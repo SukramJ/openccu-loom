@@ -964,7 +964,7 @@ func TestCommandSubscriberReportsEverySubscribeFailure(t *testing.T) {
 	for i := range total {
 		sub := &failingNthSubscriber{NoopClient: NewNoopClient(), failAt: i}
 		reg := metrics.NewRegistry()
-		col := metrics.NewMqttCollector(reg, fmt.Sprintf("sub_fail_%d", i))
+		col := metrics.NewMqttCollector(reg)
 		cs := NewCommandSubscriber(sub, NewTopicBuilder("openccu-loom"), &fakeSink{}, nil).
 			WithCollector(col)
 		err := cs.Start(context.Background())

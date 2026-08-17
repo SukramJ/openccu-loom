@@ -85,6 +85,107 @@ func TestSubstituteLeavesNonMatchingHashesAlone(t *testing.T) {
 	}
 }
 
+// TestSubstituteRejectsControlCharsPreventsRegaInjection is the regression
+// guard for the ReGa script-injection defect. Several scripts interpolate a
+// placeholder inside a `!# …` line comment on line 2 (e.g.
+// set_system_variable.fn); a value carrying a newline used to close that
+// comment and inject executable ReGa statements on the CCU's privileged
+// service session — EscapeString only doubled backslashes and escaped
+// quotes, leaving the newline intact. substitute now rejects any value with
+// a control character before it is interpolated, so the payload can never
+// reach the generated script.
+//
+// Reverting the control-character rejection in substitute makes every case
+// below fail (err becomes nil and the injected statement is interpolated).
+func TestSubstituteRejectsControlCharsPreventsRegaInjection(t *testing.T) {
+	t.Parallel()
+	// The two contexts the value lands in for the vulnerable scripts: the
+	// line-2 `!#` comment (the real breakout) and the "…" string literal.
+	body := "!# Params: ##name## (string), ##value## (string)\nstring s = \"##value##\";"
+	// dom.GetObject(1234).State(4711); — the shape of the proven payload:
+	// integer-id object access + no-arg/int-arg call, no string literal
+	// (double-quotes are escaped, so injected code cannot contain one).
+	const inject = "dom.GetObject(1234).State(4711);"
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"proof payload LF", "AAA\n" + inject + "\n!#"},
+		{"bare LF", "AAA\n" + inject},
+		{"bare CR", "AAA\r" + inject},
+		{"CRLF", "AAA\r\n" + inject},
+		{"LF after escaped quote", "\"\n" + inject},
+		{"LF after escaped backslash", "\\\n" + inject},
+		{"NUL", "AAA\x00" + inject},
+		{"vertical tab", "AAA\x0b" + inject},
+		{"form feed", "AAA\x0c" + inject},
+		{"horizontal tab", "AAA\t" + inject},
+		{"DEL", "AAA\x7f" + inject},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out, err := substitute(body, map[string]string{"name": "n", "value": tc.value})
+			if err == nil {
+				t.Fatalf("substitute accepted control-char value %q; generated script:\n%s", tc.value, out)
+			}
+			if !errors.Is(err, hmerr.ErrValidation) {
+				t.Errorf("error should wrap hmerr.ErrValidation, got %v", err)
+			}
+			// The generated script is empty on error; assert the intent
+			// explicitly so a future refactor that returns partial output
+			// still cannot carry the payload.
+			if strings.Contains(out, inject) {
+				t.Errorf("injected statement leaked into generated script: %s", out)
+			}
+		})
+	}
+}
+
+// TestSubstituteAcceptsControlFreeValue guards against over-rejection: an
+// ordinary value (including escaped quotes and backslashes) still
+// substitutes normally after the control-character defence.
+func TestSubstituteAcceptsControlFreeValue(t *testing.T) {
+	t.Parallel()
+	body := `string s = "##value##";`
+	got, err := substitute(body, map[string]string{"value": `he said "hi" \ ok`})
+	if err != nil {
+		t.Fatalf("substitute rejected a control-free value: %v", err)
+	}
+	want := `string s = "he said \"hi\" \\ ok";`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestRunRejectsControlCharValueBeforeDispatch drives the real production
+// entry point (SetSystemVariableString → Run → substitute against the
+// embedded set_system_variable.fn) with the proven payload and asserts the
+// write fails loudly and no script ever reaches the CCU — the injection is
+// stopped before any network activity.
+//
+// Reverting the fix makes this bite: substitute succeeds, Run dispatches,
+// and capture.lastScript() records the injected script.
+func TestRunRejectsControlCharValueBeforeDispatch(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+	r := newRunner(t, srv.URL)
+
+	err := r.SetSystemVariableString(context.Background(), "myVar",
+		"AAA\ndom.GetObject(1234).State(4711);\n!#")
+	if err == nil {
+		t.Fatal("SetSystemVariableString accepted a newline-bearing value")
+	}
+	if !errors.Is(err, hmerr.ErrValidation) {
+		t.Errorf("error should wrap hmerr.ErrValidation, got %v", err)
+	}
+	if got := capture.lastScript(); got != "" {
+		t.Errorf("a script reached the CCU despite rejection: %s", got)
+	}
+}
+
 func TestSanitizeJSONControlsEscapesControlCharsInsideStrings(t *testing.T) {
 	in := "{\"name\":\"line1\nline2\"}"
 	got := SanitizeJSONControls(in)
@@ -236,6 +337,47 @@ func TestRunForwardsSubstitutedScript(t *testing.T) {
 	}
 	if !strings.Contains(capture.lastScript(), `"4711"`) {
 		t.Errorf("server didn't see the substituted script: %s", capture.lastScript())
+	}
+}
+
+func TestRunListsJoinsElementsWithNewlineSeparators(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "1")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	_, err := r.RunLists(context.Background(), hmenum.RegaScriptSetDeviceRooms,
+		map[string]string{"address": "ABC123:1"},
+		map[string][]string{"rooms": {"Kitchen", "Living Room"}},
+	)
+	if err != nil {
+		t.Fatalf("RunLists: %v", err)
+	}
+	script := capture.lastScript()
+	// The joined list lands inside the quoted string literal the script splits;
+	// the structural separator survives as a real newline (data), not rejected.
+	if !strings.Contains(script, "\"Kitchen\nLiving Room\"") {
+		t.Errorf("list not joined with a newline separator inside the literal: %q", script)
+	}
+}
+
+func TestRunListsRejectsControlCharInAnElement(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	// An element carrying its own newline would forge an extra entry and, before
+	// the comment interpolation was removed, could break out of the script.
+	_, err := r.RunLists(context.Background(), hmenum.RegaScriptSetDeviceRooms,
+		map[string]string{"address": "ABC123:1"},
+		map[string][]string{"rooms": {"Kitchen", "evil\ndom.GetObject(1).State(1)"}},
+	)
+	if err == nil {
+		t.Fatal("expected an element with a control character to be rejected")
+	}
+	if capture.lastScript() != "" {
+		t.Errorf("dispatch should not have happened, server saw: %s", capture.lastScript())
 	}
 }
 

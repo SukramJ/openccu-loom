@@ -340,6 +340,74 @@ func (r *Reconciler) reconcileUnobservedDataPoints(ctx context.Context) {
 	}
 }
 
+// EmitNotReady demotes the north-bound state of a central whose south-bound
+// bring-up is down (FAILED / not operational), so its surfaces stop
+// advertising the last live readings as if current.
+//
+// The scheduled Reconcile pass is the only producer of the system_health
+// metric and the per-interface connectivity aggregate, and it is gated on the
+// central being operational. During a total CCU outage the central is FAILED,
+// the pass never runs, and the HA "Systemzustand" sensor plus every
+// connectivity binary_sensor freeze at their last reading. This runs in the
+// pass's place while the central is not operational. It never probes the
+// (unreachable) CCU — it only demotes what the probes can no longer confirm:
+//
+//   - system_health: a previously observed score is replaced with the negative
+//     not-ready sentinel [hub.MetricSystemHealthUnknown], which the consumers
+//     render as "unknown". A metric that was never observed stays unobserved —
+//     no spurious value (a 0 would read as "0% healthy") is manufactured.
+//   - connectivity: every interface still marked reachable is set unreachable,
+//     the honest state while the CCU is down.
+func (r *Reconciler) EmitNotReady(_ context.Context) error {
+	if r == nil {
+		return errors.New("reconciler: nil receiver")
+	}
+	r.emitNotReadyHealth()
+	r.emitNotReadyConnectivity()
+	return nil
+}
+
+func (r *Reconciler) emitNotReadyHealth() {
+	if r.Metrics == nil {
+		return
+	}
+	cached, observed := r.Metrics.Value(hub.MetricSystemHealth)
+	// Never observed → stay unknown (unobserved); already at the sentinel →
+	// nothing to demote.
+	if !observed || cached.Value < 0 {
+		return
+	}
+	if r.Metrics.Observe(hub.MetricSystemHealth, hub.MetricSystemHealthUnknown) && r.Bus != nil {
+		events.Publish(r.Bus, hmevent.DriftCorrectedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: r.CentralName,
+			Component:   "system_health",
+			Detail:      fmt.Sprintf("central not ready: %v -> unknown", cached.Value),
+		})
+	}
+}
+
+func (r *Reconciler) emitNotReadyConnectivity() {
+	conn := r.connectivityAggregate()
+	if conn == nil {
+		return
+	}
+	for _, entry := range conn.List() {
+		if !entry.Reachable {
+			continue
+		}
+		conn.OnStateWithInterface(entry.InterfaceID, entry.ResolvedInterface(), false)
+		if r.Bus != nil {
+			events.Publish(r.Bus, hmevent.ConnectivityChangedEvent{
+				Base:        hmevent.NewBase(),
+				CentralName: r.CentralName,
+				InterfaceID: entry.InterfaceID,
+				Reachable:   false,
+			})
+		}
+	}
+}
+
 func (r *Reconciler) reconcileSystemHealth(ctx context.Context) error {
 	if r.Health == nil || r.Metrics == nil {
 		return nil

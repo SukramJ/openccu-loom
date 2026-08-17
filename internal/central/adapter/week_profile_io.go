@@ -108,8 +108,16 @@ func bindClimateScheduleIO(ch *device.Channel, wp *weekprofile.ProfileDataPoint)
 // against a [device.Channel]. Reads the channel's MASTER paramset via the
 // installed refresher and parses the `<NN>_WP_<FIELD>` keys into a
 // [schedule.Simple].
+//
+// domain is the resolved schedule bucket (see [resolveScheduleDomain]). It is
+// only load-bearing for "lock": [weekprofile.ParseSimpleRawParamset] surfaces
+// the raw LEVEL / DURATION / TARGET_CHANNELS values, but a lock device encodes
+// lock_mode / lock_action / permission as combinations of those, so the loader
+// has to decode them explicitly for the read surfaces (MQTT Zeitplan attrs) to
+// show the real lock action rather than three permanent nulls.
 type defaultChannelLoader struct {
-	ch *device.Channel
+	ch     *device.Channel
+	domain string
 }
 
 // Load reads the channel's MASTER paramset and returns a parsed Simple
@@ -127,7 +135,37 @@ func (l *defaultChannelLoader) Load(ctx context.Context) (*schedule.Simple, erro
 	if err != nil {
 		return nil, fmt.Errorf("schedule.load.simple: parse raw paramset: %w", err)
 	}
+	if l.domain == "lock" {
+		decodeLockScheduleFields(s, values)
+	}
 	return s, nil
+}
+
+// decodeLockScheduleFields enriches a lock device's parsed schedule with the
+// lock_mode / lock_action / permission fields the CCU encodes via the
+// (LEVEL, DURATION_BASE, DURATION_FACTOR, TARGET_CHANNELS) combination.
+//
+// Mirrors the REST read path (parseSimpleScheduleWithDomain in schedules.go):
+// the duration base/factor are read from the raw paramset rather than the
+// decoded entry, because [weekprofile.ParseSimpleRawParamset] drops the
+// firmware "permanent" sentinel (factor 31) that distinguishes the
+// auto-relock actions.
+func decodeLockScheduleFields(s *schedule.Simple, raw map[string]any) {
+	if s == nil {
+		return
+	}
+	for slotNo := range s.Entries {
+		entry := s.Entries[slotNo]
+		entry.LockMode = schedule.DetectLockMode(entry.TargetChannels)
+		dBase, dFactor := lookupSlotDuration(raw, slotNo)
+		switch entry.LockMode {
+		case schedule.LockModeDoorLock:
+			entry.LockAction = schedule.DetectLockAction(entry.Level, dBase, dFactor)
+		case schedule.LockModeUserPermission:
+			entry.Permission = schedule.DetectLockPermission(entry.Level)
+		}
+		s.Entries[slotNo] = entry
+	}
 }
 
 // defaultChannelSaver implements [weekprofile.Saver[*schedule.Simple]].
@@ -192,13 +230,16 @@ func (sv *defaultChannelSaver) declaredGroups(ctx context.Context) int {
 // `wp.Simple().Load(ctx)` and `wp.Simple().Save(ctx, sched)` route
 // directly through ch.
 //
+// domain is the resolved schedule bucket (see [resolveScheduleDomain]); the
+// loader uses it to decode lock-specific fields on the read path.
+//
 // Idempotent: replaces a previously attached profile so a daemon
 // restart cycle re-wires cleanly.
-func bindDefaultScheduleIO(ch *device.Channel, wp *weekprofile.ProfileDataPoint) {
+func bindDefaultScheduleIO(ch *device.Channel, wp *weekprofile.ProfileDataPoint, domain string) {
 	if ch == nil || wp == nil {
 		return
 	}
-	loader := &defaultChannelLoader{ch: ch}
+	loader := &defaultChannelLoader{ch: ch, domain: domain}
 	saver := &defaultChannelSaver{ch: ch, priority: hmenum.CommandPriorityHigh}
 	profile := weekprofile.NewDefault(loader, saver)
 	wp.AttachSimpleProfile(profile)

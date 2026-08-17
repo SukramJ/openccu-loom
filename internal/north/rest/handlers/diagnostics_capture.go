@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
@@ -53,10 +54,22 @@ func StartCapture(svc CaptureService, rec audit.Recorder) http.HandlerFunc {
 		if req.Anonymise != nil {
 			anon = *req.Anonymise
 		}
+		// Attribute the capture to the authenticated operator so
+		// Manager.Start honours the explicit Anonymise choice above. Its
+		// gate force-anonymises whenever Triggered is empty, which is what
+		// keeps an unauthenticated or auto/scheduled capture from ever
+		// leaking raw device addresses: only a real authenticated subject
+		// (not the "anonymous" audit fallback) sets Triggered here, so an
+		// unauthenticated Anonymise=false request is still anonymised.
+		triggered := ""
+		if id, ok := auth.IdentityFrom(r.Context()); ok && id.Subject != "" {
+			triggered = id.Subject
+		}
 		opts := diagnostics.StartOptions{
 			Duration:          time.Duration(req.DurationSeconds) * time.Second,
 			LogLevelOverrides: req.LogLevels,
 			Anonymise:         anon,
+			Triggered:         triggered,
 		}
 		summary, err := svc.Start(opts)
 		if err != nil {

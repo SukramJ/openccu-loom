@@ -88,6 +88,11 @@ type restMountDeps struct {
 	// firmwareRefresher backs POST /devices/firmware/refresh (the same
 	// FirmwareDomain the WS `firmware.refresh` command uses).
 	firmwareRefresher *adapter.FirmwareDomain
+	// rpcRecorder is the shared RPC session recorder, constructed once in the
+	// composition root so the WS recording.* commands and these REST
+	// /diagnostics/rpc-recording routes drive one instance (one auto-stop
+	// timer, one status, one restart marker).
+	rpcRecorder *adapter.RPCRecorderAdapter
 	// editSessions is the shared edit-lock registry — backs both the
 	// `/sessions/edit` endpoints and the strict MASTER/LINK paramset-write
 	// gate, and is shared with the WS `paramset.put` enforcement.
@@ -216,9 +221,15 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// the event-bus tap, and the per-central metrics snapshots the
 	// diagnostics dump renders.
 	introspect := adapter.NewIntrospectAdapter(d.reg)
-	// RPC session recorder (XML/JSON-RPC replay capture). Resume a
-	// recording that was running before a restart, then expose it.
-	rpcRecorder := adapter.NewRPCRecorderAdapter(d.reg, cfg.DataDir)
+	// RPC session recorder (XML/JSON-RPC replay capture) — the shared
+	// instance built in the composition root and also driven by the WS
+	// recording.* commands. A nil dep (tests that mount REST directly) falls
+	// back to a fresh instance so this route always has a non-nil recorder.
+	// Resume a recording that was running before a restart, then expose it.
+	rpcRecorder := d.rpcRecorder
+	if rpcRecorder == nil {
+		rpcRecorder = adapter.NewRPCRecorderAdapter(d.reg, cfg.DataDir)
+	}
 	if resumed := rpcRecorder.ResumeFromMarker(ctx); len(resumed) > 0 {
 		logger.Info("diagnostics.rpc_recording.resumed", slog.Any("centrals", resumed))
 	}
@@ -689,8 +700,12 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		Alarm:        mcpAlarmSeam(d),
 		AlarmControl: mcpAlarmControlSeam(d),
 		Security:     mcpSecuritySeam(d),
-		AllowWrites:  cfg.North.MCP.AllowWrites,
-		Version:      build.Version,
+		// The shared edit-lock registry REST and WS gate MASTER/LINK writes
+		// on, so an assistant's write_paramset obeys the same lock a human
+		// editor's open session holds.
+		EditLocks:   d.editSessions,
+		AllowWrites: cfg.North.MCP.AllowWrites,
+		Version:     build.Version,
 	})))
 	path := cfg.North.MCP.MountPath()
 	mux := http.NewServeMux()

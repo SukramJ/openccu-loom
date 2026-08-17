@@ -43,6 +43,13 @@ var writeCommandRoles = map[string]auth.Role{
 	"device.replace":        auth.RoleAdmin,
 	"device.restore_config": auth.RoleAdmin,
 	"programs.delete":       auth.RoleAdmin,
+	// recording.start / recording.stop mirror the admin-gated REST
+	// `/diagnostics/rpc-recording` routes (both `.With(admin)`). Arming the
+	// diagnostic RPC recorder changes what the daemon captures about its own
+	// CCU traffic, so the socket must charge the same admin toll as REST — an
+	// operator-tier gate here made the REST gate a formality.
+	"recording.start": auth.RoleAdmin,
+	"recording.stop":  auth.RoleAdmin,
 	// Heating-group administration (GR02) mirrors the admin-gated REST
 	// POST/PUT/DELETE /groups routes: creating/editing/deleting a group
 	// rewires real devices on the CCU.
@@ -104,8 +111,6 @@ var writeCommandRoles = map[string]auth.Role{
 	"paramset.copy":                       auth.RoleOperator,
 	"paramset.put":                        auth.RoleOperator,
 	"programs.execute":                    auth.RoleOperator,
-	"recording.start":                     auth.RoleOperator,
-	"recording.stop":                      auth.RoleOperator,
 	"schedules.active_profile.set":        auth.RoleOperator,
 	"schedules.climate.copy_profile":      auth.RoleOperator,
 	"schedules.climate.set":               auth.RoleOperator,

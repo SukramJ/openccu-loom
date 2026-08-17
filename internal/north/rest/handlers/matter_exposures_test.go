@@ -841,22 +841,6 @@ func TestMatterExposable_ParameterLabel_TitleCasedWhenLabelerIsNil(t *testing.T)
 	}
 }
 
-// --- typeFromTopic ---
-
-func TestTypeFromTopic_NoPrefix_ReturnsTopic(t *testing.T) {
-	t.Parallel()
-	if got := typeFromTopic("onoff"); got != "onoff" {
-		t.Errorf("expected onoff, got %q", got)
-	}
-}
-
-func TestTypeFromTopic_WithPrefix_StripsMatterDot(t *testing.T) {
-	t.Parallel()
-	if got := typeFromTopic("matter.onoff"); got != "onoff" {
-		t.Errorf("expected onoff, got %q", got)
-	}
-}
-
 // --- recordMatterAudit non-nil recorder path ---
 
 func TestRecordMatterAudit_NonNilRecorder(t *testing.T) {

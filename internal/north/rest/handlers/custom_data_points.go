@@ -398,6 +398,15 @@ func InvokeCustomDataPoint(idx DeviceIndex, writer CustomDPWriter) http.HandlerF
 					problem.New(problem.TypeBadRequest, r, "Bad parameter", err.Error()))
 				return
 			}
+			if errors.Is(err, device.ErrChannelOperationLocked) {
+				// The operator's per-channel control lock rejected the
+				// invoke; the value never reached the wire and a retry
+				// cannot help until the lock is lifted, so this is a 423
+				// Locked — mirroring the paramset/value PUT routes — and
+				// never a 502 upstream failure.
+				writeChannelLocked(w, r)
+				return
+			}
 			// Log every 502 with the originating error so the dev /
 			// support engineer can grep the daemon log without having
 			// to enable DEBUG. The UI only sees the problem.detail.

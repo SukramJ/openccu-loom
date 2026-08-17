@@ -188,17 +188,17 @@ func (s *Service) updateDeviceHealth(ctx context.Context, centralName string, ke
 // escalates to the central-loss policy when every enrolled interface
 // of a central is gone.
 //
-// The event names the interface the way the CCU does ("BidCos-RF"),
-// while every routing entry in this package is keyed by the wire id the
-// ingest pipeline stamps onto a data point ("<central>-BidCos-RF").
-// The two spaces are reconciled once, here at the boundary, so the
-// sensor lookup and the down-map agree: matching the bare name against
-// wire-keyed routing silently found nothing, which left every contact
-// on a lost radio reporting its last known state while armed and never
-// ran the zone's central-loss policy.
+// ConnectivityChangedEvent.InterfaceID already carries the wire id the
+// ingest pipeline stamps onto a data point ("<central>-BidCos-RF"): the
+// reconciler publishes what observeProbeLatency stamped, never the bare
+// enum. It is the same space every routing entry in this package is keyed
+// by, so it is used directly. Re-wrapping it in WireInterfaceID produced a
+// doubled id ("<central>-<central>-BidCos-RF") that matched no enrolled
+// sensor, which left every contact on a lost radio reporting its last known
+// state while armed and never ran the zone's central-loss policy.
 func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChangedEvent) {
 	ctx := context.Background()
-	wireID := central.WireInterfaceID(centralName, hmenum.Interface(e.InterfaceID))
+	wireID := e.InterfaceID
 	s.mu.Lock()
 	m, ok := s.ifaceDown[centralName]
 	if !ok {

@@ -208,6 +208,34 @@ describe("surfacesStore editing", () => {
     expect(surfacesStore.profile).toBe("embedded");
   });
 
+  it("keeps unsaved row edits across a master-toggle PUT", async () => {
+    // The mode PUT body carries only `embedded`, never the draft row
+    // edits, so the daemon's response profiles are whatever is already
+    // stored — adopting them wholesale into `draft` would wipe an
+    // in-flight edit the operator has not saved yet.
+    putUISurfaces.mockResolvedValue(response({ embedded: true, profile: "embedded" }));
+    surfacesStore.toggle("nav.alarm"); // visible → hidden, unsaved
+    expect(surfacesStore.hasChanges()).toBe(true);
+
+    await surfacesStore.setEmbedded(true);
+
+    expect(surfacesStore.embedded).toBe(true);
+    expect(surfacesStore.draftVisible("nav.alarm", "standalone")).toBe(false);
+    expect(surfacesStore.hasChanges()).toBe(true);
+  });
+
+  it("keeps unsaved row edits across an embedded-scope PUT", async () => {
+    putUISurfaces.mockResolvedValue(response({ embedded_scope: "always" }));
+    surfacesStore.toggle("nav.alarm");
+    expect(surfacesStore.hasChanges()).toBe(true);
+
+    await surfacesStore.setEmbeddedScope("always");
+
+    expect(surfacesStore.embeddedScope).toBe("always");
+    expect(surfacesStore.draftVisible("nav.alarm", "standalone")).toBe(false);
+    expect(surfacesStore.hasChanges()).toBe(true);
+  });
+
   it("adopts the profile the daemon serves this browser, not the toggle", async () => {
     // Embedded is on, the scope is the default, and this browser did not
     // come through Home Assistant — so the live profile is standalone

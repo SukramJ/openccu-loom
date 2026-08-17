@@ -184,12 +184,13 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 // boot-time seed names in `state_topic` must be a topic the reachability path
 // actually writes.
 //
-// The two halves live in different identifier spaces. The client coordinator
-// is keyed by the `<central>-<iface>` wire id, while ConnectivityChangedEvent
-// carries the bare interface name the CCU reports. Seeding from the wire id
-// declared `.../ccu-01-HmIP-RF` and published `.../HmIP-RF`, so the entity HA
-// created at boot stayed unavailable forever and the first reachability change
-// added a second one next to it.
+// ConnectivityChangedEvent.InterfaceID already carries the `<central>-<iface>`
+// wire id that observeProbeLatency stamps before the reconciler publishes,
+// the same id the client coordinator is keyed by. The seed used to key off
+// the bare interface name instead, so it declared `.../HmIP-RF` while the
+// event path published `.../ccu-01-HmIP-RF`: the entity HA created at boot
+// stayed unavailable forever and the first reachability change added a
+// second, live one under the wire id.
 func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 	t.Parallel()
 	c, pub, publisher := hubDiscoveryFixture(t)
@@ -217,12 +218,13 @@ func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 		t.Fatalf("connectivity discovery has no state_topic: %v", body)
 	}
 
-	// The reachability path: the reconciler publishes the CCU's own interface
-	// name (Interface.listInterfaces), never the wire id.
+	// The reachability path: observeProbeLatency stamps the wire id onto the
+	// event before the reconciler publishes it — never the CCU's bare
+	// interface name.
 	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
-		InterfaceID: string(hmenum.InterfaceHmIPRF),
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
 		Reachable:   true,
 	})
 	publisher.Flush()
@@ -298,6 +300,69 @@ func TestRemovedProgramDiscoveryIsRetracted(t *testing.T) {
 	for topic := range declared {
 		if !retracted[topic] {
 			t.Errorf("retained discovery config %s was never cleared after the program vanished", topic)
+		}
+	}
+}
+
+// TestRetractCentralClearsEveryHubDiscoveryConfig pins the whole-central
+// retraction that runs when a CCU is removed at runtime. The per-entity
+// OnRemoved hooks only fire for an entity the CCU drops one at a time, and the
+// orphan sweep is scoped to registered centrals, so a removed central's
+// retained hub-plane discovery configs (sysvars, programs, connectivity,
+// alarm/service messages, the metric sensors, inbox, hub update) stayed alive in
+// Home Assistant forever. RetractCentral must clear every config the publisher
+// declared for that central — asserted here as a declared-vs-retracted round
+// trip through the publisher itself.
+func TestRetractCentralClearsEveryHubDiscoveryConfig(t *testing.T) {
+	t.Parallel()
+	c, pub, publisher := hubDiscoveryFixture(t)
+	c.SetSystemInformation(central.SystemInfo{
+		Model:   "HomeMatic Central",
+		Version: "3.79.6",
+		Serial:  "3014F711A0001F5A4993D962",
+	})
+
+	// A sysvar, a program and a registered interface exercise the per-entity
+	// hub-discovery planes on top of the always-declared central-wide singletons.
+	c.HubModel.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic})
+	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-9"}
+	prog.OnActive(false)
+	c.HubModel.PutProgram(prog)
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
+		Interface:   hmenum.InterfaceHmIPRF,
+	}); err != nil {
+		t.Fatalf("Clients.Register: %v", err)
+	}
+
+	publisher.Start(context.Background())
+	defer publisher.Stop()
+	publisher.Flush()
+
+	declared := map[string]bool{}
+	for _, p := range pub.Published() {
+		if strings.HasSuffix(p.Topic, "/config") && len(p.Payload) > 0 {
+			declared[p.Topic] = true
+		}
+	}
+	if len(declared) == 0 {
+		t.Fatalf("no hub discovery configs were declared; topics=%v", publishedTopics(pub))
+	}
+
+	// Runtime removal of the central: every retained discovery config it
+	// declared must be cleared with an empty payload.
+	publisher.RetractCentral(c)
+	publisher.Flush()
+
+	retracted := map[string]bool{}
+	for _, p := range pub.Published() {
+		if declared[p.Topic] && len(p.Payload) == 0 {
+			retracted[p.Topic] = true
+		}
+	}
+	for topic := range declared {
+		if !retracted[topic] {
+			t.Errorf("hub discovery config %s was never retracted on central removal", topic)
 		}
 	}
 }

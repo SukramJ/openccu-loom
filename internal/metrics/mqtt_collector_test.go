@@ -15,7 +15,7 @@ var promName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 func TestNewMqttCollector(t *testing.T) {
 	t.Parallel()
 	reg := NewRegistry()
-	mc := NewMqttCollector(reg, "ccu1")
+	mc := NewMqttCollector(reg)
 	if mc.MessagesSent == nil || mc.DiscoverySent == nil || mc.PublishErrors == nil {
 		t.Fatal("MqttCollector fields must not be nil after construction")
 	}
@@ -24,64 +24,41 @@ func TestNewMqttCollector(t *testing.T) {
 	mc.DiscoverySent.Inc()
 	mc.PublishErrors.Inc()
 
-	metrics := reg.Metrics()
-	for _, m := range metrics {
-		if m.Name == "mqtt_ccu1_messages_sent" && m.value.Load() != 2 {
+	for _, m := range reg.Metrics() {
+		if m.Name == "mqtt_messages_sent" && m.value.Load() != 2 {
 			t.Errorf("messages_sent count=%d, want 2", m.value.Load())
 		}
-	}
-}
-
-// TestNewMqttCollector_UnsafeCentralNameProducesValidNames ensures an
-// unusual central name (space / dash / unicode / empty) still yields
-// valid Prometheus metric names, so the exposition parser never drops the
-// whole scrape.
-func TestNewMqttCollector_UnsafeCentralNameProducesValidNames(t *testing.T) {
-	t.Parallel()
-	for _, name := range []string{"ccu1", "a b", "a-b", "Küche/2", "", "1st"} {
-		reg := NewRegistry()
-		mc := NewMqttCollector(reg, name)
-		if mc.MessagesSent == nil {
-			t.Fatalf("collector must not be nil for central %q", name)
-		}
-		for _, m := range reg.Metrics() {
-			if !promName.MatchString(m.Name) {
-				t.Errorf("central %q produced invalid Prometheus metric name %q", name, m.Name)
-			}
+		if !promName.MatchString(m.Name) {
+			t.Errorf("collector produced invalid Prometheus metric name %q", m.Name)
 		}
 	}
 }
 
-// TestMetricSegment_DistinctNamesDoNotCollide verifies that two distinct
-// central names which naively sanitize to the same token ("a b" and "a-b"
-// both → "a_b") stay distinct via the deterministic hash suffix, and that
-// already-safe names pass through unchanged.
-func TestMetricSegment_DistinctNamesDoNotCollide(t *testing.T) {
-	t.Parallel()
-	segA := metricSegment("a b")
-	segB := metricSegment("a-b")
-	if segA == segB {
-		t.Fatalf("distinct unsafe names must not collide: both → %q", segA)
-	}
-	if metricSegment("a b") != segA {
-		t.Error("metricSegment must be deterministic for the same input")
-	}
-	if got := metricSegment("ccu1"); got != "ccu1" {
-		t.Errorf("safe name must pass through unchanged, got %q", got)
-	}
-}
-
-// TestNewMqttCollector_DistinctNamesKeepSeparateCounters proves the
-// collision fix at the registry level: two collectors built from names
-// that sanitize alike keep independent counters instead of silently
-// merging into one metric.
-func TestNewMqttCollector_DistinctNamesKeepSeparateCounters(t *testing.T) {
+// TestNewMqttCollector_IsDaemonWideSingleSeries pins the fix for the
+// multi-CCU miscounting: the counters are a single daemon-wide series, so
+// two calls with the same Registry resolve to the SAME underlying counter
+// (the shared bridge increments one series for every central's traffic).
+// A per-central name — the previous behaviour — would have kept them
+// separate and hidden every CCU but the first.
+func TestNewMqttCollector_IsDaemonWideSingleSeries(t *testing.T) {
 	t.Parallel()
 	reg := NewRegistry()
-	a := NewMqttCollector(reg, "a b")
-	b := NewMqttCollector(reg, "a-b")
+	a := NewMqttCollector(reg)
+	b := NewMqttCollector(reg)
 	a.MessagesSent.Inc()
-	if b.MessagesSent.Value() != 0 {
-		t.Fatalf("counters for distinct centrals merged: b=%d after incrementing a", b.MessagesSent.Value())
+	a.MessagesSent.Inc()
+	b.MessagesSent.Inc()
+	if got := b.MessagesSent.Value(); got != 3 {
+		t.Fatalf("counters must be one daemon-wide series: b sees %d after 3 total increments, want 3", got)
+	}
+	// Exactly one messages_sent series is registered, not one per call.
+	count := 0
+	for _, m := range reg.Metrics() {
+		if m.Name == "mqtt_messages_sent" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("want a single mqtt_messages_sent series, got %d", count)
 	}
 }

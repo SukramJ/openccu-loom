@@ -156,6 +156,64 @@ func TestBridge_PaseLockedOutAtCap(t *testing.T) {
 	}
 }
 
+// TestBridge_PaseLockout_SurvivesInternalRestore pins that the lockout the
+// cap engages survives the RevokeWindow the cap itself runs. Production
+// windows carry a restore closure (cmd/openccu-loom/matter_verifier_installer.go
+// and matter_ephemeral_provider.go register one) that RevokeWindow runs
+// synchronously and that re-attaches the configured PASE acceptor via
+// AttachPaseHandler — which calls resetPaseFailures. Without the guard, that
+// reset cleared paseLockoutUntil (and the streak) microseconds after
+// engagePaseLockout set them, so guessing continued at full rate with the
+// backoff stuck at 0.
+//
+// The existing cap tests use a basic window (no restore closure), so they
+// never exercise the self-unlock. This one registers the production-shape
+// restore closure via setRestore.
+//
+// Bite check: dropping the preserveLockoutOnReset guard in
+// resetPaseFailures (or the Store(true) around RevokeWindow in
+// recordPaseFailure) makes the restore closure clear the lockout, so
+// paseLockedOut() is false right after the cap and this test fails.
+func TestBridge_PaseLockout_SurvivesInternalRestore(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	now := time.Now()
+	b.nowFn = func() time.Time { return now }
+
+	// The configured acceptor the restore closure re-attaches — the shape
+	// of matter_verifier_installer.go's restore, which calls
+	// bridge.AttachPaseHandler(configured) on window close.
+	configured := NewPaseAdapterWithFactory(newVerifierFactory(t, nil))
+	configured.SetPBKDFParams(failureCountTestIterations, failureCountTestSalt(), 1)
+	b.AttachPaseHandler(configured)
+
+	w := openedWindow(t, b)
+	if !w.setRestore(func() { b.AttachPaseHandler(configured) }) {
+		t.Fatal("setRestore: window unexpectedly closed")
+	}
+
+	for range paseMaxErrors {
+		b.recordPaseFailure()
+	}
+
+	if !b.paseLockedOut() {
+		t.Fatal("paseLockedOut = false after the cap fired with a restore closure registered; the internal restore cleared the lockout it had just engaged, so guessing continues at full rate")
+	}
+	// The window is revoked; the lockout, not the (now closed) window, is
+	// what holds PASE shut.
+	if got := w.CurrentWindow().Status; got != wire.WindowStatusClosed {
+		t.Errorf("window Status = %v, want Closed (revoked by the cap)", got)
+	}
+	// The backoff streak must survive too — a streak reset to 0 by the
+	// restore would restart the doubling from the base cooldown forever.
+	b.mu.RLock()
+	streak := b.paseLockoutStreak
+	b.mu.RUnlock()
+	if streak != 1 {
+		t.Errorf("paseLockoutStreak = %d after the cap, want 1 (the restore reset the backoff)", streak)
+	}
+}
+
 // TestBridge_PaseInFlightSlotReleasedOnPake1Failure pins that a handshake
 // dying before Pake3 releases the single-active-PASE slot. The Pake3
 // branch is the only other release, so a failed Pake1 used to hold the

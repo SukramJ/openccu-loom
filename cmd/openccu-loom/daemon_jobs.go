@@ -137,6 +137,12 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		})
 	}
 	jobs.Reconcile = u.Reconciler.Reconcile
+	// While the central is not operational (a CCU outage leaves it FAILED)
+	// the reconcile pass is gated off and its two products — the
+	// system_health metric and the connectivity aggregate — would freeze at
+	// their last live value on every north-bound surface. EmitNotReady runs
+	// in its place then, demoting them to unknown / unreachable.
+	jobs.ReconcileNotReady = u.Reconciler.EmitNotReady
 	if _, err := central.RegisterStandardJobs(u, jobs); err != nil {
 		logger.Warn("central.standard_jobs.register_failed",
 			slog.String("central", u.Name()),

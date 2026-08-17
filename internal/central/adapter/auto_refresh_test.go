@@ -15,6 +15,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/model/schedule"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -265,6 +267,76 @@ func TestWireConfigPendingHookSettlesOnWireInterfaceID(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("CONFIG_PENDING True→False never reached the settle handler on a named central")
+	}
+}
+
+// countingSimpleReloadLoader records every Load and signals it, so a test can
+// observe whether the CONFIG_PENDING settle reloaded a non-climate schedule.
+type countingSimpleReloadLoader struct {
+	loaded chan struct{}
+}
+
+func (l *countingSimpleReloadLoader) Load(_ context.Context) (*schedule.Simple, error) {
+	select {
+	case l.loaded <- struct{}{}:
+	default:
+	}
+	return schedule.NewSimple(), nil
+}
+
+// TestWireConfigPendingHookReloadsSimpleWeekProfile pins that a CONFIG_PENDING
+// True→False settle reloads the *simple* (non-climate) week profile, not only
+// the climate one. A switch / cover / light / lock schedule write settles the
+// same way; without the simple reload the retained MQTT schedule_data would
+// stay at its boot snapshot until the daemon restarts. The event is driven
+// through the real callback path so the reload under test is production's.
+func TestWireConfigPendingHookReloadsSimpleWeekProfile(t *testing.T) {
+	t.Parallel()
+
+	const centralName = "GoLock"
+	c, err := central.New(central.Config{Name: centralName})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	wireID := WireInterfaceID(centralName, hmenum.InterfaceHmIPRF)
+
+	dev := buildDeviceWithMasterChannels(2, "000SIMPLE", wireID)
+	dev.Channel("000SIMPLE:0").Put(newConfigPendingDP(wireID, "000SIMPLE:0"))
+	schedCh := dev.Channel("000SIMPLE:1")
+	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		CentralName:    centralName,
+		ChannelAddress: schedCh.Address,
+		ScheduleType:   weekprofile.ScheduleTypeDefault,
+		ProfileCount:   1,
+	})
+	loader := &countingSimpleReloadLoader{loaded: make(chan struct{}, 8)}
+	wp.AttachSimpleProfile(weekprofile.NewDefault(loader, nil))
+	schedCh.AttachWeekProfile(wp)
+	c.ModelRegistry.Put(dev)
+
+	// Prime Current() so the hook's has_schedule gate passes, then drain the
+	// priming signal so only the settle-driven reload remains to observe.
+	if _, err := wp.Simple().Load(context.Background()); err != nil {
+		t.Fatalf("prime simple load: %v", err)
+	}
+	<-loader.loaded
+
+	wireConfigPendingHook(context.Background(), c, nil, centralName, nil, nil)
+
+	handlers := NewCallbackHandlers(c, nil)
+	t.Cleanup(handlers.Stop)
+	initID := InitInterfaceID(c.InstanceName(), centralName, hmenum.InterfaceHmIPRF)
+	for _, v := range []bool{true, false} {
+		if err := handlers.Event(context.Background(), initID, "000SIMPLE:0",
+			string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(v)); err != nil {
+			t.Fatalf("Event(CONFIG_PENDING=%v): %v", v, err)
+		}
+	}
+
+	select {
+	case <-loader.loaded:
+	case <-time.After(2 * time.Second):
+		t.Fatal("CONFIG_PENDING settle did not reload the simple (non-climate) week profile")
 	}
 }
 

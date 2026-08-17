@@ -24,12 +24,28 @@ import (
 // AccessControl cluster server, the WriteResponse never lands, Apple
 // times out after 10 s and tears the fabric down via RemoveFabric.
 //
+// Every writable list/struct attribute needs an explicit case here: the
+// generic primitiveAttributeValue branch drains a container and yields a
+// nil Value, so a structured write that falls through reaches the cluster
+// server's MatterWrite as nil, fails its type assertion, and answers
+// FAILURE. matter.js does not hand-maintain a switch — its write path
+// decodes each value with the attribute's own TlvSchema
+// (packages/protocol/src/action/server/AttributeWriteResponse.ts
+// #decodeWithSchema), so every list/struct attribute is decodable by
+// construction. Each case below mirrors the matching read-direction
+// encoder in reply.go so the write path is symmetric with the read path.
+//
 // Add a switch case here when wiring a new writable cluster attribute
 // that carries a structured value (primitives are handled by the
 // generic primitiveAttributeValue branch).
 func attributeValueReader(path im.ConcreteAttributePath, el tlv.Element, dec *tlv.Decoder) (im.AttributeValue, error) {
-	if path.Cluster == 0x001F && path.Attribute == 0x0000 { // AccessControl.ACL
+	switch {
+	case path.Cluster == 0x001F && path.Attribute == 0x0000: // AccessControl.ACL
 		return decodeACLList(el, dec)
+	case path.Cluster == 0x001F && path.Attribute == 0x0001: // AccessControl.Extension
+		return decodeExtensionList(el, dec)
+	case path.Cluster == 0x003F && path.Attribute == 0x0000: // GroupKeyManagement.GroupKeyMap
+		return decodeGroupKeyMapList(el, dec)
 	}
 	return primitiveAttributeValue(el, dec)
 }
@@ -196,6 +212,152 @@ func decodeACLTarget(dec *tlv.Decoder) (mattercore.ACLTargetStruct, error) {
 			if !el.IsNull {
 				v := uint32(el.Uint & 0xFFFFFFFF)
 				t.DeviceType = &v
+			}
+		}
+	}
+}
+
+// decodeGroupKeyMapList reads an array of GroupKeyMapStruct
+// (Matter §11.2.10.4.1) from the TLV stream. el is the array opener; the
+// caller already consumed it via dec.Next(). Field tags mirror matter.js
+// packages/model/src/standard/elements/group-key-management.element.ts:106-111
+// (GroupId [1] uint16, GroupKeySetId [2] uint16, FabricIndex [254] uint8)
+// and the read-direction encoder in reply.go's []GroupKeyMapStruct case.
+// Draining this to nil (the old primitive fall-through) made every
+// GroupKeyMap write answer FAILURE, so no group-cast key binding was ever
+// established.
+func decodeGroupKeyMapList(el tlv.Element, dec *tlv.Decoder) (im.AttributeValue, error) {
+	if !el.IsContainer || el.Type != tlv.TypeArray {
+		return im.AttributeValue{}, fmt.Errorf("GroupKeyManagement.GroupKeyMap: value is not array (type=0x%02X)", el.Type)
+	}
+	var out []mattercore.GroupKeyMapStruct
+	for {
+		next, err := dec.Next()
+		if err != nil {
+			return im.AttributeValue{}, fmt.Errorf("GroupKeyManagement.GroupKeyMap: %w", err)
+		}
+		if next.IsEndContainer {
+			return im.AttributeValue{Value: out}, nil
+		}
+		if !next.IsContainer || next.Type != tlv.TypeStructure {
+			if next.IsContainer {
+				if derr := skipContainerTLV(dec); derr != nil {
+					return im.AttributeValue{}, derr
+				}
+			}
+			continue
+		}
+		entry, err := decodeGroupKeyMapEntry(dec)
+		if err != nil {
+			return im.AttributeValue{}, err
+		}
+		out = append(out, entry)
+	}
+}
+
+// decodeGroupKeyMapEntry reads one GroupKeyMapStruct (§11.2.10.4.1):
+//
+//	[1]   group-id        uint16
+//	[2]   group-key-set-id uint16
+//	[254] fabric-index    uint8
+//
+// Caller has consumed the entry's struct opener.
+func decodeGroupKeyMapEntry(dec *tlv.Decoder) (mattercore.GroupKeyMapStruct, error) {
+	var e mattercore.GroupKeyMapStruct
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			return mattercore.GroupKeyMapStruct{}, fmt.Errorf("GroupKeyMap entry: %w", err)
+		}
+		if el.IsEndContainer {
+			return e, nil
+		}
+		if el.Tag.Kind != tlv.TagKindContext {
+			continue
+		}
+		switch el.Tag.Number {
+		case 1:
+			e.GroupID = uint16(el.Uint & 0xFFFF)
+		case 2:
+			e.GroupKeySetID = uint16(el.Uint & 0xFFFF)
+		case 254:
+			e.FabricIndex = uint8(el.Uint & 0xFF)
+		default:
+			if el.IsContainer {
+				if err := skipContainerTLV(dec); err != nil {
+					return mattercore.GroupKeyMapStruct{}, err
+				}
+			}
+		}
+	}
+}
+
+// decodeExtensionList reads an array of AccessControlExtensionStruct
+// (Matter §9.10.4.6) from the TLV stream. el is the array opener; the
+// caller already consumed it via dec.Next(). Field tags mirror matter.js
+// packages/model/src/standard/elements/access-control.element.ts:204-208
+// (Data [1] octstr<128>, FabricIndex [254] uint8). The cluster server
+// re-stamps FabricIndex from the session context on write; it is decoded
+// here for symmetry with the read encoder. Draining this to nil (the old
+// primitive fall-through) made every Extension write answer FAILURE.
+func decodeExtensionList(el tlv.Element, dec *tlv.Decoder) (im.AttributeValue, error) {
+	if !el.IsContainer || el.Type != tlv.TypeArray {
+		return im.AttributeValue{}, fmt.Errorf("AccessControl.Extension: value is not array (type=0x%02X)", el.Type)
+	}
+	var out []mattercore.AccessControlExtensionEntry
+	for {
+		next, err := dec.Next()
+		if err != nil {
+			return im.AttributeValue{}, fmt.Errorf("AccessControl.Extension: %w", err)
+		}
+		if next.IsEndContainer {
+			return im.AttributeValue{Value: out}, nil
+		}
+		if !next.IsContainer || next.Type != tlv.TypeStructure {
+			if next.IsContainer {
+				if derr := skipContainerTLV(dec); derr != nil {
+					return im.AttributeValue{}, derr
+				}
+			}
+			continue
+		}
+		entry, err := decodeExtensionEntry(dec)
+		if err != nil {
+			return im.AttributeValue{}, err
+		}
+		out = append(out, entry)
+	}
+}
+
+// decodeExtensionEntry reads one AccessControlExtensionStruct (§9.10.4.6):
+//
+//	[1]   data         octstr<128>
+//	[254] fabric-index uint8
+//
+// Caller has consumed the entry's struct opener.
+func decodeExtensionEntry(dec *tlv.Decoder) (mattercore.AccessControlExtensionEntry, error) {
+	var e mattercore.AccessControlExtensionEntry
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			return mattercore.AccessControlExtensionEntry{}, fmt.Errorf("extension entry: %w", err)
+		}
+		if el.IsEndContainer {
+			return e, nil
+		}
+		if el.Tag.Kind != tlv.TagKindContext {
+			continue
+		}
+		switch el.Tag.Number {
+		case 1:
+			e.Data = append([]byte(nil), el.Octets...)
+		case 254:
+			e.FabricIndex = uint8(el.Uint & 0xFF)
+		default:
+			if el.IsContainer {
+				if err := skipContainerTLV(dec); err != nil {
+					return mattercore.AccessControlExtensionEntry{}, err
+				}
 			}
 		}
 	}

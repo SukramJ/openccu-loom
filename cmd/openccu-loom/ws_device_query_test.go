@@ -13,7 +13,82 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
+
+// scopedBackendStub records which central's backend a config edit session read
+// and wrote, so a session scoped to one CCU can be shown to hit that CCU and
+// not the domain's first-match default. It embeds the package's full
+// backends.Operations stub and overrides only the two paramset calls.
+type scopedBackendStub struct {
+	*testBackendOps
+	label     string
+	putCalled bool
+}
+
+func (b *scopedBackendStub) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+	return map[string]any{"CENTRAL": b.label}, nil
+}
+
+func (b *scopedBackendStub) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
+	b.putCalled = true
+	return nil
+}
+
+// TestWSConfigSession_ReadsAndWritesTheScopedCentral pins that a config edit
+// session honours central_name on BOTH the value read and the save, not only
+// the description read. Two centrals hold the same channel address; the domain
+// resolves an address to the first matching central (registry order is
+// name-sorted), so an unscoped read/write lands on ccu-a. A session scoped to
+// ccu-b must read and write ccu-b — otherwise a session can read one CCU and
+// silently write another.
+func TestWSConfigSession_ReadsAndWritesTheScopedCentral(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-a", "ccu-b")
+	const channel = "COLLIDE01:1"
+	for _, name := range []string{"ccu-a", "ccu-b"} {
+		cu, ok := reg.Get(name)
+		if !ok {
+			t.Fatalf("%s not in registry", name)
+		}
+		cu.ModelRegistry.Put(device.New(device.Config{
+			Address:     "COLLIDE01",
+			InterfaceID: "BidCos-RF",
+			Interface:   hmenum.InterfaceBidCosRF,
+			Model:       "HM-LC-Sw1-Pl",
+		}))
+	}
+
+	writer := clientpkg.NewValueWriter()
+	backendA := &scopedBackendStub{testBackendOps: &testBackendOps{}, label: "ccu-a"}
+	backendB := &scopedBackendStub{testBackendOps: &testBackendOps{}, label: "ccu-b"}
+	wireID := hmtypes.ParseWireInterfaceID("BidCos-RF")
+	writer.Register("ccu-a", wireID, backendA)
+	writer.Register("ccu-b", wireID, backendB)
+
+	paramsets := adapter.NewParamsetsDomain(reg, writer)
+	q := &wsDeviceQuery{paramsets: paramsets, registry: reg, writer: writer}
+	pw := &wsParamsetWriter{domain: paramsets, registry: reg, writer: writer}
+	keyB := configui.SessionKey{CentralName: "ccu-b", ChannelAddress: channel, ParamsetKey: hmenum.ParamsetKeyMaster}
+
+	got, err := q.GetParamset(context.Background(), keyB)
+	if err != nil {
+		t.Fatalf("GetParamset: %v", err)
+	}
+	if got["CENTRAL"] != "ccu-b" {
+		t.Fatalf("session scoped to ccu-b read %v, want ccu-b's backend", got["CENTRAL"])
+	}
+
+	if err := pw.PutParamset(context.Background(), keyB, map[string]any{"FOO": 1}); err != nil {
+		t.Fatalf("PutParamset: %v", err)
+	}
+	if !backendB.putCalled {
+		t.Error("write scoped to ccu-b did not reach ccu-b's backend")
+	}
+	if backendA.putCalled {
+		t.Error("write scoped to ccu-b leaked to ccu-a (the default first-match central)")
+	}
+}
 
 // ── GetParamsetDescription ────────────────────────────────────────────────────
 

@@ -36,13 +36,15 @@ const (
 // service against the identifier space the connectivity event actually
 // speaks.
 //
-// The probe reports the CCU's own interface name ("BidCos-RF") while
-// every routing key in this package is keyed by the wire id an ingested
-// data point carries ("<central>-BidCos-RF"). Matching one against the
-// other found nothing: no sensor was ever degraded when a radio went
-// away, and the all-interfaces-down comparison never became true, so
-// the zone's central-loss policy never ran either. The DP-level UNREACH
-// path still worked, which is what kept the gap invisible.
+// ConnectivityChangedEvent.InterfaceID already carries the wire id
+// ("<central>-BidCos-RF") that observeProbeLatency stamps before the
+// reconciler publishes, and every routing key in this package is keyed
+// by that same wire id. Re-wrapping it a second time doubled the id
+// ("<central>-<central>-BidCos-RF"), so no sensor was ever degraded
+// when a radio went away, and the all-interfaces-down comparison never
+// became true, so the zone's central-loss policy never ran either. The
+// DP-level UNREACH path still worked, which is what kept the gap
+// invisible.
 //
 // The event is published on the real central bus rather than handed to
 // the handler, so the subscription is part of what is under test.
@@ -54,7 +56,7 @@ func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 	// One radio goes away. Only the sensors behind it degrade.
 	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
 		Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
-		InterfaceID: string(hmenum.InterfaceBidCosRF), Reachable: false,
+		InterfaceID: central.WireInterfaceID(connectivityTestCentral, hmenum.InterfaceBidCosRF), Reachable: false,
 	})
 	waitForJournalEvent(t, svc, "sensor_unavailable_while_armed",
 		"a lost interface must degrade the sensors enrolled behind it")
@@ -63,7 +65,7 @@ func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 	// is now down, which is the central-loss escalation.
 	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
 		Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
-		InterfaceID: string(hmenum.InterfaceHmIPRF), Reachable: false,
+		InterfaceID: central.WireInterfaceID(connectivityTestCentral, hmenum.InterfaceHmIPRF), Reachable: false,
 	})
 	waitForJournalEvent(t, svc, "central_lost_while_armed",
 		"losing every enrolled interface must run the zone's central-loss policy")
@@ -74,11 +76,13 @@ func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 //
 // The CCU's interface list carries a lost radio by dropping it from the
 // answer, and the reconciler is what turns that absence into a
-// ConnectivityChangedEvent. Publishing the event by hand — as the test
-// above does — proves this domain reacts, never that a radio which
-// genuinely disappears reaches it. The escalation is the reason it
-// matters: an armed zone whose interfaces are all gone must run its
-// central-loss policy rather than keep trusting the last known values.
+// ConnectivityChangedEvent — carrying the wire id observeProbeLatency
+// stamped onto the reachability answer, which this domain uses
+// directly. Publishing the event by hand — as the test above does —
+// proves this domain reacts, never that a radio which genuinely
+// disappears reaches it. The escalation is the reason it matters: an
+// armed zone whose interfaces are all gone must run its central-loss
+// policy rather than keep trusting the last known values.
 func TestVanishedInterfaceEscalatesThroughTheReconciler(t *testing.T) {
 	t.Parallel()
 
@@ -95,14 +99,18 @@ func TestVanishedInterfaceEscalatesThroughTheReconciler(t *testing.T) {
 	}
 	// VirtualDevices carries no enrolled sensor and never leaves the
 	// answer: an empty answer is the CCU-is-away case the reconciler
-	// deliberately reads as "no information".
+	// deliberately reads as "no information". observeProbeLatency
+	// stamps every InterfaceReachability with the wire id before the
+	// reconciler ever publishes, so this helper mirrors that.
 	serves := func(ids ...string) []coordinators.InterfaceReachability {
 		out := make([]coordinators.InterfaceReachability, 0, len(ids)+1)
 		for _, id := range ids {
-			out = append(out, coordinators.InterfaceReachability{InterfaceID: id, Reachable: true})
+			out = append(out, coordinators.InterfaceReachability{
+				InterfaceID: central.WireInterfaceID(connectivityTestCentral, hmenum.Interface(id)), Reachable: true,
+			})
 		}
 		return append(out, coordinators.InterfaceReachability{
-			InterfaceID: string(hmenum.InterfaceVirtualDevices), Reachable: true,
+			InterfaceID: central.WireInterfaceID(connectivityTestCentral, hmenum.InterfaceVirtualDevices), Reachable: true,
 		})
 	}
 	reconcile := func(ids ...string) {
@@ -143,7 +151,7 @@ func TestPartialInterfaceRecoveryKeepsTheStillDownRadioDegraded(t *testing.T) {
 	report := func(iface hmenum.Interface, reachable bool) {
 		events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
 			Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
-			InterfaceID: string(iface), Reachable: reachable,
+			InterfaceID: central.WireInterfaceID(connectivityTestCentral, iface), Reachable: reachable,
 		})
 	}
 

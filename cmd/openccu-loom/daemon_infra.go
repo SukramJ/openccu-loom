@@ -169,7 +169,9 @@ func wireSharedInfrastructure(
 	// the "dev" default. Set before the supervisor starts emitting
 	// Discovery so the very first payload already carries it.
 	mqtt.SetOriginVersion(build.Version)
-	si.mqttCollector = metrics.NewMqttCollector(si.metricsReg, pickFirstCentral(cfg))
+	// One daemon-wide MQTT counter series: the single shared bridge carries
+	// every central's traffic, so the counters are not per-central.
+	si.mqttCollector = metrics.NewMqttCollector(si.metricsReg)
 	// The bridge/health payload names the live fleet, not the boot config: a
 	// CCU adopted through the SPA joins the registry without ever reaching
 	// cfg.Centrals.

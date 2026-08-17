@@ -12843,7 +12843,9 @@ func TestHubJSONRPCWriter_SetSysvar_Success(t *testing.T) {
 
 func TestHubJSONRPCWriter_UpdateSysvar_Success(t *testing.T) {
 	t.Parallel()
-	srv := newBoost6JSONRPCServerAlwaysOK(t, "")
+	// The update script echoes "ok" once the metadata patch landed; the writer
+	// now treats anything else as ErrSysvarNotFound.
+	srv := newBoost6JSONRPCServerAlwaysOK(t, "ok")
 	defer srv.Close()
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
@@ -12982,7 +12984,9 @@ func TestHubJSONRPCWriter_TriggerFirmwareUpdate_Success(t *testing.T) {
 
 func TestHubJSONRPCWriter_CreateSysvar_StringType_UsesRega(t *testing.T) {
 	t.Parallel()
-	srv := newBoost6JSONRPCServerAlwaysOK(t, "")
+	// The create script echoes the new object id on success; the writer now
+	// treats an empty result as a failed create.
+	srv := newBoost6JSONRPCServerAlwaysOK(t, "12345")
 	defer srv.Close()
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
@@ -12997,7 +13001,9 @@ func TestHubJSONRPCWriter_CreateSysvar_StringType_UsesRega(t *testing.T) {
 
 func TestHubJSONRPCWriter_CreateSysvar_WithUnit_UsesRega(t *testing.T) {
 	t.Parallel()
-	srv := newBoost6JSONRPCServerAlwaysOK(t, "")
+	// The create script echoes the new object id on success; the writer now
+	// treats an empty result as a failed create.
+	srv := newBoost6JSONRPCServerAlwaysOK(t, "12345")
 	defer srv.Close()
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)

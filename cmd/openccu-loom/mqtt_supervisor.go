@@ -76,6 +76,11 @@ type mqttSupervisor struct {
 	// waiting out real broker timings.
 	retryDelay    time.Duration
 	retryMaxDelay time.Duration
+	// swapFn is the stack rebuild the connect-retry loop invokes to recover a
+	// boot connect that first failed. It is [mqttSupervisor.Swap] in
+	// production; a test overrides it so the recovered lifecycle's governing
+	// context can be observed without standing up a real broker.
+	swapFn func(ctx context.Context, cfg *config.Config) error
 }
 
 // Bounds of the boot-connect retry backoff. The upper bound is what an
@@ -128,13 +133,15 @@ func newMQTTSupervisor(logger *slog.Logger, healthTracker *health.Tracker, centr
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &mqttSupervisor{
+	s := &mqttSupervisor{
 		logger:        logger,
 		healthTracker: healthTracker,
 		centralNames:  centralNames,
 		retryDelay:    defaultMQTTRetryDelay,
 		retryMaxDelay: defaultMQTTRetryMaxDelay,
 	}
+	s.swapFn = s.Swap
+	return s
 }
 
 // SetChannelHidden wires the operator-hidden-channel gate (G12) that every
@@ -412,7 +419,17 @@ func (s *mqttSupervisor) retryInitialConnect(ctx context.Context, cfg *config.Co
 			if live {
 				return
 			}
-			if err := s.Swap(retryCtx, cfg); err == nil {
+			// Rebuild on the daemon-lifetime ctx, NOT retryCtx: Swap installs a
+			// lifecycle whose whole reconnect loop (and its health probe + hub
+			// fan-out worker) is governed by the context handed to it, and
+			// retryCtx is cancelled by this goroutine's deferred cancel() the
+			// instant the retry returns. Binding the recovered lifecycle to
+			// retryCtx therefore kills its reconnect loop on the very first
+			// broker drop after a late boot connect — permanently and silently.
+			// The normal boot path passes the daemon ctx to Start for the same
+			// reason. retryCtx still governs only this loop's own backoff wait
+			// and Shutdown-driven early exit.
+			if err := s.swapFn(ctx, cfg); err == nil {
 				s.logger.Info("mqtt.supervisor.connect.recovered",
 					slog.String("broker", redactBrokerURL(cfg.North.MQTT.BrokerURL)))
 				return

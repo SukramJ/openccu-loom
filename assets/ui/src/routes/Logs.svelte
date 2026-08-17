@@ -27,6 +27,10 @@
 
   let scrollEl = $state<HTMLDivElement | null>(null);
   let eventSource: EventSource | null = null;
+  // True once the stream has connected at least once. The first "open"
+  // is just the initial mount; every one after that is a reconnect, and
+  // a reconnect is the moment worth checking for a daemon restart.
+  let everConnected = false;
 
   const SCROLL_THRESHOLD = 60;
   const MAX_RECORDS = 5000;
@@ -193,6 +197,18 @@
     es.addEventListener("open", () => {
       sseLive = true;
       sseReconnecting = false;
+      if (everConnected) {
+        // A reconnect (not the initial mount). The browser reuses the
+        // original URL — including its `since=` pin — for every retry,
+        // so a same-process reconnect just redelivers a few already-seen
+        // records that appendRecords quietly drops. A restarted daemon
+        // is different: its seq counter restarts at 1, so its records
+        // never climb back over our stale `lastSeq` and the tail would
+        // stop appending forever. Probe the daemon's own high-water mark
+        // to tell the two apart.
+        void resyncAfterReconnect();
+      }
+      everConnected = true;
     });
 
     es.addEventListener("error", () => {
@@ -200,6 +216,29 @@
       sseReconnecting = true;
       // EventSource auto-reconnects; we just reflect the state.
     });
+  }
+
+  // Detects a daemon restart across a reconnect and resyncs the tail.
+  //
+  // The SSE stream itself cannot signal a counter reset — a post-restart
+  // record just looks like an old duplicate to appendRecords' `seq >
+  // lastSeq` filter. A server whose own last_seq is now lower than what
+  // we remember can only be a fresh process, so drop the stale `since=`
+  // pin and reopen: the new connection's backfill (now scoped to
+  // since=0) and live tail both resume from the new process' own
+  // numbering. A same-process reconnect always reports last_seq >=
+  // lastSeq, so this never fires and never re-renders anything already
+  // shown.
+  async function resyncAfterReconnect() {
+    try {
+      const probe = await api.getLogs({ limit: 1, minLevel: "debug" });
+      if (probe.last_seq < lastSeq) {
+        lastSeq = 0;
+        openStream();
+      }
+    } catch {
+      // A failed probe just means we try again on the next reconnect.
+    }
   }
 
   // ── Resume following ───────────────────────────────────────────────

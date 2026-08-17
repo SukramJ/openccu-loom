@@ -517,6 +517,107 @@ func (instantConnector) Connect(context.Context) error { return nil }
 
 func (instantConnector) Disconnect(context.Context) error { return nil }
 
+// dropConnector is a broker adapter whose Connect always succeeds. Its
+// ConnectionLost channel lets a test force a drop, and the lifecycle it drives
+// uses a long idle backoff so the only reconnect within the test window is the
+// forced one — making the connect count a clean signal of "the reconnect loop
+// is still alive".
+type dropConnector struct {
+	connects atomic.Int64
+	lost     chan struct{}
+}
+
+func (c *dropConnector) Connect(context.Context) error    { c.connects.Add(1); return nil }
+func (c *dropConnector) Disconnect(context.Context) error { return nil }
+func (c *dropConnector) ConnectionLost() <-chan struct{}  { return c.lost }
+
+func waitForCond(t *testing.T, d time.Duration, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("condition not met within deadline")
+}
+
+// TestSupervisorRecoveredLifecycleSurvivesTheRetryGoroutineReturn pins the fix
+// for the boot-recovery context bug: retryInitialConnect used to rebuild the
+// stack on retryCtx, whose deferred cancel() fires the instant the one-shot
+// retry goroutine returns — cancelling the context the recovered lifecycle's
+// whole reconnect loop runs on. The first broker drop after a late boot connect
+// was then permanent and silent.
+//
+// The recovered lifecycle must run on the daemon-lifetime context instead, so
+// it is still live after the retry goroutine returns AND still reconnects on a
+// later drop. The swapFn seam lets the recovered lifecycle be observed without a
+// real broker; production wires it to Swap.
+func TestSupervisorRecoveredLifecycleSurvivesTheRetryGoroutineReturn(t *testing.T) {
+	t.Parallel()
+	daemonCtx, cancelDaemon := context.WithCancel(context.Background())
+	t.Cleanup(cancelDaemon)
+
+	conn := &dropConnector{lost: make(chan struct{}, 1)}
+	var lc *mqtt.Lifecycle
+	ctxCh := make(chan context.Context, 1)
+
+	s := newSup(t)
+	s.retryDelay = time.Millisecond
+	s.retryMaxDelay = time.Millisecond
+	s.swapFn = func(swapCtx context.Context, _ *config.Config) error {
+		// A long idle backoff so the reconnect loop's timer never fires within
+		// the test window: the only reconnect is the drop forced below.
+		l := mqtt.NewLifecycle(mqtt.LifecycleConfig{
+			InitialBackoff: 30 * time.Second,
+			MaxBackoff:     30 * time.Second,
+			FlapWindow:     -1, // every detected drop reconnects immediately
+		}, conn)
+		if err := l.Start(swapCtx); err != nil {
+			return err
+		}
+		lc = l
+		ctxCh <- swapCtx
+		return nil
+	}
+	t.Cleanup(func() {
+		if lc != nil {
+			_ = lc.Stop(context.Background())
+		}
+	})
+
+	s.retryInitialConnect(daemonCtx, mqttCfg(true))
+
+	var recoveredCtx context.Context
+	select {
+	case recoveredCtx = <-ctxCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("connect-retry never recovered the stack")
+	}
+
+	// Wait until the retry goroutine has returned: its defer cancels retryCtx and
+	// clears retryCancel. A lifecycle bound to retryCtx dies exactly here.
+	waitForCond(t, 5*time.Second, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.retryCancel == nil
+	})
+
+	if err := recoveredCtx.Err(); err != nil {
+		t.Fatalf("the recovered lifecycle's context was cancelled when the retry goroutine returned: %v — "+
+			"it was bound to the retry ctx, not the daemon ctx", err)
+	}
+
+	// It still reconnects on a later drop, which it can only do while its
+	// reconnect loop's context is alive.
+	if got := conn.connects.Load(); got != 1 {
+		t.Fatalf("connects = %d before the drop, want 1 (only the boot-recovery connect)", got)
+	}
+	conn.lost <- struct{}{}
+	waitForCond(t, 5*time.Second, func() bool { return conn.connects.Load() >= 2 })
+}
+
 // TestSupervisorRegistersEachConnectHookExactlyOnce pins the registration of
 // the connect callbacks against the window between publishing a stack and
 // handing it those callbacks.

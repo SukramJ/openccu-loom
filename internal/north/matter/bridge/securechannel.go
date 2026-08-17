@@ -590,7 +590,18 @@ func (b *Bridge) recordPaseFailure() {
 		},
 	})
 	if win != nil {
+		// RevokeWindow runs the window's restore closure synchronously, and
+		// every production restore closure re-attaches the configured PASE
+		// acceptor via AttachPaseHandler / AttachPaseHandlerProvider — each of
+		// which calls resetPaseFailures(). Without this guard that reset
+		// clears the lockout we just engaged, so the refusal lives only
+		// microseconds and guessing continues at full rate with the backoff
+		// streak stuck at 0. Preserve the in-force lockout across the internal
+		// restore; a genuine operator-initiated window open takes a different
+		// path and still starts clean.
+		b.preserveLockoutOnReset.Store(true)
 		_ = win.RevokeWindow(context.Background())
+		b.preserveLockoutOnReset.Store(false)
 	}
 }
 
@@ -645,11 +656,23 @@ func (b *Bridge) paseLockedOut() bool {
 // [Bridge.AttachPaseHandlerProvider]) — a commissioning-window boundary —
 // so each window gets its own [paseMaxErrors] budget, an unlocked PASE
 // path and a clean set of per-source dedup windows.
+//
+// Exception: when the brute-force cap's own RevokeWindow drives the
+// re-attach (preserveLockoutOnReset is raised), an in-force lockout and its
+// streak are kept. Otherwise the lockout would be cleared the instant it was
+// engaged — see [Bridge.recordPaseFailure].
 func (b *Bridge) resetPaseFailures() {
 	b.paseFailures.Store(0)
 	b.mu.Lock()
-	b.paseLockoutUntil = time.Time{}
-	b.paseLockoutStreak = 0
+	// An in-force lockout survives the internal restore the brute-force cap
+	// itself triggers (see [Bridge.recordPaseFailure]): clearing it there
+	// would unlock PASE the instant it locked. Every other caller — a fresh
+	// operator-initiated window open — leaves preserveLockoutOnReset clear
+	// and gets a clean budget.
+	if !b.preserveLockoutOnReset.Load() {
+		b.paseLockoutUntil = time.Time{}
+		b.paseLockoutStreak = 0
+	}
 	b.mu.Unlock()
 	b.unsecuredWindows.Clear()
 	b.unsecuredWindowCount.Store(0)

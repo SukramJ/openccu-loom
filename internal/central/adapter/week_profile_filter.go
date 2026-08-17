@@ -142,7 +142,8 @@ func attachNonClimateWeekProfileToDevice(dev *device.Device, centralName string)
 	wp.AttachWriter(&scheduleWriteForwarder{ch: scheduleCh}, scheduleCh.Address)
 	// Wire MASTER-paramset Load/Save so the Zeitplan sensor can surface
 	// the actual schedule entries decoded from `<NN>_WP_<FIELD>` slots.
-	bindDefaultScheduleIO(scheduleCh, wp)
+	// The resolved domain lets the loader decode lock-specific fields.
+	bindDefaultScheduleIO(scheduleCh, wp, resolveScheduleDomain(dev, scheduleCh.Number))
 	// Register every target key on the DP so SetScheduleEnabled has the
 	// full enumeration when broadcasting (empty channelKey).
 	for k := range targets {

@@ -121,6 +121,16 @@ type StandardJobs struct {
 	// state and emits drift events on divergence. Nil disables.
 	Reconcile         func(ctx context.Context) error
 	ReconcileInterval time.Duration
+
+	// ReconcileNotReady runs in Reconcile's place while the central is NOT
+	// operational (a CCU outage leaves it FAILED). Reconcile itself is gated
+	// on the central being operational, so without this the system_health
+	// metric and the per-interface connectivity aggregate — both produced
+	// only by the reconcile pass — freeze at their last live value and every
+	// north-bound surface keeps showing it as current. The not-ready emitter
+	// demotes them to unknown/unreachable instead. Nil leaves the old
+	// behaviour (skip entirely while not operational).
+	ReconcileNotReady func(ctx context.Context) error
 }
 
 // Default intervals for the background scheduler jobs.
@@ -274,6 +284,26 @@ func gatedRun(unit *Unit, skipOnConnectionIssue bool, fn func(context.Context) e
 			return nil
 		}
 		return fn(ctx)
+	}
+}
+
+// reconcileRun runs the full reconcile pass while the central is operational
+// and the not-ready emitter otherwise. A plain [gatedRun] skips the whole
+// pass during a CCU outage, which freezes the last system_health and
+// connectivity readings on every north-bound surface as if they were current
+// — the reconcile pass is their only producer. The not-ready branch keeps
+// them honest (system_health → unknown, interfaces → unreachable) without
+// probing a CCU that is down. A nil notReady falls back to the old
+// skip-entirely behaviour.
+func reconcileRun(unit *Unit, reconcile, notReady func(context.Context) error) func(context.Context) error {
+	return func(ctx context.Context) error {
+		if !isOperational(unit) {
+			if notReady != nil {
+				return notReady(ctx)
+			}
+			return nil
+		}
+		return reconcile(ctx)
 	}
 }
 
@@ -702,7 +732,7 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 		if err := unit.Scheduler.Add(scheduler.Job{
 			Name:     "central.reconcile",
 			Interval: interval,
-			Run:      gatedRun(unit, false, cfg.Reconcile),
+			Run:      reconcileRun(unit, cfg.Reconcile, cfg.ReconcileNotReady),
 		}); err != nil {
 			return registered, fmt.Errorf("central: register reconcile job: %w", err)
 		}

@@ -180,7 +180,7 @@ func TestLogout_NoSession_Returns204(t *testing.T) {
 	d := newTestAuthDeps(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", http.NoBody)
 	w := httptest.NewRecorder()
-	Logout(d).ServeHTTP(w, req)
+	Logout(d, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", w.Code)
@@ -198,7 +198,7 @@ func TestLogout_WithSession_ClearsCookie(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sess.ID})
 	w := httptest.NewRecorder()
-	Logout(d).ServeHTTP(w, req)
+	Logout(d, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", w.Code)
@@ -209,10 +209,32 @@ func TestLogout_NilDeps_Returns204(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", http.NoBody)
 	w := httptest.NewRecorder()
-	Logout(nil).ServeHTTP(w, req)
+	Logout(nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", w.Code)
+	}
+}
+
+// TestLogout_WithRevoker_ClosesSocketsBySubject pins defect-2's fix: an
+// explicit logout must route through the socket-aware [SessionRevoker] so the
+// caller's open WebSocket connections are torn down by subject — otherwise an
+// already-open /events socket keeps its operator/admin identity after logout.
+func TestLogout_WithRevoker_ClosesSocketsBySubject(t *testing.T) {
+	t.Parallel()
+	d := newTestAuthDeps(t)
+	revoker := &fakeSessionRevoker{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", http.NoBody)
+	id := auth.Identity{Subject: "admin", Role: auth.RoleAdmin, Scheme: auth.SchemeSession}
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), id))
+	w := httptest.NewRecorder()
+	Logout(d, revoker).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", w.Code)
+	}
+	if len(revoker.revokeBySubjectCalls) != 1 || revoker.revokeBySubjectCalls[0] != "admin" {
+		t.Fatalf("expected RevokeBySubject(admin) exactly once, got %v", revoker.revokeBySubjectCalls)
 	}
 }
 

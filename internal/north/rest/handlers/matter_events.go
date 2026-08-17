@@ -19,8 +19,14 @@ type MatterEvent struct {
 	// Topic is the WS hub topic the event is published under. Use
 	// the `MatterTopic*` constants below.
 	Topic string
-	// Type is the wire `type` field clients see — short, lowercase,
-	// matches the trailing segment of Topic.
+	// Type is the wire `type` field clients see. It carries the full
+	// dotted event name — identical to Topic, `matter.<event>` — because
+	// the wsapi.json envelope contract (assets/wsapi.json) defines `type`
+	// as "the `name` field of the matching broadcast entry", and every
+	// matter broadcast is named with the `matter.` prefix. Both the SPA
+	// (assets/ui/src/lib/stores/matter.svelte.ts dispatches on
+	// `case "matter.fabric_added"`) and the Python client key on the
+	// prefixed name, so a bare trailing segment reaches no consumer.
 	Type string
 	// When is the event timestamp; the publisher fills this when
 	// zero.
@@ -88,21 +94,14 @@ func publishMatterEvent(ctx context.Context, p MatterEventPublisher, topic strin
 		return
 	}
 	p.PublishMatterEvent(ctx, MatterEvent{
-		Topic:   topic,
-		Type:    typeFromTopic(topic),
+		Topic: topic,
+		// The wire `type` carries the full dotted name, identical to the
+		// topic: every other WS broadcast family emits its prefixed name
+		// and both consumers (SPA + Python client) key on `matter.<event>`.
+		Type:    topic,
 		When:    time.Now().UTC(),
 		Payload: payload,
 	})
-}
-
-// typeFromTopic strips the leading `matter.` prefix so the wire
-// `type` field matches the Type column from the wsapi catalogue.
-func typeFromTopic(topic string) string {
-	const prefix = "matter."
-	if len(topic) > len(prefix) && topic[:len(prefix)] == prefix {
-		return topic[len(prefix):]
-	}
-	return topic
 }
 
 // recordMatterAudit is a thin nil-safe wrapper around

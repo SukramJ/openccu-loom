@@ -36,10 +36,12 @@ type fakeCaptureService struct {
 	archiveData []byte
 	archiveErr  error
 	started     int
+	lastOpts    diagnostics.StartOptions
 }
 
-func (f *fakeCaptureService) Start(_ diagnostics.StartOptions) (diagnostics.Summary, error) {
+func (f *fakeCaptureService) Start(opts diagnostics.StartOptions) (diagnostics.Summary, error) {
 	f.started++
+	f.lastOpts = opts
 	if f.started > 1 {
 		return diagnostics.Summary{}, diagnostics.ErrCaptureBusy
 	}
@@ -113,6 +115,53 @@ func TestStartCapture_ValidBody_Returns202(t *testing.T) {
 	}
 	if sum.ID != "cap_aabbccdd" {
 		t.Errorf("id = %q, want cap_aabbccdd", sum.ID)
+	}
+}
+
+// TestStartCapture_AuthenticatedOperator_StampsTriggeredAndKeepsAnonymiseFalse
+// pins the diagnostics-anonymise fix: an authenticated operator's start is
+// attributed to their subject via StartOptions.Triggered, which is what lets
+// Manager.Start honour an explicit anonymise=false. Without the Triggered
+// stamp the manager force-anonymises every REST/SPA capture.
+func TestStartCapture_AuthenticatedOperator_StampsTriggeredAndKeepsAnonymiseFalse(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCaptureService{startResult: diagnostics.Summary{ID: "cap_1", Status: diagnostics.StatusRunning}}
+	r := newCaptureRouter(svc)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/capture",
+		strings.NewReader(`{"anonymise": false}`))
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "operator@ccu"}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.lastOpts.Triggered != "operator@ccu" {
+		t.Errorf("Triggered = %q, want operator@ccu", svc.lastOpts.Triggered)
+	}
+	if svc.lastOpts.Anonymise {
+		t.Errorf("Anonymise = true, want false to be forwarded to the manager")
+	}
+}
+
+// TestStartCapture_Unauthenticated_LeavesTriggeredEmpty pins the safe side:
+// an unauthenticated request leaves Triggered empty, so Manager.Start forces
+// anonymisation even when the body asks for anonymise=false. The "anonymous"
+// audit fallback must NOT count as an operator subject here.
+func TestStartCapture_Unauthenticated_LeavesTriggeredEmpty(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCaptureService{startResult: diagnostics.Summary{ID: "cap_2", Status: diagnostics.StatusRunning}}
+	r := newCaptureRouter(svc)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/capture",
+		strings.NewReader(`{"anonymise": false}`))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.lastOpts.Triggered != "" {
+		t.Errorf("Triggered = %q, want empty for an unauthenticated request", svc.lastOpts.Triggered)
 	}
 }
 

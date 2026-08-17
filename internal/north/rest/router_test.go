@@ -1056,6 +1056,134 @@ func TestRouter_IncidentsAdmin_route(t *testing.T) {
 	}
 }
 
+// TestRouter_IncidentsAdmin_requiresAdmin pins defect-4's fix: DELETE
+// /incidents is admin-gated to match the published contract
+// (assets/openapi.yaml declares it `openIdConnect: [admin]`). An operator —
+// enough for most mutations — is refused 403; an admin clears the gate and the
+// clear runs.
+func TestRouter_IncidentsAdmin_requiresAdmin(t *testing.T) {
+	t.Parallel()
+	clearer := &fakeIncidentsClearer{}
+	rr := httptest.NewRecorder()
+	roleGatedRouter(auth.RoleOperator, Deps{IncidentsAdmin: clearer}).
+		ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/incidents", http.NoBody))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("operator DELETE /incidents = %d, want 403 body=%s", rr.Code, rr.Body.String())
+	}
+	if clearer.calls != 0 {
+		t.Fatalf("operator was refused yet ClearIncidents ran %d times", clearer.calls)
+	}
+
+	rr = httptest.NewRecorder()
+	roleGatedRouter(auth.RoleAdmin, Deps{IncidentsAdmin: clearer}).
+		ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/incidents", http.NoBody))
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE /incidents = %d, want 204 body=%s", rr.Code, rr.Body.String())
+	}
+	if clearer.calls != 1 {
+		t.Fatalf("admin ClearIncidents calls=%d want 1", clearer.calls)
+	}
+}
+
+// TestRouter_BasicAuthGuessing_Throttled pins defect-1's fix: a per-IP sweep of
+// wrong-password HTTP Basic probes against a Resolve-protected route
+// (GET /auth/me) is rate-limited through the same limiter that guards
+// POST /auth/login — not answered 401 without limit. A correct credential from
+// a fresh IP still authenticates, since a successful verification is never
+// charged.
+func TestRouter_BasicAuthGuessing_Throttled(t *testing.T) {
+	t.Parallel()
+	users := auth.NewMemoryUserStore()
+	users.Put("admin", "secret", auth.RoleAdmin)
+	mw := auth.NewMiddleware(users, nil)
+	r := NewRouter(Deps{
+		StartedAt:      time.Now(),
+		AuthResolve:    mw.Resolve,
+		LoginRateLimit: middleware.NewLoginRateLimiter(),
+		Auth:           &handlers.AuthDeps{Users: users, Sessions: auth.NewSessionStore()},
+	})
+
+	probe := func(ip, user, pass string) int {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", http.NoBody)
+		req.RemoteAddr = ip
+		req.SetBasicAuth(user, pass)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		return rr.Code
+	}
+
+	const attacker = "203.0.113.9:5555"
+	saw401, saw429 := false, false
+	for range 50 {
+		switch probe(attacker, "admin", "wrong") {
+		case http.StatusUnauthorized:
+			saw401 = true
+		case http.StatusTooManyRequests:
+			saw429 = true
+		}
+		if saw429 {
+			break
+		}
+	}
+	if !saw401 {
+		t.Fatal("expected early wrong-password probes to reveal 401 before the budget was spent")
+	}
+	if !saw429 {
+		t.Fatal("wrong-password Basic sweep was never throttled (429) — guessing is unthrottled")
+	}
+
+	// Correct credential from a fresh IP (its own bucket) still authenticates.
+	if code := probe("198.51.100.7:4444", "admin", "secret"); code != http.StatusOK {
+		t.Fatalf("correct credential from a fresh IP got %d, want 200", code)
+	}
+}
+
+// recordingSessionRevoker records the subjects a revocation asked it to drop.
+type recordingSessionRevoker struct {
+	mu       sync.Mutex
+	subjects []string
+}
+
+func (r *recordingSessionRevoker) RevokeBySubject(subject string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.subjects = append(r.subjects, subject)
+	return 1
+}
+
+func (r *recordingSessionRevoker) RevokeBySubjectExcept(string, string) int { return 0 }
+
+// TestRouter_Logout_ClosesSocketsBySubject pins defect-2's wiring: the router
+// hands the socket-aware SessionRevoker to the logout handler, so an explicit
+// logout tears down the caller's open WebSocket connections by subject rather
+// than leaving them privileged.
+func TestRouter_Logout_ClosesSocketsBySubject(t *testing.T) {
+	t.Parallel()
+	revoker := &recordingSessionRevoker{}
+	r := NewRouter(Deps{
+		StartedAt: time.Now(),
+		Auth:      &handlers.AuthDeps{Sessions: auth.NewSessionStore()},
+		AuthResolve: func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				ctx := auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "alice", Role: auth.RoleAdmin})
+				next.ServeHTTP(w, req.WithContext(ctx))
+			})
+		},
+		SessionRevoker: revoker,
+	})
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", http.NoBody))
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("logout = %d, want 204 body=%s", rr.Code, rr.Body.String())
+	}
+	revoker.mu.Lock()
+	defer revoker.mu.Unlock()
+	if len(revoker.subjects) != 1 || revoker.subjects[0] != "alice" {
+		t.Fatalf("expected RevokeBySubject(alice) once, got %v", revoker.subjects)
+	}
+}
+
 // TestRouter_MasterProfiles_route verifies the master-profiles routes are
 // guarded by both Devices and MasterProfiles (nested gating — the
 // handlers resolve device_type/channel_type from the channel's device).

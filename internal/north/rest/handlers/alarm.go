@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -328,6 +329,17 @@ func ListAlarmJournal(p AlarmPanel) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid query parameter", errMsg))
 			return
 		}
+		// Hidden rows are the duress events (notes/concepts/alarm-concept.md
+		// §16): "hidden" governs the operator-visible and notification
+		// surfaces so an intruder standing next to a coerced operator sees
+		// a clean journal, not permanent audit erasure. They stay off the
+		// default feed for every role and become recoverable only through
+		// an explicit, deliberate audit read (?include_hidden=true) by an
+		// admin identity — the sanctioned authorized-reader path. A
+		// non-admin, or an admin who did not ask, gets the clean feed.
+		if includeHiddenAuthorized(r) {
+			f.IncludeHidden = true
+		}
 		rows, err := p.Stores().Journal.Query(r.Context(), f)
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Journal query failed", err)
@@ -550,6 +562,22 @@ func apiWalkTestStatus(st engine.WalkTestStatus) hmapi.AlarmWalkTestStatus {
 		out.Sensors = append(out.Sensors, row)
 	}
 	return out
+}
+
+// includeHiddenAuthorized reports whether this request is the sanctioned
+// authorized-reader path for hidden (duress) journal rows: an explicit
+// ?include_hidden=true opt-in AND an admin identity. Both are required —
+// the opt-in keeps duress off an admin's ordinary journal browsing (the
+// threat model's "attacker-visible screens stay clean"), and the role
+// gate keeps it off every operator and viewer surface entirely.
+func includeHiddenAuthorized(r *http.Request) bool {
+	switch strings.ToLower(r.URL.Query().Get("include_hidden")) {
+	case "1", "true", "yes":
+	default:
+		return false
+	}
+	id, ok := auth.IdentityFrom(r.Context())
+	return ok && id.HasRole(auth.RoleAdmin)
 }
 
 // parseAlarmJournalFilter extracts the GET /alarm/journal query

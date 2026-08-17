@@ -509,6 +509,55 @@ func TestStandardJobsRefreshClientDataDefault(t *testing.T) {
 	}
 }
 
+// TestReconcileRunFallsBackToNotReadyWhileNotOperational pins the outage fix:
+// while the central is not operational (its default pre-Start state), the
+// reconcile job must run the not-ready emitter in place of the full pass so
+// the system_health / connectivity surfaces are demoted instead of frozen.
+func TestReconcileRunFallsBackToNotReadyWhileNotOperational(t *testing.T) {
+	c := newTestCentral(t)
+	var reconcile, notReady atomic.Int32
+	run := reconcileRun(
+		c,
+		func(context.Context) error { reconcile.Add(1); return nil },
+		func(context.Context) error { notReady.Add(1); return nil },
+	)
+	if err := run(context.Background()); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if reconcile.Load() != 0 {
+		t.Errorf("full reconcile ran %d times while not operational, want 0", reconcile.Load())
+	}
+	if notReady.Load() != 1 {
+		t.Errorf("not-ready emitter ran %d times while not operational, want 1", notReady.Load())
+	}
+}
+
+// TestReconcileRunRunsFullPassWhileOperational is the other half: an
+// operational central runs the full reconcile pass, never the not-ready path.
+func TestReconcileRunRunsFullPassWhileOperational(t *testing.T) {
+	c := newTestCentral(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = c.Start(ctx)
+	_ = c.StateMachine.ForceTransitionTo(hmenum.CentralStateRunning, hmenum.FailureReasonNone)
+
+	var reconcile, notReady atomic.Int32
+	run := reconcileRun(
+		c,
+		func(context.Context) error { reconcile.Add(1); return nil },
+		func(context.Context) error { notReady.Add(1); return nil },
+	)
+	if err := run(context.Background()); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if reconcile.Load() != 1 {
+		t.Errorf("full reconcile ran %d times while operational, want 1", reconcile.Load())
+	}
+	if notReady.Load() != 0 {
+		t.Errorf("not-ready emitter ran %d times while operational, want 0", notReady.Load())
+	}
+}
+
 // TestIsOperational_NilUnit verifies isOperational returns false for nil.
 func TestIsOperational_NilUnit(t *testing.T) {
 	if isOperational(nil) {

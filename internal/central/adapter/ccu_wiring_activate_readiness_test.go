@@ -211,7 +211,7 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 	}
 	resultCh := make(chan wireResult, 1)
 	go func() {
-		closer, err := wireInterface(
+		closer, _, err := wireInterface(
 			ctx, cc, hmenum.InterfaceHmIPRF, unit, pipeline, writer,
 			nil, // runner: nil skips the ReGa fetch_all_device_data call: not needed
 			// to observe listDevices/init/deinit, and it would require

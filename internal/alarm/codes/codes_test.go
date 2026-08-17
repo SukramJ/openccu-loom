@@ -504,6 +504,91 @@ func TestFacadeMatchDuressBoundsProbeWorkPerSource(t *testing.T) {
 	}
 }
 
+// TestFacadeValidateCodeFreeMasterDisarmNeverLocksOutSource pins the
+// aggregate-panel defect: an HA "master" alarm_control_panel disarms
+// code-free, and the engine loops that one press across every zone. A
+// code-required zone refuses it — correctly — but an absent code is not
+// a wrong guess and must not charge the rate limiter, or a handful of
+// code-required zones on a single press would lock the source out and
+// then refuse the operator's immediately following correct per-zone
+// PIN. A genuinely wrong code must still count, so the brute-force
+// lockout is preserved.
+//
+// Bite: with the limiter charged on a missing code, the correct PIN
+// after rateLimitMaxAttempts code-free presses is refused and the first
+// assertion fails.
+func TestFacadeValidateCodeFreeMasterDisarmNeverLocksOutSource(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Markus", "1234", false, Perms{Disarm: true}, nil),
+	}}
+	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	// Far more code-free "master" disarms than the wrong-code budget.
+	const presses = rateLimitMaxAttempts * 3
+	for i := range presses {
+		if _, _, err := f.Validate(ctx, "zone-1", "disarm", "", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+			t.Fatalf("press %d: err=%v want engine.ErrInvalidCode (code required, none supplied)", i, err)
+		}
+	}
+
+	// The correct per-zone PIN from the same source is still accepted —
+	// no code-free press ever charged the limiter.
+	identity, _, err := f.Validate(ctx, "zone-1", "disarm", "1234", "mqtt")
+	if err != nil {
+		t.Fatalf("correct PIN after %d code-free disarms: %v, want it accepted", presses, err)
+	}
+	if identity != "Markus" {
+		t.Errorf("identity=%q want Markus", identity)
+	}
+
+	// A genuinely wrong code still counts toward the lockout: the real
+	// brute-force protection is untouched. (The success above cleared the
+	// ledger, so this run starts fresh.)
+	for i := range rateLimitMaxAttempts {
+		if _, _, err := f.Validate(ctx, "zone-1", "disarm", "0000", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+			t.Fatalf("wrong attempt %d: err=%v want engine.ErrInvalidCode", i, err)
+		}
+	}
+	if _, _, err := f.Validate(ctx, "zone-1", "disarm", "1234", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+		t.Errorf("correct PIN after %d wrong codes: err=%v want a lockout ErrInvalidCode", rateLimitMaxAttempts, err)
+	}
+}
+
+// TestFacadeMatchDuressCorrectPINNeverSuppressesRealDuress pins the
+// probe-ledger defect: a correct ordinary PIN is not a failed duress
+// guess. The aggregate panel republishes the household's correct PIN
+// across zones as ordinary no-op disarms; charging each one to the
+// probe limiter would exhaust the budget and mute a real duress code
+// entered during that window — the exact scenario the branch exists
+// for. Only a genuinely unknown code counts (guarded by
+// TestFacadeMatchDuressBoundsProbeWorkPerSource).
+//
+// Bite: with recordFailure charged on the correct ordinary PIN, the
+// real duress code after rateLimitMaxAttempts correct-PIN disarms is
+// suppressed and the final assertion fails.
+func TestFacadeMatchDuressCorrectPINNeverSuppressesRealDuress(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Markus", "1234", false, Perms{Disarm: true}, nil),
+		pinRow(t, "c2", "Under Duress", "9999", true, Perms{Disarm: true}, nil),
+	}}
+	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	const disarms = rateLimitMaxAttempts * 3
+	for i := range disarms {
+		if identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "1234", "mqtt"); duress || identity != "" {
+			t.Fatalf("disarm %d: MatchDuress(correct ordinary PIN)=(%q,%v) want ('',false)", i, identity, duress)
+		}
+	}
+
+	identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "9999", "mqtt")
+	if !duress || identity != "Under Duress" {
+		t.Fatalf("real duress code after %d correct-PIN disarms=(%q,%v) want (%q,true) — the probe ledger must not have muted it",
+			disarms, identity, duress, "Under Duress")
+	}
+}
+
 // TestFacadeRowsProjectsHardwareBindings verifies Rows parses a
 // keypad_slot row's binding and omits the hash field entirely (there
 // is none to omit — Row carries no Hash field at all).

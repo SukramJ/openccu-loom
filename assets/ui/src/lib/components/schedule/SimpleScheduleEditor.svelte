@@ -85,9 +85,24 @@
     JSON.stringify(entries) !== JSON.stringify(serverEntries),
   );
 
+  // The daemon's outer bound for a simple (non-climate) schedule
+  // channel — mirrors internal/model/schedule/simple.go's
+  // SimpleMaxSlot. A specific device may declare fewer groups (69 on
+  // a handful of models); the REST API does not currently surface that
+  // per-device figure to the SPA, so this is the daemon-wide ceiling,
+  // never a per-device promise. Writing past what a device actually
+  // supports is rejected server-side (paramset fault -5) and surfaces
+  // through the existing save-error toast. `entries` is folded in too
+  // so an already-saved schedule that (somehow) holds a slot beyond
+  // this constant is never treated as un-addable.
+  const SIMPLE_MAX_SLOT = 75;
+  const maxSlot = $derived(
+    Math.max(SIMPLE_MAX_SLOT, ...entries.map((e) => e.slot_no)),
+  );
+
   function nextFreeSlot(): number {
     const used = new Set(entries.map((e) => e.slot_no));
-    for (let i = 1; i <= 24; i++) if (!used.has(i)) return i;
+    for (let i = 1; i <= maxSlot; i++) if (!used.has(i)) return i;
     return -1;
   }
 
@@ -106,7 +121,7 @@
   function addEntry() {
     const slot = nextFreeSlot();
     if (slot < 0) {
-      toastStore.warn(t("schedule.max_reached"));
+      toastStore.warn(t("schedule.max_reached", { max: maxSlot }));
       return;
     }
     entries = [...entries, emptyEntryForDomain(slot)];
@@ -243,7 +258,7 @@
     <div>
       <h2 class="text-lg font-semibold">{t("schedule.simple_title")}</h2>
       <p class="flex items-center gap-2 text-xs text-[var(--ha-secondary-text-color)]">
-        <span>{t("schedule.slots_count", { count: entries.length })}</span>
+        <span>{t("schedule.slots_count", { count: entries.length, max: maxSlot })}</span>
         {#if domain}
           <Badge variant="muted">{domain}</Badge>
         {/if}

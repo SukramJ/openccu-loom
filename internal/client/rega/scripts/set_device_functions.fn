@@ -1,5 +1,5 @@
 !# openccu-loom — set_device_functions
-!# Params: ##address## (channel or device address), ##functions## (\n-
+!# Params: address (channel or device address), functions (\n-
 !#         separated function names; empty string clears every existing
 !#         assignment)
 !# Output: count of assignments after the update.

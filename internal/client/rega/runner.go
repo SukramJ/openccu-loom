@@ -92,6 +92,53 @@ func (r *Runner) Run(ctx context.Context, script hmenum.RegaScript, params map[s
 	return out, nil
 }
 
+// RunLists runs a script whose parameters include newline-joined lists. Each
+// element of every list is validated for control characters individually (a
+// single element may not contain any, including a newline that would forge an
+// extra entry), then the elements are joined with LF and substituted as one
+// value; the join newlines are the only control characters permitted for those
+// keys. Single-value params in params keep the strict all-control-char
+// rejection. This is how set_device_rooms / set_device_functions pass their
+// \n-separated lists without either mis-encoding a legitimate multi-entry
+// assignment or reopening the comment-break injection.
+func (r *Runner) RunLists(
+	ctx context.Context,
+	script hmenum.RegaScript,
+	params map[string]string,
+	lists map[string][]string,
+) (string, error) {
+	merged := make(map[string]string, len(params)+len(lists))
+	for k, v := range params {
+		merged[k] = v
+	}
+	listKeys := make(map[string]bool, len(lists))
+	for k, elems := range lists {
+		for _, e := range elems {
+			if bad, isBad := firstControlChar(e); isBad {
+				return "", fmt.Errorf(
+					"rega: %s: rejected control character in list param %s (U+%04X): %w",
+					script, k, bad, hmerr.ErrValidation,
+				)
+			}
+		}
+		merged[k] = strings.Join(elems, "\n")
+		listKeys[k] = true
+	}
+	body, err := loadScript(script)
+	if err != nil {
+		return "", err
+	}
+	substituted, err := substituteWithLists(body, merged, listKeys)
+	if err != nil {
+		return "", fmt.Errorf("rega: %s: %w", script, err)
+	}
+	var out string
+	if err := r.client.Call(ctx, regaRunScriptMethod, map[string]any{"script": substituted}, &out); err != nil {
+		return "", fmt.Errorf("rega: %s: %w", script, err)
+	}
+	return out, nil
+}
+
 // RunJSON runs script and unmarshals its (sanitised) output into v.
 // v must be a non-nil pointer to a type json.Unmarshal accepts.
 func (r *Runner) RunJSON(ctx context.Context, script hmenum.RegaScript, params map[string]string, v any) error {
@@ -491,14 +538,42 @@ func (r *Runner) SetSystemVariableString(ctx context.Context, name, value string
 // referenced in body must have an entry in params; unreferenced params
 // are allowed (they just go unused). The replacement value is escaped
 // via EscapeString so that it cannot break out of a double-quoted ReGa
-// string literal.
+// string literal, and any value carrying a control character is rejected
+// outright (see firstControlChar) so it cannot break out of a `!# …`
+// line comment either. Both failure modes name the offending placeholders
+// and return before any network activity.
 func substitute(body string, params map[string]string) (string, error) {
+	return substituteWithLists(body, params, nil)
+}
+
+// substituteWithLists replaces the placeholders in body with the values in
+// params. Keys named in listKeys are newline-joined lists: their value may
+// carry the LF separators the caller inserted (they land inside a quoted
+// string literal the script splits, never in a comment — see RunLists), so
+// only non-newline control characters are rejected for them. Every other key
+// rejects all control characters, because a value that reaches a `!#` comment
+// context could otherwise terminate the comment and inject script — the class
+// of defect the sysvar write path was found to have.
+func substituteWithLists(body string, params map[string]string, listKeys map[string]bool) (string, error) {
 	missing := map[string]struct{}{}
+	unsafe := map[string]rune{}
 	out := placeholderPattern.ReplaceAllStringFunc(body, func(match string) string {
 		name := match[2 : len(match)-2]
 		v, ok := params[name]
 		if !ok {
 			missing[name] = struct{}{}
+			return match
+		}
+		r, bad := firstControlChar(v)
+		if bad && listKeys[name] && r == '\n' {
+			// A list key may only carry the LF separators RunLists inserted;
+			// re-scan for any OTHER control character, which is never allowed.
+			r, bad = firstNonNewlineControlChar(v)
+		}
+		if bad {
+			if _, seen := unsafe[name]; !seen {
+				unsafe[name] = r
+			}
 			return match
 		}
 		return EscapeString(v)
@@ -511,16 +586,79 @@ func substitute(body string, params map[string]string) (string, error) {
 		sort.Strings(names)
 		return "", fmt.Errorf("missing params: %s", strings.Join(names, ", "))
 	}
+	if len(unsafe) > 0 {
+		names := make([]string, 0, len(unsafe))
+		for n := range unsafe {
+			names = append(names, fmt.Sprintf("%s (U+%04X)", n, unsafe[n]))
+		}
+		sort.Strings(names)
+		return "", fmt.Errorf(
+			"rejected control character in params: %s: %w",
+			strings.Join(names, ", "), hmerr.ErrValidation,
+		)
+	}
 	return out, nil
 }
 
 // EscapeString makes v safe to interpolate inside a double-quoted ReGa
 // string literal. The two dangerous characters are the backslash and
 // the double-quote; everything else passes through unchanged.
+//
+// It deliberately does NOT touch control characters: doubling the
+// backslash and escaping the quote leaves a newline in place, and a
+// newline breaks out of a `!# …` line comment or the surrounding "…"
+// literal regardless of the quoting. Control characters are neutralised
+// one layer up, in substitute, which rejects them before they reach here.
 func EscapeString(v string) string {
 	v = strings.ReplaceAll(v, `\`, `\\`)
 	v = strings.ReplaceAll(v, `"`, `\"`)
 	return v
+}
+
+// firstControlChar reports the first C0 control character (rune < 0x20)
+// or DEL (0x7F) in v, and whether one was found.
+//
+// A ReGa script receives its parameters by textual substitution (see
+// substitute), and several scripts interpolate a placeholder inside a
+// `!# …` line comment — a comment that ends at the first newline. A value
+// carrying a line terminator therefore closes the comment (or the
+// surrounding "…" string literal) and the CCU parses everything after it
+// as privileged ReGa statements on its service session. EscapeString does
+// not stop this: it is the newline, not the quote, that ends the line, so
+// the escaped-quote/backslash combination cannot smuggle a value past this
+// check either — it runs on the raw value before any escaping.
+//
+// The neutralisation therefore has to reject the control character itself.
+// We fail closed rather than re-encode it because the ReGa tokeniser is a
+// closed-source binary whose whitespace / line-break class we cannot
+// verify, so no encoding can be proven reversible. This mirrors the ReGa
+// username defence in internal/auth/ccuauth/store.go, and it is strictly
+// better than the status quo: a benign multi-line value already fails
+// silently on the CCU today (the post-newline text parse-errors and the
+// write returns empty output), so a loud rejection surfaces a failure that
+// was previously invisible.
+func firstControlChar(v string) (rune, bool) {
+	for _, r := range v {
+		if r < 0x20 || r == 0x7f {
+			return r, true
+		}
+	}
+	return 0, false
+}
+
+// firstNonNewlineControlChar is firstControlChar for list values: the LF
+// separators RunLists inserts are permitted, every other control character
+// (CR, TAB, NUL, DEL, …) is still reported.
+func firstNonNewlineControlChar(v string) (rune, bool) {
+	for _, r := range v {
+		if r == '\n' {
+			continue
+		}
+		if r < 0x20 || r == 0x7f {
+			return r, true
+		}
+	}
+	return 0, false
 }
 
 // SanitizeJSONControls escapes control characters (ASCII < 0x20) that

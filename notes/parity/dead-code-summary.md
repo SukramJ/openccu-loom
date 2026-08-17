@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 6c8ff468
-HEAD: 6c8ff468
+Generated: 23304d56
+HEAD: 23304d56
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29167 |
-| Reachable | 5087 |
-| Whitelisted | 21061 |
-| **Unreachable** | **3019** |
+| Total Exported | 29256 |
+| Reachable | 5092 |
+| Whitelisted | 21140 |
+| **Unreachable** | **3024** |
 
 ## Top-20 Packages by Dead Code
 
@@ -24,13 +24,13 @@ HEAD: 6c8ff468
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
 | internal/audit | 2 | 22 | 2 |
-| internal/auth | 2 | 23 | 4 |
+| internal/auth | 2 | 25 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 61 | 42 |
+| internal/model/hub | 2 | 61 | 46 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -77,8 +77,8 @@ HEAD: 6c8ff468
 | internal/model/device | GenerateTranslationKey | internal/model/device/naming.go | 39 |
 | internal/model/event | Sources | internal/model/event/event.go | 76 |
 | internal/model/event | Sources | internal/model/event/event.go | 76 |
-| internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
-| internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
+| internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 308 |
+| internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 308 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 111 |
@@ -104,13 +104,13 @@ HEAD: 6c8ff468
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
 | internal/audit | 2 | 22 | 2 |
-| internal/auth | 2 | 23 | 4 |
+| internal/auth | 2 | 25 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 61 | 42 |
+| internal/model/hub | 2 | 61 | 46 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -129,7 +129,7 @@ HEAD: 6c8ff468
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 26 | 2 |
 | internal/central/cachereset | 0 | 18 | 0 |
-| internal/central/coordinators | 0 | 110 | 6 |
+| internal/central/coordinators | 0 | 107 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 14 | 4 |
 | internal/channelflags | 0 | 2 | 0 |
@@ -185,7 +185,7 @@ HEAD: 6c8ff468
 | internal/north/matter/transport/message | 0 | 6 | 12 |
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
-| internal/north/mcp | 0 | 22 | 0 |
+| internal/north/mcp | 0 | 24 | 0 |
 | internal/north/mqtt | 0 | 88 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |

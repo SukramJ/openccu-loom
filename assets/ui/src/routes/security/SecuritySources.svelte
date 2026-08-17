@@ -99,19 +99,30 @@
   );
 
   // --- Override editing ---------------------------------------------
-  // Draft defaults to "keep the classifier verdict, included": saving
-  // with no changes is a harmless no-op (or reverts a stale override),
-  // and picking a concrete class is the only way to actually pin one.
+  // Draft defaults to "keep the classifier verdict": the class field
+  // starts blank, and `included` seeds from the source's own current
+  // state instead of being hard-coded true — otherwise re-saving a row
+  // (e.g. to change its class or add a note) would silently re-include
+  // a source the operator had previously excluded.
+  //
+  // SecuritySourceView does not carry the stored override's raw
+  // `included` bit (see SecuritySourceView in assets/openapi.yaml), so
+  // the best client-side proxy is `relevant`: the daemon forces it to
+  // false whenever an override excludes the source (internal/security
+  // index.go's classify()). A source that is relevant=false for an
+  // unrelated reason — a diagnostic class on a device with no alarm
+  // role, never overridden for inclusion — reads the same way here;
+  // exposing the raw bit on the DTO would remove that ambiguity.
   type Draft = { class: string; included: boolean; note: string };
-  function freshDraft(): Draft {
-    return { class: "", included: true, note: "" };
+  function freshDraft(s: SecuritySourceView): Draft {
+    return { class: "", included: !s.overridden || s.relevant, note: "" };
   }
   let drafts = $state<Record<string, Draft>>({});
-  function draftFor(ref: string): Draft {
-    return drafts[ref] ?? freshDraft();
+  function draftFor(s: SecuritySourceView): Draft {
+    return drafts[s.ref] ?? freshDraft(s);
   }
-  function setDraft(ref: string, patch: Partial<Draft>) {
-    drafts = { ...drafts, [ref]: { ...draftFor(ref), ...patch } };
+  function setDraft(s: SecuritySourceView, patch: Partial<Draft>) {
+    drafts = { ...drafts, [s.ref]: { ...draftFor(s), ...patch } };
   }
   function clearDraft(ref: string) {
     const next = { ...drafts };
@@ -120,7 +131,7 @@
   }
 
   async function saveOverride(s: SecuritySourceView) {
-    const d = draftFor(s.ref);
+    const d = draftFor(s);
     try {
       await api.putSecuritySourceOverride(s.ref, {
         class: (d.class || undefined) as SecuritySourceOverride["class"],
@@ -347,7 +358,7 @@
               : t("security.sources.badge.inactive")}
           </Badge>
         {:else if col.key === "override"}
-          {@const d = draftFor(s.ref)}
+          {@const d = draftFor(s)}
           <div class="flex min-w-[260px] flex-col gap-2">
             <div class="flex flex-wrap items-center gap-2">
               <!--
@@ -359,7 +370,7 @@
               <Select
                 class="min-w-[14rem] flex-1"
                 value={d.class}
-                onValueChange={(v) => setDraft(s.ref, { class: v })}
+                onValueChange={(v) => setDraft(s, { class: v })}
                 placeholder={t("security.sources.override.keep")}
                 options={SECURITY_CLASSES.map((c) => ({
                   value: c,
@@ -369,7 +380,7 @@
               <label class="flex items-center gap-1.5 text-xs">
                 <Switch
                   checked={d.included}
-                  onCheckedChange={(v) => setDraft(s.ref, { included: v })}
+                  onCheckedChange={(v) => setDraft(s, { included: v })}
                 />
                 {t("security.sources.override.included")}
               </label>
@@ -379,7 +390,7 @@
                 class="h-8 text-xs"
                 placeholder={t("security.sources.override.note_placeholder")}
                 value={d.note}
-                oninput={(e) => setDraft(s.ref, { note: e.currentTarget.value })}
+                oninput={(e) => setDraft(s, { note: e.currentTarget.value })}
               />
               <Button size="sm" onclick={() => void saveOverride(s)}>
                 {t("security.sources.override.save")}

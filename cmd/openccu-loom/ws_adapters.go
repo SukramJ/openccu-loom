@@ -26,6 +26,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -36,6 +37,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -66,6 +68,15 @@ type wsCommandWiring struct {
 	// backups backs backups.trigger — *adapter.BackupAdapter satisfies
 	// ws.BackupsService directly via TriggerBackupForCentral.
 	backups *adapter.BackupAdapter
+	// rpcRecorder is the shared RPC session recorder the REST
+	// `/diagnostics/rpc-recording` route also uses. Backing recording.* with
+	// it (rather than a separate registry walk) makes a WS-started recording
+	// arm the same auto-stop timer and marker. Nil on minimal boots — the WS
+	// wiring then builds a registry-backed fallback.
+	rpcRecorder interfaces.RPCRecorderService
+	// auditRec records the recording.start / recording.stop lifecycle so WS
+	// and REST leave one audit trail. Nil skips the row.
+	auditRec audit.Recorder
 	// cacheResetSvc backs ccu.cache_clear — scope-aware cache clear + re-pull.
 	cacheResetSvc *cachereset.Service
 	// alarm backs the alarm_panel.* command family. Nil when the alarm
@@ -123,7 +134,7 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// SessionBackend: wsSessionBackend delegates Open to the device-query path
 		// and PutParamset to the paramsets domain.
 		Sessions:       w.sessionStore,
-		SessionBackend: &wsSessionBackend{deviceQuery: deviceQuery, paramsets: &wsParamsetWriter{domain: w.paramsets}},
+		SessionBackend: &wsSessionBackend{deviceQuery: deviceQuery, paramsets: &wsParamsetWriter{domain: w.paramsets, registry: w.registry, writer: w.valueWriter}},
 		// ChangeLog receives one entry per successful config.session.save.
 		ChangeLog: w.changeLog,
 		// DeviceReloader backs config.reload_device_config and
@@ -141,7 +152,7 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 
 	ws.RegisterExtendedCommands(router, ws.ExtendedCommandsConfig{
 		Devices:   &wsDeviceWriter{admin: w.deviceAdmin},
-		Paramsets: &wsParamsetWriter{domain: w.paramsets},
+		Paramsets: &wsParamsetWriter{domain: w.paramsets, registry: w.registry, writer: w.valueWriter},
 		// EditLocks: shared registry — MASTER/LINK paramset.put writes
 		// must hold the edit lock, mirroring the REST strict gate.
 		EditLocks:      w.editSessions,
@@ -159,9 +170,13 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// GroupsAdmin: wired — heating-group create/edit/delete + type /
 		// suitable-member helpers (GR02). Same adapter as the REST writer.
 		GroupsAdmin: newGroupsAdapter(w.groupsDomain),
-		// SessionRecorder: wired — fans recording.start/stop/status across
-		// every central's session.Recorder via the registry.
-		SessionRecorder: wsSessionRecorderFrom(w.registry),
+		// SessionRecorder: wired — routes recording.start/stop/status through
+		// the same shared RPC recorder domain method the REST route uses, so a
+		// WS start arms the auto-stop timer and persists the marker.
+		SessionRecorder: wsSessionRecorderFrom(w.registry, w.rpcRecorder),
+		// RecordingAudit: wired — records the recording lifecycle so WS and
+		// REST leave one audit trail.
+		RecordingAudit: w.auditRec,
 		// FirmwareRefresher: wired — re-pulls device descriptions (incl.
 		// firmware versions) across every central + interface. Backs
 		// firmware.refresh (mirrors the Python ws_refresh_firmware_data).
@@ -545,25 +560,32 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 	sysvars := h.Sysvars()
 	out := make([]map[string]any, 0, len(sysvars))
 	for _, s := range sysvars {
+		// One guarded snapshot of the mutable descriptor: the 30 s hub refresh
+		// rewrites these ten fields in place through Sysvar.ApplyMeta under the
+		// sysvar's own lock while this handler serves the list on another
+		// goroutine. Reading them straight off the struct (as this path used to)
+		// is a data race with that rewrite — REST and the MQTT publisher already
+		// read the same Meta() snapshot.
+		m := s.Meta()
 		e := map[string]any{
 			// Renaming a system variable on the CCU rewrites the name in
 			// place on the live entry (Hub.RenameSysvar), so it is read
 			// through the data point's own lock.
 			"name":        s.LegacyName(),
-			"description": s.Description,
-			"unit":        s.Unit,
-			"value_type":  string(s.ValueType),
-			"value_list":  s.ValueList,
-			"is_visible":  s.IsVisible,
-			"is_logged":   s.IsLogged,
+			"description": m.Description,
+			"unit":        m.Unit,
+			"value_type":  string(m.ValueType),
+			"value_list":  m.ValueList,
+			"is_visible":  m.IsVisible,
+			"is_logged":   m.IsLogged,
 		}
 		// Binary value labels are present only for LOGIC/ALARM variables;
 		// mirror the REST SysvarSummary by omitting them when empty.
-		if s.ValueName0 != "" {
-			e["value_name_0"] = s.ValueName0
+		if m.ValueName0 != "" {
+			e["value_name_0"] = m.ValueName0
 		}
-		if s.ValueName1 != "" {
-			e["value_name_1"] = s.ValueName1
+		if m.ValueName1 != "" {
+			e["value_name_1"] = m.ValueName1
 		}
 		if v, ok := s.Value(); ok {
 			e["value"] = v.Unwrap()
@@ -571,11 +593,14 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 		} else {
 			e["observed"] = false
 		}
-		if s.Min != nil {
-			e["min"] = s.Min.Float
+		// Read the bound type-aware: an INTEGER sysvar carries it in
+		// ParamValue.Int, a FLOAT in .Float — reading .Float raw reports 0/0
+		// for every INTEGER variable (the REST/MQTT planes convert correctly).
+		if mn := hub.SysvarBoundAsFloat(m.Min); mn != nil {
+			e["min"] = *mn
 		}
-		if s.Max != nil {
-			e["max"] = s.Max.Float
+		if mx := hub.SysvarBoundAsFloat(m.Max); mx != nil {
+			e["max"] = *mx
 		}
 		// Device association (explicit CCU channel assignment or name
 		// match). Present only when the sysvar belongs to a device —
@@ -1045,6 +1070,20 @@ func (w *wsDeviceQuery) GetParamset(ctx context.Context, key configui.SessionKey
 	if psKey == "" {
 		psKey = hmenum.ParamsetKeyMaster
 	}
+	// A session scoped to a central must read that central. The domain
+	// resolves an address to the first matching central (registry order is
+	// name-sorted), which is the correct one whenever device addresses are
+	// unique across CCUs; only when the scoped central differs does the
+	// session risk reading the wrong CCU, so route directly to the scoped
+	// backend in that case. GetParamsetDescription already honours the
+	// scope this way — this restores the same guarantee to the value read.
+	if key.CentralName != "" && key.CentralName != firstMatchCentralName(w.registry, key.ChannelAddress) {
+		b, err := scopedParamsetBackend(w.registry, w.writer, key.CentralName, key.ChannelAddress)
+		if err != nil {
+			return nil, err
+		}
+		return b.GetParamset(ctx, key.ChannelAddress, psKey)
+	}
 	return w.paramsets.GetParamset(ctx, key.ChannelAddress, psKey)
 }
 
@@ -1052,8 +1091,13 @@ func (w *wsDeviceQuery) GetParamset(ctx context.Context, key configui.SessionKey
 
 // wsParamsetWriter bridges *adapter.ParamsetsDomain onto ws.ParamsetWriter.
 // The WS layer passes a configui.SessionKey; the domain takes (address, key).
+// registry + writer are held so a central-scoped session save can target the
+// named CCU's backend directly when it diverges from the domain's first-match
+// resolution (see PutParamset).
 type wsParamsetWriter struct {
-	domain *adapter.ParamsetsDomain
+	domain   *adapter.ParamsetsDomain
+	registry *central.Registry
+	writer   *clientpkg.ValueWriter
 }
 
 func (w *wsParamsetWriter) PutParamset(ctx context.Context, key configui.SessionKey, values map[string]any) error {
@@ -1064,7 +1108,72 @@ func (w *wsParamsetWriter) PutParamset(ctx context.Context, key configui.Session
 	if psKey == "" {
 		psKey = hmenum.ParamsetKeyMaster
 	}
+	// A session scoped to a central must write that central (see the matching
+	// note on wsDeviceQuery.GetParamset). Route around the domain only when
+	// the scoped central differs from the domain's first-match resolution; in
+	// the common case (unique device addresses across CCUs) the domain path is
+	// used, keeping validation, the visibility gate, audit and the post-write
+	// model refresh.
+	if key.CentralName != "" && key.CentralName != firstMatchCentralName(w.registry, key.ChannelAddress) {
+		// Preserve the visibility gate the domain would apply: a hidden
+		// parameter rejects the whole write, mirroring ParamsetsDomain.PutParamset.
+		if visible := w.domain.VisibleValues(key.ChannelAddress, psKey, values); len(visible) != len(values) {
+			return fmt.Errorf("%w: hidden parameter in central-scoped paramset write", hmerr.ErrParameterHidden)
+		}
+		b, err := scopedParamsetBackend(w.registry, w.writer, key.CentralName, key.ChannelAddress)
+		if err != nil {
+			return err
+		}
+		return b.PutParamset(ctx, key.ChannelAddress, psKey, values, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset)
+	}
 	return w.domain.PutParamset(ctx, key.ChannelAddress, psKey, values)
+}
+
+// scopedParamsetBackend resolves the backend of the named central for the
+// device behind channelAddress, so the config edit-session path can honour
+// central_name on the value read and the save the same way
+// GetParamsetDescription already does — a session scoped to one CCU must never
+// touch another.
+func scopedParamsetBackend(
+	registry *central.Registry,
+	writer *clientpkg.ValueWriter,
+	centralName, channelAddress string,
+) (backends.Operations, error) {
+	if registry == nil || writer == nil {
+		return nil, errors.New("ws: paramset backend not wired")
+	}
+	unit, ok := registry.Get(centralName)
+	if !ok {
+		return nil, fmt.Errorf("ws: central %q not found", centralName)
+	}
+	dev, ok := unit.ModelRegistry.Get(deviceAddrFromChannel(channelAddress))
+	if !ok {
+		return nil, fmt.Errorf("ws: device for channel %s not found on central %q", channelAddress, centralName)
+	}
+	b, ok := writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
+	if !ok {
+		return nil, fmt.Errorf("ws: no backend for %s/%s", unit.Name(), dev.InterfaceID)
+	}
+	return b, nil
+}
+
+// firstMatchCentralName returns the name of the first central (registry order
+// is name-sorted) that holds the device behind channelAddress, or "" when none
+// does. It mirrors how ParamsetsDomain resolves an address so the session path
+// can tell when a scoped central would diverge from the domain's own
+// resolution and route around it, leaving the common case on the full domain
+// path.
+func firstMatchCentralName(registry *central.Registry, channelAddress string) string {
+	if registry == nil {
+		return ""
+	}
+	deviceAddr := deviceAddrFromChannel(channelAddress)
+	for _, u := range registry.List() {
+		if _, ok := u.ModelRegistry.Get(deviceAddr); ok {
+			return u.Name()
+		}
+	}
+	return ""
 }
 
 // ── wsSessionBackend ─────────────────────────────────────────────────────────
@@ -1260,56 +1369,59 @@ func wsCacheClearerFrom(svc *cachereset.Service) ws.CacheClearer {
 
 // ── wsSessionRecorder ─────────────────────────────────────────────────────────
 
-// wsSessionRecorder adapts every central's [session.Recorder] onto
-// ws.SessionRecorder. Start / Stop fan out across all registered centrals so a
-// single recording.start / recording.stop toggles the diagnostic RPC recorder
-// fleet-wide. IsActive reports true when any central is currently capturing —
-// the recorder is multi-central by design (ADR 0002), so a per-central scope is
-// intentionally not exposed on this minimal diagnostic surface.
-type wsSessionRecorder struct{ registry *central.Registry }
+// wsSessionRecorder adapts the shared RPC recorder domain service onto
+// ws.SessionRecorder. Start / Stop delegate to the same
+// [interfaces.RPCRecorderService] the REST `/diagnostics/rpc-recording` route
+// drives, so a WS-started recording arms the same auto-stop safety timer and
+// persists the same restart-survival marker instead of poking every central's
+// recorder directly and leaving neither. Start / Stop target every central
+// (empty scope); IsActive reports true when any central is currently
+// capturing — the recorder is multi-central by design (ADR 0002), so a
+// per-central scope is intentionally not exposed on this minimal surface.
+type wsSessionRecorder struct{ svc interfaces.RPCRecorderService }
 
-// Start activates recording on every central's recorder.
+// Start activates recording on every central via the shared domain method,
+// which arms the auto-stop timer and writes the active marker.
 func (w *wsSessionRecorder) Start() bool {
-	if w == nil || w.registry == nil {
+	if w == nil || w.svc == nil {
 		return false
 	}
-	for _, u := range w.registry.List() {
-		if u != nil && u.Recorder != nil {
-			u.Recorder.StartSession()
-		}
-	}
-	return w.IsActive()
+	return anyRecordingActive(w.svc.Start(nil, 0, false))
 }
 
-// Stop deactivates recording on every central's recorder.
+// Stop deactivates recording on every central via the shared domain method,
+// which cancels the auto-stop timer.
 func (w *wsSessionRecorder) Stop() bool {
-	if w == nil || w.registry == nil {
+	if w == nil || w.svc == nil {
 		return false
 	}
-	for _, u := range w.registry.List() {
-		if u != nil && u.Recorder != nil {
-			u.Recorder.StopSession()
-		}
-	}
-	return w.IsActive()
+	return anyRecordingActive(w.svc.Stop(nil))
 }
 
 // IsActive reports whether any central's recorder is currently capturing.
 func (w *wsSessionRecorder) IsActive() bool {
-	if w == nil || w.registry == nil {
+	if w == nil || w.svc == nil {
 		return false
 	}
-	for _, u := range w.registry.List() {
-		if u != nil && u.Recorder != nil && u.Recorder.IsActive() {
+	return anyRecordingActive(w.svc.Status())
+}
+
+// anyRecordingActive reports whether any central in the status slice is
+// currently capturing.
+func anyRecordingActive(status []hmapi.RPCRecordingStatus) bool {
+	for _, s := range status {
+		if s.Active {
 			return true
 		}
 	}
 	return false
 }
 
-// wsSessionRecorderFrom returns a ws.SessionRecorder backed by the central
-// registry, or nil when there is no registry at all (which leaves the
-// recording.* commands unregistered).
+// wsSessionRecorderFrom returns a ws.SessionRecorder backed by the shared RPC
+// recorder domain service. When no shared service is wired (svc == nil) it
+// builds a registry-backed one so the family stays available; it returns nil
+// only when there is nothing at all to back it (which leaves the recording.*
+// commands unregistered).
 //
 // The decision is deliberately NOT "does a central expose a recorder right
 // now": command registration happens once at boot, while every central.New
@@ -1320,11 +1432,17 @@ func (w *wsSessionRecorder) IsActive() bool {
 // exactly when a new CCU is most likely being debugged. The returned recorder
 // re-walks the registry on every call, so a central adopted later is covered
 // and an empty fleet simply reports "not active".
-func wsSessionRecorderFrom(reg *central.Registry) ws.SessionRecorder {
-	if reg == nil {
-		return nil
+func wsSessionRecorderFrom(reg *central.Registry, svc interfaces.RPCRecorderService) ws.SessionRecorder {
+	if svc == nil {
+		if reg == nil {
+			return nil
+		}
+		// No shared service wired (e.g. a REST-disabled or minimal boot):
+		// build a registry-backed one so recording.* stays functional. The
+		// empty data dir disables only the restart-survival marker.
+		svc = adapter.NewRPCRecorderAdapter(reg, "")
 	}
-	return &wsSessionRecorder{registry: reg}
+	return &wsSessionRecorder{svc: svc}
 }
 
 // deviceAddrFromChannel strips the ":N" channel suffix from a channel

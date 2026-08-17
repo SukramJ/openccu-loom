@@ -1287,8 +1287,22 @@ type deviceWithSubDevices interface {
 // per-device-DP discovery ([deviceDescriptor]) and device-linked hub-entity
 // discovery ([hubEntityDeviceBlock]) always agree — HA only merges an entity
 // into a device when the identifier matches byte-for-byte.
-func physicalDeviceIdentifier(deviceAddress string) string {
-	return "openccu-loom_" + strings.ToLower(deviceAddress)
+//
+// Addresses that repeat verbatim across CCUs — the INT000* internal devices,
+// the virtual-remote buses (BidCoS-RF, HmIP-RCV-1, BidCoS-Wir) and the hub
+// pseudo-addresses — carry the central slug so two CCUs never collapse into a
+// single HA device card. The slug spelling is [safeLower], the same one
+// [centralDeviceIdentifier] stamps into the hub card and every via_device, so
+// the whole device hierarchy reads consistently. Globally unique hardware
+// addresses keep their bare identifier, so a single-CCU device is unchanged.
+// This mirrors the gate the entity unique_id path applies via [scopedUniqueID]
+// ([routingkey.NeedsCentralScope]).
+func physicalDeviceIdentifier(centralName, deviceAddress string) string {
+	addr := strings.ToLower(deviceAddress)
+	if centralName != "" && routingkey.NeedsCentralScope(deviceAddress) {
+		return "openccu-loom_" + safeLower(centralName) + "_" + addr
+	}
+	return "openccu-loom_" + addr
 }
 
 // centralDeviceIdentifier returns the HA device-block `identifiers` value for
@@ -1307,7 +1321,7 @@ func centralDeviceIdentifier(centralName string) string {
 }
 
 func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
-	parentID := physicalDeviceIdentifier(ev.DeviceAddress)
+	parentID := physicalDeviceIdentifier(ev.Central, ev.DeviceAddress)
 	desc := map[string]any{
 		"identifiers":  []string{parentID},
 		"manufacturer": "eQ-3",

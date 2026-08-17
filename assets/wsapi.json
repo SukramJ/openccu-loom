@@ -245,7 +245,10 @@
   {
    "category": "config",
    "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_reload_device_config (websocket_api.py:1735). Closes parity_audit gap L-7002.",
-   "name": "config.reload_device_config"
+   "name": "config.reload_device_config",
+   "args": {
+    "device_address": "string"
+   }
   },
   {
    "category": "config",
@@ -856,17 +859,32 @@
   {
    "category": "master_profiles",
    "description": "Return the full parameter set of a single master profile by device type and id.",
-   "name": "master_profiles.get"
+   "name": "master_profiles.get",
+   "args": {
+    "device_type": "string",
+    "channel_type": "string?",
+    "id": "integer?"
+   }
   },
   {
    "category": "master_profiles",
    "description": "List available master profiles, optionally filtered by device type and channel type.",
-   "name": "master_profiles.list"
+   "name": "master_profiles.list",
+   "args": {
+    "device_type": "string?",
+    "channel_type": "string?",
+    "locale": "string?"
+   }
   },
   {
    "category": "master_profiles",
    "description": "Match observed parameter values against the master-profile constraint set and return the active profile ID (0 = Expert / no match).",
-   "name": "master_profiles.match"
+   "name": "master_profiles.match",
+   "args": {
+    "device_type": "string",
+    "channel_type": "string?",
+    "current_values": "object?"
+   }
   },
   {
    "category": "paramsets",
@@ -1192,27 +1210,50 @@
   {
    "category": "cdp",
    "description": "List all custom data points of all devices (or a single device when 'device' param is supplied).",
-   "name": "cdp.list"
+   "name": "cdp.list",
+   "args": {
+    "device": "string?"
+   }
   },
   {
    "category": "cdp",
    "description": "Return a single custom data point by device address and name.",
-   "name": "cdp.get"
+   "name": "cdp.get",
+   "args": {
+    "device": "string",
+    "name": "string"
+   }
   },
   {
    "category": "cdp",
    "description": "Invoke an operation on a custom data point (turn_on, set_temperature, open, …).",
-   "name": "cdp.invoke"
+   "name": "cdp.invoke",
+   "args": {
+    "device": "string",
+    "name": "string",
+    "operation": "string",
+    "params": "object?",
+    "priority": "string?"
+   }
   },
   {
    "category": "calc_dp",
    "description": "List all calculated data points for all devices (or a single device / channel when params supplied).",
-   "name": "calc_dp.list"
+   "name": "calc_dp.list",
+   "args": {
+    "device": "string?",
+    "channel_no": "integer?"
+   }
   },
   {
    "category": "calc_dp",
    "description": "Return a single calculated data point by device address, channel number, and name.",
-   "name": "calc_dp.get"
+   "name": "calc_dp.get",
+   "args": {
+    "device": "string",
+    "channel_no": "integer?",
+    "name": "string"
+   }
   },
   {
    "category": "matter",

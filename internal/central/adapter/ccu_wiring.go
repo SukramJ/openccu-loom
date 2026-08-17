@@ -249,7 +249,7 @@ func gatedCentralBringUp(
 		if !WaitForCCUReady(ctx, *cc, CCUReadinessConfig{Timeout: -1}, logger) {
 			return // teardown
 		}
-		if err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, addCloser, logger); err == nil {
+		if loaded, err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, addCloser, logger); err == nil {
 			// Bring-up done: clear the transient "waiting for CCU" component so it
 			// does not linger and decay to UNKNOWN (which would drag the overall
 			// health verdict down forever even though the central is now healthy).
@@ -265,7 +265,11 @@ func gatedCentralBringUp(
 				Base:        hmevent.NewBase(),
 				CentralName: cc.Name,
 			})
-			recordCentralReadiness(unit, hmenum.ReadinessReady, len(cc.Interfaces), len(cc.Interfaces))
+			// Report the interfaces that actually loaded devices, not the
+			// configured count: an interface whose ingest exhausted its retries
+			// is wired but serves nothing, and reporting it as loaded would
+			// latch "ready, N/N" over a partly-dark central.
+			recordCentralReadiness(unit, hmenum.ReadinessReady, loaded, len(cc.Interfaces))
 			// A regression detector, not a routine check: both backends
 			// wire the sysvar write path during hub bring-up, so this
 			// line should never appear. It exists because the omission it
@@ -357,7 +361,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	cbHandlers *CallbackHandlers,
 	addCloser func(func()),
 	logger *slog.Logger,
-) error {
+) (loaded int, err error) {
 	writer := deps.Writer
 	translations := deps.Translations
 
@@ -369,7 +373,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		logger.Warn("wire.hub.failed",
 			slog.String("central", cc.Name),
 			slog.String("err", err.Error()))
-		return fmt.Errorf("hub: %w", err)
+		return 0, fmt.Errorf("hub: %w", err)
 	}
 	addCloser(hubCloser)
 	// Backfill the central's serial into the store now that the hub bring-up has
@@ -427,19 +431,31 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	}
 
 	total := len(cc.Interfaces)
-	loaded := 0
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	for _, ifaceSpec := range cc.Interfaces {
 		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
-		closer, err := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
-		if err != nil {
+		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
+		if ifErr != nil {
 			logger.Warn("wire.interface.failed",
 				slog.String("central", cc.Name),
 				slog.String("interface", string(iface)),
-				slog.String("err", err.Error()))
+				slog.String("err", ifErr.Error()))
 			continue
 		}
 		addCloser(closer)
+		if !ingested {
+			// The interface is wired (client + backend + callback route are
+			// registered, and the closer tears them down on shutdown) but its
+			// ingest exhausted every retry, so it carries zero devices and its
+			// client is now DISCONNECTED for the recovery pipeline to reconnect.
+			// It must NOT count toward the loaded tally the readiness phase
+			// reports — latching a central "ready, N/N loaded" while an
+			// interface serves nothing hides the outage from every surface.
+			logger.Warn("wire.interface.no_devices",
+				slog.String("central", cc.Name),
+				slog.String("interface", string(iface)))
+			continue
+		}
 		logger.Info("wire.interface.ok",
 			slog.String("central", cc.Name),
 			slog.String("interface", string(iface)))
@@ -481,7 +497,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// each writing to its own interface backend (no CCU-wide toggle exists).
 	WireInstallModeDPs(unit, writer)
 	logger.Info("wire.sysvar_creator.ok", slog.String("central", cc.Name))
-	return nil
+	return loaded, nil
 }
 
 // backendRegistry is the central-scoped interface→backend lookup the
@@ -621,17 +637,21 @@ func wireInterface(
 	binrpcCallbackServer *rpcserver.BINRPCServer,
 	binrpcCallbackAddr string,
 	logger *slog.Logger,
-) (func(), error) {
+) (closer func(), ingested bool, err error) {
 	// CUxD speaks BIN-RPC natively. It gets its own dedicated wiring
 	// path: a BIN-RPC client (outbound calls), a BIN-RPC callback
 	// registration (inbound push), and no XML-RPC client at all.
 	if iface == hmenum.InterfaceCUxD {
-		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, logger)
+		closer, err = wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, logger)
+		// CUxD reports "wired" the same way it did before the XML-RPC path
+		// grew a loaded signal: a successful wire counts, a hard error does
+		// not. Its own ingest-exhaustion handling lives in runCUxDActivation.
+		return closer, err == nil, err
 	}
 
 	url, err := interfaceURL(cc, iface)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// wireID is the canonical, host-independent interface identifier used
@@ -657,7 +677,7 @@ func wireInterface(
 		),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("xmlrpc client: %w", err)
+		return nil, false, fmt.Errorf("xmlrpc client: %w", err)
 	}
 
 	xmlCaller := &xmlrpcCaller{client: xmlClient}
@@ -735,7 +755,7 @@ func wireInterface(
 	icCfg.ReadThrottle, icCfg.WriteThrottle, icCfg.ControlThrottle = perClassThrottlePools(relCfg.CommandThrottleInterCommandDelay)
 	ic, err := client.New(icCfg)
 	if err != nil {
-		return nil, fmt.Errorf("interface client: %w", err)
+		return nil, false, fmt.Errorf("interface client: %w", err)
 	}
 	wireClientReliability(unit, ic, wireID)
 	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
@@ -746,7 +766,7 @@ func wireInterface(
 		Announcer: announcer,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("backend factory: %w", err)
+		return nil, false, fmt.Errorf("backend factory: %w", err)
 	}
 	// Probe runtime capabilities once before the first operation.
 	// Failures are soft: the backend keeps its conservative static defaults.
@@ -1243,35 +1263,7 @@ func wireInterface(
 	ingestBackoff := []time.Duration{
 		1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
 	}
-ingestLoop:
-	for attempt := 0; ; attempt++ {
-		err := activate(ingestAttemptContext(ctx, attempt, len(ingestBackoff)))
-		if err == nil {
-			break
-		}
-		if attempt >= len(ingestBackoff) {
-			// Every retry is spent and the interface stayed empty: no
-			// devices, no callbacks, nothing north-bound. That is an
-			// outcome, not a transient.
-			logger.Error("wire.interface.ingest_failed",
-				slog.String("central", cc.Name),
-				slog.String("interface", wireID),
-				slog.String("err", err.Error()))
-			break
-		}
-		logger.Debug("wire.interface.ingest_retry",
-			slog.String("central", cc.Name),
-			slog.String("interface", wireID),
-			slog.Int("attempt", attempt+1),
-			slog.String("err", err.Error()))
-		t := time.NewTimer(ingestBackoff[attempt])
-		select {
-		case <-ctx.Done():
-			t.Stop()
-			break ingestLoop
-		case <-t.C:
-		}
-	}
+	ingested = runXMLRPCActivation(ctx, ingestBackoff, activate, ic, cc.Name, wireID, logger)
 
 	// Closer deregisters the callback + unregisters the backend writer
 	// on daemon shutdown. The XML-RPC client itself is stateless.
@@ -1279,7 +1271,7 @@ ingestLoop:
 	ifaceID := wireID
 	deinitID := initID
 	//nolint:contextcheck // teardown closure: deinit runs on a fresh short-timeout ctx, not the already-cancelled wiring ctx
-	closer := func() {
+	closer = func() {
 		// Stop the connection-probe goroutine first so the next tick
 		// does not race against the backend being torn down.
 		probeCancel()
@@ -1297,7 +1289,61 @@ ingestLoop:
 			unit.MetricsClients.Deregister(iface)
 		}
 	}
-	return closer, nil
+	return closer, ingested, nil
+}
+
+// runXMLRPCActivation drives activate through the boot-time retry schedule for
+// an XML-RPC interface, mirroring [runCUxDActivation]. It returns true once an
+// ingest attempt succeeds; on exhaustion or ctx-cancel it walks the client to
+// DISCONNECTED and returns false.
+//
+// The DISCONNECTED walk is the load-bearing half: activate() fails inside
+// IngestFromBackend, well before the init()/callback block that would otherwise
+// have advanced the state machine, so an exhausted ingest used to leave the
+// client stuck in CREATED. CanReconnect is false in CREATED, so the recovery
+// pipeline rejected every trigger with "CanReconnect returned false" and the
+// interface served zero devices until a daemon restart. DISCONNECTED is the
+// only state (besides FAILED) from which the pipeline can reconnect it, so the
+// interface repairs itself on the next probe success.
+func runXMLRPCActivation(
+	ctx context.Context,
+	backoff []time.Duration,
+	activate func(context.Context) error,
+	ic *client.InterfaceClient,
+	centralName, wireID string,
+	logger *slog.Logger,
+) bool {
+	for attempt := 0; ; attempt++ {
+		err := activate(ingestAttemptContext(ctx, attempt, len(backoff)))
+		if err == nil {
+			return true
+		}
+		if attempt >= len(backoff) {
+			// Every retry is spent and the interface stayed empty: no devices,
+			// no callbacks, nothing north-bound. That is an outcome, not a
+			// transient — and the client must be left reconnectable, not stuck
+			// in CREATED.
+			logger.Error("wire.interface.ingest_failed",
+				slog.String("central", centralName),
+				slog.String("interface", wireID),
+				slog.String("err", err.Error()))
+			ensureDisconnectedClientState(ic, err, logger)
+			return false
+		}
+		logger.Debug("wire.interface.ingest_retry",
+			slog.String("central", centralName),
+			slog.String("interface", wireID),
+			slog.Int("attempt", attempt+1),
+			slog.String("err", err.Error()))
+		t := time.NewTimer(backoff[attempt])
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			ensureDisconnectedClientState(ic, ctx.Err(), logger)
+			return false
+		case <-t.C:
+		}
+	}
 }
 
 // ensureDisconnectedClientState walks the InterfaceClient's state machine

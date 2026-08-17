@@ -60,6 +60,12 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 	t.Helper()
 	m := &sysvarMockServer{}
 	m.iseID.Store(4321)
+	// Default the ReGa result to a success token so a create ("id") and an
+	// update ("ok") both read as accepted — the writers now reject an empty
+	// result (a decline / failed create). "ok" is non-empty (create's success
+	// signal) and equals the update script's success token, so it satisfies
+	// both. A test that wants a decline stores an explicit "" itself.
+	m.regaResult.Store("ok")
 	m.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var env struct {
@@ -389,8 +395,9 @@ func TestSetSysvarStringUsesRega(t *testing.T) {
 
 func TestSetSysvarStringDeclinedSurfacesError(t *testing.T) {
 	m := newSysvarMock(t)
-	// Default regaResult is empty — the script's decline signal (sysvar
-	// missing or not string-typed).
+	// An empty result is the script's decline signal (sysvar missing or not
+	// string-typed); store it explicitly to override the mock's success default.
+	m.regaResult.Store("")
 	w := newWriterAgainst(t, m.srv.URL)
 
 	if err := w.SetSysvar(context.Background(), "Statustext", "Fenster offen"); err == nil {
@@ -525,6 +532,42 @@ func TestDeleteSysvarPropagatesCCUError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "sysvar not found") {
 		t.Fatalf("error = %v, want it to carry the CCU message", err)
+	}
+}
+
+// UpdateSysvar must not swallow the update script's result: the script
+// writes "ok" only inside its `if (oSv)` guard, so an empty output means the
+// target name no longer resolves to a sysvar on the CCU. A PATCH against a
+// deleted variable must surface ErrSysvarNotFound (mapped to 404) rather than
+// answer a false 202 and re-key the local cache to a name the CCU never
+// renamed.
+func TestUpdateSysvarMissingTargetSurfacesNotFound(t *testing.T) {
+	m := newSysvarMock(t)
+	// The update script declines (target not found) by emitting nothing.
+	m.regaResult.Store("")
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "Ghost", NewName: "Fresh"})
+	if err == nil {
+		t.Fatal("an update against a missing sysvar must surface an error, not a silent no-op")
+	}
+	if !errors.Is(err, hub.ErrSysvarNotFound) {
+		t.Fatalf("err = %v, want ErrSysvarNotFound", err)
+	}
+}
+
+// CreateSysvar via the Rega path must not swallow the create script's result:
+// an empty output means dom.CreateObject failed. A failed create must surface
+// an error rather than answer a false 202 (STRING forces the Rega path).
+func TestCreateSysvarEmptyOutputSurfacesError(t *testing.T) {
+	m := newSysvarMock(t)
+	// dom.CreateObject failure → the create script emits an empty string.
+	m.regaResult.Store("")
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Broken", ValueType: "STRING"})
+	if err == nil {
+		t.Fatal("a failed create (empty rega output) must surface an error, not a silent no-op")
 	}
 }
 

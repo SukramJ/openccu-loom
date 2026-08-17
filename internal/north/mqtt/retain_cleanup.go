@@ -619,10 +619,29 @@ func discoveryNodePrefixes(centralName string) []string {
 	return prefixes
 }
 
-// hasAnyPrefix reports whether s starts with any of the prefixes.
-func hasAnyPrefix(s string, prefixes []string) bool {
+// discoveryNodeIDBelongsTo reports whether nodeID is a retained HA-Discovery
+// config owned by the central whose node-id prefixes are `prefixes` (its
+// canonical and legacy slug spellings, each ending in "_"; see
+// [discoveryNodePrefixes]).
+//
+// Every producer spells a node id as `<central-slug>_<object>`, where the
+// object — a device address ([naming.PathData.DiscoveryNodeID]) or a hub kind
+// ([hubNodeID]) — never carries an underscore. The central slug therefore runs
+// up to the LAST underscore, which is a real boundary: matching the exact
+// segment there keeps a central named `ccu` (slug `ccu`) from claiming a
+// sibling `ccu wohnung`'s (slug `ccu_wohnung`) `ccu_wohnung_*` node ids. A bare
+// HasPrefix("ccu_") test did claim them, and because the sibling's entities are
+// not yet in `declared` during the first CCU's boot sweep, it evicted every one
+// of them until the daemon next restarted. The raw plane escapes this because
+// its central segment is delimited by "/", never "_".
+func discoveryNodeIDBelongsTo(nodeID string, prefixes []string) bool {
+	i := strings.LastIndexByte(nodeID, '_')
+	if i <= 0 || i == len(nodeID)-1 {
+		return false
+	}
+	segment := nodeID[:i+1] // "<central-slug>_", the exact segment to match
 	for _, p := range prefixes {
-		if strings.HasPrefix(s, p) {
+		if segment == p {
 			return true
 		}
 	}
@@ -699,7 +718,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		}
 		nodeID := strings.ToLower(parts[1])
 		switch {
-		case hasAnyPrefix(nodeID, nodePrefixes):
+		case discoveryNodeIDBelongsTo(nodeID, nodePrefixes):
 		case daemonLevelNodeIDs[nodeID]:
 			// A daemon-level plane is only swept once it has declared.
 			//

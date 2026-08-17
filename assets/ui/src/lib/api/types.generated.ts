@@ -10061,6 +10061,8 @@ export interface components {
             zone_id?: string;
             /** @description An operator decision, not the classifier, produced this verdict. */
             overridden?: boolean;
+            /** @description The stored override's raw inclusion bit, present only when `overridden` is true. A read surface seeds its include/exclude toggle from it so a prior exclusion is not silently undone on the next save; absent means no override is stored and the default-included behaviour holds. */
+            override_included?: boolean;
             /** Format: date-time */
             since?: string;
         };
@@ -10984,6 +10986,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
@@ -11126,6 +11129,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
@@ -17099,6 +17103,8 @@ export interface operations {
                 to?: string;
                 /** @description Maximum entries to return. 0 or absent uses the default (500). Values above 5000 are capped to 5000. */
                 limit?: number;
+                /** @description Admin-only. Hidden rows (duress events) are kept off the default feed for every role so an intruder next to a coerced operator sees a clean journal. Setting `include_hidden=true` on a request made with an admin identity is the sanctioned audit-read path that recovers them; the flag is ignored for any non-admin request or an admin request that omits it. */
+                include_hidden?: boolean;
             };
             header?: never;
             path?: never;

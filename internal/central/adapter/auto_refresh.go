@@ -104,30 +104,7 @@ func wireConfigPendingHook(
 			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			defer cancel()
 
-			// Week-profile reload (unique per device, has_schedule-gated).
-			seen := make(map[*weekprofile.ClimateProfile]struct{})
-			for _, ch := range dev.Channels() {
-				wp := ch.WeekProfile()
-				if wp == nil {
-					continue
-				}
-				cp := wp.Climate()
-				if cp == nil {
-					continue
-				}
-				if _, dup := seen[cp]; dup {
-					continue
-				}
-				seen[cp] = struct{}{}
-				if _, err := cp.Current(); err != nil {
-					continue
-				}
-				if _, err := cp.Load(ctx); err != nil && logger != nil {
-					logger.Debug("auto_refresh.config_pending.week_profile.load",
-						slog.String("device", dev.Address),
-						slog.String("err", err.Error()))
-				}
-			}
+			reloadDeviceWeekProfiles(ctx, dev, logger)
 
 			visibility.ApplyChannelOperationModeGatingDevice(dev)
 
@@ -147,6 +124,53 @@ func wireConfigPendingHook(
 			refreshDeviceMasterCache(ctx, dev, interfaceID, centralName, getter, masterValues, logger)
 		})
 	})
+}
+
+// reloadDeviceWeekProfiles reloads every distinct week profile of dev after a
+// CONFIG_PENDING settle. Both climate and simple (non-climate) profiles are
+// reloaded: a non-climate schedule write (switch / cover / light / lock) also
+// settles through CONFIG_PENDING, and without the simple reload the retained
+// MQTT schedule_data would stay at its boot snapshot until the daemon restarts.
+// Each profile is reloaded once (dedup) and only when it has a schedule.
+func reloadDeviceWeekProfiles(ctx context.Context, dev *device.Device, logger *slog.Logger) {
+	seenClimate := make(map[*weekprofile.ClimateProfile]struct{})
+	seenSimple := make(map[*weekprofile.DefaultProfile]struct{})
+	logLoadErr := func(err error) {
+		if err != nil && logger != nil {
+			logger.Debug("auto_refresh.config_pending.week_profile.load",
+				slog.String("device", dev.Address),
+				slog.String("err", err.Error()))
+		}
+	}
+	for _, ch := range dev.Channels() {
+		wp := ch.WeekProfile()
+		if wp == nil {
+			continue
+		}
+		if cp := wp.Climate(); cp != nil {
+			if _, dup := seenClimate[cp]; dup {
+				continue
+			}
+			seenClimate[cp] = struct{}{}
+			if _, err := cp.Current(); err != nil {
+				continue
+			}
+			_, err := cp.Load(ctx)
+			logLoadErr(err)
+			continue
+		}
+		if sp := wp.Simple(); sp != nil {
+			if _, dup := seenSimple[sp]; dup {
+				continue
+			}
+			seenSimple[sp] = struct{}{}
+			if _, err := sp.Current(); err != nil {
+				continue
+			}
+			_, err := sp.Load(ctx)
+			logLoadErr(err)
+		}
+	}
 }
 
 // refreshDeviceMasterCache reads MASTER for every channel of dev and

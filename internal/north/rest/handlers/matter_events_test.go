@@ -4,14 +4,64 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 )
+
+// capturingMatterPublisher records the last MatterEvent it was handed so a
+// test can inspect the exact envelope the handlers construct.
+type capturingMatterPublisher struct{ last MatterEvent }
+
+func (c *capturingMatterPublisher) PublishMatterEvent(_ context.Context, ev MatterEvent) {
+	c.last = ev
+}
+
+// TestPublishMatterEventTypeCarriesTheMatterPrefix pins the wsapi.json
+// envelope contract: the wire `type` names the event family and MUST equal
+// the prefixed topic (`matter.<event>`). The SPA
+// (assets/ui/src/lib/stores/matter.svelte.ts) and the Python client both
+// dispatch on `case "matter.<event>"`, so a bare trailing segment reaches
+// no consumer and the whole Matter broadcast family goes dead.
+//
+// Bite check: reinstating the old `Type: typeFromTopic(topic)` stripping —
+// i.e. emitting the bare segment — makes every case below fail because
+// `type` ("fabric_added") no longer equals `topic` ("matter.fabric_added").
+func TestPublishMatterEventTypeCarriesTheMatterPrefix(t *testing.T) {
+	t.Parallel()
+
+	topics := []string{
+		MatterTopicExposableChanged,
+		MatterTopicCommissioningWindowOpened,
+		MatterTopicCommissioningProgress,
+		MatterTopicFabricAdded,
+		MatterTopicFabricRemoved,
+		MatterTopicEndpointAssembled,
+	}
+	for _, topic := range topics {
+		t.Run(topic, func(t *testing.T) {
+			t.Parallel()
+			pub := &capturingMatterPublisher{}
+			publishMatterEvent(context.Background(), pub, topic, map[string]any{"k": "v"})
+
+			if pub.last.Type != topic {
+				t.Errorf("type = %q, want it to equal the topic %q", pub.last.Type, topic)
+			}
+			if pub.last.Topic != topic {
+				t.Errorf("topic = %q, want %q", pub.last.Topic, topic)
+			}
+			if !strings.HasPrefix(pub.last.Type, "matter.") {
+				t.Errorf("type = %q, want the matter. prefix so both consumers match", pub.last.Type)
+			}
+		})
+	}
+}
 
 type fakeDiagEvents struct{ events []diagevent.Event }
 

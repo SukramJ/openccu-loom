@@ -160,6 +160,21 @@ class ApiError extends Error {
     }
     return "";
   }
+
+  /**
+   * The RFC 9457 `title` field — the daemon's short summary of the
+   * problem (e.g. `Edit lock required`, `Channel locked`). Used as a
+   * `detail`-less fallback so a 423 without a `detail` body still
+   * surfaces something more specific than the bare status code.
+   */
+  get problemTitle(): string {
+    const b = this.body;
+    if (typeof b === "object" && b !== null && "title" in b) {
+      const ti = (b as { title: unknown }).title;
+      return typeof ti === "string" ? ti : "";
+    }
+    return "";
+  }
 }
 
 // CSRFCookieName / CSRFHeaderName mirror internal/auth/csrf.go. The
@@ -2511,11 +2526,19 @@ export function friendlyError(
       return t("api.error.rate_limited");
     }
     if (err.status === 423) {
-      // A control write against a locked channel. The daemon's detail
-      // names the REST path that lifts the lock, which is the wrong
-      // instruction for someone looking at the SPA — point at the
-      // channel flags instead. Surfaces that need the lock *holder*
-      // (the edit-session banner) branch on 423 before reaching here.
+      // 423 is not always a channel lock — the same status also covers
+      // a lapsed/missing MASTER edit-lock token (enforceEditLock in
+      // internal/north/rest/handlers/paramsets.go), a different
+      // situation with a different fix. Prefer the daemon's own
+      // problem.detail/problem.title when it sent one — that is
+      // specific to whichever the daemon actually rejected — and only
+      // fall back to the generic channel-lock text when the response
+      // carries neither. Surfaces that need the lock *holder* (the
+      // edit-session banner) branch on 423 before reaching here.
+      const reason = err.problemDetail || err.problemTitle;
+      if (reason) {
+        return `${t("api.error.locked_reason", { status: String(err.status) })} — ${reason}`;
+      }
       return t("api.error.locked");
     }
     if (err.status >= 500) {

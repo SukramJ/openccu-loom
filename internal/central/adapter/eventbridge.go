@@ -3085,6 +3085,28 @@ func rawLocksToUint32(v any) (uint32, bool) {
 	return 0, false
 }
 
+// scheduleDomainForChannel resolves the user-facing schedule domain of a
+// non-climate device via the same resolution the REST read path uses
+// ([resolveScheduleDomain]), so the MQTT `schedule_domain` attribute and the
+// REST bucket never disagree — a cover / dimmer / light / lock stops
+// masquerading as a "switch". Falls back to "switch" when the device or its
+// type cannot be resolved, preserving the historically non-empty attribute.
+func (b *EventBridge) scheduleDomainForChannel(address string, channelNo int) string {
+	if b.registry != nil {
+		for _, u := range b.registry.List() {
+			dev, ok := u.ModelRegistry.Get(address)
+			if !ok {
+				continue
+			}
+			if d := resolveScheduleDomain(dev, channelNo); d != "" {
+				return d
+			}
+			break
+		}
+	}
+	return "switch"
+}
+
 // publishScheduleEntityPayload publishes the current state + attrs JSON
 // for a Zeitplan sensor. Split out so both the initial-snapshot path and
 // the live OnChange callback share it.
@@ -3148,7 +3170,7 @@ func (b *EventBridge) publishScheduleEntityPayload(
 		}
 		attrs["available_target_channels"] = atcMap
 		attrs["schedule_data"] = map[string]any{"entries": simpleScheduleEntriesJSON(wp)}
-		attrs["schedule_domain"] = "switch"
+		attrs["schedule_domain"] = b.scheduleDomainForChannel(address, channelNo)
 	}
 	notePublish(ctx, bridge.PublishScheduleEntityAttrs(ctx, centralName, iface, address, channelNo, attrs))
 	// state := count of active entries. Currently 0 until the

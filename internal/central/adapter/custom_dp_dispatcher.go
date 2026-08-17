@@ -166,8 +166,23 @@ func (d *CustomDPDispatcher) dispatch(
 	if l, ok := dp.(*light.ColorTempLight); ok {
 		return d.dispatchColorTempLight(ctx, l, operation, params, priority)
 	}
+	// DRGDaliLight (HmIP-DRG-DALI) composes *ColorTempLight and adds an
+	// optional EFFECT surface; it is a distinct concrete type, so the
+	// ColorTempLight case above never matches it. Without this case every
+	// turn_on/off/brightness/color_temp/effect command errored as an
+	// unsupported type even though the profile is advertised as controllable.
+	if l, ok := dp.(*light.DRGDaliLight); ok {
+		return d.dispatchDRGDaliLight(ctx, l, operation, params, priority)
+	}
 	if l, ok := dp.(*light.FixedColorLight); ok {
 		return d.dispatchFixedColorLight(ctx, l, operation, params, priority)
+	}
+	// SoundPlayerLED (HmIP-MP3P status LED) composes *FixedColorLight; like
+	// DRGDaliLight it is a distinct type the FixedColorLight case never
+	// matches. Route it through the fixed-colour path so its turn_on/off,
+	// brightness and fixed-colour commands dispatch like every other light.
+	if l, ok := dp.(*light.SoundPlayerLED); ok {
+		return d.dispatchFixedColorLight(ctx, l.FixedColorLight, operation, params, priority)
 	}
 	if l, ok := dp.(*light.ColorLight); ok {
 		return d.dispatchColorLight(ctx, l, operation, params, priority)
@@ -348,6 +363,23 @@ func (d *CustomDPDispatcher) dispatchColorTempLight(
 	default:
 		return d.dispatchLight(ctx, l.Light, op, p, prio)
 	}
+}
+
+// dispatchDRGDaliLight routes the DALI light: set_effect goes to its own
+// optional EFFECT surface (a no-op on fixtures without one), and every other
+// operation — turn_on/off, brightness, color_temp — delegates to the embedded
+// ColorTempLight path, exactly as the sibling light types are dispatched.
+func (d *CustomDPDispatcher) dispatchDRGDaliLight(
+	ctx context.Context, l *light.DRGDaliLight, op string, p map[string]any, prio hmenum.CommandPriority,
+) error {
+	if op == "set_effect" {
+		label, ok := paramStringOptional(p, "label")
+		if !ok {
+			return fmt.Errorf("%w: set_effect requires a string label", hmapi.ErrBadParam)
+		}
+		return l.SetEffect(ctx, label, prio)
+	}
+	return d.dispatchColorTempLight(ctx, l.ColorTempLight, op, p, prio)
 }
 
 func (d *CustomDPDispatcher) dispatchFixedColorLight(

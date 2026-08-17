@@ -419,6 +419,29 @@ func (s *Sysvar) ApplyMeta(m SysvarMeta) {
 	s.Vid = m.Vid
 }
 
+// SysvarBoundAsFloat coerces a declared numeric bound (a Sysvar Min / Max) to
+// the float64 form the north-bound number surfaces (REST summary, WS
+// descriptor, MQTT number discovery) want. The bound is type-aware: an
+// INTEGER-typed sysvar carries its bound in [hmtypes.ParamValue.Int] and a
+// FLOAT-typed one in .Float, so reading .Float unconditionally reports 0 for
+// every INTEGER variable. Returns nil when the bound is nil, absent, or carries
+// a non-numeric kind (e.g. a LIST sysvar's spurious bound).
+func SysvarBoundAsFloat(pv *hmtypes.ParamValue) *float64 {
+	if pv == nil || pv.IsNone() {
+		return nil
+	}
+	switch pv.Kind {
+	case hmtypes.ValueKindFloat:
+		v := pv.Float
+		return &v
+	case hmtypes.ValueKindInt:
+		v := float64(pv.Int)
+		return &v
+	default:
+		return nil
+	}
+}
+
 // EnabledByDefault shadows the promoted [HubDataPoint.EnabledByDefault] so the
 // EnabledDefault field — which the hub refresh rewrites through [ApplyMeta]
 // under s.mu — is read under the same lock. The forced-usage delegation is

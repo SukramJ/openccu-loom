@@ -124,6 +124,113 @@ func (p *HubMQTTPublisher) Flush() {
 	}
 }
 
+// RetractCentral clears every retained hub-plane discovery config the publisher
+// declared for u's central — programs, sysvars, install-mode, connectivity,
+// alarm/service messages, the system-health / last-event-age / connection-latency
+// sensors, the inbox and the hub update entity — by re-publishing each with an
+// empty payload. It is the whole-central counterpart to the per-entity OnRemoved
+// retract hooks in wireOne*.
+//
+// Those hooks only fire for an entity the CCU drops one at a time; a whole
+// central removed at runtime never triggers them, and the orphan-topic sweep is
+// scoped to registered centrals so it can never reach a central that is leaving
+// the registry. Without this the removed CCU's hub entities stay retained on the
+// broker — visible and frozen in Home Assistant, and surviving daemon restarts —
+// until the topic is cleared by hand.
+//
+// Call it BEFORE the unit's model is torn down: the retract items are rebuilt
+// from the live hub model (programs, sysvars, install-mode DPs) and interface
+// list, so they carry the same unique_ids the declare side published.
+func (p *HubMQTTPublisher) RetractCentral(u *central.Unit) {
+	if p == nil || u == nil || p.wiring == nil {
+		return
+	}
+	b := p.wiring.Bridge()
+	if b == nil {
+		// MQTT disabled at runtime keeps the Wiring alive with no bridge; a
+		// retract has nowhere to go and there is nothing retained to clear.
+		return
+	}
+	// Publishes run on the fan-out worker under its own context, so they survive
+	// the (possibly request-scoped) removeCentral caller and are cancelled only
+	// by the publisher's own Stop. Fall back to Background when no worker runs
+	// (a unit test driving the publisher without Start).
+	ctx := context.Background()
+	if f := p.fanout.Load(); f != nil {
+		ctx = f.ctx
+	}
+	centralName := u.Name()
+	disco := b.DefaultBuilder()
+	if disco == nil {
+		disco = mqtt.NewDefaultDiscoveryBuilder(b.Topics(), centralName)
+	}
+	// Re-stamp the serial that gates every hub-discovery unique_id so the retract
+	// items address the same topics the declare side published. It is normally
+	// already present from the central's earlier wiring; re-stamping is cheap and
+	// idempotent, and only a resolved serial is written (never an empty one).
+	if hi := hubInfoFromUnit(u); hi.Serial != "" {
+		disco.SetHubInfoFor(centralName, hi)
+	}
+
+	var items []mqtt.DiscoveryItem
+	if hubModel := u.HubModel; hubModel != nil {
+		for _, prog := range hubModel.Programs() {
+			if prog == nil || prog.Internal() {
+				continue
+			}
+			items = append(items, disco.BuildProgramDiscoveryRoles(
+				centralName, programSpecFor(prog), b.ProgramRoles(centralName, prog),
+			)...)
+		}
+		for _, sv := range hubModel.Sysvars() {
+			if sv == nil {
+				continue
+			}
+			items = append(items, disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv)))
+		}
+		for _, dp := range hubModel.InstallModeDPs() {
+			if dp == nil || dp.InterfaceID == "" {
+				continue
+			}
+			items = append(items,
+				disco.BuildInstallModeSensorDiscovery(centralName, dp.InterfaceID),
+				disco.BuildInstallModeButtonDiscovery(centralName, dp.InterfaceID))
+		}
+	}
+	// Connectivity: one binary_sensor per registered interface, keyed by the same
+	// `<central>-<iface>` wire id seedConnectivityDiscovery declares.
+	if u.Clients != nil {
+		for _, entry := range u.Clients.List() {
+			if entry == nil {
+				continue
+			}
+			iface := entry.Interface
+			if iface == "" {
+				iface = BareInterfaceFromWireID(centralName, entry.InterfaceID)
+			}
+			if iface == "" {
+				continue
+			}
+			items = append(items, disco.BuildConnectivityDiscovery(centralName, WireInterfaceID(centralName, iface)))
+		}
+	}
+	// Central-wide singletons, published unconditionally in wireOneCentral.
+	items = append(
+		items,
+		disco.BuildAlarmMessagesDiscovery(centralName),
+		disco.BuildServiceMessagesDiscovery(centralName),
+		disco.BuildSystemHealthDiscovery(centralName),
+		disco.BuildLastEventAgeDiscovery(centralName),
+		disco.BuildConnectionLatencyDiscovery(centralName),
+		disco.BuildInboxDiscovery(centralName),
+		disco.BuildHubUpdateDiscovery(centralName),
+	)
+
+	p.publish(func() {
+		retractHubDiscoveryItems(ctx, b, items)
+	})
+}
+
 // publish hands one hub-plane broker interaction to the fan-out worker.
 //
 // Every job is enqueued as durable: the hub plane carries discovery configs
@@ -524,13 +631,15 @@ func (p *HubMQTTPublisher) wireInstallMode(
 // not only after the first reachability change. Connection-latency is
 // aggregated central-wide and seeded from the Metrics block instead.
 //
-// The seed keys on the BARE interface name, not on the `<central>-<iface>`
-// wire id the client coordinator is registered under: the state half of this
-// entity rides ConnectivityChangedEvent, whose InterfaceID is the name the
-// CCU itself reports from `Interface.listInterfaces`. Seeding under the wire
-// id declared a state topic nothing ever writes — a permanently unavailable
-// entity per radio — and the first reachability change then added a second,
-// live pair under the bare name.
+// The seed keys on the `<central>-<iface>` wire id, exactly as the state half
+// does: ConnectivityChangedEvent.InterfaceID carries the wire id because
+// observeProbeLatency (hub_wiring.go) stamps it there before the reconciler
+// publishes — the same id GET /interfaces reports and the client looks each
+// sensor's value up by. Seeding under the bare interface name instead declared
+// a state topic nothing ever writes (a permanently unavailable entity per
+// radio) while the first reachability change added a second, live pair under
+// the wire id. Seeding under the wire id and recording it in
+// connectivityDiscovered keeps the seed and the event path on one entity.
 func seedConnectivityDiscovery(
 	ctx context.Context,
 	u *central.Unit,
@@ -546,16 +655,20 @@ func seedConnectivityDiscovery(
 		if entry == nil {
 			continue
 		}
-		iface := string(entry.Interface)
+		iface := entry.Interface
 		if iface == "" {
-			iface = string(BareInterfaceFromWireID(centralName, entry.InterfaceID))
+			iface = BareInterfaceFromWireID(centralName, entry.InterfaceID)
 		}
 		if iface == "" {
 			continue
 		}
-		if !connectivityDiscovered[iface] {
-			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, iface))
-			connectivityDiscovered[iface] = true
+		// The wire id, built the same way observeProbeLatency builds the id it
+		// stamps onto ConnectivityChangedEvent, so the seed's discovery topic
+		// and unique_id match the state the event path later publishes.
+		wireID := WireInterfaceID(centralName, iface)
+		if !connectivityDiscovered[wireID] {
+			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, wireID))
+			connectivityDiscovered[wireID] = true
 		}
 	}
 }
@@ -649,22 +762,34 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, val.Unwrap()))
 		}
 	})
-	p.addUnsub(sv.OnUpdate(func(_, next hmtypes.ParamValue) {
+	unsubUpdate := sv.OnUpdate(func(_, next hmtypes.ParamValue) {
 		p.publish(func() {
 			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
 		})
-	}))
+	})
+	p.addUnsub(unsubUpdate)
 	// A system variable the operator deleted in the CCU WebUI is dropped
 	// from the model by the next refresh, but its retained discovery config
 	// keeps the entity alive in every consumer — frozen at its last value,
 	// and across daemon restarts, because nothing ever clears a retained
 	// topic the model no longer knows about. Retract the config this sysvar
 	// declared the moment the model drops it, exactly as wireOneProgram
-	// does for programs.
+	// does for programs. A CCU-side rename reaches this same hook (the model
+	// retracts the old identity before re-announcing the new one via the
+	// registration observer), so the state subscription is released here too
+	// — otherwise the re-wire would leave the pre-rename OnUpdate slot live and
+	// every value change would publish to both the old (retracted) and the new
+	// state topic.
 	p.addUnsub(sv.OnRemoved(func() {
+		unsubUpdate()
+		// Build the retract item synchronously, on the notifying goroutine, so
+		// its topic is derived from the identity's CURRENT (pre-rename) name. A
+		// rename renames the live object immediately after this hook returns;
+		// deferring the build to the async worker would read the new name and
+		// retract the wrong topic, leaving the old entity stranded.
+		item := disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv))
 		p.publish(func() {
-			retractHubDiscoveryItems(ctx, b,
-				[]mqtt.DiscoveryItem{disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv))})
+			retractHubDiscoveryItems(ctx, b, []mqtt.DiscoveryItem{item})
 		})
 	}))
 }
@@ -691,8 +816,8 @@ func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
 		Writable:       sv.Writable(),
 		IsExtended:     m.IsExtended,
 		EnabledDefault: sv.EnabledByDefault(),
-		Min:            paramValueAsFloat(m.Min),
-		Max:            paramValueAsFloat(m.Max),
+		Min:            hub.SysvarBoundAsFloat(m.Min),
+		Max:            hub.SysvarBoundAsFloat(m.Max),
 		DeviceAddress:  sv.DeviceAddress(),
 	}
 }
@@ -750,26 +875,6 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 // the real Connectivity state aggregate; here we only need the topic
 // shape, which lives on the model type.
 var hubConnectivityTopics = hub.NewConnectivity()
-
-// paramValueAsFloat coerces a CCU [*hmtypes.ParamValue] bound (Min /
-// Max on a Sysvar) to the float64 form HA's number discovery wants.
-// Returns nil when the source is nil, absent, or carries a non-numeric
-// kind (e.g. a List sysvar's spurious bounds).
-func paramValueAsFloat(pv *hmtypes.ParamValue) *float64 {
-	if pv == nil || pv.IsNone() {
-		return nil
-	}
-	switch pv.Kind {
-	case hmtypes.ValueKindFloat:
-		v := pv.Float
-		return &v
-	case hmtypes.ValueKindInt:
-		v := float64(pv.Int)
-		return &v
-	default:
-		return nil
-	}
-}
 
 // sysvarStateForMQTT maps the CCU-side value into the payload HA
 // expects on the state topic. For List sysvars the CCU reports the

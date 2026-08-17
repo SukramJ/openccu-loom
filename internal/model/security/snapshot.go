@@ -41,6 +41,12 @@ type Snapshot struct {
 	// False means the engine reported a problem with itself, which is
 	// distinct from a broker outage and must be distinguishable.
 	EngineHealthy bool
+	// IndexHealthy reports whether the classification index reflects the
+	// live model. False means the last RebuildIndex failed (a SQLite read
+	// error — lock contention, disk-full, WAL stall) and the domain cannot
+	// vouch that any class is clear: the snapshot is a degraded "unknown",
+	// not an all-clear, and Severity is raised accordingly.
+	IndexHealthy bool
 	// LastAlarm and LastFault are the most recent notifications of each
 	// kind; they survive a restart of the consumer, which an event
 	// cannot.
@@ -195,6 +201,11 @@ type SourceView struct {
 	// Overridden reports that an operator decision, not the classifier,
 	// produced this verdict.
 	Overridden bool
+	// OverrideIncluded is the stored override's raw inclusion bit. It is
+	// only meaningful when Overridden is true; a read surface seeds its
+	// include/exclude toggle from it rather than assuming "included" so a
+	// prior exclusion is not silently undone on the next save.
+	OverrideIncluded bool
 	// SinceMS is when it last became active; 0 while inactive.
 	SinceMS int64
 }

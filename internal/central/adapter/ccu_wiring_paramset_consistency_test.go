@@ -297,7 +297,7 @@ func TestWireInterfaceReportsStaleHmIPParamsetDescriptors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	closer, err := wireInterface(
+	closer, _, err := wireInterface(
 		ctx, cc, hmenum.InterfaceHmIPRF, unit, NewDevicePipeline(unit), client.NewValueWriter(),
 		nil, // runner: the ReGa value seed needs a second (JSON-RPC) surface and no MASTER value rides it
 		"",  // callbackURL: no push registration; the sweep runs off the ingest, not off a callback

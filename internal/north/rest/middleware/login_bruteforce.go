@@ -77,6 +77,29 @@ func (l *LoginRateLimiter) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
+// Budget reports whether the source of r may attempt a credential
+// verification — a token is available in its per-IP bucket — WITHOUT
+// consuming one, and the Retry-After seconds when it may not. It backs the
+// Resolve-stage Basic-auth guard ([auth.GuardBasicAuth]): a successful
+// verification must cost nothing, so the peek here and the [LoginRateLimiter.Charge]
+// on a failure are separate operations sharing the same per-IP buckets as the
+// login POST — a Basic-guessing sweep and a login sweep deplete one budget.
+func (l *LoginRateLimiter) Budget(r *http.Request) (ok bool, retryAfter int) {
+	lim := l.store.get(loginClientIP(r))
+	if lim.Tokens() >= 1 {
+		return true, 0
+	}
+	return false, retryAfterSeconds(lim)
+}
+
+// Charge records one failed credential verification from the source of r,
+// consuming a token from the shared per-IP bucket so a Basic-auth guessing
+// sweep on any Resolve-protected route depletes the same budget the login
+// route does.
+func (l *LoginRateLimiter) Charge(r *http.Request) {
+	_ = l.store.get(loginClientIP(r)).Allow()
+}
+
 // loginClientIP is the best-effort source address used as the rate-limit key.
 // It deliberately uses RemoteAddr only — honouring X-Forwarded-For without a
 // configured trusted-proxy allow-list would let an attacker bypass the limit

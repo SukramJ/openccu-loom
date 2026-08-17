@@ -83,6 +83,42 @@ func TestStart_ZeroDuration_UsesDefault(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// Start — anonymise gating
+// --------------------------------------------------------------------------
+
+// TestStart_TriggeredOperator_HonoursAnonymiseFalse pins that an operator-
+// initiated capture (a non-empty Triggered subject) honours an explicit
+// Anonymise=false. The REST/SPA path stamps the authenticated operator into
+// Triggered precisely so this choice is not silently overridden.
+func TestStart_TriggeredOperator_HonoursAnonymiseFalse(t *testing.T) {
+	t.Parallel()
+	mgr := diagnostics.NewManager(nil, nil)
+	sum, err := mgr.Start(diagnostics.StartOptions{Anonymise: false, Triggered: "operator@ccu"})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if sum.Anonymised {
+		t.Error("operator-triggered capture with Anonymise=false must not be anonymised")
+	}
+}
+
+// TestStart_Untriggered_ForcesAnonymise pins the safe default: a capture with
+// no operator subject (auto/scheduled, or an unauthenticated request whose
+// Triggered stays empty) is always anonymised, even when Anonymise=false, so
+// raw device addresses never leak on a capture nobody is accountable for.
+func TestStart_Untriggered_ForcesAnonymise(t *testing.T) {
+	t.Parallel()
+	mgr := diagnostics.NewManager(nil, nil)
+	sum, err := mgr.Start(diagnostics.StartOptions{Anonymise: false, Triggered: ""})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if !sum.Anonymised {
+		t.Error("untriggered capture must be anonymised regardless of Anonymise=false")
+	}
+}
+
+// --------------------------------------------------------------------------
 // Start — duration cap
 // --------------------------------------------------------------------------
 

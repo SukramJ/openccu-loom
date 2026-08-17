@@ -6,6 +6,7 @@ package hub
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -138,6 +139,18 @@ type SysvarMutator interface {
 // 503 so the SPA can show "feature not configured" instead of a
 // generic upstream error.
 var ErrNoSysvarMutator = errors.New("hub: no sysvar mutator configured")
+
+// ErrSysvarNotFound signals a PATCH/rename against a sysvar the CCU no longer
+// has: the update ReGa script emits "" (rather than "ok") when the target name
+// does not resolve. The REST handler maps it to 404 instead of a false 202.
+var ErrSysvarNotFound = errors.New("hub: sysvar not found")
+
+// ErrSysvarExists signals a create against a name the hub already mirrors: the
+// create ReGa script silently no-ops on a collision (it writes the pre-existing
+// object id and quits, indistinguishable on the wire from a fresh create), so
+// the hub rejects a known-duplicate name up front. The REST handler maps it to
+// 409 instead of a false 202.
+var ErrSysvarExists = errors.New("hub: sysvar already exists")
 
 // SysvarUsage is one CCU program that references a system variable.
 type SysvarUsage struct {
@@ -572,32 +585,64 @@ func (h *Hub) RemoveSysvar(name string) bool {
 	return true
 }
 
-// RenameSysvar re-keys a cached sysvar from oldName to newName and
-// updates the entry's Name field, preserving the same pointer so
-// subscribers wired via OnSysvarRegistered stay valid. It reports
-// whether an entry existed under oldName. Local-only: the CCU-side
-// rename runs through UpdateSysvarRemote. A no-op when the names match,
-// oldName is unknown, or newName is already taken (the periodic refresh
-// reconciles any residual state).
+// RenameSysvar re-keys a cached sysvar from oldName to newName and updates the
+// entry's Name field, preserving the same pointer so subscribers wired via
+// OnSysvarRegistered stay valid. It reports whether an entry existed under
+// oldName. Local-only: the CCU-side rename runs through UpdateSysvarRemote. A
+// no-op when the names match, oldName is unknown, or newName is already taken
+// (the periodic refresh reconciles any residual state).
+//
+// A rename changes the entity's north-bound identity, so it must retract the
+// old identity and announce the new one: MQTT topics are derived from the live
+// name on every publish, so without this the old retained HA discovery config
+// is never retracted (the entity freezes at its last pre-rename value) and the
+// new name's discovery is never published. RenameSysvar therefore fires the
+// removal hook (NotifyRemoved) for the old name — while the live name still
+// reads oldName, so the retract targets the old topic — and then fires the
+// registration observers for the new name, exactly as PutSysvar does, so the
+// MQTT publisher retracts and re-publishes. The removal hook clears the
+// per-entity subscriptions the registration observer then re-installs, so no
+// consumer is left double-registered.
 func (h *Hub) RenameSysvar(oldName, newName string) bool {
 	if oldName == newName || newName == "" {
 		return false
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	s, ok := h.sysvars[oldName]
 	if !ok {
+		h.mu.Unlock()
 		return false
 	}
 	if _, taken := h.sysvars[newName]; taken {
+		h.mu.Unlock()
 		return false
 	}
+	observers := append([]func(*Sysvar){}, h.sysvarObservers...)
+	h.mu.Unlock()
+
+	// Retract the old identity's north-bound footprint FIRST, while the live
+	// name still reads oldName: the removal hooks build their retract topic
+	// from the sysvar's current name, so firing after the rename would retract
+	// the NEW name and strand the pre-rename entity for the life of the broker.
+	s.NotifyRemoved()
+
+	h.mu.Lock()
 	delete(h.sysvars, oldName)
-	// The name belongs to the embedded data point and is read through its
-	// own lock by every north-bound reader; the hub mutex held here guards
-	// the map, not the entry.
+	// The name belongs to the embedded data point and is read through its own
+	// lock by every north-bound reader; the hub mutex held here guards the map.
 	s.SetName(newName)
 	h.sysvars[newName] = s
+	h.mu.Unlock()
+
+	// Announce the new identity so late-bound consumers (the MQTT publisher)
+	// publish discovery + state under the new name and re-install the
+	// per-entity hooks NotifyRemoved just released. Mirrors PutSysvar; fired
+	// outside the hub lock because the observers call back into the model.
+	for _, cb := range observers {
+		if cb != nil {
+			cb(s)
+		}
+	}
 	return true
 }
 
@@ -676,6 +721,15 @@ func (h *Hub) CreateSysvarRemote(ctx context.Context, spec SysvarCreateSpec) err
 	m := h.sysvarMut()
 	if m == nil {
 		return ErrNoSysvarMutator
+	}
+	// The create ReGa script no-ops on a name collision — it writes the
+	// existing object's id and quits, which is indistinguishable on the wire
+	// from a fresh create, so the writer cannot tell the two apart. Reject a
+	// name the hub already mirrors here so a duplicate never answers a false
+	// 202. A genuine dom.CreateObject failure is still caught by the writer's
+	// empty-output check.
+	if _, exists := h.Sysvar(spec.Name); exists {
+		return fmt.Errorf("create sysvar %q: %w", spec.Name, ErrSysvarExists)
 	}
 	return m.CreateSysvar(ctx, spec)
 }

@@ -140,7 +140,7 @@ func hubEntityDeviceBlock(centralName, deviceAddress string, info HubInfo) map[s
 		return hubDeviceBlock(centralName, info)
 	}
 	return map[string]any{
-		"identifiers": []string{physicalDeviceIdentifier(deviceAddress)},
+		"identifiers": []string{physicalDeviceIdentifier(centralName, deviceAddress)},
 		"via_device":  centralDeviceIdentifier(centralName),
 	}
 }

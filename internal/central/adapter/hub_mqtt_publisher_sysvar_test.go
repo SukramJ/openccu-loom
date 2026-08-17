@@ -11,25 +11,25 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// ─── Fix 4: paramValueAsFloat ────────────────────────────────────────────────
+// ─── hub.SysvarBoundAsFloat (the MQTT plane's numeric-bound conversion) ──────
 
-func TestParamValueAsFloat(t *testing.T) {
+func TestSysvarBoundAsFloat(t *testing.T) {
 	t.Parallel()
 
 	// nil pointer → nil
-	if got := paramValueAsFloat(nil); got != nil {
+	if got := hub.SysvarBoundAsFloat(nil); got != nil {
 		t.Fatalf("nil input: want nil, got %v", got)
 	}
 
 	// zero-value ParamValue (Kind=None) → nil
 	none := hmtypes.NoneValue()
-	if got := paramValueAsFloat(&none); got != nil {
+	if got := hub.SysvarBoundAsFloat(&none); got != nil {
 		t.Fatalf("KindNone: want nil, got %v", got)
 	}
 
 	// Float kind
 	fv := hmtypes.FloatValue(12.5)
-	got := paramValueAsFloat(&fv)
+	got := hub.SysvarBoundAsFloat(&fv)
 	if got == nil {
 		t.Fatal("Float kind: got nil, want *12.5")
 	}
@@ -37,9 +37,9 @@ func TestParamValueAsFloat(t *testing.T) {
 		t.Fatalf("Float kind: got %v, want 12.5", *got)
 	}
 
-	// Int kind
+	// Int kind — an INTEGER sysvar carries its bound here, not in .Float.
 	iv := hmtypes.IntValue(42)
-	got = paramValueAsFloat(&iv)
+	got = hub.SysvarBoundAsFloat(&iv)
 	if got == nil {
 		t.Fatal("Int kind: got nil, want *42.0")
 	}
@@ -49,19 +49,19 @@ func TestParamValueAsFloat(t *testing.T) {
 
 	// String kind → nil
 	sv := hmtypes.StringValue("hello")
-	if got := paramValueAsFloat(&sv); got != nil {
+	if got := hub.SysvarBoundAsFloat(&sv); got != nil {
 		t.Fatalf("String kind: want nil, got %v", got)
 	}
 
 	// Bool kind → nil
 	bv := hmtypes.BoolValue(true)
-	if got := paramValueAsFloat(&bv); got != nil {
+	if got := hub.SysvarBoundAsFloat(&bv); got != nil {
 		t.Fatalf("Bool kind: want nil, got %v", got)
 	}
 
 	// List kind → nil
 	lv := hmtypes.ListValue([]string{"a", "b"})
-	if got := paramValueAsFloat(&lv); got != nil {
+	if got := hub.SysvarBoundAsFloat(&lv); got != nil {
 		t.Fatalf("List kind: want nil, got %v", got)
 	}
 }

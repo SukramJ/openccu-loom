@@ -6,8 +6,10 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
@@ -51,8 +53,10 @@ func (p *matterEventPublisher) PublishMatterEvent(_ context.Context, ev handlers
 // `Bridge.SetOnReassembled` hook.
 func (p *matterEventPublisher) publishEndpointAssembled(count int) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
-		Topic:   handlers.MatterTopicEndpointAssembled,
-		Type:    "endpoint_assembled",
+		Topic: handlers.MatterTopicEndpointAssembled,
+		// The wire `type` carries the full dotted name, identical to the
+		// topic — both WS consumers key on `matter.<event>`.
+		Type:    handlers.MatterTopicEndpointAssembled,
 		When:    time.Now().UTC(),
 		Payload: map[string]any{"endpoint_count": count},
 	})
@@ -71,7 +75,7 @@ func (p *matterEventPublisher) publishEndpointAssembled(count int) {
 func (p *matterEventPublisher) publishFabricAdded(fabricIndex uint8) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
 		Topic:   handlers.MatterTopicFabricAdded,
-		Type:    "fabric_added",
+		Type:    handlers.MatterTopicFabricAdded,
 		When:    time.Now().UTC(),
 		Payload: p.fabricPayload(fabricIndex),
 	})
@@ -99,8 +103,11 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 		return handlers.MatterFabricResponse{
 			FabricIndex:   r.FabricIndex,
 			FabricID:      r.FabricID,
+			FabricIDHex:   fmt.Sprintf("%016X", r.FabricID),
 			NodeID:        r.NodeID,
+			NodeIDHex:     fmt.Sprintf("%016X", r.NodeID),
 			VendorID:      r.VendorID,
+			VendorName:    eligibility.VendorName(r.VendorID),
 			Label:         r.Label,
 			CompressedID:  hex.EncodeToString(r.CompressedID[:]),
 			RootPublicKey: hex.EncodeToString(r.RootPublicKey),
@@ -115,7 +122,7 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 func (p *matterEventPublisher) publishFabricRemoved(fabricIndex uint8) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
 		Topic:   handlers.MatterTopicFabricRemoved,
-		Type:    "fabric_removed",
+		Type:    handlers.MatterTopicFabricRemoved,
 		When:    time.Now().UTC(),
 		Payload: map[string]any{"fabric_index": fabricIndex},
 	})

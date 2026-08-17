@@ -234,6 +234,74 @@ func TestReconcilerSkipsOnNegativeHealth(t *testing.T) {
 	}
 }
 
+// TestReconcilerEmitNotReadyDemotesStalePositiveHealth pins the outage fix:
+// a central that was operational (system_health observed at a positive score)
+// and then goes not-ready must stop reporting that stale positive. EmitNotReady
+// runs in the gated reconcile pass's place and replaces the score with the
+// not-ready sentinel, which the north-bound consumers render as "unknown".
+func TestReconcilerEmitNotReadyDemotesStalePositiveHealth(t *testing.T) {
+	bus := events.NewBus()
+	metrics := hub.NewMetrics()
+	metrics.Observe(hub.MetricSystemHealth, 100) // was fully healthy while operational
+
+	var drifts []hmevent.DriftCorrectedEvent
+	defer events.Subscribe(bus, func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
+
+	r := &coordinators.Reconciler{CentralName: "ccu1", Bus: bus, Metrics: metrics}
+	if err := r.EmitNotReady(context.Background()); err != nil {
+		t.Fatalf("EmitNotReady: %v", err)
+	}
+	got, observed := metrics.Value(hub.MetricSystemHealth)
+	if !observed || got.Value >= 0 {
+		t.Fatalf("system_health = %v (observed=%v); want the negative not-ready sentinel, not a stale positive", got.Value, observed)
+	}
+	if len(drifts) != 1 || drifts[0].Component != "system_health" {
+		t.Fatalf("expected one system_health drift on demotion, got %+v", drifts)
+	}
+}
+
+// TestReconcilerEmitNotReadyLeavesUnobservedHealthUnknown proves the sentinel
+// is never manufactured: a metric that was never observed (a CCU that never
+// came up) stays unobserved rather than being set to a spurious value.
+func TestReconcilerEmitNotReadyLeavesUnobservedHealthUnknown(t *testing.T) {
+	metrics := hub.NewMetrics()
+	r := &coordinators.Reconciler{CentralName: "ccu1", Metrics: metrics}
+	if err := r.EmitNotReady(context.Background()); err != nil {
+		t.Fatalf("EmitNotReady: %v", err)
+	}
+	if _, observed := metrics.Value(hub.MetricSystemHealth); observed {
+		t.Fatalf("never-observed system_health must stay unobserved after EmitNotReady")
+	}
+}
+
+// TestReconcilerEmitNotReadyMarksInterfacesUnreachable pins the second
+// instance the same gate froze: the per-interface connectivity aggregate. A
+// not-ready central must mark every still-reachable interface unreachable
+// rather than leave it advertising the last live "reachable".
+func TestReconcilerEmitNotReadyMarksInterfacesUnreachable(t *testing.T) {
+	bus := events.NewBus()
+	conn := hub.NewConnectivity()
+	conn.OnState("ccu1-HmIP-RF", true)
+	conn.OnState("ccu1-BidCos-RF", true)
+
+	var down []hmevent.ConnectivityChangedEvent
+	defer events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) { down = append(down, e) })()
+
+	r := &coordinators.Reconciler{CentralName: "ccu1", Bus: bus, Connectivity: conn}
+	if err := r.EmitNotReady(context.Background()); err != nil {
+		t.Fatalf("EmitNotReady: %v", err)
+	}
+	for _, id := range []string{"ccu1-HmIP-RF", "ccu1-BidCos-RF"} {
+		reachable, observed := conn.Reachable(id)
+		if !observed || reachable {
+			t.Fatalf("%s reachable=%v observed=%v; want unreachable", id, reachable, observed)
+		}
+	}
+	if len(down) != 2 {
+		t.Fatalf("expected 2 connectivity-down events, got %d", len(down))
+	}
+}
+
 // TestReconcilerConnectivityFollowsTheProbeMembership walks a full probe
 // sequence and pins which ConnectivityChangedEvents each answer produces.
 //

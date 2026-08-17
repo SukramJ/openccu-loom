@@ -438,6 +438,44 @@ func TestListSysvars_MinMaxExposed(t *testing.T) {
 	}
 }
 
+// TestListSysvars_IntegerBoundsExposed pins the type-aware bound conversion:
+// an INTEGER sysvar carries its bounds in ParamValue.Int, not .Float, so
+// reading .Float raw reported 0/0 for every INTEGER variable. min=1/max=100
+// must round-trip as 1/100 (the FLOAT twin was already correct).
+func TestListSysvars_IntegerBoundsExposed(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	sv := hub.NewSysvar("test-ccu", "Counter", "", hmenum.HubValueTypeInteger, nil)
+	minV := hmtypes.IntValue(1)
+	maxV := hmtypes.IntValue(100)
+	sv.Min = &minV
+	sv.Max = &maxV
+	h.PutSysvar(sv)
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sysvars", http.NoBody)
+	w := httptest.NewRecorder()
+	ListSysvars(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body []SysvarSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 sysvar, got %d", len(body))
+	}
+	s := body[0]
+	if s.Min == nil || *s.Min != 1.0 {
+		t.Errorf("min=%v want 1.0 (INTEGER bound read via .Int, not .Float)", s.Min)
+	}
+	if s.Max == nil || *s.Max != 100.0 {
+		t.Errorf("max=%v want 100.0 (INTEGER bound read via .Int, not .Float)", s.Max)
+	}
+}
+
 // TestListSysvars_NoMinMax_Omitted pins H-033: a sysvar without bounds must
 // omit min and max from the JSON.
 func TestListSysvars_NoMinMax_Omitted(t *testing.T) {

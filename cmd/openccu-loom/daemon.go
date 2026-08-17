@@ -618,6 +618,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	linksDomain := adapter.NewLinksDomain(reg, valueWriter, translations).SetAuditRecorder(auditRec)
 	paramsetsDomain := adapter.NewParamsetsDomain(reg, valueWriter).SetAuditRecorder(auditRec).SetVisibilityGate(visReg)
 	schedulesDomain := adapter.NewSchedulesDomain(reg, valueWriter).SetAuditRecorder(auditRec)
+	// Shared RPC session recorder: one instance backs both the WS
+	// recording.start/stop/status commands and the REST
+	// /diagnostics/rpc-recording routes, so a recording armed on either
+	// transport shares the same auto-stop timer, status and restart marker.
+	// The restart-survival resume happens in mountRESTServer (it owns the
+	// boot ctx) on this same instance.
+	rpcRecorder := adapter.NewRPCRecorderAdapter(reg, cfg.DataDir)
 
 	// --- MQTT subscribers --------------------------------------
 	// Wired post-schedulesDomain so the WeekProfileSink can be
@@ -722,6 +729,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		registry:         reg,
 		deviceReloader:   deviceReloader,
 		backups:          backupAdapter,
+		rpcRecorder:      rpcRecorder,
+		auditRec:         auditRec,
 		editSessions:     editSessions,
 		// cacheResetSvc backs ccu.cache_clear — scope-aware clear + re-pull.
 		cacheResetSvc: cacheResetSvc,
@@ -790,6 +799,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		groupsDomain:           groupsDomain,
 		deviceReloader:         deviceReloader,
 		firmwareRefresher:      adapter.NewFirmwareDomain(reg, valueWriter),
+		rpcRecorder:            rpcRecorder,
 		editSessions:           editSessions,
 		dpWriterAdapter:        dpWriterAdapter,
 		customDPDispatcher:     customDPDispatcher,

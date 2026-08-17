@@ -168,3 +168,101 @@ func TestBindClimateScheduleIONilNoop(t *testing.T) {
 	}()
 	bindClimateScheduleIO(nil, nil)
 }
+
+// lockScheduleRawParamset builds a two-slot lock MASTER paramset: slot 1 is a
+// door-lock "unlock_autorelock_end" action (LEVEL=1.0, DURATION 7/31 sentinel,
+// actor 1_1), slot 2 a user-permission "granted" slot (LEVEL=1.0, actor 2_1).
+// The duration sentinel (factor 31) is what [weekprofile.ParseSimpleRawParamset]
+// drops, so the loader must decode the action from the raw values.
+func lockScheduleRawParamset() map[string]any {
+	return map[string]any{
+		"01_WP_WEEKDAY":         weekprofile.WeekdayListToBitmask([]schedule.Weekday{schedule.WeekdayMonday}),
+		"01_WP_FIXED_HOUR":      7,
+		"01_WP_FIXED_MINUTE":    30,
+		"01_WP_LEVEL":           1.0,
+		"01_WP_TARGET_CHANNELS": weekprofile.TargetChannelsListToBitmask([]string{"1_1"}),
+		"01_WP_DURATION_BASE":   7,
+		"01_WP_DURATION_FACTOR": 31,
+		"02_WP_WEEKDAY":         weekprofile.WeekdayListToBitmask([]schedule.Weekday{schedule.WeekdayTuesday}),
+		"02_WP_FIXED_HOUR":      8,
+		"02_WP_FIXED_MINUTE":    0,
+		"02_WP_LEVEL":           1.0,
+		"02_WP_TARGET_CHANNELS": weekprofile.TargetChannelsListToBitmask([]string{"2_1"}),
+		"02_WP_DURATION_BASE":   7,
+		"02_WP_DURATION_FACTOR": 31,
+	}
+}
+
+// TestDefaultChannelLoaderDecodesLockFields pins that a lock-domain loader
+// surfaces lock_mode / lock_action / permission on the read path, and that a
+// non-lock domain leaves them empty. Without the decode the MQTT Zeitplan
+// attributes carry three permanent nulls for every lock device.
+func TestDefaultChannelLoaderDecodesLockFields(t *testing.T) {
+	t.Parallel()
+	ch := &device.Channel{Address: "VCU000LOCK:10"}
+	ch.SetRefresher(&wpFakeRefresher{response: lockScheduleRawParamset()})
+
+	lockLoader := &defaultChannelLoader{ch: ch, domain: "lock"}
+	s, err := lockLoader.Load(context.Background())
+	if err != nil {
+		t.Fatalf("lock Load returned err: %v", err)
+	}
+	e1, ok := s.Entries[1]
+	if !ok {
+		t.Fatal("slot 1 missing from parsed lock schedule")
+	}
+	if e1.LockMode != schedule.LockModeDoorLock {
+		t.Errorf("slot 1 LockMode = %q, want %q", e1.LockMode, schedule.LockModeDoorLock)
+	}
+	if e1.LockAction != schedule.LockActionUnlock {
+		t.Errorf("slot 1 LockAction = %q, want %q", e1.LockAction, schedule.LockActionUnlock)
+	}
+	e2, ok := s.Entries[2]
+	if !ok {
+		t.Fatal("slot 2 missing from parsed lock schedule")
+	}
+	if e2.LockMode != schedule.LockModeUserPermission {
+		t.Errorf("slot 2 LockMode = %q, want %q", e2.LockMode, schedule.LockModeUserPermission)
+	}
+	if e2.Permission != schedule.LockPermissionAllowed {
+		t.Errorf("slot 2 Permission = %q, want %q", e2.Permission, schedule.LockPermissionAllowed)
+	}
+
+	// The gate: a non-lock domain must not synthesise lock fields.
+	switchLoader := &defaultChannelLoader{ch: ch, domain: "switch"}
+	sw, err := switchLoader.Load(context.Background())
+	if err != nil {
+		t.Fatalf("switch Load returned err: %v", err)
+	}
+	if e := sw.Entries[1]; e.LockMode != "" || e.LockAction != "" || e.Permission != "" {
+		t.Errorf("non-lock domain populated lock fields: mode=%q action=%q perm=%q",
+			e.LockMode, e.LockAction, e.Permission)
+	}
+}
+
+// TestBindDefaultScheduleIOThreadsDomain pins that the resolved domain reaches
+// the loader — a lock device wired through bindDefaultScheduleIO decodes lock
+// fields, proving the domain plumbing is not lost between wiring and read.
+func TestBindDefaultScheduleIOThreadsDomain(t *testing.T) {
+	t.Parallel()
+	ch := &device.Channel{Address: "VCU000LOCK:10"}
+	ch.SetRefresher(&wpFakeRefresher{response: lockScheduleRawParamset()})
+	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		CentralName:    "Test",
+		ChannelAddress: ch.Address,
+		ScheduleType:   weekprofile.ScheduleTypeDefault,
+		ProfileCount:   1,
+	})
+	bindDefaultScheduleIO(ch, wp, "lock")
+	if wp.Simple() == nil {
+		t.Fatal("bindDefaultScheduleIO must attach a Simple profile")
+	}
+	s, err := wp.Simple().Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load returned err: %v", err)
+	}
+	if s.Entries[1].LockAction != schedule.LockActionUnlock {
+		t.Errorf("domain not threaded to loader: LockAction = %q, want %q",
+			s.Entries[1].LockAction, schedule.LockActionUnlock)
+	}
+}

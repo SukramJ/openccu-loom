@@ -339,12 +339,37 @@ func recordingBool(t *testing.T, data any) bool {
 	return v
 }
 
+// TestRecordingCommandsRequireAdminRole pins defect-3's fix: the WS
+// recording.start / recording.stop commands must be admin-gated to match the
+// admin-only REST /diagnostics/rpc-recording routes. An operator identity —
+// enough for most write commands — is refused with `forbidden`; an admin
+// clears the gate.
+func TestRecordingCommandsRequireAdminRole(t *testing.T) {
+	t.Parallel()
+	rec := &fakeSessionRecorder{}
+	r := newLinksRouter(nil, rec)
+
+	for _, cmd := range []string{"recording.start", "recording.stop"} {
+		t.Run(cmd, func(t *testing.T) {
+			t.Parallel()
+			res := r.Dispatch(opCtx(), cmd, nil)
+			if res.Error == nil || res.Error.Code != CommandErrorForbidden {
+				t.Fatalf("operator dispatch of %s = %+v, want forbidden", cmd, res.Error)
+			}
+			res = r.Dispatch(adminCtx(), cmd, nil)
+			if res.Error != nil && (res.Error.Code == CommandErrorForbidden || res.Error.Code == CommandErrorUnauthorized) {
+				t.Fatalf("admin dispatch of %s blocked by role gate: %+v", cmd, res.Error)
+			}
+		})
+	}
+}
+
 func TestRecordingStart(t *testing.T) {
 	t.Parallel()
 	rec := &fakeSessionRecorder{}
 	r := newLinksRouter(nil, rec)
 
-	res := r.Dispatch(opCtx(), "recording.start", nil)
+	res := r.Dispatch(adminCtx(), "recording.start", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -362,8 +387,8 @@ func TestRecordingStop_AfterStart(t *testing.T) {
 	r := newLinksRouter(nil, rec)
 
 	// Start first, then stop.
-	r.Dispatch(opCtx(), "recording.start", nil)
-	res := r.Dispatch(opCtx(), "recording.stop", nil)
+	r.Dispatch(adminCtx(), "recording.start", nil)
+	res := r.Dispatch(adminCtx(), "recording.stop", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -381,7 +406,7 @@ func TestRecordingStatus_ReflectsState(t *testing.T) {
 	r := newLinksRouter(nil, rec)
 
 	// Activate and check status.
-	r.Dispatch(opCtx(), "recording.start", nil)
+	r.Dispatch(adminCtx(), "recording.start", nil)
 	res := r.Dispatch(context.Background(), "recording.status", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
@@ -391,7 +416,7 @@ func TestRecordingStatus_ReflectsState(t *testing.T) {
 	}
 
 	// Deactivate and check status.
-	r.Dispatch(opCtx(), "recording.stop", nil)
+	r.Dispatch(adminCtx(), "recording.stop", nil)
 	res = r.Dispatch(context.Background(), "recording.status", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)

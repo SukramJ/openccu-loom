@@ -483,23 +483,46 @@ func (s *SchedulesDomain) detectScheduleDomain(deviceAddress string, scheduleCha
 		if !ok {
 			continue
 		}
-		// The schedule channel itself carries a type like
-		// SWITCH_WEEK_PROFILE — the prefix is the strongest hint.
-		for _, ch := range dev.Channels() {
-			if ch.Number != scheduleChannelNo {
-				continue
-			}
-			if d := domainFromWeekProfileType(ch.Type); d != "" {
-				return d
-			}
+		return resolveScheduleDomain(dev, scheduleChannelNo)
+	}
+	return ""
+}
+
+// resolveScheduleDomain classifies a device's schedule into one of the
+// user-facing domain buckets. It is the single resolution both the REST read
+// path ([SchedulesDomain.detectScheduleDomain]) and the MQTT publisher share so
+// the two surfaces never disagree.
+//
+// A lock actor channel (type starting with DOOR_LOCK or equal to KEYMATIC) wins
+// over the week-profile channel type. Door locks (HmIP-DLD carries
+// DOOR_LOCK_STATE_TRANSMITTER, HmIP-DLP DOOR_LOCK_TRANSCEIVER) expose their
+// schedule on a generic SWITCH_WEEK_PROFILE channel, which would otherwise
+// resolve to "switch" — the SPA would then render an on/off switch instead of
+// the lock action picker and a save would corrupt the slot. DOOR_LOCK_* and
+// KEYMATIC channels only ever appear on locks, so this precedence cannot
+// misclassify a real switch/cover/light/climate device.
+func resolveScheduleDomain(dev *device.Device, scheduleChannelNo int) string {
+	// The lock actor is the strongest signal — take it first.
+	for _, ch := range dev.Channels() {
+		if domainFromActorType(ch.Type) == "lock" {
+			return "lock"
 		}
-		// Fallback: scan main channels for a known actor type.
-		for _, ch := range dev.Channels() {
-			if d := domainFromActorType(ch.Type); d != "" {
-				return d
-			}
+	}
+	// The schedule channel itself carries a type like SWITCH_WEEK_PROFILE —
+	// the prefix is the next strongest hint.
+	for _, ch := range dev.Channels() {
+		if ch.Number != scheduleChannelNo {
+			continue
 		}
-		return ""
+		if d := domainFromWeekProfileType(ch.Type); d != "" {
+			return d
+		}
+	}
+	// Fallback: scan main channels for a known actor type.
+	for _, ch := range dev.Channels() {
+		if d := domainFromActorType(ch.Type); d != "" {
+			return d
+		}
 	}
 	return ""
 }

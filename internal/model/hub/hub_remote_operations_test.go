@@ -139,6 +139,65 @@ func TestHubCreateSysvarRemote_withMutator(t *testing.T) {
 	}
 }
 
+// A rename must retract the old identity and announce the new one so the MQTT
+// publisher (which subscribes to these hooks) retracts the old retained
+// discovery config and re-publishes under the new name — otherwise the HA
+// entity freezes at its last pre-rename value while live state moves to an
+// unannounced topic. Asserted through the hooks; RenameSysvar is the only
+// thing called — the removal / registration setters are never fired directly.
+func TestRenameSysvar_FiresRetractOldAndAnnounceNew(t *testing.T) {
+	h := NewHub("ccu")
+	sv := NewSysvar("ccu", "Old", "", hmenum.HubValueTypeFloat, nil)
+	h.PutSysvar(sv)
+
+	retracted := false
+	unsub := sv.OnRemoved(func() { retracted = true })
+	defer unsub()
+
+	var announced *Sysvar
+	unsubReg := h.OnSysvarRegistered(func(s *Sysvar) { announced = s })
+	defer unsubReg()
+
+	if !h.RenameSysvar("Old", "New") {
+		t.Fatal("RenameSysvar returned false")
+	}
+	if !retracted {
+		t.Error("rename must fire the old identity's removal hook (retract-old)")
+	}
+	if announced == nil {
+		t.Fatal("rename must fire the registration observer (announce-new)")
+	}
+	if got := announced.LegacyName(); got != "New" {
+		t.Errorf("announced name = %q, want New", got)
+	}
+	if _, ok := h.Sysvar("New"); !ok {
+		t.Error("sysvar not resolvable under the new name after rename")
+	}
+	if _, ok := h.Sysvar("Old"); ok {
+		t.Error("sysvar still resolvable under the old name after rename")
+	}
+}
+
+// A create against a name the hub already mirrors is a collision: the CCU's
+// create script silently no-ops (it writes the pre-existing object id and
+// quits, indistinguishable on the wire from a fresh create), so the hub must
+// reject it up front with ErrSysvarExists rather than dispatch and answer a
+// false 202.
+func TestHubCreateSysvarRemote_nameCollision(t *testing.T) {
+	h := NewHub("ccu")
+	mut := &stubSysvarMutator{}
+	h.SysvarMutator = mut
+	h.PutSysvar(NewSysvar("ccu", "Dup", "", hmenum.HubValueTypeInteger, nil))
+
+	err := h.CreateSysvarRemote(context.Background(), SysvarCreateSpec{Name: "Dup", ValueType: "INTEGER"})
+	if !errors.Is(err, ErrSysvarExists) {
+		t.Fatalf("want ErrSysvarExists, got %v", err)
+	}
+	if len(mut.created) != 0 {
+		t.Fatalf("mutator must not be called on a collision, created=%v", mut.created)
+	}
+}
+
 func TestHubDeleteSysvarRemote_noMutator(t *testing.T) {
 	h := NewHub("ccu")
 	if !errors.Is(h.DeleteSysvarRemote(context.Background(), "X"), ErrNoSysvarMutator) {

@@ -293,11 +293,36 @@ func Login(d *AuthDeps) http.HandlerFunc {
 	}
 }
 
-// Logout revokes the current session and clears the cookie.
-func Logout(d *AuthDeps) http.HandlerFunc {
+// Logout revokes the caller's sessions, tears down their open WebSocket
+// connections, and clears the cookie.
+//
+// The socket teardown is the part that used to be missing: revoking the
+// session left an already-open /api/v1/events socket dispatching commands
+// under the operator/admin identity it captured at upgrade, so a logged-out
+// principal kept its privileges for the life of that connection. The
+// socket-aware revoker — the same [SessionRevoker] the user-update, delete and
+// password-change flows receive — closes those sockets by subject. Dropping
+// the subject's other tabs is the intended, acceptable consequence of an
+// explicit logout.
+//
+// A nil revoker (test fixtures, a daemon without a live WebSocket surface)
+// falls back to revoking only the current session by its cookie id.
+func Logout(d *AuthDeps, revoker SessionRevoker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if c, err := r.Cookie(auth.SessionCookieName); err == nil && d != nil && d.Sessions != nil {
-			d.Sessions.Revoke(c.Value) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
+		subject := ""
+		if id, ok := auth.IdentityFrom(r.Context()); ok {
+			subject = id.Subject
+		}
+		switch {
+		case revoker != nil && subject != "":
+			// RevokeBySubject drops every server-side session for the subject
+			// AND (via the composed socket-aware revoker) closes its open
+			// WebSocket connections.
+			revoker.RevokeBySubject(subject)
+		default:
+			if c, err := r.Cookie(auth.SessionCookieName); err == nil && d != nil && d.Sessions != nil {
+				d.Sessions.Revoke(c.Value) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
+			}
 		}
 		auth.ClearSessionCookie(w)
 		w.WriteHeader(http.StatusNoContent)

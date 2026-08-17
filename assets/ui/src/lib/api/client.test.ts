@@ -826,6 +826,50 @@ describe("friendlyError — validation and conflict responses", () => {
   });
 });
 
+describe("friendlyError — 423 Locked carries either a channel lock or a lapsed edit token", () => {
+  // The daemon answers 423 for two different situations: a control write
+  // against a locked channel (writeChannelLocked in
+  // internal/north/rest/handlers/devices.go) and a MASTER/LINK write
+  // missing/lapsed edit-lock token (enforceEditLock in
+  // internal/north/rest/handlers/paramsets.go). The blanket channel-lock
+  // text used to answer both; it must defer to the daemon's own detail
+  // whenever one is present.
+  const translate = (key: string, vars?: Record<string, number | string>) =>
+    vars ? `${key}::${JSON.stringify(vars)}` : key;
+
+  async function errorFrom(status: number, body: unknown): Promise<unknown> {
+    fetchMock.mockResolvedValueOnce(jsonResponse(body, status));
+    try {
+      await api.health();
+      throw new Error("expected the request to reject");
+    } catch (err) {
+      return err;
+    }
+  }
+
+  it("surfaces the daemon's own detail instead of the generic channel-lock text", async () => {
+    const err = await errorFrom(423, {
+      title: "Edit lock required",
+      detail: "hold an edit session (device:0002E4A17B93C1) and present its token via X-Edit-Token",
+    });
+    expect(friendlyError(err, translate)).toBe(
+      'api.error.locked_reason::{"status":"423"} — hold an edit session (device:0002E4A17B93C1) and present its token via X-Edit-Token',
+    );
+  });
+
+  it("falls back to problem.title when the body carries a title but no detail", async () => {
+    const err = await errorFrom(423, { title: "Edit lock required" });
+    expect(friendlyError(err, translate)).toBe(
+      'api.error.locked_reason::{"status":"423"} — Edit lock required',
+    );
+  });
+
+  it("falls back to the generic channel-lock text when the body carries neither", async () => {
+    const err = await errorFrom(423, "");
+    expect(friendlyError(err, translate)).toBe("api.error.locked");
+  });
+});
+
 describe("api.listChannels — bare-array response", () => {
   // GET /devices/{addr}/channels answers with a bare JSON array. A client
   // that expects a wrapper reads `.items` off an Array, gets undefined and
