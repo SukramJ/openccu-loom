@@ -215,15 +215,28 @@ const (
 	// before it reached the wire. Distinct from a failure — nothing was
 	// measured about the CCU, only about this daemon's own back-pressure.
 	RPCOutcomeRejected
+	// RPCOutcomeIgnored means the call ended in an error that is not
+	// evidence about the CCU link — the same classes [reliability.
+	// IsWireFailure] excludes from tripping the circuit breaker: a
+	// permanent semantic fault, the caller's own context going away, or
+	// the daemon shedding its own load (throttle full/closed, superseded).
+	// Counting these as failures would make a metric named after the
+	// circuit breaker disagree with the breaker's own classification.
+	RPCOutcomeIgnored
 )
 
 // classifyRPCOutcome maps a reliability-stack error onto an [RPCOutcome].
-func classifyRPCOutcome(err error) RPCOutcome {
+// ctx is the caller's context, forwarded unchanged to
+// [reliability.IsWireFailure] so a cancelled caller is recognised the same
+// way the circuit breaker recognises it.
+func classifyRPCOutcome(ctx context.Context, err error) RPCOutcome {
 	switch {
 	case err == nil:
 		return RPCOutcomeSuccess
 	case errors.Is(err, hmerr.ErrCircuitBreakerOpen):
 		return RPCOutcomeRejected
+	case !reliability.IsWireFailure(ctx, err):
+		return RPCOutcomeIgnored
 	default:
 		return RPCOutcomeFailed
 	}
@@ -409,13 +422,15 @@ func (c *InterfaceClient) Capabilities() backends.Capabilities {
 }
 
 // observeRPCOutcome reports one completed RPC to the configured hook.
-// started is the instant the call entered the reliability stack.
-func (c *InterfaceClient) observeRPCOutcome(method string, started time.Time, err error) {
+// started is the instant the call entered the reliability stack; ctx is
+// the caller's context, needed to tell a caller-cancelled call apart from
+// a genuine wire failure — see [classifyRPCOutcome].
+func (c *InterfaceClient) observeRPCOutcome(ctx context.Context, method string, started time.Time, err error) {
 	hook := c.cfg.RPCOutcomeHook
 	if hook == nil {
 		return
 	}
-	hook(method, time.Since(started), classifyRPCOutcome(err))
+	hook(method, time.Since(started), classifyRPCOutcome(ctx, err))
 }
 
 // Call executes method/params through the reliability stack.
@@ -496,7 +511,7 @@ func (c *InterfaceClient) Call(
 		c.lastFailureAt = time.Now()
 		c.failureMu.Unlock()
 	}
-	c.observeRPCOutcome(method, started, err)
+	c.observeRPCOutcome(ctx, method, started, err)
 	return out, err
 }
 
@@ -558,7 +573,7 @@ func (c *InterfaceClient) CallOrdered(
 		c.lastFailureAt = time.Now()
 		c.failureMu.Unlock()
 	}
-	c.observeRPCOutcome(method, started, err)
+	c.observeRPCOutcome(ctx, method, started, err)
 	return result, err
 }
 

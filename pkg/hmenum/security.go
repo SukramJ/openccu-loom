@@ -268,8 +268,13 @@ type DuressVisibility string
 
 // DuressVisibility values.
 const (
-	// DuressVisibilityHidden keeps duress on the webhook and the raw
-	// alarm event topic only, reproducing the historical behaviour.
+	// DuressVisibilityHidden keeps duress on the webhook only,
+	// reproducing the historical behaviour. The raw MQTT alarm event
+	// topic never carries a duress marker — the alarm publisher does not
+	// subscribe to the duress fan-out at all, so a duress disarm appears
+	// there as an ordinary disarm regardless of this setting. An
+	// installation with no webhook configured therefore gets no duress
+	// notification whatsoever at this level.
 	DuressVisibilityHidden DuressVisibility = "hidden"
 	// DuressVisibilityNotifyOnly additionally emits the non-retained
 	// notification event, so a phone is reached — but never the

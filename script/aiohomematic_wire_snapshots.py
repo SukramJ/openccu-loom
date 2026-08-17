@@ -540,8 +540,11 @@ def _gen_text_display_write_rows() -> None:
         {"ID": 3, "Text": "Line three"},
     ]
     # aiohomematic text_display.py: send_text builds a paramset per row with
-    # DISPLAY_DATA_STRING, DISPLAY_DATA_ALIGNMENT, DISPLAY_DATA_SCROLLING,
-    # DISPLAY_DATA_ICON, then a final DISPLAY_DATA_COMMIT.
+    # DISPLAY_DATA_STRING, DISPLAY_DATA_ALIGNMENT, DISPLAY_DATA_ICON, then a
+    # final DISPLAY_DATA_COMMIT. There is no DISPLAY_DATA_SCROLLING field —
+    # it does not exist on _dp_display_data_* in text_display.py, nor on any
+    # CCU device (HmIP-WRCD is the only text-display model and its channel
+    # :3 does not expose it either).
     calls = []
     for row in rows:
         row_id = row["ID"]
@@ -552,7 +555,6 @@ def _gen_text_display_write_rows() -> None:
             "put_values": {
                 "DISPLAY_DATA_ALIGNMENT": "LEFT",
                 "DISPLAY_DATA_ICON": "NONE",
-                "DISPLAY_DATA_SCROLLING": "NONE",
                 "DISPLAY_DATA_STRING": row["Text"],
             },
         })

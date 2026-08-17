@@ -1088,7 +1088,7 @@ func TestCallOnceReadBodyError(t *testing.T) {
 
 // TestLoginBackoffContextCancelledDuringWait verifies that Login respects
 // context cancellation while it is sleeping in the backoff path (i.e. when
-// failedLoginAttempts >= loginMaxFailedAttempts and a backoff is pending).
+// a backoff from a prior failure is pending).
 func TestLoginBackoffContextCancelledDuringWait(t *testing.T) {
 	t.Parallel()
 	// We need a server that the client will never reach in this test (because
@@ -1117,6 +1117,37 @@ func TestLoginBackoffContextCancelledDuringWait(t *testing.T) {
 	// The error must be context-derived, not an auth failure.
 	if errors.Is(err, hmerr.ErrAuthFailure) {
 		t.Fatalf("backoff cancellation must not surface as ErrAuthFailure, got %v", err)
+	}
+}
+
+// TestLoginBackoffAppliesFromTheFirstFailure verifies that a pending
+// backoff delays the next Login call even when far fewer than
+// loginMaxFailedAttempts have accumulated — the very first rejected login
+// must already slow the second one down, not just the eleventh. Gating
+// the wait on loginMaxFailedAttempts let the first ten rejected logins
+// fire back-to-back with no delay at all, which is what keeps an
+// exhausted CCU session pool exhausted.
+func TestLoginBackoffAppliesFromTheFirstFailure(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.login": func(_ envelope) any { return okResult("session") },
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+
+	const backoff = 80 * time.Millisecond
+	c.mu.Lock()
+	c.failedLoginAttempts = 1 // one failure — nowhere near loginMaxFailedAttempts
+	c.currentBackoff = backoff
+	c.mu.Unlock()
+
+	start := time.Now()
+	if err := c.Login(context.Background()); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < backoff {
+		t.Fatalf("Login returned after %v, want at least the pending backoff of %v", elapsed, backoff)
 	}
 }
 

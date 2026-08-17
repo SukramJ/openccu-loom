@@ -121,7 +121,12 @@ func toFloat64(v any) (float64, bool) {
 		}
 		return 0, true
 	case string:
-		if f, err := strconv.ParseFloat(strings.TrimSpace(x), 64); err == nil {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(x), 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
+			// ParseFloat accepts "nan"/"inf" as valid float text; a
+			// non-finite value has no JSON representation and would
+			// corrupt every north-bound response encoding the resulting
+			// data point alongside healthy ones — reject it here rather
+			// than seed a float64 data point that can never round-trip.
 			return f, true
 		}
 	}

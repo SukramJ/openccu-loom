@@ -239,3 +239,55 @@ func TestRendererArgsAlwaysHasAllKeys(t *testing.T) {
 		}
 	}
 }
+
+// TestRendererRendersRaisedForEveryHazardClass pins that a hazard class
+// (smoke/water/gas/co/intrusion/panic) rendered with [hmenum.
+// SecurityVerbRaised] resolves to real catalogue prose in both locales,
+// not the raw "security.subject.<class>.raised" / "security.message.
+// <class>.raised" key text.
+//
+// The Raised verb is normally a diagnostic-class-only path (applyFault
+// is only reached from subscribe.go for a non-hazard class), but
+// index.go's enrollment.SensorType branch can carry a hazard class
+// (from the sensor's enrolled type) alongside a diagnostic fault reason
+// classified independently from a different parameter on the same
+// device — e.g. an enrolled smoke detector's own LOWBAT parameter. That
+// combination reaches applyFault via the boot-time fault reconciliation
+// pass (index.go rebuild), which raises with the class attached to the
+// source, not with the reason's own diagnostic class.
+func TestRendererRendersRaisedForEveryHazardClass(t *testing.T) {
+	cat := newTestRendererCatalogs(t)
+
+	for _, locale := range []string{"en", "de"} {
+		for _, class := range hmenum.SecurityClasses() {
+			if !class.Hazard() {
+				continue
+			}
+			t.Run(locale+"/"+string(class), func(t *testing.T) {
+				r := newRenderer(cat, locale, "")
+				in := reportInput{
+					Class:  class,
+					Verb:   hmenum.SecurityVerbRaised,
+					Reason: hmenum.SecurityFaultReasonLowBattery,
+					Sources: []hmevent.SecuritySourceRef{
+						{Name: "Detector", ChannelAddress: "ABC123:1", Central: "ccu1"},
+					},
+					At:         time.Date(2026, time.March, 4, 14, 37, 0, 0, time.UTC),
+					Fault:      true,
+					Retainable: true,
+				}
+				n := r.render(in)
+
+				if n.Subject == subjectKey(class, hmenum.SecurityVerbRaised) {
+					t.Errorf("Subject fell back to the raw catalogue key %q — no translation for this (class, verb)", n.Subject)
+				}
+				if n.Message == messageKey(class, hmenum.SecurityVerbRaised) {
+					t.Errorf("Message fell back to the raw catalogue key %q — no translation for this (class, verb)", n.Message)
+				}
+				if strings.Contains(n.Subject, "{") || strings.Contains(n.Message, "{") {
+					t.Errorf("unresolved placeholder: Subject=%q Message=%q", n.Subject, n.Message)
+				}
+			})
+		}
+	}
+}

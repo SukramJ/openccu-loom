@@ -232,16 +232,18 @@ func (s *Service) Clear(ctx context.Context, scope Scope) (Report, error) {
 		s.clearUnit(ctx, scope, u, &rep)
 	}
 
-	// In-memory value cache per affected central, then audit, then re-pull.
+	// In-memory value cache per affected central, then re-pull, then audit —
+	// the audit row must see CentralsReinit as it stands after the re-pull,
+	// otherwise every recorded entry reads reinit=[] regardless of outcome.
 	for _, central := range affected {
 		if s.d.ClearValueCache != nil {
 			s.d.ClearValueCache(central)
 		}
 	}
+	rep.CentralsReinit = s.reinit(ctx, affected)
 	if s.d.Audit != nil {
 		s.d.Audit(ctx, scope, rep)
 	}
-	rep.CentralsReinit = s.reinit(ctx, affected)
 
 	s.logger.Info("cachereset.done",
 		slog.String("scope", scope.String()),

@@ -36,14 +36,18 @@ const (
 // file, so this must not turn liveness probes red.
 func recordConfigOverlayHealth(tracker *health.Tracker, reg *metrics.Registry, err error) {
 	if tracker != nil {
+		// Sticky: a one-shot boot-time fact recorded exactly once — see
+		// the matching comment in recordSecretHealth for why the decay
+		// must not apply to it.
 		if err == nil {
 			tracker.Record(configOverlayHealthComponent, health.Sample{
-				Healthy: true, Note: "database sections applied",
+				Healthy: true, Note: "database sections applied", Sticky: true,
 			})
 		} else {
 			tracker.Record(configOverlayHealthComponent, health.Sample{
 				Healthy: false,
 				Note:    "database config sections not applied: " + err.Error(),
+				Sticky:  true,
 			})
 		}
 	}
@@ -70,15 +74,19 @@ func recordConfigOverlayHealth(tracker *health.Tracker, reg *metrics.Registry, e
 // rows so the operator can find and re-create them.
 func recordUnroutableCentralHealth(tracker *health.Tracker, reg *metrics.Registry, names []string) {
 	if tracker != nil {
+		// Sticky: a one-shot boot-time fact recorded exactly once — see
+		// the matching comment in recordSecretHealth for why the decay
+		// must not apply to it.
 		if len(names) == 0 {
 			tracker.Record(configCentralsHealthComponent, health.Sample{
-				Healthy: true, Note: "all stored centrals are routable",
+				Healthy: true, Note: "all stored centrals are routable", Sticky: true,
 			})
 		} else {
 			tracker.Record(configCentralsHealthComponent, health.Sample{
 				Healthy: false,
 				Note: "not started, the CCU callback would be rejected: " + strings.Join(names, ", ") +
 					" — re-add each CCU with a name of letters, digits, \"-\" and \"_\"",
+				Sticky: true,
 			})
 		}
 	}

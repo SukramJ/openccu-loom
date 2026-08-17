@@ -10,7 +10,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	openccudata "github.com/SukramJ/go-openccu-data"
 )
 
 func TestLoadTranslationsEmptyPathReturnsSentinel(t *testing.T) {
@@ -74,8 +77,15 @@ func TestTranslationsFallbackOnMiss(t *testing.T) {
 
 func TestLoadTranslationsRoundTrip(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "tx.json.gz")
+	// A synthetic, never-real parameter name: LoadTranslations now also
+	// applies the curated translation_custom/ overlay (see
+	// TestLoadTranslationsAppliesTheSameCuratedOverlayAsEmbedded), and a
+	// real CCU parameter such as LEVEL is one of its curated entries —
+	// using it here would assert against curated content that can
+	// change with the data module rather than against the round-trip
+	// this test exists to check.
 	raw := map[string]map[string]string{
-		"parameters_de": {"level": "Niveau"},
+		"parameters_de": {"zzz_synthetic_roundtrip_probe": "Niveau"},
 		"device_icons":  {"263 130": "icon.png"},
 	}
 
@@ -91,11 +101,55 @@ func TestLoadTranslationsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if tr.Parameter("de", "LEVEL") != "Niveau" {
+	if tr.Parameter("de", "ZZZ_SYNTHETIC_ROUNDTRIP_PROBE") != "Niveau" {
 		t.Fatalf("loaded value wrong")
 	}
 	if tr.DeviceIcon("263 130") != "icon.png" {
 		t.Fatal("icon lost")
+	}
+}
+
+// TestLoadTranslationsAppliesTheSameCuratedOverlayAsEmbedded pins that an
+// operator-supplied translations archive gets the same curated
+// translation_custom/ overlay LoadTranslationsEmbedded applies. Without
+// it, pointing ccu_data.translations_path at a custom or regenerated
+// extract of the very same upstream archive silently drops every
+// curated patch — including the explicit-empty "primary parameter"
+// markers that drive HA-Discovery entity-name suppression — even though
+// the base data is identical.
+//
+// Feeding LoadTranslations the SAME base archive bytes
+// LoadTranslationsEmbedded decodes isolates the overlay step: any
+// remaining difference between the two results can only come from one
+// loader applying the curated overlay and the other not.
+func TestLoadTranslationsAppliesTheSameCuratedOverlayAsEmbedded(t *testing.T) {
+	blob, err := openccudata.ReadFile("translation_extract.json.gz")
+	if err != nil {
+		t.Fatalf("read embedded base archive: %v", err)
+	}
+	tmp := filepath.Join(t.TempDir(), "translation_extract.json.gz")
+	if err := os.WriteFile(tmp, blob, 0o600); err != nil {
+		t.Fatalf("write temp archive: %v", err)
+	}
+
+	embedded, err := LoadTranslationsEmbedded()
+	if err != nil {
+		t.Fatalf("LoadTranslationsEmbedded: %v", err)
+	}
+	fromPath, err := LoadTranslations(tmp)
+	if err != nil {
+		t.Fatalf("LoadTranslations: %v", err)
+	}
+
+	if !reflect.DeepEqual(embedded.Parameters, fromPath.Parameters) {
+		t.Error("LoadTranslations(path).Parameters diverges from LoadTranslationsEmbedded().Parameters — " +
+			"the curated overlay was not applied to the operator-supplied archive")
+	}
+	if !reflect.DeepEqual(embedded.ChannelTypes, fromPath.ChannelTypes) {
+		t.Error("LoadTranslations(path).ChannelTypes diverges from LoadTranslationsEmbedded().ChannelTypes")
+	}
+	if !reflect.DeepEqual(embedded.DeviceIcons, fromPath.DeviceIcons) {
+		t.Error("LoadTranslations(path).DeviceIcons diverges from LoadTranslationsEmbedded().DeviceIcons")
 	}
 }
 

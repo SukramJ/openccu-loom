@@ -607,19 +607,17 @@ func (t *TextDisplay) Clear(ctx context.Context, id int32, priority hmenum.Comma
 // no icon is requested. Clears any previously-set icon.
 const writeRowsDefaultIcon = "NONE"
 
-// writeRowsDefaultScrolling is the DISPLAY_DATA_SCROLLING value sent by
-// WriteRows when no scrolling mode is specified. Clears any previously-set
-// scrolling mode.
-const writeRowsDefaultScrolling = "NONE"
-
 // WriteRows writes a sequence of rows as one atomic put_paramset per row
 // followed by a single DISPLAY_DATA_COMMIT write. Each row is sent to its
 // own channel address (row 1 → base address, row N → base device + :N).
 // This matches the reference pattern where send_text is called once per row
 // and each call emits one put_paramset to the row-specific channel.
 //
-// Each per-row paramset always includes STRING, ICON, ALIGNMENT, and SCROLLING
-// so previously-set values are explicitly cleared rather than left as-is.
+// Each per-row paramset always includes STRING, ICON and ALIGNMENT so
+// previously-set values are explicitly cleared rather than left as-is.
+// There is no DISPLAY_DATA_SCROLLING field on any real CCU text-display
+// channel — it does not exist on the Python reference's TextDisplay data
+// point (text_display.py) nor on HmIP-WRCD, the only text-display model.
 func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum.CommandPriority) error {
 	if len(rows) == 0 {
 		return nil
@@ -644,7 +642,6 @@ func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum
 				string(hmenum.ParameterDisplayDataString):    r.Text,
 				string(hmenum.ParameterDisplayDataIcon):      iconVal,
 				string(hmenum.ParameterDisplayDataAlignment): alignVal,
-				string(hmenum.ParameterDisplayDataScrolling): writeRowsDefaultScrolling,
 			}
 			if r.TextColor != nil && *r.TextColor != "" {
 				values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor

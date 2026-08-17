@@ -91,6 +91,24 @@ func TestDecodeValueInvalidDouble(t *testing.T) {
 	}
 }
 
+// TestDecodeValueNonFiniteDoubleRejected checks that NaN and Inf — both
+// of which strconv.ParseFloat accepts as valid float text — are rejected
+// at the wire boundary rather than reaching the model as a DoubleValue
+// with no JSON representation.
+func TestDecodeValueNonFiniteDoubleRejected(t *testing.T) {
+	t.Parallel()
+
+	for _, text := range []string{"nan", "NaN", "inf", "+Inf", "-Inf", "infinity"} {
+		text := text
+		t.Run(text, func(t *testing.T) {
+			t.Parallel()
+			if _, err := decodeValueFromString(t, `<value><double>`+text+`</double></value>`); err == nil {
+				t.Fatalf("expected error for non-finite double %q", text)
+			}
+		})
+	}
+}
+
 // TestDecodeValueInvalidBase64 checks that bad base64 is rejected.
 func TestDecodeValueInvalidBase64(t *testing.T) {
 	t.Parallel()

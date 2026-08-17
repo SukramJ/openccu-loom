@@ -33,18 +33,33 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 		// Hub-aggregate read tools (gated on HubResolver + CentralLister).
 		"list_programs", "list_sysvars", "list_service_messages",
 		"list_alarm_messages", "list_inbox", "get_system_info",
+		// Alarm / Security & Safety read tools (gated on Alarm / Security).
+		"list_alarm_zones", "list_triggered_motion", "get_security_status",
 	}
-	writeTools := []string{"set_datapoint", "write_paramset", "trigger_program"}
+	// arm_alarm_zone / disarm_alarm_zone / reset_motion are gated on
+	// AlarmControl + AllowWrites, exactly like the other write tools — the
+	// most consequential ones in the catalogue, since they change the
+	// armed state of a physical security system. A prior version of this
+	// test never wired Alarm/AlarmControl/Security into fullDeps, so these
+	// three tools were absent from every catalogue this test built and the
+	// posture guard never saw them at all.
+	writeTools := []string{
+		"set_datapoint", "write_paramset", "trigger_program",
+		"arm_alarm_zone", "disarm_alarm_zone", "reset_motion",
+	}
 
 	fullDeps := func(allowWrites bool) mcp.Deps {
 		return mcp.Deps{
-			Centrals:    emptyCentrals{},
-			Devices:     emptyDevices{},
-			Writer:      mcpNoopWriter{},
-			Paramsets:   mcpNoopParamsets{},
-			Health:      mcpNoopHealth{},
-			Hubs:        mcpNoopHubs{},
-			AllowWrites: allowWrites,
+			Centrals:     emptyCentrals{},
+			Devices:      emptyDevices{},
+			Writer:       mcpNoopWriter{},
+			Paramsets:    mcpNoopParamsets{},
+			Health:       mcpNoopHealth{},
+			Hubs:         mcpNoopHubs{},
+			Alarm:        mcpParityAlarm{},
+			AlarmControl: mcpParityAlarm{},
+			Security:     mcpParitySecurity{},
+			AllowWrites:  allowWrites,
 		}
 	}
 
@@ -84,23 +99,26 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 }
 
 // TestMCPToolNamingTaxonomy pins the naming concept documented over
-// registerReadTools: every MCP tool name uses one of the four sanctioned
-// verb prefixes so the catalogue reads as a single coherent design rather
-// than a grab-bag. A new tool that invents a fifth verb (or spells one
-// out verbosely) trips this guard.
+// registerReadTools: every MCP tool name uses one of the sanctioned verb
+// prefixes in allowedVerbs so the catalogue reads as a single coherent
+// design rather than a grab-bag. A new tool that invents an unsanctioned
+// verb (or spells one out verbosely) trips this guard.
 func TestMCPToolNamingTaxonomy(t *testing.T) {
 	t.Parallel()
 
-	allowedVerbs := []string{"list", "get", "read", "set", "write", "trigger"}
+	allowedVerbs := []string{"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset"}
 
 	names := mcpToolNames(t, mcp.Deps{
-		Centrals:    emptyCentrals{},
-		Devices:     emptyDevices{},
-		Writer:      mcpNoopWriter{},
-		Paramsets:   mcpNoopParamsets{},
-		Health:      mcpNoopHealth{},
-		Hubs:        mcpNoopHubs{},
-		AllowWrites: true,
+		Centrals:     emptyCentrals{},
+		Devices:      emptyDevices{},
+		Writer:       mcpNoopWriter{},
+		Paramsets:    mcpNoopParamsets{},
+		Health:       mcpNoopHealth{},
+		Hubs:         mcpNoopHubs{},
+		Alarm:        mcpParityAlarm{},
+		AlarmControl: mcpParityAlarm{},
+		Security:     mcpParitySecurity{},
+		AllowWrites:  true,
 	})
 	if len(names) == 0 {
 		t.Fatal("no tools advertised")

@@ -76,6 +76,18 @@ func GuardBasicAuth(t BasicAuthThrottle) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			if basicSchemeDisabled(r.Context()) {
+				// Resolve never attempted a verification for this request —
+				// the Basic scheme is administratively off (no UserStore
+				// wired) — so there is nothing here to rate-limit. Charging
+				// anyway would let a client that still sends a stale Basic
+				// header (a browser that once answered the challenge, an old
+				// integration) deplete the same per-IP bucket POST
+				// /auth/login needs, locking that source out of login while
+				// Basic itself answers every such request instantly.
+				next.ServeHTTP(w, r)
+				return
+			}
 			ok, retry := t.Budget(r)
 			if !ok {
 				w.Header().Set("Retry-After", strconv.Itoa(retry))
@@ -114,6 +126,28 @@ func markBasicAttemptAccounted(ctx context.Context) context.Context {
 func basicAttemptAccounted(ctx context.Context) bool {
 	accounted, _ := ctx.Value(keyBasicAccounted).(bool)
 	return accounted
+}
+
+// keyBasicSchemeDisabled marks a request that carried a Basic header
+// [Middleware.resolve] did not even attempt to verify because no
+// UserStore is wired (the operator turned Basic auth off). It is
+// distinct from keyBasicAccounted: an unaccounted attempt still means
+// "Basic ran, nothing charged it yet, charge it now" — this means
+// "Basic never ran at all, there is nothing to charge."
+const keyBasicSchemeDisabled ctxKey = "basic-scheme-disabled"
+
+// markBasicSchemeDisabled returns a context recording that the request's
+// Basic header was never attempted because the scheme is administratively
+// off.
+func markBasicSchemeDisabled(ctx context.Context) context.Context {
+	return context.WithValue(ctx, keyBasicSchemeDisabled, true)
+}
+
+// basicSchemeDisabled reports whether the resolver skipped this request's
+// Basic header because no UserStore is wired.
+func basicSchemeDisabled(ctx context.Context) bool {
+	disabled, _ := ctx.Value(keyBasicSchemeDisabled).(bool)
+	return disabled
 }
 
 // hasBasicCredentials reports whether r carries a parseable HTTP Basic

@@ -469,8 +469,9 @@ func (s *SchedulesDomain) GetClimateSchedule(
 		dto.Kind = "climate"
 		dto.Channel = chRef
 		// ACTIVE_PROFILE lives as a VALUES data point. Best-effort.
-		if active, ok := s.readActiveProfile(ctx, backend, channelAddr); ok {
+		if active, idx, ok := s.readActiveProfile(ctx, backend, channelAddr); ok {
 			dto.ActiveProfile = active
+			dto.ActiveProfileIndex = &idx
 		}
 		return dto, nil
 	}
@@ -1095,22 +1096,25 @@ func (s *SchedulesDomain) SetActiveProfile(
 
 // readActiveProfile is best-effort: a missing ACTIVE_PROFILE DP is
 // silently swallowed because non-HmIP thermostats do not expose it.
+// The returned index is the 0-based profile index matching
+// [hmapi.ClimateSchedule.ActiveProfileIndex]'s documented contract — the
+// CCU's own ACTIVE_PROFILE value is the 1-based P<n> slot number.
 func (s *SchedulesDomain) readActiveProfile(
 	ctx context.Context, backend paramsetBackend, channelAddr string,
-) (string, bool) {
+) (string, int, bool) {
 	values, err := backend.GetParamset(ctx, channelAddr, hmenum.ParamsetKeyValues)
 	if err != nil {
-		return "", false
+		return "", 0, false
 	}
 	raw, ok := values["ACTIVE_PROFILE"]
 	if !ok {
-		return "", false
+		return "", 0, false
 	}
 	idx, ok := coerceInt(raw)
 	if !ok || idx < 1 || idx > 6 {
-		return "", false
+		return "", 0, false
 	}
-	return fmt.Sprintf("P%d", idx), true
+	return fmt.Sprintf("P%d", idx), idx - 1, true
 }
 
 // resolve locates the backend and returns the fully-qualified channel

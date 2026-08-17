@@ -17,54 +17,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
-// TestGetSystemInformation verifies that the CCU response is decoded into
-// SystemInformation correctly.
-func TestGetSystemInformation(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"System.getSystemInformation": func(env envelope) any {
-			return okResult(map[string]any{
-				"SERIAL_NUMBER":    "MEQ1234567",
-				"VERSION":          "3.65.10",
-				"HARDWARE_VERSION": "2.1",
-			})
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	info, err := c.GetSystemInformation(context.Background())
-	if err != nil {
-		t.Fatalf("GetSystemInformation: %v", err)
-	}
-	if info.Serial != "MEQ1234567" {
-		t.Errorf("Serial = %q, want %q", info.Serial, "MEQ1234567")
-	}
-	if info.SoftwareVersion != "3.65.10" {
-		t.Errorf("SoftwareVersion = %q, want %q", info.SoftwareVersion, "3.65.10")
-	}
-	if info.HardwareVersion != "2.1" {
-		t.Errorf("HardwareVersion = %q, want %q", info.HardwareVersion, "2.1")
-	}
-}
-
-// TestGetSystemInformationErrorPropagates checks that a server-side error is
-// returned as a non-nil error.
-func TestGetSystemInformationErrorPropagates(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"System.getSystemInformation": func(env envelope) any {
-			return response{Error: &wireError{Code: -32603, Message: "internal"}}
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	if _, err := c.GetSystemInformation(context.Background()); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
 // TestDeleteSystemVariable verifies the correct wire params are sent.
 func TestDeleteSystemVariable(t *testing.T) {
 	t.Parallel()
@@ -247,34 +199,6 @@ func TestGetDeviceDetails(t *testing.T) {
 	}
 }
 
-// TestGetAllDeviceData verifies the interface parameter is forwarded and the
-// map result is decoded.
-func TestGetAllDeviceData(t *testing.T) {
-	t.Parallel()
-	var gotIface string
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.listDevices": func(env envelope) any {
-			gotIface, _ = env.Params["interface"].(string)
-			return okResult(map[string]any{
-				"HEQ0123456:1": map[string]any{"SET_POINT_TEMPERATURE": 21.5},
-			})
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	data, err := c.GetAllDeviceData(context.Background(), "BidCos-RF")
-	if err != nil {
-		t.Fatalf("GetAllDeviceData: %v", err)
-	}
-	if gotIface != "BidCos-RF" {
-		t.Errorf("interface=%q, want BidCos-RF", gotIface)
-	}
-	if _, ok := data["HEQ0123456:1"]; !ok {
-		t.Error("expected key HEQ0123456:1 in result")
-	}
-}
-
 // TestSuppressServiceMessage verifies all four parameters are forwarded.
 func TestSuppressServiceMessage(t *testing.T) {
 	t.Parallel()
@@ -302,71 +226,6 @@ func TestSuppressServiceMessage(t *testing.T) {
 	}
 	if suppress, _ := gotParams["suppress"].(bool); !suppress {
 		t.Error("suppress=false, want true")
-	}
-}
-
-// TestHasProgramIDs verifies the ISE-ID is forwarded and boolean is decoded.
-func TestHasProgramIDs(t *testing.T) {
-	t.Parallel()
-	var gotID string
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Channel.hasProgramIds": func(env envelope) any {
-			gotID, _ = env.Params["id"].(string)
-			return okResult(true)
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	ok, err := c.HasProgramIDs(context.Background(), "1234")
-	if err != nil {
-		t.Fatalf("HasProgramIDs: %v", err)
-	}
-	if gotID != "1234" {
-		t.Errorf("id=%q, want %q", gotID, "1234")
-	}
-	if !ok {
-		t.Error("HasProgramIDs returned false, want true")
-	}
-}
-
-// TestHasProgramIDsFalse verifies that a false result is correctly decoded.
-func TestHasProgramIDsFalse(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Channel.hasProgramIds": func(env envelope) any {
-			return okResult(false)
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	ok, err := c.HasProgramIDs(context.Background(), "9999")
-	if err != nil {
-		t.Fatalf("HasProgramIDs: %v", err)
-	}
-	if ok {
-		t.Error("HasProgramIDs returned true for absent program")
-	}
-}
-
-// TestHasProgramIDsError checks that a server error is surfaced.
-func TestHasProgramIDsError(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Channel.hasProgramIds": func(env envelope) any {
-			return response{Error: &wireError{Code: -32603, Message: "server error"}}
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	_, err := c.HasProgramIDs(context.Background(), "1")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !errors.Is(err, hmerr.ErrInternalBackendException) {
-		t.Errorf("got %v, want ErrInternalBackendException", err)
 	}
 }
 
@@ -1702,40 +1561,6 @@ func TestAcknowledgeMessageError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// IsServiceAvailable
-// ---------------------------------------------------------------------------
-
-func TestIsServiceAvailableTrue(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"System.getSystemInformation": func(_ envelope) any {
-			return okResult(map[string]any{"SERIAL_NUMBER": "X", "VERSION": "1", "HARDWARE_VERSION": "1"})
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	if !c.IsServiceAvailable(context.Background()) {
-		t.Error("expected true")
-	}
-}
-
-func TestIsServiceAvailableFalse(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"System.getSystemInformation": func(_ envelope) any {
-			return response{Error: &wireError{Code: -1, Message: "down"}}
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	if c.IsServiceAvailable(context.Background()) {
-		t.Error("expected false")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // TriggerFirmwareUpdate
 // ---------------------------------------------------------------------------
 
@@ -1770,43 +1595,6 @@ func TestTriggerFirmwareUpdateError(t *testing.T) {
 
 	c, _ := New(Config{Endpoint: srv.URL})
 	if err := c.TriggerFirmwareUpdate(context.Background()); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// GetSuppressedServiceMessages
-// ---------------------------------------------------------------------------
-
-func TestGetSuppressedServiceMessages(t *testing.T) {
-	t.Parallel()
-	want := []map[string]any{{"parameterID": "LOWBAT"}}
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.getSuppressedServiceMessages": func(_ envelope) any { return okResult(want) },
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	got, err := c.GetSuppressedServiceMessages(context.Background(), "HmIP-RF", "VCU001:1")
-	if err != nil {
-		t.Fatalf("GetSuppressedServiceMessages: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len=%d, want 1", len(got))
-	}
-}
-
-func TestGetSuppressedServiceMessagesError(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.getSuppressedServiceMessages": func(_ envelope) any {
-			return response{Error: &wireError{Code: -1, Message: "fail"}}
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	if _, err := c.GetSuppressedServiceMessages(context.Background(), "X", "Y"); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -1848,43 +1636,6 @@ func TestGetInstallModeError(t *testing.T) {
 
 	c, _ := New(Config{Endpoint: srv.URL})
 	if _, err := c.GetInstallMode(context.Background(), "X"); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// GetLinkInfo
-// ---------------------------------------------------------------------------
-
-func TestGetLinkInfo(t *testing.T) {
-	t.Parallel()
-	want := map[string]any{"NAME": "mylink", "DESCRIPTION": "desc"}
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.getLinkInfo": func(_ envelope) any { return okResult(want) },
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	got, err := c.GetLinkInfo(context.Background(), "BidCos-RF", "sender:1", "receiver:1")
-	if err != nil {
-		t.Fatalf("GetLinkInfo: %v", err)
-	}
-	if got["NAME"] != "mylink" {
-		t.Errorf("NAME=%v, want mylink", got["NAME"])
-	}
-}
-
-func TestGetLinkInfoError(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.getLinkInfo": func(_ envelope) any {
-			return response{Error: &wireError{Code: -1, Message: "fail"}}
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	if _, err := c.GetLinkInfo(context.Background(), "X", "a", "b"); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -2276,20 +2027,6 @@ func TestGetDeviceDetailsError(t *testing.T) {
 	defer srv.Close()
 	c, _ := New(Config{Endpoint: srv.URL})
 	if _, err := c.GetDeviceDetails(context.Background()); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-func TestGetAllDeviceDataError(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.listDevices": func(_ envelope) any {
-			return response{Error: &wireError{Code: -32603, Message: "fail"}}
-		},
-	})
-	defer srv.Close()
-	c, _ := New(Config{Endpoint: srv.URL})
-	if _, err := c.GetAllDeviceData(context.Background(), "HmIP-RF"); err == nil {
 		t.Fatal("expected error")
 	}
 }

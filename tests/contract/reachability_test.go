@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
+// The tests in this file validate the SHAPE of the committed
+// notes/parity/dead-code-inventory.json snapshot: that it exists, that
+// its whitelist/unreachable/summary/by_package sections are internally
+// consistent, and that no test file leaked into the unreachable list.
+// None of them re-run `go run ./script/reachability` and compare its
+// output against this snapshot, and none enforces a ceiling on the
+// unreachable count — a green run here says the last committed snapshot
+// is well-formed, not that the current tree matches it or that the
+// unreachable count has not grown. Regenerate and diff the snapshot by
+// hand (`make reachability`) to check the tree itself.
 package contract
 
 import (

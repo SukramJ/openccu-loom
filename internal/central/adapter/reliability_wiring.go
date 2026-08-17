@@ -103,9 +103,13 @@ func newRPCOutcomeHook(unit *central.Unit, interfaceID string) func(string, time
 			return
 		}
 		ms := float64(duration.Nanoseconds()) / float64(time.Millisecond)
-		// A rejected call never reached the CCU, so it is not a service
-		// call and must not be averaged into the per-method durations.
-		if outcome != client.RPCOutcomeRejected {
+		// A rejected call never reached the CCU, and an ignored one carries
+		// an error that is not evidence about the CCU either (a caller
+		// cancellation, a permanent semantic fault, or the daemon shedding
+		// its own load) — neither belongs in the per-method service
+		// durations, which is what the diagnostics `rpc` section renders as
+		// service health.
+		if outcome != client.RPCOutcomeRejected && outcome != client.RPCOutcomeIgnored {
 			obs.ObserveService(method, ms, outcome == client.RPCOutcomeFailed)
 		}
 		switch outcome {
@@ -113,7 +117,8 @@ func newRPCOutcomeHook(unit *central.Unit, interfaceID string) func(string, time
 			obs.ObserveCounter(metrics.MetricKeys.CircuitFailure(interfaceID).String(), 1)
 		case client.RPCOutcomeRejected:
 			obs.ObserveCounter(metrics.MetricKeys.CircuitRejection(interfaceID).String(), 1)
-		case client.RPCOutcomeSuccess:
+		case client.RPCOutcomeIgnored, client.RPCOutcomeSuccess:
+			// Neither is failure evidence about the wire; no counter to bump.
 		}
 	}
 }

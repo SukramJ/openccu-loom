@@ -14,7 +14,6 @@
           "put_values": {
             "DISPLAY_DATA_ALIGNMENT": "LEFT",
             "DISPLAY_DATA_ICON": "NONE",
-            "DISPLAY_DATA_SCROLLING": "NONE",
             "DISPLAY_DATA_STRING": "Line one"
           }
         },
@@ -25,7 +24,6 @@
           "put_values": {
             "DISPLAY_DATA_ALIGNMENT": "LEFT",
             "DISPLAY_DATA_ICON": "NONE",
-            "DISPLAY_DATA_SCROLLING": "NONE",
             "DISPLAY_DATA_STRING": "Line two"
           }
         },
@@ -36,7 +34,6 @@
           "put_values": {
             "DISPLAY_DATA_ALIGNMENT": "LEFT",
             "DISPLAY_DATA_ICON": "NONE",
-            "DISPLAY_DATA_SCROLLING": "NONE",
             "DISPLAY_DATA_STRING": "Line three"
           }
         },

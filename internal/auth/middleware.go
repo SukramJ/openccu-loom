@@ -43,17 +43,22 @@ func NewMiddleware(users UserStore, tokens TokenStore) *Middleware {
 // traffic — that is Require's job.
 func (m *Middleware) Resolve(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok, throttled := m.resolve(r)
+		id, ok, throttled, basicDisabled := m.resolve(r)
 		ctx := r.Context()
 		if throttled {
 			// Tell the downstream guard this attempt is already accounted for,
 			// so the two never charge the same source twice.
 			ctx = markBasicAttemptAccounted(ctx)
 		}
+		if basicDisabled {
+			// Tell the downstream guard this Basic header was never
+			// attempted at all, so it has nothing to charge either.
+			ctx = markBasicSchemeDisabled(ctx)
+		}
 		if ok {
 			ctx = context.WithValue(ctx, keyIdentity, id)
 		}
-		if throttled || ok {
+		if throttled || ok || basicDisabled {
 			r = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, r)
@@ -94,46 +99,53 @@ func (m *Middleware) RequireRole(want Role, next http.Handler) http.Handler {
 }
 
 // resolve reports the identity the request's credentials carry, whether one
-// was found, and whether a Basic verification went through the throttle — the
-// last so the downstream guard knows the attempt is already accounted for.
-func (m *Middleware) resolve(r *http.Request) (id Identity, ok, throttled bool) {
+// was found, whether a Basic verification went through the throttle (so the
+// downstream guard knows the attempt is already accounted for), and whether
+// the request carried a Basic header that was never attempted because the
+// scheme is administratively off (no UserStore wired) — the downstream guard
+// must not charge that against the shared per-IP bucket either.
+func (m *Middleware) resolve(r *http.Request) (id Identity, ok, throttled, basicDisabled bool) {
 	// Bearer first — lets operators use tokens for CI/automation.
 	if m.Tokens != nil {
 		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 			token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 			if id, err := m.Tokens.AuthenticateToken(r.Context(), token); err == nil {
-				return id, true, false
+				return id, true, false, false
 			}
 		}
 	}
-	if m.Users != nil {
-		if user, pass, hasBasic := r.BasicAuth(); hasBasic {
-			// Charge the attempt before the password KDF runs, not after: the
-			// KDF is what the throttle has to bound. A source out of budget
-			// is refused here, so it never reaches the verification.
-			refund := func() {}
-			if m.BasicThrottle != nil {
-				cancel, allowed := m.BasicThrottle.ReserveBasicAttempt(r)
-				if !allowed {
-					return Identity{}, false, true
-				}
-				refund = cancel
-				throttled = true
+	if m.Users == nil {
+		if _, _, hasBasic := r.BasicAuth(); hasBasic {
+			return Identity{}, false, false, true
+		}
+		return Identity{}, false, false, false
+	}
+	if user, pass, hasBasic := r.BasicAuth(); hasBasic {
+		// Charge the attempt before the password KDF runs, not after: the
+		// KDF is what the throttle has to bound. A source out of budget
+		// is refused here, so it never reaches the verification.
+		refund := func() {}
+		if m.BasicThrottle != nil {
+			cancel, allowed := m.BasicThrottle.ReserveBasicAttempt(r)
+			if !allowed {
+				return Identity{}, false, true, false
 			}
-			if id, err := m.Users.AuthenticateBasic(r.Context(), user, pass); err == nil {
-				// A credential that verified costs nothing.
-				refund()
-				return id, true, throttled
-			} else if !errors.Is(err, ErrUnauthenticated) {
-				// Other errors propagate as unresolved — they'll be
-				// re-surfaced as 401 in Require below. A store failure is not
-				// the caller's doing, so the token goes back.
-				refund()
-				return Identity{}, false, throttled
-			}
+			refund = cancel
+			throttled = true
+		}
+		if id, err := m.Users.AuthenticateBasic(r.Context(), user, pass); err == nil {
+			// A credential that verified costs nothing.
+			refund()
+			return id, true, throttled, false
+		} else if !errors.Is(err, ErrUnauthenticated) {
+			// Other errors propagate as unresolved — they'll be
+			// re-surfaced as 401 in Require below. A store failure is not
+			// the caller's doing, so the token goes back.
+			refund()
+			return Identity{}, false, throttled, false
 		}
 	}
-	return Identity{}, false, throttled
+	return Identity{}, false, throttled, false
 }
 
 // IdentityFrom returns the Identity attached to ctx by [Resolve].

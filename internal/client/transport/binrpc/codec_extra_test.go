@@ -186,6 +186,43 @@ func TestReadResponseDoubleTruncatedMantissa(t *testing.T) {
 	}
 }
 
+// --- readValue: double whose mantissa/exponent compute to a non-finite value ---
+
+// TestReadResponseDoubleInfRejected checks that a mantissa/exponent pair
+// that overflows to +Inf is rejected rather than reaching the model,
+// mirroring encodeDouble's write-side guard on the read path.
+func TestReadResponseDoubleInfRejected(t *testing.T) {
+	payload := []byte{
+		0x00, 0x00, 0x00, 0x04, // typeDouble
+		0x00, 0x00, 0x00, 0x01, // mantissa = 1
+		0x7F, 0xFF, 0xFF, 0xFF, // exponent = math.MaxInt32 -> 2^exp overflows to +Inf
+	}
+	frame := make([]byte, 0, 8+len(payload))
+	frame = append(frame, 'B', 'i', 'n', msgTypeResponse, 0x00, 0x00, 0x00, byte(len(payload)))
+	frame = append(frame, payload...)
+	_, err := ReadResponse(bytes.NewReader(frame))
+	if err == nil {
+		t.Error("expected error for a double that computes to +Inf")
+	}
+}
+
+// TestReadResponseDoubleNaNRejected checks that a zero mantissa with a
+// large exponent — Inf*0 = NaN — is rejected on the read path.
+func TestReadResponseDoubleNaNRejected(t *testing.T) {
+	payload := []byte{
+		0x00, 0x00, 0x00, 0x04, // typeDouble
+		0x00, 0x00, 0x00, 0x00, // mantissa = 0
+		0x7F, 0xFF, 0xFF, 0xFF, // exponent = math.MaxInt32 -> 2^exp * 0 = NaN
+	}
+	frame := make([]byte, 0, 8+len(payload))
+	frame = append(frame, 'B', 'i', 'n', msgTypeResponse, 0x00, 0x00, 0x00, byte(len(payload)))
+	frame = append(frame, payload...)
+	_, err := ReadResponse(bytes.NewReader(frame))
+	if err == nil {
+		t.Error("expected error for a double that computes to NaN")
+	}
+}
+
 // --- readValue: array with truncated count field ---
 
 func TestReadResponseArrayTruncatedCount(t *testing.T) {

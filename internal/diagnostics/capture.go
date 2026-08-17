@@ -8,8 +8,9 @@
 // A capture is an in-memory recording of every slog record emitted
 // while it runs. When the operator stops it (or its duration
 // expires), the buffered ndjson stream is wrapped in a tar.gz that
-// also contains a snapshot of build metadata + the diagnostics dump
-// at stop time. The archive lives in RAM (gzip-compressed) for
+// also carries a capture.meta.json sidecar (lifecycle timestamps,
+// status, event/byte counts, the trigger and any override applied —
+// see [buildArchive]). The archive lives in RAM (gzip-compressed) for
 // download; older archives are evicted FIFO once the rolling
 // retention cap is reached so a forgetful operator cannot exhaust
 // the daemon's heap.

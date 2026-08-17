@@ -8606,6 +8606,9 @@ func TestGetClimateSchedule_WithActiveProfile(t *testing.T) {
 	if dto.ActiveProfile != "P2" {
 		t.Errorf("expected ActiveProfile=P2, got %q", dto.ActiveProfile)
 	}
+	if dto.ActiveProfileIndex == nil || *dto.ActiveProfileIndex != 1 {
+		t.Errorf("expected ActiveProfileIndex=1 (0-based for CCU profile 2), got %v", dto.ActiveProfileIndex)
+	}
 }
 
 // ---------------------------------------------------------------------------

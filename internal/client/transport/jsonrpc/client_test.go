@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -259,6 +260,52 @@ func TestClientReloginOnJSONRPCAccessDenied(t *testing.T) {
 	}
 	if c.SessionID() != "new" {
 		t.Fatalf("session=%q, want new", c.SessionID())
+	}
+}
+
+// TestClientReloginOnJSONRPCSessionExpiredFamily pins that a session
+// rejected with the JSON-RPC -32001/-32002 codes (godevccu's shape) is
+// treated the same as the CCU's own code 400 — the client used to
+// recognise only 400, so a backend using this family never re-logged in
+// and kept sending the dead session id forever.
+func TestClientReloginOnJSONRPCSessionExpiredFamily(t *testing.T) {
+	for _, code := range []int{jsonRPCAuthRequiredCode, jsonRPCSessionExpiredCode} {
+		t.Run(strconv.Itoa(code), func(t *testing.T) {
+			var workCalls, loginCalls atomic.Int32
+			srv := newTestServer(t, map[string]func(envelope) any{
+				"Session.login": func(envelope) any {
+					loginCalls.Add(1)
+					return okResult("new")
+				},
+				"Work": func(env envelope) any {
+					workCalls.Add(1)
+					if env.Params[sessionParamKey] != "new" {
+						return response{Error: &wireError{Code: code, Message: "session expired"}}
+					}
+					return okResult(true)
+				},
+			})
+			defer srv.Close()
+
+			c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+			c.mu.Lock()
+			c.sessionID = "old"
+			c.lastSessionRefresh = time.Now()
+			c.mu.Unlock()
+
+			if err := c.Call(context.Background(), "Work", nil, nil); err != nil {
+				t.Fatalf("Call must self-heal a session rejected with code %d, got %v", code, err)
+			}
+			if workCalls.Load() != 2 {
+				t.Fatalf("Work attempts=%d, want 2 (fail + retry)", workCalls.Load())
+			}
+			if loginCalls.Load() != 1 {
+				t.Fatalf("login attempts=%d, want 1", loginCalls.Load())
+			}
+			if c.SessionID() != "new" {
+				t.Fatalf("session=%q, want new", c.SessionID())
+			}
+		})
 	}
 }
 

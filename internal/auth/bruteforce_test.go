@@ -266,6 +266,41 @@ func TestGuardChargesOnlyWhatTheResolverDidNotAccountFor(t *testing.T) {
 	})
 }
 
+// TestGuardBasicAuthSkipsChargeWhenBasicSchemeDisabled pins that a stale
+// Basic header on a mount whose UserStore is nil (the operator turned
+// Basic auth off, e.g. north.rest.auth.basic_enabled: false) never
+// depletes the shared per-IP bucket POST /auth/login needs. Resolve
+// never attempts a verification for such a request, so there is nothing
+// for the guard to charge — and charging anyway would let a client that
+// keeps sending its old Basic header lock its own source out of login.
+func TestGuardBasicAuthSkipsChargeWhenBasicSchemeDisabled(t *testing.T) {
+	t.Parallel()
+	th := &fakeThrottle{budget: 5}
+	m := NewMiddleware(nil, nil) // Users == nil: Basic scheme administratively off
+	m.BasicThrottle = th
+
+	called := false
+	h := m.Resolve(GuardBasicAuth(th)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, wrongPasswordRequest())
+
+	if !called {
+		t.Fatal("downstream handler not called — a disabled scheme must not block the request")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+	if th.charges != 0 {
+		t.Fatalf("guard charged %d attempts for a request Basic never verified", th.charges)
+	}
+	if th.budget != 5 {
+		t.Fatalf("budget = %d, want untouched at 5 (charges silently spend it too)", th.budget)
+	}
+}
+
 // TestResolveWithoutThrottleStillVerifies keeps the unwired path working: a
 // middleware with no throttle behaves exactly as it did before one existed.
 func TestResolveWithoutThrottleStillVerifies(t *testing.T) {

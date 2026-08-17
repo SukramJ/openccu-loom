@@ -90,6 +90,16 @@ func TestToFloat64AllBranches(t *testing.T) {
 		{"3.14", 3.14, true},
 		{"bad", 0, false},
 		{[]int{}, 0, false},
+		// strconv.ParseFloat accepts "nan"/"inf" as valid float text, but
+		// a non-finite value has no JSON representation and would corrupt
+		// every north-bound response encoding the resulting data point
+		// alongside healthy ones — coerceWire must reject it the same way
+		// an unparsable string is rejected.
+		{"nan", 0, false},
+		{"NaN", 0, false},
+		{"inf", 0, false},
+		{"+Inf", 0, false},
+		{"-Inf", 0, false},
 	}
 	for _, c := range cases {
 		got, ok := toFloat64(c.in)

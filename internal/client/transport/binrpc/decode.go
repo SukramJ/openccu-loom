@@ -165,7 +165,17 @@ func readValue(r *bytesReader, depth int) (xmlrpc.Value, error) {
 		if err := binary.Read(r, binary.BigEndian, &exp); err != nil {
 			return nil, err
 		}
-		return xmlrpc.DoubleValue(math.Pow(2, float64(exp)) * float64(mant) / mantissaScale), nil
+		f := math.Pow(2, float64(exp)) * float64(mant) / mantissaScale
+		// A crafted or malfunctioning peer can drive this computation
+		// non-finite (a large exponent overflows to +/-Inf; mant==0 with
+		// a large exponent is Inf*0 = NaN). encodeDouble rejects both on
+		// the way out; nothing on this read path did, so a non-finite
+		// value could reach the model and break every north-bound JSON
+		// encoding of the batch or paramset carrying it.
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil, fmt.Errorf("binrpc: non-finite double (mantissa=%d exponent=%d)", mant, exp)
+		}
+		return xmlrpc.DoubleValue(f), nil
 	case typeArray:
 		var count uint32
 		if err := binary.Read(r, binary.BigEndian, &count); err != nil {

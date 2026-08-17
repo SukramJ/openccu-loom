@@ -126,6 +126,39 @@ func TestStaleSampleDecaysToUnknown(t *testing.T) {
 	}
 }
 
+// TestStickySampleNeverDecaysToUnknown pins the boot-only-component case:
+// a component recorded exactly once at boot (config secrets resolved,
+// the DB config overlay applied, unroutable centrals enumerated) must
+// not decay to StatusUnknown just because staleAfter elapsed with no
+// second Record call — that component was never going to be
+// re-recorded, so decaying it turns a permanently healthy fact into a
+// permanently degraded /health after 90 s on every daemon, regardless
+// of how healthy the rest of it is.
+func TestStickySampleNeverDecaysToUnknown(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(t0)
+	tr := NewTracker(WithClock(clk), WithStaleAfter(time.Minute))
+
+	tr.Record("c", Sample{Healthy: true, Timestamp: t0, Sticky: true})
+
+	// Advance well past the stale threshold — an ordinary sample would
+	// have decayed to unknown by now (see TestStaleSampleDecaysToUnknown).
+	clk.Advance(24 * time.Hour)
+	c, ok := tr.Get("c")
+	if !ok {
+		t.Fatal("component not found")
+	}
+	if c.Status != StatusHealthy {
+		t.Errorf("sticky component at +24h status=%s, want healthy (no decay)", c.Status)
+	}
+
+	// Overall must reflect the same: a sticky component alone in the
+	// tracker must not drag Overall() down to unknown either.
+	if got := tr.Overall(); got != StatusHealthy {
+		t.Errorf("Overall() at +24h = %s, want healthy", got)
+	}
+}
+
 func TestStaleZeroDisablesDecay(t *testing.T) {
 	t.Parallel()
 	clk := clock.NewFake(t0)
