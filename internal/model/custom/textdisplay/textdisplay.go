@@ -69,33 +69,57 @@ const MaxRowLength = 24
 
 // defaultIcons is the static fallback icon list for HmIP-WRCD when no
 // runtime paramset is available. Sourced from the DISPLAY_DATA_ICON
-// VALUE_LIST present on all HmIP-SDV* channel 1 MASTER paramsets.
+// VALUE_LIST on the HmIP-WRCD ACOUSTIC_DISPLAY_RECEIVER channel's VALUES
+// paramset (channel :3) — the only channel in the fleet that carries this
+// parameter.
 var defaultIcons = []string{
-	"OFF",
-	"ON",
-	"OPEN",
-	"CLOSED",
+	"NO_ICON",
+	"LAMP_OFF",
+	"LAMP_ON",
+	"PADLOCK_OPEN",
+	"PADLOCK_CLOSED",
 	"ERROR",
-	"OK",
+	"EVERYTHING_OKAY",
 	"INFORMATION",
 	"NEW_MESSAGE",
 	"SERVICE_MESSAGE",
-	"SIGNAL_NEW_MESSAGE",
-	"SIGNAL_SERVICE_MESSAGE",
-	"SIGNAL_NEW_INFORMATION",
+	"SUN",
+	"MOON",
+	"WIND",
+	"CLOUD",
+	"THUNDERSTORM",
+	"DRIZZLE",
+	"CLOUD_AND_MOOON",
+	"RAIN",
+	"SNOW",
+	"CLOUD_AND_SUN",
+	"CLOUD_SUN_AND_RAIN",
+	"SNOWFLAKE",
+	"RAINDROP",
+	"FLAME",
+	"WINDOW_OPEN",
+	"SHUTTERS",
+	"ECO",
+	"PROTECTION_DEACTIVATED",
+	"EXTERNAL_PROTECTION",
+	"INTERNAL_PROTECTION",
+	"BELL",
+	"CLOCK",
 }
 
 // defaultSounds is the static fallback sound list for HmIP-WRCD when
 // no runtime paramset is available. Sourced from the
-// ACOUSTIC_NOTIFICATION_SELECTION VALUE_LIST on HmIP-SDV* devices.
+// ACOUSTIC_NOTIFICATION_SELECTION VALUE_LIST on the same
+// ACOUSTIC_DISPLAY_RECEIVER channel (:3) [defaultIcons] reads.
 var defaultSounds = []string{
-	"SOUND_OFF",
-	"LONG_LONG",
-	"LONG_SHORT",
-	"LONG_SHORT_SHORT",
-	"SHORT",
-	"SHORT_SHORT",
-	"LONG",
+	"LOW_BATTERY",
+	"DISARMED",
+	"INTERNALLY_ARMED",
+	"EXTERNALLY_ARMED",
+	"DELAYED_INTERNALLY_ARMED",
+	"DELAYED_EXTERNALLY_ARMED",
+	"EVENT",
+	"ERROR",
 }
 
 // Writer is the outbound-command contract.

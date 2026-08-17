@@ -99,10 +99,16 @@ const (
 	matterAttrUITempDisplayMode uint32 = 0x0000
 	matterAttrUIKeypadLockout   uint32 = 0x0001
 
-	// Generic measurement attribute (TemperatureMeasurement /
+	// Generic measurement attributes (TemperatureMeasurement /
 	// RelativeHumidityMeasurement / IlluminanceMeasurement all use the
-	// same conventional ID 0x0000 for MeasuredValue).
-	matterAttrMeasuredValue uint32 = 0x0000
+	// same conventional IDs). MeasuredValue/MinMeasuredValue/
+	// MaxMeasuredValue are all conformance "M" (mandatory) on both
+	// clusters — matter.js packages/model/src/standard/elements/
+	// temperature-measurement.element.ts:15-26 and
+	// relative-humidity-measurement.element.ts:15-26.
+	matterAttrMeasuredValue    uint32 = 0x0000
+	matterAttrMinMeasuredValue uint32 = 0x0001
+	matterAttrMaxMeasuredValue uint32 = 0x0002
 
 	matterAttrFeatureMap      uint32 = 0xFFFC
 	matterAttrClusterRevision uint32 = 0xFFFD
@@ -182,7 +188,13 @@ func (climateSystemModeUnsupportedError) MatterStatusCode() im.StatusCode {
 var _ im.StatusCodeError = climateSystemModeUnsupportedError{}
 
 // celsiusToMatter encodes an HM temperature (°C) into Matter's int16
-// 0.01°C convention. Saturates at int16 bounds rather than wrapping.
+// 0.01°C convention. Clamps to [−27315, 32766] rather than the raw int16
+// bounds: 32767 is the TLV-null sentinel (Matter §2.3.5.1 / chip
+// `kMaxMeasuredValueRange = 32766`) and −32768 falls below the
+// TemperatureMeasurement cluster's MinMeasuredValue constraint floor
+// (chip `kMinMeasuredValueRange = -27315 = -273.15 °C`); a value outside
+// that range is out-of-constraint for the mandatory MeasuredValue
+// attribute on both the standalone and the climate-derived servers.
 //
 // The product is rounded, not truncated: a tenth-of-a-degree reading
 // such as 20.4 is 2039.9999999999998 in binary64, and truncating it
@@ -193,11 +205,11 @@ var _ im.StatusCodeError = climateSystemModeUnsupportedError{}
 // behind the standalone TemperatureMeasurement endpoints.
 func celsiusToMatter(c float64) int16 {
 	v := math.Round(c * 100)
-	if v > 32767 {
-		return 32767
+	if v > 32766 { // 32767 is the Matter NULL sentinel — must not be emitted as a real value
+		return 32766
 	}
-	if v < -32768 {
-		return -32768
+	if v < -27315 { // −273.15 °C absolute-zero floor per chip kMinMeasuredValueRange
+		return -27315
 	}
 	return int16(v)
 }
@@ -844,6 +856,10 @@ func (s climateTempMeasServer) MatterRead(attrID uint32) (any, bool) {
 			return nil, true
 		}
 		return celsiusToMatter(t), true
+	case matterAttrMinMeasuredValue:
+		return int16(-27315), true // -273.15 °C — physical absolute zero
+	case matterAttrMaxMeasuredValue:
+		return int16(32766), true // spec ceiling; 32767 is the NULL sentinel
 	case matterAttrFeatureMap:
 		return uint32(0), true
 	case matterAttrClusterRevision:
@@ -866,10 +882,11 @@ func (s climateTempMeasServer) MatterReportable() []uint32 {
 }
 
 // MatterAttributes covers the TemperatureMeasurement (0x0402) cluster's
-// projected surface. Single MeasuredValue attribute today; FeatureMap
-// + ClusterRevision are dispatched as globals.
+// mandatory surface: MeasuredValue, MinMeasuredValue and MaxMeasuredValue
+// (matches internal/north/matter/cluster/measurement.TemperatureServer);
+// FeatureMap + ClusterRevision are dispatched as globals.
 func (s climateTempMeasServer) MatterAttributes() []uint32 {
-	return []uint32{matterAttrMeasuredValue}
+	return []uint32{matterAttrMeasuredValue, matterAttrMinMeasuredValue, matterAttrMaxMeasuredValue}
 }
 
 // climateHumidityServer projects HUMIDITY onto the
@@ -891,6 +908,10 @@ func (s climateHumidityServer) MatterRead(attrID uint32) (any, bool) {
 			return nil, true
 		}
 		return humidityToMatter(h), true
+	case matterAttrMinMeasuredValue:
+		return uint16(0), true
+	case matterAttrMaxMeasuredValue:
+		return uint16(10000), true
 	case matterAttrFeatureMap:
 		return uint32(0), true
 	case matterAttrClusterRevision:
@@ -912,10 +933,11 @@ func (s climateHumidityServer) MatterReportable() []uint32 {
 	return []uint32{matterAttrMeasuredValue}
 }
 
-// MatterAttributes mirrors [climateTempMeasServer.MatterAttributes]
-// for the RelativeHumidityMeasurement (0x0405) cluster.
+// MatterAttributes mirrors [climateTempMeasServer.MatterAttributes]'s
+// mandatory-surface rationale for the RelativeHumidityMeasurement (0x0405)
+// cluster (matches internal/north/matter/cluster/measurement.HumidityServer).
 func (s climateHumidityServer) MatterAttributes() []uint32 {
-	return []uint32{matterAttrMeasuredValue}
+	return []uint32{matterAttrMeasuredValue, matterAttrMinMeasuredValue, matterAttrMaxMeasuredValue}
 }
 
 // extractSetpointRaiseLower pulls (mode, amount) out of a

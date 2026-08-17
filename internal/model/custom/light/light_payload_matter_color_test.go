@@ -939,3 +939,82 @@ func TestHueToMatterBranches(t *testing.T) {
 		t.Errorf("hueToMatter(180) = %d out of range", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// OnMatterValueChanged: colour-attribute dirty marking
+//
+// A colour change made outside Matter (wall remote, CCU WebUI, CCU
+// program) must dirty-mark the ColorControl cluster so a subscribed
+// controller's next ReportData carries it — see
+// [ColorLight.OnMatterValueChanged].
+
+// TestColorLightOnMatterValueChangedFiresOnHueOnly verifies that a
+// confirmed HUE-only update fires the callback even though LEVEL never
+// changed — the bug this fix closes: before it, only the embedded
+// Light's LEVEL notifier fired.
+func TestColorLightOnMatterValueChangedFiresOnHueOnly(t *testing.T) {
+	w := &stubWriter{}
+	cl, _, hue, _ := newColorLightRig(t, "X:1", w)
+	var count int
+	unsub := cl.OnMatterValueChanged(func() { count++ })
+	defer unsub()
+	hue.OnEvent(int32(180))
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation on HUE-only change, got %d", count)
+	}
+}
+
+// TestColorLightOnMatterValueChangedFiresOnSaturationOnly mirrors
+// TestColorLightOnMatterValueChangedFiresOnHueOnly for SATURATION.
+func TestColorLightOnMatterValueChangedFiresOnSaturationOnly(t *testing.T) {
+	w := &stubWriter{}
+	cl, _, _, sat := newColorLightRig(t, "X:1", w)
+	var count int
+	unsub := cl.OnMatterValueChanged(func() { count++ })
+	defer unsub()
+	sat.OnEvent(0.5)
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation on SATURATION-only change, got %d", count)
+	}
+}
+
+// TestColorLightOnMatterValueChangedNilSafe verifies the nil-receiver
+// guard mirrors Climate.OnMatterValueChanged's contract.
+func TestColorLightOnMatterValueChangedNilSafe(t *testing.T) {
+	var cl *ColorLight
+	unsub := cl.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil ColorLight: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+}
+
+// TestColorTempLightOnMatterValueChangedFiresOnKelvinOnly verifies that a
+// confirmed COLOR_TEMPERATURE-only update fires the callback.
+func TestColorTempLightOnMatterValueChangedFiresOnKelvinOnly(t *testing.T) {
+	w := &stubWriter{}
+	ctl, _, kelvin := newColorTempLightRig(t, "X:1", w, 2700, 6500)
+	var count int
+	unsub := ctl.OnMatterValueChanged(func() { count++ })
+	defer unsub()
+	kelvin.OnEvent(int32(300))
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation on kelvin-only change, got %d", count)
+	}
+}
+
+// TestRGBWLightOnMatterValueChangedFiresOnHueOrKelvin verifies that
+// RGBWLight fans both its embedded ColorLight's HUE and its own kelvin
+// (COLOR_TEMPERATURE) into the callback.
+func TestRGBWLightOnMatterValueChangedFiresOnHueOrKelvin(t *testing.T) {
+	w := &multiWriter{}
+	r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
+	var count int
+	unsub := r.OnMatterValueChanged(func() { count++ })
+	defer unsub()
+	r.hue.OnEvent(int32(120))
+	r.kelvin.OnEvent(int32(200))
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations (hue + kelvin), got %d", count)
+	}
+}

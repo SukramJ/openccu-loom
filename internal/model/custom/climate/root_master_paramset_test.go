@@ -86,6 +86,32 @@ func putFloatMaster(ch *device.Channel, param hmenum.Parameter) *generic.Float {
 	return dp
 }
 
+// putSelectMaster attaches an ENUM data point to the channel's MASTER
+// paramset, carrying the real 15-entry TEMPERATURE_OFFSET VALUE_LIST the
+// classic RF family (HM-CC-RT-DN, HM-TC-IT-WM-W-EU) advertises on the
+// device-root MASTER paramset.
+func putSelectMaster(ch *device.Channel, param hmenum.Parameter) *generic.Select {
+	dp := generic.NewSelect(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyMaster,
+			Parameter:      string(param),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+			Min:        json.RawMessage("0"),
+			Max:        json.RawMessage("14"),
+			ValueList: []string{
+				"-3.5K", "-3.0K", "-2.5K", "-2.0K", "-1.5K", "-1.0K", "-0.5K",
+				"0.0K", "0.5K", "1.0K", "1.5K", "2.0K", "2.5K", "3.0K", "3.5K",
+			},
+		},
+	})
+	ch.PutMaster(dp)
+	return dp
+}
+
 // putPointerMaster attaches an INTEGER WEEK_PROGRAM_POINTER data point to the
 // channel's MASTER paramset with a 0..2 descriptor (three week programs, the
 // HM-TC-IT-WM-W-EU / HM-CC-VG-1 shape).
@@ -186,6 +212,35 @@ func TestSubscribeTemperatureOffsetRootMaster(t *testing.T) {
 	sp, _ := c.State().(*payload.ClimateState)
 	if sp == nil || sp.TemperatureOffset == nil {
 		t.Fatalf("state payload should carry temperature_offset once observed on the root MASTER paramset")
+	}
+}
+
+// TestSubscribeTemperatureOffsetRootMasterEnum pins that Subscribe resolves
+// TEMPERATURE_OFFSET through its VALUE_LIST label rather than reporting the
+// raw ENUM index. On the classic RF family (HM-CC-RT-DN, HM-TC-IT-WM-W-EU)
+// the device-root TEMPERATURE_OFFSET is an ENUM, not a FLOAT — its wire
+// value is a 0-based VALUE_LIST index, exactly like HEATING_COOLING — so
+// a bare type-assertion / stringification reports the index ("7") instead
+// of the label ("0.0K").
+func TestSubscribeTemperatureOffsetRootMasterEnum(t *testing.T) {
+	w := &recordingParamsetWriter{}
+	climateCh, root := newClassicRFDevice(t, "VCU0000342", "VCU0000342:2", w)
+	offset := putSelectMaster(root, hmenum.ParameterTemperatureOffset)
+
+	c := New(Config{Channel: climateCh, Writer: w, Kind: KindRF})
+	cancel := c.Subscribe(climateCh)
+	defer cancel()
+
+	// Index 7 is "0.0K" in the real 15-entry VALUE_LIST.
+	offset.OnEvent(int32(7))
+
+	v, ok := c.TemperatureOffset()
+	if !ok || v != "0.0K" {
+		t.Fatalf("TemperatureOffset() = (%q, %v), want (\"0.0K\", true)", v, ok)
+	}
+	sp, _ := c.State().(*payload.ClimateState)
+	if sp == nil || sp.TemperatureOffset == nil || *sp.TemperatureOffset != "0.0K" {
+		t.Fatalf("state payload temperature_offset should report the ENUM label, got %+v", sp)
 	}
 }
 

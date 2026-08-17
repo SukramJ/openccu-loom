@@ -125,7 +125,7 @@ func (s *SysvarDpText) SetTextValue(ctx context.Context, text string) error {
 		limit = SysvarTextMaxLength
 	}
 	if len(text) > limit {
-		return fmt.Errorf("sysvar %q: text value length %d exceeds maximum %d", s.Name, len(text), limit)
+		return fmt.Errorf("sysvar %q: text value length %d exceeds maximum %d", s.LegacyName(), len(text), limit)
 	}
 	return s.Set(ctx, hmtypes.StringValue(text))
 }
@@ -153,7 +153,7 @@ func (n *SysvarDpNumber) SendVariable(ctx context.Context, value float64) error 
 		minVal := paramValueToFloat64(*m.Min)
 		maxVal := paramValueToFloat64(*m.Max)
 		if value < minVal || value > maxVal {
-			return fmt.Errorf("sysvar %q: value %v out of range [%v, %v]", n.Name, value, minVal, maxVal)
+			return fmt.Errorf("sysvar %q: value %v out of range [%v, %v]", n.LegacyName(), value, minVal, maxVal)
 		}
 	}
 	return n.Set(ctx, hmtypes.FloatValue(value))
@@ -200,7 +200,7 @@ func (s *SysvarDpSelect) SelectValue() (string, bool) {
 func (s *SysvarDpSelect) SendVariable(ctx context.Context, value any) error {
 	valueList := s.Meta().ValueList
 	if len(valueList) == 0 {
-		return fmt.Errorf("sysvar %q: no value list configured", s.Name)
+		return fmt.Errorf("sysvar %q: no value list configured", s.LegacyName())
 	}
 	idx := -1
 	switch v := value.(type) {
@@ -216,13 +216,13 @@ func (s *SysvarDpSelect) SendVariable(ctx context.Context, value any) error {
 			}
 		}
 		if idx < 0 {
-			return fmt.Errorf("sysvar %q: value %q not in value list", s.Name, v)
+			return fmt.Errorf("sysvar %q: value %q not in value list", s.LegacyName(), v)
 		}
 	default:
-		return fmt.Errorf("sysvar %q: unsupported value type %T", s.Name, value)
+		return fmt.Errorf("sysvar %q: unsupported value type %T", s.LegacyName(), value)
 	}
 	if idx < 0 || idx >= len(valueList) {
-		return fmt.Errorf("sysvar %q: index %d out of range [0, %d)", s.Name, idx, len(valueList))
+		return fmt.Errorf("sysvar %q: index %d out of range [0, %d)", s.LegacyName(), idx, len(valueList))
 	}
 	return s.Set(ctx, hmtypes.IntValue(idx))
 }

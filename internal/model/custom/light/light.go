@@ -112,6 +112,12 @@ type Light struct {
 	// running timer rather than leaving the old value active.
 	hasOnTimeUnit bool
 
+	// onTimeValueParam / onTimeUnitParam are the wire parameter(s)
+	// [Light.SetOnTime] writes, resolved once at construction from the
+	// channel's own paramset. See [resolveOnTimeParams].
+	onTimeValueParam hmenum.Parameter
+	onTimeUnitParam  hmenum.Parameter
+
 	// resetsOnTimeOnTurnOn gates whether a plain TurnOn (no explicit
 	// on-time/timer) emits the NotUsed sentinel on a channel that carries
 	// ON_TIME_UNIT. Only signal lights (FixedColorLight) require this reset.
@@ -131,10 +137,13 @@ type Light struct {
 func New(cfg Config) *Light {
 	level := custom.FloatField(cfg.Channel, hmenum.ParameterLevel)
 	hasOnTimeUnit := cfg.Channel != nil && cfg.Channel.Parameter(hmenum.ParameterOnTimeUnit) != nil
+	onTimeValueParam, onTimeUnitParam := resolveOnTimeParams(cfg.Channel)
 	l := &Light{
 		Float:                level,
 		Capabilities:         cfg.Capabilities,
 		hasOnTimeUnit:        hasOnTimeUnit,
+		onTimeValueParam:     onTimeValueParam,
+		onTimeUnitParam:      onTimeUnitParam,
 		enableLastBrightness: deviceLightLastBrightness(cfg.Channel),
 	}
 	// GlobalSceneControl (Matter OnOff attribute 0x4000) defaults to
@@ -796,12 +805,43 @@ func (l *Light) BrightnessPct() (pct int, observed bool) {
 	return int(b.Level()*100 + 0.5), true
 }
 
-// SetOnTime sets the ON_TIME parameter on the light's channel.
-// The duration is encoded into ON_TIME_VALUE / ON_TIME_UNIT pairs.
+// resolveOnTimeParams determines the wire parameter(s) that carry a
+// light's on-time timer. No CCU device carries ON_TIME_VALUE / ON_TIME_UNIT
+// — those literal names exist in hmenum but appear on no light's paramset
+// in the fleet — so probing for them always misses and the write is
+// rejected or dropped. The real shapes are family-specific: plain dimmers
+// (HM-LC-Dim*, HmIP-BDT/-PDT/-FDT) carry a single FLOAT ON_TIME in
+// seconds; signal lights and RGBW dimmers (HmIP-BSL, -RGBW, -DRG-DALI)
+// carry the value/unit pair DURATION_VALUE + DURATION_UNIT, exactly like
+// RAMP_TIME_VALUE/RAMP_TIME_UNIT. Mirrors the profile's
+// FieldOnTimeValue/FieldOnTimeUnit mapping (generated_profile_configs.go),
+// read here directly off the wire so the probe works regardless of which
+// profile registered the channel.
+func resolveOnTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Parameter) {
+	if ch != nil && ch.Parameter(hmenum.ParameterDurationValue) != nil && ch.Parameter(hmenum.ParameterDurationUnit) != nil {
+		return hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit
+	}
+	return hmenum.ParameterOnTime, ""
+}
+
+// SetOnTime sets the light's on-time timer, encoding the duration into
+// whichever wire shape [resolveOnTimeParams] resolved at construction: a
+// bare seconds value for the plain-dimmer families, or a value/unit pair
+// for signal lights and RGBW dimmers.
 func (l *Light) SetOnTime(ctx context.Context, w custom.Writer, addr string, d time.Duration, priority hmenum.CommandPriority) error {
+	valueParam := l.onTimeValueParam
+	if valueParam == "" {
+		valueParam = hmenum.ParameterOnTime
+	}
+	if l.onTimeUnitParam == "" {
+		if err := w.SetValue(custom.EnsureContext(ctx), addr, valueParam, d.Seconds(), priority); err != nil {
+			return fmt.Errorf("light: ON_TIME: %w", err)
+		}
+		return nil
+	}
 	value, unit := custom.EncodeTimerDuration(d)
 	if err := stageTimerPair(ctx, w, addr,
-		hmenum.ParameterOnTimeValue, value, hmenum.ParameterOnTimeUnit, unit, priority); err != nil {
+		valueParam, value, l.onTimeUnitParam, unit, priority); err != nil {
 		return fmt.Errorf("light: ON_TIME: %w", err)
 	}
 	return nil

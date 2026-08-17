@@ -535,3 +535,65 @@ func TestFloat_OnMatterValueChanged_NilCallbackSafe(t *testing.T) {
 	// OnEvent must not panic when callback is nil (no subscriber stored).
 	f.OnEvent(0.5)
 }
+
+// ---------------------------------------------------------------------------
+// Integer.OnMatterValueChanged
+//
+// Integer backs HUE / the RF colour dimmers' single COLOR integer /
+// colour-temperature Kelvin on every custom light type that holds one.
+// These tests lock the same confirmed-only contract the Float
+// specialisation carries above — without it, a colour changed outside
+// Matter never dirty-marks the ColorControl cluster.
+
+// TestInteger_OnMatterValueChanged_FiresOnConfirmedChange verifies that a
+// registered callback is invoked whenever a fresh confirmed value arrives
+// via OnEvent.
+func TestInteger_OnMatterValueChanged_FiresOnConfirmedChange(t *testing.T) {
+	i := NewInteger(baseCfg(hmenum.ParameterHue, hmenum.ParameterTypeInteger, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+	var count int
+	_ = i.OnMatterValueChanged(func() { count++ })
+	i.OnEvent(30)
+	i.OnEvent(60)
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations, got %d", count)
+	}
+}
+
+// TestInteger_OnMatterValueChanged_UnsubscribeStopsCallback verifies that
+// calling the returned closure detaches the callback so subsequent value
+// pushes do not fire it.
+func TestInteger_OnMatterValueChanged_UnsubscribeStopsCallback(t *testing.T) {
+	i := NewInteger(baseCfg(hmenum.ParameterHue, hmenum.ParameterTypeInteger, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+	var count int
+	unsub := i.OnMatterValueChanged(func() { count++ })
+	i.OnEvent(30)
+	unsub()
+	i.OnEvent(60)
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
+	}
+}
+
+// TestInteger_OnMatterValueChanged_NilIntegerSafe verifies that calling
+// OnMatterValueChanged on a nil *Integer does not panic and returns a
+// non-nil, safe-to-call unsubscribe closure.
+func TestInteger_OnMatterValueChanged_NilIntegerSafe(t *testing.T) {
+	var i *Integer
+	unsub := i.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil Integer: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+}
+
+// TestInteger_OnMatterValueChanged_NilCallbackSafe verifies that a nil
+// callback is accepted without panic and returns a callable unsub.
+func TestInteger_OnMatterValueChanged_NilCallbackSafe(t *testing.T) {
+	i := NewInteger(baseCfg(hmenum.ParameterHue, hmenum.ParameterTypeInteger, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+	unsub := i.OnMatterValueChanged(nil)
+	if unsub == nil {
+		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
+	}
+	// OnEvent must not panic when callback is nil (no subscriber stored).
+	i.OnEvent(30)
+}

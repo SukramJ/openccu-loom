@@ -705,19 +705,25 @@ func HSToFixedColor(hue int32, saturation float64) FixedColor {
 		return FixedColorWhite
 	}
 	h := ((int(hue) % 360) + 360) % 360
+	// Exclusive-low / inclusive-high bands mirror
+	// hs_color_to_fixed_converter (light.py:824-834) exactly: a hue
+	// landing precisely on a boundary (30/90/150/210/270/330) belongs to
+	// the band below it, not the one above — e.g. hue=330 is PURPLE, not
+	// the next RED wrap. Getting this backwards shifts all six boundary
+	// hues one segment clockwise from what the reference reports.
 	switch {
-	case h < 30 || h >= 330:
-		return FixedColorRed
-	case h < 90:
+	case h > 30 && h <= 90:
 		return FixedColorYellow
-	case h < 150:
+	case h > 90 && h <= 150:
 		return FixedColorGreen
-	case h < 210:
+	case h > 150 && h <= 210:
 		return FixedColorCyan
-	case h < 270:
+	case h > 210 && h <= 270:
 		return FixedColorBlue
-	default:
+	case h > 270 && h <= 330:
 		return FixedColorMagenta
+	default:
+		return FixedColorRed
 	}
 }
 

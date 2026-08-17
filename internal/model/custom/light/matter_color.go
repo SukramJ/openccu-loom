@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -25,14 +26,70 @@ var (
 	_ interfaces.MatterEndpointSource = (*ColorLight)(nil)
 	_ interfaces.MatterEndpointSource = (*ColorTempLight)(nil)
 	_ interfaces.MatterEndpointSource = (*RGBWLight)(nil)
-	// The colour variants embed *Light (→ *generic.Float), so they inherit
-	// OnMatterValueChanged and propagate external on/off + brightness
-	// changes. Colour-attribute (hue / saturation / colour-temperature)
-	// change propagation is a separate additive refinement.
+	// The colour variants shadow the embedded Light's OnMatterValueChanged
+	// (see below) so a colour change — hue/saturation, the RF COLOR
+	// integer, or colour temperature — dirty-marks the ColorControl
+	// attributes in addition to the inherited on/off + brightness
+	// propagation, exactly as Climate.OnMatterValueChanged fans out its
+	// own value-bearing DPs.
 	_ interfaces.MatterChangeNotifier = (*ColorLight)(nil)
 	_ interfaces.MatterChangeNotifier = (*ColorTempLight)(nil)
 	_ interfaces.MatterChangeNotifier = (*RGBWLight)(nil)
 )
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier],
+// shadowing the embedded *Light's. A colour light's ColorControl cluster
+// depends on HUE/SATURATION or the RF colour dimmers' single COLOR
+// integer — DPs the embedded Light knows nothing about — so without this
+// override a colour changed at the wall remote, in the CCU WebUI, or from
+// a CCU program never dirty-marks the cluster and a subscribed controller
+// keeps showing the stale colour until brightness or on/off happens to
+// change too. Exactly one of (hue+saturation) and colorIndex is non-nil
+// per device family; each embedded DP's own OnMatterValueChanged guards a
+// nil receiver, so the unused one contributes a no-op unsubscribe.
+func (l *ColorLight) OnMatterValueChanged(cb func()) func() {
+	if l == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		l.Light.OnMatterValueChanged(cb),
+		l.hue.OnMatterValueChanged(cb),
+		l.saturation.OnMatterValueChanged(cb),
+		l.colorIndex.OnMatterValueChanged(cb),
+	)
+}
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier],
+// shadowing the embedded *Light's — see [ColorLight.OnMatterValueChanged]
+// for the rationale. Exactly one of kelvin and colorLevel is non-nil per
+// device family (HmIP COLOR_TEMPERATURE vs. the RF tunable-white
+// COLOR_LEVEL channel); the unused one's nil-guarded
+// OnMatterValueChanged contributes a no-op unsubscribe.
+func (l *ColorTempLight) OnMatterValueChanged(cb func()) func() {
+	if l == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		l.Light.OnMatterValueChanged(cb),
+		l.kelvin.OnMatterValueChanged(cb),
+		l.colorLevel.OnMatterValueChanged(cb),
+	)
+}
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier],
+// shadowing the embedded *ColorLight's — see
+// [ColorLight.OnMatterValueChanged] for the rationale. RGBWLight adds its
+// own kelvin (COLOR_TEMPERATURE) axis on top of the embedded ColorLight's
+// hue/saturation/colorIndex, so both must fan into the callback.
+func (l *RGBWLight) OnMatterValueChanged(cb func()) func() {
+	if l == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		l.ColorLight.OnMatterValueChanged(cb),
+		l.kelvin.OnMatterValueChanged(cb),
+	)
+}
 
 // Matter ColorControl constants follow the Matter 1.5.1 Application
 // Cluster Specification §3.2. Cluster revision + 1.4/1.5 FeatureMap

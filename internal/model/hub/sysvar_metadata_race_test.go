@@ -95,3 +95,55 @@ func TestSysvarMetadataConcurrentRefreshAndRead(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestSysvarNameConcurrentRenameAndErrorFormatting is the race tripwire for
+// [Sysvar.SetName] rewriting the name in place (an operator renames the
+// system variable) while error-formatting paths read it — toWire's
+// value-rejection branches, SetTextValue's length guard, and
+// SysvarDpNumber.SendVariable's range guard all interpolate the sysvar's
+// name into the returned error. Every one of those sites must read
+// through [HubDataPoint.LegacyName] (which takes the data point's own
+// lock, the same one SetName writes under) rather than the bare Name
+// field — a direct field read races the rename's string-header write. Run
+// with -race.
+func TestSysvarNameConcurrentRenameAndErrorFormatting(t *testing.T) {
+	t.Parallel()
+
+	sv := NewSysvar("race-central", "InitialName", "desc", hmenum.HubValueTypeFloat, &countingSysvarWriter{})
+	minVal := hmtypes.FloatValue(0)
+	maxVal := hmtypes.FloatValue(10)
+	sv.ApplyMeta(SysvarMeta{
+		ValueType: hmenum.HubValueTypeFloat,
+		Min:       &minVal,
+		Max:       &maxVal,
+	})
+	text := &SysvarDpText{Sysvar: sv, MaxLength: 2}
+	number := &SysvarDpNumber{Sysvar: sv}
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+
+	// Writer: an operator renames the sysvar on the CCU, rewriting the name
+	// in place on every pass.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := range 3000 {
+			sv.SetName("RenamedVar" + strconv.Itoa(i%7))
+		}
+	}()
+
+	// Readers: trip every error-formatting site that interpolates the name.
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 3000 {
+				_ = sv.Set(ctx, hmtypes.ParamValue{Kind: hmtypes.ValueKindNone})
+				_ = text.SetTextValue(ctx, "too long for MaxLength")
+				_ = number.SendVariable(ctx, 999.0) // out of the configured [0,10] range
+			}
+		}()
+	}
+	wg.Wait()
+}

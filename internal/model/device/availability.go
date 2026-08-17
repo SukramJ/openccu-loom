@@ -18,30 +18,36 @@ import (
 type AvailabilityInfo struct {
 	// IsReachable is the inverse of UN_REACH (falls back to
 	// STICKY_UN_REACH, defaults to true when neither has been seen).
-	IsReachable bool
+	IsReachable bool `json:"IsReachable"`
 
 	// LastUpdated is the most recent OnEvent timestamp across every
 	// data point on every channel. Zero when nothing has been
 	// observed yet.
-	LastUpdated time.Time
+	LastUpdated time.Time `json:"LastUpdated"`
 
 	// BatteryLevel is a 0-100 percentage derived from
 	// OPERATING_VOLTAGE_LEVEL (preferred) or BATTERY_STATE when the
 	// latter looks like a percentage (> 10).
-	BatteryLevel *int
+	BatteryLevel *int `json:"BatteryLevel"`
 
 	// LowBattery is the LOW_BAT parameter. Nil when the device has
 	// no battery indicator.
-	LowBattery *bool
+	LowBattery *bool `json:"LowBattery"`
 
 	// SignalStrength is RSSI_DEVICE in dBm (negative values) — the
 	// reception strength the device reports for the central.
-	SignalStrength *int
+	SignalStrength *int `json:"SignalStrength"`
 
 	// RSSIPeer is RSSI_PEER in dBm (negative values) — the reception
 	// strength the central/partner reports for the device. Nil when the
-	// device does not expose it.
-	RSSIPeer *int
+	// device does not expose it. Excluded from JSON: it is not part of
+	// the documented DeviceDetail.availability schema
+	// (assets/openapi.yaml) — the field-name-as-key struct had no json
+	// tags at all, so this one leaked onto the wire as an undocumented
+	// "RSSIPeer" key that no client contract or generated type knows
+	// about. RSSI_PEER remains reachable through the generic
+	// paramset/data-point endpoints for callers that need it.
+	RSSIPeer *int `json:"-"`
 }
 
 // HasBattery reports whether any battery reading is present.
