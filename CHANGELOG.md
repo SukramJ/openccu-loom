@@ -6,24 +6,78 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.61.3]
 
-Post-release audit of the 0.61.x fix wave. Each item below is a defect the
-0.61.0/0.61.1 audit-fix squash left behind or introduced, found by a
-full-codebase re-review and confirmed by an independent adversarial pass.
+Post-release audit of the 0.61.x fix wave: a full-codebase re-review found
+defects the 0.61.0/0.61.1 audit-fix squash left behind, introduced, or never
+covered. Every fix below carries a test that fails when the fix is reverted,
+and each was confirmed by an independent adversarial pass. The north-bound API
+contract gains a few backward-compatible fields and moves to **6.2.0**.
+
+### Security
+
+- **HTTP Basic credential guessing is now rate-limited.** The login limiter
+  guarded only `POST /auth/login`, so `Authorization: Basic` on any route (e.g.
+  `GET /auth/me`) could be brute-forced at unlimited rate; failed Basic
+  verification now shares the same per-IP limiter.
+- **A system-variable value can no longer inject ReGa script.** A value
+  containing a newline broke out of the generated script's `!#` comment and ran
+  on the CCU's privileged service session (reachable from REST/WS/MQTT sysvar
+  writes). Control characters in script placeholder values are now rejected.
+- **Logout closes the user's open WebSockets**, so a revoked session no longer
+  keeps a privileged socket alive.
+- **The Matter PASE brute-force lockout can no longer unlock itself** while a
+  commissioning window is open.
+- **MCP is properly gated**: `write_paramset` honours the MASTER/LINK edit lock,
+  and value writes go through descriptor coercion like REST.
+- **The WS `recording.*` commands are admin-gated**, audited, and arm the
+  auto-stop timer, matching the REST route.
 
 ### Fixed
 
-- **Per-interface connectivity no longer produces a dead HA entity and a
-  duplicate per radio, and the alarm domain notices a lost radio again.** The
-  0.61.1 fix for #574 moved `ConnectivityChangedEvent.InterfaceID` to the wire
-  form `<central>-<interface>` on the producer side, but two consumers stayed
-  on the bare name: the MQTT discovery seed declared the connectivity
-  binary_sensor under the bare interface name while the state was published
-  under the wire id (one permanently-unavailable entity plus a live duplicate
-  per radio), and the alarm service re-wrapped the already-wire id into
-  `<central>-<central>-<interface>`, so a radio going down degraded no enrolled
-  sensor and never ran the zone's central-loss policy. Both now use the wire id
-  the event carries; the guard tests that fed the bare name (and so could not
-  catch the drift) now feed the wire id production emits.
+- **Connectivity plane** — the 0.61.1 wire-id move for #574 left the MQTT
+  discovery seed and the alarm domain on the bare interface name, producing one
+  dead HA entity plus a duplicate per radio and stopping the alarm domain from
+  noticing a lost radio; both now use the wire id the event carries.
+- **MQTT value encoding** — select/enum writes forwarded the option label
+  instead of the VALUE_LIST index (every ENUM in the fleet is index-based), and
+  VALUES writes skipped descriptor coercion entirely; both now coerce against
+  the parameter descriptor.
+- **Alarm code plane** — a code-free master DISARM and an ordinary correct PIN
+  no longer lock out the code plane or mute the covert duress channel; a failed
+  siren fire stays degraded until its own condition clears; a hidden duress
+  journal row is recoverable by an admin.
+- **Multi-CCU** — the HA device card, the CUxD `unique_id`, and the
+  discovery-orphan sweep are all central-scoped, so two CCUs no longer merge,
+  collide, or evict each other's entities; removing a CCU now retracts its whole
+  hub plane.
+- **System variables** — INTEGER bounds report their real min/max, a rename
+  republishes the HA entity instead of freezing it, the WS list no longer races
+  the refresh, and Create/Update surface the CCU's result (404/409) instead of
+  a false 202.
+- **Schedules** — door-lock schedules resolve to the lock domain (the action
+  picker instead of an on/off switch), non-climate schedules refresh on
+  CONFIG_PENDING, and the MQTT `schedule_domain` reports the real bucket.
+- **Central bring-up** — a boot-time MQTT connect recovered on retry keeps its
+  reconnect loop, an XML-RPC ingest that exhausts its retries no longer sticks
+  in CREATED, and HmIP-DRG-DALI / HmIP-MP3P-LED are controllable again.
+- **Matter** — the WebSocket broadcasts carry the `matter.` prefix their
+  consumers dispatch on, structured attribute writes (GroupKeyMap,
+  AccessControl.Extension) decode instead of failing, and the fabric-added
+  broadcast carries the exact 64-bit ids.
+- **Backups no longer lose the history database** — `history.db` is snapshotted
+  consistently instead of copied live, so a restore keeps its rows.
+- **Health & diagnostics honesty** — `system_health` and per-interface
+  connectivity report "unknown" during a CCU outage instead of a frozen last
+  value; a failed security-index rebuild reports a degraded state instead of a
+  false all-clear; an operator's diagnostics-capture anonymise choice is
+  honoured.
+- **Config UI** — the Navigation & views editor no longer discards unsaved row
+  edits on a mode toggle, the live log tail resumes after a daemon restart, a
+  security-source exclusion is not silently re-included, and the schedule editor
+  follows the device's real slot count.
+- **Contract sync** — the locked custom-DP invoke returns 423 (not 502), the
+  first-run wizard actually publishes MQTT entities, the config edit session is
+  central-scoped on write, and the WS command schema documents the arguments its
+  handlers require.
 
 ## [0.61.2]
 
