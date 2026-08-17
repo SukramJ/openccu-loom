@@ -111,10 +111,10 @@ func putPointerMaster(ch *device.Channel, param hmenum.Parameter) *generic.Integ
 // a climate channel carrying the VALUES-paramset runtime parameters and a
 // device-root channel carrying the MASTER-paramset operator-config parameters
 // (TEMPERATURE_OFFSET / WEEK_PROGRAM_POINTER).
-func newClassicRFDevice(t *testing.T, deviceAddr, climateAddr string, w Writer) (*device.Channel, *device.Channel) {
+func newClassicRFDevice(t *testing.T, deviceAddr, climateAddr string, w Writer) (climateCh, root *device.Channel) {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmRF", Address: deviceAddr})
-	climateCh := d.AddChannel(climateAddr, 2, "CLIMATE", hmenum.ParamsetKeyValues)
+	climateCh = d.AddChannel(climateAddr, 2, "CLIMATE", hmenum.ParamsetKeyValues)
 
 	// Setpoint on the climate channel so New can attach.
 	setpoint := generic.NewFloat(generic.Spec{
@@ -131,7 +131,7 @@ func newClassicRFDevice(t *testing.T, deviceAddr, climateAddr string, w Writer) 
 	})
 	climateCh.Put(setpoint)
 
-	root := d.EnsureRootChannel()
+	root = d.EnsureRootChannel()
 	return climateCh, root
 }
 
@@ -212,6 +212,8 @@ func TestSetProfileRFWritesPointerToRootMaster(t *testing.T) {
 			valuesPut = &w.puts[i]
 		case hmenum.ParamsetKeyMaster:
 			masterPut = &w.puts[i]
+		default:
+			// Only VALUES and MASTER are expected here.
 		}
 		// No put may carry parameters from both paramsets.
 		_, hasPointer := p.values[string(hmenum.ParameterWeekProgramPointer)]
