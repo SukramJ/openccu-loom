@@ -124,7 +124,10 @@ func readEvent(t *testing.T, r *bufio.Reader) outboundEvent {
 		}
 		if json.Unmarshal(pay, &probe) == nil {
 			switch probe.Op {
-			case "subscribed", "unsubscribed", "replay_done", "replay_lost", "ping":
+			// "error" is a protocol-level notification (see the matching
+			// comment in live_test.go's recv) uncorrelated to any
+			// broadcast event, so it is skipped here too.
+			case "subscribed", "unsubscribed", "replay_done", "replay_lost", "ping", "error":
 				continue
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -268,7 +269,34 @@ const (
 	// per-resource edit lock. The client must open an edit session and
 	// pass its token as `edit_token` before retrying.
 	CommandErrorLocked = "locked"
+	// CommandErrorNotFound is returned when a command's target — a
+	// device, program, sysvar or other named entity — does not exist.
+	// Distinct from CommandErrorInternal so a client can tell a bad id
+	// apart from a genuine daemon fault instead of retrying or alerting
+	// on both alike.
+	CommandErrorNotFound = "not_found"
 )
+
+// classifyDomainErrorCode reports the CommandError code a domain-layer
+// failure should carry. Every not-found lookup in this package phrases
+// its error as "<subject> not found" (device, program, sysvar, custom/
+// calculated data point, …); recognizing that phrasing here — rather
+// than duplicating the check at each call site — lets a client
+// distinguish a bad id (CommandErrorNotFound) from a genuine daemon
+// fault (CommandErrorInternal), which the wire contract's error.code
+// exists to carry.
+func classifyDomainErrorCode(err error) string {
+	if strings.Contains(strings.ToLower(err.Error()), "not found") {
+		return CommandErrorNotFound
+	}
+	return CommandErrorInternal
+}
+
+// wrapDomainError classifies a domain-layer failure into a CommandError,
+// prefixed with op for log correlation.
+func wrapDomainError(op string, err error) *CommandError {
+	return NewCommandError(classifyDomainErrorCode(err), op+": "+err.Error())
+}
 
 // Router routes inbound `call` frames to a registered handler by
 // command name. Mirrors Home Assistant's `async_register_command`
@@ -420,7 +448,11 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}
-		res := Result{Error: NewCommandError(CommandErrorInternal, err.Error())}
+		// A handler that returns a raw (non-CommandError) error — most of
+		// the cdp.*/calc_dp.* lookups do — still deserves the not-found vs.
+		// internal-error distinction; classify it the same way
+		// wrapDomainError does for handlers that pre-wrap their own errors.
+		res := Result{Error: NewCommandError(classifyDomainErrorCode(err), err.Error())}
 		r.logOutcome(ctx, command, res, time.Since(start))
 		return res
 	}

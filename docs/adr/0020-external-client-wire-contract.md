@@ -234,3 +234,15 @@ Operators see no behaviour change. The role enforcement that the new
 `security:` blocks document was already in place via the router's
 `pr.With(op)` / `pr.With(admin)` middleware wraps — the OpenAPI
 annotation is documentation catching up with reality.
+
+## Update (0.61.3): Matter broadcasts aligned to the full-name `type` convention
+
+The "Naming consistencies introduced" section above documented Matter
+broadcasts as a deliberate asymmetry: `type` carried only the trailing
+segment after `matter.` (e.g. `"exposable_changed"`) while core
+broadcasts carried the full dotted name. 0.61.3 closed that gap —
+`internal/north/rest/handlers/matter_events.go` now sets `Type: topic`
+directly; the `typeFromTopic` helper this ADR cited no longer exists.
+Every broadcast, Matter included, now sets `type` to the full dotted
+name. See `docs/external-clients/topic-hierarchy.md` for the current
+client-facing statement.

@@ -336,22 +336,67 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("master_profiles.match", masterProfilesMatchHandler(cfg.MasterProfiles))
 	}
 	// --- Reports zweit ---
+	registerReportCommands(router, cfg)
+	if cfg.CentralLinks != nil {
+		// central.create_links / central.remove_links — toggle CCU
+		// click-event forwarding for a device's press-event channels.
+		// Mirrors Python create_central_links / remove_central_links.
+		router.Register("central.create_links", centralCreateLinksHandler(cfg.CentralLinks))
+		router.Register("central.remove_links", centralRemoveLinksHandler(cfg.CentralLinks))
+		router.Register("central.links_status", centralLinksStatusHandler(cfg.CentralLinks))
+	}
+	if cfg.SessionRecorder != nil {
+		// recording.start / recording.stop — toggle the diagnostic RPC
+		// session recorder. Mirrors Python record_session.
+		router.Register("recording.start", recordingStartHandler(cfg.SessionRecorder, cfg.RecordingAudit))
+		router.Register("recording.stop", recordingStopHandler(cfg.SessionRecorder, cfg.RecordingAudit))
+		router.Register("recording.status", recordingStatusHandler(cfg.SessionRecorder))
+	}
+}
+
+// registerReportCommands wires the read-oriented "reports" family
+// (change history, central info, CCU telemetry, incidents, service
+// messages, paramset copy/form-schema) split out of
+// [RegisterExtendedCommands] to keep that function under the linter's
+// length budget.
+//
+// Every provider-gated command below registers a stub (rather than
+// leaving the name unregistered) when its provider is nil, mirroring
+// the pattern in commands_missing.go: an unwired command that Dispatch
+// cannot find at all comes back as CommandErrorUnknownCommand, which
+// reads identically to a typo or a schema/router drift, even though the
+// command is real and merely undeployed in this build. A stub instead
+// answers CommandErrorNotImplemented and still shows up in
+// system.commands, so a client — or the schema's own catalogue — can
+// distinguish "not available in this deployment" from "not a command".
+func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if cfg.ChangeHistory != nil {
 		router.Register("change_history.list", changeHistoryListHandler(cfg.ChangeHistory))
+	} else {
+		router.Register("change_history.list", stubHandler("ws: change_history.list: change-history provider not configured in this deployment"))
 	}
 	if cfg.ChangeHistoryClearer != nil {
 		// change_history.clear — truncate the persisted log.
 		router.Register("change_history.clear", changeHistoryClearHandler(cfg.ChangeHistoryClearer))
+	} else {
+		router.Register("change_history.clear", stubHandler("ws: change_history.clear: change-history provider not configured in this deployment"))
 	}
 	if cfg.Central != nil {
 		router.Register("central.info", centralInfoHandler(cfg.Central))
 		router.Register("central.connectivity", centralConnectivityHandler(cfg.Central))
 		router.Register("central.system_health", centralSystemHealthHandler(cfg.Central))
 		router.Register("central.reconcile", centralReconcileHandler(cfg.Central))
+	} else {
+		router.Register("central.info", stubHandler("ws: central.info: central-info provider not configured in this deployment"))
+		router.Register("central.connectivity", stubHandler("ws: central.connectivity: central-info provider not configured in this deployment"))
+		router.Register("central.system_health", stubHandler("ws: central.system_health: central-info provider not configured in this deployment"))
+		router.Register("central.reconcile", stubHandler("ws: central.reconcile: central-info provider not configured in this deployment"))
 	}
 	if cfg.ThrottleStats != nil {
 		// ccu.throttle_stats — per-interface command-throttle diagnostics.
 		router.Register("ccu.throttle_stats", ccuThrottleStatsHandler(cfg.ThrottleStats))
+	} else {
+		router.Register("ccu.throttle_stats", stubHandler("ws: ccu.throttle_stats: throttle-stats provider not configured in this deployment"))
 	}
 	if cfg.CacheClearer != nil {
 		// ccu.cache_clear — clear all in-memory caches.
@@ -360,6 +405,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if cfg.DeviceStatistics != nil {
 		// ccu.device_statistics — per-interface device telemetry.
 		router.Register("ccu.device_statistics", ccuDeviceStatisticsHandler(cfg.DeviceStatistics))
+	} else {
+		router.Register("ccu.device_statistics", stubHandler("ws: ccu.device_statistics: device-statistics provider not configured in this deployment"))
 	}
 	if cfg.FirmwareRefresher != nil {
 		// firmware.refresh — force-refresh firmware cache from CCU.
@@ -374,6 +421,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if cfg.IncidentClearer != nil {
 		// incidents.clear — clear the incident store.
 		router.Register("incidents.clear", incidentsClearHandler(cfg.IncidentClearer))
+	} else {
+		router.Register("incidents.clear", stubHandler("ws: incidents.clear: incident-clearer provider not configured in this deployment"))
 	}
 	if cfg.IncidentLister != nil {
 		// incidents.list and its alias incidents.get both map to the same
@@ -381,6 +430,9 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		h := incidentsListHandler(cfg.IncidentLister)
 		router.Register("incidents.list", h)
 		router.Register("incidents.get", h)
+	} else {
+		router.Register("incidents.list", stubHandler("ws: incidents.list: incident-lister provider not configured in this deployment"))
+		router.Register("incidents.get", stubHandler("ws: incidents.get: incident-lister provider not configured in this deployment"))
 	}
 	if cfg.Groups != nil {
 		// groups.list — read-only heating-group listing (one entry per
@@ -400,11 +452,17 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("service_messages.disable", serviceMessagesDisableHandler(cfg.ExtendedHub))
 		router.Register("service_messages.suppressed", serviceMessagesSuppressedHandler(cfg.ExtendedHub))
 		router.Register("service_messages.unsuppress", serviceMessagesUnsuppressHandler(cfg.ExtendedHub))
+	} else {
+		router.Register("service_messages.disable", stubHandler("ws: service_messages.disable: extended-hub provider not configured in this deployment"))
+		router.Register("service_messages.suppressed", stubHandler("ws: service_messages.suppressed: extended-hub provider not configured in this deployment"))
+		router.Register("service_messages.unsuppress", stubHandler("ws: service_messages.unsuppress: extended-hub provider not configured in this deployment"))
 	}
 	if cfg.UISchema != nil {
 		// paramset.form_schema — full UI schema for one channel/paramset.
 		// Mirrors Python `ws_get_form_schema` (websocket_api.py:252).
 		router.Register("paramset.form_schema", paramsetFormSchemaHandler(cfg.UISchema))
+	} else {
+		router.Register("paramset.form_schema", stubHandler("ws: paramset.form_schema: UI-schema provider not configured in this deployment"))
 	}
 	if cfg.ParamsetReader != nil && cfg.Paramsets != nil {
 		// paramset.copy — generic paramset-to-paramset copy between
@@ -412,21 +470,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		// from the source channel and writes the writable subset to the
 		// target. Mirrors Python `ws_copy_paramset` (websocket_api.py:916).
 		router.Register("paramset.copy", paramsetCopyHandler(cfg.ParamsetReader, cfg.Paramsets))
-	}
-	if cfg.CentralLinks != nil {
-		// central.create_links / central.remove_links — toggle CCU
-		// click-event forwarding for a device's press-event channels.
-		// Mirrors Python create_central_links / remove_central_links.
-		router.Register("central.create_links", centralCreateLinksHandler(cfg.CentralLinks))
-		router.Register("central.remove_links", centralRemoveLinksHandler(cfg.CentralLinks))
-		router.Register("central.links_status", centralLinksStatusHandler(cfg.CentralLinks))
-	}
-	if cfg.SessionRecorder != nil {
-		// recording.start / recording.stop — toggle the diagnostic RPC
-		// session recorder. Mirrors Python record_session.
-		router.Register("recording.start", recordingStartHandler(cfg.SessionRecorder, cfg.RecordingAudit))
-		router.Register("recording.stop", recordingStopHandler(cfg.SessionRecorder, cfg.RecordingAudit))
-		router.Register("recording.status", recordingStatusHandler(cfg.SessionRecorder))
+	} else {
+		router.Register("paramset.copy", stubHandler("ws: paramset.copy: paramset-reader provider not configured in this deployment"))
 	}
 }
 

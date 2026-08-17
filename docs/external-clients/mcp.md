@@ -156,7 +156,9 @@ set — the same multi-CCU rule the rest of the surface follows.
 | Tool | Arguments | Effect |
 | --- | --- | --- |
 | `set_datapoint` | `central_name`, `address` (channel), `parameter` (e.g. `STATE`, `LEVEL`), `value` | Writes a value to a device data point. Recorded to the audit log with a `via mcp` note. |
-| `write_paramset` | `central_name`, `address` (channel), `key` (`MASTER`/`VALUES`), `values` (map) | Writes a paramset. Recorded to the audit log. |
+| `write_paramset` | `central_name`, `address` (channel), `key` (`MASTER`/`VALUES`), `values` (map), `edit_token?` | Writes a paramset. Recorded to the audit log. A `MASTER` write requires `edit_token` from `open_edit_session` — see the note below. |
+| `open_edit_session` | `address` (channel), `key` (`MASTER`) | Acquires the per-channel edit lock a `MASTER` `write_paramset` call needs. Returns `token` (pass as `edit_token`) and `expires`. Fails when another session already holds the lock. Registered only when the daemon's edit-lock registry is wired. |
+| `close_edit_session` | `address` (channel), `key` (`MASTER`), `edit_token` | Releases a lock `open_edit_session` opened. Registered only when the daemon's edit-lock registry is wired. |
 | `trigger_program` | `central_name`, `program_id` (CCU ISE object id) | Runs a CCU automation program. Recorded to the audit log. |
 | `arm_alarm_zone` | `zone_id`, `mode` (`perimeter`, `full`, `night`, `vacation`, `custom`) | Arms one alarm zone. Fails when a sensor blocks the arm — read `list_alarm_zones` first. |
 | `disarm_alarm_zone` | `zone_id` | Disarms one alarm zone. Zones whose policy requires a disarm code cannot be disarmed from here. |
@@ -168,6 +170,12 @@ Notes:
   the REST API uses for user-initiated writes.
 - `LINK` paramsets are intentionally **not** exposed (they need a peer
   address and a different tool shape). Only `MASTER` and `VALUES`.
+- A `MASTER` `write_paramset` call is a configuration change and is
+  gated behind the same per-channel edit lock REST and WebSocket
+  clients use: call `open_edit_session` first, pass the returned
+  `token` as `write_paramset`'s `edit_token`, and call
+  `close_edit_session` when done (or let the lock expire on its own).
+  `VALUES` writes are ungated and need no token.
 - Channel addresses use the `<device>:<channel>` form (e.g.
   `0001D3C99C1234:4`). Device-level addresses (no `:channel`) are used
   by `get_device`.
@@ -260,12 +268,14 @@ The server is designed to be **safe to enable**:
 1. `enabled: true` alone → **read-only**. The agent can inventory
    devices, read paramsets, inspect health, and read the audit log, but
    cannot change anything on the CCU.
-2. `allow_writes: true` *in addition* → the six write tools are
-   registered. This is a **separate, deliberate decision** — enabling
-   MCP never silently grants write access.
+2. `allow_writes: true` *in addition* → the write tools of §2.2 are
+   registered (each still gated on its own dependency being wired).
+   This is a **separate, deliberate decision** — enabling MCP never
+   silently grants write access.
 
-   Three of those six act on devices (`set_datapoint`, `write_paramset`,
-   `trigger_program`); the other three act on the **alarm system**
+   Most of those tools act on devices (`set_datapoint`, `write_paramset`
+   plus its `open_edit_session` / `close_edit_session` lock pair,
+   `trigger_program`); the rest act on the **alarm system**
    (`arm_alarm_zone`, `disarm_alarm_zone`, `reset_motion`). There is no
    separate opt-in for the alarm tier — the one flag grants both, so an
    agent that can switch a lamp can also disarm a zone. Zones whose
@@ -352,10 +362,12 @@ north-bound.
 > *"Set the staircase light's on-time to 90 seconds."*
 
 `read_paramset` (`MASTER`) to discover the current values and parameter
-names → the agent proposes the change → `write_paramset` (`MASTER`)
-with just the changed keys. Because the write goes through the same
-validated paramset path as REST, invalid values are rejected at the
-boundary, and the change lands in the audit log.
+names → the agent proposes the change → `open_edit_session` for the
+channel to obtain an `edit_token` → `write_paramset` (`MASTER`) with
+just the changed keys and that token → `close_edit_session` once done.
+Because the write goes through the same validated paramset path as
+REST, invalid values are rejected at the boundary, and the change lands
+in the audit log.
 
 ### 5.8 Cross-CCU operations (multi-CCU)
 

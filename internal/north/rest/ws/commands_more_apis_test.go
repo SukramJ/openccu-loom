@@ -196,22 +196,62 @@ func TestParamsetCopy_RequiresAddresses(t *testing.T) {
 	}
 }
 
-func TestParamsetCopy_NotRegisteredWhenReaderOrWriterNil(t *testing.T) {
+// TestParamsetCopy_StubbedWhenReaderOrWriterNil verifies that
+// paramset.copy stays registered — and therefore visible in
+// system.commands — even when its provider is only half-wired,
+// answering CommandErrorNotImplemented rather than
+// CommandErrorUnknownCommand. A command a client cannot tell apart
+// from a typo (the two error codes read identically as "no such
+// command") hides an availability gap the schema declares as real;
+// see the sibling stub commands in commands_missing.go for the same
+// convention.
+func TestParamsetCopy_StubbedWhenReaderOrWriterNil(t *testing.T) {
 	rw := &stubParamsetReaderWriter{}
 
-	// Only ParamsetReader wired, no ParamsetWriter → not registered.
+	// Only ParamsetReader wired, no ParamsetWriter → stubbed, not absent.
 	r1 := NewRouter()
 	RegisterExtendedCommands(r1, ExtendedCommandsConfig{ParamsetReader: rw})
 	raw, _ := json.Marshal(map[string]any{"source_channel_address": "A:1", "target_channel_address": "B:1"})
-	if res := r1.Dispatch(opCtx(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
-		t.Fatal("paramset.copy should not be registered without both reader and writer")
+	if res := r1.Dispatch(opCtx(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorNotImplemented {
+		t.Fatalf("paramset.copy without a writer should be a stub (not_implemented), got %+v", res.Error)
 	}
 
-	// Only ParamsetWriter wired, no ParamsetReader → not registered.
+	// Only ParamsetWriter wired, no ParamsetReader → stubbed, not absent.
 	r2 := NewRouter()
 	RegisterExtendedCommands(r2, ExtendedCommandsConfig{Paramsets: rw})
-	if res := r2.Dispatch(opCtx(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
-		t.Fatal("paramset.copy should not be registered without both reader and writer")
+	if res := r2.Dispatch(opCtx(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorNotImplemented {
+		t.Fatalf("paramset.copy without a reader should be a stub (not_implemented), got %+v", res.Error)
+	}
+}
+
+// TestExtendedCommandsStubEveryOptionalProviderCommandWhenUnwired pins
+// the fix for the set of RegisterExtendedCommands commands whose
+// domain provider is optional (nil in a deployment that does not wire
+// it): each one must stay registered — visible in system.commands,
+// dispatchable — and answer CommandErrorNotImplemented rather than
+// disappearing from the router and being indistinguishable from a
+// misspelled command name (CommandErrorUnknownCommand).
+func TestExtendedCommandsStubEveryOptionalProviderCommandWhenUnwired(t *testing.T) {
+	t.Parallel()
+	commands := []string{
+		"change_history.list", "change_history.clear",
+		"central.info", "central.connectivity", "central.system_health", "central.reconcile",
+		"ccu.throttle_stats", "ccu.device_statistics",
+		"incidents.list", "incidents.get", "incidents.clear",
+		"service_messages.disable", "service_messages.suppressed", "service_messages.unsuppress",
+		"paramset.form_schema", "paramset.copy",
+	}
+	r := NewRouter()
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{})
+	for _, cmd := range commands {
+		res := r.Dispatch(opCtx(), cmd, nil)
+		if res.Error == nil {
+			t.Errorf("%s: expected an error with no provider wired, got a result", cmd)
+			continue
+		}
+		if res.Error.Code != CommandErrorNotImplemented {
+			t.Errorf("%s: code=%q, want %q (stub, not unregistered)", cmd, res.Error.Code, CommandErrorNotImplemented)
+		}
 	}
 }
 

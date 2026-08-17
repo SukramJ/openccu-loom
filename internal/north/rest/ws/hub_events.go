@@ -486,6 +486,17 @@ func (s *HubEventsSubscriber) hubModelSubscriptions(centralName string, hm *hubm
 	}
 	if hm.Metrics != nil {
 		unsubs = append(unsubs, hm.Metrics.OnAny(func(sample hubmodel.MetricSample) {
+			// A negative system_health is the not-ready sentinel
+			// (hubmodel.MetricSystemHealthUnknown): the central is FAILED, so
+			// the score is unknown, not a real percentage. REST's config
+			// snapshot (system_hub.go) omits the field and the hub data-point
+			// projection (hub_data_points.go) skips the metric entirely for
+			// the same reason; this broadcast must match or a client mirroring
+			// hub.metrics_changed onto a gauge renders "-1 %" during an outage
+			// instead of "unknown".
+			if sample.Kind == hubmodel.MetricSystemHealth && sample.Value < 0 {
+				return
+			}
 			s.hub.Publish(Event{
 				Topic: MetricsTopic(centralName),
 				Type:  eventTypeMetricsChanged,

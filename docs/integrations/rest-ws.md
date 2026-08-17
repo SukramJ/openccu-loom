@@ -87,7 +87,7 @@ Connect a WebSocket to:
 ws://<host>:8119/api/v1/events
 ```
 
-This is one multiplexed channel. The same connection carries command replies and topic broadcasts. The schema in [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) defines 118 entries — 95 invokable commands + 23 server-pushed broadcasts (`jq '.commands | length'` / `jq '[.commands[] | select(.kind=="broadcast")] | length'`).
+This is one multiplexed channel. The same connection carries command replies and topic broadcasts. The schema in [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) defines both invokable commands and server-pushed broadcasts in one `commands` array; run these against your checkout for the current counts rather than trusting a number here, since the catalogue grows every release: `jq '[.commands[] | select(.kind!="broadcast")] | length' assets/wsapi.json` for invokable commands, `jq '[.commands[] | select(.kind=="broadcast")] | length' assets/wsapi.json` for broadcasts.
 
 ### Envelope
 
