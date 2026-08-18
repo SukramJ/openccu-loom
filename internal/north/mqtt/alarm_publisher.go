@@ -678,23 +678,22 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 	return b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
 }
 
-// PublishAlarmState publishes the retained plain HA state token for an
-// zone (or the master panel). Returns nil silently when the raw plane is
-// disabled, matching every other raw-plane publisher on [Bridge].
+// PublishAlarmState publishes the retained plain HA state token for a
+// zone (or the master panel).
+//
+// It is deliberately NOT gated on the raw plane: this topic is the
+// `state_topic` the zone's own discovery payload names, so silencing it
+// while discovery still declares it leaves every alarm entity in Home
+// Assistant present and permanently unknown — declared and published have
+// to stay the same set.
 func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) error {
-	if !b.cfg.RawEnabled {
-		return nil
-	}
 	return b.client.Publish(ctx, topic, []byte(token), b.cfg.QoS.State, true)
 }
 
 // PublishAlarmAvailability publishes the retained per-panel availability
-// flag (online/offline). Returns nil silently when the raw plane is
-// disabled, matching every other raw-plane publisher on [Bridge].
+// flag (online/offline). Not gated on the raw plane, for the same reason
+// as [Bridge.PublishAlarmState]: the discovery payload names this topic.
 func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, online bool) error {
-	if !b.cfg.RawEnabled {
-		return nil
-	}
 	body := []byte("offline")
 	if online {
 		body = []byte("online")
@@ -703,12 +702,9 @@ func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, onl
 }
 
 // RetractAlarmTopic clears a retained alarm state or availability topic.
-// Returns nil silently when the raw plane is disabled — there is nothing
-// to retract on a plane that never published.
+// Never gated: the topics it clears are the ones discovery declares, and a
+// retraction that is skipped leaves a stale retained value behind forever.
 func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
-	if !b.cfg.RawEnabled {
-		return nil
-	}
 	return b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
 }
 

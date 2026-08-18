@@ -11,25 +11,20 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// TestSecurityPlaneRawTopicsRespectRawEnabled covers the single funnel
-// [SecurityMQTTPublisher.publish] every raw security topic goes through
-// (retained state, class/zone states, the plane's own availability, and
-// non-retained event/fault reports): with the raw plane disabled none of
-// them may reach the broker, matching every other raw-plane publisher on
-// [Bridge] (e.g. [Bridge.PublishAvailability], which the security
-// discovery entities' availability list itself depends on — see
-// [securityAvailability]).
+// TestSecurityPlaneFeedsTheEntitiesItDeclares pins the security plane
+// against the defect class this project keeps rediscovering: an entity that
+// Home Assistant creates from a discovery config and then never receives a
+// value for.
 //
-// Discovery configs are unaffected: [SecurityMQTTPublisher.declareEntities]
-// publishes them through [Bridge.PublishAlarmDiscovery], which gates only
-// on HADiscoveryEnabled, so an operator who disables raw topics but keeps
-// discovery on still gets the entities declared — the same split the rest
-// of the bridge already applies.
-func TestSecurityPlaneRawTopicsRespectRawEnabled(t *testing.T) {
+// Every topic the funnel writes under `<base>/security/` is a `state_topic`
+// named by one of those configs, so the raw-plane switch must not silence
+// them. Gated, the operator gets the full set of Security & Safety entities,
+// all of them permanently unknown — which is strictly worse than either
+// having them work or not having them at all.
+func TestSecurityPlaneFeedsTheEntitiesItDeclares(t *testing.T) {
 	t.Parallel()
 	const base = "openccu-loom"
 	obs := newObservedPlane()
@@ -48,27 +43,19 @@ func TestSecurityPlaneRawTopicsRespectRawEnabled(t *testing.T) {
 	t.Cleanup(p.Stop)
 
 	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
-	events.Publish(bus, hmevent.SecurityNotificationEvent{
-		Base:       hmevent.NewBaseAt(time.Now()),
-		Class:      hmenum.SecurityClassSmoke,
-		Severity:   hmenum.SecuritySeverityCritical,
-		Subject:    "Rauch",
-		Message:    "Rauch erkannt",
-		AtMS:       time.Now().UnixMilli(),
-		Retainable: true,
-	})
 	obs.settle(t)
 
-	rawPrefix := base + "/security/"
+	statePrefix := base + "/security/"
+	fed := 0
 	for topic := range obs.publishedTopics() {
-		if strings.HasPrefix(topic, rawPrefix) {
-			t.Errorf("raw_enabled=false: security plane published raw topic %q", topic)
+		if strings.HasPrefix(topic, statePrefix) {
+			fed++
 		}
 	}
+	if fed == 0 {
+		t.Error("raw_enabled=false: the security plane declared entities but fed none of them")
+	}
 
-	// Discovery stays on: declareEntities' own funnel is unaffected by the
-	// raw-plane gate. publishedTopics() excludes discovery config topics by
-	// design, so the raw records are checked directly.
 	sawDiscovery := false
 	for _, rec := range obs.records() {
 		if isDiscoveryConfigTopic(rec.topic) {
@@ -77,6 +64,6 @@ func TestSecurityPlaneRawTopicsRespectRawEnabled(t *testing.T) {
 		}
 	}
 	if !sawDiscovery {
-		t.Fatal("raw_enabled=false, discovery_enabled=true: expected the security plane to still declare its entities")
+		t.Fatal("expected the security plane to declare its entities")
 	}
 }

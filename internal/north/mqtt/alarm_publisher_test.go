@@ -886,16 +886,15 @@ func TestAlarmPlaneDoesNotDeclareWhenADiscoveryPublishFailed(t *testing.T) {
 	}
 }
 
-// TestAlarmRawPlanePublishersRespectRawEnabled covers the four
-// Bridge-level alarm publish primitives that back
-// [AlarmMQTTPublisher.reconcile]/[AlarmMQTTPublisher.retractPanel]/
-// [AlarmMQTTPublisher.publishEventMsg]: with the raw plane disabled none
-// of them may reach the broker, matching every other raw-plane
-// publisher on [Bridge] (see e.g. [Bridge.PublishSourceState]). Without
-// the gate an operator who disables `north.mqtt.raw_enabled` still sees
-// the alarm panel's retained state/availability/event topics on the
-// broker.
-func TestAlarmRawPlanePublishersRespectRawEnabled(t *testing.T) {
+// TestAlarmPlaneGatesOnlyTheTopicDiscoveryDoesNotDeclare pins which half
+// of the alarm plane the raw switch may silence.
+//
+// The zone's discovery payload names its state and availability topics, so
+// those must publish whatever `north.mqtt.raw_enabled` says: gated, Home
+// Assistant keeps the entity the config created and never receives a value
+// for it, which is worse than either extreme. The event topic appears in no
+// discovery payload — it is raw-plane traffic and the switch owns it.
+func TestAlarmPlaneGatesOnlyTheTopicDiscoveryDoesNotDeclare(t *testing.T) {
 	t.Parallel()
 	b, pub := newTestBridge(t, func(c *BridgeConfig) { c.RawEnabled = false })
 	ctx := context.Background()
@@ -909,20 +908,22 @@ func TestAlarmRawPlanePublishersRespectRawEnabled(t *testing.T) {
 	if err := b.RetractAlarmTopic(ctx, "openccu-loom/alarm/eg/state"); err != nil {
 		t.Fatalf("RetractAlarmTopic: %v", err)
 	}
+	if len(pub.sent) != 3 {
+		t.Fatalf("raw_enabled=false: the discovery-declared alarm topics must still publish, got %d writes: %+v", len(pub.sent), pub.sent)
+	}
+
 	if err := b.PublishAlarmEvent(ctx, "openccu-loom/alarm/eg/event", []byte(`{}`)); err != nil {
 		t.Fatalf("PublishAlarmEvent: %v", err)
 	}
-	if len(pub.sent) != 0 {
-		t.Fatalf("raw_enabled=false: expected no broker writes from the alarm raw-plane publishers, got %d: %+v", len(pub.sent), pub.sent)
+	if len(pub.sent) != 3 {
+		t.Fatalf("raw_enabled=false: the event topic is raw-plane traffic and must stay silent, got %d writes: %+v", len(pub.sent), pub.sent)
 	}
 
-	// The gate is specific to RawEnabled, not a blanket no-op: with the
-	// raw plane enabled the same calls must still reach the broker.
 	b2, pub2 := newTestBridge(t)
-	if err := b2.PublishAlarmState(ctx, "openccu-loom/alarm/eg/state", "armed_home"); err != nil {
-		t.Fatalf("PublishAlarmState: %v", err)
+	if err := b2.PublishAlarmEvent(ctx, "openccu-loom/alarm/eg/event", []byte(`{}`)); err != nil {
+		t.Fatalf("PublishAlarmEvent: %v", err)
 	}
 	if len(pub2.sent) != 1 {
-		t.Fatalf("raw_enabled=true: expected the state publish to reach the broker, got %d writes", len(pub2.sent))
+		t.Fatalf("raw_enabled=true: the event topic must reach the broker, got %d writes", len(pub2.sent))
 	}
 }

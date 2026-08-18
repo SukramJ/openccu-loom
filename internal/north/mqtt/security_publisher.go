@@ -177,12 +177,10 @@ func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 	if b == nil {
 		return
 	}
-	// The security plane has no discovery-only fast path — every message
-	// on this topic funnel is a raw-plane write, so this is the one gate
-	// the whole plane needs, matching every raw-plane publisher on [Bridge].
-	if !b.cfg.RawEnabled {
-		return
-	}
+	// Deliberately ungated. The funnel carries the very topics the security
+	// discovery payloads name as their `state_topic`, so silencing it while
+	// discovery still declares them leaves every Security & Safety entity
+	// present in Home Assistant and permanently unknown.
 	qos := b.cfg.QoS.State
 	if !m.retained {
 		// An event is a moment, not a state: at-most-once delivery is
