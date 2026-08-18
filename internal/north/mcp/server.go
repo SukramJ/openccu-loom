@@ -99,6 +99,7 @@ type EditLockVerifier interface {
 // identical value it already passes as EditLocks, so no extra wiring is
 // needed to light this up. A nil manager disables both the gate and the
 // two session tools (test-only escape hatch).
+// loom:reachable:reason="the declared type of Deps.EditLocks, which the composition root fills at cmd/openccu-loom/daemon_rest_mount.go with the shared *handlers.EditSessions registry; an interface reached through its implementation, which the analyzer's type heuristic cannot follow"
 type EditLockManager interface {
 	EditLockVerifier
 	// Open acquires the lock for key on behalf of subject. The second

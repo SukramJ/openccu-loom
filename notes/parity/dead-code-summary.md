@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 23304d56
-HEAD: 23304d56
+Generated: 14852e7f
+HEAD: 14852e7f
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29256 |
-| Reachable | 5092 |
-| Whitelisted | 21140 |
-| **Unreachable** | **3024** |
+| Total Exported | 29523 |
+| Reachable | 5106 |
+| Whitelisted | 21395 |
+| **Unreachable** | **3022** |
 
 ## Top-20 Packages by Dead Code
 
@@ -135,7 +135,7 @@ HEAD: 23304d56
 | internal/channelflags | 0 | 2 | 0 |
 | internal/client | 0 | 28 | 8 |
 | internal/client/observer | 0 | 3 | 0 |
-| internal/client/transport/jsonrpc | 0 | 13 | 0 |
+| internal/client/transport/jsonrpc | 0 | 11 | 0 |
 | internal/clock | 0 | 5 | 0 |
 | internal/configstore | 0 | 17 | 0 |
 | internal/configui | 0 | 16 | 0 |

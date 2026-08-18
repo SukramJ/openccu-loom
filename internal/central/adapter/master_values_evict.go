@@ -28,6 +28,7 @@ const masterValuesEvictTimeout = 30 * time.Second
 // since the CCU keeps the serial as the address — was seeded straight
 // from the previous pairing's stale configuration instead of the CCU's
 // current one.
+// loom:reachable:reason="the return type of WireMasterValuesEviction, which the daemon calls at cmd/openccu-loom/daemon_southbound.go to arm the eviction; the analyzer does not count a type reached only as a function result"
 type MasterValuesEvictor struct {
 	store  *sqlite.MasterValuesStore
 	logger *slog.Logger

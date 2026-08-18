@@ -81,6 +81,7 @@ type ACLLister interface {
 //
 // Production never wires this. Tests and local development do, where the
 // alternative is that no request at all is answered.
+// loom:reachable:reason="the documented opt-out for a deployment that deliberately runs the Matter bridge without stored access-control entries, selected by an operator rather than by the daemon; nothing in production selects it, which is the point — access control now fails closed by default"
 type UnenforcedACL struct{}
 
 // ListACL returns one wildcard CASE entry at Administer privilege: no
