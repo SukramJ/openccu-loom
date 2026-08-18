@@ -63,6 +63,21 @@ still open, trust this file plus `CHANGELOG.md`.
   `by_design.md` entry recording the divergence.
   *Plan: [`notes/plans/matter-case-resume-session-id.md`](matter-case-resume-session-id.md).*
 
+### Device model
+
+- **Custom-DP fields still bound by a fixed parameter name.** A custom data
+  point resolves the wire fields it composes by a constant parameter on its own
+  channel, while the device profile's channel-group schema states both the
+  parameter and the channel per device family. 0.63.1 moved the climate family
+  onto the schema; three further families are confirmed broken by the same
+  mechanism, each measured against the device descriptions a real CCU sends:
+  HM-LC-JaX materialises without its slat axis (`LEVEL_SLATS`, not `LEVEL_2`),
+  HmIP-DLD never reports a jammed motor (`ERROR_JAMMED` sits on the channel
+  before the lock), and HmIP locks never report a direction (`ACTIVITY_STATE`,
+  not `DIRECTION`). *Effort: M. Priority: medium — each is a feature that is
+  silently absent, not a crash.*
+  *Plan: [`notes/plans/custom-dp-profile-schema-binding.md`](custom-dp-profile-schema-binding.md).*
+
 ### REST API
 
 - **Two pagination envelopes across list endpoints.** `/devices` returns
