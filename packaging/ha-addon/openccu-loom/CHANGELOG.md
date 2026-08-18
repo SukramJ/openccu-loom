@@ -6,6 +6,7 @@ The smaller findings behind the 0.62.0 audit fixes. What you will notice:
 
 - **Channel configuration saves again.** Almost every parameter the
   configuration dialog offered was refused with "parameter hidden".
+- **Percentages show the real number again.** A dimmer at 42 % was displayed as 0.42 % in the web UI — brightness, blind and slat positions, colour saturation and similar readings were all a hundred times too small. Home Assistant was never affected; this was the daemon's own interface.
 - **A CCU backup is no longer created twice.** It also stops leaving a multi-megabyte leftover file on the CCU, and takes roughly half as long.
 - **Downloaded CCU backups no longer end up inside the CCU's own backups.** Installed as CCU add-on software they were stored in a directory the CCU packs into every backup, so each backup carried all earlier ones and the storage filled up. They now go where the CCU keeps its own backups, or, failing that, are excluded from them.
 - **A configuration entity keeps the value you set** instead of snapping back to

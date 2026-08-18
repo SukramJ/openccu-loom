@@ -20,11 +20,18 @@ the OpenAPI 3.0 spelling inside a 3.1 document, where it has no meaning. A
 client that generated code from the old schema gets different types out of the
 new one, which is exactly what a major version is for. Everything else in the
 contract is additive: new MCP tools, argument schemas for nineteen WebSocket
-commands, and a few response fields — among them `filename` on a backup entry,
-which is what carries the minor step to 7.1.0.
+commands, and a few response fields — among them `filename` on a backup entry
+and `display_value` on a data point, which carry the minor steps to 7.2.0.
 
 ### Added
 
+- A data point now reports `display_value` — its value expressed in the unit it
+  names, i.e. `value * multiplier` — on the REST summary, the WebSocket
+  value-changed push and the channel ui-schema. `value` keeps its meaning: it is
+  the raw CCU wire value and the write path sends it back unchanged. Render
+  `display_value` when present and `value` otherwise; no client needs to do the
+  arithmetic, and the two planes are guaranteed to agree so a reading seeded
+  from REST does not jump on the first push.
 - A backup entry now carries `filename`, the archive's name in the CCU's own
   convention (`<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`),
   recorded when the archive was taken. The download is served under it, and a
@@ -49,6 +56,17 @@ which is what carries the minor step to 7.1.0.
 
 ### Fixed
 
+- Values whose CCU unit disagrees with the wire scale are no longer rendered a
+  hundred times too small. A dimmer at 42 % arrives as `0.42` with unit `%` —
+  the daemon reported the converting factor and expected every consumer to
+  apply it, and none did. 499 visible data points across the fleet are affected
+  (LEVEL, LEVEL_REAL, SATURATION, LEVEL_2 and friends). The conversion now
+  happens once, in the north-bound projection; MQTT already did it in its
+  discovery templates and is unchanged.
+- `TIME_OF_OPERATION` reports days, the unit its factor converts into, instead
+  of the CCU's seconds. The two disagreed, so a consumer applying the factor
+  showed a day count labelled `s`. A guard now fails the build for any
+  multiplier whose declared unit does not match what the daemon reports.
 - Downloaded CCU archives no longer end up inside the CCU's own backups
   ([#584](https://github.com/SukramJ/openccu-loom/issues/584)). Installed as CCU
   add-on software the daemon kept them under `/usr/local/addons/`, which is
