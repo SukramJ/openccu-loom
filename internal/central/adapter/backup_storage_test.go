@@ -56,14 +56,15 @@ func validBackupArchive(t *testing.T) string {
 // ---------------------------------------------------------------------------
 
 type stubBackupStorage struct {
-	entries   []hmapi.BackupEntry
-	content   map[string]string // id → raw content
-	openErr   error
-	saveErr   error
-	deleteErr error
-	saved     map[string][]byte // id → saved bytes; populated by Save
-	deleted   []string          // ids passed to Delete, in call order
-	mu        sync.Mutex
+	entries    []hmapi.BackupEntry
+	content    map[string]string // id → raw content
+	openErr    error
+	saveErr    error
+	deleteErr  error
+	saved      map[string][]byte // id → saved bytes; populated by Save
+	savedNames map[string]string // id → display name passed to Save
+	deleted    []string          // ids passed to Delete, in call order
+	mu         sync.Mutex
 }
 
 func (s *stubBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, error) {
@@ -100,9 +101,9 @@ func (s *stubBackupStorage) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-// Save implements [BackupStorage]. Records the payload in s.saved and returns
-// s.saveErr (nil by default).
-func (s *stubBackupStorage) Save(_ context.Context, id string, data []byte) error {
+// Save implements [BackupStorage]. Records the payload in s.saved and the
+// display name in s.savedNames, and returns s.saveErr (nil by default).
+func (s *stubBackupStorage) Save(_ context.Context, id, filename string, data []byte) error {
 	if s.saveErr != nil {
 		return s.saveErr
 	}
@@ -111,7 +112,11 @@ func (s *stubBackupStorage) Save(_ context.Context, id string, data []byte) erro
 	if s.saved == nil {
 		s.saved = make(map[string][]byte)
 	}
+	if s.savedNames == nil {
+		s.savedNames = make(map[string]string)
+	}
 	s.saved[id] = data
+	s.savedNames[id] = filename
 	return nil
 }
 
@@ -336,6 +341,128 @@ func TestNewFilesystemBackupStorageCreatesDir(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// FilesystemBackupStorage — .nobackup exclusion marker
+// ---------------------------------------------------------------------------
+
+// TestNewFilesystemBackupStorageWritesNoBackupTagForFreshDir verifies that
+// constructing storage over a directory NewFilesystemBackupStorage itself
+// creates also drops the CCU's --exclude-tag=.nobackup marker into it.
+func TestNewFilesystemBackupStorageWritesNoBackupTagForFreshDir(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	dir := filepath.Join(base, "fresh")
+
+	if _, err := NewFilesystemBackupStorage(dir); err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, NoBackupTagName)); err != nil {
+		t.Fatalf("expected %s in a freshly created directory: %v", NoBackupTagName, err)
+	}
+}
+
+// TestNewFilesystemBackupStorageWritesNoBackupTagForExistingDir verifies the
+// marker is also dropped into a directory that already existed before
+// construction — the tag must not depend on this daemon having created the
+// directory itself (e.g. an operator-provided storage path reused across
+// restarts).
+func TestNewFilesystemBackupStorageWritesNoBackupTagForExistingDir(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	if _, err := NewFilesystemBackupStorage(dir); err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, NoBackupTagName)); err != nil {
+		t.Fatalf("expected %s in a pre-existing directory: %v", NoBackupTagName, err)
+	}
+}
+
+// TestNewFilesystemBackupStorageDoesNotTruncateExistingNoBackupTag verifies
+// that a marker already carrying content survives construction untouched —
+// the helper returns early once the file is present rather than reopening
+// it and truncating it.
+func TestNewFilesystemBackupStorageDoesNotTruncateExistingNoBackupTag(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	want := []byte("pre-existing marker content")
+	if err := os.WriteFile(filepath.Join(dir, NoBackupTagName), want, 0o640); err != nil {
+		t.Fatalf("seed marker: %v", err)
+	}
+
+	if _, err := NewFilesystemBackupStorage(dir); err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, NoBackupTagName))
+	if err != nil {
+		t.Fatalf("read marker: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("marker content = %q, want untouched %q", got, want)
+	}
+}
+
+// TestFilesystemBackupStorageListNeverReportsNoBackupTag verifies the
+// exclusion marker never surfaces as a backup entry, and that it survives a
+// full Save/Delete cycle of an actual archive alongside it — Save's
+// scratch-file dance and Delete's removal must never touch anything but the
+// archive's own path.
+func TestFilesystemBackupStorageListNeverReportsNoBackupTag(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected empty list before any Save, got %+v", list)
+	}
+
+	const id = "alpha-20260701-100000"
+	if err := st.Save(ctx, id, "", []byte("payload")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	list, err = st.List(ctx)
+	if err != nil {
+		t.Fatalf("list after save: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != id {
+		t.Fatalf("list after save = %+v, want exactly [%s]", list, id)
+	}
+	if _, err := os.Stat(filepath.Join(dir, NoBackupTagName)); err != nil {
+		t.Fatalf("marker did not survive Save: %v", err)
+	}
+
+	if err := st.Delete(ctx, id); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	list, err = st.List(ctx)
+	if err != nil {
+		t.Fatalf("list after delete: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected empty list after delete (marker must not be reported), got %+v", list)
+	}
+	if _, err := os.Stat(filepath.Join(dir, NoBackupTagName)); err != nil {
+		t.Fatalf("marker did not survive Delete: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // FilesystemBackupStorage — save atomicity / torso rejection
 // ---------------------------------------------------------------------------
 
@@ -417,7 +544,7 @@ func TestFilesystemBackupStorageSaveLeavesNoVisibleFileWhenWriteFails(t *testing
 		t.Fatalf("fill blocker: %v", err)
 	}
 
-	if err := st.Save(context.Background(), id, []byte("payload")); err == nil {
+	if err := st.Save(context.Background(), id, "", []byte("payload")); err == nil {
 		t.Fatal("expected Save to fail when the archive cannot be published")
 	}
 
@@ -434,7 +561,7 @@ func TestFilesystemBackupStorageSaveLeavesNoVisibleFileWhenWriteFails(t *testing
 		t.Fatalf("read dir: %v", err)
 	}
 	for _, e := range entries {
-		if e.Name() != id+".sbk" {
+		if e.Name() != id+".sbk" && e.Name() != NoBackupTagName {
 			t.Errorf("failed save left %q behind in the storage directory", e.Name())
 		}
 	}
@@ -491,11 +618,11 @@ func TestFilesystemBackupStorageSaveOverwritesCompletely(t *testing.T) {
 
 	ctx := context.Background()
 	const id = "alpha-20260701-100000"
-	if err := st.Save(ctx, id, []byte("a much longer first payload")); err != nil {
+	if err := st.Save(ctx, id, "", []byte("a much longer first payload")); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
 	want := []byte("second")
-	if err := st.Save(ctx, id, want); err != nil {
+	if err := st.Save(ctx, id, "", want); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
 
@@ -511,8 +638,219 @@ func TestFilesystemBackupStorageSaveOverwritesCompletely(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read dir: %v", err)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("storage dir must hold only the archive, got %d entries", len(entries))
+	// The archive plus the exclusion marker every storage directory carries.
+	if len(entries) != 2 {
+		t.Fatalf("storage dir must hold only the archive and %s, got %d entries", NoBackupTagName, len(entries))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FilesystemBackupStorage — display filename sidecar
+// ---------------------------------------------------------------------------
+
+// TestFilesystemBackupStorageSaveListDeleteRoundTripsTheDisplayName verifies
+// the whole sidecar lifecycle: Save records the CCU-convention display name,
+// List reports it back on the matching entry, and Delete removes the
+// sidecar along with the archive so a later id reuse cannot inherit a
+// deleted archive's name.
+func TestFilesystemBackupStorageSaveListDeleteRoundTripsTheDisplayName(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+	const id = "alpha-20260817-140500"
+	const name = "ccu-01.local-3.87.6.20260404-2026-08-17-1405.sbk"
+
+	if err := st.Save(ctx, id, name, []byte("payload")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	sidecar := filepath.Join(dir, id+backupNameSuffix)
+	if _, statErr := os.Stat(sidecar); statErr != nil {
+		t.Fatalf("expected sidecar %q to exist after save: %v", sidecar, statErr)
+	}
+
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].Filename != name {
+		t.Fatalf("list = %+v, want a single entry with Filename %q", list, name)
+	}
+
+	if err := st.Delete(ctx, id); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, statErr := os.Stat(sidecar); !os.IsNotExist(statErr) {
+		t.Fatalf("expected sidecar %q to be removed by Delete, stat err = %v", sidecar, statErr)
+	}
+}
+
+// TestFilesystemBackupStorageSaveWithEmptyNameRemovesAStaleSidecar verifies
+// that re-saving under the same id with an empty display name (e.g. the CCU
+// had reported its system information for the first save but not for a
+// later re-save under a reused id) drops the previous sidecar rather than
+// leaving a name on disk that no longer describes the current archive.
+func TestFilesystemBackupStorageSaveWithEmptyNameRemovesAStaleSidecar(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+	const id = "alpha-20260817-140500"
+
+	if err := st.Save(ctx, id, "ccu-01.local-3.87.6.20260404-2026-08-17-1405.sbk", []byte("first")); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	if err := st.Save(ctx, id, "", []byte("second")); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+
+	sidecar := filepath.Join(dir, id+backupNameSuffix)
+	if _, statErr := os.Stat(sidecar); !os.IsNotExist(statErr) {
+		t.Fatalf("expected the stale sidecar %q to be gone, stat err = %v", sidecar, statErr)
+	}
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].Filename != "" {
+		t.Fatalf("list = %+v, want a single entry with an empty Filename", list)
+	}
+}
+
+// TestFilesystemBackupStorageListDoesNotReportTheNameSidecarAsABackup
+// verifies the sidecar file itself never surfaces as an entry in List — it
+// does not end in .sbk, and List's own directory scan only picks up that
+// suffix.
+func TestFilesystemBackupStorageListDoesNotReportTheNameSidecarAsABackup(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+	const id = "alpha-20260817-140500"
+
+	if err := st.Save(ctx, id, "ccu-01.local-3.87.6.20260404-2026-08-17-1405.sbk", []byte("payload")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected exactly 1 entry (the archive, not its name sidecar), got %d: %+v", len(list), list)
+	}
+	if list[0].ID != id {
+		t.Fatalf("listed entry ID = %q, want %q", list[0].ID, id)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FilesystemBackupStorage.readName — sanitising what comes back off disk
+// ---------------------------------------------------------------------------
+
+// writeRawSidecar plants a sidecar file directly, bypassing writeName, so a
+// test can exercise readName against content Save itself would never
+// produce (a hand-edited or hostile sidecar).
+func writeRawSidecar(t *testing.T, dir, id, raw string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, id+backupNameSuffix), []byte(raw), 0o640); err != nil {
+		t.Fatalf("write raw sidecar: %v", err)
+	}
+}
+
+// TestFilesystemBackupStorageReadNameRejectsAPathSeparator verifies a
+// sidecar carrying a path separator degrades to an empty Filename rather
+// than being served — the value ends up as an HTTP Content-Disposition
+// filename, where a separator is a path-traversal-flavoured payload for a
+// client that trusts it verbatim.
+func TestFilesystemBackupStorageReadNameRejectsAPathSeparator(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+	const id = "alpha-20260817-140500"
+	if err := os.WriteFile(filepath.Join(dir, id+".sbk"), []byte("payload"), 0o640); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	writeRawSidecar(t, dir, id, "../../etc/passwd")
+
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].Filename != "" {
+		t.Fatalf("list = %+v, want the tainted name dropped to empty", list)
+	}
+}
+
+// TestFilesystemBackupStorageReadNameRejectsCRLF verifies a sidecar carrying
+// a CRLF sequence — the header-injection case — degrades to an empty
+// Filename instead of being written into the Content-Disposition header
+// verbatim.
+func TestFilesystemBackupStorageReadNameRejectsCRLF(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+	const id = "alpha-20260817-140500"
+	if err := os.WriteFile(filepath.Join(dir, id+".sbk"), []byte("payload"), 0o640); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	writeRawSidecar(t, dir, id, "evil.sbk\r\nX-Injected: 1")
+
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].Filename != "" {
+		t.Fatalf("list = %+v, want the CRLF-carrying name dropped to empty", list)
+	}
+}
+
+// TestFilesystemBackupStorageReadNameRejectsAnOverlongName verifies a
+// sidecar longer than 255 bytes degrades to an empty Filename.
+func TestFilesystemBackupStorageReadNameRejectsAnOverlongName(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+	const id = "alpha-20260817-140500"
+	if err := os.WriteFile(filepath.Join(dir, id+".sbk"), []byte("payload"), 0o640); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	writeRawSidecar(t, dir, id, strings.Repeat("a", 256)+".sbk")
+
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].Filename != "" {
+		t.Fatalf("list = %+v, want the overlong name dropped to empty", list)
 	}
 }
 
@@ -595,6 +933,44 @@ func TestFilesystemBackupStorageSaveUploadedReturnsMatchingByteCount(t *testing.
 	}
 	if entry.Bytes != int64(len(payload)) {
 		t.Errorf("Bytes = %d, want %d", entry.Bytes, len(payload))
+	}
+}
+
+// TestFilesystemBackupStorageSaveUploadedLeavesFilenameEmpty verifies an
+// imported archive lists with an empty Filename: the browser-supplied name
+// is untrusted and there is no CCU behind the archive to derive a
+// CCU-convention name from, so it renders as `<id>.sbk` rather than
+// something that looks like a fact about the archive.
+func TestFilesystemBackupStorageSaveUploadedLeavesFilenameEmpty(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	ctx := context.Background()
+
+	entry, err := st.SaveUploaded(ctx, "operator-supplied-name.sbk", []byte("payload"))
+	if err != nil {
+		t.Fatalf("SaveUploaded: %v", err)
+	}
+
+	list, err := st.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var found *hmapi.BackupEntry
+	for i := range list {
+		if list[i].ID == entry.ID {
+			found = &list[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("uploaded entry %q not found in list %+v", entry.ID, list)
+	}
+	if found.Filename != "" {
+		t.Errorf("Filename = %q, want empty for an uploaded archive", found.Filename)
 	}
 }
 

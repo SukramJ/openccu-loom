@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/secret"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -207,6 +208,14 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:goco
 			// every run while restoring nothing the daemon needs to operate.
 			if fi.IsDir() && rel == ccuBackupsDirName {
 				return filepath.SkipDir
+			}
+			// Honour the same exclusion tag the CCU's own tar respects, so a
+			// relocated archive store that still sits under DataDir is skipped
+			// too. The name-based skip above only knows the default layout.
+			if fi.IsDir() {
+				if _, err := os.Stat(filepath.Join(p, adapter.NoBackupTagName)); err == nil {
+					return filepath.SkipDir
+				}
 			}
 			// Skip every live DB, WAL, and SHM file — a consistent VACUUMed
 			// copy of each is added separately below.

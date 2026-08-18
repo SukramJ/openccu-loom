@@ -325,7 +325,7 @@ func TestFilesystemBackupStorageDeleteRemovesFile(t *testing.T) {
 	ctx := context.Background()
 	const id = "alpha-20260701-100000"
 
-	if err := st.Save(ctx, id, []byte("payload")); err != nil {
+	if err := st.Save(ctx, id, "", []byte("payload")); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
@@ -461,7 +461,7 @@ func TestScheduledCreateThenPruneKeepsExactlyKeepLast(t *testing.T) {
 	for i := range keepLast {
 		id := "alpha-" + base.Add(time.Duration(i)*time.Hour).Format(backupTimestampLayout)
 		seeded[i] = id
-		if err := storage.Save(ctx, id, []byte("old")); err != nil {
+		if err := storage.Save(ctx, id, "", []byte("old")); err != nil {
 			t.Fatalf("seed save: %v", err)
 		}
 		mt := base.Add(time.Duration(i) * time.Hour)
@@ -525,7 +525,7 @@ func (s *createObservingStorage) Open(context.Context, string) (io.ReadCloser, e
 	return nil, errors.New("not used")
 }
 
-func (s *createObservingStorage) Save(context.Context, string, []byte) error {
+func (s *createObservingStorage) Save(context.Context, string, string, []byte) error {
 	s.saves.Add(1)
 	return nil
 }
@@ -611,7 +611,7 @@ func TestConcurrentCreateAndPruneKeepsACompleteBackup(t *testing.T) {
 	a := NewBackupAdapter(reg).SetStorage(storage)
 
 	seeded := "alpha-" + time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Format(backupTimestampLayout)
-	if err := storage.Save(ctx, seeded, []byte("older complete backup")); err != nil {
+	if err := storage.Save(ctx, seeded, "", []byte("older complete backup")); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 

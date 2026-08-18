@@ -267,10 +267,64 @@ func (a *BackupAdapter) createAndSave(ctx context.Context, u *central.Unit, id s
 			slog.Int("bytes", len(data)))
 		return nil
 	}
-	if err := a.storage.Save(ctx, id, data); err != nil {
+	if err := a.storage.Save(ctx, id, ccuArchiveName(u, time.Now()), data); err != nil {
 		return fmt.Errorf("backup: save: %w", err)
 	}
 	return nil
+}
+
+// ccuArchiveName renders the archive's name the way the CCU names its own:
+// `<hostname>-<firmware version>-<YYYY-MM-DD-HHMM>.sbk`. Two archives are
+// then immediately distinguishable by which CCU they came from and which
+// firmware they can be restored onto — neither of which the storage id
+// carries, because that id is a key the rotation pruner parses.
+//
+// The time is local, matching the CCU's own naming; the id keeps its UTC
+// stamp. Returns "" when the CCU has not reported hostname or version yet,
+// which reads back as "no name recorded" rather than as a name with holes
+// in it — a half-filled name is worse than none, because it looks like a
+// fact about the archive.
+func ccuArchiveName(u *central.Unit, at time.Time) string {
+	if u == nil {
+		return ""
+	}
+	info := u.SystemInformation()
+	host := strings.TrimSpace(info.Hostname)
+	if host == "" {
+		// The CCU has no hostname of its own to give; the central's name is
+		// what the operator calls this CCU, which is the same distinction the
+		// name has to carry.
+		host = u.Name()
+	}
+	host = backupNameSegment(host)
+	version := backupNameSegment(strings.TrimSpace(info.Version))
+	if host == "" || version == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s-%s-%s.sbk", host, version, at.Format("2006-01-02-1504"))
+}
+
+// backupNameSegment sanitises one segment of a display filename. It is not
+// backupSafeName: that one maps '.' to '_' because an id must stay parseable,
+// and a firmware version put through it comes out as `3_87_6_20260404` — a
+// version string nobody can match against a release. Dots survive here; only
+// what would make the name unsafe in a filesystem path or an HTTP header does
+// not. A segment left with nothing usable returns "", which suppresses the
+// whole name.
+func backupNameSegment(s string) string {
+	out := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9',
+			r == '-', r == '_', r == '.':
+			return r
+		default:
+			return '_'
+		}
+	}, s)
+	if strings.Trim(out, "._-") == "" {
+		return ""
+	}
+	return out
 }
 
 // backupTimestampLayout is the fixed-width UTC timestamp appended to every
