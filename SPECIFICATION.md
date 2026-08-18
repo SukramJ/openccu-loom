@@ -119,9 +119,11 @@ eQ-3 HomeMatic Software License — see ADR 0003.
 2. **Wire-compatible device semantics.** Enum strings, paramset
    normalization, and the device-profile catalogue match the
    `aiohomematic` reference so a device behaves identically on both
-   stacks. Profiles are generated via `script/generate_profiles.py`;
-   the registry parity test and the cross-stack model-snapshot diff
-   are regression detectors for this agreement.
+   stacks. The device-profile catalogue was forked from that reference
+   and is maintained here since ADR 0063; the cross-stack
+   model-snapshot diff remains the regression detector for the
+   agreement, and a deliberate deviation is recorded in
+   `notes/parity/by_design.md`.
 3. **Reliability envelope**: circuit breaker, command throttle
    (RF duty cycle), command retry with exponential backoff, request
    coalescing, ping/pong health tracking, connection recovery

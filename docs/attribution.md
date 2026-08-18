@@ -22,8 +22,10 @@ machine-oriented list.
 - Used as: the reference implementation this whole project is a Go port of —
   transports, devices, paramsets, custom-DP composition, enumerations and
   their string values, interface classification, paramset normalization and
-  patches, and the device-profile registration shape. The device profiles are
-  *generated* from the aiohomematic registry by `script/generate_profiles.py`.
+  patches, and the device-profile registration shape. The device-profile
+  catalogue was *derived* from the aiohomematic registry and, since
+  [ADR 0063](adr/0063-self-maintained-device-profiles.md), is maintained in
+  this repository rather than regenerated.
 
 Compliance: MIT, same as OpenCCU-Loom. No Python source is reproduced verbatim;
 the Go code is a from-scratch semantic port that cites the aiohomematic file +

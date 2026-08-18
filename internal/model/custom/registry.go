@@ -10,9 +10,9 @@
 // profile at device-creation time to lay out the generic/custom data-
 // point graph.
 //
-// 0.1.0 ships a small hand-written subset as reference; the full
-// Catalogue is regenerated from
-// script/generate_profiles.py and landed in.
+// The catalogue lives in profiles.go and profile_configs.go and is
+// maintained by hand — see ADR 0063 for why, and CLAUDE.md's "Add a new
+// device type" for the workflow.
 package custom
 
 import (

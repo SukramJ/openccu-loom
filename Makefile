@@ -509,11 +509,6 @@ generate: ## run all code generators
 	$(GO) generate ./...
 	$(MAKE) export-schemas
 	$(MAKE) ui-types
-	@if [ -x script/generate_profiles.py ]; then \
-		./script/generate_profiles.py; \
-	else \
-		echo "profile generator not present yet (Phase 5)"; \
-	fi
 
 .PHONY: docker
 docker: ## build multi-arch Docker images (requires buildx)
