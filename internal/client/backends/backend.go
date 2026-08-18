@@ -210,9 +210,10 @@ type DeviceOps interface {
 	// return [ErrUnsupported].
 	DownloadFirmware(ctx context.Context, firmwareURL string) error
 
-	// CreateBackupAndDownload triggers a CCU config backup and
-	// downloads the resulting archive. maxWaitTime and pollInterval
-	// control how long to wait for the archive to become ready.
+	// CreateBackupAndDownload obtains a CCU config archive. maxWaitTime
+	// bounds the whole exchange in seconds; pollInterval survives for
+	// backends that stage the archive before fetching it and is ignored
+	// by those that do not.
 	// Returns [ErrUnsupported] when [Capabilities.Backup] is false.
 	CreateBackupAndDownload(ctx context.Context, maxWaitTime, pollInterval float64) ([]byte, error)
 }

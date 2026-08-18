@@ -150,7 +150,7 @@ type comTestPoll struct {
 // TestDevice implements Operations. Starts the CCU's per-device
 // communication test (ReGa DevStartComTest) and polls until the device's
 // last-completed-test time advances past the start, or the window
-// elapses. Mirrors the start+poll shape of CreateBackupAndDownload.
+// elapses.
 func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs, pollIntervalSecs float64) (hmapi.CommunicationTestResult, error) {
 	if b.rega == nil {
 		return hmapi.CommunicationTestResult{}, ErrUnsupported
@@ -614,107 +614,42 @@ func (b *CcuBackend) GetDeviceDescription(ctx context.Context, address string) (
 
 // --- backup -------------------------------------------------------------
 
-// backupStatus mirrors the JSON object returned by the
-// create_backup_status ReGa script.
-type backupStatus struct {
-	Status   string `json:"status"`
-	File     string `json:"file"`
-	Filename string `json:"filename"`
-	Size     int64  `json:"size"`
-}
-
-// backupStart mirrors the JSON object returned by the create_backup_start
-// ReGa script.
-type backupStart struct {
-	Success bool   `json:"success"`
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
-
-const (
-	backupStatusRunning   = "running"
-	backupStatusCompleted = "completed"
-	backupStatusFailed    = "failed"
-	backupStatusIdle      = "idle"
-)
-
-// CreateBackupAndDownload implements Operations. It starts a CCU config
-// backup in the background via the create_backup_start ReGa script, polls
-// create_backup_status until the archive is ready, then downloads the
-// `.sbk` archive over HTTP from the CCU's cp_security.cgi maintenance
-// endpoint. Returns the raw archive bytes. maxWaitTime and pollInterval
-// are in seconds; zero values fall back to 300 s / 5 s.
+// CreateBackupAndDownload implements Operations. It downloads a `.sbk`
+// archive over HTTP from the CCU's cp_security.cgi maintenance endpoint,
+// which builds the archive on the fly, and returns the raw bytes.
+// A positive maxWaitTime bounds the whole exchange in seconds; zero or
+// negative leaves the bound to the caller's context and the HTTP client,
+// which is what every production caller wants — its own deadline is the
+// budget for the backup, and a second, shorter one here would abort a run
+// the caller still had time for. pollInterval is accepted for interface
+// compatibility and unused.
 //
-// Requires both a ReGa ScriptRunner (SetScriptRunner) for the start/status
-// scripts and the HTTP download transport (SetDownloadFirmwareTransport)
-// for the archive fetch. Mirrors the reference create_backup_and_download
-// flow (start → poll status → download_backup via cp_security.cgi).
-func (b *CcuBackend) CreateBackupAndDownload(ctx context.Context, maxWaitTime, pollInterval float64) ([]byte, error) {
-	if b.rega == nil {
-		return nil, ErrUnsupported
-	}
+// There is deliberately no `create_backup_start` / `create_backup_status`
+// prelude. That flow drove /bin/createBackup.sh into
+// /usr/local/tmp/last_backup.sbk, but nothing ever read that file: the
+// CGI packs `/usr/local` itself rather than serving what the script
+// produced (occu WebUI/www/config/backup.tcl, proc create_backup). So
+// every backup tarred, gzipped and signed the CCU's whole state twice,
+// left a multi-megabyte archive behind in /usr/local/tmp until the next
+// run, and spent most of the caller's timeout budget on the half that was
+// discarded. It also made the flow depend on a helper script only OpenCCU
+// and RaspberryMatic ship, which the fallback then had to work around.
+//
+// Requires the HTTP download transport (SetDownloadFirmwareTransport). The
+// ReGa scripts stay in the catalogue for the hub's own trigger/status
+// commands, whose product *is* the file on the CCU.
+func (b *CcuBackend) CreateBackupAndDownload(ctx context.Context, maxWaitTime, _ float64) ([]byte, error) {
 	if b.baseURL == "" || b.sessionIDFn == nil {
 		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: HTTP download transport not wired: %w", ErrUnsupported)
 	}
-	if maxWaitTime <= 0 {
-		maxWaitTime = 300
+	if maxWaitTime > 0 {
+		// The CGI answers only once the archive is complete, so the deadline
+		// has to cover the build, not just the transfer.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(maxWaitTime*float64(time.Second)))
+		defer cancel()
 	}
-	if pollInterval <= 0 {
-		pollInterval = 5
-	}
-
-	// 1. Start the backup process in the background.
-	//
-	// This prelude drives /bin/createBackup.sh, which only OpenCCU and
-	// RaspberryMatic ship. On a stock CCU3 the script is absent and the
-	// start reports failure - but the archive is still reachable, because
-	// the download step below posts to cp_security.cgi?action=create_backup,
-	// and that CGI builds the archive itself rather than reading the file
-	// the script would have produced (occu WebUI/www/config/backup.tcl,
-	// proc create_backup). So a failed start is not fatal: it means this
-	// firmware has no background-backup helper, and the synchronous CGI is
-	// the whole job. Falling back keeps stock CCU3 hosts working instead of
-	// failing them with a missing-script error.
-	var start backupStart
-	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptCreateBackupStart, nil, &start); err != nil {
-		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: start: %w", err)
-	}
-	if !start.Success {
-		return b.downloadBackup(ctx)
-	}
-
-	// 2. Poll create_backup_status until completion, failure, or timeout.
-	deadline := time.Now().Add(time.Duration(maxWaitTime * float64(time.Second)))
-	ticker := time.NewTicker(time.Duration(pollInterval * float64(time.Second)))
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-ticker.C:
-		}
-
-		var status backupStatus
-		if err := b.rega.RunJSON(ctx, hmenum.RegaScriptCreateBackupStatus, nil, &status); err != nil {
-			return nil, fmt.Errorf("ccu.CreateBackupAndDownload: status: %w", err)
-		}
-
-		switch status.Status {
-		case backupStatusCompleted:
-			return b.downloadBackup(ctx)
-		case backupStatusFailed:
-			return nil, errors.New("ccu.CreateBackupAndDownload: backup failed on CCU")
-		case backupStatusIdle:
-			return nil, errors.New("ccu.CreateBackupAndDownload: unexpected idle status (backup not running)")
-		case backupStatusRunning:
-			// keep polling
-		}
-
-		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("ccu.CreateBackupAndDownload: timeout after %.0fs", maxWaitTime)
-		}
-	}
+	return b.downloadBackup(ctx)
 }
 
 // downloadBackup fetches a freshly created backup archive from the CCU's

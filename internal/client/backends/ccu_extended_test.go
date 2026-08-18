@@ -875,14 +875,110 @@ func (m *multiScriptRunner) RunJSON(ctx context.Context, script hmenum.RegaScrip
 // loop acts on, never how long it paused in between.
 const backupPollInterval = 0.02
 
+// TestCcuCreateBackupAndDownloadNoScriptRunner verifies that the archive
+// download succeeds on the HTTP transport alone: a nil ScriptRunner is no
+// longer an error, because the CGI builds the archive itself and the ReGa
+// create_backup_start/create_backup_status prelude is gone.
 func TestCcuCreateBackupAndDownloadNoScriptRunner(t *testing.T) {
 	t.Parallel()
-	// No ScriptRunner wired → ErrUnsupported.
+	const wantBody = "BACKUP_CONTENT"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(wantBody))
+	}))
+	defer srv.Close()
+
+	// No ScriptRunner wired at all.
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
-	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
-	_, err := b.CreateBackupAndDownload(context.Background(), 1, 1)
-	if !errors.Is(err, ErrUnsupported) {
-		t.Fatalf("want ErrUnsupported, got %v", err)
+	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+
+	data, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
+	if err != nil {
+		t.Fatalf("CreateBackupAndDownload: %v", err)
+	}
+	if string(data) != wantBody {
+		t.Fatalf("data=%q, want %q", data, wantBody)
+	}
+}
+
+// recordingScriptRunner is a [ScriptRunner] test double that fails the test
+// on any script invocation. CreateBackupAndDownload must never touch the
+// ReGa engine at all: the CGI builds and streams the archive in one GET, so
+// running create_backup_start/create_backup_status alongside it would tar
+// the CCU's state a second time for nothing. This is the regression pin
+// against that redundant prelude creeping back in.
+type recordingScriptRunner struct {
+	t       *testing.T
+	scripts []hmenum.RegaScript
+}
+
+func (r *recordingScriptRunner) Run(_ context.Context, script hmenum.RegaScript, _ map[string]string) (string, error) {
+	r.t.Helper()
+	r.scripts = append(r.scripts, script)
+	r.t.Errorf("unexpected ReGa script run: %s", script)
+	return "", nil
+}
+
+func (r *recordingScriptRunner) RunJSON(_ context.Context, script hmenum.RegaScript, _ map[string]string, _ any) error {
+	r.t.Helper()
+	r.scripts = append(r.scripts, script)
+	r.t.Errorf("unexpected ReGa script run: %s", script)
+	return nil
+}
+
+// TestCcuCreateBackupAndDownloadNeverRunsRegaScript pins that the download
+// path never invokes the ReGa engine, even when a ScriptRunner is wired in
+// (e.g. for the hub's own trigger/status commands). A regression that
+// reintroduces the create_backup_start/create_backup_status prelude must
+// fail here first.
+func TestCcuCreateBackupAndDownloadNeverRunsRegaScript(t *testing.T) {
+	t.Parallel()
+	const wantBody = "BACKUP_CONTENT"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(wantBody))
+	}))
+	defer srv.Close()
+
+	runner := &recordingScriptRunner{t: t}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+
+	data, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
+	if err != nil {
+		t.Fatalf("CreateBackupAndDownload: %v", err)
+	}
+	if string(data) != wantBody {
+		t.Fatalf("data=%q, want %q", data, wantBody)
+	}
+	if len(runner.scripts) != 0 {
+		t.Fatalf("ReGa scripts invoked: %v, want none", runner.scripts)
+	}
+}
+
+// TestCcuCreateBackupAndDownloadBoundedByMaxWaitTime verifies that
+// maxWaitTime bounds the whole exchange: against a server that accepts the
+// connection but never writes a response, the call must return a
+// context-deadline error instead of hanging until the transport's own
+// (much longer) timeout.
+func TestCcuCreateBackupAndDownloadBoundedByMaxWaitTime(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+
+	start := time.Now()
+	_, err := b.CreateBackupAndDownload(context.Background(), 0.05, backupPollInterval)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("want context.DeadlineExceeded, got %v", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("call took %v, want it bounded by maxWaitTime well under the 2s test-suite budget", elapsed)
 	}
 }
 
