@@ -279,7 +279,7 @@ func (g *GroupKeyManagement) matterReadWithCtx(ctx context.Context, attrID uint3
 		return groupKeyMgmtClusterRevision, true
 	// Global attributes 0xFFF8–0xFFFB: mirrors matter.js ClusterServer
 	// auto-populated globalAttributes
-	// (packages/node/src/behaviors/ClusterBehavior.ts) and chip
+	// (packages/node/src/behavior/cluster/ClusterBehavior.ts) and chip
 	// endpoint_config.h cluster metadata tables.
 	case cluster.AttrGlobalGeneratedCommandList:
 		// GKM generated commands: KeySetReadResponse (0x02),

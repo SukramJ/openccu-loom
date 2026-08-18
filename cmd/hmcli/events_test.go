@@ -293,6 +293,38 @@ func TestSplitTopics(t *testing.T) {
 	}
 }
 
+// TestPrintEventJSONCarriesKindAndSeq is the regression guard for the --json
+// branch dropping fields eventsInbound does not declare: the broadcast
+// envelope (internal/north/rest/ws/client.go outboundEvent) always carries
+// `kind` ("initial"/"change"/"refresh", ADR 0022) and `seq`, and a consumer
+// filtering `select(.kind == "change")` must see the real value, not an
+// absent field.
+func TestPrintEventJSONCarriesKindAndSeq(t *testing.T) {
+	t.Parallel()
+	msg := eventsInbound{
+		Kind:    "change",
+		Topic:   "device.value_changed",
+		Type:    "device.value_changed",
+		TS:      "2026-01-01T00:00:00Z",
+		Payload: json.RawMessage(`{"x":1}`),
+		Seq:     0,
+	}
+	var out bytes.Buffer
+	if err := printEvent(&out, msg, true); err != nil {
+		t.Fatalf("printEvent: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
+		t.Fatalf("printEvent output did not parse as JSON: %v (got %q)", err, out.String())
+	}
+	if decoded["kind"] != "change" {
+		t.Errorf("kind=%v, want change (got line %q)", decoded["kind"], out.String())
+	}
+	if _, ok := decoded["seq"]; !ok {
+		t.Errorf("seq missing from output, want present even for a zero seq (got line %q)", out.String())
+	}
+}
+
 // mustMarshal is a test helper that marshals v to JSON or fatals.
 func mustMarshal(t *testing.T, v any) []byte {
 	t.Helper()

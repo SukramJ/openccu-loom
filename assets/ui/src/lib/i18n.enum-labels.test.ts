@@ -54,6 +54,7 @@ const ALARM_JOURNAL_EVENTS = [
   "code_action_failed",
   "code_locked_out",
   "code_lockout",
+  "code_missing",
   "code_permission_denied",
   "cross_zone_first_hit",
   "disarmed",
@@ -64,6 +65,7 @@ const ALARM_JOURNAL_EVENTS = [
   "incident_load_failed",
   "incident_lost_on_restore",
   "incident_persist_failed",
+  "invalid_code",
   "keypad_blocked",
   "keypad_press_unmatched",
   "mode_removed_while_armed",
@@ -179,6 +181,13 @@ const AUDIT_ACTIONS = [
   "user_create",
   "user_delete",
   "user_update",
+  "logging.override_set",
+  "logging.override_reset",
+  "logging.default_level_set",
+  "diagnostics.capture_start",
+  "diagnostics.capture_stop",
+  "system.restart_requested",
+  "cache_clear",
 ];
 
 const CAPTURE_STATES = ["running", "stopped", "expired", "aborted"];

@@ -49,6 +49,16 @@ const readTimeout = 60 * time.Second
 // the bound only matters when the peer has stopped reading.
 const closeFlushTimeout = 5 * time.Second
 
+// kindReplayDoneMarker tags an [Event] queued on c.out as the
+// replay-completion ack rather than a real broadcast — see
+// [client.replayFrom] for why it travels through the domain queue
+// instead of c.ctrl. writePump intercepts it before the normal
+// outboundEvent path, so it never reaches a real subscriber's wire
+// payload and never needs to be a value a domain producer could emit by
+// accident (it does not appear in the [KindInitial] / [KindChange] /
+// [KindRefresh] wire vocabulary).
+const kindReplayDoneMarker = "$replay_done"
+
 // client owns one WebSocket connection: its subscriptions, an
 // outbound queue, and the goroutines reading/writing frames.
 type client struct {
@@ -284,6 +294,20 @@ func (c *client) enqueueCtrl(op byte, payload []byte) {
 // resume succeeded, or `{op: "replay_lost", oldest_seq: M}` when
 // `since` precedes the oldest buffered event (client must take a
 // fresh /snapshot).
+//
+// The success ack is queued on c.out — the same channel every replayed
+// event above just went through — via [client.enqueue], not on c.ctrl.
+// writePump's select has no ordering guarantee between the two channels
+// (Go picks uniformly among ready cases), so a `replay_done` sent on
+// c.ctrl can reach the wire before the tail of a large replay batch
+// still sitting in c.out, telling the client "everything after this is
+// live" while hundreds of the replayed events it just labelled as
+// current are still ahead of it. Routing it through c.out instead makes
+// FIFO order within one channel do the ordering, matching the documented
+// wire contract. `replay_lost` (both branches) needs no such treatment:
+// the res.Lost case returns before anything is queued, and the overflow
+// case in [client.signalGap] already tells the client its buffered
+// events are unreliable regardless of interleaving.
 func (c *client) replayFrom(since uint64) {
 	res := c.hub.Replay(since, c.matches)
 	if res.Lost {
@@ -298,7 +322,7 @@ func (c *client) replayFrom(since uint64) {
 	if last == 0 {
 		last = since
 	}
-	c.sendOp(outboundOp{Op: "replay_done", Seq: last})
+	c.enqueue(Event{Kind: kindReplayDoneMarker, Seq: last})
 }
 
 // sendOp marshals a control-frame envelope and queues it for the
@@ -462,14 +486,15 @@ type outboundEvent struct {
 	Payload any    `json:"payload"`
 }
 
-// outboundOp is the simple envelope for ping, pong, subscribe ACKs
-// and replay control frames. Op-specific fields are optional so a
-// single struct covers every wire shape the client sees.
+// outboundOp is the simple envelope for ping, pong, subscribe ACKs,
+// replay control frames and protocol-level errors. Op-specific fields
+// are optional so a single struct covers every wire shape the client sees.
 type outboundOp struct {
-	Op        string   `json:"op"`
-	Seq       uint64   `json:"seq,omitempty"`
-	OldestSeq uint64   `json:"oldest_seq,omitempty"`
-	Topics    []string `json:"topics,omitempty"`
+	Op        string        `json:"op"`
+	Seq       uint64        `json:"seq,omitempty"`
+	OldestSeq uint64        `json:"oldest_seq,omitempty"`
+	Topics    []string      `json:"topics,omitempty"`
+	Error     *CommandError `json:"error,omitempty"`
 }
 
 // readPump reads inbound frames, assembles fragmented messages and updates
@@ -554,7 +579,12 @@ func (c *client) readPump() {
 //
 // The wire contract is text JSON (assets/wsapi.json). A binary message is
 // rejected with 1003 rather than silently discarded, so a client that sends
-// one learns why instead of waiting on a reply that never comes.
+// one learns why instead of waiting on a reply that never comes. A text
+// message that is not valid JSON, or whose `op` is not one this switch
+// knows, gets the same courtesy at the application level: an `{op:"error"}`
+// frame rather than silence — a client waiting on the documented ack for
+// that frame (e.g. `subscribed`) would otherwise hang indefinitely with no
+// signal that its request was never processed.
 func (c *client) dispatchMessage(opcode byte, payload []byte) bool {
 	if opcode != opText {
 		c.failConnection(closeUnsupportedData, "binary messages are not supported")
@@ -563,6 +593,7 @@ func (c *client) dispatchMessage(opcode byte, payload []byte) bool {
 	var msg inboundMessage
 	if err := json.Unmarshal(payload, &msg); err != nil {
 		c.logger.Warn("ws.malformed", slog.String("err", err.Error()))
+		c.sendOp(outboundOp{Op: "error", Error: NewCommandError(CommandErrorBadRequest, "malformed frame: "+err.Error())})
 		return true
 	}
 	switch msg.Op {
@@ -584,6 +615,9 @@ func (c *client) dispatchMessage(opcode byte, payload []byte) bool {
 		c.reauth(msg.Token)
 	case "call":
 		c.handleCommand(msg)
+	default:
+		c.logger.Warn("ws.unknown_op", slog.String("op", msg.Op))
+		c.sendOp(outboundOp{Op: "error", Error: NewCommandError(CommandErrorBadRequest, "unknown op: "+msg.Op)})
 	}
 	return true
 }
@@ -643,6 +677,21 @@ func (c *client) writePump() {
 		case <-c.closed:
 			return
 		case ev := <-c.out:
+			if ev.Kind == kindReplayDoneMarker {
+				// See kindReplayDoneMarker and client.replayFrom: this
+				// marker travels through c.out purely for its position in
+				// the FIFO order, not as a broadcast — write it as the
+				// documented {op:"replay_done"} control frame instead of
+				// an outboundEvent.
+				buf, err := json.Marshal(outboundOp{Op: "replay_done", Seq: ev.Seq})
+				if err == nil {
+					if err := c.rawWrite(opText, buf); err != nil {
+						return
+					}
+				}
+				c.noteDrained()
+				continue
+			}
 			kind := ev.Kind
 			if kind == "" {
 				kind = KindChange

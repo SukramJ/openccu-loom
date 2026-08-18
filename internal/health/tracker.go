@@ -52,6 +52,18 @@ type Sample struct {
 	// un-localized values in Note). Never used for sentinel matching.
 	NoteKey   string
 	Timestamp time.Time
+	// Sticky exempts this sample from the staleAfter decay in
+	// [Tracker.applyStaleLocked]: it never downgrades to [StatusUnknown]
+	// on its own just because time passed since it was recorded.
+	//
+	// Set it for a component that is genuinely a one-shot boot-time fact
+	// (a config file resolved, a cipher key found) rather than an
+	// ongoing signal (a CCU connection, an event stream) — staleness
+	// exists to catch the latter going silent, and applying it to the
+	// former means the daemon's own /health can never report healthy
+	// again 90 s after a perfectly healthy boot, for no reason a
+	// restart would fix.
+	Sticky bool
 }
 
 // Component holds the latest state for one registered component.
@@ -296,7 +308,10 @@ func (t *Tracker) Snapshot() []Component {
 // [StatusUnknown] when the sample timestamp is older than
 // [Tracker.staleAfter]. Caller must hold mu.
 func (t *Tracker) applyStaleLocked(c Component) Component {
-	if t.staleAfter <= 0 {
+	if t.staleAfter <= 0 || c.LastSample.Sticky {
+		return c
+	}
+	if c.LastSample.Sticky {
 		return c
 	}
 	if c.LastSample.Timestamp.IsZero() {

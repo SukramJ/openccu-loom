@@ -131,6 +131,10 @@ func TestRFSetModeHeatWritesManuMode(t *testing.T) {
 // TestSetProfileWeekProgramIPMapsToActiveProfile verifies that on KindIP
 // the week-program profile writes ACTIVE_PROFILE with a 1-based int index
 // (HmIP shape).
+//
+// Starts from AUTO so only ACTIVE_PROFILE goes out — this isolates the
+// value shape from the AUTO/BOOST_MODE batching that
+// TestSetProfileWeekProgramIPSwitchesToAutoFirst covers.
 func TestSetProfileWeekProgramIPMapsToActiveProfile(t *testing.T) {
 	t.Parallel()
 
@@ -145,6 +149,9 @@ func TestSetProfileWeekProgramIPMapsToActiveProfile(t *testing.T) {
 	for _, tc := range cases {
 		w := &stubWriter{}
 		r := newRig(t, "x", KindIP, w, custom.ClimateCapabilities{SupportsProfile: true})
+		if err := r.climate.SetMode(context.Background(), ModeAuto, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("profile=%v: SetMode(Auto): %v", tc.profile, err)
+		}
 		if err := r.climate.SetProfile(context.Background(), tc.profile, hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("profile=%v: %v", tc.profile, err)
 		}
@@ -189,6 +196,71 @@ func TestSetProfileWeekProgramRFMapsToEnumLabel(t *testing.T) {
 		if !ok || s != tc.wantLabel {
 			t.Errorf("profile=%v: value=%#v, want %q", tc.profile, got.value, tc.wantLabel)
 		}
+	}
+}
+
+// TestSetProfileWeekProgramIPSwitchesToAutoFirst verifies that selecting a
+// week-program profile while the thermostat is not in AUTO batches the AUTO
+// switch, the BOOST_MODE clear and ACTIVE_PROFILE into one put_paramset — a
+// week program only executes in AUTO, so writing the pointer alone from MANU
+// stores it without effect. Mirrors CustomDpIpThermostat.set_profile's
+// week-program branch (climate.py:858-863): CONTROL_MODE, BOOST_MODE and
+// ACTIVE_PROFILE are all VALUES parameters on the same channel, and
+// @bind_collector groups every send_value call it makes there into one
+// put_paramset instead of one round-trip each (CallParameterCollector.
+// add_data_point / _send_paramset, model/data_point.py:1648-1667,1724-1776).
+func TestSetProfileWeekProgramIPSwitchesToAutoFirst(t *testing.T) {
+	t.Parallel()
+
+	w := &putWriter{}
+	r := newRig(t, "x", KindIP, w, custom.ClimateCapabilities{SupportsProfile: true, SupportsBoost: true})
+	// Put the thermostat in HEAT (MANU) before selecting a week program.
+	if err := r.climate.SetMode(context.Background(), ModeHeat, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetMode(Heat): %v", err)
+	}
+	before := len(w.puts)
+
+	if err := r.climate.SetProfile(context.Background(), ProfileWeekProgram1, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetProfile(week_program_1): %v", err)
+	}
+	puts := w.puts[before:]
+	if len(puts) != 1 {
+		t.Fatalf("SetProfile(week_program_1) from MANU wrote %d put_paramset call(s), want CONTROL_MODE + BOOST_MODE + ACTIVE_PROFILE batched into one: %+v", len(puts), puts)
+	}
+	got := puts[0]
+	if v, ok := got[string(hmenum.ParameterControlMode)].(int32); !ok || v != 0 {
+		t.Errorf("CONTROL_MODE=%#v, want int32(0) (AUTO)", got[string(hmenum.ParameterControlMode)])
+	}
+	if v, ok := got[string(hmenum.ParameterBoostMode)].(bool); !ok || v {
+		t.Errorf("BOOST_MODE=%#v, want false", got[string(hmenum.ParameterBoostMode)])
+	}
+	if v, ok := got[string(hmenum.ParameterActiveProfile)].(int32); !ok || v != 1 {
+		t.Errorf("ACTIVE_PROFILE=%#v, want int32(1)", got[string(hmenum.ParameterActiveProfile)])
+	}
+}
+
+// TestSetProfileWeekProgramIPSkipsAutoSwitchWhenAlreadyAuto verifies that no
+// extra CONTROL_MODE/BOOST_MODE write happens when the thermostat is
+// already in AUTO — only ACTIVE_PROFILE is written.
+func TestSetProfileWeekProgramIPSkipsAutoSwitchWhenAlreadyAuto(t *testing.T) {
+	t.Parallel()
+
+	w := &stubWriter{}
+	r := newRig(t, "x", KindIP, w, custom.ClimateCapabilities{SupportsProfile: true, SupportsBoost: true})
+	if err := r.climate.SetMode(context.Background(), ModeAuto, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetMode(Auto): %v", err)
+	}
+	before := len(w.calls)
+
+	if err := r.climate.SetProfile(context.Background(), ProfileWeekProgram2, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetProfile(week_program_2): %v", err)
+	}
+	calls := w.calls[before:]
+	if len(calls) != 1 {
+		t.Fatalf("SetProfile(week_program_2) from AUTO wrote %d calls, want only ACTIVE_PROFILE: %+v", len(calls), calls)
+	}
+	if calls[0].param != hmenum.ParameterActiveProfile || calls[0].value.(int32) != 2 {
+		t.Errorf("write=%+v, want ACTIVE_PROFILE=2", calls[0])
 	}
 }
 
@@ -289,6 +361,45 @@ func TestSetProfileNonWeekRejected(t *testing.T) {
 	r := newRig(t, "x", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsProfile: true})
 	if err := r.climate.SetProfile(context.Background(), ProfileAway, hmenum.CommandPriorityHigh); err == nil {
 		t.Error("SetProfile(Away) must be rejected")
+	}
+}
+
+// TestSetProfileNoneClearsBoostOnIP verifies that SetProfile(ProfileNone) —
+// the profile [Climate.Profiles] itself lists first — clears BOOST_MODE on
+// an HmIP thermostat instead of returning "no pointer mapping". Mirrors
+// CustomDpIpThermostat.set_profile's NONE branch (climate.py:856-857),
+// which sends BOOST_MODE=False.
+func TestSetProfileNoneClearsBoostOnIP(t *testing.T) {
+	t.Parallel()
+
+	w := &stubWriter{}
+	r := newRig(t, "x", KindIP, w, custom.ClimateCapabilities{SupportsProfile: true, SupportsBoost: true})
+	if err := r.climate.SetProfile(context.Background(), ProfileNone, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetProfile(none): unexpected error %v", err)
+	}
+	got := w.last()
+	if got.param != hmenum.ParameterBoostMode {
+		t.Fatalf("SetProfile(none) wrote param=%v, want BOOST_MODE", got.param)
+	}
+	if on, ok := got.value.(bool); !ok || on {
+		t.Fatalf("SetProfile(none) wrote BOOST_MODE=%#v, want false", got.value)
+	}
+}
+
+// TestSetProfileNoneNoOpOnRF verifies that SetProfile(ProfileNone) on a
+// classic RF thermostat is a no-op that reports success rather than an
+// error — the reference's RF set_profile has no NONE branch at all
+// (climate.py:602-619), so selecting "none" there writes nothing.
+func TestSetProfileNoneNoOpOnRF(t *testing.T) {
+	t.Parallel()
+
+	w := &stubWriter{}
+	r := newRig(t, "x", KindRF, w, custom.ClimateCapabilities{SupportsProfile: true, SupportsBoost: true})
+	if err := r.climate.SetProfile(context.Background(), ProfileNone, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetProfile(none) on RF: unexpected error %v", err)
+	}
+	if len(w.calls) != 0 {
+		t.Errorf("SetProfile(none) on RF wrote %+v, want no wire calls", w.calls)
 	}
 }
 

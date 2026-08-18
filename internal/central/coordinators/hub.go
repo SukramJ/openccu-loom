@@ -966,20 +966,27 @@ func (h *HubCoordinator) RefreshMetrics(ctx context.Context) error {
 }
 
 // PublishInstallModeRefreshed fires an [hmevent.InstallModeChangedEvent] for
-// each registered install-mode data point so north-bound adapters (MQTT,
-// REST) pick up the refreshed countdown values.
+// each registered install-mode data point whose (enabled, remaining_s) pair
+// changed since the last call, so north-bound adapters (MQTT, REST) pick up
+// the refreshed countdown values without re-publishing an identical
+// steady-state tuple on every poll — this job runs every 30s for the life
+// of the daemon, and install mode is off far more often than it is on.
 func (h *HubCoordinator) PublishInstallModeRefreshed() {
 	dps := h.InstallModeDPs()
 	for _, dp := range dps {
 		if dp == nil {
 			continue
 		}
+		enabled, remainingS, changed := dp.ConsumeChangeSincePublish()
+		if !changed {
+			continue
+		}
 		events.Publish(h.bus, hmevent.InstallModeChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: h.centralName,
 			InterfaceID: dp.InterfaceID,
-			Enabled:     dp.IsActive(),
-			RemainingS:  int(dp.Remaining().Seconds()),
+			Enabled:     enabled,
+			RemainingS:  remainingS,
 		})
 	}
 }

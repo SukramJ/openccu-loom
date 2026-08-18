@@ -22,14 +22,24 @@ const (
 // (the ADR 0027 resilient fallback) — previously visible only as a single boot
 // warning. Recording it as a degraded /health component and a Prometheus gauge
 // lets an operator dashboard catch the condition without scraping logs.
+//
+// Recorded exactly once, at boot, with no periodic refresher — Sticky so it
+// does not decay to StatusUnknown 90s later and drag a genuinely healthy
+// daemon's /health to "unknown" for the rest of the process lifetime.
 func recordSecretHealth(tracker *health.Tracker, reg *metrics.Registry, available bool) {
 	if tracker != nil {
+		// Sticky: this is a one-shot boot-time fact (the cipher either
+		// found a master key or it did not) recorded exactly once, never
+		// re-recorded on a heartbeat — without Sticky the tracker's
+		// staleAfter decay would downgrade it to StatusUnknown 90 s after
+		// boot regardless of how healthy the rest of the daemon is.
 		if available {
-			tracker.Record(secretsHealthComponent, health.Sample{Healthy: true, Note: "encrypted at rest"})
+			tracker.Record(secretsHealthComponent, health.Sample{Healthy: true, Note: "encrypted at rest", Sticky: true})
 		} else {
 			tracker.Record(secretsHealthComponent, health.Sample{
 				Healthy: false,
 				Note:    "no master key resolved — config secrets stored in plaintext",
+				Sticky:  true,
 			})
 		}
 	}

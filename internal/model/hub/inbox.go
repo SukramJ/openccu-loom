@@ -6,6 +6,7 @@ package hub
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -144,12 +145,30 @@ func (i *Inbox) merged() map[string]InboxDevice {
 
 // Replace swaps the CCU-reported pending-devices set. Fires subscribers
 // when the merged set actually changed.
+//
+// The caller never carries a FirstSeen value (the coordinator has no
+// first-detection timestamp of its own — the CCU's inbox query does not
+// report one), so this is the one place that stamps it: an address seen
+// in the previous set keeps its stamp, a genuinely new address is
+// stamped with the current time. Without the carry-over every periodic
+// hub scan would reset FirstSeen to "now", since Inbox.Replace rebuilds
+// the whole list from scratch on every call.
 func (i *Inbox) Replace(devices []InboxDevice) {
 	next := make(map[string]InboxDevice, len(devices))
 	for j := range devices {
 		next[devices[j].Address] = devices[j]
 	}
 	i.swap(func() bool {
+		now := time.Now().Unix()
+		for addr := range next {
+			d := next[addr]
+			if prev, existed := i.devices[addr]; existed && prev.FirstSeen != 0 {
+				d.FirstSeen = prev.FirstSeen
+			} else if d.FirstSeen == 0 {
+				d.FirstSeen = now
+			}
+			next[addr] = d
+		}
 		changed := !i.observed || !sameInbox(i.devices, next)
 		i.devices = next
 		i.observed = true
@@ -163,6 +182,12 @@ func (i *Inbox) Replace(devices []InboxDevice) {
 // accepted yet. Fires subscribers when the merged set actually changed,
 // which is what drives the `hub.<central>.inbox` broadcast so an open
 // SPA sees a newly paired device without polling.
+//
+// Carries FirstSeen over the same way [Inbox.Replace] does — the caller
+// (PublishPendingDevices) rebuilds the whole queue from scratch on every
+// call, so without this an address already pending would have its
+// first-detection stamp reset on every subsequent announcement / accept
+// in the queue.
 func (i *Inbox) SetPendingCreation(devices []InboxDevice) {
 	next := make(map[string]InboxDevice, len(devices))
 	for j := range devices {
@@ -171,6 +196,16 @@ func (i *Inbox) SetPendingCreation(devices []InboxDevice) {
 		next[d.Address] = d
 	}
 	i.swap(func() bool {
+		now := time.Now().Unix()
+		for addr := range next {
+			d := next[addr]
+			if prev, existed := i.pending[addr]; existed && prev.FirstSeen != 0 {
+				d.FirstSeen = prev.FirstSeen
+			} else if d.FirstSeen == 0 {
+				d.FirstSeen = now
+			}
+			next[addr] = d
+		}
 		changed := !sameInbox(i.pending, next)
 		i.pending = next
 		return changed

@@ -117,7 +117,20 @@ func readEventFilterArray(dec *tlv.Decoder) ([]EventMinimumNumber, error) {
 			return filters, nil
 		}
 		if !el.IsContainer || el.Type != tlv.TypeStructure {
-			// Skip non-struct elements — forward-compat tolerance.
+			// Skip non-struct elements — forward-compat tolerance. A
+			// scalar has already been fully consumed by dec.Next(); a
+			// container (e.g. a nested Array/List) still has its inner
+			// elements pending and must be drained via skipContainer —
+			// otherwise the next dec.Next() call reads that container's
+			// first inner element as if it were the following
+			// EventFilters array member and desyncs the rest of the
+			// message, mirroring the read.go / subscribe.go fix for the
+			// sibling EventFilters-field case.
+			if el.IsContainer {
+				if err := skipContainer(dec); err != nil {
+					return nil, err
+				}
+			}
 			continue
 		}
 		f, err := readEventFilterFields(dec)

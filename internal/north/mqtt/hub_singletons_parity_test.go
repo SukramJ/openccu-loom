@@ -77,3 +77,29 @@ func TestBuildHubUpdateDiscovery_SystemUpdateSlug(t *testing.T) {
 		t.Errorf("unique_id=%q should end with _system_update", uid)
 	}
 }
+
+// TestBuildHubUpdateDiscovery_NoValueOrInProgressTemplate pins that the
+// hub firmware-update entity lets Home Assistant parse its state topic
+// natively. `value_template` narrows the payload to a bare version
+// string before HA's schema check runs, and `in_progress_template` is
+// not an MQTT `update` option at all (HA's update platform reads
+// `in_progress` only from the schema-parsed state payload) — either one
+// silenced the entity's install-in-progress indication.
+func TestBuildHubUpdateDiscovery_NoValueOrInProgressTemplate(t *testing.T) {
+	t.Parallel()
+	db := newHubBuilder()
+	item := db.BuildHubUpdateDiscovery("ccu-01")
+	if !item.OK {
+		t.Fatal("BuildHubUpdateDiscovery returned ok=false")
+	}
+	m := jsonMap(t, item)
+	if _, ok := m["value_template"]; ok {
+		t.Error("value_template must not be set: it prevents HA from reading in_progress out of the state JSON")
+	}
+	if _, ok := m["in_progress_template"]; ok {
+		t.Error("in_progress_template is not an HA MQTT update option and is silently dropped")
+	}
+	if st, _ := m["state_topic"].(string); st == "" {
+		t.Error("state_topic must still be set so HA can parse installed_version/latest_version/in_progress natively")
+	}
+}

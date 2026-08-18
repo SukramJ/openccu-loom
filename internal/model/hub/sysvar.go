@@ -724,7 +724,7 @@ func (s *Sysvar) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 // `SysvarDpSelect.send_variable` (model/hub/select.py:34-42).
 func (s *Sysvar) toWire(v hmtypes.ParamValue) (any, error) {
 	if v.Kind == hmtypes.ValueKindNone {
-		return nil, fmt.Errorf("sysvar %q: cannot write NoneValue", s.Name)
+		return nil, fmt.Errorf("sysvar %q: cannot write NoneValue", s.LegacyName())
 	}
 	// One snapshot of the declared type and value list for the whole call: the
 	// hub scan rewrites both in place through [ApplyMeta] while a command is in
@@ -737,7 +737,7 @@ func (s *Sysvar) toWire(v hmtypes.ParamValue) (any, error) {
 			if idx, ok := resolveListIndex(v, m.ValueList); ok {
 				return idx, nil
 			}
-			return nil, fmt.Errorf("sysvar %q: value %s not in value list", s.Name, v.AsString())
+			return nil, fmt.Errorf("sysvar %q: value %s not in value list", s.LegacyName(), v.AsString())
 		}
 		// No labels on the descriptor: the write still needs a numeric index.
 		return s.intToWire(v)
@@ -763,7 +763,7 @@ func (s *Sysvar) toWire(v hmtypes.ParamValue) (any, error) {
 	case hmtypes.ValueKindList:
 		return v.List, nil
 	}
-	return nil, fmt.Errorf("sysvar %q: unsupported value kind %s", s.Name, v.Kind)
+	return nil, fmt.Errorf("sysvar %q: unsupported value kind %s", s.LegacyName(), v.Kind)
 }
 
 // boolToWire coerces v to the bool a LOGIC/ALARM sysvar writes. String
@@ -796,7 +796,7 @@ func (s *Sysvar) boolToWire(v hmtypes.ParamValue) (any, error) {
 			return false, nil
 		}
 	}
-	return nil, fmt.Errorf("sysvar %q: value %s is not a boolean", s.Name, v.AsString())
+	return nil, fmt.Errorf("sysvar %q: value %s is not a boolean", s.LegacyName(), v.AsString())
 }
 
 // floatToWire coerces v to the float64 a FLOAT/NUMBER sysvar writes.
@@ -811,7 +811,7 @@ func (s *Sysvar) floatToWire(v hmtypes.ParamValue) (any, error) {
 			return f, nil
 		}
 	}
-	return nil, fmt.Errorf("sysvar %q: value %s is not numeric", s.Name, v.AsString())
+	return nil, fmt.Errorf("sysvar %q: value %s is not numeric", s.LegacyName(), v.AsString())
 }
 
 // intToWire coerces v to the int an INTEGER (or label-less LIST) sysvar
@@ -842,7 +842,7 @@ func (s *Sysvar) intToWire(v hmtypes.ParamValue) (any, error) {
 			return int(n), nil
 		}
 	}
-	return nil, fmt.Errorf("sysvar %q: value %s is not an integer", s.Name, v.AsString())
+	return nil, fmt.Errorf("sysvar %q: value %s is not an integer", s.LegacyName(), v.AsString())
 }
 
 // stringToWire coerces v to the string a STRING sysvar writes; scalar
@@ -854,7 +854,7 @@ func (s *Sysvar) stringToWire(v hmtypes.ParamValue) (any, error) {
 	case hmtypes.ValueKindBool, hmtypes.ValueKindInt, hmtypes.ValueKindFloat:
 		return v.AsString(), nil
 	}
-	return nil, fmt.Errorf("sysvar %q: value kind %s cannot write a string sysvar", s.Name, v.Kind)
+	return nil, fmt.Errorf("sysvar %q: value kind %s cannot write a string sysvar", s.LegacyName(), v.Kind)
 }
 
 // resolveListIndex maps a write-side value onto a zero-based index into

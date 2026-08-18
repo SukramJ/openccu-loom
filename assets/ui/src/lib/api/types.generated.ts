@@ -4974,8 +4974,10 @@ export interface paths {
          * Config field schema — section list + typed field descriptors
          * @description Returns the static descriptor of every config field the daemon
          *     exposes: which sections exist, the Go type of each field, and
-         *     whether changing a field requires a daemon restart. No
-         *     authentication required — the schema carries no secret values.
+         *     whether changing a field requires a daemon restart. The schema
+         *     carries no secret values, but the route still sits behind the
+         *     standard authenticated-session gate like every other /config/*
+         *     route — any authenticated role may read it.
          */
         get: operations["getConfigSchema"];
         put?: never;
@@ -6979,6 +6981,14 @@ export interface components {
              *     as the CCU declares it. Empty when none.
              */
             unit?: string;
+            /**
+             * @description Converts `value` (the raw wire value) into the unit `unit`
+             *     names — e.g. a LEVEL data point reports `value` in 0.0-1.0
+             *     with `unit` "%", so a client must multiply by `multiplier`
+             *     (100) to render "42 %" instead of "0.42 %". Only present
+             *     for a non-trivial multiplier; absent means 1.
+             */
+            multiplier?: number;
             min?: unknown;
             max?: unknown;
             default?: unknown;
@@ -7915,6 +7925,12 @@ export interface components {
             /** @enum {string} */
             mappable: "mappable" | "partially_mappable" | "unmappable";
             device_type?: number;
+            /**
+             * @description Operator-facing Matter device-type name for `device_type`
+             *     (e.g. "On/Off Light"). Empty when `device_type` is zero
+             *     (measurement rides on a host endpoint).
+             */
+            device_type_label?: string;
             clusters?: number[];
             reason?: string;
         };
@@ -9610,7 +9626,7 @@ export interface components {
         /** @description Identifies a live edit session on the heartbeat and close routes. The token is what proves ownership; a request that omits it is accepted syntactically but cannot refresh or release the lock. */
         EditSessionRequest: {
             key: string;
-            token: string;
+            token?: string;
         };
         /** @description Lock state returned on open and heartbeat. */
         EditSessionResponse: {
@@ -9784,6 +9800,13 @@ export interface components {
         /** @description One alarm zone — an independently armable partition with its own arm state, sensor set, and output set. */
         AlarmZone: {
             id: string;
+            name: string;
+            /** @description Display ordering hint for the SPA zone list. */
+            position?: number;
+            config?: components["schemas"]["AlarmZoneConfig"];
+        };
+        /** @description Request body of POST /alarm/zones. Unlike [AlarmZone], `id` is not required: the server always mints its own id (uuid.NewString()) and ignores one sent in the body, so a REST-conventional client that omits it is not rejected before the handler ever runs. */
+        AlarmZoneCreate: {
             name: string;
             /** @description Display ordering hint for the SPA zone list. */
             position?: number;
@@ -12652,6 +12675,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["BadRequest"];
+            423: components["responses"]["Locked"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -14839,7 +14863,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: unknown;
-                    };
+                    }[];
                 };
             };
         };
@@ -16650,7 +16674,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AlarmZone"];
+                "application/json": components["schemas"]["AlarmZoneCreate"];
             };
         };
         responses: {

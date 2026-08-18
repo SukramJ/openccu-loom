@@ -15,14 +15,20 @@ import (
 )
 
 // Binding implements the Matter Binding cluster (0x001E) per Matter
-// Core Specification 1.5.1 §9.6. Mandatory on bridged endpoints that
-// support local actions referencing other Matter nodes (e.g. a Light
-// switch endpoint binding to a target Light endpoint).
+// Core Specification 1.5.1 §9.6, which is mandatory on bridged
+// endpoints that support local actions referencing other Matter nodes
+// (e.g. a Light switch endpoint binding to a target Light endpoint).
 //
-// openccu-loom's bridged endpoints accept binding writes from
-// commissioners but treat them as opaque — the bridge does not
-// originate traffic to the bound nodes. Storing the list satisfies
-// commissioners that round-trip the attribute on bind/unbind UX.
+// Stub, not mounted: no bridged endpoint in v1.1 constructs a Binding
+// server — [NewBinding] has no production caller (see
+// internal/north/matter/cluster/core/doc.go's cluster inventory), so
+// this cluster is absent from every endpoint's ServerList and no
+// controller can reach the write handler below. The bridge does not
+// originate traffic to bound nodes even where it is present, so
+// mounting it would still be a round-trippable-but-opaque store, not
+// live binding behaviour. Wiring this in requires deciding which
+// bridged endpoints declare the binding feature; deferred until a
+// concrete use-case arrives.
 type Binding struct {
 	mu       sync.RWMutex
 	bindings []TargetStruct

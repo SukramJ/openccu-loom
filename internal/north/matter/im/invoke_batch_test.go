@@ -96,6 +96,40 @@ func TestValidateInvokeBatch(t *testing.T) {
 	}
 }
 
+// batchOfN builds an InvokeRequest with n distinct, individually
+// well-formed CommandInvocations — each on its own endpoint with a
+// distinct CommandRef — so a rejection can only be attributed to the
+// path-count check, not to any of ValidateInvokeBatch's other guards.
+func batchOfN(n int) InvokeRequest {
+	invokes := make([]CommandInvocation, n)
+	for i := range invokes {
+		//nolint:gosec // test fixture, n bounded by callers below.
+		invokes[i] = CommandInvocation{
+			Path:          concretePath(uint16(i+1), 0x0006, 0x01),
+			CommandRef:    uint16(i + 1),
+			HasCommandRef: true,
+		}
+	}
+	return InvokeRequest{Invokes: invokes}
+}
+
+// TestValidateInvokeBatch_MaxPathsPerInvoke pins the batch-size ceiling
+// mirroring matter.js InteractionServer.ts:950-955
+// (`if (invokeRequests.length > this.#maxPathsPerInvoke) throw new
+// StatusResponseError(..., Status.InvalidAction)`), evaluated before any
+// command in the batch is dispatched. A batch at exactly the ceiling
+// passes; one past it is rejected regardless of every individual
+// command being otherwise well-formed.
+func TestValidateInvokeBatch_MaxPathsPerInvoke(t *testing.T) {
+	t.Parallel()
+	if got := ValidateInvokeBatch(batchOfN(DefaultMaxPathsPerInvoke)); got != StatusSuccess {
+		t.Errorf("batch of %d (at ceiling): got %v, want StatusSuccess", DefaultMaxPathsPerInvoke, got)
+	}
+	if got := ValidateInvokeBatch(batchOfN(DefaultMaxPathsPerInvoke + 1)); got != StatusInvalidAction {
+		t.Errorf("batch of %d (over ceiling): got %v, want StatusInvalidAction", DefaultMaxPathsPerInvoke+1, got)
+	}
+}
+
 // TestInvokeResponse_HasCommandData verifies the CommandDataIB detection that
 // gates the SuppressResponse "send nothing" decision (Matter §8.8.3.2.1;
 // matter.js InteractionServer.ts:1043-1074): a response is "command data"

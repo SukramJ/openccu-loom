@@ -45,7 +45,7 @@ func TestMatterCommissioningWindow_HappyPath_PublishesCommissioningWindowOpened(
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, pub).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, pub, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())

@@ -177,6 +177,10 @@ func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 	if b == nil {
 		return
 	}
+	// Deliberately ungated. The funnel carries the very topics the security
+	// discovery payloads name as their `state_topic`, so silencing it while
+	// discovery still declares them leaves every Security & Safety entity
+	// present in Home Assistant and permanently unknown.
 	qos := b.cfg.QoS.State
 	if !m.retained {
 		// An event is a moment, not a state: at-most-once delivery is

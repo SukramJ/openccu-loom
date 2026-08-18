@@ -40,33 +40,10 @@ const firmwareTransportDownloadTimeout = 10 * time.Minute
 // Adding a wrapper here is preferred over calling [Client.Call] directly from
 // higher-level code because it keeps the wire coupling in one place.
 
-// SystemInformation holds the result of [Client.GetSystemInformation].
-// Wire shape: map with string fields from System.getSystemInformation.
-type SystemInformation struct {
-	// Serial is the CCU serial number (e.g. "MEQ1234567").
-	Serial string `json:"SERIAL_NUMBER"`
-	// SoftwareVersion is the installed firmware version string.
-	SoftwareVersion string `json:"VERSION"`
-	// HardwareVersion is the hardware revision string.
-	HardwareVersion string `json:"HARDWARE_VERSION"`
-}
-
 // DeviceDetail holds a single entry returned by [Client.GetDeviceDetails].
 // Wire shape from Device.listAllDetail: map of device address → detail map.
 // We decode the outer result as a map[string]any for flexibility.
 type DeviceDetail = map[string]any
-
-// GetSystemInformation calls System.getSystemInformation and returns typed
-// system-level metadata for the CCU.
-//
-// Wire: System.getSystemInformation (no params).
-func (c *Client) GetSystemInformation(ctx context.Context) (SystemInformation, error) {
-	var info SystemInformation
-	if err := c.Call(ctx, "System.getSystemInformation", nil, &info); err != nil {
-		return SystemInformation{}, err
-	}
-	return info, nil
-}
 
 // DeleteSystemVariable removes the system variable identified by name.
 //
@@ -151,20 +128,6 @@ func (c *Client) GetDeviceDetails(ctx context.Context) ([]DeviceDetail, error) {
 	return result, nil
 }
 
-// GetAllDeviceData returns a bulk snapshot of all channel values for the
-// given interface. The CCU returns a map keyed by channel address.
-//
-// Wire: Interface.listDevices, params: {interface: iface}.
-func (c *Client) GetAllDeviceData(ctx context.Context, iface string) (map[string]any, error) {
-	var result map[string]any
-	if err := c.Call(ctx, "Interface.listDevices", map[string]any{
-		"interface": iface,
-	}, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 // SuppressServiceMessage sets or clears the suppression flag on a service
 // message for the given channel parameter.
 //
@@ -178,20 +141,6 @@ func (c *Client) SuppressServiceMessage(ctx context.Context, iface, channelAddre
 		"parameterId":    parameterID,
 		"suppress":       suppress,
 	}, nil)
-}
-
-// HasProgramIDs checks whether the CCU program identified by iseID exists and
-// is reachable. Returns true when the program is present.
-//
-// Wire: Channel.hasProgramIds, params: {id: iseID}.
-func (c *Client) HasProgramIDs(ctx context.Context, iseID string) (bool, error) {
-	var result bool
-	if err := c.Call(ctx, "Channel.hasProgramIds", map[string]any{
-		"id": iseID,
-	}, &result); err != nil {
-		return false, err
-	}
-	return result, nil
 }
 
 // SetInstallModeBidCos enters or leaves BidCos pairing mode on the given
@@ -646,42 +595,12 @@ func (c *Client) AcknowledgeMessage(ctx context.Context, messageID string) error
 	}, nil)
 }
 
-// IsServiceAvailable performs a lightweight availability check against the
-// CCU JSON-RPC endpoint by calling System.getSystemInformation. Returns true
-// when the call succeeds, false when the CCU is not reachable or returns an
-// error.
-//
-// Callers should prefer the circuit-breaker state for routine health checks;
-// this method is for explicit on-demand probes (e.g. before initiating a CCU
-// backup download).
-func (c *Client) IsServiceAvailable(ctx context.Context) bool {
-	_, err := c.GetSystemInformation(ctx)
-	return err == nil
-}
-
 // TriggerFirmwareUpdate triggers a CCU-initiated firmware update for all
 // devices that have a pending update.
 //
 // Wire: Interface.triggerFirmwareUpdate (no params).
 func (c *Client) TriggerFirmwareUpdate(ctx context.Context) error {
 	return c.Call(ctx, "Interface.triggerFirmwareUpdate", nil, nil)
-}
-
-// GetSuppressedServiceMessages returns the list of currently suppressed
-// service messages for the given channel parameter.
-//
-// Wire: Interface.getSuppressedServiceMessages,
-//
-// params: {interface, channel}.
-func (c *Client) GetSuppressedServiceMessages(ctx context.Context, iface, channelAddress string) ([]map[string]any, error) {
-	var result []map[string]any
-	if err := c.Call(ctx, "Interface.getSuppressedServiceMessages", map[string]any{
-		"interface": iface,
-		"channel":   channelAddress,
-	}, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 // GetInstallMode returns the current pairing mode for the given interface (0
@@ -799,24 +718,6 @@ func bidcosPercent(m map[string]any, key string) int {
 		}
 	}
 	return -1
-}
-
-// GetLinkInfo returns the name and description of the direct link between two
-// channels on the given interface.
-//
-// Wire: Interface.getLinkInfo,
-//
-// params: {interface, sender, receiver}.
-func (c *Client) GetLinkInfo(ctx context.Context, iface, sender, receiver string) (map[string]any, error) {
-	var result map[string]any
-	if err := c.Call(ctx, "Interface.getLinkInfo", map[string]any{
-		"interface": iface,
-		"sender":    sender,
-		"receiver":  receiver,
-	}, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 // GetSystemVariable reads the current value of the named CCU system variable.

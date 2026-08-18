@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -589,6 +590,159 @@ func TestChunkReportData_MixedReports_Splits(t *testing.T) {
 	}
 }
 
+// bigPartsList returns a Descriptor.PartsList-shaped AttributeReport
+// (Matter §9.5.6.3) whose encoded []uint16 list alone exceeds
+// reportChunkHardCap — the shape the finding names: a bridge with
+// enough endpoints that a single AttributeReport can never fit any
+// datagram, oversized or not.
+func bigPartsList(endpoint uint16, n int) im.AttributeReport {
+	ids := make([]uint16, n)
+	for i := range ids {
+		ids[i] = uint16(i + 1) //nolint:gosec // test fixture, bounded range.
+	}
+	return im.AttributeReport{
+		Path: im.ConcreteAttributePath{
+			Endpoint: endpoint, Cluster: 0x1D, Attribute: 0x0003,
+			HasEndpoint: true, HasCluster: true, HasAttribute: true,
+		},
+		Value:       im.AttributeValue{Value: ids},
+		DataVersion: 1,
+	}
+}
+
+// TestChunkReportData_OversizedSingleAttributeDowngradesToStatus
+// verifies that an AttributeReport whose own encoded size breaches
+// reportChunkHardCap — and therefore could never be sent as data
+// regardless of chunk boundaries, since udp.Listener.Send rejects any
+// payload over udp.MaxDatagramSize — is downgraded to an
+// AttributeStatusIB(ResourceExhausted) rather than shipped raw and
+// refused by the transport.
+func TestChunkReportData_OversizedSingleAttributeDowngradesToStatus(t *testing.T) {
+	t.Parallel()
+	rep := bigPartsList(1, 2000) // ~6 KB encoded, well past reportChunkHardCap.
+	rd := im.ReportData{Reports: []im.AttributeReport{rep}}
+
+	chunks, err := chunkReportData(rd, reportChunkPayloadBudget)
+	if err != nil {
+		t.Fatalf("chunkReportData: %v", err)
+	}
+	if len(chunks) != 1 {
+		t.Fatalf("len(chunks)=%d, want 1", len(chunks))
+	}
+	if len(chunks[0].Reports) != 1 {
+		t.Fatalf("len(chunks[0].Reports)=%d, want 1", len(chunks[0].Reports))
+	}
+	got := chunks[0].Reports[0]
+	if !got.IsStatus {
+		t.Fatal("oversized report was not downgraded to a status entry")
+	}
+	if got.Status.Status != im.StatusResourceExhausted {
+		t.Errorf("status=%v, want StatusResourceExhausted", got.Status.Status)
+	}
+	if got.Path != rep.Path {
+		t.Errorf("downgraded status entry lost the original path: got %+v, want %+v", got.Path, rep.Path)
+	}
+
+	body, err := EncodeReportData(chunks[0])
+	if err != nil {
+		t.Fatalf("EncodeReportData: %v", err)
+	}
+	if len(body) > udp.MaxDatagramSize {
+		t.Errorf("downgraded chunk still exceeds udp.MaxDatagramSize: %d > %d", len(body), udp.MaxDatagramSize)
+	}
+}
+
+// TestChunkReportData_OversizedSingleAttributeAmongOthers verifies
+// that an oversized entry downgrades to a status without disturbing
+// the normal-sized entries around it — chunkReportData must not
+// downgrade every report in the batch, only the one that cannot fit
+// any datagram on its own.
+func TestChunkReportData_OversizedSingleAttributeAmongOthers(t *testing.T) {
+	t.Parallel()
+	reports := []im.AttributeReport{
+		makeAttributeReport(1),
+		bigPartsList(2, 2000),
+		makeAttributeReport(3),
+	}
+	rd := im.ReportData{Reports: reports}
+
+	chunks, err := chunkReportData(rd, reportChunkPayloadBudget)
+	if err != nil {
+		t.Fatalf("chunkReportData: %v", err)
+	}
+
+	var sawStatus, sawEndpoint1, sawEndpoint3 bool
+	for _, c := range chunks {
+		body, err := EncodeReportData(c)
+		if err != nil {
+			t.Fatalf("EncodeReportData: %v", err)
+		}
+		if len(body) > udp.MaxDatagramSize {
+			t.Errorf("chunk exceeds udp.MaxDatagramSize: %d > %d", len(body), udp.MaxDatagramSize)
+		}
+		for _, r := range c.Reports {
+			switch {
+			case r.IsStatus && r.Path.Endpoint == 2:
+				sawStatus = true
+				if r.Status.Status != im.StatusResourceExhausted {
+					t.Errorf("status=%v, want StatusResourceExhausted", r.Status.Status)
+				}
+			case !r.IsStatus && r.Path.Endpoint == 1:
+				sawEndpoint1 = true
+			case !r.IsStatus && r.Path.Endpoint == 3:
+				sawEndpoint3 = true
+			}
+		}
+	}
+	if !sawStatus {
+		t.Error("oversized entry (endpoint 2) was not downgraded to a status entry")
+	}
+	if !sawEndpoint1 || !sawEndpoint3 {
+		t.Error("normal-sized siblings were dropped or altered alongside the oversized entry")
+	}
+}
+
+// TestChunkReportData_OversizedSingleEventDowngradesToStatus mirrors
+// the attribute-side test for EventReport — the same downgrade must
+// apply to an oversized event payload.
+func TestChunkReportData_OversizedSingleEventDowngradesToStatus(t *testing.T) {
+	t.Parallel()
+	ids := make([]uint16, 2000)
+	for i := range ids {
+		ids[i] = uint16(i + 1) //nolint:gosec // test fixture, bounded range.
+	}
+	ev := im.EventReport{
+		Path:     im.ConcreteEventPath{Endpoint: 1, Cluster: 0x0028, Event: 0x00, HasEndpoint: true, HasCluster: true, HasEvent: true},
+		Number:   1,
+		Priority: im.EventPriorityInfo,
+		Data:     im.AttributeValue{Value: ids},
+	}
+	rd := im.ReportData{HasSubscription: true, SubscriptionID: 1, EventReports: []im.EventReport{ev}}
+
+	chunks, err := chunkReportData(rd, reportChunkPayloadBudget)
+	if err != nil {
+		t.Fatalf("chunkReportData: %v", err)
+	}
+	if len(chunks) != 1 || len(chunks[0].EventReports) != 1 {
+		t.Fatalf("chunks=%+v, want exactly one chunk with one event report", chunks)
+	}
+	got := chunks[0].EventReports[0]
+	if !got.IsStatus {
+		t.Fatal("oversized event report was not downgraded to a status entry")
+	}
+	if got.Status.Status != im.StatusResourceExhausted {
+		t.Errorf("status=%v, want StatusResourceExhausted", got.Status.Status)
+	}
+
+	body, err := EncodeReportData(chunks[0])
+	if err != nil {
+		t.Fatalf("EncodeReportData: %v", err)
+	}
+	if len(body) > udp.MaxDatagramSize {
+		t.Errorf("downgraded chunk still exceeds udp.MaxDatagramSize: %d > %d", len(body), udp.MaxDatagramSize)
+	}
+}
+
 // ─── FabricDescriptorStruct TLV encoding ─────────────────────────────────────
 
 // encodeFabricList is a test helper that encodes a
@@ -653,5 +807,79 @@ func TestFabricDescriptorStruct_VidVerificationStatement_TLVPresentWhenSet(t *te
 	found := slices.Contains(raw, 0xAB)
 	if !found {
 		t.Error("VidVerificationStatement payload byte 0xAB not found in TLV")
+	}
+}
+
+// ─── AccessControlExtensionEntry TLV encoding ────────────────────────────────
+
+// TestDefaultAttrWriter_AccessControlExtensionEntry_EmptyList verifies that
+// an empty AccessControl.Extension list encodes as a present, empty TLV
+// array rather than falling through the type switch's default case to
+// TLV null — a null reads as "attribute missing" to a controller, an
+// empty array reads as "attribute present, no entries".
+func TestDefaultAttrWriter_AccessControlExtensionEntry_EmptyList(t *testing.T) {
+	t.Parallel()
+	el := encodeOne(t, im.AttributeValue{Value: []mattercore.AccessControlExtensionEntry{}})
+	if el.Type != tlv.TypeArray || !el.IsContainer {
+		t.Fatalf("want TypeArray/IsContainer for empty list, got type=0x%02X isContainer=%v isNull=%v", el.Type, el.IsContainer, el.IsNull)
+	}
+}
+
+// TestDefaultAttrWriter_AccessControlExtensionEntry_PopulatedList verifies
+// that a populated AccessControl.Extension list round-trips its Data
+// (context tag 1) and FabricIndex (context tag 254) fields — the shape
+// AccessControlExtensionStruct declares in matter.js
+// access-control.element.ts. Before the []mattercore.AccessControlExtensionEntry
+// case existed, the type switch fell through to `default:` and every read
+// of this attribute returned TLV null regardless of what was stored.
+func TestDefaultAttrWriter_AccessControlExtensionEntry_PopulatedList(t *testing.T) {
+	t.Parallel()
+	entries := []mattercore.AccessControlExtensionEntry{
+		{Data: []byte{0xAB, 0xCD, 0xEF}, FabricIndex: 3},
+	}
+	enc := tlv.NewEncoder()
+	defaultAttributeValueWriter(enc, tlv.AnonymousTag(), im.AttributeValue{Value: entries})
+	raw, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("encoder.Bytes: %v", err)
+	}
+
+	dec := tlv.NewDecoder(raw)
+	arr, err := dec.Next()
+	if err != nil {
+		t.Fatalf("decoder.Next (array): %v", err)
+	}
+	if arr.Type != tlv.TypeArray || !arr.IsContainer {
+		t.Fatalf("want TypeArray/IsContainer, got type=0x%02X isContainer=%v", arr.Type, arr.IsContainer)
+	}
+
+	entry, err := dec.Next()
+	if err != nil {
+		t.Fatalf("decoder.Next (entry struct): %v", err)
+	}
+	if entry.Type != tlv.TypeStructure || !entry.IsContainer {
+		t.Fatalf("want TypeStructure/IsContainer for entry, got type=0x%02X isContainer=%v", entry.Type, entry.IsContainer)
+	}
+
+	data, err := dec.Next()
+	if err != nil {
+		t.Fatalf("decoder.Next (Data field): %v", err)
+	}
+	if data.Tag.Kind != tlv.TagKindContext || data.Tag.Number != 1 {
+		t.Errorf("Data field tag=%+v, want context tag 1", data.Tag)
+	}
+	if !slices.Equal(data.Octets, entries[0].Data) {
+		t.Errorf("Data field bytes=%v, want %v", data.Octets, entries[0].Data)
+	}
+
+	fabricIdx, err := dec.Next()
+	if err != nil {
+		t.Fatalf("decoder.Next (FabricIndex field): %v", err)
+	}
+	if fabricIdx.Tag.Kind != tlv.TagKindContext || fabricIdx.Tag.Number != 254 {
+		t.Errorf("FabricIndex field tag=%+v, want context tag 254", fabricIdx.Tag)
+	}
+	if fabricIdx.Uint != uint64(entries[0].FabricIndex) {
+		t.Errorf("FabricIndex=%d, want %d", fabricIdx.Uint, entries[0].FabricIndex)
 	}
 }

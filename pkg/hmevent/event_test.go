@@ -23,6 +23,7 @@ func TestEventCatalogueTypesUniqueAndNonEmpty(t *testing.T) {
 		DataPointSourceChangedEvent{},
 		DeviceCreatedEvent{},
 		DeviceRemovedEvent{},
+		DeviceMetadataChangedEvent{},
 		DeviceTriggerEvent{},
 		LinkPeerChangedEvent{},
 		ConnectionLostEvent{},

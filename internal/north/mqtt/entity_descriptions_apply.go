@@ -35,8 +35,12 @@ var entityDescriptionAuthoritativeFields = []string{
 
 // The function deletes [entityDescriptionAuthoritativeFields] from the body
 // when no rule matches; for matched rules it applies authoritative
-// replacement on every HA-attribute field.
-func applyEntityDescription(body map[string]any, component, parameter, model, unit, postfix string) {
+// replacement on every HA-attribute field. Returns the matched rule (nil on
+// a miss) so a caller that needs a field this function doesn't copy into
+// body — e.g. Multiplier, applied separately by [applyMultiplierSensor] /
+// [applyMultiplierNumber] because it needs the parameter's live value,
+// not a static body field — does not have to re-run the lookup.
+func applyEntityDescription(body map[string]any, component, parameter, model, unit, postfix string) *HARegistryDescription {
 	desc := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
 	if desc == nil {
 		// Strict ownership of fields the HA integration is the sole source for
@@ -47,7 +51,7 @@ func applyEntityDescription(body map[string]any, component, parameter, model, un
 		for _, k := range entityDescriptionAuthoritativeFields {
 			delete(body, k)
 		}
-		return
+		return nil
 	}
 	setOrDeleteString(body, "device_class", desc.DeviceClass)
 	setOrDeleteString(body, "state_class", desc.StateClass)
@@ -80,6 +84,7 @@ func applyEntityDescription(body map[string]any, component, parameter, model, un
 		}
 		body["options"] = opts
 	}
+	return desc
 }
 
 // setOrDeleteString is the per-field authoritative-replacement

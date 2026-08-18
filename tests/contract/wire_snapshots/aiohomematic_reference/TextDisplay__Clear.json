@@ -15,7 +15,7 @@
             "DISPLAY_DATA_ALIGNMENT": "CENTER",
             "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
             "DISPLAY_DATA_COMMIT": true,
-            "DISPLAY_DATA_ICON": "OFF",
+            "DISPLAY_DATA_ICON": "NO_ICON",
             "DISPLAY_DATA_ID": 1,
             "DISPLAY_DATA_STRING": "",
             "DISPLAY_DATA_TEXT_COLOR": "BLACK"

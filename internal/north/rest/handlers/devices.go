@@ -319,6 +319,14 @@ type DataPointSummary struct {
 	// "mA", "Hz", "Wh", ...) as the CCU declares it. Empty when the
 	// descriptor carries no unit.
 	Unit string `json:"unit,omitempty"`
+	// Multiplier converts Value (the raw wire value) into the unit
+	// Unit names — e.g. a LEVEL data point reports Value in 0.0-1.0
+	// with Unit "%", so a client must multiply by Multiplier (100) to
+	// render "42 %" instead of "0.42 %". Only emitted for a non-trivial
+	// multiplier so most responses stay unchanged; a client that omits
+	// this field must treat it as 1. Mirrors the MQTT raw-plane
+	// GenericDataPointConfig.Multiplier (internal/payload/info.go).
+	Multiplier float64 `json:"multiplier,omitempty"`
 	// Min / Max / Default carry the descriptor's numeric bounds and
 	// preset value verbatim from the wire. The SPA's AutoTile
 	// composer reads them to decide between slider / stepper /
@@ -980,6 +988,15 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 		s.Unit = u.Unit()
 	} else {
 		s.Unit = pd.Unit
+	}
+	// Same non-trivial-only gate as the MQTT raw-plane config payload
+	// (internal/model/generic/payload.go): a DP without a Multiplier()
+	// method, or one that resolves to the identity multiplier, leaves
+	// the field at its zero value so omitempty drops it.
+	if m, ok := dp.(interface{ Multiplier() float64 }); ok {
+		if mult := m.Multiplier(); mult != 0 && mult != 1.0 {
+			s.Multiplier = mult
+		}
 	}
 	if len(pd.ValueList) > 0 {
 		s.ValueList = pd.ValueList

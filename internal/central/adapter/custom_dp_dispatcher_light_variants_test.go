@@ -151,6 +151,13 @@ func TestDispatchDRGDaliLight_SetEffect(t *testing.T) {
 // SoundPlayerLED (HmIP-MP3P status LED)
 // ============================================================
 
+// TestDispatchSoundPlayerLED_TurnOnOff is the regression guard for the
+// dispatcher routing bug: turn_on/turn_off used to go through the embedded
+// FixedColorLight's plain Light.TurnOn/TurnOff, which write LEVEL only. The
+// LED stays dark at its power-on COLOR=BLACK default even though LEVEL
+// reports "on" — a plain turn_on must write COLOR (not just LEVEL), and
+// turn_off must write COLOR=BLACK atomically with ON_TIME=0 to also clear
+// any running flash timer.
 func TestDispatchSoundPlayerLED_TurnOnOff(t *testing.T) {
 	t.Parallel()
 	w := &dispatchWriter{}
@@ -163,16 +170,94 @@ func TestDispatchSoundPlayerLED_TurnOnOff(t *testing.T) {
 	if err := disp.InvokeCustomDP(context.Background(), "MP3P001", "LEVEL", "turn_on", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
 		t.Fatalf("turn_on: %v", err)
 	}
-	if w.callCount() == 0 {
-		t.Fatal("turn_on wrote nothing")
+	onPut, ok := w.lastPut()
+	if !ok {
+		t.Fatal("turn_on did not reach an atomic put_paramset")
+	}
+	if _, ok := onPut.values["COLOR"]; !ok {
+		t.Fatalf("turn_on did not write COLOR, only %v — the LED stays dark at COLOR=BLACK", onPut.values)
+	}
+	if v, ok := onPut.values["LEVEL"]; !ok || v == 0.0 {
+		t.Fatalf("turn_on did not turn LEVEL on, got %v", onPut.values)
 	}
 
 	if err := disp.InvokeCustomDP(context.Background(), "MP3P001", "LEVEL", "turn_off", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
 		t.Fatalf("turn_off: %v", err)
 	}
-	s, ok := w.lastSet()
-	if !ok || s.value != 0.0 {
-		t.Fatalf("turn_off did not write LEVEL=0 (ok=%v, set=%+v)", ok, s)
+	offPut, ok := w.lastPut()
+	if !ok {
+		t.Fatal("turn_off did not reach an atomic put_paramset")
+	}
+	if got := offPut.values["COLOR"]; got != "BLACK" {
+		t.Fatalf("turn_off COLOR = %v, want BLACK", got)
+	}
+	if got := offPut.values["ON_TIME"]; got != 0.0 {
+		t.Fatalf("turn_off ON_TIME = %v, want 0.0 (must clear a running flash timer)", got)
+	}
+}
+
+// TestDispatchSoundPlayerLED_TurnOnWithHSColorAndFlash verifies the LED's
+// own optional turn_on fields (hue/saturation, flash timing, repetitions)
+// reach the wire, so a caller is not limited to the fixed-colour path's
+// "label"/"slot" shape for a one-shot flashing turn_on.
+func TestDispatchSoundPlayerLED_TurnOnWithHSColorAndFlash(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	l := buildSoundPlayerLEDDP(t, "MP3P004", w)
+	disp, _ := buildDispatcher(t, "MP3P004", "LEVEL", l)
+
+	params := map[string]any{
+		"hue":           float64(0),
+		"saturation":    float64(100),
+		"flash_time_ms": float64(500),
+		"repetitions":   float64(3),
+	}
+	if err := disp.InvokeCustomDP(context.Background(), "MP3P004", "LEVEL", "turn_on", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_on: %v", err)
+	}
+	put, ok := w.lastPut()
+	if !ok {
+		t.Fatal("turn_on did not reach an atomic put_paramset")
+	}
+	if got := put.values["COLOR"]; got != "RED" {
+		t.Fatalf("COLOR = %v, want RED (hue=0/saturation=100)", got)
+	}
+	if got := put.values["ON_TIME_LIST_1"]; got != "500MS" {
+		t.Fatalf("ON_TIME_LIST_1 = %v, want 500MS", got)
+	}
+	if got := put.values["REPETITIONS"]; got != "REPETITIONS_003" {
+		t.Fatalf("REPETITIONS = %v, want REPETITIONS_003", got)
+	}
+}
+
+// TestDispatchSoundPlayerLED_SetLevelStateShapeRoutesToLEDMethods verifies
+// the HA mqtt-light `set_level{"state":"ON"/"OFF"}` JSON shape also reaches
+// the LED's own atomic turn_on/turn_off rather than the LEVEL-only path.
+func TestDispatchSoundPlayerLED_SetLevelStateShapeRoutesToLEDMethods(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	l := buildSoundPlayerLEDDP(t, "MP3P005", w)
+	disp, _ := buildDispatcher(t, "MP3P005", "LEVEL", l)
+
+	params := map[string]any{"state": "ON"}
+	if err := disp.InvokeCustomDP(context.Background(), "MP3P005", "LEVEL", "set_level", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("set_level state=ON: %v", err)
+	}
+	put, ok := w.lastPut()
+	if !ok {
+		t.Fatal("set_level state=ON did not reach an atomic put_paramset")
+	}
+	if _, ok := put.values["COLOR"]; !ok {
+		t.Fatalf("set_level state=ON did not write COLOR, got %v", put.values)
+	}
+
+	params = map[string]any{"state": "OFF"}
+	if err := disp.InvokeCustomDP(context.Background(), "MP3P005", "LEVEL", "set_level", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("set_level state=OFF: %v", err)
+	}
+	put, ok = w.lastPut()
+	if !ok || put.values["COLOR"] != "BLACK" {
+		t.Fatalf("set_level state=OFF did not write COLOR=BLACK, got %+v (ok=%v)", put.values, ok)
 	}
 }
 

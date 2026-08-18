@@ -23,8 +23,22 @@
  "subscription_ack": {
   "description": "After a `{op:\"subscribe\", topics:[...]}` or `{op:\"unsubscribe\", topics:[...]}` is processed, the daemon echoes one `{op:\"subscribed\"|\"unsubscribed\", topics:[...]}` frame carrying the topics the client just requested. Reconnect-after-failure logic can use this ACK to confirm the subscription set survived the round trip without needing to inspect daemon-side state. An empty topics array suppresses the ACK to keep no-op subscribes quiet."
  },
+ "protocol_error": {
+  "description": "A text frame that is not valid JSON, or whose `op` is not one of the operations documented here, is answered with `{op:\"error\", error:{code:\"bad_request\", message:\"...\"}}` rather than being dropped silently. The connection stays open — only a WebSocket-framing violation (RFC 6455 §5, e.g. a binary frame or an interleaved fragment) closes it, with a close code instead of this frame."
+ },
  "command_schemas": {
   "description": "Each command entry below may carry an `args` and a `result` field documenting its argument and return shape. `args` is an object whose keys are argument names; each value is a string of the form `<json-type>[?]` (with `?` marking optional fields). `result` follows the same conventions and may also be `\"array\"` or a fully-spelled object. Missing fields mean the command takes no arguments and/or returns an opaque object — the canonical source for the wire shape is then the matching Go handler under internal/north/rest/ws/."
+ },
+ "optional_deployment_providers": {
+  "description": "Every command listed here is always present in `system.commands` and always dispatchable, but its domain provider is wired only when the deployment supplies it; when unwired, the command answers `{code:\"not_implemented\"}` instead of running. Check `system.commands` at runtime rather than assuming every catalogued command is functional in a given daemon build.",
+  "commands": [
+   "change_history.list", "change_history.clear",
+   "central.info", "central.connectivity", "central.system_health", "central.reconcile",
+   "ccu.throttle_stats", "ccu.device_statistics",
+   "incidents.list", "incidents.get", "incidents.clear",
+   "service_messages.disable", "service_messages.suppressed", "service_messages.unsuppress",
+   "paramset.form_schema", "paramset.copy"
+  ]
  },
  "commands": [
   {
@@ -232,7 +246,11 @@
   {
    "category": "change_history",
    "description": "List recent paramset-write history entries, optionally filtered by channel address.",
-   "name": "change_history.list"
+   "name": "change_history.list",
+   "args": {
+    "limit": "integer?",
+    "channel_address": "string?"
+   }
   },
   {
    "category": "config",
@@ -252,13 +270,23 @@
   },
   {
    "category": "config",
-   "description": "Return the current pending changes for an open config session.",
-   "name": "config.session.changes"
+   "description": "Return the current pending changes for an open config session. `channel_address` and `paramset_key` identify the session, the same pair `config.session.open` was called with.",
+   "name": "config.session.changes",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string"
+   }
   },
   {
    "category": "config",
-   "description": "Discard all pending changes and close the config session.",
-   "name": "config.session.discard"
+   "description": "Discard all pending changes and close the config session. `channel_address` and `paramset_key` identify the session, the same pair `config.session.open` was called with.",
+   "name": "config.session.discard",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string"
+   }
   },
   {
    "category": "config",
@@ -272,13 +300,23 @@
   },
   {
    "category": "config",
-   "description": "Re-apply the most recently undone change in the open config session.",
-   "name": "config.session.redo"
+   "description": "Re-apply the most recently undone change in the open config session. `channel_address` and `paramset_key` identify the session, the same pair `config.session.open` was called with.",
+   "name": "config.session.redo",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string"
+   }
   },
   {
    "category": "config",
-   "description": "Write the pending changes of the open config session to the CCU and close the session.",
-   "name": "config.session.save"
+   "description": "Write the pending changes of the open config session to the CCU and close the session. `channel_address` and `paramset_key` identify the session, the same pair `config.session.open` was called with.",
+   "name": "config.session.save",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string"
+   }
   },
   {
    "category": "config",
@@ -294,8 +332,13 @@
   },
   {
    "category": "config",
-   "description": "Undo the most recent staged change in the open config session.",
-   "name": "config.session.undo"
+   "description": "Undo the most recent staged change in the open config session. `channel_address` and `paramset_key` identify the session, the same pair `config.session.open` was called with.",
+   "name": "config.session.undo",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string"
+   }
   },
   {
    "category": "custom_data_point",
@@ -719,7 +762,7 @@
   },
   {
    "category": "install_mode",
-   "description": "Close the pairing window for the named interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "description": "Close the pairing window for the named interface. `interface_id` accepts either the bare interface type (\"HmIP-RF\") or the composite `<central>-<interface>` id other commands publish (e.g. devices.list, ccu.get_signal_quality); both resolve to the same pairing window. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
    "name": "install_mode.disable",
    "args": {
     "interface_id": "string",
@@ -732,10 +775,11 @@
   },
   {
    "category": "install_mode",
-   "description": "Scan the wired bus (BidCos-Wired) for new devices; returns the count found (they join the inbox for acceptance).",
+   "description": "Scan the wired bus (BidCos-Wired) for new devices; returns the count found (they join the inbox for acceptance). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one. `central` is accepted as a deprecated alias for `central_name`.",
    "name": "install_mode.search",
    "args": {
     "interface_id": "string",
+    "central_name": "string?",
     "central": "string?"
    },
    "result": {
@@ -745,7 +789,7 @@
   },
   {
    "category": "install_mode",
-   "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device. `interface_id` accepts either the bare interface type (\"HmIP-RF\") or the composite `<central>-<interface>` id other commands publish (e.g. devices.list, ccu.get_signal_quality); both resolve to the same pairing window. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
    "name": "install_mode.enable",
    "args": {
     "interface_id": "string",
@@ -776,17 +820,34 @@
   {
    "category": "links",
    "description": "Create a new direct link between a sender and a receiver channel.",
-   "name": "links.add"
+   "name": "links.add",
+   "args": {
+    "sender": "string",
+    "receiver": "string",
+    "name": "string?",
+    "description": "string?"
+   }
   },
   {
    "category": "links",
    "description": "Return the form schema (descriptions + current values) for a link paramset between sender and receiver. Mirrors Python ws_get_link_form_schema (websocket_api.py:1057).",
-   "name": "links.get_form_schema"
+   "name": "links.get_form_schema",
+   "args": {
+    "interface_id": "string",
+    "sender_channel_address": "string",
+    "receiver_channel_address": "string"
+   }
   },
   {
    "category": "links",
    "description": "Return available easymode profiles for a link between sender and receiver channel types. Mirrors Python ws_get_link_profiles (websocket_api.py:1123). Stub until Phase-11.",
-   "name": "links.get_profiles"
+   "name": "links.get_profiles",
+   "args": {
+    "interface_id": "string?",
+    "sender_channel_address": "string",
+    "receiver_channel_address": "string",
+    "locale": "string?"
+   }
   },
   {
    "category": "links",
@@ -799,7 +860,11 @@
   {
    "category": "links",
    "description": "Read the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_get_link_paramset (websocket_api.py:1313). Closes parity_audit gap G-03.",
-   "name": "links.get_paramset"
+   "name": "links.get_paramset",
+   "args": {
+    "address": "string",
+    "peer_address": "string"
+   }
   },
   {
    "category": "links",
@@ -812,17 +877,29 @@
   {
    "category": "links",
    "description": "Global direct-link overview across all centrals (or one when 'central' is set). Each link carries its owning central_name and interface_id.",
-   "name": "links.list_all"
+   "name": "links.list_all",
+   "args": {
+    "central": "string?"
+   }
   },
   {
    "category": "links",
    "description": "Write values to the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_put_link_paramset (websocket_api.py:1387). Closes parity_audit gap G-04.",
-   "name": "links.put_paramset"
+   "name": "links.put_paramset",
+   "args": {
+    "address": "string",
+    "peer_address": "string",
+    "parameters": "object"
+   }
   },
   {
    "category": "links",
    "description": "Delete an existing direct link between a sender and a receiver channel.",
-   "name": "links.remove"
+   "name": "links.remove",
+   "args": {
+    "sender": "string",
+    "receiver": "string"
+   }
   },
   {
    "category": "links",
@@ -838,7 +915,13 @@
   {
    "category": "links",
    "description": "Temporarily apply a link profile's default values to a link paramset for preview. Mirrors Python ws_test_link_profile (websocket_api.py:2643). Stub until Phase-11.",
-   "name": "links.test_profile"
+   "name": "links.test_profile",
+   "args": {
+    "interface_id": "string",
+    "sender_channel_address": "string",
+    "receiver_channel_address": "string",
+    "profile_id": "integer?"
+   }
   },
   {
    "category": "master_profiles",
@@ -889,7 +972,12 @@
   {
    "category": "paramsets",
    "description": "Copy a paramset (VALUES or MASTER) from a source channel to a target channel by reading + writing the values. Distinct from links.copy (peer-to-peer link-entry copy). Mirrors Python ws_copy_paramset (websocket_api.py:916). Closes parity_audit gap L-7015.",
-   "name": "paramset.copy"
+   "name": "paramset.copy",
+   "args": {
+    "source_channel_address": "string",
+    "target_channel_address": "string",
+    "paramset_key": "string?"
+   }
   },
   {
    "category": "paramsets",
@@ -904,7 +992,12 @@
   {
    "category": "paramsets",
    "description": "Auto-detect a parameter value from the device via determine_parameter. Mirrors Python ws_determine_parameter (websocket_api.py:2556). Stub until Phase-11.",
-   "name": "paramset.determine"
+   "name": "paramset.determine",
+   "args": {
+    "interface_id": "string",
+    "channel_address": "string",
+    "parameter_id": "string"
+   }
   },
   {
    "category": "paramsets",
@@ -936,7 +1029,7 @@
     "channel_address": "string",
     "paramset_key": "string",
     "values": "object",
-    "edit_token": "string"
+    "edit_token": "string?"
    },
    "result": {
     "written": "integer"
@@ -1082,12 +1175,20 @@
   {
    "category": "schedules",
    "description": "Enable or disable the weekly program on a device. Mirrors Python ws_set_schedule_enabled (websocket_api.py:1698). Stub until Phase-11.",
-   "name": "schedules.set_enabled"
+   "name": "schedules.set_enabled",
+   "args": {
+    "device_address": "string",
+    "enabled": "boolean",
+    "channel_key": "string?"
+   }
   },
   {
    "category": "alarms",
    "description": "Disable (permanently suppress) a single service message by id. Resolves the message's channel + service parameter and suppresses it on the CCU via Interface.suppressServiceMessages until cleared via service_messages.unsuppress.",
-   "name": "service_messages.disable"
+   "name": "service_messages.disable",
+   "args": {
+    "id": "string"
+   }
   },
   {
    "category": "alarms",
@@ -1097,7 +1198,12 @@
   {
    "category": "alarms",
    "description": "Clear a permanent service-message suppression. Params: channel (required), parameter (empty = all parameters of the channel), interface (optional, resolved from the stored suppression).",
-   "name": "service_messages.unsuppress"
+   "name": "service_messages.unsuppress",
+   "args": {
+    "channel": "string",
+    "parameter": "string?",
+    "interface": "string?"
+   }
   },
   {
    "category": "alarms",

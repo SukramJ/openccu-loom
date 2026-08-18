@@ -108,10 +108,31 @@ func TestSensorCandidateFor(t *testing.T) {
 		},
 		{
 			name:              "motion detector motion is an intrusion candidate by channel type",
-			channelType:       "MOTIONDETECTOR",
+			channelType:       "MOTIONDETECTOR_TRANSCEIVER",
 			parameter:         hmenum.ParameterMotion,
 			wantOK:            true,
 			wantSensorType:    hmenum.AlarmSensorTypeMotion,
+			wantSecurityClass: hmenum.SecurityClassIntrusion,
+			wantRecommended:   true,
+		},
+		{
+			name:              "virtual motion detector motion is an intrusion candidate by channel type",
+			channelType:       "MOTIONDETECTOR_VIRTUAL_TRANSCEIVER",
+			parameter:         hmenum.ParameterMotion,
+			wantOK:            true,
+			wantSensorType:    hmenum.AlarmSensorTypeMotion,
+			wantSecurityClass: hmenum.SecurityClassIntrusion,
+			wantRecommended:   true,
+		},
+		{
+			// HmIP-SRH, the current-generation window-handle sensor: its
+			// tri-state STATE (CLOSED/TILTED/OPEN) reaches the same
+			// intrusion branch as HmIP-Wired's ROTARY_HANDLE_SENSOR.
+			name:              "rotary handle transceiver state is an intrusion candidate by channel type",
+			channelType:       "ROTARY_HANDLE_TRANSCEIVER",
+			parameter:         hmenum.ParameterState,
+			wantOK:            true,
+			wantSensorType:    hmenum.AlarmSensorTypeWindow,
 			wantSecurityClass: hmenum.SecurityClassIntrusion,
 			wantRecommended:   true,
 		},

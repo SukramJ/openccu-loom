@@ -304,10 +304,20 @@ func parseHHMM(s string) (hour, minute int, err error) {
 // mirroring engine.AlarmSchedule.Days). It walks forward day by day,
 // bounded to a week: since days is a subset of {0..6}, a matching
 // weekday always recurs within 7 days.
+//
+// Each candidate re-applies hour:minute to its own calendar date
+// instead of reusing a previously normalized wall clock. now's own
+// day may sit inside a spring-forward gap (the daemon's previous fire
+// landed there because the requested time did not exist that day),
+// and time.Date silently normalizes a gap instant forward by an hour;
+// deriving every candidate from that normalized instant via AddDate
+// would carry the +1h into every later day too, one calendar day
+// later than the gap itself.
 func nextFire(now time.Time, hour, minute int, days []int) time.Time {
-	base := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	for i := range 8 {
-		c := base.AddDate(0, 0, i)
+		d := day.AddDate(0, 0, i)
+		c := time.Date(d.Year(), d.Month(), d.Day(), hour, minute, 0, 0, now.Location())
 		if !c.After(now) {
 			continue
 		}
@@ -319,5 +329,6 @@ func nextFire(now time.Time, hour, minute int, days []int) time.Time {
 	// the loop above always returns. Kept as a safe fallback rather
 	// than a panic — a malformed Days list (e.g. every value out of
 	// 0-6) degrades to "one week out" instead of wedging the chain.
-	return base.AddDate(0, 0, 7)
+	d := day.AddDate(0, 0, 7)
+	return time.Date(d.Year(), d.Month(), d.Day(), hour, minute, 0, 0, now.Location())
 }

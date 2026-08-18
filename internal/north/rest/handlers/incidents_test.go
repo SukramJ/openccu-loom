@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,36 @@ func (s *stubIncidentsQuerier) IncidentsFiltered(central string, since, until ti
 	s.lastCentral, s.lastSince, s.lastUntil, s.lastLimit = central, since, until, limit
 	out := applyIncidentsFilter(s.incidents, incidentsFilter{central: central, since: since, until: until, limit: limit})
 	return out
+}
+
+// nilReturningIncidentsQuerier mimics the production shape that triggered
+// the null-response defect: [adapter.IncidentsStoreReader.IncidentsFiltered]
+// scans into a bare `var out []hmapi.Incident` and returns it unchanged, so
+// a query that matches nothing returns nil rather than an empty slice.
+type nilReturningIncidentsQuerier struct{}
+
+func (nilReturningIncidentsQuerier) Incidents() []Incident { return nil }
+
+func (nilReturningIncidentsQuerier) IncidentsFiltered(string, time.Time, time.Time, int) []Incident {
+	return nil
+}
+
+// TestListIncidents_QuerierReturnsNil_ResponseIsEmptyArrayNotNull pins the
+// declared array response schema: GET /incidents must never marshal to the
+// JSON literal `null`, which a generated client typed as Incident[] cannot
+// iterate.
+func TestListIncidents_QuerierReturnsNil_ResponseIsEmptyArrayNotNull(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/incidents", http.NoBody)
+	w := httptest.NewRecorder()
+	ListIncidents(nilReturningIncidentsQuerier{}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if got := strings.TrimSpace(w.Body.String()); got != "[]" {
+		t.Errorf("body = %q, want the literal empty array [], not null", got)
+	}
 }
 
 func TestListIncidents_HappyPath(t *testing.T) {

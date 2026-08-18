@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -64,6 +65,15 @@ func CreateAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
 			return
 		}
+		// The name is the only operator-facing identifier in the zone
+		// list and every arm/disarm confirm dialog — an empty one is an
+		// unlabelled row the operator cannot tell apart on a surface
+		// where picking the wrong one has physical consequences.
+		if strings.TrimSpace(in.Name) == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "Missing name", "zone name is required"))
+			return
+		}
 		cfgJSON := string(in.Config)
 		if _, err := engine.ParseZoneConfig(cfgJSON); err != nil {
 			problem.Write(w, http.StatusUnprocessableEntity,
@@ -119,6 +129,13 @@ func PutAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 		if err := DecodeJSON(r, &in); err != nil {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
+			return
+		}
+		// See the identical check in CreateAlarmZone: the name is the
+		// only operator-facing identifier for this zone.
+		if strings.TrimSpace(in.Name) == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "Missing name", "zone name is required"))
 			return
 		}
 		cfgJSON := string(in.Config)
@@ -507,8 +524,18 @@ func uniqueZoneSlug(name string, existing []sqlitestore.AlarmZoneRow) string {
 	}
 	taken := make(map[string]bool, len(existing))
 	for i := range existing {
-		if existing[i].Slug != "" {
-			taken[existing[i].Slug] = true
+		// A blank stored slug (pre-migration rows the charset migration
+		// reset, or a row that has never been read through the security
+		// domain's refreshZoneSlugs) still resolves to an effective slug
+		// at read time — routingkey.HubSlug(name) — so it must reserve
+		// that slug here too, or a new zone can be handed the identity an
+		// existing one already answers to.
+		slug := existing[i].Slug
+		if slug == "" {
+			slug = routingkey.HubSlug(existing[i].Name)
+		}
+		if slug != "" {
+			taken[slug] = true
 		}
 	}
 	if !taken[base] {

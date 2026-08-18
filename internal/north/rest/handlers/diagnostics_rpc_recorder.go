@@ -120,7 +120,7 @@ func DownloadRPCRecording(svc RPCRecorderService) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Disposition",
-			"attachment; filename=\"rpc-recording-"+centralName+"-"+format+".json\"")
+			ContentDispositionAttachment("rpc-recording-"+centralName+"-"+format+".json"))
 		JSON(w, http.StatusOK, out)
 	}
 }

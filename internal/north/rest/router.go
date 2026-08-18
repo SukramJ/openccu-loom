@@ -1216,9 +1216,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/matter/exposable", handlers.MatterExposable(d.MatterCandidateProvider, d.MatterExposureStore, d.Labels))
 			pr.With(admin).Put("/matter/exposable", handlers.MatterExposeUpdate(d.MatterExposureStore, d.MatterEventPublisher, d.MatterAuditRecorder, d.MatterTopologyReassembler))
 			pr.With(admin).Post("/matter/exposable/bulk", handlers.MatterExposeBulk(d.MatterExposureStore, d.MatterEventPublisher, d.MatterAuditRecorder, d.MatterTopologyReassembler))
-			pr.With(admin).Post("/matter/commissioning/window", handlers.MatterCommissioningWindow(d.MatterCommissioningOpener, d.MatterEventPublisher))
+			pr.With(admin).Post("/matter/commissioning/window", handlers.MatterCommissioningWindow(d.MatterCommissioningOpener, d.MatterEventPublisher, d.MatterAuditRecorder))
 			pr.With(admin).Post("/matter/commissioning/window/close", handlers.MatterCommissioningClose(d.MatterCommissioningCloser, d.MatterEventPublisher, d.MatterAuditRecorder))
-			pr.With(admin).Post("/matter/share", handlers.MatterShare(d.MatterCommissioningOpener, d.MatterEventPublisher))
+			pr.With(admin).Post("/matter/share", handlers.MatterShare(d.MatterCommissioningOpener, d.MatterEventPublisher, d.MatterAuditRecorder))
 
 			// Visibility / un-ignore endpoints — power-user surface that
 			// promotes otherwise-hidden parameters to first-class data
@@ -1373,11 +1373,19 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 
 // streamingPaths are the long-lived responses this router serves: the
 // server-sent-event log tail, which writes for as long as an operator keeps
-// the Logs view open, and the NDJSON event-bus tap, which streams for the
-// window the caller asked for (up to five minutes).
+// the Logs view open, the NDJSON event-bus tap, which streams for the
+// window the caller asked for (up to five minutes), and the NDJSON fleet
+// snapshot (`?ndjson=1`), which flushes one line per interface / device /
+// channel / data point / room / function / program / sysvar and can run
+// well past the router-wide deadline for a large multi-CCU fleet on a
+// slow or throttled connection (mobile, HA Ingress). The exemption is
+// path-based like its siblings, so it also covers the plain (non-NDJSON)
+// JSON snapshot response on the same path — harmless, since a normal
+// response still completes on its own regardless of the deadline.
 var streamingPaths = map[string]struct{}{
 	"/api/v1/diagnostics/logs/stream":  {},
 	"/api/v1/diagnostics/eventbus/tap": {},
+	"/api/v1/snapshot":                 {},
 }
 
 // timeoutExceptStreaming applies the router-wide request deadline everywhere

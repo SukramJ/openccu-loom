@@ -154,6 +154,49 @@ func TestHubEventsSubscriberMetrics(t *testing.T) {
 	}
 }
 
+// TestHubEventsSubscriberMetricsSuppressesNotReadySentinel verifies that
+// the not-ready sentinel (a negative system_health, meaning "the central
+// is FAILED, score unknown") never reaches the hub.metrics_changed
+// broadcast — mirroring the REST config snapshot (system_hub.go) and the
+// hub data-point projection (hub_data_points.go), which both omit it for
+// the same reason. Without the suppression, a client mirroring the
+// broadcast onto a gauge renders "-1 %" during an outage instead of
+// "unknown".
+func TestHubEventsSubscriberMetricsSuppressesNotReadySentinel(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	cu.HubModel.Metrics.Observe(hub.MetricSystemHealth, hub.MetricSystemHealthUnknown)
+	// A subsequent legitimate observation proves the subscriber is still
+	// alive and forwarding for this metric kind — if the sentinel had
+	// fired too, it would appear in the replay buffer alongside this one.
+	cu.HubModel.Metrics.Observe(hub.MetricSystemHealth, 97)
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == MetricsTopic("home")
+	})
+	p, ok := ev.Payload.(HubMetricChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want HubMetricChangedPayload", ev.Payload)
+	}
+	if p.Value != 97 {
+		t.Fatalf("value = %g, want 97 — the not-ready sentinel must not have reached the wire first", p.Value)
+	}
+
+	res := h.Replay(0, func(topic string) bool { return topic == MetricsTopic("home") })
+	for _, e := range res.Events {
+		if pp, ok := e.Payload.(HubMetricChangedPayload); ok && pp.Value < 0 {
+			t.Fatalf("found a negative system_health broadcast in the replay buffer: %+v", pp)
+		}
+	}
+}
+
 // TestHubEventsSubscriberConnectivity verifies that a connectivity state change
 // fires a broadcast on ConnectivityTopic with the interface ID and reachability.
 func TestHubEventsSubscriberConnectivity(t *testing.T) {

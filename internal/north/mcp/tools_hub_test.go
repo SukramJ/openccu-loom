@@ -9,6 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -98,7 +99,12 @@ func TestListPrograms_FilterInternalPrograms(t *testing.T) {
 	}
 }
 
-func TestListPrograms_UnknownCentralReturnsEmpty(t *testing.T) {
+// TestListPrograms_UnknownCentralReturnsError pins the fix for
+// G2-ws-mcp-live-7: a central_name that names no configured central must
+// surface as an error, not a well-formed empty result an agent would
+// report as "you have no programs" — indistinguishable from a central
+// that genuinely has none. Mirrors the WS ErrCentralUnknown path.
+func TestListPrograms_UnknownCentralReturnsError(t *testing.T) {
 	hubs := newFakeHubs() // no "ghost" central registered
 	centrals := &fakeCentrals{names: []string{"alpha"}}
 
@@ -106,16 +112,36 @@ func TestListPrograms_UnknownCentralReturnsEmpty(t *testing.T) {
 	defer cs.Close()
 
 	res := callTool(t, cs, "list_programs", map[string]any{"central_name": "ghost"})
-	if res.IsError {
-		t.Fatalf("expected graceful empty result, got error: %v", res.Content)
+	if !res.IsError {
+		t.Fatal("expected IsError=true for an unknown central_name")
 	}
+}
 
-	var out struct {
-		Programs []struct{ ID string } `json:"programs"`
+// TestCentralScopedHubTools_UnknownCentralReturnsError table-tests every
+// remaining centralsToScan-backed tool (list_programs' own sibling test
+// above covers the pattern in full detail): each must reject an unknown
+// central_name as an error rather than silently returning an empty
+// list/aggregate.
+func TestCentralScopedHubTools_UnknownCentralReturnsError(t *testing.T) {
+	tools := []string{
+		"list_sysvars",
+		"list_service_messages",
+		"list_alarm_messages",
+		"list_inbox",
+		"get_system_info",
 	}
-	unmarshalStructured(t, res, &out)
-	if len(out.Programs) != 0 {
-		t.Fatalf("expected 0 programs for unknown central, got %d", len(out.Programs))
+	for _, tool := range tools {
+		t.Run(tool, func(t *testing.T) {
+			hubs := newFakeHubs()
+			centrals := &fakeCentrals{names: []string{"alpha"}}
+			cs := connect(t, hubDeps(centrals, hubs, newFakeDevices()))
+			defer cs.Close()
+
+			res := callTool(t, cs, tool, map[string]any{"central_name": "ghost"})
+			if !res.IsError {
+				t.Fatalf("%s: expected IsError=true for an unknown central_name", tool)
+			}
+		})
 	}
 }
 
@@ -725,6 +751,131 @@ func TestListChannels_UnknownAddress(t *testing.T) {
 	}
 	if len(out.Channels) != 0 {
 		t.Errorf("expected 0 channels for unknown device, got %d", len(out.Channels))
+	}
+}
+
+// ─── get_device_schedule ────────────────────────────────────────────────────
+
+// TestGetDeviceSchedule_ClimateChannel pins that a thermostat channel's
+// attached week-profile projects to schedule_type=climate with its
+// profile set, current profile and temperature bounds — the read
+// surface this tool exists to close (D2-ws-mcp-surface-2): MCP had no
+// way to answer "does this device have a schedule" at all.
+func TestGetDeviceSchedule_ClimateChannel(t *testing.T) {
+	devs := newFakeDevices()
+	dev := device.New(device.Config{
+		Address:   "THERM01",
+		Model:     "HmIP-eTRV-2",
+		Interface: hmenum.InterfaceHmIPRF,
+	})
+	dev.AddChannel("THERM01:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	dev.Channel("THERM01:1").AttachWeekProfile(weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		CentralName:    "alpha",
+		ChannelAddress: "THERM01:1",
+		ScheduleType:   weekprofile.ScheduleTypeClimate,
+		ProfileCount:   3,
+		MinTemp:        5,
+		MaxTemp:        30,
+	}))
+	devs.add(dev, "alpha")
+
+	centrals := &fakeCentrals{names: []string{"alpha"}}
+	hubs := newFakeHubs()
+	cs := connect(t, hubDeps(centrals, hubs, devs))
+	defer cs.Close()
+
+	res := callTool(t, cs, "get_device_schedule", map[string]any{"address": "THERM01"})
+	if res.IsError {
+		t.Fatalf("get_device_schedule returned error: %v", res.Content)
+	}
+
+	var out struct {
+		Found    bool   `json:"found"`
+		Central  string `json:"central"`
+		Channels []struct {
+			ChannelAddress    string   `json:"channel_address"`
+			ScheduleType      string   `json:"schedule_type"`
+			MaxEntries        int      `json:"max_entries"`
+			AvailableProfiles []string `json:"available_profiles"`
+			CurrentProfile    string   `json:"current_profile"`
+			MinTemp           float64  `json:"min_temp"`
+			MaxTemp           float64  `json:"max_temp"`
+		} `json:"channels"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if !out.Found || out.Central != "alpha" {
+		t.Fatalf("found=%v central=%q, want found=true central=alpha", out.Found, out.Central)
+	}
+	if len(out.Channels) != 1 {
+		t.Fatalf("expected 1 scheduled channel, got %d", len(out.Channels))
+	}
+	ch := out.Channels[0]
+	if ch.ChannelAddress != "THERM01:1" || ch.ScheduleType != "climate" {
+		t.Fatalf("channel=%+v, want THERM01:1/climate", ch)
+	}
+	if len(ch.AvailableProfiles) != 3 || ch.CurrentProfile != "P1" {
+		t.Fatalf("profiles=%v current=%q, want 3 profiles starting P1", ch.AvailableProfiles, ch.CurrentProfile)
+	}
+	if ch.MinTemp != 5 || ch.MaxTemp != 30 {
+		t.Fatalf("min/max temp=%v/%v, want 5/30", ch.MinTemp, ch.MaxTemp)
+	}
+}
+
+// TestGetDeviceSchedule_DeviceWithoutSchedule pins the negative case: a
+// device with no attached week profile reports Found=true (it exists)
+// but an empty channel list, distinguishing "no schedule" from "unknown
+// device".
+func TestGetDeviceSchedule_DeviceWithoutSchedule(t *testing.T) {
+	devs := newFakeDevices()
+	dev := device.New(device.Config{
+		Address:   "PLAIN01",
+		Model:     "HmIP-PS",
+		Interface: hmenum.InterfaceHmIPRF,
+	})
+	dev.AddChannel("PLAIN01:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	devs.add(dev, "alpha")
+
+	centrals := &fakeCentrals{names: []string{"alpha"}}
+	hubs := newFakeHubs()
+	cs := connect(t, hubDeps(centrals, hubs, devs))
+	defer cs.Close()
+
+	res := callTool(t, cs, "get_device_schedule", map[string]any{"address": "PLAIN01"})
+	if res.IsError {
+		t.Fatalf("get_device_schedule returned error: %v", res.Content)
+	}
+	var out struct {
+		Found    bool          `json:"found"`
+		Channels []interface{} `json:"channels"`
+	}
+	unmarshalStructured(t, res, &out)
+	if !out.Found {
+		t.Fatal("expected Found=true for a known device")
+	}
+	if len(out.Channels) != 0 {
+		t.Errorf("expected 0 scheduled channels, got %d", len(out.Channels))
+	}
+}
+
+// TestGetDeviceSchedule_UnknownAddress mirrors TestListChannels_UnknownAddress.
+func TestGetDeviceSchedule_UnknownAddress(t *testing.T) {
+	devs := newFakeDevices()
+	centrals := &fakeCentrals{names: []string{"alpha"}}
+	hubs := newFakeHubs()
+	cs := connect(t, hubDeps(centrals, hubs, devs))
+	defer cs.Close()
+
+	res := callTool(t, cs, "get_device_schedule", map[string]any{"address": "DOES_NOT_EXIST"})
+	if res.IsError {
+		t.Fatalf("expected graceful not-found, got error: %v", res.Content)
+	}
+	var out struct {
+		Found bool `json:"found"`
+	}
+	unmarshalStructured(t, res, &out)
+	if out.Found {
+		t.Fatal("expected Found=false for unknown address")
 	}
 }
 

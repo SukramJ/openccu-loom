@@ -729,6 +729,24 @@ func TestNextFire(t *testing.T) {
 			t.Errorf("got %v, want %v", got, want)
 		}
 	})
+
+	t.Run("spring-forward gap does not push the day after one hour late", func(t *testing.T) {
+		loc, err := time.LoadLocation("Europe/Berlin")
+		if err != nil {
+			t.Skipf("tzdata unavailable: %v", err)
+		}
+		// The requested 02:30 does not exist on 2026-03-29 (the EU
+		// spring-forward gap), so the chain's previous fire already
+		// normalized forward to 03:30 CEST — this is the instant the
+		// re-arm computes from. The day after must still land on its
+		// own 02:30, not inherit the gap day's normalized clock.
+		now := time.Date(2026, 3, 29, 3, 30, 0, 0, loc)
+		got := nextFire(now, 2, 30, nil)
+		want := time.Date(2026, 3, 30, 2, 30, 0, 0, loc)
+		if !got.Equal(want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
 }
 
 // marshalZoneConfig encodes cfg into the alarm_zones.config_json wire

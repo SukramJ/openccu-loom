@@ -266,9 +266,13 @@ type ClimateSchedule struct {
 	Domain        string             `json:"domain,omitempty"`
 	ActiveProfile string             `json:"active_profile,omitempty"`
 	// ActiveProfileIndex is the 0-based integer index of the currently
-	// active climate profile as reported by the CCU. Nil when the device
-	// does not report a numeric active-profile index (e.g. simple-schedule
-	// devices). The SPA uses this to pre-select the profile tab.
+	// active climate profile, derived from the CCU's own ACTIVE_PROFILE
+	// value (which is 1-based). Nil when the device does not report a
+	// numeric active-profile index (e.g. simple-schedule devices). It
+	// carries the same fact as [ActiveProfile] (the "P<n>" key) as a
+	// number, for a client that wants to index straight into an ordered
+	// tab/array without parsing the string — the SPA currently uses the
+	// string form and treats this field as ignorable.
 	ActiveProfileIndex *int                      `json:"active_profile_index,omitempty"`
 	Profiles           map[string]ClimateProfile `json:"profiles,omitempty"`
 	SimpleEntries      []SimpleScheduleEntry     `json:"simple_entries,omitempty"`

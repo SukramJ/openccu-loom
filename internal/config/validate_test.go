@@ -169,11 +169,12 @@ func TestValidateChecksTheWebhookEndpoint(t *testing.T) {
 	})
 }
 
-// TestValidateChecksTheMCPMountPath pins that north.mcp.path, when set, is
-// something http.ServeMux can register: an absolute mount prefix built from
-// unreserved characters. ServeMux rejects a malformed pattern by panicking
-// during registration, so a value that gets past this check kills the daemon
-// in bring-up — on every start, since the value is persisted.
+// TestValidateChecksTheMCPMountPath pins that north.mcp.path, when set while
+// the adapter is enabled, is something http.ServeMux can register: an
+// absolute mount prefix built from unreserved characters. ServeMux rejects a
+// malformed pattern by panicking during registration, so a value that gets
+// past this check kills the daemon in bring-up — on every start, since the
+// value is persisted.
 func TestValidateChecksTheMCPMountPath(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -199,6 +200,7 @@ func TestValidateChecksTheMCPMountPath(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			cfg := Default()
+			cfg.North.MCP.Enabled = true
 			cfg.North.MCP.Path = tc.path
 			err := cfg.Validate()
 			if tc.wantErr {
@@ -208,6 +210,21 @@ func TestValidateChecksTheMCPMountPath(t *testing.T) {
 			assertAccepted(t, err)
 		})
 	}
+}
+
+// TestValidateSkipsTheMCPMountPathWhileDisabled pins the upgrade-safety
+// escape hatch: a value that fails [NorthMCP.ValidateMountPath] never
+// reaches ServeMux while the adapter stays off (see mountMCP), so it must
+// not abort startup either. Without this, an operator who never enabled MCP
+// but carries a legacy-format north.mcp.path in a persisted config could
+// see the daemon refuse to start on every boot after upgrading to a
+// stricter mount-path rule.
+func TestValidateSkipsTheMCPMountPathWhileDisabled(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.North.MCP.Enabled = false
+	cfg.North.MCP.Path = "mcp-no-leading-slash"
+	assertAccepted(t, cfg.Validate())
 }
 
 // TestValidateChecksTheMatterBridgeParameters pins the bridge's listen
@@ -388,6 +405,43 @@ func TestValidateChecksTheRESTCapacityKnobs(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestValidateRejectsAnUnknownHAIngressRole is the regression guard for
+// north.rest.auth.ha_ingress.role silently escalating any unrecognised
+// value to admin: the field is free text with no schema enum (see
+// ingressRole in cmd/openccu-loom/ingress_auth_wiring.go), so this
+// validator is the only gate between an operator's typo — "Viewer",
+// "read-only", "operatr" — and every HA-Ingress-proxied request being
+// granted full admin.
+func TestValidateRejectsAnUnknownHAIngressRole(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		role    string
+		wantErr bool
+	}{
+		{"empty selects the admin default", "", false},
+		{"admin", "admin", false},
+		{"operator", "operator", false},
+		{"viewer", "viewer", false},
+		{"capitalised near-miss", "Viewer", true},
+		{"a different word entirely", "read-only", true},
+		{"a typo", "operatr", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := Default()
+			cfg.North.REST.Auth.HAIngress.Role = tc.role
+			err := cfg.Validate()
+			if tc.wantErr {
+				assertRejected(t, err, "north.rest.auth.ha_ingress.role")
+				return
+			}
+			assertAccepted(t, err)
+		})
+	}
 }
 
 // TestValidateRejectsNegativeDurations is table-driven over one setter per

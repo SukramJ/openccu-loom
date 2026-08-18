@@ -286,9 +286,16 @@ func TestClimateSetProfileRejectsNonWeek(t *testing.T) {
 // WEEK_PROGRAM_POINTER. HmIP-BWTH / -eTRV / -STH / -WTH / -WGT expose
 // `ACTIVE_PROFILE` on the climate channel; sending WEEK_PROGRAM_POINTER
 // instead triggers XML-RPC fault `-5 "Invalid parameter or value"`.
+//
+// Starts from AUTO so only ACTIVE_PROFILE goes out — this isolates the
+// value shape from the AUTO/BOOST_MODE batching that
+// TestSetProfileWeekProgramIPSwitchesToAutoFirst covers.
 func TestClimateSetProfileIPMapsToActiveProfile(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "x", KindIP, w, custom.ClimateCapabilities{SupportsProfile: true})
+	if err := r.climate.SetMode(context.Background(), ModeAuto, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetMode(Auto): %v", err)
+	}
 	if err := r.climate.SetProfile(context.Background(), ProfileWeekProgram3, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}

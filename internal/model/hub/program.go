@@ -284,6 +284,31 @@ func (p *Program) Internal() bool {
 	return p.IsInternal
 }
 
+// SetEnabledDefault rewrites the promoted EnabledDefault field under the
+// program lock. The periodic hub refresh (loadPrograms) calls this on
+// every scan to keep the flag in sync with the operator's configured
+// program markers; routing it through here — rather than a bare field
+// assignment on the live, concurrently-read Program — is what makes
+// [Program.EnabledByDefault] safe to read from another goroutine (the MQTT
+// discovery fan-out) while the refresh is running.
+func (p *Program) SetEnabledDefault(enabled bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.EnabledDefault = enabled
+}
+
+// EnabledByDefault shadows the promoted [HubDataPoint.EnabledByDefault] so
+// the EnabledDefault field — which the hub refresh rewrites through
+// [SetEnabledDefault] under p.mu — is read under the same lock. Mirrors
+// [Sysvar.EnabledByDefault]. The forced-usage delegation is preserved;
+// ForcedUsage takes the separate BaseDataPointFields lock, so there is no
+// re-entrancy against p.mu.
+func (p *Program) EnabledByDefault() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.HubDataPoint.EnabledByDefault()
+}
+
 // programWriter returns the currently installed execution backend.
 //
 // [UpdateMetadata] replaces the writer in place while commands are in

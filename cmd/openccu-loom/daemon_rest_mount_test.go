@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 )
 
 // TestMountMCPResolvesCredentialsBeforeRequire pins the fix that wraps
@@ -48,7 +49,7 @@ func TestMountMCPResolvesCredentialsBeforeRequire(t *testing.T) {
 		w.WriteHeader(http.StatusTeapot)
 	})
 
-	handler := mountMCP(cfg, d, fallthroughRouter, slog.New(slog.DiscardHandler))
+	handler := mountMCP(cfg, d, fallthroughRouter, nil, slog.New(slog.DiscardHandler))
 
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		t.Run("valid bearer token reaches the MCP handler ("+method+")", func(t *testing.T) {
@@ -121,7 +122,7 @@ func TestMountMCPSurvivesAPersistedUnmountablePath(t *testing.T) {
 			rest := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusTeapot)
 			})
-			handler := mountMCP(cfg, restMountDeps{reg: central.NewRegistry()}, rest, slog.New(slog.DiscardHandler))
+			handler := mountMCP(cfg, restMountDeps{reg: central.NewRegistry()}, rest, nil, slog.New(slog.DiscardHandler))
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
 			rr := httptest.NewRecorder()
@@ -161,7 +162,7 @@ func TestMountMCPGatesWriteToolsOnOperatorRole(t *testing.T) {
 		cfg := config.Default()
 		cfg.North.MCP.Enabled = true
 		cfg.North.MCP.AllowWrites = allowWrites
-		return mountMCP(cfg, d, http.NotFoundHandler(), slog.New(slog.DiscardHandler))
+		return mountMCP(cfg, d, http.NotFoundHandler(), nil, slog.New(slog.DiscardHandler))
 	}
 
 	call := func(h http.Handler, token string) int {
@@ -184,5 +185,107 @@ func TestMountMCPGatesWriteToolsOnOperatorRole(t *testing.T) {
 	readOnly := newHandler(false)
 	if got := call(readOnly, "viewer"); got == http.StatusForbidden || got == http.StatusUnauthorized {
 		t.Errorf("viewer must reach the read-only MCP mount, got %d", got)
+	}
+}
+
+// TestMountMCPThrottlesBasicAuthGuessingLikeREST is the regression guard for
+// the MCP mount sitting outside rest.NewRouter's r.Use(...) chain and
+// therefore skipping auth.GuardBasicAuth: a Resolve-protected route (like
+// every REST route) charges one token per failed Basic attempt via
+// Middleware.resolve, but only GuardBasicAuth turns a spent budget into a
+// 429 — Resolve itself just falls through to Require, which answers 401
+// forever no matter how many attempts a source has burned. Repeated failed
+// Basic-auth attempts against /mcp must eventually see 429, exactly like
+// they would against any other Resolve-protected REST path, and the budget
+// is the SAME loginLimiter instance the REST router shares.
+func TestMountMCPThrottlesBasicAuthGuessingLikeREST(t *testing.T) {
+	t.Parallel()
+
+	users := auth.NewMemoryUserStore() // no Put(): every Basic attempt fails verification
+	tokens := auth.NewMemoryTokenStore(nil)
+	authMw := auth.NewMiddleware(users, tokens)
+	loginLimiter := middleware.NewLoginRateLimiter()
+	authMw.BasicThrottle = loginLimiter // mirrors mountRESTServer's own wiring
+
+	d := restMountDeps{
+		reg:         central.NewRegistry(),
+		authMw:      authMw,
+		restResolve: authMw.Resolve,
+	}
+	cfg := config.Default()
+	cfg.North.MCP.Enabled = true
+
+	handler := mountMCP(cfg, d, http.NotFoundHandler(), loginLimiter, slog.New(slog.DiscardHandler))
+
+	const sourceIP = "203.0.113.7:12345"
+
+	// Exhaust the shared bucket directly rather than through repeated slow
+	// (bcrypt-costed) HTTP round trips — this is also the more faithful
+	// scenario for "SAME loginLimiter instance the REST router shares":
+	// the budget could equally have been spent by Basic-auth guessing
+	// against a REST route from the same source.
+	depleteReq := httptest.NewRequest(http.MethodPost, "/auth/login", http.NoBody)
+	depleteReq.RemoteAddr = sourceIP
+	for {
+		_, ok := loginLimiter.ReserveBasicAttempt(depleteReq)
+		if !ok {
+			break
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", http.NoBody)
+	req.SetBasicAuth("nobody", "wrong-password")
+	req.RemoteAddr = sourceIP
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Errorf("Basic-auth attempt against /mcp with an exhausted shared budget: got %d, want 429 — GuardBasicAuth is not wired on this mount", rr.Code)
+	}
+}
+
+// TestMountMCPAppliesRateLimit is the regression guard for the MCP mount
+// skipping middleware.RateLimit: a burst of requests from one source that
+// would trip the REST router's rate limiter must trip it here too, or an
+// attacker routes abusive volume through /mcp specifically to dodge the
+// throttle every other endpoint enforces.
+func TestMountMCPAppliesRateLimit(t *testing.T) {
+	t.Parallel()
+
+	tokens := auth.NewMemoryTokenStore(map[string]auth.Identity{
+		"good": {Subject: "test-agent", Role: auth.RoleViewer},
+	})
+	authMw := auth.NewMiddleware(nil, tokens)
+
+	d := restMountDeps{
+		reg:         central.NewRegistry(),
+		authMw:      authMw,
+		restResolve: authMw.Resolve,
+	}
+	cfg := config.Default()
+	cfg.North.MCP.Enabled = true
+	cfg.North.REST.RateLimit.Enabled = true
+	cfg.North.REST.RateLimit.RequestsPerSecond = 1
+	cfg.North.REST.RateLimit.Burst = 1
+
+	handler := mountMCP(cfg, d, http.NotFoundHandler(), nil, slog.New(slog.DiscardHandler))
+
+	call := func() int {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", http.NoBody)
+		req.Header.Set("Authorization", "Bearer good")
+		req.RemoteAddr = "203.0.113.9:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		return rr.Code
+	}
+
+	saw429 := false
+	for range 5 {
+		if call() == http.StatusTooManyRequests {
+			saw429 = true
+			break
+		}
+	}
+	if !saw429 {
+		t.Error("a burst against /mcp with burst=1 never got 429 — middleware.RateLimit is not wired on this mount")
 	}
 }

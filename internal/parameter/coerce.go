@@ -165,6 +165,28 @@ func asBool(raw any) (bool, error) {
 	}
 }
 
+// intFromFloat narrows a float to int with the guards Go's own conversion
+// does not perform.
+//
+// A conversion whose value does not fit the destination — or is NaN or an
+// infinity — is undefined in Go: the result is whatever the platform
+// produces, and on the 32-bit shipped target that starts just past two
+// billion rather than at nine quintillion. A CCU that reports a runaway
+// counter, or a NaN the wire decoder let through, would otherwise land in
+// the parameter store as a plausible-looking small number instead of a
+// rejected write.
+//
+// Truncation toward zero is preserved: only the guard is new.
+func intFromFloat(v float64) (int, error) {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, fmt.Errorf("parameter: %v is not a finite number", v)
+	}
+	if v > float64(math.MaxInt) || v < float64(math.MinInt) {
+		return 0, fmt.Errorf("parameter: float value %v overflows int", v)
+	}
+	return int(v), nil
+}
+
 func asInt(raw any) (int, error) {
 	switch v := raw.(type) {
 	case int:
@@ -176,7 +198,16 @@ func asInt(raw any) (int, error) {
 	case int32:
 		return int(v), nil
 	case int64:
-		return int(v), nil
+		// On a 32-bit build (armv7, the shipped add-on target) int is
+		// 32 bits, so an unchecked narrowing here can silently wrap an
+		// out-of-range value into a different in-range one before
+		// checkNumericRange ever sees it — the same class of bug the
+		// uint/uint64 branches below already guard against, and that
+		// [hmtypes.NewParamValue] documents for the read path.
+		if v > int64(math.MaxInt) || v < int64(math.MinInt) {
+			return 0, fmt.Errorf("parameter: int64 value %d overflows int", v)
+		}
+		return int(v), nil //nolint:gosec // bounds-checked above; see #20
 	case uint:
 		if v > uint(math.MaxInt) {
 			return 0, fmt.Errorf("parameter: uint value %d overflows int", v)
@@ -194,9 +225,9 @@ func asInt(raw any) (int, error) {
 		}
 		return int(v), nil //nolint:gosec // bounds-checked above; see #20
 	case float32:
-		return int(v), nil
+		return intFromFloat(float64(v))
 	case float64:
-		return int(v), nil
+		return intFromFloat(v)
 	case bool:
 		if v {
 			return 1, nil
@@ -213,7 +244,10 @@ func asInt(raw any) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("parameter: cannot coerce %v to int: %w", v, err)
 		}
-		return int(n), nil
+		if n > int64(math.MaxInt) || n < int64(math.MinInt) {
+			return 0, fmt.Errorf("parameter: json.Number value %d overflows int", n)
+		}
+		return int(n), nil //nolint:gosec // bounds-checked above; see #20
 	default:
 		return 0, fmt.Errorf("parameter: cannot coerce %T to int", raw)
 	}

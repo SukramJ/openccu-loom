@@ -343,6 +343,64 @@ func recordCentralReadiness(unit *central.Unit, phase hmenum.ReadinessPhase, loa
 	}
 }
 
+// countLoadedInterfaces reports how many of cc's configured interfaces
+// currently carry at least one device in the model, from live registry
+// state. Mirrors the count [bringUpCentral] produces at boot, so a
+// recovery-triggered recompute agrees with the tally the bring-up path
+// would have reported had the interface ingested on the first attempt.
+func countLoadedInterfaces(unit *central.Unit, cc config.CentralConfig) int {
+	if unit == nil || unit.DeviceRegistry == nil {
+		return 0
+	}
+	loaded := 0
+	for _, ifaceSpec := range cc.Interfaces {
+		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
+		wireID := hmtypes.ParseWireInterfaceID(WireInterfaceID(cc.Name, iface))
+		if len(unit.DeviceRegistry.Addresses(wireID)) > 0 {
+			loaded++
+		}
+	}
+	return loaded
+}
+
+// WireReadinessRecompute keeps the central's queryable readiness tally
+// truthful for the life of the daemon, not just at the moment bring-up
+// finishes. [bringUpCentral] latches "interfaces loaded" once, at the end of
+// the readiness-gated bring-up; an interface whose boot ingest exhausted its
+// retries is deliberately left DISCONNECTED for the recovery pipeline to
+// repair (see the ingested check in bringUpCentral's interface loop), and
+// the pipeline does repair it — but nothing updated the tally afterwards, so
+// a central that reached Ready at N-1/N reported exactly that for the rest
+// of the daemon's life even once every interface recovered.
+//
+// Recomputes and republishes the tally from live registry state whenever a
+// recovery completes, but only once the central has reached Ready (the
+// bring-up path owns the tally before that) and only when the count
+// actually changed, so a recovery on an interface that was already carrying
+// devices does not re-publish an identical readiness event.
+func WireReadinessRecompute(unit *central.Unit, cc config.CentralConfig, logger *slog.Logger) func() {
+	if unit == nil || unit.EventBus == nil {
+		return func() {}
+	}
+	return events.Subscribe(unit.EventBus, func(hmevent.RecoveryCompletedEvent) {
+		r := unit.Readiness()
+		if r.Phase != hmenum.ReadinessReady {
+			return
+		}
+		loaded := countLoadedInterfaces(unit, cc)
+		if loaded == r.InterfacesLoaded {
+			return
+		}
+		if logger != nil {
+			logger.Info("wire.central.readiness_recomputed",
+				slog.String("central", cc.Name),
+				slog.Int("loaded", loaded),
+				slog.Int("total", r.InterfacesTotal))
+		}
+		recordCentralReadiness(unit, hmenum.ReadinessReady, loaded, r.InterfacesTotal)
+	})
+}
+
 // bringUpCentral runs a central's full southbound bring-up against a ready CCU.
 // Order matters: the hub load (names/rooms/functions) runs FIRST so every
 // device the pipeline then creates already carries its CCU-assigned name — the
@@ -408,6 +466,10 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// Source-token lifecycle on the central's bus: ConnectionLost → stale,
 	// RecoveryCompleted → live.
 	addCloser(WireValueSourceLifecycle(unit, logger))
+	// Keeps the readiness tally live past the boot-time latch: a recovered
+	// interface that exhausted its ingest retries at boot must stop being
+	// counted as missing once the recovery pipeline repairs it.
+	addCloser(WireReadinessRecompute(unit, *cc, logger))
 
 	pipeline := NewDevicePipeline(unit).
 		WithTranslations(translations, cfg.Locale).
@@ -642,11 +704,12 @@ func wireInterface(
 	// path: a BIN-RPC client (outbound calls), a BIN-RPC callback
 	// registration (inbound push), and no XML-RPC client at all.
 	if iface == hmenum.InterfaceCUxD {
-		closer, err = wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, logger)
-		// CUxD reports "wired" the same way it did before the XML-RPC path
-		// grew a loaded signal: a successful wire counts, a hard error does
-		// not. Its own ingest-exhaustion handling lives in runCUxDActivation.
-		return closer, err == nil, err
+		// ingested mirrors the XML-RPC path's runXMLRPCActivation result: it
+		// reflects whether runCUxDActivation actually ingested devices, not
+		// merely whether the client/backend wiring succeeded — a CUxD
+		// interface that exhausts every retry is wired but empty, and must
+		// not count toward the "interfaces loaded" tally.
+		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, logger)
 	}
 
 	url, err := interfaceURL(cc, iface)

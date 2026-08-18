@@ -191,6 +191,63 @@ func TestParityStaleDecayToUnknown(t *testing.T) {
 	}
 }
 
+// TestParityStickySampleNeverDecaysToUnknown is the regression guard for a
+// one-shot boot-time verdict (config.overlay, config.secrets — recorded
+// exactly once, with no periodic refresher) decaying to StatusUnknown once
+// it outlives the staleness window and dragging a healthy daemon's overall
+// /health status down with it: a Sticky sample must keep reporting its
+// recorded status forever, exactly like a component with WithStaleAfter(0)
+// tracker-wide, but scoped to that one component so live components (an
+// interface gone silent, say) still decay normally.
+func TestParityStickySampleNeverDecaysToUnknown(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(parityT0)
+	tr := NewTracker(WithClock(clk), WithStaleAfter(30*time.Second))
+
+	tr.Record("config.overlay", Sample{Healthy: true, Timestamp: clk.Now(), Sticky: true})
+	tr.Record("live-interface", Sample{Healthy: true, Timestamp: clk.Now()})
+
+	clk.Advance(31 * time.Second)
+
+	sticky, _ := tr.Get("config.overlay")
+	if sticky.Status != StatusHealthy {
+		t.Errorf("sticky component decayed: status=%s, want healthy", sticky.Status)
+	}
+	live, _ := tr.Get("live-interface")
+	if live.Status != StatusUnknown {
+		t.Errorf("non-sticky component did not decay: status=%s, want unknown (staleness must still work for live components)", live.Status)
+	}
+	if tr.Overall() != StatusUnknown {
+		t.Errorf("Overall() = %s, want unknown — the live component's decay must still degrade the aggregate", tr.Overall())
+	}
+}
+
+// TestParityHealthyDaemonStaysHealthyPastStaleWindowWhenBootComponentsAreSticky
+// pins the observable symptom directly: a daemon where every live component
+// stays healthy must keep reporting Overall() == healthy indefinitely, even
+// once the one-shot boot components (config.overlay, config.secrets) are
+// far past the staleness window — before the fix, ServiceAvailability's
+// "healthy plus any unknown => unknown" rule downgraded the whole daemon 90s
+// after every boot regardless of live health.
+func TestParityHealthyDaemonStaysHealthyPastStaleWindowWhenBootComponentsAreSticky(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(parityT0)
+	tr := NewTracker(WithClock(clk), WithStaleAfter(30*time.Second))
+
+	tr.Record("config.overlay", Sample{Healthy: true, Timestamp: clk.Now(), Sticky: true})
+	tr.Record("config.secrets", Sample{Healthy: true, Timestamp: clk.Now(), Sticky: true})
+	tr.Record("central.ccu-01", Sample{Healthy: true, Timestamp: clk.Now()})
+
+	clk.Advance(31 * time.Second)
+	// The live component keeps getting refreshed, as a real interface probe
+	// would every few seconds.
+	tr.Record("central.ccu-01", Sample{Healthy: true, Timestamp: clk.Now()})
+
+	if got := tr.Overall(); got != StatusHealthy {
+		t.Errorf("Overall() = %s, want healthy — a genuinely healthy daemon must not report unknown once boot-only components age past the stale window", got)
+	}
+}
+
 // ── 6. Multi-interface score aggregation (Multi-CCU) ─────────────────────────
 
 // TestParityMultiInterfaceScoreAggregation registers three interfaces in

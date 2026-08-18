@@ -10,6 +10,7 @@ package bridge
 // Lives in package bridge to access unexported functions.
 
 import (
+	"bytes"
 	"testing"
 
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
@@ -458,6 +459,55 @@ func TestDefaultAttributeValueWriter_AccessControlEntryChangedEvent_WithTargets(
 		FabricIndex: 2,
 	}
 	verifyNonEmpty(t, "AccessControlEntryChangedEvent (with targets)", callAttributeWriter(im.AttributeValue{Value: v}))
+}
+
+// TestDefaultAttributeValueWriter_AccessControlExtensionChangedEvent_NilLatestValue
+// pins that the writer has a dedicated case for
+// AccessControlExtensionChangedEvent — before that case existed the type
+// switch fell through to `default:` and emitted TLV null, which
+// verifyNonEmpty alone would not catch (PutNull also produces non-empty
+// bytes). Decoding the top-level element and asserting it is a
+// Structure (not Null) is the check that actually distinguishes the
+// two outcomes.
+func TestDefaultAttributeValueWriter_AccessControlExtensionChangedEvent_NilLatestValue(t *testing.T) {
+	t.Parallel()
+	nodeID := uint64(0xABCD)
+	passcodeID := uint16(7)
+	v := mattercore.AccessControlExtensionChangedEvent{
+		AdminNodeID:     &nodeID,
+		AdminPasscodeID: &passcodeID,
+		ChangeType:      mattercore.AccessControlChangeTypeAdded,
+		LatestValue:     nil,
+		FabricIndex:     1,
+	}
+	b := verifyNonEmpty(t, "AccessControlExtensionChangedEvent (nil LatestValue)", callAttributeWriter(im.AttributeValue{Value: v}))
+	el, err := tlv.NewDecoder(b).Next()
+	if err != nil {
+		t.Fatalf("decoder.Next: %v", err)
+	}
+	if el.Type != tlv.TypeStructure || !el.IsContainer {
+		t.Fatalf("want TypeStructure/IsContainer, got type=0x%02X isContainer=%v isNull=%v", el.Type, el.IsContainer, el.IsNull)
+	}
+}
+
+// TestDefaultAttributeValueWriter_AccessControlExtensionChangedEvent_WithLatestValue
+// verifies that a non-nil LatestValue (an AccessControlExtensionEntry)
+// carries its Data bytes and FabricIndex onto the wire.
+func TestDefaultAttributeValueWriter_AccessControlExtensionChangedEvent_WithLatestValue(t *testing.T) {
+	t.Parallel()
+	lv := &mattercore.AccessControlExtensionEntry{
+		Data:        []byte{0xAB, 0xCD, 0xEF},
+		FabricIndex: 1,
+	}
+	v := mattercore.AccessControlExtensionChangedEvent{
+		ChangeType:  mattercore.AccessControlChangeTypeChanged,
+		LatestValue: lv,
+		FabricIndex: 1,
+	}
+	b := verifyNonEmpty(t, "AccessControlExtensionChangedEvent (with LatestValue)", callAttributeWriter(im.AttributeValue{Value: v}))
+	if !bytes.Contains(b, lv.Data) {
+		t.Errorf("encoded event does not contain LatestValue.Data bytes %v", lv.Data)
+	}
 }
 
 // ─── defaultCommandFieldsWriter ───────────────────────────────────────────────

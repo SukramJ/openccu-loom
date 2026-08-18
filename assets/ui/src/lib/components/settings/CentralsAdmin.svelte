@@ -200,6 +200,13 @@
   // reference wins at runtime (the daemon checks env first); the
   // SPA mirrors that by treating env as an override.
   let fPassword = $state("");
+  // GET /centrals masks a stored password to the literal "***" sentinel
+  // (maskCentralRow) so the response is safe to log. openEdit() seeds
+  // fPassword from that masked value; the input never renders the
+  // sentinel itself (see the password field below), and this flag is
+  // what tells buildRow() whether the operator actually typed something
+  // or the field still holds the untouched, seeded value.
+  let passwordTouched = $state(false);
   let fPasswordEnv = $state("");
   // JSON-RPC (ReGa/hub) port override. Empty = use the CCU default
   // derived from the TLS toggle (443 with TLS, 80 without). Stored in
@@ -254,6 +261,7 @@
     fTlsInsecure = false;
     fUsername = "";
     fPassword = "";
+    passwordTouched = false;
     fPasswordEnv = "";
     fJsonRpcPort = "";
     fPrimaryInterface = "HmIP-RF";
@@ -294,6 +302,7 @@
     fTlsInsecure = false;
     fUsername = "";
     fPassword = "";
+    passwordTouched = false;
     fPasswordEnv = "";
     fJsonRpcPort = "";
     fPrimaryInterface = "HmIP-RF";
@@ -315,6 +324,7 @@
     fTlsInsecure = row.tls_insecure_skip_verify ?? false;
     fUsername = row.username ?? "";
     fPassword = row.password_plain ?? "";
+    passwordTouched = false;
     fPasswordEnv = row.password_env ?? "";
     fJsonRpcPort = row.json_rpc_port ? String(row.json_rpc_port) : "";
     fPrimaryInterface = row.primary_interface ?? "";
@@ -387,12 +397,15 @@
       tls: fTls || undefined,
       tls_insecure_skip_verify: fTlsInsecure || undefined,
       username: fUsername || undefined,
-      // Always send the key, even empty. The daemon reads an absent
-      // password_plain as "unchanged" — it has to, because GET masks the
-      // value and a client that round-trips a central would otherwise wipe
-      // the CCU credential — so an emptied input only clears the stored
-      // password when it arrives as an explicit "".
-      password_plain: fPassword,
+      // GET masks a stored password to "***", so that sentinel must never
+      // round-trip back as the credential. When editing and the operator
+      // never touched the field, omit the key entirely — the daemon reads
+      // an absent password_plain as "unchanged" and keeps the stored
+      // value. Once touched, send exactly what is typed, even "", which
+      // is how a credential is explicitly cleared. A new central has no
+      // stored value to preserve, so its typed (possibly empty) password
+      // always goes through as-is.
+      password_plain: isEdit && !passwordTouched ? undefined : fPassword,
       password_env: fPasswordEnv || undefined,
       primary_interface: fPrimaryInterface || undefined,
       interfaces: buildInterfaces(),
@@ -427,7 +440,13 @@
       (before.tls ?? false) !== (after.tls ?? false) ||
       (before.tls_insecure_skip_verify ?? false) !== (after.tls_insecure_skip_verify ?? false) ||
       (before.username ?? "") !== (after.username ?? "") ||
-      (before.password_plain ?? "") !== (after.password_plain ?? "") ||
+      // buildRow() omits password_plain (undefined) whenever the operator
+      // never touched the field — the daemon keeps the stored credential
+      // in that case, so an omitted key can never itself be the reason a
+      // restart is required. `before.password_plain` is the GET-masked
+      // "***" sentinel, which must not be compared as if it were real.
+      (after.password_plain !== undefined &&
+        (before.password_plain ?? "") !== after.password_plain) ||
       (before.password_env ?? "") !== (after.password_env ?? "") ||
       (before.primary_interface ?? "") !== (after.primary_interface ?? "") ||
       interfaceSetKey(before.interfaces) !== interfaceSetKey(after.interfaces)
@@ -880,14 +899,24 @@
             <span>{t("centrals.field.password")}</span>
             <input
               type="password"
-              bind:value={fPassword}
+              value={passwordTouched ? fPassword : fPassword === "***" ? "" : fPassword}
+              oninput={(e) => {
+                fPassword = (e.target as HTMLInputElement).value;
+                passwordTouched = true;
+              }}
               autocomplete="new-password"
               disabled={!!fPasswordEnv}
-              placeholder={fPasswordEnv ? t("centrals.field.password_placeholder_env") : ""}
+              placeholder={fPasswordEnv
+                ? t("centrals.field.password_placeholder_env")
+                : !passwordTouched && fPassword === "***"
+                  ? "••••"
+                  : ""}
               class="h-9 rounded border border-slate-300 px-3 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
             />
             <span class="text-xs text-[var(--ha-secondary-text-color)]">
-              {t("centrals.field.password_hint")}
+              {!passwordTouched && fPassword === "***"
+                ? t("centrals.field.password_hint_unchanged")
+                : t("centrals.field.password_hint")}
             </span>
           </label>
         </div>

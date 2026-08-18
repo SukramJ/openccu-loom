@@ -105,17 +105,23 @@
   // (e.g. to change its class or add a note) would silently re-include
   // a source the operator had previously excluded.
   //
-  // SecuritySourceView does not carry the stored override's raw
-  // `included` bit (see SecuritySourceView in assets/openapi.yaml), so
-  // the best client-side proxy is `relevant`: the daemon forces it to
-  // false whenever an override excludes the source (internal/security
-  // index.go's classify()). A source that is relevant=false for an
+  // `override_included` is the stored override's raw `included` bit
+  // (populated whenever `overridden` is true) and is what this must
+  // seed from. `relevant` is a lossy proxy for it: classifySource
+  // (internal/security/index.go) sets relevant=true unconditionally
+  // once an override carries a class, so a note-only override (class
+  // blank, included=true) on a source that is relevant=false for an
   // unrelated reason — a diagnostic class on a device with no alarm
-  // role, never overridden for inclusion — reads the same way here;
-  // exposing the raw bit on the DTO would remove that ambiguity.
+  // role — reads through `relevant` as excluded even though it was
+  // never meant to be. Kept only as the fallback for a daemon that
+  // predates this field.
   type Draft = { class: string; included: boolean; note: string };
   function freshDraft(s: SecuritySourceView): Draft {
-    return { class: "", included: !s.overridden || s.relevant, note: "" };
+    return {
+      class: "",
+      included: !s.overridden || (s.override_included ?? s.relevant),
+      note: "",
+    };
   }
   let drafts = $state<Record<string, Draft>>({});
   function draftFor(s: SecuritySourceView): Draft {

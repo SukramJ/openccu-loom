@@ -131,9 +131,16 @@ const concFeatureMEA uint32 = 1 << 0
 // packages/model/src/standard/elements/power-source.element.ts — the
 // list identifies which endpoints this power source serves.
 const (
-	attrPwrStatus               uint32 = 0x0000
-	attrPwrOrder                uint32 = 0x0001
-	attrPwrDescription          uint32 = 0x0002
+	attrPwrStatus              uint32 = 0x0000
+	attrPwrOrder               uint32 = 0x0001
+	attrPwrDescription         uint32 = 0x0002
+	attrPwrBatPercentRemaining uint32 = 0x000C
+	// attrPwrBatChargeLevel and the two IDs below it are conformance
+	// "BAT" (unconditionally mandatory once the BAT feature is set);
+	// BatPercentRemaining above is conformance "[BAT]" (optional even
+	// with BAT set) per matter.js power-source-cluster.element.ts:68-71
+	// — only advertised by [PowerSourceServer] instances constructed via
+	// [NewPowerSourceServerFromFloat].
 	attrPwrBatChargeLevel       uint32 = 0x000E
 	attrPwrBatReplacementNeeded uint32 = 0x000F
 	attrPwrBatReplaceability    uint32 = 0x0010
@@ -916,8 +923,17 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 			return []interfaces.MatterClusterServer{NewOccupancySensingServer(b)}
 		}
 	case interfaces.MatterMeasurementBattery:
+		// Two source shapes project onto PowerSource: a LOWBAT bool
+		// (BatChargeLevel) or a derived battery-percentage float (e.g.
+		// OperatingVoltageLevelSensor — BatPercentRemaining). Checked in
+		// this order because both interfaces are structurally possible
+		// on a source that also implements other measurement surfaces;
+		// a bool source is the more specific / more common HM signal.
 		if b, ok := src.(interfaces.MatterBoolMeasurementSource); ok {
 			return []interfaces.MatterClusterServer{NewPowerSourceServer(b)}
+		}
+		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
+			return []interfaces.MatterClusterServer{NewPowerSourceServerFromFloat(f)}
 		}
 	case interfaces.MatterMeasurementPower:
 		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
@@ -1426,24 +1442,37 @@ func NewPM10ConcentrationServer(src interfaces.MatterFloatMeasurementSource) *PM
 
 // --- PowerSource (0x002F) — battery-only flavour ----------------------
 
-// PowerSourceServer projects a [interfaces.MatterBoolMeasurementSource]
-// (typically the LOWBAT binary parameter) onto a battery-flavoured
-// Matter PowerSource cluster. The bool maps as:
+// PowerSourceServer projects either a [interfaces.MatterBoolMeasurementSource]
+// (typically the LOWBAT binary parameter) or a
+// [interfaces.MatterFloatMeasurementSource] (a derived battery-percentage
+// sensor, e.g. OperatingVoltageLevelSensor) onto a battery-flavoured
+// Matter PowerSource cluster. A server instance wraps exactly one of
+// the two — see [NewPowerSourceServer] and
+// [NewPowerSourceServerFromFloat].
+//
+// Bool source drives BatChargeLevel (conformance BAT, mandatory):
 //
 //	false → BatChargeLevel = OK (0)
 //	true  → BatChargeLevel = Warning (1)
 //
 // HM has no Critical-level signal; devices that go fully critical
-// disconnect from the network instead. The cluster advertises only
-// the BAT feature; OPERATING_VOLTAGE_LEVEL-driven percentage
-// projection (BatPercentRemaining) is a future float-source path.
+// disconnect from the network instead.
+//
+// Float source drives BatPercentRemaining (conformance [BAT], optional
+// — matter.js power-source-cluster.element.ts:68-71, id 0xc, uint8,
+// constraint "max 200", quality "X Q"): the source's 0-100 percentage
+// is converted to Matter's half-percent units (0..200) and only
+// advertised by instances built via [NewPowerSourceServerFromFloat] —
+// a bool-source instance omits the attribute entirely rather than
+// reporting null forever, matching the optional conformance.
 //
 // PowerSourceServer embeds [cluster.DataVersionTracker] and implements
 // [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type PowerSourceServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterBoolMeasurementSource
+	src      interfaces.MatterBoolMeasurementSource
+	floatSrc interfaces.MatterFloatMeasurementSource
 	// endpoint is the Matter endpoint this power source feeds, stamped
 	// post-construction by the endpoint assembler via [SetEndpoint] so
 	// EndpointList (0x001F) can name it. Zero means "unspecified", which
@@ -1454,9 +1483,20 @@ type PowerSourceServer struct {
 // Compile-time assertion: PowerSourceServer satisfies MatterClusterDataVersion.
 var _ interfaces.MatterClusterDataVersion = (*PowerSourceServer)(nil)
 
-// NewPowerSourceServer wraps src.
+// NewPowerSourceServer wraps a boolean LOWBAT-style source. Serves
+// BatChargeLevel; BatPercentRemaining is not advertised (optional
+// conformance [BAT] — a bool source has no percentage to report).
 func NewPowerSourceServer(src interfaces.MatterBoolMeasurementSource) *PowerSourceServer {
 	return &PowerSourceServer{src: src}
+}
+
+// NewPowerSourceServerFromFloat wraps a derived battery-percentage
+// source (e.g. OperatingVoltageLevelSensor). Serves BatPercentRemaining
+// from it; BatChargeLevel still reports OK — there is no boolean
+// LOWBAT signal to derive Warning from, mirroring MatterRead's
+// no-observation fallback for the bool path.
+func NewPowerSourceServerFromFloat(src interfaces.MatterFloatMeasurementSource) *PowerSourceServer {
+	return &PowerSourceServer{floatSrc: src}
 }
 
 // SetEndpoint stamps the endpoint id this power source is mounted on so
@@ -1480,6 +1520,13 @@ func (s *PowerSourceServer) MatterRead(attrID uint32) (any, bool) {
 	case attrPwrDescription:
 		return "Battery", true
 	case attrPwrBatChargeLevel:
+		// s.src is nil on a float-constructed instance (see
+		// [NewPowerSourceServerFromFloat]) — there is no boolean LOWBAT
+		// signal to derive Warning from, so it falls back to OK the same
+		// way an unobserved bool source does.
+		if s.src == nil {
+			return batChargeOK, true
+		}
 		v, ok := s.src.MatterBoolValue()
 		if !ok {
 			return batChargeOK, true
@@ -1488,7 +1535,25 @@ func (s *PowerSourceServer) MatterRead(attrID uint32) (any, bool) {
 			return batChargeWarning, true
 		}
 		return batChargeOK, true
+	case attrPwrBatPercentRemaining:
+		// Optional conformance [BAT] — only present on a
+		// float-constructed instance; the bool-only constructor never
+		// reaches here because MatterAttributes()/MatterReportable()
+		// omit this ID for it, but a wildcard read still calls MatterRead
+		// directly, so guard explicitly rather than relying on that.
+		if s.floatSrc == nil {
+			return nil, false
+		}
+		v, ok := s.floatSrc.MatterFloatValue()
+		if !ok {
+			// Present but currently unknown — quality X permits null.
+			return nil, true
+		}
+		return percentToHalfPercent(v), true
 	case attrPwrBatReplacementNeeded:
+		if s.src == nil {
+			return false, true
+		}
 		v, ok := s.src.MatterBoolValue()
 		if !ok {
 			return false, true
@@ -1527,6 +1592,9 @@ func (s *PowerSourceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any,
 
 // MatterReportable returns the attribute IDs that the Matter Power Source cluster reports on change.
 func (s *PowerSourceServer) MatterReportable() []uint32 {
+	if s.floatSrc != nil {
+		return []uint32{attrPwrBatChargeLevel, attrPwrBatReplacementNeeded, attrPwrBatPercentRemaining}
+	}
 	return []uint32{attrPwrBatChargeLevel, attrPwrBatReplacementNeeded}
 }
 
@@ -1534,8 +1602,14 @@ func (s *PowerSourceServer) MatterReportable() []uint32 {
 // server implements via MatterRead. Apple Home's HAP service rebuild
 // reads the full attribute set; without this the dispatcher falls back
 // to MatterReportable's two-attribute subscription surface.
+//
+// attrPwrBatPercentRemaining is conformance [BAT] (optional even with
+// BAT set) and is only listed for a float-constructed instance — see
+// [NewPowerSourceServerFromFloat] — matching the way a bool-constructed
+// instance genuinely does not implement it rather than reporting null
+// forever.
 func (s *PowerSourceServer) MatterAttributes() []uint32 {
-	return []uint32{
+	attrs := []uint32{
 		attrPwrStatus,
 		attrPwrOrder,
 		attrPwrDescription,
@@ -1544,4 +1618,26 @@ func (s *PowerSourceServer) MatterAttributes() []uint32 {
 		attrPwrBatReplaceability,
 		attrPwrEndpointList,
 	}
+	if s.floatSrc != nil {
+		attrs = append(attrs, attrPwrBatPercentRemaining)
+	}
+	return attrs
+}
+
+// percentToHalfPercent converts a 0-100 battery percentage to Matter's
+// BatPercentRemaining wire encoding — half-percent units, uint8
+// 0..200 — per Matter §11.7.6.5.2 / matter.js
+// power-source-cluster.element.ts:68-71 (constraint "max 200"). Rounds
+// first, then clamps — a value like 100.4 % rounds to 200.8 half-
+// percent before the ceiling clamps it to 200, rather than clamping
+// the percentage to 100 first and losing the distinction.
+func percentToHalfPercent(pct float64) uint8 {
+	half := math.Round(pct * 2)
+	if half < 0 {
+		half = 0
+	}
+	if half > 200 {
+		half = 200
+	}
+	return uint8(half)
 }

@@ -87,7 +87,17 @@ type MeasurementSample struct {
 // MeasurementBucket is one aggregated point returned by
 // [MeasurementStore.QueryBuckets]. TS is the bucket's start time.
 type MeasurementBucket struct {
-	TS    time.Time
+	TS time.Time
+	// Avg is the arithmetic mean of the samples in the bucket (SUM/COUNT
+	// over event-driven push samples), NOT a time-weighted average. CCU
+	// parameters push on change, so sample spacing is irregular: a mostly
+	// idle series with one brief high-value spike reports an average
+	// several times its true time-weighted value, because a spike sampled
+	// once counts the same as a steady value sampled many times. No stage
+	// of the pipeline (raw AVG, hourly/daily rollup) applies a duration
+	// weight. Callers presenting this as a power/energy average (the REST
+	// energy handler's avg_power_w) should be aware of the bias for
+	// bursty, non-cumulative parameters.
 	Avg   float64
 	Min   float64
 	Max   float64
@@ -1464,18 +1474,30 @@ func (s *MeasurementStore) DeleteDevice(
 		return nil
 	}
 	prefix := deviceAddress + ":"
-	// One statement per tier: the rollups outlive the raw rows, so an
-	// unpaired device would keep its aggregates for the tiers' whole
-	// retention if only `measurements` were cleared.
+	// One statement per tier, inside one transaction: the rollups outlive
+	// the raw rows, so an unpaired device would keep its aggregates for the
+	// tiers' whole retention if only `measurements` were cleared. Without
+	// the transaction a failure between statements (SQLITE_BUSY, the
+	// process stopping mid-removal) leaves the tiers inconsistent —
+	// exactly the resurfacing this multi-tier delete exists to prevent, now
+	// reachable through a partial run instead of a single-tier delete.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("measurements.DeleteDevice begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
 	for _, stmt := range []string{
 		deleteDeviceRawSQL,
 		deleteDeviceHourlySQL,
 		deleteDeviceDailySQL,
 	} {
-		if _, err := s.db.ExecContext(ctx, stmt,
+		if _, err := tx.ExecContext(ctx, stmt,
 			centralName, interfaceID, deviceAddress, prefix); err != nil {
 			return fmt.Errorf("measurements.DeleteDevice: %w", err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("measurements.DeleteDevice commit: %w", err)
 	}
 	return nil
 }
@@ -1506,19 +1528,29 @@ func (s *MeasurementStore) DeleteForCentral(ctx context.Context, centralName str
 	if s == nil || s.db == nil {
 		return nil
 	}
-	// All three tiers, not just the raw table. The rollups outlive the raw
-	// rows by design (hourly 13 months, daily forever by default), so
-	// deleting only `measurements` left a removed CCU's aggregates behind —
-	// and re-adopting the same central name resurfaced them in the energy
-	// views as if the CCU had never been away.
+	// All three tiers, not just the raw table, inside one transaction. The
+	// rollups outlive the raw rows by design (hourly 13 months, daily
+	// forever by default), so deleting only `measurements` left a removed
+	// CCU's aggregates behind — and re-adopting the same central name
+	// resurfaced them in the energy views as if the CCU had never been
+	// away. Without the transaction, a failure between statements leaves
+	// exactly that same partial state instead of preventing it.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("measurements.DeleteForCentral begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
 	for _, stmt := range []string{
 		`DELETE FROM measurements WHERE central_name = ?`,
 		`DELETE FROM measurements_hourly WHERE central_name = ?`,
 		`DELETE FROM measurements_daily WHERE central_name = ?`,
 	} {
-		if _, err := s.db.ExecContext(ctx, stmt, centralName); err != nil {
+		if _, err := tx.ExecContext(ctx, stmt, centralName); err != nil {
 			return fmt.Errorf("measurements.DeleteForCentral: %w", err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("measurements.DeleteForCentral commit: %w", err)
 	}
 	return nil
 }
@@ -1529,14 +1561,22 @@ func (s *MeasurementStore) DeleteAll(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("measurements.DeleteAll begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
 	for _, stmt := range []string{
 		`DELETE FROM measurements`,
 		`DELETE FROM measurements_hourly`,
 		`DELETE FROM measurements_daily`,
 	} {
-		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("measurements.DeleteAll: %w", err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("measurements.DeleteAll commit: %w", err)
 	}
 	return nil
 }

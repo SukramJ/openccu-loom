@@ -5,12 +5,14 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 )
 
 // This file holds the hub- and device-derived read tools that project the
@@ -27,18 +29,49 @@ type centralScopeIn struct {
 	CentralName string `json:"central_name,omitempty" jsonschema:"optional CCU name to scope the result; omit to span every central"`
 }
 
+// centralKnown reports whether centralName is empty (no scoping
+// requested, so there is nothing to validate) or matches one of the
+// configured centrals. A nil CentralLister cannot be consulted, so it
+// treats every name as unverifiable rather than unknown — the caller
+// falls back to its pre-validation behaviour in that case.
+func centralKnown(d Deps, centralName string) bool {
+	if centralName == "" || d.Centrals == nil {
+		return true
+	}
+	for _, c := range d.Centrals.Names() {
+		if c == centralName {
+			return true
+		}
+	}
+	return false
+}
+
+// errUnknownCentral reports centralName against the configured centrals,
+// mirroring the WS ErrCentralUnknown path (ws/commands_default.go
+// centralHub): a mistyped or hallucinated central_name is a client
+// error the caller must be told about, not silently degraded to an
+// empty result that reads as "this central genuinely has none".
+func errUnknownCentral(d Deps, centralName string) error {
+	return fmt.Errorf("unknown central %q; configured centrals: %s",
+		centralName, strings.Join(d.Centrals.Names(), ", "))
+}
+
 // centralsToScan resolves the centrals a central-spanning read tool should
 // iterate: just the named one when central_name is set, else every
-// configured central. A named-but-unknown central yields an empty result
-// (its HubFor lookup returns nil and is skipped by the caller).
-func centralsToScan(d Deps, centralName string) []string {
+// configured central. A named-but-unknown central is reported as an
+// error (see [errUnknownCentral]) rather than yielding an empty scan.
+func centralsToScan(d Deps, centralName string) ([]string, error) {
 	if d.Centrals == nil {
-		return nil
+		return nil, nil
 	}
-	if want := strings.TrimSpace(centralName); want != "" {
-		return []string{want}
+	want := strings.TrimSpace(centralName)
+	if want == "" {
+		return d.Centrals.Names(), nil
 	}
-	return d.Centrals.Names()
+	if !centralKnown(d, want) {
+		return nil, errUnknownCentral(d, want)
+	}
+	return []string{want}, nil
 }
 
 // rfc3339OrEmpty formats a timestamp as RFC3339, or "" for the zero value
@@ -71,7 +104,11 @@ func registerListPrograms(s *mcpsdk.Server, d Deps) {
 		Description: "List CCU automation programs, optionally scoped to one central via central_name. Returns each program's id (pass it to trigger_program), name, and last-execution state. Internal Tmp_* programs are omitted.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listProgramsOut, error) {
 		out := listProgramsOut{Programs: []programSummary{}}
-		for _, c := range centralsToScan(d, in.CentralName) {
+		scan, err := centralsToScan(d, in.CentralName)
+		if err != nil {
+			return nil, listProgramsOut{}, err
+		}
+		for _, c := range scan {
 			h := d.Hubs.HubFor(c)
 			if h == nil {
 				continue
@@ -118,7 +155,11 @@ func registerListSysvars(s *mcpsdk.Server, d Deps) {
 		Description: "List CCU system variables (sysvars), optionally scoped to one central via central_name. Returns each variable's name, type, current value, and unit. Internal sysvars are omitted.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listSysvarsOut, error) {
 		out := listSysvarsOut{Sysvars: []sysvarSummary{}}
-		for _, c := range centralsToScan(d, in.CentralName) {
+		scan, err := centralsToScan(d, in.CentralName)
+		if err != nil {
+			return nil, listSysvarsOut{}, err
+		}
+		for _, c := range scan {
 			h := d.Hubs.HubFor(c)
 			if h == nil {
 				continue
@@ -178,7 +219,11 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 		Description: "List active CCU service messages (e.g. low battery, sabotage, communication errors), optionally scoped to one central via central_name. These surface device-maintenance conditions that get_health does not report.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listServiceMessagesOut, error) {
 		out := listServiceMessagesOut{Messages: []serviceMessageSummary{}}
-		for _, c := range centralsToScan(d, in.CentralName) {
+		scan, err := centralsToScan(d, in.CentralName)
+		if err != nil {
+			return nil, listServiceMessagesOut{}, err
+		}
+		for _, c := range scan {
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.ServiceMessages == nil {
 				continue
@@ -236,7 +281,11 @@ func registerListAlarmMessages(s *mcpsdk.Server, d Deps) {
 		Description: "List active CCU alarm messages (the alarm set, distinct from service messages), optionally scoped to one central via central_name.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listAlarmMessagesOut, error) {
 		out := listAlarmMessagesOut{Messages: []alarmMessageSummary{}}
-		for _, c := range centralsToScan(d, in.CentralName) {
+		scan, err := centralsToScan(d, in.CentralName)
+		if err != nil {
+			return nil, listAlarmMessagesOut{}, err
+		}
+		for _, c := range scan {
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.Messages == nil {
 				continue
@@ -285,7 +334,11 @@ func registerListInbox(s *mcpsdk.Server, d Deps) {
 		Description: "List devices waiting for acceptance — newly detected devices in the CCU inbox plus any this daemon parked because delay_new_device_creation is enabled (pending_creation) — optionally scoped to one central via central_name.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listInboxOut, error) {
 		out := listInboxOut{Devices: []inboxDeviceSummary{}}
-		for _, c := range centralsToScan(d, in.CentralName) {
+		scan, err := centralsToScan(d, in.CentralName)
+		if err != nil {
+			return nil, listInboxOut{}, err
+		}
+		for _, c := range scan {
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.Inbox == nil {
 				continue
@@ -332,7 +385,11 @@ func registerGetSystemInfo(s *mcpsdk.Server, d Deps) {
 		Description: "Report the daemon version and, per central (optionally scoped via central_name), the program/sysvar counts and CCU firmware-update state (current/available firmware, whether an update is available or running).",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, getSystemInfoOut, error) {
 		out := getSystemInfoOut{DaemonVersion: d.Version, Centrals: []systemInfoCentral{}}
-		for _, c := range centralsToScan(d, in.CentralName) {
+		scan, err := centralsToScan(d, in.CentralName)
+		if err != nil {
+			return nil, getSystemInfoOut{}, err
+		}
+		for _, c := range scan {
 			h := d.Hubs.HubFor(c)
 			if h == nil {
 				continue
@@ -473,6 +530,87 @@ func registerListChannels(s *mcpsdk.Server, d Deps) {
 				ParamsetKey: string(ch.ParamsetIn),
 				DataPoints:  len(ch.DataPoints()),
 			})
+		}
+		return nil, out, nil
+	})
+}
+
+// channelScheduleSummary projects one channel's week profile — enough
+// for an agent to answer "does this device have a schedule, what
+// profile is active, how many entries does it use" without needing the
+// REST schedule surface's full climate/simple entry payloads.
+type channelScheduleSummary struct {
+	ChannelAddress string `json:"channel_address"`
+	// ScheduleType is "climate" (thermostats) or "default" (switches,
+	// lights, covers, valves, locks) — mirrors weekprofile.ScheduleType.
+	ScheduleType string `json:"schedule_type"`
+	EntryCount   int    `json:"entry_count"`
+	MaxEntries   int    `json:"max_entries"`
+	// AvailableProfiles / CurrentProfile / MinTemp / MaxTemp are climate-only
+	// (empty/zero for a default schedule, which has exactly one profile).
+	AvailableProfiles []string `json:"available_profiles,omitempty"`
+	CurrentProfile    string   `json:"current_profile,omitempty"`
+	MinTemp           float64  `json:"min_temp,omitempty"`
+	MaxTemp           float64  `json:"max_temp,omitempty"`
+	// ScheduleEnabled maps a schedule-domain key to whether the weekly
+	// program currently drives that channel (vs. manual/hold override).
+	ScheduleEnabled map[string]bool `json:"schedule_enabled,omitempty"`
+}
+
+type getDeviceScheduleIn struct {
+	Address string `json:"address" jsonschema:"the device address / serial, e.g. 0001D3C99C1234 (device-level, not a channel address)"`
+}
+
+type getDeviceScheduleOut struct {
+	Found    bool                     `json:"found"`
+	Central  string                   `json:"central,omitempty"`
+	Channels []channelScheduleSummary `json:"channels"`
+}
+
+// registerGetDeviceSchedule implements `get_device_schedule`, a read
+// projection of the device model's week-profile data points — the same
+// seam list_channels already reads off d.Devices, so no new dependency
+// is introduced. Complements the REST `GET
+// /devices/{addr}/channels/{no}/schedule` family with a device-wide,
+// agent-friendly summary rather than one call per channel.
+func registerGetDeviceSchedule(s *mcpsdk.Server, d Deps) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name: "get_device_schedule",
+		Description: "Read a device's weekly schedule (week profile): schedule type (climate/default), " +
+			"active/available profiles, entry counts, and per-channel schedule-enabled state. " +
+			"One entry per channel that carries a schedule; empty when the device has none.",
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getDeviceScheduleIn) (*mcpsdk.CallToolResult, getDeviceScheduleOut, error) {
+		out := getDeviceScheduleOut{Channels: []channelScheduleSummary{}}
+		if d.Devices == nil {
+			return nil, out, nil
+		}
+		dev, ok := d.Devices.Device(strings.TrimSpace(in.Address))
+		if !ok {
+			return nil, out, nil
+		}
+		out.Found = true
+		out.Central = d.Devices.CentralOf(dev.Address)
+		for _, ch := range dev.Channels() {
+			if !ch.HasWeekProfile() {
+				continue
+			}
+			wp := ch.WeekProfile()
+			sum := channelScheduleSummary{
+				ChannelAddress:  ch.Address,
+				EntryCount:      wp.Value(),
+				MaxEntries:      wp.MaxEntries(),
+				ScheduleEnabled: wp.ScheduleEnabled(),
+			}
+			if wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
+				sum.ScheduleType = "climate"
+				sum.AvailableProfiles = wp.AvailableProfiles()
+				sum.CurrentProfile = wp.CurrentProfile()
+				sum.MinTemp = wp.MinTemp()
+				sum.MaxTemp = wp.MaxTemp()
+			} else {
+				sum.ScheduleType = "default"
+			}
+			out.Channels = append(out.Channels, sum)
 		}
 		return nil, out, nil
 	})

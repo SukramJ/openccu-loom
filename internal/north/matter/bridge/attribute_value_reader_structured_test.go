@@ -119,7 +119,20 @@ func TestAttributeValueReader_Extension_DecodesAndClusterAccepts(t *testing.T) {
 		HasCluster: true, HasAttribute: true,
 		Cluster: 0x001F, Attribute: 0x0001,
 	}
-	data := []byte{0xD8, 0x00, 0x01, 0x02} // vendor-opaque octet string
+	// Vendor-opaque octet string. Must itself decode as a well-formed TLV
+	// List (matter.js AccessControlServer.ts:424-441
+	// extensionEntryValidator) — a minimal empty List (0x17 open, 0x18
+	// EndOfContainer) satisfies that while still exercising the same
+	// decode-then-write seam this test targets.
+	dataEnc := tlv.NewEncoder()
+	dataEnc.StartList(tlv.AnonymousTag())
+	if err := dataEnc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer Data list: %v", err)
+	}
+	data, err := dataEnc.Bytes()
+	if err != nil {
+		t.Fatalf("dataEnc.Bytes: %v", err)
+	}
 	raw := buildExtensionArrayTLV([]mattercore.AccessControlExtensionEntry{
 		{Data: data, FabricIndex: fabric},
 	})

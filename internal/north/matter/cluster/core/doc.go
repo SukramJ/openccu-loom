@@ -14,7 +14,7 @@
 // Cluster IDs:
 //
 //   - Descriptor                          0x001D — every endpoint
-//   - Binding                             0x001E — every bridged endpoint
+//   - Binding                             0x001E — stub, not mounted
 //   - BasicInformation                    0x0028 — root endpoint only
 //   - BridgedDeviceBasicInformation       0x0039 — bridged endpoints
 //   - GeneralCommissioning                0x0030 — root endpoint only (Stufe 5)

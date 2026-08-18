@@ -21,7 +21,7 @@ import (
 // identifier (e.g. the function name or a job tag).
 // fn may be nil — in that case nothing happens.
 //
-// loom:reachable:reason="utility wrapper for panic-safe goroutines; callers in adapter background tasks are added incrementally"
+// loom:reachable:reason="utility wrapper for panic-safe goroutines; called from central_bringup.go, auto_refresh.go and eventbridge.go's background tasks"
 func SafeGo(name string, fn func()) {
 	if fn == nil {
 		return

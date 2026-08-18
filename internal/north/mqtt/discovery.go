@@ -162,8 +162,6 @@ func SetOriginVersion(v string) {
 // position + slats, siren, lock with capability sets) are handled
 // by targeted overrides in future scheibes.
 //
-// The optional [PayloadFormat] selector aligns the produced payloads
-// with the bridge's wire format. In `bare` mode (default) state
 // State topics carry the canonical JSON envelope
 // `{"value":..,"available":..,"modified_at":..}` and the discovery
 // payload uses `value_template` filters to pick the scalar out of
@@ -626,7 +624,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	if hmipCat == "" {
 		hmipCat = string(comp)
 	}
-	applyEntityDescription(body, hmipCat, ev.Parameter, ev.Model, ev.descUnit(), "")
+	haDesc := applyEntityDescription(body, hmipCat, ev.Parameter, ev.Model, ev.descUnit(), "")
 	// MASTER-paramset fallback: when neither EntityDescriptionFor nor
 	// the HA integration sets an entity_category, force "config". This is a
 	// openccu-loom-MQTT UX convention so MASTER parameters land in HA's
@@ -776,7 +774,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// `new_value = self._data_point.value * self._multiplier`).
 		// Without this template Energy/Power readings would be off by
 		// the unit factor when the CCU firmware reports the raw count.
-		applyMultiplierSensor(ev, body)
+		applyMultiplierSensor(ev, body, registryMultiplier(haDesc))
 	case HAComponentLight, HAComponentNumber, HAComponentCover:
 		body["command_topic"] = commandTopic
 		body["optimistic"] = false
@@ -811,7 +809,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			// and invert the scaling on writes (`value / multiplier`).
 			// Run AFTER the seed above so the scaling actually has values
 			// to multiply.
-			applyMultiplierNumber(ev, body, stateTopic, commandTopic)
+			applyMultiplierNumber(ev, body, stateTopic, commandTopic, registryMultiplier(haDesc))
 			// unit_of_measurement defaults to the Python reference
 			// implementation's `data_point.unit` when the EntityDescription
 			// doesn't override (`number.py:236-237`). Mirror that here so
@@ -1037,17 +1035,45 @@ func discoveryNodeID(centralName, deviceAddress string) string {
 	return pd.DiscoveryNodeID(centralName)
 }
 
-// applyMultiplierSensor patches body["value_template"] when ev.Channel
-// reports a non-trivial multiplier for ev.Parameter. The emitted Jinja
-// template multiplies the wire scalar (raw or value_json.value,
-// depending on PayloadFormat) by the multiplier, mirroring the math
-// the Python reference implementation's `sensor.py:201` does.
-func applyMultiplierSensor(ev Event, body map[string]any) {
+// registryMultiplier extracts the HA-registry Multiplier override from a
+// matched entity-description rule (nil when no rule matched or the rule
+// left Multiplier unset), for [applyMultiplierSensor] / [applyMultiplierNumber].
+func registryMultiplier(desc *HARegistryDescription) *float64 {
+	if desc == nil {
+		return nil
+	}
+	return desc.Multiplier
+}
+
+// resolveMultiplier picks the scaling factor for ev.Parameter. The
+// per-entity registry override wins when present, mirroring the Python
+// reference implementation's precedence (`entity_description.multiplier
+// if ... is not None else data_point.multiplier`, `sensor.py:196-201`,
+// `number.py:226-235`): the descriptor-driven multiplier
+// ([channelMultiplierReader.ParameterMultiplier], unit-based) only sees a
+// parameter's *reported* CCU unit, which is empty for several device/
+// parameter combinations (e.g. LEVEL on HmIP-eTRV/-HEATING/-FALMOT-C12)
+// whose registry rule still declares the /100 valve-position scaling —
+// without the override those readings publish unscaled (0.42 instead of
+// 42).
+func resolveMultiplier(ev Event, override *float64) (float64, bool) {
+	if override != nil && *override != 0 && *override != 1.0 {
+		return *override, true
+	}
 	r, ok := ev.Channel.(channelMultiplierReader)
 	if !ok {
-		return
+		return 0, false
 	}
-	m, nontrivial := r.ParameterMultiplier(ev.Parameter)
+	return r.ParameterMultiplier(ev.Parameter)
+}
+
+// applyMultiplierSensor patches body["value_template"] when ev.Channel or
+// override reports a non-trivial multiplier for ev.Parameter. The emitted
+// Jinja template multiplies the wire scalar (raw or value_json.value,
+// depending on PayloadFormat) by the multiplier, mirroring the math
+// the Python reference implementation's `sensor.py:201` does.
+func applyMultiplierSensor(ev Event, body map[string]any, override *float64) {
+	m, nontrivial := resolveMultiplier(ev, override)
 	if !nontrivial {
 		return
 	}
@@ -1062,12 +1088,8 @@ func applyMultiplierSensor(ev Event, body map[string]any) {
 
 // applyMultiplierNumber patches body so HA scales `min`/`max`/`step` to the
 // multiplied range and inverts the multiplier on writes.
-func applyMultiplierNumber(ev Event, body map[string]any, stateTopic, commandTopic string) {
-	r, ok := ev.Channel.(channelMultiplierReader)
-	if !ok {
-		return
-	}
-	m, nontrivial := r.ParameterMultiplier(ev.Parameter)
+func applyMultiplierNumber(ev Event, body map[string]any, stateTopic, commandTopic string, override *float64) {
+	m, nontrivial := resolveMultiplier(ev, override)
 	if !nontrivial {
 		return
 	}

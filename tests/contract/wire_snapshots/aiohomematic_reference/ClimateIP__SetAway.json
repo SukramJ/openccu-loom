@@ -13,7 +13,7 @@
           "paramset_key": "VALUES",
           "put_values": {
             "PARTY_TIME_START": "<now>",
-            "PARTY_TIME_END": "2024_12_01 00:00",
+            "PARTY_TIME_END": "<local-until>",
             "SET_POINT_MODE": 2,
             "SET_POINT_TEMPERATURE": 17.0
           }

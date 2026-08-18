@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -128,6 +129,15 @@ func decodeTypedValue(d *xml.Decoder, start xml.StartElement, depth int) (Value,
 		f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 		if err != nil {
 			return nil, fmt.Errorf("xmlrpc: invalid double %q: %w", s, err)
+		}
+		// ParseFloat accepts "nan"/"inf" as valid float text, but a
+		// non-finite value has no JSON representation: it reaches the
+		// model, then breaks every north-bound JSON encoding of whatever
+		// batch or paramset carries it alongside healthy values. Reject
+		// it here, at the wire boundary, mirroring the write-side guard
+		// in binrpc encodeDouble.
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil, fmt.Errorf("xmlrpc: non-finite double %q", s)
 		}
 		return DoubleValue(f), nil
 

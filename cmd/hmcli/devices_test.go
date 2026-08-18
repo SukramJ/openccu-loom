@@ -489,6 +489,32 @@ func TestDevicesSetSendsStringValue(t *testing.T) {
 	}
 }
 
+// TestDevicesSetWithInvalidPriorityReturnsErrorLocally is the regression
+// guard for the --priority flag accepting values outside the REST API's
+// enum (assets/openapi.yaml SetValueRequest.priority: critical, high,
+// default, low): a value like the flag's own former help-text example
+// "normal" must fail fast on the client instead of round-tripping to the
+// daemon as a 400 (or, with request validation off, silently becoming a
+// different priority than requested).
+func TestDevicesSetWithInvalidPriorityReturnsErrorLocally(t *testing.T) {
+	t.Parallel()
+	var called bool
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/devices/D/channels/1/data-points/STATE/value": func(w http.ResponseWriter, _ *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusNoContent)
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"devices", "set", "--host", ts.URL, "--priority", "normal", "D", "1", "STATE", "true"}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for an out-of-enum --priority value")
+	}
+	if called {
+		t.Error("request reached the server; want it rejected locally before dispatch")
+	}
+}
+
 func TestDevicesSetWithPriorityFlag(t *testing.T) {
 	t.Parallel()
 	var gotBody setValueRequest
@@ -521,6 +547,29 @@ func TestDevicesSetPrintsOkOnSuccess(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "ok") {
 		t.Errorf("expected 'ok' in stdout, got: %q", stdout.String())
+	}
+}
+
+func TestDevicesSetWithJSONFlagEmitsParseableObject(t *testing.T) {
+	t.Parallel()
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/devices/D/channels/1/data-points/STATE/value": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"devices", "set", "--host", ts.URL, "--json", "D", "1", "STATE", "true"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("--json output did not parse as JSON: %v (got %q)", err, stdout.String())
+	}
+	if got["status"] != "ok" {
+		t.Errorf("status=%v, want ok", got["status"])
+	}
+	if got["address"] != "D" {
+		t.Errorf("address=%v, want D", got["address"])
 	}
 }
 

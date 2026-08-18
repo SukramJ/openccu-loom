@@ -232,6 +232,27 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 		postfix = pf.NamePostfix()
 	}
 	applyEntityDescriptionStrict(body, comp, "", ev.Model, ev.descUnit(), postfix)
+	// `translation_key` is a native-HA-integration concept: it resolves
+	// against that integration's own translations.json, which an
+	// MQTT-discovered entity has none of, so HA's MQTT schema strips the
+	// key on receipt and it never affects anything. A body left with
+	// `name: nil` (see channelBaseBody) alongside a translation_key that
+	// would normally have supplied the display suffix therefore shows up
+	// in HA as the bare device name — indistinguishable from any other
+	// single-primary entity on the same device (canonical case: an
+	// HmIP-eTRV's climate and its BUTTON_LOCK child lock both landing on
+	// "<device name>"). Resolve the key through the daemon's own
+	// catalogue and use the result as the name instead; entities whose
+	// translation_key has no catalogue entry keep the untouched null,
+	// same as before.
+	if body["name"] == nil {
+		if tk, ok := body["translation_key"].(string); ok && tk != "" {
+			nameKey := "discovery.entity_name." + tk
+			if resolved := d.tr(nameKey); resolved != nameKey {
+				body["name"] = resolved
+			}
+		}
+	}
 	// CDP_SECONDARY entities (mirror channels declared via the
 	// profile's `secondary_channels`) are hidden by default in HA —
 	// (model/data_point.py:399). The operator can re-enable them

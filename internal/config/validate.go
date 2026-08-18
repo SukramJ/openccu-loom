@@ -46,6 +46,9 @@ func validateFieldRanges(c *Config) error {
 	if err := validateRESTLimits(&c.North.REST); err != nil {
 		return err
 	}
+	if err := validateHAIngressRole(c.North.REST.Auth.HAIngress.Role); err != nil {
+		return err
+	}
 	if err := validateFiniteFloats(c); err != nil {
 		return err
 	}
@@ -110,8 +113,14 @@ func validateWebhook(w *NorthWebhook) error {
 // validateMCP checks the Model Context Protocol mount path. The value
 // becomes an [net/http.ServeMux] pattern verbatim, which is why the rules
 // live on the config type itself — see [NorthMCP.ValidateMountPath].
+//
+// The check only runs while the adapter is enabled: while disabled the path
+// is never handed to ServeMux (see mountMCP), so a stale or legacy-format
+// value left over in an unused section must not abort startup. Without this
+// gate, upgrading past the mount-path syntax tightened by ADR 0025 could
+// fail every subsequent boot for an operator who never turned MCP on.
 func validateMCP(m *NorthMCP) error {
-	if m.Path == "" {
+	if !m.Enabled || m.Path == "" {
 		return nil
 	}
 	return m.ValidateMountPath()
@@ -192,6 +201,28 @@ func validateRESTLimits(r *NorthREST) error {
 		return fmt.Errorf("config: north.rest.ws.replay_capacity must be >= 0 (0 disables replay): %d", r.WS.ReplayCapacity)
 	}
 	return nil
+}
+
+// validateHAIngressRole rejects a north.rest.auth.ha_ingress.role value
+// outside the documented "admin"|"operator"|"viewer" enum (empty selects
+// the "admin" default).
+//
+// The consumer (ingressRole in cmd/openccu-loom/ingress_auth_wiring.go)
+// treats any unrecognised string as "admin" — a fail-OPEN default chosen so
+// a typo does not lock an operator out, but it means "Viewer" (capitalised),
+// "read-only", or any other near-miss silently grants full admin over every
+// HA-Ingress-proxied request instead of the restricted role the operator
+// typed. There is no schema enum on this free-text field (SchemaField
+// carries no options), so the SectionEditor cannot catch it client-side —
+// this is the only gate.
+func validateHAIngressRole(role string) error {
+	switch role {
+	case "", "admin", "operator", "viewer":
+		return nil
+	default:
+		return fmt.Errorf(
+			"config: north.rest.auth.ha_ingress.role must be one of admin|operator|viewer (empty selects \"admin\"), got %q", role)
+	}
 }
 
 // durationType is the reflect type every duration leaf carries.

@@ -2528,13 +2528,22 @@ export function friendlyError(
     if (err.status === 423) {
       // 423 is not always a channel lock — the same status also covers
       // a lapsed/missing MASTER edit-lock token (enforceEditLock in
-      // internal/north/rest/handlers/paramsets.go), a different
-      // situation with a different fix. Prefer the daemon's own
-      // problem.detail/problem.title when it sent one — that is
-      // specific to whichever the daemon actually rejected — and only
-      // fall back to the generic channel-lock text when the response
-      // carries neither. Surfaces that need the lock *holder* (the
-      // edit-session banner) branch on 423 before reaching here.
+      // internal/north/rest/handlers/paramsets.go) and a resource
+      // already held by another edit session (session.go), each a
+      // different situation with a different localized message.
+      // Discriminate on the daemon's problem.title, which is a fixed,
+      // known set (writeChannelLocked / enforceEditLock / session.go),
+      // rather than on "is any text present" — every 423 the daemon
+      // sends carries a detail, so that test never distinguished them
+      // and always won with the raw, untranslated English sentence.
+      // Surfaces that need the lock *holder* (the edit-session banner)
+      // branch on 423 before reaching here.
+      if (err.problemTitle === "Channel locked") {
+        return t("api.error.locked");
+      }
+      if (err.problemTitle === "Edit lock required") {
+        return t("api.error.edit_lock_lapsed");
+      }
       const reason = err.problemDetail || err.problemTitle;
       if (reason) {
         return `${t("api.error.locked_reason", { status: String(err.status) })} — ${reason}`;

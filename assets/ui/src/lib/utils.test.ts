@@ -31,4 +31,18 @@ describe("makeTextMatcher", () => {
     expect(m("foo(bar")).toBe(true);
     expect(m("foobar")).toBe(false);
   });
+
+  it("still matches literally when the term happens to also be a valid but different regex", () => {
+    // "Wohnzimmer (Decke)" compiles as a regex (the parens become a
+    // capture group), which then matches nothing containing the literal
+    // text. The literal pass must not be disabled just because the term
+    // also parses as a (differently-meaning) pattern.
+    expect(makeTextMatcher("Wohnzimmer (Decke)")("Wohnzimmer (Decke)")).toBe(true);
+    expect(makeTextMatcher("Bad [oben]")("Bad [oben]")).toBe(true);
+    expect(makeTextMatcher("Licht+Steckdose")("Licht+Steckdose")).toBe(true);
+    expect(makeTextMatcher("Taster (Kanal 1)")("Taster (Kanal 1)")).toBe(true);
+    // A power-user regex that has no literal match still works via the
+    // regex pass.
+    expect(makeTextMatcher("HmIP-BSM")("HmIP-BSM")).toBe(true);
+  });
 });

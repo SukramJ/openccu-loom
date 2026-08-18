@@ -188,6 +188,7 @@ func (m *Manager) Reload(ctx context.Context) error {
 		rowIDs[rows[i].ID] = struct{}{}
 	}
 	m.pruneDemands(rowIDs)
+	m.pruneFailed(rowIDs)
 	return nil
 }
 
@@ -666,6 +667,35 @@ func (m *Manager) resolveFailure(outputID string) {
 	m.mu.Unlock()
 	if recovered && m.health != nil {
 		m.health(true, "alarm output stop verified")
+	}
+}
+
+// pruneFailed drops outstanding failures whose enrolled row no longer
+// exists after a Reload (the operator deleted the failing output),
+// mirroring pruneDemands for the health-degradation side of a removed
+// row. Without this a failure can never resolve once its row is gone —
+// resolveFailure only runs from a verified stop of that same output,
+// and a deleted row's watchdog and stop never run again — so the
+// domain would stay degraded, naming a device that no longer exists,
+// until the daemon restarts.
+//
+// The health signal only fires when this prune is what empties the
+// set: Reload runs after every alarm management write, not only
+// output changes, so an unconditional health(true) here would
+// republish "healthy" on every unrelated config save.
+func (m *Manager) pruneFailed(rowIDs map[string]struct{}) {
+	m.mu.Lock()
+	pruned := false
+	for id := range m.failed {
+		if _, ok := rowIDs[id]; !ok {
+			delete(m.failed, id)
+			pruned = true
+		}
+	}
+	recovered := pruned && len(m.failed) == 0
+	m.mu.Unlock()
+	if recovered && m.health != nil {
+		m.health(true, "alarm output removed while degraded")
 	}
 }
 

@@ -98,7 +98,12 @@ func (c *wsConn) recv(v any) json.RawMessage {
 		}
 		if json.Unmarshal(raw, &probe) == nil {
 			switch probe.Op {
-			case "subscribed", "unsubscribed", "replay_done", "replay_lost", "ping":
+			// "error" is a protocol-level notification (malformed frame,
+			// unknown op — see [client.dispatchMessage]) uncorrelated to
+			// any pending `call`, so it is skipped here exactly like ping:
+			// a caller waiting on a specific result must not mistake it
+			// for that result.
+			case "subscribed", "unsubscribed", "replay_done", "replay_lost", "ping", "error":
 				continue
 			}
 		}

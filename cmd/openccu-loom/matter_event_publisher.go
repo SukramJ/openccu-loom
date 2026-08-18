@@ -81,17 +81,38 @@ func (p *matterEventPublisher) publishFabricAdded(fabricIndex uint8) {
 	})
 }
 
+// zeroFabricPayload is the degraded fabricPayload fallback: a
+// handlers.MatterFabricResponse carrying only fabricIndex, with every other
+// field at its schema-valid zero form. assets/openapi.yaml's MatterFabric
+// schema (which assets/wsapi.json's matter.fabric_added payload schema
+// references) declares fabric_id, fabric_id_hex, node_id, node_id_hex,
+// vendor_id, compressed_id and root_public_key as required — a generated
+// strict client rejects a frame that omits any of them, so a lookup miss or
+// a slow/erroring store read must still ship every required key rather than
+// the bare index alone. The _hex fields are zero-padded to their real
+// 16-digit width rather than left as Go's empty-string zero value so they
+// still parse as the hex shape the schema documents.
+func zeroFabricPayload(fabricIndex uint8) handlers.MatterFabricResponse {
+	return handlers.MatterFabricResponse{
+		FabricIndex: fabricIndex,
+		FabricIDHex: fmt.Sprintf("%016X", uint64(0)),
+		NodeIDHex:   fmt.Sprintf("%016X", uint64(0)),
+	}
+}
+
 // fabricPayload builds the MatterFabric body for fabricIndex, falling back to
-// the bare index when no store is wired or the fabric cannot be resolved.
+// [zeroFabricPayload] when no store is wired or the fabric cannot be
+// resolved — never to a partial object, which every required field in the
+// declared schema would then be missing from.
 func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 	if p == nil || p.fabrics == nil {
-		return map[string]any{"fabric_index": fabricIndex}
+		return zeroFabricPayload(fabricIndex)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), fabricLookupTimeout)
 	defer cancel()
 	recs, err := p.fabrics.ListFabrics(ctx)
 	if err != nil {
-		return map[string]any{"fabric_index": fabricIndex}
+		return zeroFabricPayload(fabricIndex)
 	}
 	for i := range recs {
 		r := &recs[i]
@@ -113,7 +134,7 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 			RootPublicKey: hex.EncodeToString(r.RootPublicKey),
 		}
 	}
-	return map[string]any{"fabric_index": fabricIndex}
+	return zeroFabricPayload(fabricIndex)
 }
 
 // publishFabricRemoved emits `matter.fabric_removed` with the

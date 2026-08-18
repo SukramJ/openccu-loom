@@ -251,7 +251,10 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 		// the previous default of 1 had no live symptom; matter.js
 		// parity makes the bridge robust against a future commissioner
 		// that DOES batch (Matter Spec §11.1.5.20 allows 1..65535).
-		maxPaths = 10
+		// im.DefaultMaxPathsPerInvoke is the single source of truth so
+		// this advertisement and im.ValidateInvokeBatch's enforcement
+		// ceiling cannot drift apart.
+		maxPaths = im.DefaultMaxPathsPerInvoke
 	}
 	// ConfigurationVersion is optional on Root BasicInformation and
 	// matter.js Sample omits it. Carry zero (= "not configured") all

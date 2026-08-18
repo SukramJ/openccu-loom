@@ -4,6 +4,95 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.0]
+
+The medium and low findings of the round-4 full-codebase audit — the tail
+behind 0.62.0's critical and high ones. Around 130 of the 212 were fixed; the
+rest were either already closed by the 0.62.0 wave, refuted on inspection, or
+left open with the reason recorded, because a safe fix needed a design decision
+rather than a local edit. Ships database migration **039**.
+
+The north-bound API contract moves to **7.0.0**. Nothing the daemon *does*
+changed incompatibly — the major step is because the specification was wrong
+and now is not: `GET /diagnostics/capture` has always answered with an array
+while the schema declared an object, and the nullable fields were written in
+the OpenAPI 3.0 spelling inside a 3.1 document, where it has no meaning. A
+client that generated code from the old schema gets different types out of the
+new one, which is exactly what a major version is for. Everything else in the
+contract is additive: new MCP tools, argument schemas for nineteen WebSocket
+commands, and a few response fields.
+
+### Added
+
+- MCP gained tools to open and close an edit session, without which writing a
+  MASTER paramset over MCP was unreachable — the write is fail-closed on an edit
+  token and no tool could mint one. Also a schedule read tool.
+
+### Changed
+
+- MASTER paramset saves succeed for every writable parameter the configuration
+  UI offers. The write was gated by the data-point-creation whitelist, which is
+  not an authorisation list, so almost everything the read surface offered was
+  refused on save.
+- Sixteen WebSocket commands that the composition root never wires now answer
+  not-implemented instead of unknown-command, which was indistinguishable from a
+  typo, and a malformed frame gets an error answer instead of silence.
+
+### Fixed
+
+- A dead CCU's leftovers: removing a central now also deletes its visibility
+  overrides, channel flags, recording overrides and Matter exposures, so a CCU
+  re-adopted under the same name no longer inherits the previous incarnation's
+  settings.
+- A MASTER value change is published on the master state topic and the
+  WebSocket stream, so configuration entities no longer revert to their boot
+  value after every write.
+- Colour changes dirty-mark their Matter attributes; a colour set at the wall
+  was never reported to a controller.
+- Turning the raw plane off now silences the alarm and security raw topics too.
+- The update entities no longer ship options Home Assistant drops, so an install
+  in progress is visible; and a level data point whose descriptor reports no unit
+  reaches Home Assistant as a percentage rather than a raw fraction.
+- Wrong values reaching a device: switching a HmIP thermostat to a week program
+  left it in manual mode with boost still on; the classic-RF offset surfaced the
+  raw enum index; a setpoint was clamped a second time against a capability the
+  descriptor does not know; ending an away period on classic RF submitted an
+  empty window; the light on-time setter wrote a parameter pair that exists on no
+  device; and the text display was offered icons and sounds it does not have.
+- Alarm: a fault whose source left the model could never be closed, a walk-test
+  session survived arming and afterwards swallowed real sensor events, a
+  restored silenced incident kept a running counter, and a zone slug repaired by
+  the migration was re-derived on every boot instead of being written back.
+- Matter: a second subscription on one session destroyed the first because the
+  keep-subscriptions flag was ignored, an oversized report aborted the whole
+  subscription instead of downgrading one path, the access-control extension
+  always read back as null, and removing a fabric left its extension data in
+  memory for the next fabric to inherit.
+- A non-finite float from the wire was accepted on the read path and then broke
+  every north-bound JSON encoding — the collection endpoint answered 200 with an
+  empty body, losing the healthy values alongside the bad one.
+- Health: three boot-time components decayed to unknown ninety seconds after
+  every healthy boot, because staleness was applied to one-shot facts.
+- The daemon no longer aborts its boot over a stale MCP path while MCP is
+  disabled; SQLite pragmas reach the whole connection pool rather than one
+  connection; the tiered measurement deletes are transactional; and a config
+  section written before the embedded-scope change is repaired by migration 039.
+- The SPA stops discarding unsaved work when the locale, the expert-mode
+  checkbox or a Settings tab changes, and shows localized text where it
+  previously leaked raw tokens — including the CCU password dialog, which
+  pre-filled the mask the API sends in place of the real value.
+- On real CCUs: alarm system variables report their state, assigning a channel
+  to a system variable works, device and channel rename works, suppressed
+  service messages are shown, and programs report when they last ran.
+
+### Internal
+
+- The text-display wire snapshots pinned an icon value the device does not have,
+  so the guard was recording the defect rather than preventing it.
+- Two batches independently added the same health flag and the same pair of MCP
+  edit-session tools, and both extended the central-purge routine with different
+  cleanups; the merge keeps one implementation of each and combines the cleanups.
+
 ## [0.62.0]
 
 The critical and high findings of the round-4 full-codebase audit

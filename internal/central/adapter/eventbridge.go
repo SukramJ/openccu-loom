@@ -357,6 +357,14 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceCreated(jobCtx, u, e) })
 		}),
+		// A rename or room/function change updates the live model but
+		// touches no wire value, so it rides no DataPointValueChangedEvent —
+		// without this the HA-Discovery device name / suggested_area kept
+		// whatever [publishDeviceSnapshot] last observed until a broker
+		// reconnect or daemon restart re-walked the whole model.
+		events.Subscribe(bus, func(e hmevent.DeviceMetadataChangedEvent) {
+			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceMetadataChanged(jobCtx, u, e) })
+		}),
 		// An availability flip that did NOT come from an inbound value —
 		// the interface-wide force applied when its client leaves
 		// CONNECTED — has no value-change event to ride, so the retained
@@ -427,6 +435,37 @@ func (b *EventBridge) onDeviceCreated(ctx context.Context, u *central.Unit, e hm
 	d, ok := u.ModelRegistry.Get(e.Address)
 	if !ok || d == nil {
 		return
+	}
+	b.publishDeviceSnapshot(ctx, u.Name(), d)
+}
+
+// onDeviceMetadataChanged re-publishes one device's full MQTT snapshot
+// after a rename or room/function change, so the HA-Discovery device
+// name / suggested_area stay current instead of keeping the value
+// observed at the device's last full snapshot. [publishDeviceSnapshot]
+// is retained-topic idempotent, so this only changes the fields that
+// actually moved.
+func (b *EventBridge) onDeviceMetadataChanged(ctx context.Context, u *central.Unit, e hmevent.DeviceMetadataChangedEvent) {
+	if b == nil || b.mqtt == nil || u == nil {
+		return
+	}
+	if !u.IsSouthboundReady() {
+		return
+	}
+	d, ok := u.ModelRegistry.Get(e.Address)
+	if !ok || d == nil {
+		return
+	}
+	// The per-DP HA-Discovery label prefers each data point's
+	// construction-time cached NameData quadruple over recomputing it live
+	// (see datapointNameDataOf in buildPublishEvent), so a rename that only
+	// republished the snapshot would keep emitting the pre-rename name on
+	// every entity. Re-stamp the cache for every data point of every
+	// channel first — restampChannelDataPointNames is the same helper the
+	// ingest pipeline uses right after a channel is hydrated.
+	for _, ch := range d.Channels() {
+		restampChannelDataPointNames(ch, ch.DataPoints())
+		restampChannelDataPointNames(ch, ch.MasterDataPoints())
 	}
 	b.publishDeviceSnapshot(ctx, u.Name(), d)
 }
@@ -2990,8 +3029,8 @@ func simpleEntryJSON(e schedule.SimpleEntry) map[string]any {
 	}
 	var (
 		level2     any
-		duration   = e.Duration
-		rampTime   = e.RampTime
+		duration   any
+		rampTime   any
 		astroType  any
 		lockMode   any
 		lockAction any
@@ -3000,11 +3039,18 @@ func simpleEntryJSON(e schedule.SimpleEntry) map[string]any {
 	if e.Level2 != nil {
 		level2 = *e.Level2
 	}
-	if duration == "" {
-		duration = "0ms"
+	// An empty Duration/RampTime means "no duration — leave the device's
+	// value alone", which is a different wire pair from the genuine (base
+	// 0, factor 0) zero duration weekprofile.ZeroDuration ("0ms") encodes
+	// — including the firmware's "permanent" sentinel (base 7, factor 31),
+	// which decodes to "" the same way. Coercing both to the string "0ms"
+	// collapsed that distinction on this plane; publish JSON null instead,
+	// exactly like every other optional field in this payload.
+	if e.Duration != "" {
+		duration = e.Duration
 	}
-	if rampTime == "" {
-		rampTime = "0ms"
+	if e.RampTime != "" {
+		rampTime = e.RampTime
 	}
 	if e.AstroType != "" {
 		astroType = string(e.AstroType)

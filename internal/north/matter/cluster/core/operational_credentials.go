@@ -697,7 +697,7 @@ func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) { //nolin
 	// AttributeList during the initial subscribe sweep and marks the
 	// cluster unknown when they return UnsupportedAttribute. Adding these
 	// cases mirrors matter.js ClusterServer auto-populated globalAttributes
-	// (packages/node/src/behaviors/ClusterBehavior.ts) and chip
+	// (packages/node/src/behavior/cluster/ClusterBehavior.ts) and chip
 	// endpoint_config.h cluster metadata tables.
 	case cluster.AttrGlobalGeneratedCommandList:
 		// OpCreds generated commands: AttestationResponse (0x01),
@@ -1895,24 +1895,16 @@ func (o *OperationalCredentials) handleRemoveFabric(ctx context.Context, fields 
 	// attempt does not reuse stale CSR / trust-root state. Mirrors matter.js
 	// FabricManager.ts:241-248 #handleFabricDeleted which calls
 	// fabric.storage?.clearAll() for all fabric-scoped in-memory state.
+	// Also bumps DataVersion — see [OperationalCredentials.NotifyFabricRemoved],
+	// which every fabric-removal surface (this wire command, REST revoke,
+	// factory reset) runs so none of them skip a consequence the others apply.
+	o.NotifyFabricRemoved(req.FabricIndex)
+
 	o.mu.Lock()
-	if o.currentFabric == req.FabricIndex {
-		o.currentFabric = 0
-		// Clear pending commissioning state that was created for this
-		// fabric — pendingPrivKey/TrustRoot/CSRNonce are fabric-scoped
-		// (they are consumed by a single AddNOC for the in-flight fabric).
-		// If RemoveFabric is called for a fabric that was mid-commissioning
-		// (fail-safe expiry path), zeroing them here prevents stale CSR
-		// reuse on the next attempt. Also clears nocWasInvoked.
-		o.clearPendingState()
-	}
 	hook := o.onFabricRemoved
 	mdnsHook := o.onMDNSReannounce
 	withdrawHook := o.onFabricWithdraw
 	o.mu.Unlock()
-
-	// Bump DataVersion after successful RemoveFabric — fabric list changed.
-	o.dataVersion.Bump()
 
 	if hook != nil {
 		// Fires AFTER fabric persistence is gone but BEFORE we return
@@ -2014,6 +2006,32 @@ func (o *OperationalCredentials) handleAddTrustedRootCertificate(fields any) (an
 	o.pendingTrustRootDER = append([]byte(nil), req.RootCACertificate...)
 	o.mu.Unlock()
 	return nil, nil
+}
+
+// NotifyFabricRemoved runs the in-process consequences a removed fabric
+// owes on THIS cluster instance, regardless of which surface deleted the
+// persisted row: the wire RemoveFabric command's own [handleRemoveFabric]
+// calls it directly, and a surface that deletes the row without going
+// through the cluster — REST revoke, factory reset — must call it too, or
+// the cluster keeps answering stale data:
+//
+//   - Bumps DataVersion. A commissioner that cached CurrentFabricIndex /
+//     Fabrics / CommissionedFabricCount behind a DataVersionFilter compares
+//     against this value; without the bump it reads "unchanged" and keeps
+//     showing the removed fabric until something unrelated bumps the
+//     cluster.
+//   - Clears currentFabric and any pending commissioning state when they
+//     belonged to the removed fabric, mirroring the wire path's own
+//     cleanup so a subsequent CSR/AddNOC does not reuse stale state tied
+//     to a fabric that no longer exists.
+func (o *OperationalCredentials) NotifyFabricRemoved(fabricIndex uint8) {
+	o.mu.Lock()
+	if o.currentFabric == fabricIndex {
+		o.currentFabric = 0
+		o.clearPendingState()
+	}
+	o.mu.Unlock()
+	o.dataVersion.Bump()
 }
 
 // SetCurrentFabric is called by the message dispatcher before

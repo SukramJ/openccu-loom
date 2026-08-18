@@ -885,3 +885,45 @@ func TestAlarmPlaneDoesNotDeclareWhenADiscoveryPublishFailed(t *testing.T) {
 			"the orphan sweep would clear the live panel")
 	}
 }
+
+// TestAlarmPlaneGatesOnlyTheTopicDiscoveryDoesNotDeclare pins which half
+// of the alarm plane the raw switch may silence.
+//
+// The zone's discovery payload names its state and availability topics, so
+// those must publish whatever `north.mqtt.raw_enabled` says: gated, Home
+// Assistant keeps the entity the config created and never receives a value
+// for it, which is worse than either extreme. The event topic appears in no
+// discovery payload — it is raw-plane traffic and the switch owns it.
+func TestAlarmPlaneGatesOnlyTheTopicDiscoveryDoesNotDeclare(t *testing.T) {
+	t.Parallel()
+	b, pub := newTestBridge(t, func(c *BridgeConfig) { c.RawEnabled = false })
+	ctx := context.Background()
+
+	if err := b.PublishAlarmState(ctx, "openccu-loom/alarm/eg/state", "armed_home"); err != nil {
+		t.Fatalf("PublishAlarmState: %v", err)
+	}
+	if err := b.PublishAlarmAvailability(ctx, "openccu-loom/alarm/eg/availability", true); err != nil {
+		t.Fatalf("PublishAlarmAvailability: %v", err)
+	}
+	if err := b.RetractAlarmTopic(ctx, "openccu-loom/alarm/eg/state"); err != nil {
+		t.Fatalf("RetractAlarmTopic: %v", err)
+	}
+	if len(pub.sent) != 3 {
+		t.Fatalf("raw_enabled=false: the discovery-declared alarm topics must still publish, got %d writes: %+v", len(pub.sent), pub.sent)
+	}
+
+	if err := b.PublishAlarmEvent(ctx, "openccu-loom/alarm/eg/event", []byte(`{}`)); err != nil {
+		t.Fatalf("PublishAlarmEvent: %v", err)
+	}
+	if len(pub.sent) != 3 {
+		t.Fatalf("raw_enabled=false: the event topic is raw-plane traffic and must stay silent, got %d writes: %+v", len(pub.sent), pub.sent)
+	}
+
+	b2, pub2 := newTestBridge(t)
+	if err := b2.PublishAlarmEvent(ctx, "openccu-loom/alarm/eg/event", []byte(`{}`)); err != nil {
+		t.Fatalf("PublishAlarmEvent: %v", err)
+	}
+	if len(pub2.sent) != 1 {
+		t.Fatalf("raw_enabled=true: the event topic must reach the broker, got %d writes", len(pub2.sent))
+	}
+}

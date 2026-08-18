@@ -24,6 +24,17 @@ const (
 	tagInvokeRespResponses        uint8 = 1
 )
 
+// DefaultMaxPathsPerInvoke is the ceiling on CommandDataIBs a single
+// InvokeRequest batch may carry. Mirrors matter.js
+// packages/types/src/protocol/definitions/interaction.ts
+// DEFAULT_MAX_PATHS_PER_INVOKE — the same value the bridge advertises
+// via BasicInformation.MaxPathsPerInvoke (0x0016,
+// cluster/core/basic_information.go) and the CASE SessionParameters
+// negotiation. Defined here (the protocol layer) rather than in
+// cluster/core so [ValidateInvokeBatch] can enforce the exact number
+// the bridge advertises without an import cycle.
+const DefaultMaxPathsPerInvoke = 10
+
 // CommandDataIB / CommandStatusIB tag numbers.
 const (
 	tagCmdDataPath   uint8 = 0
@@ -264,6 +275,11 @@ func (ir InvokeResponse) HasCommandData() bool {
 // else StatusSuccess. A single-command invoke always passes. Mirrors matter.js
 // packages/protocol/src/action/server/CommandInvokeResponse.ts:64-92,171-185
 // (CommandInvokeResponse.process / #processConcrete):
+//   - the batch must not exceed [DefaultMaxPathsPerInvoke] paths, checked
+//     before any per-command validation or dispatch (matter.js
+//     packages/node/src/node/server/InteractionServer.ts:950-955
+//     `if (invokeRequests.length > this.#maxPathsPerInvoke) throw
+//     new StatusResponseError(..., Status.InvalidAction)`);
 //   - a wildcard-endpoint path is illegal in a batch (matter.js "Wildcard path
 //     must not be used with multiple invokes");
 //   - every concrete path in a batch MUST carry a CommandRef ("The CommandRef
@@ -276,6 +292,9 @@ func (ir InvokeResponse) HasCommandData() bool {
 // The wire decoder guarantees every command path carries a cluster and a
 // command, so a "wildcard" here is a path without a concrete endpoint.
 func ValidateInvokeBatch(req InvokeRequest) StatusCode {
+	if len(req.Invokes) > DefaultMaxPathsPerInvoke {
+		return StatusInvalidAction
+	}
 	multiple := len(req.Invokes) > 1
 	seenPaths := make(map[[3]uint32]struct{}, len(req.Invokes))
 	seenRefs := make(map[uint16]struct{}, len(req.Invokes))

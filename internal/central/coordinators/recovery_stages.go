@@ -87,7 +87,7 @@ func cooldownStage(d time.Duration) RecoveryStep {
 // Each stage delegates to the corresponding field in deps. Fields that are
 // nil become no-op stages so callers only need to fill relevant slots.
 //
-// loom:reachable:reason="called by NewConnectionRecoveryCoordinator to assemble the production pipeline"
+// loom:reachable:reason="called by the per-interface recovery wiring (internal/central/adapter/ccu_wiring.go and cuxd_wiring.go) to assemble each interface's production pipeline"
 func DefaultRecoveryPipeline(deps RecoveryStageDeps) []Pipeline {
 	return []Pipeline{
 		{

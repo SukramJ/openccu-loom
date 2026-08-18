@@ -742,11 +742,11 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	}
 
 	// Reap subscriptions for endpoints that no longer exist in the new
-	// topology. Mirrors matter.js
-	// packages/node/src/behaviors/network/ServerNode.ts
+	// topology. Mirrors matter.js packages/node/src/node/ServerNode.ts
 	// / BridgedDeviceBasicInformation lifecycle where removing an endpoint
 	// tears down its active subscriptions via
-	// `endpoint.lifecycle.remove()` → SubscriptionHandler.close().
+	// `endpoint.lifecycle.remove()` →
+	// packages/node/src/node/server/ServerSubscription.ts close().
 	if prevTopology != nil {
 		newIDs := make(map[uint16]bool, len(topology.Endpoints))
 		for _, ep := range topology.Endpoints {

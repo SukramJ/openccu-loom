@@ -5,13 +5,18 @@ package contract
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
 )
 
 // Pin the reliability invariants flagged as load-bearing by the
@@ -113,6 +118,48 @@ func TestXMLRPCFaultCodeRetryability(t *testing.T) {
 				"between attempts, so every repeat spends duty cycle for nothing", c, int(c))
 		}
 	}
+}
+
+// TestConfigSchemaCommandRetryInitialDelayDefaultMatchesReliabilityStack
+// pins the SPA-facing placeholder for `reliability.command_retry_initial_delay`
+// against the constant it actually falls back to. The two drifted before: the
+// schema advertised 250ms while newClientRetrier's zero-value fallback
+// (internal/client/reliability.NewRetrier) resolves to
+// [hmreliability.RetryInitialBackoff], a production-hardened 2s — so an
+// operator who read the hint and typed "2s" believing they were making the
+// retrier 8x gentler changed nothing at all.
+func TestConfigSchemaCommandRetryInitialDelayDefaultMatchesReliabilityStack(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config/schema", http.NoBody)
+	w := httptest.NewRecorder()
+	handlers.GetConfigSchema().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("schema endpoint returned %d", w.Code)
+	}
+	var resp struct {
+		Fields []struct {
+			Path    string `json:"path"`
+			Default any    `json:"default"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("schema response is not JSON: %v", err)
+	}
+
+	want := float64(hmreliability.RetryInitialBackoff.Nanoseconds())
+	for _, f := range resp.Fields {
+		if f.Path != "reliability.command_retry_initial_delay" {
+			continue
+		}
+		got, ok := f.Default.(float64)
+		if !ok || got != want {
+			t.Errorf("schema default for %s = %v, want %v ns (hmreliability.RetryInitialBackoff = %s)",
+				f.Path, f.Default, want, hmreliability.RetryInitialBackoff)
+		}
+		return
+	}
+	t.Fatal("reliability.command_retry_initial_delay not found in schema")
 }
 
 func TestCircuitBreakerHalfOpenFailReopens(t *testing.T) {

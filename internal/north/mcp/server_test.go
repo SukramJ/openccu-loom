@@ -342,6 +342,25 @@ func TestListDevices_FilteredByCentral(t *testing.T) {
 	}
 }
 
+// TestListDevices_UnknownCentralReturnsError mirrors
+// TestListPrograms_UnknownCentralReturnsError (tools_hub_test.go) for
+// list_devices, which resolves central_name against d.Devices client-side
+// rather than through centralsToScan and therefore needed its own guard.
+func TestListDevices_UnknownCentralReturnsError(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:  devs,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_devices", map[string]any{"central_name": "ghost"})
+	if !res.IsError {
+		t.Fatal("expected IsError=true for an unknown central_name")
+	}
+}
+
 func TestGetDevice_Found(t *testing.T) {
 	devs, _, _ := makeDeviceFixture()
 	deps := mcp.Deps{

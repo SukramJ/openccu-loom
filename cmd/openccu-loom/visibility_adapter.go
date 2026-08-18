@@ -96,8 +96,11 @@ func (v *visibilityAdapter) UnIgnoreCandidateGroups(centralName string, paramset
 // LoadUnIgnore implements handlers.VisibilityRegistryLoader. It writes
 // `patterns` for `centralName` into the shared registry as part of the
 // union of every central's persisted set, then re-runs the
-// suppression-mark pass on every device belonging to the named central.
-// The result `affectedDevices` is the count of devices touched.
+// suppression-mark pass on every device of every registered central — the
+// decider is fleet-wide, so a pattern un-ignored via one central's request
+// changes what every other central's already-materialised devices expose
+// too. The result `affectedDevices` is the count of devices touched across
+// the whole fleet.
 //
 // Pre-condition: the caller must have already persisted `patterns` to
 // SQLite via VisibilityUnIgnoreStore.Replace — LoadUnIgnore reads back
@@ -135,20 +138,27 @@ func (v *visibilityAdapter) LoadUnIgnore(centralName string, _ []string) (affect
 		return 0, parseErrors, nil //nolint:nilerr // surfaced as parse error, not 500
 	}
 
-	// Re-run the suppression-mark pass on every device of the
-	// named central so the per-DP IsUnIgnored bit reflects the new
-	// rules. Other centrals share the same registry; if patterns
-	// promoted by central A also un-cover parameters on central B,
-	// the next pipeline cycle (Init or Reassemble) picks them up —
-	// callers that need an immediate fan-out can trigger a
-	// per-central re-mark themselves.
-	unit, ok := v.centralRegistry.Get(centralName)
-	if !ok {
+	// The named central must exist — the request is scoped to it even
+	// though the decider itself (and therefore the re-mark below) is
+	// fleet-wide.
+	if _, ok := v.centralRegistry.Get(centralName); !ok {
 		return 0, nil, fmt.Errorf("central %q not registered", centralName)
 	}
+
+	// Re-run the suppression-mark pass on every device of EVERY
+	// registered central, not just the named one: the decider the marks
+	// are computed against is the single shared registry (patterns are
+	// central-agnostic — central A un-ignoring a parameter un-ignores it
+	// for central B too), so scoping the re-mark to one central leaves
+	// every sibling central's already-materialised devices with a stale
+	// per-DP mark until their next full pipeline cycle. Mirrors the
+	// boot/adopt fan-out in applyVisibilityUnIgnore (visibility_wiring.go).
 	decider := v.registry.Parameter()
 	count := 0
-	if unit.ModelRegistry != nil {
+	for _, unit := range v.centralRegistry.List() {
+		if unit == nil || unit.ModelRegistry == nil {
+			continue
+		}
 		for _, d := range unit.ModelRegistry.List() {
 			visibility.ApplyUnIgnoredMarks(d, decider)
 			count++

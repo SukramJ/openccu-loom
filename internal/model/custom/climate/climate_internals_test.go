@@ -5,6 +5,8 @@ package climate
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -497,14 +499,32 @@ func TestClimateDisableAwayIP(t *testing.T) {
 	}
 }
 
+// TestClimateDisableAwayRF pins that leaving away/party mode on a classic
+// RF thermostat submits a past-window party code — mirroring
+// disable_away_mode's RF override (climate.py:555-565), which cancels an
+// active party by submitting a code whose window already ended, not by
+// writing PARTY_MODE_SUBMIT="" (the DP's power-on default, which encodes
+// no window at all and leaves the firmware's active party running).
 func TestClimateDisableAwayRF(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "x", KindRF, w, custom.ClimateCapabilities{SupportsAway: true})
 	if err := r.climate.DisableAway(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("DisableAway RF: %v", err)
 	}
-	if got := w.last(); got.param != hmenum.ParameterPartyModeSubmit {
+	got := w.last()
+	if got.param != hmenum.ParameterPartyModeSubmit {
 		t.Errorf("DisableAway RF wrote param=%v, want PARTY_MODE_SUBMIT", got.param)
+	}
+	code, ok := got.value.(string)
+	if !ok || code == "" {
+		t.Fatalf("DisableAway RF wrote PARTY_MODE_SUBMIT=%q, want a non-empty past-window code", got.value)
+	}
+	parts := strings.Split(code, ",")
+	if len(parts) != 9 {
+		t.Fatalf("PARTY_MODE_SUBMIT=%q: expected 9 comma-separated fields, got %d", code, len(parts))
+	}
+	if parts[0] != fmt.Sprintf("%.1f", 12.0) {
+		t.Errorf("PARTY_MODE_SUBMIT temperature field=%q, want %q", parts[0], fmt.Sprintf("%.1f", 12.0))
 	}
 }
 
@@ -1453,13 +1473,16 @@ func TestMatterToHmModeUnknown(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCelsiusToMatterClamping(t *testing.T) {
-	// Positive overflow.
-	if got := celsiusToMatter(400.0); got != 32767 {
-		t.Errorf("celsiusToMatter(400) = %d, want 32767", got)
+	// Positive overflow clamps below the Matter NULL sentinel (32767), not
+	// at the raw int16 ceiling.
+	if got := celsiusToMatter(400.0); got != 32766 {
+		t.Errorf("celsiusToMatter(400) = %d, want 32766", got)
 	}
-	// Negative overflow.
-	if got := celsiusToMatter(-400.0); got != -32768 {
-		t.Errorf("celsiusToMatter(-400) = %d, want -32768", got)
+	// Negative overflow clamps at the TemperatureMeasurement cluster's
+	// absolute-zero constraint floor (-273.15 °C), not at the raw int16
+	// floor.
+	if got := celsiusToMatter(-400.0); got != -27315 {
+		t.Errorf("celsiusToMatter(-400) = %d, want -27315", got)
 	}
 }
 

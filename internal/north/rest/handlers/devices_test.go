@@ -655,6 +655,72 @@ func newDeviceWithDP(t *testing.T, addr, model string, channelNo int, param hmen
 	return d
 }
 
+// newDeviceWithLevelDP builds a device carrying one Float data point whose
+// descriptor UNIT is "100%" — the wire shape LEVEL and every 0.0-1.0
+// percent-family parameter use. CleanupUnit canonicalises this to "%",
+// which is why the multiplier (100) has to travel separately: the value
+// stays 0.0-1.0 on the wire, only the label says "%".
+func newDeviceWithLevelDP(t *testing.T) *device.Device {
+	t.Helper()
+	d := device.New(device.Config{
+		Address:     "0001ABCD",
+		Model:       "HmIP-BROLL",
+		Interface:   hmenum.InterfaceHmIPRF,
+		InterfaceID: "HmIP-RF@ccu01",
+		Name:        "Test",
+	})
+	chAddr := "0001ABCD:1"
+	ch := d.AddChannel(chAddr, 1, "BLIND", hmenum.ParamsetKeyValues)
+	dp := generic.NewFloat(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: chAddr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterLevel),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Unit:       "100%",
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(dp)
+	return d
+}
+
+// TestGetDataPoint_PercentFamilyUnit_CarriesMultiplier pins the REST
+// counterpart of the MQTT raw-plane config payload's multiplier field: a
+// data point whose raw wire value needs scaling to match its cleaned-up
+// unit (0.0-1.0 "100%" -> "%") must expose the scale factor, or a client
+// has no way to render "42 %" instead of "0.42 %" for a LEVEL parameter.
+func TestGetDataPoint_PercentFamilyUnit_CarriesMultiplier(t *testing.T) {
+	t.Parallel()
+	d := newDeviceWithLevelDP(t)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{
+		"addr":  "0001ABCD",
+		"no":    "1",
+		"param": "LEVEL",
+	}))
+	w := httptest.NewRecorder()
+	GetDataPoint(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body DataPointSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Unit != "%" {
+		t.Fatalf("unit = %q, want the cleaned-up %%", body.Unit)
+	}
+	if body.Multiplier != 100 {
+		t.Errorf("multiplier = %v, want 100 so a 0.42 wire value renders as 42 %%", body.Multiplier)
+	}
+}
+
 func TestGetDataPoint_HappyPath(t *testing.T) {
 	t.Parallel()
 	d := newDeviceWithDP(t, "0001ABCD", "HmIP-BSM", 1, hmenum.ParameterState)

@@ -48,7 +48,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 	binrpcCallbackServer *rpcserver.BINRPCServer,
 	binrpcCallbackAddr string,
 	logger *slog.Logger,
-) (func(), error) {
+) (closer func(), ingested bool, err error) {
 	iface := hmenum.InterfaceCUxD
 	port := hmenum.DefaultBINRPCPort
 	if ov := interfacePortOverride(cc, iface); ov > 0 {
@@ -72,7 +72,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("binrpc client: %w", err)
+		return nil, false, fmt.Errorf("binrpc client: %w", err)
 	}
 
 	binCaller := &binrpcCaller{client: binClient}
@@ -122,7 +122,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 	icCfg.ReadThrottle, icCfg.WriteThrottle, icCfg.ControlThrottle = perClassThrottlePools(relCfg.CommandThrottleInterCommandDelay)
 	ic, err := client.New(icCfg)
 	if err != nil {
-		return nil, fmt.Errorf("interface client: %w", err)
+		return nil, false, fmt.Errorf("interface client: %w", err)
 	}
 	wireClientReliability(unit, ic, wireID) //nolint:contextcheck // incident hooks are fire-and-forget and outlive the wiring ctx by design
 	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
@@ -132,7 +132,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		Announcer: announcer,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("backend factory: %w", err)
+		return nil, false, fmt.Errorf("backend factory: %w", err)
 	}
 	if initErr := backends.MaybeInitialize(ctx, backend); initErr != nil {
 		logger.Warn(
@@ -274,14 +274,14 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		return nil
 	}
 
-	runCUxDActivation(ctx, cuxdIngestBackoff, activate, ic, cc.Name, wireID, logger)
+	ingested = runCUxDActivation(ctx, cuxdIngestBackoff, activate, ic, cc.Name, wireID, logger)
 
 	// The closer is returned unconditionally — every registration above
 	// (writer backend, client entry, metrics client, BIN-RPC callback
 	// routes) happens before the ingest, so an ingest that never succeeds
 	// must still be releasable on teardown.
 	//nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx; see deinitOnShutdown
-	closer := func() {
+	closer = func() {
 		if binrpcCallbackServer != nil {
 			deinitOnShutdown(backend, callbackURL, cc.Name, initID, logger)
 			binrpcCallbackServer.Deregister(initID)
@@ -309,7 +309,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 			unit.MetricsClients.Deregister(iface)
 		}
 	}
-	return closer, nil
+	return closer, ingested, nil
 }
 
 // announceCUxDCallback tells CUxD where to push its events. A blank
@@ -360,11 +360,14 @@ var cuxdIngestBackoff = []time.Duration{
 	1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
 }
 
-// runCUxDActivation drives activate through the boot-time retry schedule.
-// It returns once the activation succeeded, the retries are spent, or the
-// wiring context is cancelled; the interface is reported as wired either
-// way, because the caller's closer owns the registrations made before the
-// first attempt.
+// runCUxDActivation drives activate through the boot-time retry schedule and
+// mirrors [runXMLRPCActivation]'s return: it reports whether the interface
+// actually ingested devices (true) or exhausted every retry / was cancelled
+// (false), so the caller can distinguish "wired" from "wired but empty"
+// instead of treating a successful client setup as a successful ingest. The
+// closer returned by [wireCUxDInterface] releases the registrations made
+// before the first attempt either way — this return value only feeds the
+// readiness tally.
 func runCUxDActivation(
 	ctx context.Context,
 	backoff []time.Duration,
@@ -372,11 +375,11 @@ func runCUxDActivation(
 	ic *client.InterfaceClient,
 	centralName, wireID string,
 	logger *slog.Logger,
-) {
+) bool {
 	for attempt := 0; ; attempt++ {
 		err := activate(ingestAttemptContext(ctx, attempt, len(backoff)))
 		if err == nil {
-			return
+			return true
 		}
 		if attempt >= len(backoff) {
 			// Every retry is spent and the interface stayed empty. Walk the
@@ -387,7 +390,7 @@ func runCUxDActivation(
 				slog.String("interface", wireID),
 				slog.String("err", err.Error()))
 			ensureDisconnectedClientState(ic, err, logger)
-			return
+			return false
 		}
 		logger.Debug("wire.interface.ingest_retry",
 			slog.String("central", centralName),
@@ -399,7 +402,7 @@ func runCUxDActivation(
 		case <-ctx.Done():
 			t.Stop()
 			ensureDisconnectedClientState(ic, ctx.Err(), logger)
-			return
+			return false
 		case <-t.C:
 		}
 	}

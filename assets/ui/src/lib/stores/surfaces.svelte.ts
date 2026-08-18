@@ -86,7 +86,15 @@ function createSurfacesStore() {
     if (opts.resetDraft ?? true) {
       draft = cloneProfiles(resp.profiles);
     }
-    editing = resp.profile;
+    // Only seed the editor's profile selection on the very first load.
+    // load(), save(), setEmbedded() and setEmbeddedScope() all round-trip
+    // through apply(); snapping `editing` back to the live profile on
+    // every one of those responses would switch the editor out from
+    // under an operator who is preparing the OTHER profile (setEditing)
+    // while they save it or flip the embedded mode.
+    if (!loaded) {
+      editing = resp.profile;
+    }
     loaded = true;
     markDirty();
   }

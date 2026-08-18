@@ -51,6 +51,15 @@ export function makeTextMatcher(term: string): (text: string) => boolean {
     re = null;
   }
   const lower = q.toLowerCase();
-  return (text: string) =>
-    re ? re.test(text) : text.toLowerCase().includes(lower);
+  // The literal substring match is an additional pass, never a fallback
+  // that a valid-but-different-meaning regex disables. A CCU-style name
+  // like "Wohnzimmer (Decke)" compiles as a regex (the parens become a
+  // capture group) and then matches nothing containing that literal
+  // text, which would otherwise empty the whole list for an exact,
+  // pasted-in name — the common case, not the power-user one.
+  return (text: string) => {
+    const t = text.toLowerCase();
+    if (t.includes(lower)) return true;
+    return re ? re.test(text) : false;
+  };
 }

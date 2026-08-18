@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -375,6 +376,35 @@ func TestListDiscoveredCCUs_SuggestedHostFromDep(t *testing.T) {
 			}
 		}
 	})
+}
+
+// nilReturningIgnoreStore mimics the production shape that triggered the
+// null-response defect: [sqlite.DiscoveryIgnoreStore.List] scans into a
+// bare `var out []IgnoredCCU` and returns it unchanged, so a store with no
+// ignored CCUs returns (nil, nil) rather than an empty slice.
+type nilReturningIgnoreStore struct{ *fakeIgnoreStore }
+
+func (*nilReturningIgnoreStore) List(context.Context) ([]sqlite.IgnoredCCU, error) {
+	return nil, nil
+}
+
+// TestListIgnoredCCUs_StoreReturnsNil_ResponseIsEmptyArrayNotNull pins the
+// declared array response schema: GET /centrals/discovered/ignored must
+// never marshal to the JSON literal `null`.
+func TestListIgnoredCCUs_StoreReturnsNil_ResponseIsEmptyArrayNotNull(t *testing.T) {
+	t.Parallel()
+	deps := &DiscoveryDeps{Ignore: &nilReturningIgnoreStore{fakeIgnoreStore: newFakeIgnoreStore()}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/centrals/discovered/ignored", http.NoBody)
+	w := httptest.NewRecorder()
+	ListIgnoredCCUs(deps).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := strings.TrimSpace(w.Body.String()); got != "[]" {
+		t.Errorf("body = %q, want the literal empty array [], not null", got)
+	}
 }
 
 // TestListIgnoredCCUs_ReturnsAll verifies that ListIgnoredCCUs returns every

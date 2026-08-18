@@ -26,6 +26,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -86,6 +87,30 @@ type EditLockVerifier interface {
 	Verify(key, token string) bool
 }
 
+// EditLockManager extends [EditLockVerifier] with the operations
+// open_edit_session / close_edit_session need to mint and release a
+// lock. Without it, write_paramset's MASTER/LINK gate (which only ever
+// consults Verify) has no MCP-side way to obtain the token it demands
+// — every REST/WS session-open path is closed to an MCP-only client, so
+// a MASTER write is permanently unreachable over this transport even
+// though the REST and WS siblings can perform it. *handlers.EditSessions
+// (internal/north/rest/handlers/session.go), the same registry REST and
+// WS share, satisfies it — the production composition root wires the
+// identical value it already passes as EditLocks, so no extra wiring is
+// needed to light this up. A nil manager disables both the gate and the
+// two session tools (test-only escape hatch).
+// loom:reachable:reason="the declared type of Deps.EditLocks, which the composition root fills at cmd/openccu-loom/daemon_rest_mount.go with the shared *handlers.EditSessions registry; an interface reached through its implementation, which the analyzer's type heuristic cannot follow"
+type EditLockManager interface {
+	EditLockVerifier
+	// Open acquires the lock for key on behalf of subject. The second
+	// return is false when another live session already holds it.
+	Open(key, subject string) (handlers.EditLock, bool)
+	// Close releases the lock for key when token matches its current
+	// holder. Returns false when the key is unheld or token does not
+	// match — same semantics as [handlers.EditSessions.Close].
+	Close(key, token string) bool
+}
+
 // HubResolver resolves a central's hub model by name — the seam the
 // gated trigger_program tool uses to find and run a CCU program.
 // *central.Registry satisfies it.
@@ -114,10 +139,13 @@ type Deps struct {
 	Audit     audit.Recorder
 	Incidents IncidentsReader
 	// EditLocks gates MASTER/LINK paramset writes through write_paramset
-	// on holding the edit lock, exactly as the REST and WS siblings do.
-	// Nil disables enforcement (test-only escape hatch); the production
-	// composition root wires the shared *handlers.EditSessions instance.
-	EditLocks EditLockVerifier
+	// on holding the edit lock, exactly as the REST and WS siblings do,
+	// and backs the open_edit_session / close_edit_session tools that
+	// let an MCP-only client obtain that lock in the first place. Nil
+	// disables enforcement and both session tools (test-only escape
+	// hatch); the production composition root wires the shared
+	// *handlers.EditSessions instance.
+	EditLocks EditLockManager
 	// Alarm / AlarmControl project the alarm system; Security projects
 	// the Security & Safety domain. Each is optional: a nil seam leaves
 	// its tools unregistered rather than advertising a tool that

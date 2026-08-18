@@ -58,6 +58,14 @@ var wiringSettersWithoutCaller = map[string]string{
 	// documented choice, so the seam is dead along with it.
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core.DiagnosticLogs.AttachProvider": "the DiagnosticLogs cluster is deliberately not mounted on the root endpoint; the dead-code inventory already exempts the file",
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/light.ColorControlServer.SetWriter": "colour-temperature lights are served by internal/model/custom/light, not by this standalone reference server, which nothing constructs",
+
+	// Verified: fluent With* setters (isWiringVerb now covers them too),
+	// each with its own doc comment naming the reason the daemon leaves
+	// it nil and the alternate path that already does the job.
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.ConnectionRecoveryCoordinator.WithStateMachine":           "the daemon deliberately leaves this nil — central.Unit.EvaluateCentralState owns central-wide state instead of one interface's Run driving it; wire only together with a per-interface state model",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.ConnectionRecoveryCoordinator.WithCircuitBreakerResetter": "the daemon leaves this nil because the reset already happens one layer down, in InterfaceClient.Reconnect's own success path",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.ConnectionRecoveryCoordinator.WithJSONRPCSessionClearer":  "ClearJSONRPCSessionBeforeRecovery, the only consumer of this seam, has no production caller either; the recovery-pipeline step it feeds is unbuilt",
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt.DefaultDiscoveryBuilder.WithTranslations":                           "documented as a test override; NewDefaultDiscoveryBuilder auto-loads the embedded catalogues in production, and nothing — not even a test — calls this setter",
 }
 
 // wiringSeamsUnderInvestigation is the same shape and a different claim.
@@ -218,7 +226,15 @@ func ownPackage(p *packages.Package) bool {
 }
 
 func isWiringVerb(name string) bool {
-	for _, verb := range []string{"Set", "Attach", "Register"} {
+	// With* is the fluent form of the same seam shape: a collaborator in,
+	// the receiver (or nothing) out. MQTTCommandSink.WithSelectionLabeler,
+	// EventBridge.WithVisibility/WithParameterLabels and the whole
+	// CommandSubscriber.With* family (WithCDPSink, WithWeekProfileSink,
+	// WithCombinedDPSink, WithScheduleSwitchSink, WithInstallModeSink,
+	// WithCentralNames, WithCollector, ...) inject collaborators exactly
+	// like a Set*/Attach*/Register* does; omitting the verb left every one
+	// of them outside this guard's reach.
+	for _, verb := range []string{"Set", "Attach", "Register", "With"} {
 		if strings.HasPrefix(name, verb) && len(name) > len(verb) &&
 			name[len(verb)] >= 'A' && name[len(verb)] <= 'Z' {
 			return true

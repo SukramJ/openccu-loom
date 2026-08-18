@@ -390,6 +390,7 @@ func (a *DeviceAdminDomain) SetRooms(
 			return err
 		}
 		dev.SetRooms(rooms)
+		u.PublishDeviceMetadataChanged(dev)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -415,6 +416,7 @@ func (a *DeviceAdminDomain) SetFunctions(
 			return err
 		}
 		dev.SetFunctions(functions)
+		u.PublishDeviceMetadataChanged(dev)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -485,6 +487,7 @@ func (a *DeviceAdminDomain) setChannelAssignment(
 			return err
 		}
 		stamp(dev, ch)
+		u.PublishDeviceMetadataChanged(dev)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)

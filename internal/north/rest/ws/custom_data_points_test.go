@@ -214,8 +214,8 @@ func TestCustomDPList_DeviceNotFound_ReturnsError(t *testing.T) {
 	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx})
 
 	res := r.Dispatch(context.Background(), "cdp.list", jsonParam(`{"device":"MISSING"}`))
-	if res.Error == nil {
-		t.Fatal("expected error for missing device")
+	if res.Error == nil || res.Error.Code != CommandErrorNotFound {
+		t.Fatalf("expected not_found for missing device, got %+v", res.Error)
 	}
 }
 
@@ -249,8 +249,8 @@ func TestCustomDPGet_MissingDevice_ReturnsError(t *testing.T) {
 	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx})
 
 	res := r.Dispatch(context.Background(), "cdp.get", jsonParam(`{"device":"MISSING","name":"STATE"}`))
-	if res.Error == nil {
-		t.Fatal("expected error for missing device")
+	if res.Error == nil || res.Error.Code != CommandErrorNotFound {
+		t.Fatalf("expected not_found for missing device, got %+v", res.Error)
 	}
 }
 
@@ -401,8 +401,8 @@ func TestCalculatedDPGet_NotFound_ReturnsError(t *testing.T) {
 
 	res := r.Dispatch(context.Background(), "calc_dp.get",
 		jsonParam(`{"device":"DEV0033","channel_no":1,"name":"MISSING"}`))
-	if res.Error == nil {
-		t.Fatal("expected error for missing calculated DP")
+	if res.Error == nil || res.Error.Code != CommandErrorNotFound {
+		t.Fatalf("expected not_found for missing calculated DP, got %+v", res.Error)
 	}
 }
 

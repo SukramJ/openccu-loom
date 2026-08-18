@@ -247,3 +247,19 @@ func (f *Float) OnMatterValueChanged(cb func()) func() {
 	}
 	return f.OnConfirmedUpdate(func(_, _ float64) { cb() })
 }
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier]
+// for the writable Integer specialisation (HUE / COLOR index / colour
+// temperature Kelvin). Custom device types that hold a *Integer colour
+// axis — ColorLight's hue, the RF colour dimmers' single COLOR integer,
+// ColorTempLight's / RGBWLight's kelvin — use this so an external
+// CCU-confirmed colour change dirty-marks the ColorControl attributes and
+// Apple's Subscribe sees the new value, not just the value it wrote
+// itself. Wraps OnConfirmedUpdate for the same optimistic-transition
+// rationale as [Float.OnMatterValueChanged].
+func (i *Integer) OnMatterValueChanged(cb func()) func() {
+	if i == nil || i.DataPoint == nil || cb == nil {
+		return func() {}
+	}
+	return i.OnConfirmedUpdate(func(_, _ int32) { cb() })
+}

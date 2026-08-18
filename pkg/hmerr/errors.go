@@ -471,14 +471,17 @@ func redactHexToken(msg string, start int) (end int, ok bool) {
 // ExceptionToFailureReason maps a Go error to the machine-readable
 // [hmenum.FailureReason] a state machine records on a failed transition.
 //
-// It walks the error chain with errors.Is:
+// It walks the error chain with errors.Is, in this order — timeout
+// before ErrNoConnection, because every transport wraps a deadline in
+// ErrNoConnection on its way out, so the reverse order would make the
+// timeout branch unreachable for a real transport error:
+//   - nil → [hmenum.FailureReasonNone]
 //   - [ErrAuthFailure] → [hmenum.FailureReasonAuth]
+//   - a deadline or a net.Error that reports Timeout →
+//     [hmenum.FailureReasonTimeout]
 //   - [ErrNoConnection] → [hmenum.FailureReasonNetwork]
 //   - [ErrCircuitBreakerOpen] → [hmenum.FailureReasonCircuitBreaker]
 //   - [ErrInternalBackendException] → [hmenum.FailureReasonInternal]
-//   - a deadline or a net.Error that reports Timeout →
-//     [hmenum.FailureReasonTimeout]
-//   - nil → [hmenum.FailureReasonNone]
 //   - anything else → [hmenum.FailureReasonUnknown]
 //
 // The reason is what an operator is shown for an interface that is not
@@ -498,6 +501,16 @@ func ExceptionToFailureReason(err error) hmenum.FailureReason {
 	if errors.Is(err, ErrAuthFailure) {
 		return hmenum.FailureReasonAuth
 	}
+	// Checked before ErrNoConnection: every south-bound transport wraps
+	// a context deadline (and a bare net.Error timeout) in ErrNoConnection
+	// on the way out (see xmlrpc/client.go, jsonrpc/client.go,
+	// binrpc/client.go), so errors.Is(err, ErrNoConnection) would always
+	// match first and this branch would never be reached for a real
+	// transport error — a CCU that accepts the connection and then stops
+	// answering would misreport as "network" instead of "timeout".
+	if isTimeoutError(err) {
+		return hmenum.FailureReasonTimeout
+	}
 	if errors.Is(err, ErrNoConnection) {
 		return hmenum.FailureReasonNetwork
 	}
@@ -506,9 +519,6 @@ func ExceptionToFailureReason(err error) hmenum.FailureReason {
 	}
 	if errors.Is(err, ErrInternalBackendException) {
 		return hmenum.FailureReasonInternal
-	}
-	if isTimeoutError(err) {
-		return hmenum.FailureReasonTimeout
 	}
 	return hmenum.FailureReasonUnknown
 }

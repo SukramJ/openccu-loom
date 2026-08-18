@@ -93,6 +93,23 @@ func (s *VisibilityUnIgnoreStore) Patterns(ctx context.Context, centralName stri
 	return out, nil
 }
 
+// DeleteForCentral removes every persisted un_ignore pattern for
+// centralName. Called on live central removal, so a re-adopted central
+// under the same name (or a different CCU later given that name) starts
+// from an empty pattern set instead of the previous incarnation's rows
+// silently reviving through the [central.Registry.OnRegister] observer
+// that replays whatever SQLite still holds.
+func (s *VisibilityUnIgnoreStore) DeleteForCentral(ctx context.Context, centralName string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM visibility_unignore WHERE central_name = ?`, centralName); err != nil {
+		return fmt.Errorf("visibility_unignore.DeleteForCentral: %w", err)
+	}
+	return nil
+}
+
 // Replace swaps the full pattern set for centralName atomically. Empty
 // `patterns` clears the list. updatedBy is stamped onto every retained
 // pattern. Duplicate / blank patterns in the input are deduped.

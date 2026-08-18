@@ -30,16 +30,17 @@ func TestTextDisplayStatePayloadHasAvailableIcons(t *testing.T) {
 		t.Fatal("StatePayload missing key available_icons")
 	}
 
-	// "OK" is present in the static HmIP-WRCD list (defaultIcons).
+	// "EVERYTHING_OKAY" is present in the real HmIP-WRCD DISPLAY_DATA_ICON
+	// VALUE_LIST (defaultIcons).
 	found := false
 	for _, icon := range state.AvailableIcons {
-		if icon == "OK" {
+		if icon == "EVERYTHING_OKAY" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("available_icons does not contain expected marker \"OK\"; got %v", state.AvailableIcons)
+		t.Errorf("available_icons does not contain expected marker \"EVERYTHING_OKAY\"; got %v", state.AvailableIcons)
 	}
 }
 
@@ -59,16 +60,17 @@ func TestTextDisplayStatePayloadHasAvailableSounds(t *testing.T) {
 		t.Fatal("StatePayload missing key available_sounds")
 	}
 
-	// "SHORT" is present in the static HmIP-WRCD list (defaultSounds).
+	// "EVENT" is present in the real HmIP-WRCD ACOUSTIC_NOTIFICATION_SELECTION
+	// VALUE_LIST (defaultSounds).
 	found := false
 	for _, snd := range state.AvailableSounds {
-		if snd == "SHORT" {
+		if snd == "EVENT" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("available_sounds does not contain expected marker \"SHORT\"; got %v", state.AvailableSounds)
+		t.Errorf("available_sounds does not contain expected marker \"EVENT\"; got %v", state.AvailableSounds)
 	}
 }
 

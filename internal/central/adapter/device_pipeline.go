@@ -1605,12 +1605,15 @@ func bridgeMasterDataPointToBus(bus *events.Bus, dp device.ParameterDataPoint) {
 // [hmevent.WeekProfileChangedEvent] on the event bus.
 //
 // Nothing subscribes to that event. The signal that actually reaches
-// MQTT and the SPA is the data point's own change callback, which the
-// event bridge registers on — see eventbridge.go's ProfileDataPoint
-// OnChange wiring. The bus event is a second announcement of the same
-// fact with no listener, kept because removing a published event type is
-// a wire-visible change; it is declared as unconsumed in the contract
-// test that enumerates them.
+// MQTT is the data point's own change callback, which the event bridge
+// registers on — see eventbridge.go's ProfileDataPoint OnChange wiring —
+// and that callback only publishes to MQTT: there is no WS schedule
+// broadcast, so an SPA schedule view that is already open does not
+// learn about a CCU-side or second-operator schedule change until the
+// user navigates away and back. The bus event is a second announcement
+// of the same fact with no listener, kept because removing a published
+// event type is a wire-visible change; it is declared as unconsumed in
+// the contract test that enumerates them.
 //
 // The struct captures bus + centralName at construction time; the channel
 // address is obtained from the ProfileDataPoint itself through the closure

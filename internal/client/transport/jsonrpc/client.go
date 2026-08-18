@@ -87,9 +87,12 @@ const DefaultResponseLimit = 128 * 1024 * 1024
 // login attempt.
 const loginBackoffMultiplier = 2.0
 
-// loginMaxFailedAttempts is the number of consecutive authentication
-// failures after which the client stops retrying login automatically.
-// Mirrors the LOGIN_MAX_FAILED_ATTEMPTS constant in the Python reference.
+// loginMaxFailedAttempts mirrors the LOGIN_MAX_FAILED_ATTEMPTS constant in
+// the Python reference (client/json_rpc.py _do_login), which applies the
+// same backoff from the first failure and, past this count, only raises
+// its log to error — it does not stop retrying either. Neither client
+// implements a hard "give up" state; [loginMaxBackoff] bounding the retry
+// rate to one attempt per 60 s is what actually protects the CCU.
 const loginMaxFailedAttempts = 10
 
 // loginBaseBackoff is the initial backoff duration applied after the
@@ -113,6 +116,31 @@ const staleLogoutTimeout = 5 * time.Second
 // HTTP 200) both for an invalid/expired session and for a privilege
 // mismatch, e.g. `access denied ("ADMIN" needed 0)`.
 const ccuAccessDeniedCode = 400
+
+// jsonRPCAuthRequiredCode and jsonRPCSessionExpiredCode are the standard
+// JSON-RPC 2.0 codes some backends (godevccu, the reference simulator,
+// among them) use for "no session presented" / "session no longer valid"
+// instead of the CCU's own code 400. Without treating these the same as
+// ccuAccessDeniedCode, a backend that signals expiry this way never
+// re-logs-in: it keeps sending the dead session id until the client's own
+// freshness window elapses, failing every call on it in the meantime.
+const (
+	jsonRPCAuthRequiredCode   = -32001
+	jsonRPCSessionExpiredCode = -32002
+)
+
+// isStaleSessionCode reports whether code is one of the JSON-RPC error
+// codes that mean "the session on this connection is no longer usable" —
+// as opposed to a permanent, non-session rejection. Every code in this
+// family is handled identically: re-login once and retry the call.
+func isStaleSessionCode(code int) bool {
+	switch code {
+	case ccuAccessDeniedCode, jsonRPCAuthRequiredCode, jsonRPCSessionExpiredCode:
+		return true
+	default:
+		return false
+	}
+}
 
 // Client is a CCU JSON-RPC client. Safe for concurrent use.
 type Client struct {
@@ -331,10 +359,12 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	if parsed.Error != nil {
 		// The CCU reports an invalid/expired session as HTTP 200 + error
 		// code 400 ("access denied") — indistinguishable on the wire from
-		// a privilege mismatch. Re-login and retry once: an expired
-		// session self-heals, a genuine privilege mismatch fails again
-		// with 400 on the fresh session and propagates below.
-		if parsed.Error.Code == ccuAccessDeniedCode && allowRetry && c.cfg.Username != "" {
+		// a privilege mismatch; some backends signal the same condition
+		// with JSON-RPC codes -32001/-32002 instead. Re-login and retry
+		// once for the whole family: an expired session self-heals, a
+		// genuine privilege mismatch fails again with the same code on
+		// the fresh session and propagates below.
+		if isStaleSessionCode(parsed.Error.Code) && allowRetry && c.cfg.Username != "" {
 			if loginErr := c.reloginLocked(ctx, sessionOf(merged)); loginErr == nil {
 				return c.callOnce(ctx, method, params, out, false)
 			}
@@ -357,11 +387,13 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 // Login obtains a session ID via Session.login and stores it. Cheap to call
 // repeatedly; callers usually do so only after 401/403.
 //
-// Rate-limiting: consecutive authentication failures trigger an exponential
-// backoff starting at [loginBaseBackoff] = 1 s, doubling each time up to
-// [loginMaxBackoff] = 60 s, across up to [loginMaxFailedAttempts] = 10
-// failures. This prevents hammering a misconfigured CCU. The backoff and
-// counter are reset on the first successful login.
+// Rate-limiting: every failed login is followed by an exponential backoff
+// before the next attempt, starting at [loginBaseBackoff] = 1 s and
+// doubling each consecutive failure up to [loginMaxBackoff] = 60 s — from
+// the first rejection, not after [loginMaxFailedAttempts] accumulate, or
+// a misconfigured or exhausted-session-pool CCU gets hammered with
+// back-to-back Session.login attempts before the throttle ever engages.
+// The backoff and counter are reset on the first successful login.
 func (c *Client) Login(ctx context.Context) error {
 	if c.cfg.Username == "" {
 		return nil
@@ -377,13 +409,18 @@ func (c *Client) Login(ctx context.Context) error {
 	c.mu.Unlock()
 	c.logoutStale(ctx, displaced)
 
-	// Enforce backoff when too many consecutive failures have occurred.
+	// Enforce backoff from the first failure, not from the tenth: the
+	// doc comment above promises "starting at 1 s, doubling each time"
+	// and a caller gating this on loginMaxFailedAttempts first defeats
+	// that — the first ten rejected logins would fire back-to-back with
+	// no delay at all, which is exactly what keeps an exhausted CCU
+	// session pool exhausted (every immediate retry claims the slot a
+	// concurrent WebUI session just freed).
 	c.mu.Lock()
-	failCount := c.failedLoginAttempts
 	backoff := c.currentBackoff
 	c.mu.Unlock()
 
-	if failCount >= loginMaxFailedAttempts && backoff > 0 {
+	if backoff > 0 {
 		// Apply the accumulated backoff before trying again.
 		timer := time.NewTimer(backoff)
 		select {

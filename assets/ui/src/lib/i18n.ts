@@ -380,6 +380,7 @@ const EN: Catalog = {
   "alarm.journal_event.code_action_failed": "Code action failed",
   "alarm.journal_event.code_locked_out": "Code entry locked out",
   "alarm.journal_event.code_lockout": "Code lockout started",
+  "alarm.journal_event.code_missing": "Code required",
   "alarm.journal_event.code_permission_denied":
     "Code not permitted for this action",
   "alarm.journal_event.cross_zone_first_hit": "First cross-zone hit",
@@ -392,6 +393,7 @@ const EN: Catalog = {
   "alarm.journal_event.incident_load_failed": "Incident could not be loaded",
   "alarm.journal_event.incident_lost_on_restore": "Incident lost on restore",
   "alarm.journal_event.incident_persist_failed": "Incident could not be saved",
+  "alarm.journal_event.invalid_code": "Invalid code entered",
   "alarm.journal_event.keypad_blocked": "Keypad blocked",
   "alarm.journal_event.keypad_press_unmatched": "Keypad entry did not match",
   "alarm.journal_event.mode_removed_while_armed":
@@ -789,6 +791,13 @@ const EN: Catalog = {
   "audit.action.tls_cert_upload": "TLS certificate",
   "audit.action.token_create": "Token created",
   "audit.action.token_revoke": "Token revoked",
+  "audit.action.logging.override_set": "Log level override set",
+  "audit.action.logging.override_reset": "Log level override reset",
+  "audit.action.logging.default_level_set": "Default log level changed",
+  "audit.action.diagnostics.capture_start": "Diagnostic capture started",
+  "audit.action.diagnostics.capture_stop": "Diagnostic capture stopped",
+  "audit.action.system.restart_requested": "Daemon restart requested",
+  "audit.action.cache_clear": "Cache cleared",
   "audit.action.un_ignore_update": "Update un-ignored",
   "audit.action.user_create": "User created",
   "audit.action.user_delete": "User deleted",
@@ -1558,7 +1567,7 @@ const EN: Catalog = {
   "config.help.north.mqtt.protocol_version":
     'MQTT wire dialect: "5" (default) or "3.1.1" for brokers without MQTT 5.0 support. No silent downgrade — a v5 connect against a v3-only broker fails with a named error.',
   "config.help.north.mqtt.payload_format":
-    "bare keeps primitive scalar payloads (backwards-compat); json wraps state with {value, available}. Flip only after every consumer is upgraded.",
+    "Reserved, currently a no-op: state topics always carry the JSON envelope {value, available, modified_at} regardless of this setting. There is no primitive-scalar (bare) output mode today.",
   "config.help.north.mqtt.sub_devices_enabled":
     "Split multi-channel-group devices into one HA device per channel group. Renders the parent + N children hierarchy in HA.",
   "config.help.north.matter.enabled":
@@ -1684,7 +1693,7 @@ const EN: Catalog = {
   "config.help.callback.port":
     "XML-RPC callback listener port. 0 lets the OS pick an ephemeral port; the daemon re-advertises it on every CCU reconnect.",
   "config.help.callback.bin_port":
-    "BIN-RPC callback listener port (CUxD). Same dynamic-port semantics as the XML-RPC port.",
+    "BIN-RPC callback listener port (CUxD). 0 resolves to the 8129 default, not an OS-assigned port — unlike the XML-RPC port above, this listener has no port-range escape valve, so two daemons on one host each need an explicit, distinct value here.",
   "config.help.callback.port_range":
     "Optional port range <lo>-<hi>; the callback listener binds the first free port in it. Takes precedence over the XML-RPC port above. Use when the daemon sits behind a narrow firewall range.",
   "config.help.callback.public_host":
@@ -1784,7 +1793,7 @@ const EN: Catalog = {
   "config.help.persistence.history.export.token_env":
     "Name of the environment variable that holds the InfluxDB write token; the token is never stored inline in config.",
   "config.help.reliability.command_retry_initial_delay":
-    "First backoff delay after a transient CCU write failure (the retry-stack doubles on each step). Default 250 ms; raise to 2 s to mirror the reference implementation or lower for fast test rigs.",
+    "First backoff delay after a transient CCU write failure (the retry-stack doubles on each step). Default 2 s (production-hardened); lower it for fast test rigs.",
   "config.help.reliability.command_throttle_inter_command_delay":
     "Minimum gap between two consecutive throttled commands per CCU interface. Default 0 (no pacing). Raise to ~50–500 ms on heavily-loaded BidCos-RF interfaces to reduce duty-cycle errors.",
   "config.help.centrals":
@@ -2344,6 +2353,8 @@ const EN: Catalog = {
   "centrals.field.password": "Password",
   "centrals.field.password_hint":
     "Stored in the daemon's SQLite database (file mode 0600). Backup tarballs redact it unless --include-secrets is passed.",
+  "centrals.field.password_hint_unchanged":
+    "A password is stored. Leave blank to keep it — type a new one to replace it.",
   "centrals.field.password_placeholder_env": "(resolved from env variable)",
   "centrals.field.password_env": "Password env-var (override)",
   "centrals.field.password_env_hint":
@@ -3178,6 +3189,8 @@ const EN: Catalog = {
   "api.error.locked":
     "Locked — this channel is protected against control writes. Lift the lock in the channel's flags.",
   "api.error.locked_reason": "Locked ({status}).",
+  "api.error.edit_lock_lapsed":
+    "Your edit session has expired — reopen the paramset editor to get a new lock.",
   // --- Matter bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",
@@ -4439,6 +4452,7 @@ const DE: Catalog = {
   "alarm.journal_event.code_action_failed": "Code-Aktion fehlgeschlagen",
   "alarm.journal_event.code_locked_out": "Code-Eingabe gesperrt",
   "alarm.journal_event.code_lockout": "Code-Sperre gestartet",
+  "alarm.journal_event.code_missing": "Code erforderlich",
   "alarm.journal_event.code_permission_denied":
     "Code für diese Aktion nicht berechtigt",
   "alarm.journal_event.cross_zone_first_hit":
@@ -4456,6 +4470,7 @@ const DE: Catalog = {
     "Vorfall beim Wiederherstellen verloren",
   "alarm.journal_event.incident_persist_failed":
     "Vorfall konnte nicht gespeichert werden",
+  "alarm.journal_event.invalid_code": "Ungültiger Code eingegeben",
   "alarm.journal_event.keypad_blocked": "Bedienteil gesperrt",
   "alarm.journal_event.keypad_press_unmatched":
     "Eingabe am Bedienteil ohne Treffer",
@@ -4869,6 +4884,13 @@ const DE: Catalog = {
   "audit.action.tls_cert_upload": "TLS-Zertifikat",
   "audit.action.token_create": "Token erstellt",
   "audit.action.token_revoke": "Token widerrufen",
+  "audit.action.logging.override_set": "Log-Level-Override gesetzt",
+  "audit.action.logging.override_reset": "Log-Level-Override zurückgesetzt",
+  "audit.action.logging.default_level_set": "Standard-Log-Level geändert",
+  "audit.action.diagnostics.capture_start": "Diagnose-Aufzeichnung gestartet",
+  "audit.action.diagnostics.capture_stop": "Diagnose-Aufzeichnung gestoppt",
+  "audit.action.system.restart_requested": "Daemon-Neustart angefordert",
+  "audit.action.cache_clear": "Cache geleert",
   "audit.action.un_ignore_update": "Update nicht mehr ignoriert",
   "audit.action.user_create": "Benutzer angelegt",
   "audit.action.user_delete": "Benutzer gelöscht",
@@ -5664,7 +5686,7 @@ const DE: Catalog = {
   "config.help.north.mqtt.protocol_version":
     'MQTT-Dialekt: "5" (Standard) oder "3.1.1" für Broker ohne MQTT-5.0-Unterstützung. Kein stilles Downgrade — ein v5-Connect gegen einen v3-Broker schlägt mit benanntem Fehler fehl.',
   "config.help.north.mqtt.payload_format":
-    "bare bleibt bei primitiven Scalar-Payloads (rückwärtskompatibel); json wrapper {value, available}. Erst umschalten, wenn alle Konsumenten umgestellt sind.",
+    "Reserviert, aktuell ohne Wirkung: State-Topics tragen unabhängig von dieser Einstellung immer den JSON-Envelope {value, available, modified_at}. Einen primitiven Scalar-Modus (bare) gibt es derzeit nicht.",
   "config.help.north.mqtt.sub_devices_enabled":
     "Multi-Channel-Group-Geräte als ein HA-Gerät pro Kanal-Gruppe rendern. Zeigt Parent + N Children in HA.",
   "config.help.north.matter.enabled":
@@ -5790,7 +5812,7 @@ const DE: Catalog = {
   "config.help.callback.port":
     "Port des XML-RPC-Callback-Listeners. 0 = OS wählt ephemeren Port; der Daemon meldet ihn bei jedem CCU-Reconnect neu.",
   "config.help.callback.bin_port":
-    "Port des BIN-RPC-Callback-Listeners (CUxD). Gleiche Dynamic-Port-Semantik wie der XML-RPC-Port.",
+    "Port des BIN-RPC-Callback-Listeners (CUxD). 0 führt zum Standardwert 8129, nicht zu einem vom Betriebssystem vergebenen Port — anders als beim XML-RPC-Port oben gibt es für diesen Listener keinen Port-Bereich als Ausweg, daher braucht jeder Daemon auf demselben Host hier einen eigenen, expliziten Wert.",
   "config.help.callback.port_range":
     "Optionaler Port-Bereich <lo>-<hi>; der Callback-Listener bindet den ersten freien Port darin. Hat Vorrang vor dem XML-RPC-Port oben. Wenn der Daemon hinter einer engen Firewall sitzt.",
   "config.help.callback.public_host":
@@ -5834,7 +5856,7 @@ const DE: Catalog = {
   "config.help.north.rest.ws.replay_capacity":
     "Ringpuffer-Tiefe für das subscribe-with-since-Feature des WebSocket. Default 1024 Events. Auf speicherbeschränkten Hosts reduzieren; bei Burst-Verlusten erhöhen.",
   "config.help.reliability.command_retry_initial_delay":
-    "Erste Backoff-Wartezeit nach einem vorübergehenden CCU-Schreibfehler (verdoppelt sich bei jedem Retry). Default 250 ms; 2 s entspricht dem Referenz-Stack, niedriger für schnelle Test-Setups.",
+    "Erste Backoff-Wartezeit nach einem vorübergehenden CCU-Schreibfehler (verdoppelt sich bei jedem Retry). Default 2 s (produktionsgehärtet); niedriger für schnelle Test-Setups.",
   "config.help.reliability.command_throttle_inter_command_delay":
     "Minimaler Abstand zwischen zwei gedrosselten Befehlen pro CCU-Interface. Default 0 (keine Drossel). Auf ~50–500 ms erhöhen wenn BidCos-RF Duty-Cycle-Fehler zeigt.",
   "config.help.persistence.values_cache.enabled":
@@ -6461,6 +6483,8 @@ const DE: Catalog = {
   "centrals.field.password": "Passwort",
   "centrals.field.password_hint":
     "Wird in der SQLite-Datenbank des Daemons abgelegt (Dateirechte 0600). Backup-Archive redaktieren das Feld, außer du verwendest --include-secrets.",
+  "centrals.field.password_hint_unchanged":
+    "Es ist ein Passwort gespeichert. Leer lassen, um es zu behalten — ein neues eingeben, um es zu ersetzen.",
   "centrals.field.password_placeholder_env": "(wird aus Env-Variable gelesen)",
   "centrals.field.password_env": "Passwort-Umgebungsvariable (überschreibt)",
   "centrals.field.password_env_hint":
@@ -7305,6 +7329,8 @@ const DE: Catalog = {
   "api.error.locked":
     "Gesperrt — dieser Kanal ist gegen Steuerbefehle gesperrt. Die Sperre lässt sich in den Kanal-Flags aufheben.",
   "api.error.locked_reason": "Gesperrt ({status}).",
+  "api.error.edit_lock_lapsed":
+    "Deine Editiersitzung ist abgelaufen — öffne den Parameter-Editor erneut, um eine neue Sperre zu erhalten.",
   // --- Matter-Bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",

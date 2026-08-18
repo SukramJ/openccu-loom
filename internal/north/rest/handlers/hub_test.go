@@ -1913,6 +1913,45 @@ func TestCreateSysvar_ChannelUnknown_Returns422(t *testing.T) {
 	}
 }
 
+// TestCreateSysvar_NameConflict_Returns409WithExplanationInDetail pins
+// the wire shape a client actually reads: the SPA's generic error path
+// renders `problemTitle` for the SPA's own handled statuses but falls
+// through to `problemDetail` for a bare 409, so the explanation has to
+// live in Detail, not Title, or the operator sees only the variable name
+// with no context for why the create failed.
+func TestCreateSysvar_NameConflict_Returns409WithExplanationInDetail(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: hub.ErrSysvarExists}
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Zaehler","value_type":"BOOL"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
+	}
+	var prob struct {
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &prob); err != nil {
+		t.Fatalf("unmarshal problem body: %v", err)
+	}
+	// The old shape put the full sentence in Title and the bare name
+	// ("Zaehler") in Detail — Detail containing the name alone is not
+	// enough to catch the regression, since that is also true of the old
+	// shape. The distinguishing fact is that Detail carries the
+	// explanation text ("already exists"), not just the identifier.
+	if !strings.Contains(prob.Detail, "Zaehler") || !strings.Contains(prob.Detail, "already exists") {
+		t.Errorf("detail = %q, want the variable name AND the explanation together", prob.Detail)
+	}
+	if prob.Title == "Zaehler" {
+		t.Errorf("title = %q, the bare variable name must not be the entire explanation", prob.Title)
+	}
+}
+
 // A channel_address in the PATCH body reaches UpdateSysvar as a non-nil
 // pointer so the tri-state assign/clear/untouched semantics survive.
 func TestPatchSysvar_ChannelAddress_PassesThrough(t *testing.T) {

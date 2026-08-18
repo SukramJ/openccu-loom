@@ -188,6 +188,23 @@ describe("SecuritySources — override flow", () => {
     expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 
+  it("seeds the included switch ON for a note-only override whose stored bit is included, even though relevant is false", async () => {
+    // A note-only override (no class picked) on a source with no alarm
+    // role classifies as relevant=false regardless of its stored
+    // `included` bit — `relevant` is not a proxy for "was this
+    // excluded". The exact stored bit is override_included, and it
+    // must win over the lossy relevant fallback.
+    mockListSecuritySources.mockResolvedValue([
+      source({ overridden: true, relevant: false, override_included: true }),
+    ]);
+    const { findByRole, getByText } = render(SecuritySources);
+    await findByRole("table");
+
+    const row = getByText("Kitchen smoke").closest("tr")!;
+    const toggle = within(row).getByRole("switch");
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+
   it("seeds the included switch ON for a source with no override", async () => {
     mockListSecuritySources.mockResolvedValue([
       source({ overridden: false, relevant: true }),

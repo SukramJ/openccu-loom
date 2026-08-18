@@ -46,9 +46,20 @@ type Translations struct {
 // ErrNoArchive is returned when the translation archive path is empty.
 var ErrNoArchive = errors.New("ccudata: archive path is empty")
 
-// LoadTranslations reads the gzipped JSON archive at path.
+// LoadTranslations reads the gzipped JSON archive at path and overlays
+// the same curated `translation_custom/` files [LoadTranslationsEmbedded]
+// applies — an operator-supplied archive is a substitute for the
+// embedded base extract, not for the curated overlay, so the two loaders
+// must produce the same post-processed shape. Without this, an operator
+// who points ccu_data.translations_path at a custom or regenerated
+// extract silently loses every explicit-empty "primary parameter"
+// marker the overlay carries (see [overlayCustomTranslations] and the
+// semantics documented on this struct's ParameterHelp-adjacent fields).
+//
 // Returns [ErrNoArchive] when path is empty; other errors when the
-// file is unreadable or the payload mismatches the expected shape.
+// file is unreadable or the payload mismatches the expected shape. A
+// corrupt overlay is not fatal — the caller still gets the base
+// extract, same as [LoadTranslationsEmbedded].
 func LoadTranslations(path string) (*Translations, error) {
 	if path == "" {
 		return nil, ErrNoArchive
@@ -70,7 +81,11 @@ func LoadTranslations(path string) (*Translations, error) {
 		return nil, fmt.Errorf("ccudata: decode: %w", err)
 	}
 
-	return translationsFromRaw(raw), nil
+	t := translationsFromRaw(raw)
+	if err := overlayCustomTranslations(t); err != nil {
+		return t, fmt.Errorf("ccudata: custom translations: %w", err)
+	}
+	return t, nil
 }
 
 // Empty returns a Translations struct with all maps non-nil. Used as

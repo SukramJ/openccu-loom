@@ -226,6 +226,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// routable callback path segment — otherwise the only trace of a CCU
 		// that can never receive an event is one line in the boot log.
 		recordUnroutableCentralHealth(healthTracker, metricsReg, ov.unroutableCentrals)
+	} else {
+		recordSQLiteOpenFailureHealth(healthTracker, ov.dbOpenErr)
 	}
 	// Teach the reload path how to re-derive the effective config, so a
 	// REST-triggered reload picks up section edits the SPA persisted to the
@@ -496,6 +498,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		recordingOverrides:      recordingOverrides,
 		recordingStore:          recordingStore,
 		channelFlagsOverlay:     channelFlagsOverlay,
+		channelFlagsStore:       channelFlagsStore,
 		healthTracker:           healthTracker,
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		mqttWiring:              mqttWiring,
@@ -526,7 +529,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// below then leaves the plain SQLite-backed service in place.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 	centralOrch := newCentralOrchestrator(reg, sb.bringUpManager, sbDeps, cfg, logger, instanceName,
-		valuesCacheStore, masterValuesStore, historyStore, recordingStore)
+		valuesCacheStore, masterValuesStore, historyStore, recordingStore, recordingOverrides,
+		channelFlagsStore, channelFlagsOverlay)
 	// A runtime-adopted central must join the hub-discovery ready pipeline the
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
@@ -542,6 +546,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	reconnector := adapter.NewRecoveryReconnector(reg, nil)
 	ifaceAdapter := adapter.NewInterfacesAdapter(reg, reconnector)
 	configAdapter := adapter.NewConfigAdapter(cfg, reg)
+	// Report the ports the callback listeners actually bound — not the
+	// configured value, which a dynamic-port mode (callback.port_range,
+	// bin_port: 0) never equals — so GET /api/v1/config reflects what the
+	// CCU was actually told to push to.
+	configAdapter.SetEffectiveCallbackPorts(callbackPort, binRPCPort)
 	healthAdapter := adapter.NewHealthAdapter(reg, healthTracker)
 
 	// Auth stores — a minimal in-memory state fed from cfg.Users.
@@ -656,6 +665,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// central. Nil-safe on both sides (bridge disabled / orchestrator
 	// unavailable).
 	centralOrch.setMatterCentralHook(matter.centralHook)
+	centralOrch.setMatterExposureStore(matter.exposureStore)
 	centralOrch.setAlarmCentralHook(alarmCentralHook(alarmSvc))
 	centralOrch.setSecurityCentralHook(securityCentralHook(securitySvc))
 	// Matter's ordered teardown is owned by the north-bound registry (it

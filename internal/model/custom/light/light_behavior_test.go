@@ -170,23 +170,73 @@ func TestLightSetTimerZeroClearsTimer(t *testing.T) {
 	}
 }
 
-// TestLightSetOnTime verifies SetOnTime dispatches two SetValue calls
-// (ON_TIME_VALUE + ON_TIME_UNIT) without error.
+// TestLightSetOnTime verifies that SetOnTime writes the plain ON_TIME
+// parameter as a single bare seconds value on a channel with no
+// DURATION_UNIT — the shape every plain-dimmer family (HM-LC-Dim*,
+// HmIP-BDT/-PDT/-FDT) carries. No CCU device's paramset carries
+// ON_TIME_VALUE / ON_TIME_UNIT; writing those literal names is always
+// rejected or dropped.
 func TestLightSetOnTime(t *testing.T) {
 	w := &multiWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	if err := l.SetOnTime(context.Background(), w, "HmIP-BDT:4", 30*time.Second, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("SetOnTime error: %v", err)
 	}
+	if len(w.calls) != 1 {
+		t.Fatalf("SetOnTime wrote %d calls, want 1 (bare ON_TIME): %+v", len(w.calls), w.calls)
+	}
+	got := w.calls[0]
+	if got.param != hmenum.ParameterOnTime {
+		t.Errorf("SetOnTime wrote param=%v, want ON_TIME", got.param)
+	}
+	if v, ok := got.value.(float64); !ok || v != 30 {
+		t.Errorf("SetOnTime wrote value=%v, want 30 (seconds)", got.value)
+	}
+}
+
+// TestLightSetOnTimeDurationPair verifies that SetOnTime writes the
+// DURATION_VALUE + DURATION_UNIT pair on a channel that carries both —
+// the shape signal lights and RGBW dimmers (HmIP-BSL, -RGBW, -DRG-DALI)
+// carry instead of a bare ON_TIME.
+func TestLightSetOnTimeDurationPair(t *testing.T) {
+	w := &multiWriter{}
+	const address = "HmIP-BSL:8"
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0002"})
+	ch := d.AddChannel(address, 1, "NOTIFICATION_LIGHT", hmenum.ParamsetKeyValues)
+	mk := func(p hmenum.Parameter, typ hmenum.ParameterType) generic.Spec {
+		return generic.Spec{
+			Key: hmtypes.DataPointKey{
+				ChannelAddress: address,
+				ParamsetKey:    hmenum.ParamsetKeyValues,
+				Parameter:      string(p),
+			},
+			Descriptor: hmproto.ParameterData{
+				Type:       typ,
+				Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+			},
+			Writer: w,
+		}
+	}
+	ch.Put(generic.NewFloat(mk(hmenum.ParameterLevel, hmenum.ParameterTypeFloat)))
+	ch.Put(generic.NewInteger(mk(hmenum.ParameterDurationValue, hmenum.ParameterTypeInteger)))
+	ch.Put(generic.NewSelect(mk(hmenum.ParameterDurationUnit, hmenum.ParameterTypeEnum)))
+
+	l := New(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{Dimmable: true}})
+	if err := l.SetOnTime(context.Background(), w, address, 30*time.Second, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetOnTime error: %v", err)
+	}
 	found := map[hmenum.Parameter]bool{}
 	for _, c := range w.calls {
 		found[c.param] = true
 	}
-	if !found[hmenum.ParameterOnTimeValue] {
-		t.Error("SetOnTime must write ON_TIME_VALUE")
+	if !found[hmenum.ParameterDurationValue] {
+		t.Error("SetOnTime must write DURATION_VALUE")
 	}
-	if !found[hmenum.ParameterOnTimeUnit] {
-		t.Error("SetOnTime must write ON_TIME_UNIT")
+	if !found[hmenum.ParameterDurationUnit] {
+		t.Error("SetOnTime must write DURATION_UNIT")
+	}
+	if found[hmenum.ParameterOnTimeValue] || found[hmenum.ParameterOnTimeUnit] {
+		t.Errorf("SetOnTime must not write the non-existent ON_TIME_VALUE/ON_TIME_UNIT pair: %+v", w.calls)
 	}
 }
 
@@ -580,6 +630,32 @@ func TestHSToFixedColorMapping(t *testing.T) {
 		got := HSToFixedColor(tc.hue, tc.sat)
 		if got != tc.want {
 			t.Errorf("HSToFixedColor(%d, %.2f) = %d, want %d", tc.hue, tc.sat, got, tc.want)
+		}
+	}
+}
+
+// TestHSToFixedColorBoundaries pins the exclusive-low / inclusive-high band
+// edges against hs_color_to_fixed_converter (light.py:824-834): a hue
+// landing exactly on a boundary belongs to the band below it. Getting the
+// inequality direction backwards shifts every one of these six hues one
+// segment clockwise from what the reference reports — e.g. hue=330 would
+// wrongly land on RED instead of PURPLE/MAGENTA.
+func TestHSToFixedColorBoundaries(t *testing.T) {
+	cases := []struct {
+		hue  int32
+		want FixedColor
+	}{
+		{30, FixedColorRed},      // boundary belongs to the band below: RED, not YELLOW
+		{90, FixedColorYellow},   // YELLOW, not GREEN
+		{150, FixedColorGreen},   // GREEN, not CYAN/TURQUOISE
+		{210, FixedColorCyan},    // CYAN/TURQUOISE, not BLUE
+		{270, FixedColorBlue},    // BLUE, not MAGENTA/PURPLE
+		{330, FixedColorMagenta}, // MAGENTA/PURPLE, not RED
+	}
+	for _, tc := range cases {
+		got := HSToFixedColor(tc.hue, 100)
+		if got != tc.want {
+			t.Errorf("HSToFixedColor(%d, 100) = %d, want %d", tc.hue, got, tc.want)
 		}
 	}
 }

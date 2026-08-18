@@ -586,3 +586,44 @@ func TestClearInvalidScope(t *testing.T) {
 		t.Error("reiniter should not be called for invalid scope")
 	}
 }
+
+// TestClearAuditSeesReinitCentrals pins that the audit hook observes the
+// same CentralsReinit list the returned Report carries. The audit hook used
+// to run before the re-init step populated that field, so every audit row
+// recorded an empty list regardless of which centrals were actually
+// re-pulled.
+func TestClearAuditSeesReinitCentrals(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	devs := &fakeDevices{clearN: 1}
+	reiniter := &fakeReiniter{ok: true}
+
+	var auditedReinit []string
+	auditCalls := 0
+
+	svc := New(Deps{
+		Devices:  devs,
+		Reiniter: reiniter,
+		Audit: func(_ context.Context, _ Scope, rep Report) {
+			auditCalls++
+			auditedReinit = rep.CentralsReinit
+		},
+	})
+
+	scope := Scope{Kind: ScopeInterface, Central: "ccu", Interface: "HmIP-RF"}
+	rep, err := svc.Clear(ctx, scope)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if auditCalls != 1 {
+		t.Fatalf("Audit calls = %d, want 1", auditCalls)
+	}
+	if len(rep.CentralsReinit) != 1 || rep.CentralsReinit[0] != "ccu" {
+		t.Fatalf("Report.CentralsReinit = %v, want [ccu]", rep.CentralsReinit)
+	}
+	if len(auditedReinit) != 1 || auditedReinit[0] != "ccu" {
+		t.Errorf("audit hook observed CentralsReinit = %v, want [ccu]", auditedReinit)
+	}
+}

@@ -563,6 +563,18 @@ func TestExceptionToFailureReason(t *testing.T) {
 		{"internal backend", fmt.Errorf("rpc: %w", ErrInternalBackendException), hmenum.FailureReasonInternal},
 		{"context deadline", fmt.Errorf("call: %w", context.DeadlineExceeded), hmenum.FailureReasonTimeout},
 		{"net timeout", fmt.Errorf("read: %w", timeoutNetError{}), hmenum.FailureReasonTimeout},
+		// The shape every south-bound transport actually produces: a hung
+		// (but reachable) CCU fails its http.Client.Do with
+		// context.DeadlineExceeded, and every transport wraps that in
+		// ErrNoConnection (see xmlrpc/client.go, jsonrpc/client.go,
+		// binrpc/client.go). A hung CCU must classify as a timeout, not a
+		// generic network failure, or the operator is pointed at the wrong
+		// cause.
+		{
+			"deadline wrapped in ErrNoConnection (real transport shape)",
+			fmt.Errorf("%w: %w", ErrNoConnection, context.DeadlineExceeded),
+			hmenum.FailureReasonTimeout,
+		},
 		// A bare client exception names no cause the operator can act on.
 		{"client exception", ErrClientException, hmenum.FailureReasonUnknown},
 		{"unclassified", errors.New("some unexpected error"), hmenum.FailureReasonUnknown},

@@ -208,6 +208,19 @@ WHERE central_name = ? AND device_address = ? AND channel_no = ? AND dp_kind = ?
 	return nil
 }
 
+// DeleteForCentral removes every allowlist row for centralName. Called on
+// live central removal, so `GET /api/v1/matter/status`'s enabled_count stops
+// counting endpoints that can never exist once the owning central is gone —
+// without it, the orphaned rows survive and the dashboard shows a permanent
+// gap between "enabled" and "exposed" that nothing in the UI can resolve.
+func (s *Store) DeleteForCentral(ctx context.Context, centralName string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM matter_exposures WHERE central_name = ?`, centralName)
+	if err != nil {
+		return fmt.Errorf("matter store: delete exposures for central: %w", err)
+	}
+	return nil
+}
+
 // CountEnabled returns the number of enabled rows for a central
 // (empty central = global). Used by `/matter/status` for the
 // dashboard summary.

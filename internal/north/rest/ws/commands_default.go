@@ -485,7 +485,7 @@ func devicesGetHandler(q DeviceQuery) CommandHandler {
 		}
 		dev, err := q.GetDevice(ctx, args.Address)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "get_device: "+err.Error())
+			return nil, wrapDomainError("get_device", err)
 		}
 		if dev == nil {
 			return nil, NewCommandError("not_found", "no device at "+args.Address)
@@ -625,7 +625,7 @@ func programsExecuteHandler(q HubQuery) CommandHandler {
 		}
 		executed, err := h.ExecuteProgram(ctx, args.ID, args.CheckConditions)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "execute_program: "+err.Error())
+			return nil, wrapDomainError("execute_program", err)
 		}
 		return map[string]any{"executed": executed, "id": args.ID}, nil
 	}
@@ -645,7 +645,7 @@ func programsDeleteHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := h.DeleteProgram(ctx, args.ID); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "delete_program: "+err.Error())
+			return nil, wrapDomainError("delete_program", err)
 		}
 		return map[string]any{"deleted": true, "id": args.ID}, nil
 	}
@@ -683,7 +683,7 @@ func sysvarsSetHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := h.SetSysvar(ctx, args.Name, args.Value); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "set_sysvar: "+err.Error())
+			return nil, wrapDomainError("set_sysvar", err)
 		}
 		return map[string]any{"saved": true, "name": args.Name}, nil
 	}
@@ -867,6 +867,38 @@ type installModeIfaceArgs struct {
 	InterfaceID string `json:"interface_id"`
 }
 
+// installModeKnownInterfaces lists every bare interface token the
+// install-mode registry can be keyed by (pkg/hmenum's fixed enumeration).
+// normalizeInstallModeInterfaceID uses it to recognize a composite id.
+var installModeKnownInterfaces = []hmenum.Interface{
+	hmenum.InterfaceHmIPRF,
+	hmenum.InterfaceBidCosRF,
+	hmenum.InterfaceBidCosWired,
+	hmenum.InterfaceVirtualDevices,
+	hmenum.InterfaceCUxD,
+}
+
+// normalizeInstallModeInterfaceID accepts either the bare interface type
+// the install-mode registry is keyed by ("HmIP-RF") or the composite wire
+// id every other part of the WS surface publishes for the same argument
+// name ("<central>-HmIP-RF" — devices.list, ccu.get_signal_quality, the
+// hub.*.connectivity.* broadcast topic; see pkg/hmtypes.WireInterfaceID)
+// and returns the bare form the registry expects. install_mode.enable/
+// disable are the one place in the command surface where interface_id
+// means the bare form, so a client that reused the composite id it read
+// elsewhere would otherwise be rejected with "not registered".
+func normalizeInstallModeInterfaceID(raw string) string {
+	for _, known := range installModeKnownInterfaces {
+		if raw == string(known) {
+			return raw
+		}
+		if strings.HasSuffix(raw, "-"+string(known)) {
+			return string(known)
+		}
+	}
+	return raw
+}
+
 func installModeStatusHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args centralArgs
@@ -904,13 +936,14 @@ func installModeEnableHandler(q HubQuery) CommandHandler {
 		if err != nil {
 			return nil, err
 		}
+		ifaceID := normalizeInstallModeInterfaceID(args.InterfaceID)
 		if args.SGTIN != "" {
-			if err := h.EnableInstallModeLocal(ctx, args.InterfaceID, args.DurationSeconds, args.SGTIN, args.Key); err != nil {
+			if err := h.EnableInstallModeLocal(ctx, ifaceID, args.DurationSeconds, args.SGTIN, args.Key); err != nil {
 				return nil, NewCommandError(CommandErrorInternal, "enable_install_mode_local: "+err.Error())
 			}
 			return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds, "local": true}, nil
 		}
-		if err := h.EnableInstallMode(ctx, args.InterfaceID, args.DurationSeconds); err != nil {
+		if err := h.EnableInstallMode(ctx, ifaceID, args.DurationSeconds); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "enable_install_mode: "+err.Error())
 		}
 		return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds}, nil
@@ -930,7 +963,7 @@ func installModeDisableHandler(q HubQuery) CommandHandler {
 		if err != nil {
 			return nil, err
 		}
-		if err := h.DisableInstallMode(ctx, args.InterfaceID); err != nil {
+		if err := h.DisableInstallMode(ctx, normalizeInstallModeInterfaceID(args.InterfaceID)); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "disable_install_mode: "+err.Error())
 		}
 		return map[string]any{"enabled": false, "interface_id": args.InterfaceID}, nil
@@ -939,7 +972,13 @@ func installModeDisableHandler(q HubQuery) CommandHandler {
 
 type installModeSearchArgs struct {
 	InterfaceID string `json:"interface_id"`
-	Central     string `json:"central,omitempty"`
+	CentralName string `json:"central_name,omitempty"`
+	// Central is a deprecated alias for CentralName. install_mode.search
+	// originally used this key while every other central-scoped command
+	// (install_mode.enable/disable/status included) uses central_name;
+	// keep it accepted so a client that already sends `central` does not
+	// break, but resolve central_name first.
+	Central string `json:"central,omitempty"`
 }
 
 func installModeSearchHandler(q HubQuery) CommandHandler {
@@ -951,7 +990,11 @@ func installModeSearchHandler(q HubQuery) CommandHandler {
 		if args.InterfaceID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "interface_id required")
 		}
-		found, err := q.SearchWiredDevices(ctx, args.InterfaceID, args.Central)
+		central := args.CentralName
+		if central == "" {
+			central = args.Central
+		}
+		found, err := q.SearchWiredDevices(ctx, args.InterfaceID, central)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "search_devices: "+err.Error())
 		}

@@ -540,8 +540,11 @@ def _gen_text_display_write_rows() -> None:
         {"ID": 3, "Text": "Line three"},
     ]
     # aiohomematic text_display.py: send_text builds a paramset per row with
-    # DISPLAY_DATA_STRING, DISPLAY_DATA_ALIGNMENT, DISPLAY_DATA_SCROLLING,
-    # DISPLAY_DATA_ICON, then a final DISPLAY_DATA_COMMIT.
+    # DISPLAY_DATA_STRING, DISPLAY_DATA_ALIGNMENT, DISPLAY_DATA_ICON, then a
+    # final DISPLAY_DATA_COMMIT. There is no DISPLAY_DATA_SCROLLING field —
+    # it does not exist on _dp_display_data_* in text_display.py, nor on any
+    # CCU device (HmIP-WRCD is the only text-display model and its channel
+    # :3 does not expose it either).
     calls = []
     for row in rows:
         row_id = row["ID"]
@@ -552,7 +555,6 @@ def _gen_text_display_write_rows() -> None:
             "put_values": {
                 "DISPLAY_DATA_ALIGNMENT": "LEFT",
                 "DISPLAY_DATA_ICON": "NONE",
-                "DISPLAY_DATA_SCROLLING": "NONE",
                 "DISPLAY_DATA_STRING": row["Text"],
             },
         })
@@ -923,6 +925,38 @@ def _gen_climate_ip_disable_boost() -> None:
     _write_snapshot("ClimateIP", "DisableBoost", inputs)
 
 
+def _gen_climate_ip_set_profile() -> None:
+    """
+    ClimateIP SetProfile (week program), already-in-AUTO scenario: writes a
+    single ACTIVE_PROFILE SetValue. Mirrors CustomDpIpThermostat.set_profile's
+    `if self.mode != ClimateMode.AUTO` guard (climate.py:859-861) being false,
+    matching tests/test_model_climate.py:1259-1266, which drives SET_POINT_MODE
+    to AUTO via a data-point event before calling
+    set_profile(profile=WEEK_PROGRAM_1) and asserts exactly this call.
+    When the thermostat is NOT already in AUTO, set_profile also writes
+    CONTROL_MODE and BOOST_MODE first — and because those two and
+    ACTIVE_PROFILE are all VALUES parameters on the same channel,
+    @bind_collector batches all three into one put_paramset instead of one
+    round-trip each (CallParameterCollector.add_data_point / _send_paramset,
+    model/data_point.py:1648-1667,1724-1776). That scenario is not captured
+    here — the Go side pins it with a table test instead of a wire snapshot,
+    since it depends on locally-observed device state rather than a fixed
+    literal input.
+    """
+    cases = [
+        ("WeekProgram1", 1),
+        ("WeekProgram2", 2),
+        ("WeekProgram3", 3),
+    ]
+    inputs = []
+    for label, idx in cases:
+        inputs.append({
+            "label": f"profile={label}",
+            "calls": [{"method": "SetValue", "address": "BWTH0001:1", "parameter": "ACTIVE_PROFILE", "value": idx}],
+        })
+    _write_snapshot("ClimateIP", "SetProfile", inputs)
+
+
 def _gen_climate_rf_set_mode() -> None:
     """
     ClimateRF SetMode: aiohomematic uses RF thermostat (HM-CC-RT-DN).
@@ -1051,7 +1085,7 @@ def _gen_text_display_write() -> None:
                     "DISPLAY_DATA_ALIGNMENT": "CENTER",
                     "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
                     "DISPLAY_DATA_COMMIT": True,
-                    "DISPLAY_DATA_ICON": "OFF",
+                    "DISPLAY_DATA_ICON": "NO_ICON",
                     "DISPLAY_DATA_ID": row_id,
                     "DISPLAY_DATA_STRING": text,
                     "DISPLAY_DATA_TEXT_COLOR": "BLACK",
@@ -1077,7 +1111,7 @@ def _gen_text_display_clear() -> None:
                 "DISPLAY_DATA_ALIGNMENT": "CENTER",
                 "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
                 "DISPLAY_DATA_COMMIT": True,
-                "DISPLAY_DATA_ICON": "OFF",
+                "DISPLAY_DATA_ICON": "NO_ICON",
                 "DISPLAY_DATA_ID": 1,
                 "DISPLAY_DATA_STRING": "",
                 "DISPLAY_DATA_TEXT_COLOR": "BLACK",
@@ -1103,7 +1137,7 @@ def _gen_text_display_write_with_sound() -> None:
                 "DISPLAY_DATA_ALIGNMENT": "CENTER",
                 "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
                 "DISPLAY_DATA_COMMIT": True,
-                "DISPLAY_DATA_ICON": "OFF",
+                "DISPLAY_DATA_ICON": "NO_ICON",
                 "DISPLAY_DATA_ID": 1,
                 "DISPLAY_DATA_STRING": "Alert",
                 "DISPLAY_DATA_TEXT_COLOR": "BLACK",
@@ -1214,6 +1248,7 @@ def main() -> None:
         ("ClimateIP", "SetTemperature", _gen_climate_ip_set_temperature),
         ("ClimateIP", "EnableBoost", _gen_climate_ip_enable_boost),
         ("ClimateIP", "DisableBoost", _gen_climate_ip_disable_boost),
+        ("ClimateIP", "SetProfile", _gen_climate_ip_set_profile),
         ("ClimateRF", "SetMode", _gen_climate_rf_set_mode),
         ("ClimateRF", "SetTemperature", _gen_climate_rf_set_temperature),
         ("SoundPlayer", "StopSound", _gen_sound_player_stop_sound),

@@ -522,6 +522,33 @@ func TestRestore_ImplausibleClock_TriggeredNeverRefires(t *testing.T) {
 	}
 }
 
+// TestRestore_ImplausibleClock_SilencedIncidentStillStops pins S3
+// persistence under an implausible clock too: a silenced incident must
+// never keep sounding, whether or not the restore trusts wall-clock
+// math for re-fire accounting.
+func TestRestore_ImplausibleClock_SilencedIncidentStillStops(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	h.start()
+	h.armFull()
+	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	if err := h.eng.Silence(h.ctx, "eg", "tester", "test"); err != nil {
+		t.Fatalf("silence: %v", err)
+	}
+
+	h.restartAt(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+	if n := h.outputs.fireCount(); n != 0 {
+		t.Fatalf("implausible clock re-fired a silenced incident: %d", n)
+	}
+	if n := h.outputs.stopCount(); n == 0 {
+		t.Fatalf("silenced incident restored under an implausible clock issued no counter-stop")
+	}
+	if !h.journal.has("silenced_incident_restored") {
+		t.Fatalf("missing silenced-restore journal entry; got %v", h.journal.events())
+	}
+}
+
 func TestRestore_TriggeredWithLostIncidentNeverRefires(t *testing.T) {
 	h := newHarness(t)
 	h.seedStandardZone()

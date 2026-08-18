@@ -37,6 +37,10 @@ func TestUpdateMetadataSerialisesWithNameReaders(t *testing.T) {
 			// A fresh writer every round: the refresh replaces the
 			// execution backend in place while commands run against it.
 			p.UpdateMetadata("program"+strconv.Itoa(i+1), i%2 == 0, noopProgramWriter{})
+			// The hub refresh rewrites EnabledDefault on every pass too
+			// (hub_wiring.go's loadPrograms), the same shape of in-place
+			// rewrite UpdateMetadata guards for Name/IsInternal.
+			p.SetEnabledDefault(i%3 == 0)
 		}
 	}()
 	for range 4 {
@@ -52,6 +56,9 @@ func TestUpdateMetadataSerialisesWithNameReaders(t *testing.T) {
 				_ = p.Info()
 				_ = p.Internal()
 				_ = p.CanonicalUniqueID("ABC123")
+				// The MQTT discovery fan-out reads EnabledDefault via this
+				// promoted-and-shadowed accessor while the refresh rewrites it.
+				_ = p.EnabledByDefault()
 				// The command path reads the writer the refresh swaps.
 				_ = p.Execute(context.Background())
 			}

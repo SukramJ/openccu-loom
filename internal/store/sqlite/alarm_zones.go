@@ -67,6 +67,22 @@ ON CONFLICT(id) DO UPDATE SET
 	return nil
 }
 
+// SetSlug persists a slug for a row whose stored slug is currently
+// empty — the migration-repair path re-deriving the frozen identifier
+// a pre-migration or migration-blanked row never got. It only ever
+// moves a row from no slug to a slug: the WHERE clause makes a second,
+// racing repair of the same row a no-op instead of a second write, and
+// Upsert's own conflict-update deliberately never touches slug once
+// set, so this is the only path that can change it after creation.
+func (s *AlarmZoneStore) SetSlug(ctx context.Context, id, slug string) error {
+	const q = `UPDATE alarm_zones SET slug = ? WHERE id = ? AND slug = ''`
+	_, err := s.db.ExecContext(ctx, q, slug, id)
+	if err != nil {
+		return fmt.Errorf("sqlite: set alarm zone slug: %w", err)
+	}
+	return nil
+}
+
 // Get returns the zone with id. The boolean reports whether it exists.
 func (s *AlarmZoneStore) Get(ctx context.Context, id string) (AlarmZoneRow, bool, error) {
 	const q = `

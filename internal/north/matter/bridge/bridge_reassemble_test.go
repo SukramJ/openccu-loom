@@ -156,10 +156,10 @@ func TestReassemble_ButtonGroupPressEventsFlowOnce(t *testing.T) {
 // topology swap removes endpoint 5, any subscription referencing endpoint 5
 // is closed by the subscription manager.
 //
-// Mirrors matter.js packages/node/src/behaviors/network/ServerNode.ts
-// lifecycle: removing a BridgedNode endpoint tears down its active
-// subscriptions via endpoint.lifecycle.remove() →
-// packages/protocol/src/interaction/SubscriptionHandler.ts close().
+// Mirrors matter.js packages/node/src/node/ServerNode.ts lifecycle:
+// removing a BridgedNode endpoint tears down its active subscriptions
+// via endpoint.lifecycle.remove() →
+// packages/node/src/node/server/ServerSubscription.ts close().
 func TestReassemble_ReapsSubscriptionsForRemovedEndpoints(t *testing.T) {
 	t.Parallel()
 

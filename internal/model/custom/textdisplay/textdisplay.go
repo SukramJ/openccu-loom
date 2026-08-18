@@ -69,33 +69,57 @@ const MaxRowLength = 24
 
 // defaultIcons is the static fallback icon list for HmIP-WRCD when no
 // runtime paramset is available. Sourced from the DISPLAY_DATA_ICON
-// VALUE_LIST present on all HmIP-SDV* channel 1 MASTER paramsets.
+// VALUE_LIST on the HmIP-WRCD ACOUSTIC_DISPLAY_RECEIVER channel's VALUES
+// paramset (channel :3) — the only channel in the fleet that carries this
+// parameter.
 var defaultIcons = []string{
-	"OFF",
-	"ON",
-	"OPEN",
-	"CLOSED",
+	"NO_ICON",
+	"LAMP_OFF",
+	"LAMP_ON",
+	"PADLOCK_OPEN",
+	"PADLOCK_CLOSED",
 	"ERROR",
-	"OK",
+	"EVERYTHING_OKAY",
 	"INFORMATION",
 	"NEW_MESSAGE",
 	"SERVICE_MESSAGE",
-	"SIGNAL_NEW_MESSAGE",
-	"SIGNAL_SERVICE_MESSAGE",
-	"SIGNAL_NEW_INFORMATION",
+	"SUN",
+	"MOON",
+	"WIND",
+	"CLOUD",
+	"THUNDERSTORM",
+	"DRIZZLE",
+	"CLOUD_AND_MOOON",
+	"RAIN",
+	"SNOW",
+	"CLOUD_AND_SUN",
+	"CLOUD_SUN_AND_RAIN",
+	"SNOWFLAKE",
+	"RAINDROP",
+	"FLAME",
+	"WINDOW_OPEN",
+	"SHUTTERS",
+	"ECO",
+	"PROTECTION_DEACTIVATED",
+	"EXTERNAL_PROTECTION",
+	"INTERNAL_PROTECTION",
+	"BELL",
+	"CLOCK",
 }
 
 // defaultSounds is the static fallback sound list for HmIP-WRCD when
 // no runtime paramset is available. Sourced from the
-// ACOUSTIC_NOTIFICATION_SELECTION VALUE_LIST on HmIP-SDV* devices.
+// ACOUSTIC_NOTIFICATION_SELECTION VALUE_LIST on the same
+// ACOUSTIC_DISPLAY_RECEIVER channel (:3) [defaultIcons] reads.
 var defaultSounds = []string{
-	"SOUND_OFF",
-	"LONG_LONG",
-	"LONG_SHORT",
-	"LONG_SHORT_SHORT",
-	"SHORT",
-	"SHORT_SHORT",
-	"LONG",
+	"LOW_BATTERY",
+	"DISARMED",
+	"INTERNALLY_ARMED",
+	"EXTERNALLY_ARMED",
+	"DELAYED_INTERNALLY_ARMED",
+	"DELAYED_EXTERNALLY_ARMED",
+	"EVENT",
+	"ERROR",
 }
 
 // Writer is the outbound-command contract.
@@ -583,19 +607,17 @@ func (t *TextDisplay) Clear(ctx context.Context, id int32, priority hmenum.Comma
 // no icon is requested. Clears any previously-set icon.
 const writeRowsDefaultIcon = "NONE"
 
-// writeRowsDefaultScrolling is the DISPLAY_DATA_SCROLLING value sent by
-// WriteRows when no scrolling mode is specified. Clears any previously-set
-// scrolling mode.
-const writeRowsDefaultScrolling = "NONE"
-
 // WriteRows writes a sequence of rows as one atomic put_paramset per row
 // followed by a single DISPLAY_DATA_COMMIT write. Each row is sent to its
 // own channel address (row 1 → base address, row N → base device + :N).
 // This matches the reference pattern where send_text is called once per row
 // and each call emits one put_paramset to the row-specific channel.
 //
-// Each per-row paramset always includes STRING, ICON, ALIGNMENT, and SCROLLING
-// so previously-set values are explicitly cleared rather than left as-is.
+// Each per-row paramset always includes STRING, ICON and ALIGNMENT so
+// previously-set values are explicitly cleared rather than left as-is.
+// There is no DISPLAY_DATA_SCROLLING field on any real CCU text-display
+// channel — it does not exist on the Python reference's TextDisplay data
+// point (text_display.py) nor on HmIP-WRCD, the only text-display model.
 func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum.CommandPriority) error {
 	if len(rows) == 0 {
 		return nil
@@ -620,7 +642,6 @@ func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum
 				string(hmenum.ParameterDisplayDataString):    r.Text,
 				string(hmenum.ParameterDisplayDataIcon):      iconVal,
 				string(hmenum.ParameterDisplayDataAlignment): alignVal,
-				string(hmenum.ParameterDisplayDataScrolling): writeRowsDefaultScrolling,
 			}
 			if r.TextColor != nil && *r.TextColor != "" {
 				values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor

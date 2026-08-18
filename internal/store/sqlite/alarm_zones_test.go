@@ -111,6 +111,68 @@ func TestAlarmZoneStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
 	}
 }
 
+// TestAlarmZoneStoreSetSlugFillsAnEmptySlug verifies SetSlug writes a
+// slug for a row whose stored slug is currently empty — the
+// migration-repair path a pre-migration or migration-blanked row needs
+// to get its frozen identifier persisted instead of re-derived every
+// boot.
+func TestAlarmZoneStoreSetSlugFillsAnEmptySlug(t *testing.T) {
+	s := freshAlarmZoneStore(t)
+	ctx := context.Background()
+
+	row := baseAlarmZoneRow("zone-1")
+	row.Slug = ""
+	if err := s.Upsert(ctx, row); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	if err := s.SetSlug(ctx, "zone-1", "ground-floor"); err != nil {
+		t.Fatalf("SetSlug: %v", err)
+	}
+
+	got, ok, err := s.Get(ctx, "zone-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !ok {
+		t.Fatal("Get: want ok=true")
+	}
+	if got.Slug != "ground-floor" {
+		t.Errorf("Slug=%q want %q", got.Slug, "ground-floor")
+	}
+}
+
+// TestAlarmZoneStoreSetSlugNeverOverwritesAnExistingSlug verifies the
+// WHERE-guarded update: SetSlug is the migration-repair path only, and
+// must never move an already-frozen slug even if called again — the
+// same invariant Upsert's conflict-update already enforces for every
+// other write path.
+func TestAlarmZoneStoreSetSlugNeverOverwritesAnExistingSlug(t *testing.T) {
+	s := freshAlarmZoneStore(t)
+	ctx := context.Background()
+
+	row := baseAlarmZoneRow("zone-1")
+	row.Slug = "ground-floor"
+	if err := s.Upsert(ctx, row); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	if err := s.SetSlug(ctx, "zone-1", "attic"); err != nil {
+		t.Fatalf("SetSlug: %v", err)
+	}
+
+	got, ok, err := s.Get(ctx, "zone-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !ok {
+		t.Fatal("Get: want ok=true")
+	}
+	if got.Slug != "ground-floor" {
+		t.Errorf("Slug=%q want %q (SetSlug must not move an already-frozen slug)", got.Slug, "ground-floor")
+	}
+}
+
 // TestAlarmZoneStoreGetAllOrdering verifies GetAll orders by position then
 // name.
 func TestAlarmZoneStoreGetAllOrdering(t *testing.T) {

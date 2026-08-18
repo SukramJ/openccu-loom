@@ -77,3 +77,64 @@ func TestOpen_ForeignKeysOnEveryPooledConnection(t *testing.T) {
 		}
 	}
 }
+
+// TestOpen_TuningPragmasOnEveryPooledConnection is the regression guard for
+// the audit finding covering the other three connection-scoped pragmas:
+// synchronous, cache_size and temp_store were only ever applied through
+// applyPragmas' single ExecContext call, which primes one pooled connection
+// and leaves the rest on SQLite's compiled defaults (synchronous=FULL, a
+// 2 MB cache, file-backed temp storage) instead of the SPECIFICATION §13.2
+// tuning. Holding several connections open at once forces the pool to hand
+// out distinct physical connections; every one of them must report the
+// tuned values, not just the one applyPragmas happened to prime.
+func TestOpen_TuningPragmasOnEveryPooledConnection(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	openMu.Lock()
+	db, err := Open(ctx, FileDSN(filepath.Join(t.TempDir(), "tuning_pool.db")))
+	openMu.Unlock()
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	const n = 6
+	conns := make([]*sql.Conn, 0, n)
+	t.Cleanup(func() {
+		for _, c := range conns {
+			_ = c.Close()
+		}
+	})
+	for i := range n {
+		c, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("acquire conn %d: %v", i, err)
+		}
+		conns = append(conns, c)
+
+		var synchronous int
+		if err := c.QueryRowContext(ctx, "PRAGMA synchronous").Scan(&synchronous); err != nil {
+			t.Fatalf("conn %d PRAGMA synchronous: %v", i, err)
+		}
+		if synchronous != 1 { // 1 = NORMAL, SQLite's compiled default is 2 = FULL
+			t.Errorf("conn %d reports synchronous=%d, want 1 (NORMAL)", i, synchronous)
+		}
+
+		var cacheSize int
+		if err := c.QueryRowContext(ctx, "PRAGMA cache_size").Scan(&cacheSize); err != nil {
+			t.Fatalf("conn %d PRAGMA cache_size: %v", i, err)
+		}
+		if cacheSize != -20000 {
+			t.Errorf("conn %d reports cache_size=%d, want -20000 (20 MB)", i, cacheSize)
+		}
+
+		var tempStore int
+		if err := c.QueryRowContext(ctx, "PRAGMA temp_store").Scan(&tempStore); err != nil {
+			t.Fatalf("conn %d PRAGMA temp_store: %v", i, err)
+		}
+		if tempStore != 2 { // 2 = MEMORY, SQLite's compiled default is 0 = file-backed
+			t.Errorf("conn %d reports temp_store=%d, want 2 (MEMORY)", i, tempStore)
+		}
+	}
+}

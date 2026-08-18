@@ -941,8 +941,14 @@ var ErrTemperatureOutOfRange = errors.New("climate: temperature out of allowed r
 // the thermostat is currently in HEAT mode — matches the manual-mode bypass
 // for devices where the valid range is deliberately wider in manual operation.
 //
-// After range validation the value is still clamped to the capability bounds
-// so a bypassed write never exceeds the hardware-safe envelope.
+// The value is written as validated — [Climate.Capabilities]'
+// MinTemperature/MaxTemperature is only the last-resort fallback MinTemp/
+// MaxTemp use when neither the operator-configured bound nor the setpoint
+// descriptor is available; it must not additionally clamp a value that
+// already passed the descriptor-derived MinTemp/MaxTemp check, or a
+// setpoint the device itself advertises as legal (e.g. 30.5 °C on every
+// HmIP thermostat, whose capability fallback is 30.0) silently arrives at
+// the CCU rounded down.
 func (c *Climate) SetTemperature(ctx context.Context, v float64, priority hmenum.CommandPriority) error {
 	minT := c.MinTemp()
 	maxT := c.MaxTemp()
@@ -955,7 +961,6 @@ func (c *Climate) SetTemperature(ctx context.Context, v float64, priority hmenum
 	if doValidate && (v < minT || v > maxT) {
 		return fmt.Errorf("%w: %.1f not in [%.1f, %.1f]", ErrTemperatureOutOfRange, v, minT, maxT)
 	}
-	v = clamp(v, c.Capabilities.MinTemperature, c.Capabilities.MaxTemperature)
 	if c.setpoint != nil {
 		if err := c.setpoint.Set(custom.EnsureContext(ctx), v, priority); err != nil {
 			return fmt.Errorf("climate: set temperature: %w", err)
@@ -971,13 +976,14 @@ func (c *Climate) SetTemperature(ctx context.Context, v float64, priority hmenum
 	return nil
 }
 
-// SetTemperatureRaw writes a setpoint value without range validation. The
-// value is still clamped to the hardware-safe capability bounds
-// [Capabilities.MinTemperature .. Capabilities.MaxTemperature] so no
-// out-of-spec value reaches the wire. Use SetTemperature when the caller
-// wants the additional configured min/max guard.
+// SetTemperatureRaw writes a setpoint value without the MinTemp/MaxTemp
+// range check SetTemperature applies. The setpoint data point still
+// enforces the CCU-advertised descriptor bounds on the wire (see
+// [generic.Float.Set]); this bypasses only the daemon-side pre-check, the
+// same contract [Climate.SetTemperature]'s "do_validate" bypass gives the
+// manual-mode-not-relevant path. Use SetTemperature when the caller wants
+// the additional configured min/max guard.
 func (c *Climate) SetTemperatureRaw(ctx context.Context, v float64, priority hmenum.CommandPriority) error {
-	v = clamp(v, c.Capabilities.MinTemperature, c.Capabilities.MaxTemperature)
 	if c.setpoint != nil {
 		if err := c.setpoint.Set(custom.EnsureContext(ctx), v, priority); err != nil {
 			return fmt.Errorf("climate: set temperature raw: %w", err)
@@ -1057,11 +1063,45 @@ func (c *Climate) SetProfile(ctx context.Context, p Profile, priority hmenum.Com
 	}
 	switch c.Kind {
 	case KindIP:
+		// A week program only executes while the thermostat is in AUTO —
+		// selecting one from MANU/HEAT/COOL stores the pointer but has no
+		// effect until the device switches mode on its own. So the
+		// thermostat is brought into AUTO (which also clears an active
+		// boost) before ACTIVE_PROFILE is written, mirroring the RF branch
+		// below.
+		//
 		// ACTIVE_PROFILE is 1-based INTEGER on HmIP — matches the
 		// `device_active_profile_index` we already surface in
 		// StatePayload.
-		if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterActiveProfile, idx+1, priority); err != nil {
+		params := map[hmenum.Parameter]any{
+			hmenum.ParameterActiveProfile: idx + 1,
+		}
+		switchingToAuto := false
+		if mode, ok := c.Mode(); !ok || mode != ModeAuto {
+			// CONTROL_MODE, BOOST_MODE and ACTIVE_PROFILE are all VALUES
+			// parameters on the same climate channel, so the Python
+			// reference's
+			// @bind_collector groups every send_value call set_profile makes
+			// here into one put_paramset instead of one round-trip each —
+			// CallParameterCollector.add_data_point buckets by
+			// (paramset_key, collector_order, channel_address) and
+			// _send_paramset sends the whole bucket as a single put_paramset
+			// once it holds more than one parameter (climate.py:859-863;
+			// data_point.py:1648-1667, 1724-1776). Splitting the write into
+			// separate calls would let a mid-sequence failure leave the
+			// device in AUTO with the old profile still active.
+			switchingToAuto = true
+			params[hmenum.ParameterControlMode] = int32(0) // AUTO
+			params[hmenum.ParameterBoostMode] = false
+		}
+		if err := custom.PutOrSet(custom.EnsureContext(ctx), c.writer, c.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 			return fmt.Errorf("climate: set profile: %w", err)
+		}
+		if switchingToAuto {
+			c.mu.Lock()
+			c.mode = ModeAuto
+			c.hasMode = true
+			c.mu.Unlock()
 		}
 	case KindRF:
 		// A week-program profile requires the thermostat to be in AUTO mode
@@ -1110,6 +1150,22 @@ func (c *Climate) SetProfile(ctx context.Context, p Profile, priority hmenum.Com
 // to a parameter it does not carry — COMFORT_MODE and LOWERING_MODE exist
 // on RF thermostats only.
 func (c *Climate) setModeProfile(ctx context.Context, p Profile, priority hmenum.CommandPriority) (handled bool, err error) {
+	if p == ProfileNone {
+		// Only HmIP thermostats give "none" an explicit wire action: it
+		// cancels an active boost — CustomDpIpThermostat.set_profile's
+		// NONE branch sends BOOST_MODE=False (climate.py:856-857). The
+		// classic RF set_profile has no NONE branch at all — selecting
+		// "none" there is a silent no-op, not an error, and SimpleRF's
+		// base set_profile is a no-op for every profile — so both kinds
+		// simply report the profile handled without a wire write.
+		if c.Kind != KindIP || !c.Capabilities.SupportsBoost {
+			return true, nil
+		}
+		if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterBoostMode, false, priority); err != nil {
+			return false, fmt.Errorf("climate: set profile %s: %w", p, err)
+		}
+		return true, nil
+	}
 	var (
 		param     hmenum.Parameter
 		supported bool
@@ -1263,7 +1319,16 @@ func (c *Climate) DisableAway(ctx context.Context, priority hmenum.CommandPriori
 		if c.writer == nil {
 			return ErrModeNotSupported
 		}
-		if err := c.writer.SetValue(ctx, c.Address, hmenum.ParameterPartyModeSubmit, "", priority); err != nil {
+		// PARTY_MODE_SUBMIT carries no "clear" sentinel — the empty string
+		// is just the DP's power-on DEFAULT and encodes no window for the
+		// firmware to evaluate, so it leaves an active party running.
+		// Cancelling a running party requires submitting a fully-formed
+		// code whose window already lies in the past, exactly as SetAway
+		// does for a future one — mirrors disable_away_mode's RF override,
+		// which submits a code from 11h ago to 10h ago.
+		now := time.Now()
+		code := partyModeCode(now.Add(-11*time.Hour), now.Add(-10*time.Hour), 12.0)
+		if err := c.writer.SetValue(ctx, c.Address, hmenum.ParameterPartyModeSubmit, code, priority); err != nil {
 			return fmt.Errorf("climate: PARTY_MODE_SUBMIT clear: %w", err)
 		}
 	default:
@@ -1700,11 +1765,6 @@ func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyc
 	case KindSimpleRF:
 		// No activity source.
 	}
-	applyTemperatureOffset := func(next any) {
-		if next != nil {
-			c.OnTemperatureOffset(next)
-		}
-	}
 	// TEMPERATURE_OFFSET is a MASTER-paramset DP on HmIP/RF thermostats —
 	// channel-configuration item, not runtime state. It sits on the climate
 	// channel's MASTER for HmIP thermostats but on the device-root MASTER for
@@ -1713,7 +1773,23 @@ func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyc
 	// payload dropped it. The OPTIMUM_START_STOP and
 	// MIN_MAX_VALUE_NOT_RELEVANT_FOR_MANU_MODE bindings below stay on the
 	// climate channel, where the HmIP family that carries them advertises them.
+	//
+	// On the classic RF family (HM-CC-RT-DN, HM-TC-IT-WM-W-EU) the
+	// device-root TEMPERATURE_OFFSET is an ENUM, not a FLOAT — its wire
+	// value is a 0-based VALUE_LIST index, exactly like HEATING_COOLING
+	// above. Resolving it through EnumWireLabel keeps the reported offset
+	// as the "-3.5K".."3.5K" label instead of the raw index string.
 	if dp := resolveConfigParam(ch, hmenum.ParameterTemperatureOffset); dp != nil {
+		applyTemperatureOffset := func(next any) {
+			if next == nil {
+				return
+			}
+			if label, ok := custom.EnumWireLabel(dp, next); ok {
+				c.OnTemperatureOffset(label)
+				return
+			}
+			c.OnTemperatureOffset(next)
+		}
 		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyTemperatureOffset(next) }))
 		replayCurrentValue(dp, applyTemperatureOffset)
 	}
@@ -2235,16 +2311,6 @@ func profileWeekIndex(p Profile) (int32, bool) {
 		return 0, false
 	}
 	return 0, false
-}
-
-func clamp(v, lo, hi float64) float64 {
-	if lo != 0 && v < lo {
-		return lo
-	}
-	if hi != 0 && v > hi {
-		return hi
-	}
-	return v
 }
 
 // IsStateChange reports whether the proposed climate change would alter the

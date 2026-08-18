@@ -266,4 +266,45 @@ describe("SystemUpdatePanel poll-loop teardown", () => {
       setTimeoutSpy.mockRestore();
     }
   });
+
+  it("does not arm a poll from onMount's own load() if unmounted before it resolves", async () => {
+    // Distinct from the tick-teardown case above: here the component is
+    // unmounted while still inside onMount's *initial* `await load()`, i.e.
+    // before ensurePoll() has ever run. stopPoll() (onDestroy) has nothing
+    // to cancel yet — no pollTimer exists — so the only thing standing
+    // between "component is gone" and "a 5s poll gets armed anyway" is
+    // ensurePoll() itself refusing to start once pollStopped is set.
+    const scheduled: Array<() => void> = [];
+    const realSetTimeout = globalThis.setTimeout;
+    const setTimeoutSpy = vi
+      .spyOn(globalThis, "setTimeout")
+      .mockImplementation(((fn: () => void, delay?: number, ...rest: unknown[]) => {
+        if (delay === 5000) {
+          scheduled.push(fn);
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        }
+        return realSetTimeout(fn, delay, ...rest);
+      }) as unknown as typeof setTimeout);
+
+    try {
+      let resolveInitialLoad: (v: unknown) => void = () => {};
+      const initialLoad = new Promise((resolve) => {
+        resolveInitialLoad = resolve;
+      });
+      mockGetSystemUpdate.mockImplementationOnce(() => initialLoad);
+
+      const { unmount } = render(SystemUpdatePanel);
+      // onMount is running and suspended on its own `await load()`.
+      unmount();
+
+      // The seed fetch now settles with an install in progress — the
+      // condition that would normally trigger ensurePoll().
+      resolveInitialLoad([{ ...SINGLE_CENTRAL[0], in_progress: true }]);
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+
+      expect(scheduled).toHaveLength(0);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
 });

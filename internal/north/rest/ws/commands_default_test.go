@@ -423,6 +423,37 @@ func TestDevicesGetReportsNotFoundOnNilDevice(t *testing.T) {
 	}
 }
 
+// TestDevicesGetClassifiesNotFoundQueryErrorAsNotFound verifies that a
+// DeviceQuery.GetDevice failure phrased as "... not found ..." — the
+// shape every not-found lookup in this package uses — surfaces as
+// CommandErrorNotFound rather than CommandErrorInternal, so a client can
+// tell a bad address apart from a genuine daemon fault.
+func TestDevicesGetClassifiesNotFoundQueryErrorAsNotFound(t *testing.T) {
+	q := &stubDeviceQuery{deviceErr: errors.New("ws: device not found: 0001GHOST")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Devices: q})
+	args, _ := json.Marshal(map[string]any{"address": "0001GHOST"})
+	res := r.Dispatch(context.Background(), "devices.get", args)
+	if res.Error == nil || res.Error.Code != CommandErrorNotFound {
+		t.Fatalf("got %+v want not_found", res.Error)
+	}
+}
+
+// TestDevicesGetClassifiesOtherQueryErrorAsInternal verifies a
+// DeviceQuery.GetDevice failure unrelated to a missing resource (a
+// transport or database fault) still surfaces as CommandErrorInternal —
+// the not-found reclassification must not swallow real daemon faults.
+func TestDevicesGetClassifiesOtherQueryErrorAsInternal(t *testing.T) {
+	q := &stubDeviceQuery{deviceErr: errors.New("store: query timed out")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Devices: q})
+	args, _ := json.Marshal(map[string]any{"address": "0001ABCD"})
+	res := r.Dispatch(context.Background(), "devices.get", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("got %+v want internal_error", res.Error)
+	}
+}
+
 func TestDevicesGetRequiresAddress(t *testing.T) {
 	q := &stubDeviceQuery{}
 	r := NewRouter()
@@ -778,6 +809,51 @@ func TestProgramsExecuteErrorMapsToInternal(t *testing.T) {
 	}
 }
 
+// TestProgramsExecuteNotFoundMapsToNotFound verifies that a
+// HubQuery.ExecuteProgram failure phrased as "program not found"
+// surfaces as CommandErrorNotFound, distinguishing a bad program id
+// from the genuine daemon fault TestProgramsExecuteErrorMapsToInternal
+// covers.
+func TestProgramsExecuteNotFoundMapsToNotFound(t *testing.T) {
+	hub := &stubHub{executeErr: errors.New("hub: program not found")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P999"})
+	res := r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error == nil || res.Error.Code != CommandErrorNotFound {
+		t.Fatalf("expected not_found, got %+v", res.Error)
+	}
+}
+
+// TestProgramsDeleteNotFoundMapsToNotFound mirrors
+// TestProgramsExecuteNotFoundMapsToNotFound for programs.delete.
+func TestProgramsDeleteNotFoundMapsToNotFound(t *testing.T) {
+	hub := &stubHub{deleteProgramErr: errors.New("hub: program not found")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P999"})
+	res := r.Dispatch(adminCtx(), "programs.delete", args)
+	if res.Error == nil || res.Error.Code != CommandErrorNotFound {
+		t.Fatalf("expected not_found, got %+v", res.Error)
+	}
+}
+
+// TestSysvarsSetNotFoundMapsToNotFound mirrors
+// TestProgramsExecuteNotFoundMapsToNotFound for sysvars.set.
+func TestSysvarsSetNotFoundMapsToNotFound(t *testing.T) {
+	hub := &stubHub{setErr: errors.New("ws: sysvar not found")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"name": "DoesNotExist", "value": true})
+	res := r.Dispatch(opCtx(), "sysvars.set", args)
+	if res.Error == nil || res.Error.Code != CommandErrorNotFound {
+		t.Fatalf("expected not_found, got %+v", res.Error)
+	}
+}
+
 func TestProgramsDeleteRequiresID(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
@@ -1037,6 +1113,39 @@ func TestInstallModeFullCycle(t *testing.T) {
 	}
 }
 
+// TestInstallModeEnableDisableAcceptCompositeInterfaceID verifies
+// install_mode.enable/disable accept the composite `<central>-<interface>`
+// wire id every other WS surface publishes for interface_id (devices.list,
+// ccu.get_signal_quality, the hub.*.connectivity.* broadcast topic), not
+// just the bare interface type the install-mode registry is keyed by.
+func TestInstallModeEnableDisableAcceptCompositeInterfaceID(t *testing.T) {
+	hub := &stubHub{installStatus: map[string]any{"HmIP-RF": map[string]any{"enabled": false}}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	enableArgs, _ := json.Marshal(map[string]any{"interface_id": "ccu-01-HmIP-RF", "duration_seconds": 60})
+	res := r.Dispatch(opCtx(), "install_mode.enable", enableArgs)
+	if res.Error != nil {
+		t.Fatalf("enable err: %+v", res.Error)
+	}
+	if hub.installEnabledID != "HmIP-RF" {
+		t.Fatalf("enable saw ifaceID=%q, want the bare form HmIP-RF", hub.installEnabledID)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok || data["interface_id"] != "ccu-01-HmIP-RF" {
+		t.Fatalf("result interface_id=%v, want the caller's original composite id echoed back", res.Data)
+	}
+
+	disableArgs, _ := json.Marshal(map[string]any{"interface_id": "ccu-01-BidCos-Wired"})
+	res = r.Dispatch(opCtx(), "install_mode.disable", disableArgs)
+	if res.Error != nil {
+		t.Fatalf("disable err: %+v", res.Error)
+	}
+	if hub.installDisabledID != "BidCos-Wired" {
+		t.Fatalf("disable saw ifaceID=%q, want the bare form BidCos-Wired", hub.installDisabledID)
+	}
+}
+
 // TestInstallModeSearchDispatchesToHubQueryAndReturnsFound verifies
 // "install_mode.search" forwards interface_id/central to
 // HubQuery.SearchWiredDevices and echoes the found count back in the
@@ -1082,6 +1191,27 @@ func TestInstallModeSearchRequiresInterfaceID(t *testing.T) {
 	}
 	if len(hub.wiredSearches) != 0 {
 		t.Fatalf("HubQuery.SearchWiredDevices must not be called without interface_id, got %v", hub.wiredSearches)
+	}
+}
+
+// TestInstallModeSearchAcceptsCentralNameLikeSiblingCommands verifies
+// install_mode.search resolves its target CCU via `central_name`, the
+// key every sibling install_mode.* command uses, and not just the
+// deprecated `central` alias.
+func TestInstallModeSearchAcceptsCentralNameLikeSiblingCommands(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{wiredFound: 2}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"interface_id": "BidCos-Wired", "central_name": "ccu-02"})
+	res := r.Dispatch(opCtx(), "install_mode.search", args)
+	if res.Error != nil {
+		t.Fatalf("install_mode.search: %+v", res.Error)
+	}
+	got, ok := hub.wiredSearches["BidCos-Wired"]
+	if !ok || got != "ccu-02" {
+		t.Fatalf("wiredSearches[BidCos-Wired]=%q ok=%v, want (ccu-02, true)", got, ok)
 	}
 }
 

@@ -198,13 +198,17 @@ func deviceAddressOf(channelAddress string) string {
 	return channelAddress
 }
 
-// counterReading is one bucket's (first, last) pair for a single cumulative
-// counter series (one channel, one parameter), tagged with the bucket start
-// so the readings can be ordered before the range total is computed.
+// counterReading is one bucket's (first, last, max) triple for a single
+// cumulative counter series (one channel, one parameter), tagged with the
+// bucket start so the readings can be ordered before the range total is
+// computed. max carries the bucket's peak reading — the only column that
+// retains a reset's pre-reset high point once the bucket is rolled up to
+// (first, last).
 type counterReading struct {
 	ts    int64
 	first float64
 	last  float64
+	max   float64
 }
 
 // FoldEnergyRows folds per-channel per-bucket rollup rows into the
@@ -265,17 +269,17 @@ func FoldEnergyRows(q EnergyQuery, rows []EnergyRawRow, nameOf DeviceNamer) Ener
 				b.PeakPowerW = row.Max
 			}
 		case energyParameterEnergyCounter:
-			delta, reset := energyDelta(row.First, row.Last)
+			delta, reset := energyDelta(row.First, row.Last, row.Max)
 			b.ConsumedWh += delta
 			b.Reset = b.Reset || reset
 			sk := energySeriesKey{dev, row.ChannelAddress, row.Parameter}
-			series[sk] = append(series[sk], counterReading{row.BucketTS.UnixMilli(), row.First, row.Last})
+			series[sk] = append(series[sk], counterReading{row.BucketTS.UnixMilli(), row.First, row.Last, row.Max})
 		case energyParameterEnergyCounterFeedIn:
-			delta, reset := energyDelta(row.First, row.Last)
+			delta, reset := energyDelta(row.First, row.Last, row.Max)
 			b.FeedInWh += delta
 			b.Reset = b.Reset || reset
 			sk := energySeriesKey{dev, row.ChannelAddress, row.Parameter}
-			series[sk] = append(series[sk], counterReading{row.BucketTS.UnixMilli(), row.First, row.Last})
+			series[sk] = append(series[sk], counterReading{row.BucketTS.UnixMilli(), row.First, row.Last, row.Max})
 		}
 	}
 
@@ -368,44 +372,55 @@ func deviceCounterTotals(series map[energySeriesKey][]counterReading) map[string
 }
 
 // energyDelta applies the counter-reset rule to one cumulative-counter
-// bucket: the normal case is last-first; when the meter reset within the
-// bucket (last < first), the delta is last (energy accumulated since the
-// reset) and reset is true. Never returns a negative delta.
-func energyDelta(first, last float64) (delta float64, reset bool) {
+// bucket: the normal case is last-first. When the meter reset within the
+// bucket (last < first), last alone would drop whatever the counter rose
+// to between the reset and the reset itself — max is the only rollup
+// column that retains that pre-reset peak, so the recovered delta is
+// (max-first), the rise up to the reset, plus last, the rise since it.
+// reset is true. Never returns a negative delta: max is the bucket's
+// peak reading, so it is always >= first, the peak's own contribution.
+func energyDelta(first, last, maxVal float64) (delta float64, reset bool) {
 	if last < first {
-		return last, true
+		rise := maxVal - first
+		if rise < 0 {
+			rise = 0
+		}
+		return rise + last, true
 	}
 	return last - first, false
 }
 
 // counterRangeTotal returns the total consumption of one cumulative counter
 // over its buckets, counting inter-bucket rise and segmenting on resets.
-// Sorted by bucket time, the per-bucket (first, last) readings flatten to
-// the ordered sequence first0, last0, first1, last1, …; each adjacent step
-// contributes its rise (b - a) or, when the counter went backwards (a
-// reset to 0), the post-reset reading b. The very first reading is the
-// baseline and is not itself counted. This recovers the consumption a plain
-// Σ(last - first) per bucket drops in the gap between adjacent buckets.
+// Sorted by bucket time, each bucket contributes two components: its own
+// reset-aware delta ([energyDelta], which — unlike a per-bucket chart
+// value — has the bucket's max available to recover a reset's pre-reset
+// peak) plus, for every bucket after the first, the inter-bucket rise (or
+// post-reset reading) between the previous bucket's last reading and this
+// bucket's first. This recovers the consumption a plain Σ(last - first)
+// per bucket drops in the gap between adjacent buckets.
 func counterRangeTotal(readings []counterReading) float64 {
 	if len(readings) == 0 {
 		return 0
 	}
 	sort.Slice(readings, func(i, j int) bool { return readings[i].ts < readings[j].ts })
-	seq := make([]float64, 0, len(readings)*2)
-	for _, r := range readings {
-		seq = append(seq, r.first, r.last)
-	}
 	var total float64
-	for i := 1; i < len(seq); i++ {
-		total += counterSegment(seq[i-1], seq[i])
+	for i, r := range readings {
+		delta, _ := energyDelta(r.first, r.last, r.max)
+		total += delta
+		if i > 0 {
+			total += counterSegment(readings[i-1].last, r.first)
+		}
 	}
 	return total
 }
 
-// counterSegment is one step of a cumulative-counter reading sequence: the
-// rise b - a, or — when the counter decreased (a reset to 0) — the
-// post-reset reading b. Never negative. Mirrors [energyDelta]'s per-bucket
-// rule at the inter-reading granularity.
+// counterSegment is the inter-bucket step between one bucket's last
+// reading and the next bucket's first: the rise b - a, or — when the
+// counter decreased (a reset between the two buckets) — the post-reset
+// reading b. Never negative. No bucket max is available at this
+// granularity — the two buckets do not share one — unlike the within-
+// bucket case [energyDelta] handles.
 func counterSegment(a, b float64) float64 {
 	if b >= a {
 		return b - a

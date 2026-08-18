@@ -29,7 +29,7 @@ func TestRunCUxDActivationRetriesUntilIngestSucceeds(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	runCUxDActivation(context.Background(), testCUxDBackoff(),
+	ingested := runCUxDActivation(context.Background(), testCUxDBackoff(),
 		func(context.Context) error {
 			calls++
 			if calls < 3 {
@@ -41,6 +41,9 @@ func TestRunCUxDActivationRetriesUntilIngestSucceeds(t *testing.T) {
 
 	if calls != 3 {
 		t.Fatalf("activate calls = %d, want 3 (two failures then success)", calls)
+	}
+	if !ingested {
+		t.Fatal("runCUxDActivation reported ingested=false after the retry succeeded")
 	}
 }
 
@@ -63,7 +66,7 @@ func TestRunCUxDActivationExhaustsRetriesAndDisconnectsClient(t *testing.T) {
 
 	backoff := testCUxDBackoff()
 	calls := 0
-	runCUxDActivation(context.Background(), backoff,
+	ingested := runCUxDActivation(context.Background(), backoff,
 		func(context.Context) error {
 			calls++
 			return errors.New("list devices: connection refused")
@@ -76,6 +79,13 @@ func TestRunCUxDActivationExhaustsRetriesAndDisconnectsClient(t *testing.T) {
 	if got := ic.ClientState(); got != hmenum.ClientStateDisconnected {
 		t.Fatalf("client state = %s, want %s", got, hmenum.ClientStateDisconnected)
 	}
+	// This is the readiness-tally defect's regression guard: a CUxD interface
+	// that exhausts every retry must report ingested=false, the same as its
+	// XML-RPC sibling, so wireInterface does not count it toward "interfaces
+	// loaded" over a central that is actually still partly dark.
+	if ingested {
+		t.Fatal("runCUxDActivation reported ingested=true for a permanently failing ingest")
+	}
 }
 
 // Teardown during the retry window must abort the wait immediately rather
@@ -85,10 +95,11 @@ func TestRunCUxDActivationStopsOnContextCancel(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	calls := 0
+	var ingested bool
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runCUxDActivation(ctx, []time.Duration{time.Hour, time.Hour},
+		ingested = runCUxDActivation(ctx, []time.Duration{time.Hour, time.Hour},
 			func(context.Context) error {
 				calls++
 				cancel()
@@ -104,5 +115,8 @@ func TestRunCUxDActivationStopsOnContextCancel(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("activate calls = %d, want 1", calls)
+	}
+	if ingested {
+		t.Fatal("ingested=true after context cancel")
 	}
 }

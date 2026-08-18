@@ -302,13 +302,12 @@ bridge onto a new fabric never leaves the admin-gated
 carries `discriminator` and `duration_seconds`, which is what a client
 needs to show that a window is open and when it closes.
 
-**Known divergence:** Matter broadcast frames currently set `type` to
-the *trailing segment* after `matter.` (e.g. `type: "exposable_changed"`
-on topic `matter.exposable_changed`), while core broadcasts use the
-*full* event name as `type` (e.g. `type: "datapoint.value_changed"`).
-The `wsapi.json` `name` field reflects the topic in both cases. This
-asymmetry is tracked for future alignment; clients should not rely on
-either convention for cross-namespace generic dispatch.
+Matter broadcast frames set `type` to the full dotted broadcast name —
+the same convention core broadcasts use (e.g. `type:
+"matter.exposable_changed"` on topic `matter.exposable_changed`,
+`type: "datapoint.value_changed"` on topic
+`device.{address}.channels.{channel}.data_points.{parameter}`). The
+`wsapi.json` `name` field reflects the topic in both cases.
 
 ## Reserved namespaces
 

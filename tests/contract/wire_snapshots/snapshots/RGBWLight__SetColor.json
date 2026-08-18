@@ -3,7 +3,7 @@
   "setter": "SetColor",
   "inputs": [
     {
-      "label": "hue=0,sat=1.0",
+      "label": "hue=0,sat=100",
       "calls": [
         {
           "method": "PutParamset",
@@ -17,7 +17,7 @@
       ]
     },
     {
-      "label": "hue=180,sat=0.7",
+      "label": "hue=180,sat=70",
       "calls": [
         {
           "method": "PutParamset",

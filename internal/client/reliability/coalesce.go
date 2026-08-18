@@ -203,10 +203,19 @@ func (c *Coalescer) sharedContext(ctx context.Context, call *coalescedCall) cont
 
 // run executes the shared call and publishes its outcome to everyone
 // waiting on it.
+//
+// The map entry is dropped BEFORE the call settles, not after: settle
+// closes call.done and every parked [Coalescer.await] returns the moment
+// that happens, so a caller can observe its own Do() returning while the
+// map still (briefly) carries the now-finished entry if the purge ran
+// second. That window makes [Coalescer.InFlight] and [Coalescer.Stats]
+// report a call in flight when none is, and lets a brand-new caller for
+// the same key join the already-settled call instead of starting a fresh
+// one. Purging first closes the window by construction: the entry is gone
+// before anyone can be woken to look for it.
 func (c *Coalescer) run(ctx context.Context, key string, call *coalescedCall, fn func(ctx context.Context) (any, error)) {
 	defer call.cancel()
 	v, err := invokeCoalesced(ctx, fn)
-	call.settle(v, err)
 
 	c.mu.Lock()
 	// Only drop the entry while it is still this call: [Coalescer.Clear]
@@ -218,6 +227,8 @@ func (c *Coalescer) run(ctx context.Context, key string, call *coalescedCall, fn
 		c.failed++
 	}
 	c.mu.Unlock()
+
+	call.settle(v, err)
 }
 
 // invokeCoalesced runs fn and turns a panicking call into an error. The

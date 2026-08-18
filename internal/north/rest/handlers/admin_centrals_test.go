@@ -224,7 +224,7 @@ func TestCreateCentral_MissingHost_Returns400(t *testing.T) {
 func TestUpdateCentral_Happy(t *testing.T) {
 	t.Parallel()
 	svc := newFakeCentralSvc()
-	body := strings.NewReader(`{"Host":"192.168.1.99","Enabled":false}`)
+	body := strings.NewReader(`{"Host":"192.168.1.99","Enabled":false,"Interfaces":[]}`)
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
@@ -250,6 +250,54 @@ func TestUpdateCentral_MissingHost_Returns400(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+// TestUpdateCentral_MissingEnabled_Returns400AndDoesNotDisable pins the
+// full-replace hazard: `enabled` has no `omitempty`, so a body that omits it
+// would otherwise decode to false and silently take a working central
+// offline. The request must be rejected instead, and the stored row must be
+// untouched.
+func TestUpdateCentral_MissingEnabled_Returns400AndDoesNotDisable(t *testing.T) {
+	t.Parallel()
+	svc := newFakeCentralSvc() // "home" starts Enabled: true
+	body := strings.NewReader(`{"Host":"192.168.1.10","Interfaces":[]}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !svc.centrals["home"].Enabled {
+		t.Error("a rejected update must not disable the central")
+	}
+}
+
+// TestUpdateCentral_MissingInterfaces_Returns400AndKeepsThem pins the same
+// hazard for `interfaces`: a body that omits the key would otherwise decode
+// to nil and drop every configured interface on an unconditional upsert.
+func TestUpdateCentral_MissingInterfaces_Returns400AndKeepsThem(t *testing.T) {
+	t.Parallel()
+	svc := newFakeCentralSvc()
+	svc.centrals["home"] = sqlite.CentralRow{
+		Name:       "home",
+		Host:       "192.168.1.10",
+		Enabled:    true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}},
+	}
+	body := strings.NewReader(`{"Host":"192.168.1.10","Enabled":true}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(svc.centrals["home"].Interfaces) != 1 {
+		t.Errorf("a rejected update must not drop configured interfaces, got %+v", svc.centrals["home"].Interfaces)
 	}
 }
 
@@ -348,7 +396,7 @@ func TestUpdateCentral_MaskedPassword_RestoresStoredCredential(t *testing.T) {
 	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
 		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
 	}}
-	body := strings.NewReader(`{"Host":"192.168.1.99","password_plain":"***"}`)
+	body := strings.NewReader(`{"Host":"192.168.1.99","password_plain":"***","Enabled":true,"Interfaces":[]}`)
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
@@ -369,7 +417,7 @@ func TestUpdateCentral_RealPassword_PersistsAsIs(t *testing.T) {
 	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
 		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
 	}}
-	body := strings.NewReader(`{"Host":"192.168.1.99","password_plain":"newpass"}`)
+	body := strings.NewReader(`{"Host":"192.168.1.99","password_plain":"newpass","Enabled":true,"Interfaces":[]}`)
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
@@ -393,7 +441,7 @@ func TestUpdateCentral_AbsentPasswordKey_KeepsStoredCredential(t *testing.T) {
 	// returns it in the clear, so a script that only flips `enabled` omits
 	// it. Put is an unconditional upsert — the omission must not wipe the
 	// CCU credential.
-	body := strings.NewReader(`{"Host":"192.168.1.10","Enabled":true}`)
+	body := strings.NewReader(`{"Host":"192.168.1.10","Enabled":true,"Interfaces":[]}`)
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
@@ -415,7 +463,7 @@ func TestUpdateCentral_NullPassword_KeepsStoredCredential(t *testing.T) {
 	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
 		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
 	}}
-	body := strings.NewReader(`{"Host":"192.168.1.10","password_plain":null}`)
+	body := strings.NewReader(`{"Host":"192.168.1.10","password_plain":null,"Enabled":true,"Interfaces":[]}`)
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
@@ -436,7 +484,7 @@ func TestUpdateCentral_ExplicitEmptyPassword_ClearsStoredCredential(t *testing.T
 	}}
 	// An operator switching the central to password_env sends the key
 	// explicitly empty; that is the one payload that clears it.
-	body := strings.NewReader(`{"Host":"192.168.1.10","password_plain":"","password_env":"CCU_PW"}`)
+	body := strings.NewReader(`{"Host":"192.168.1.10","password_plain":"","password_env":"CCU_PW","Enabled":true,"Interfaces":[]}`)
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
@@ -515,7 +563,7 @@ func TestDeleteCentral_NotFound_Returns404(t *testing.T) {
 // would tell them to retry; a 400 tells them what to change.
 func TestCentralWriteRefusedForCleartextPasswordReturns400(t *testing.T) {
 	t.Parallel()
-	body := `{"Name":"office","Host":"10.0.0.5","password_plain":"secret","Enabled":true}`
+	body := `{"Name":"office","Host":"10.0.0.5","password_plain":"secret","Enabled":true,"Interfaces":[]}`
 	tests := []struct {
 		name    string
 		handler func(svc CentralAdminService) http.HandlerFunc

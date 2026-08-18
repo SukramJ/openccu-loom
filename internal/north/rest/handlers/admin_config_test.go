@@ -115,6 +115,46 @@ func TestGetConfigSchema_IncludesMCP(t *testing.T) {
 	}
 }
 
+// TestGetConfigSchema_CCUDataPathsCarryNoFilesystemDefault pins the
+// consumerDefaults contract: loadTranslations/loadEasymode
+// (cmd/openccu-loom/daemon_ccudata.go) use the configured path only when
+// non-empty and otherwise call the embedded loader directly — there is no
+// "./var/ccu_data/..." filesystem fallback for the SPA to advertise as a
+// placeholder. A fabricated path here previously led an operator who typed
+// it verbatim into a permanent load failure on every normal install (the
+// path does not exist), even though labels kept working via the embedded
+// fallback.
+func TestGetConfigSchema_CCUDataPathsCarryNoFilesystemDefault(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config/schema", http.NoBody)
+	w := httptest.NewRecorder()
+	GetConfigSchema().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var schema SchemaResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &schema); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	for _, p := range []string{"ccu_data.translations_path", "ccu_data.easymode_path"} {
+		found := false
+		for _, f := range schema.Fields {
+			if f.Path != p {
+				continue
+			}
+			found = true
+			if f.Default != nil {
+				t.Errorf("%s default = %v, want no placeholder (no filesystem fallback exists)", p, f.Default)
+			}
+		}
+		if !found {
+			t.Errorf("schema fields missing %s", p)
+		}
+	}
+}
+
 // TestAuthSchemeTogglesAreRestartRequired guards that the Basic and Bearer
 // scheme gates are flagged restart-required. Both are wired into the auth
 // middleware once at boot (cmd/openccu-loom/daemon_north.go only passes a

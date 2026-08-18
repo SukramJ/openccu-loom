@@ -16,6 +16,7 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { dpLabel } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { resolveChannel, type ResolvedChannel } from "./resolver";
   import { widgetForResolved } from "./widgets";
 
@@ -132,11 +133,7 @@
     {t("common.loading")}
   </div>
 {:else if error}
-  <div
-    class="rounded-xl border border-[var(--ha-error-color)] bg-[var(--ha-card-background-color)] p-3 text-sm text-[var(--ha-error-color)]"
-  >
-    {error}
-  </div>
+  <ErrorState message={error} onRetry={load} />
 {:else if resolved && Widget}
   <Widget {resolved} {title} {secondary} {onSetSlot} />
 {/if}

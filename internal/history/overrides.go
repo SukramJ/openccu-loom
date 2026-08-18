@@ -130,3 +130,28 @@ func (o *RecordingOverrides) Clear(
 	o.mu.Unlock()
 	return nil
 }
+
+// DeleteCentral drops every override this overlay holds for central from
+// the in-memory map, without touching the backing store. The caller — the
+// central-removal path — deletes the durable rows itself (via
+// [sqlite.RecordingOverrideStore.DeleteForCentral]) and must call this
+// right after, so the two halves stay in sync: [Load] only runs once at
+// wire time, so a central removed and re-adopted under the same name would
+// otherwise keep serving stale "never record" verdicts from rows the store
+// no longer has, until the next daemon restart. Returns the number of keys
+// removed, for logging. Safe on a nil receiver.
+func (o *RecordingOverrides) DeleteCentral(central string) int {
+	if o == nil {
+		return 0
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	n := 0
+	for k := range o.m {
+		if k.central == central {
+			delete(o.m, k)
+			n++
+		}
+	}
+	return n
+}

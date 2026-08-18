@@ -299,7 +299,7 @@ func (c *CircuitBreaker) DoWithPriority(ctx context.Context, operationID string,
 
 // record updates breaker state based on the outcome of one call. ctx is
 // the caller's context, which is what tells a failure the CCU produced
-// apart from one the caller produced — see [isWireFailure].
+// apart from one the caller produced — see [IsWireFailure].
 func (c *CircuitBreaker) record(ctx context.Context, err error) {
 	c.mu.Lock()
 	from := c.state
@@ -312,7 +312,7 @@ func (c *CircuitBreaker) record(ctx context.Context, err error) {
 				c.halfOpenOK = 0
 			}
 		}
-	} else if isWireFailure(ctx, err) {
+	} else if IsWireFailure(ctx, err) {
 		c.halfOpenOK = 0
 		c.consecutiveErr++
 		if c.state == hmenum.CircuitStateHalfOpen {
@@ -340,7 +340,7 @@ func (c *CircuitBreaker) RecordFailure() {
 	c.record(context.Background(), errors.New("recorded failure"))
 }
 
-// isWireFailure reports whether err is evidence about the channel to the
+// IsWireFailure reports whether err is evidence about the channel to the
 // CCU, which is the only thing the breaker is allowed to react to. ctx is
 // the context the caller handed to [CircuitBreaker.Do].
 //
@@ -364,7 +364,7 @@ func (c *CircuitBreaker) RecordFailure() {
 // A deadline the transport sets on its own derived context is *not* in
 // that set: the caller's context is still live, so a CCU that stops
 // answering keeps tripping the breaker as it must.
-func isWireFailure(ctx context.Context, err error) bool {
+func IsWireFailure(ctx context.Context, err error) bool {
 	switch {
 	case err == nil:
 		return false

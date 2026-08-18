@@ -610,6 +610,50 @@ func TestSensorAppliesMultiplierTemplate(t *testing.T) {
 	}
 }
 
+// TestSensorAppliesRegistryMultiplierWithoutAChannelReader verifies that
+// a LEVEL sensor whose CCU descriptor carries no UNIT (so
+// [channelMultiplierReader.ParameterMultiplier] has no unit to scale
+// from — modeled here with a nil ev.Channel, which cannot implement the
+// interface at all) still gets a * 100 value_template from the HA
+// registry's per-entity Multiplier override (see the LEVEL rules in
+// entity_descriptions_generated.go, e.g. HmIP-eTRV/-HEATING/-FALMOT-C12).
+// Without the override an HmIP-eTRV valve at 42 % open published
+// `{"value":0.42}` and Home Assistant showed "0.42 %" instead of "42 %".
+func TestSensorAppliesRegistryMultiplierWithoutAChannelReader(t *testing.T) {
+	t.Parallel()
+
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	ev := Event{
+		Interface:     "HmIP-RF",
+		DeviceAddress: "0001ETRV",
+		ChannelNo:     1,
+		Parameter:     "LEVEL",
+		Model:         "HmIP-eTRV-2",
+		Category:      hmenum.DataPointCategorySensor,
+		Channel:       nil,
+	}
+
+	comp, _, _, buf, ok := db.Build(ev)
+	if !ok {
+		t.Fatal("Build returned ok=false for LEVEL")
+	}
+	if comp != string(HAComponentSensor) {
+		t.Fatalf("component=%q want %q", comp, HAComponentSensor)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(buf, &payload); err != nil {
+		t.Fatalf("payload JSON: %v", err)
+	}
+	vt, ok := payload["value_template"].(string)
+	if !ok || vt == "" {
+		t.Fatalf("value_template missing from sensor payload; payload=%v", payload)
+	}
+	if !strings.Contains(vt, "100") {
+		t.Errorf("value_template=%q does not reference the registry multiplier 100", vt)
+	}
+}
+
 // TestNumberInvertsMultiplierOnCommand verifies that a number parameter whose
 // channel reports a non-trivial multiplier gets:
 // - value_template: "{{ (value | float * N) }}" — scaling for display
@@ -871,6 +915,58 @@ func TestLockValueTemplatePresent(t *testing.T) {
 	}
 	if !strings.Contains(tpl, "value_json.lock_state") {
 		t.Errorf("value_template does not reference value_json.lock_state: %s", tpl)
+	}
+}
+
+// buttonLockStubBuilder extends stubBuilder with NamePostfix so the
+// aggregator's postfix propagation (discovery_aggregate.go's
+// aggregateChannel) reaches the registry's BUTTON_LOCK rule the same
+// way the real lock.Lock custom-DP does.
+type buttonLockStubBuilder struct {
+	stubBuilder
+}
+
+func (*buttonLockStubBuilder) NamePostfix() string { return "BUTTON_LOCK" }
+
+// TestButtonLockAggregateGetsAResolvedName pins that the thermostat
+// child-lock aggregate — the one production case where a translation_key
+// currently pairs with `name: nil` — gets a real name instead of relying
+// on `translation_key`, which HA's MQTT discovery schema drops silently
+// (MQTT-discovered entities carry no translations.json for the key to
+// resolve against). Without this the entity showed up in HA under the
+// bare device name, indistinguishable from the thermostat's own climate
+// entity.
+func TestButtonLockAggregateGetsAResolvedName(t *testing.T) {
+	t.Parallel()
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	ev := Event{
+		Source: &buttonLockStubBuilder{stubBuilder{component: "lock", body: map[string]any{}}},
+		// HasSinglePrimaryCustomDP=true reproduces the `name: nil` body
+		// displayChannelName leaves for a device whose lock aggregate is
+		// its one primary custom DP; production locks reach the same
+		// null through the IgnoreMultipleChannelsForName override
+		// instead (custom/lock.py's naming rule), but both paths hand
+		// the same nil-name body to the fix under test.
+		Channel:       &mockChannelInspector{isPrimary: true, singlePrimary: true},
+		Interface:     "HmIP-RF",
+		DeviceAddress: "0001DLD0",
+		ChannelNo:     1,
+		ChannelType:   "DOOR_LOCK_STATE",
+	}
+	_, _, _, buf, ok := db.Build(ev)
+	if !ok {
+		t.Fatal("Build returned ok=false")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(buf, &payload); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if payload["translation_key"] != "button_lock" {
+		t.Fatalf("translation_key=%v want %q", payload["translation_key"], "button_lock")
+	}
+	name, _ := payload["name"].(string)
+	if name == "" {
+		t.Fatal("name is empty/null: HA has no translations.json for an MQTT-discovered entity's translation_key, so the entity would show up as the bare device name")
 	}
 }
 

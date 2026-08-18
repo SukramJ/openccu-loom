@@ -17,7 +17,8 @@ import (
 // The CCU convention is:
 //
 //	init(callbackURL, interfaceID)   — register this daemon as recipient
-//	init("", interfaceID)            — deregister (URL emptied)
+//	init(callbackURL)                — deregister (interface id omitted,
+//	                                    not emptied — see [Deinit])
 type xmlrpcAnnouncer struct {
 	client *xmlrpc.Client
 }

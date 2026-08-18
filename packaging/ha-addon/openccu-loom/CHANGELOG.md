@@ -1,5 +1,30 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.63.0
+
+The smaller findings behind the 0.62.0 audit fixes. What you will notice:
+
+- **Channel configuration saves again.** Almost every parameter the
+  configuration dialog offered was refused with "parameter hidden".
+- **A configuration entity keeps the value you set** instead of snapping back to
+  what it had at start-up.
+- **Colour changes made at the wall reach Apple Home and Google Home.** Only
+  brightness and on/off used to be reported.
+- **Update entities show an install in progress**, and a valve or dimmer level
+  shows as a percentage rather than a fraction.
+- **The web UI stops throwing away unsaved edits** when you switch language,
+  tick expert mode, or change tab — and it asks first.
+- **Removing a CCU removes its settings with it.** Adding it back under the same
+  name used to bring back the old hidden channels, recording overrides and
+  Matter exposures.
+- **On real CCUs:** alarm system variables report their state, assigning a
+  channel to a system variable works, renaming a device or channel works,
+  suppressed service messages are shown, and programs report when they last ran.
+- Several thermostat, blind, light and display commands sent values the device
+  does not accept — a week program that stayed in manual mode, a temperature
+  clamped below what the device allows, an on-time written to a parameter no
+  device has, display icons that do not exist.
+
 ## 0.62.0
 
 The critical and high findings of a full-codebase audit. What you will notice:

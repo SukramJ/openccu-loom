@@ -208,6 +208,7 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 		registerListRooms(s, d)
 		registerListFunctions(s, d)
 		registerListChannels(s, d)
+		registerGetDeviceSchedule(s, d)
 	}
 	// Hub-aggregate read tools span the configured centrals via the
 	// already-wired HubResolver + CentralLister seams.
@@ -244,6 +245,9 @@ func registerListDevices(s *mcpsdk.Server, d Deps) {
 			return nil, out, nil
 		}
 		want := strings.TrimSpace(in.CentralName)
+		if want != "" && !centralKnown(d, want) {
+			return nil, listDevicesOut{}, errUnknownCentral(d, want)
+		}
 		for _, dev := range d.Devices.Devices() {
 			central := d.Devices.CentralOf(dev.Address)
 			if want != "" && central != want {
@@ -435,6 +439,34 @@ type writeParamsetOut struct {
 	OK bool `json:"ok"`
 }
 
+type openEditSessionIn struct {
+	Address string `json:"address" jsonschema:"the channel address to lock, e.g. 0001D3C99C1234:1"`
+	Key     string `json:"key" jsonschema:"the paramset key to lock: MASTER"`
+}
+
+type openEditSessionOut struct {
+	// Opened is false when another live session already holds the lock;
+	// Token is then empty and the caller must retry once it is released
+	// (Close, or the registry's own TTL) instead of writing.
+	Opened  bool      `json:"opened"`
+	Token   string    `json:"token,omitempty"`
+	Key     string    `json:"key"`
+	Expires time.Time `json:"expires,omitzero"`
+}
+
+type closeEditSessionIn struct {
+	Address   string `json:"address" jsonschema:"the channel address the session was opened for"`
+	Key       string `json:"key" jsonschema:"the paramset key the session was opened for: MASTER"`
+	EditToken string `json:"edit_token" jsonschema:"the token open_edit_session returned"`
+}
+
+type closeEditSessionOut struct {
+	// Closed is false when the key was already unheld or edit_token did
+	// not match its current holder — the lock is not this caller's to
+	// release either way, so nothing was changed.
+	Closed bool `json:"closed"`
+}
+
 type triggerProgramIn struct {
 	CentralName string `json:"central_name" jsonschema:"the CCU that owns the program (required)"`
 	ProgramID   string `json:"program_id" jsonschema:"the CCU program ID (ISE object id)"`
@@ -453,6 +485,10 @@ func registerWriteTools(s *mcpsdk.Server, d Deps) {
 	}
 	if d.Paramsets != nil {
 		registerWriteParamset(s, d)
+	}
+	if d.EditLocks != nil {
+		registerOpenEditSession(s, d)
+		registerCloseEditSession(s, d)
 	}
 	if d.Hubs != nil {
 		registerTriggerProgram(s, d)
@@ -550,7 +586,8 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 			lockKey := "channel:" + address + ":" + string(key)
 			if !d.EditLocks.Verify(lockKey, strings.TrimSpace(in.EditToken)) {
 				return nil, writeParamsetOut{}, fmt.Errorf(
-					"edit lock required for %s write on %s; open an edit session and pass edit_token", key, address)
+					"edit lock required for %s write on %s; open an edit session and pass edit_token", key, address,
+				)
 			}
 		}
 		// The paramset domain this tool writes through records the change
@@ -569,6 +606,69 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 			return nil, writeParamsetOut{}, fmt.Errorf("write paramset: %w", err)
 		}
 		return nil, writeParamsetOut{OK: true}, nil
+	})
+}
+
+// editLockSubject is the fixed identity open_edit_session records on
+// the lock it opens. REST/WS sessions record the caller's authenticated
+// subject; MCP write tools have no per-call human identity of their
+// own (the mount authenticates the transport, not each tool call — see
+// the package doc comment), so every MCP-opened lock is attributed to
+// this constant rather than left blank or fabricated.
+const editLockSubject = "mcp"
+
+// registerOpenEditSession implements `open_edit_session`, the MCP-side
+// counterpart of REST `POST /sessions/edit` and the seam write_paramset's
+// MASTER/LINK gate needs: without a way to mint a token, that gate makes
+// every MASTER write unreachable over MCP even though it never rejects a
+// legitimate one over REST or WS.
+func registerOpenEditSession(s *mcpsdk.Server, d Deps) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name: "open_edit_session",
+		Description: "Acquire the per-channel edit lock a MASTER write_paramset call requires. " +
+			"Returns a token to pass as write_paramset's edit_token, and the deadline the lock " +
+			"expires at if not renewed. Call close_edit_session when done, or let it expire.",
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in openEditSessionIn) (*mcpsdk.CallToolResult, openEditSessionOut, error) {
+		address := strings.TrimSpace(in.Address)
+		if address == "" {
+			return nil, openEditSessionOut{}, errors.New("address is required")
+		}
+		key, ok := parseParamsetKey(in.Key)
+		if !ok || key != hmenum.ParamsetKeyMaster {
+			return nil, openEditSessionOut{}, fmt.Errorf("key must be MASTER, got %q", in.Key)
+		}
+		lockKey := "channel:" + address + ":" + string(key)
+		lock, opened := d.EditLocks.Open(lockKey, editLockSubject)
+		if !opened {
+			return nil, openEditSessionOut{Key: string(key)},
+				fmt.Errorf("edit lock for %s %s is already held by another session; retry once it is released or expires", address, key)
+		}
+		return nil, openEditSessionOut{Opened: true, Token: lock.Token, Key: string(key), Expires: lock.Expires}, nil
+	})
+}
+
+// registerCloseEditSession implements `close_edit_session`, releasing a
+// lock open_edit_session opened. Mirrors REST `DELETE /sessions/edit`.
+func registerCloseEditSession(s *mcpsdk.Server, d Deps) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name:        "close_edit_session",
+		Description: "Release an edit lock opened by open_edit_session, e.g. once a write_paramset MASTER write completes.",
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in closeEditSessionIn) (*mcpsdk.CallToolResult, closeEditSessionOut, error) {
+		address := strings.TrimSpace(in.Address)
+		if address == "" {
+			return nil, closeEditSessionOut{}, errors.New("address is required")
+		}
+		key, ok := parseParamsetKey(in.Key)
+		if !ok || key != hmenum.ParamsetKeyMaster {
+			return nil, closeEditSessionOut{}, fmt.Errorf("key must be MASTER, got %q", in.Key)
+		}
+		token := strings.TrimSpace(in.EditToken)
+		if token == "" {
+			return nil, closeEditSessionOut{}, errors.New("edit_token is required")
+		}
+		lockKey := "channel:" + address + ":" + string(key)
+		closed := d.EditLocks.Close(lockKey, token)
+		return nil, closeEditSessionOut{Closed: closed}, nil
 	})
 }
 

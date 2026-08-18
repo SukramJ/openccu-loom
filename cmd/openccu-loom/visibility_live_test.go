@@ -140,6 +140,49 @@ func TestApplyVisibilityUnIgnore_WithPatterns_ReturnsOne(t *testing.T) {
 	}
 }
 
+// TestApplyVisibilityUnIgnore_ReadFailureAfterSuccess_KeepsPreviousPatterns
+// is the regression guard for a transient per-central read failure wiping
+// every already-applied un-ignore pattern: a prior successful apply loads
+// "ACTIVE" into the shared registry, then the store is closed to force the
+// next apply's read to fail. Before the fix, a read failure was treated as
+// "this central has no patterns" and the (now empty) union was still loaded
+// into the registry unconditionally, un-applying every pattern that is in
+// fact still persisted. The fix aborts the whole apply on any read failure
+// and keeps the registry's previous contents.
+func TestApplyVisibilityUnIgnore_ReadFailureAfterSuccess_KeepsPreviousPatterns(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}}
+	db := openMigratedTestDB(t, "vis_apply_read_failure.db")
+	store := sqlitestore.NewVisibilityUnIgnoreStore(db)
+	visReg := visibility.NewRegistry()
+	reg := buildTestRegistry(t, "ccu-01")
+	logger := slog.New(slog.DiscardHandler)
+
+	ctx := context.Background()
+	if err := store.Replace(ctx, "ccu-01", []string{"ACTIVE"}, "test"); err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+	if n := applyVisibilityUnIgnore(ctx, cfg, reg, store, visReg, logger); n != 1 {
+		t.Fatalf("initial apply: expected 1 central with patterns, got %d", n)
+	}
+	if entries := visReg.Parameter().UnIgnoreEntries(); len(entries) == 0 {
+		t.Fatalf("initial apply: expected the registry to carry the un-ignore pattern, got none")
+	}
+
+	// Force every subsequent Patterns() read to fail.
+	if err := db.Close(); err != nil {
+		t.Fatalf("db.Close: %v", err)
+	}
+
+	applyVisibilityUnIgnore(ctx, cfg, reg, store, visReg, logger)
+
+	entries := visReg.Parameter().UnIgnoreEntries()
+	if len(entries) == 0 {
+		t.Error("a read failure wiped the registry's previously-applied un-ignore patterns; want them kept")
+	}
+}
+
 func TestApplyVisibilityUnIgnore_Seed_FromConfigOnFirstStart(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()

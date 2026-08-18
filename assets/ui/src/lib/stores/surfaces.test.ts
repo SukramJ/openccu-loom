@@ -184,6 +184,30 @@ describe("surfacesStore editing", () => {
     expect(surfacesStore.visible("nav.matter")).toBe(false);
   });
 
+  it("keeps the operator on the profile they are editing across save/setEmbedded/setEmbeddedScope", async () => {
+    // Live profile is standalone throughout — every response below still
+    // reports profile: "standalone". The operator switched the editor to
+    // "embedded" to prepare that layout; none of the three round-trips
+    // may snap the editor back to the live profile underneath them.
+    surfacesStore.setEditing("embedded");
+    expect(surfacesStore.editing).toBe("embedded");
+
+    putUISurfaces.mockResolvedValue(response({ profile: "standalone" }));
+    surfacesStore.set("nav.matter", true, "embedded");
+    await surfacesStore.save();
+    expect(surfacesStore.editing).toBe("embedded");
+
+    putUISurfaces.mockResolvedValue(response({ profile: "standalone", embedded: true }));
+    await surfacesStore.setEmbedded(true);
+    expect(surfacesStore.editing).toBe("embedded");
+
+    putUISurfaces.mockResolvedValue(
+      response({ profile: "standalone", embedded: true, embedded_scope: "always" }),
+    );
+    await surfacesStore.setEmbeddedScope("always");
+    expect(surfacesStore.editing).toBe("embedded");
+  });
+
   it("sends the working copy on save and adopts the daemon's answer", async () => {
     putUISurfaces.mockResolvedValue(
       response({ profiles: { standalone: { "nav.alarm": "hidden" } } }),

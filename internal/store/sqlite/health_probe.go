@@ -26,16 +26,33 @@ const DefaultProbeInterval = 30 * time.Second
 // healthy budget mirrors the §13.2 spec ("response p99 under
 // 100 ms"); 500 ms is the established degraded boundary used by the
 // daemon's REST-side budget warnings.
-const (
+//
+// Declared as vars (not consts) so a test can shrink them temporarily and
+// force the elevated/slow branches deterministically, without depending on
+// a genuinely slow database round-trip.
+var (
 	healthyLatencyBudget  = 100 * time.Millisecond
 	degradedLatencyBudget = 500 * time.Millisecond
 )
+
+// sqliteBusyTimeout mirrors the `busy_timeout` pragma every pooled
+// connection carries (dsn.go's connectionPragmas, applyPragmas in
+// store.go): SQLite itself will hold a writer-blocked query open for up to
+// this long before returning SQLITE_BUSY, so the probe's own deadline below
+// must clear it — otherwise a lock wait the database is configured to
+// tolerate gets reported as a probe failure before SQLite ever gives up on
+// it.
+const sqliteBusyTimeout = 5 * time.Second
 
 // HealthRecorder is the slim contract the probe needs from the
 // [*health.Tracker]. Defined here so tests can drop in a fake
 // without pulling the full tracker.
 type HealthRecorder interface {
 	Record(name string, sample health.Sample)
+	// RecordQuality reports a soft, non-fatal observation: the resulting
+	// status is capped at DEGRADED and can never escalate to UNHEALTHY. The
+	// probe uses it for elevated latency, which is not a database failure.
+	RecordQuality(name, note string)
 }
 
 // StartHealthProbe spawns a goroutine that pings db on a fixed cadence
@@ -78,10 +95,11 @@ func StartHealthProbe(ctx context.Context, db *sql.DB, tracker HealthRecorder, i
 
 // probeOnce runs a single `SELECT 1` round-trip and converts the
 // outcome to a [health.Sample]. The query itself is cheap; the
-// per-conn budget is bounded so a stuck DB cannot block the probe
-// goroutine indefinitely.
+// per-conn budget is bounded — above [sqliteBusyTimeout] — so a stuck
+// DB cannot block the probe goroutine indefinitely while a lock wait
+// SQLite itself would still resolve is not misreported as a failure.
 func probeOnce(ctx context.Context, db *sql.DB, tracker HealthRecorder) {
-	queryCtx, cancel := context.WithTimeout(ctx, degradedLatencyBudget*2)
+	queryCtx, cancel := context.WithTimeout(ctx, sqliteBusyTimeout+degradedLatencyBudget)
 	defer cancel()
 	started := time.Now()
 	var one int
@@ -90,6 +108,10 @@ func probeOnce(ctx context.Context, db *sql.DB, tracker HealthRecorder) {
 
 	switch {
 	case err != nil:
+		// A genuine query error (not merely elevated latency) is what
+		// UNHEALTHY exists to report: sqlite is a critical component, so
+		// this trips ServiceAvailability/HTTP 503 immediately via the
+		// second Record below, which escalates DEGRADED to UNHEALTHY.
 		tracker.Record(StoreComponentName, health.Sample{
 			Healthy: false,
 			Note:    fmt.Sprintf("probe failed: %v (elapsed=%s)", err, elapsed),
@@ -101,19 +123,17 @@ func probeOnce(ctx context.Context, db *sql.DB, tracker HealthRecorder) {
 			Note:    "probe failed (escalated)",
 		})
 	case elapsed > degradedLatencyBudget:
-		tracker.Record(StoreComponentName, health.Sample{
-			Healthy: false,
-			Note:    fmt.Sprintf("slow probe: %s > %s", elapsed, degradedLatencyBudget),
-		})
+		// Elevated latency alone is not a database failure — capped at
+		// DEGRADED via RecordQuality, mirroring how ping/pong correlation
+		// noise is capped, so two slow-but-successful round-trips in a row
+		// cannot escalate a fully working database to UNHEALTHY/503.
+		tracker.RecordQuality(StoreComponentName,
+			fmt.Sprintf("slow probe: %s > %s", elapsed, degradedLatencyBudget))
 	case elapsed > healthyLatencyBudget:
-		// Degraded — a single elevated probe yields DEGRADED via the
-		// flap-damp rule. The note carries the actual latency so the
-		// SPA can show "120 ms (budget 100 ms)" instead of just a
-		// status flip.
-		tracker.Record(StoreComponentName, health.Sample{
-			Healthy: false,
-			Note:    fmt.Sprintf("elevated probe: %s > %s", elapsed, healthyLatencyBudget),
-		})
+		// Degraded — the note carries the actual latency so the SPA can
+		// show "120 ms (budget 100 ms)" instead of just a status flip.
+		tracker.RecordQuality(StoreComponentName,
+			fmt.Sprintf("elevated probe: %s > %s", elapsed, healthyLatencyBudget))
 	default:
 		tracker.Record(StoreComponentName, health.Sample{
 			Healthy: true,
