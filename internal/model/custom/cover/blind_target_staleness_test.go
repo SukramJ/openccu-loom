@@ -231,3 +231,46 @@ func TestBlindSetCombinedNeverStopsFirst(t *testing.T) {
 		t.Errorf("STOP writes = %d, want 0 — every command named both axes", got)
 	}
 }
+
+// TestBlindFollowUpCommandCarriesTheJustCommandedOtherAxis pins the
+// opposite failure from the staleness fix above: the axis the caller did
+// not name in a follow-up command must carry the value the *previous*
+// command just sent, even though the CCU has not echoed it back yet.
+// Falling back to the last CCU-confirmed observation in that window
+// treats "not yet confirmed" the same as "never commanded" and sends the
+// untouched axis to 0 — closing a blind whose slats were just opened to
+// 30 % closes the slats with it, because no wall-clock delay separates a
+// command from its own echo in a fast client.
+func TestBlindFollowUpCommandCarriesTheJustCommandedOtherAxis(t *testing.T) {
+	w := &putWriter{}
+	b := newFleetBlind(t, w)
+
+	// Move to 50 % — no CCU echo is fed back, mirroring the real
+	// round-trip delay between a command and its confirmation.
+	if err := b.SetPosition(context.Background(), 0.50, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetPosition: %v", err)
+	}
+	// Tilt the slats before that write confirms — the level axis must
+	// still read 50 %, not the device's pre-command default.
+	if err := b.SetTilt(context.Background(), 0.30, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetTilt: %v", err)
+	}
+	cc := w.combinedCalls()
+	last, _ := cc[len(cc)-1].value.(string)
+	if last != "L2=30,L=50" {
+		t.Errorf("COMBINED_PARAMETER = %q, want %q — the level axis lost the value just commanded",
+			last, "L2=30,L=50")
+	}
+
+	// Close — again before any echo — and check the symmetric case: the
+	// tilt axis just commanded must carry forward into this write.
+	if err := b.SetPosition(context.Background(), 0.0, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetPosition (close): %v", err)
+	}
+	cc = w.combinedCalls()
+	last, _ = cc[len(cc)-1].value.(string)
+	if last != "L2=30,L=0" {
+		t.Errorf("COMBINED_PARAMETER = %q, want %q — the tilt axis lost the value just commanded",
+			last, "L2=30,L=0")
+	}
+}

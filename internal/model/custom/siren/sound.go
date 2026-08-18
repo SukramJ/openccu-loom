@@ -37,6 +37,7 @@ var ErrInvalidSoundfileIndex = fmt.Errorf("siren: soundfile index out of range (
 // device does not offer. It is an error rather than a silent skip: the
 // player accepts the surrounding parameters either way, so a dropped
 // SOUNDFILE plays the previously selected file and looks like success.
+// loom:reachable:reason="wrapped and returned by PlaySound in this package when a caller names a tone the device does not offer, and exported so a caller can match it with errors.Is; the analyzer does not follow sentinel-var references"
 var ErrUnknownSoundfile = errors.New("siren: unknown soundfile")
 
 // nonPlayableSoundfiles are the SOUNDFILE VALUE_LIST members that are

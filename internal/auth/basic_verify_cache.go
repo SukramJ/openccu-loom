@@ -42,6 +42,7 @@ const verifiedBasicMax = 512
 // password nor the stored hash can be recovered from a heap dump of the map.
 // The unknown-user path is deliberately never cached: it must keep costing a
 // full compare so response latency does not reveal whether a subject exists.
+// loom:reachable:reason="the field type of sqlite.UserStore.verified and the return type of NewVerifiedBasicCache, which NewUserStore calls on construction; the analyzer counts a type as reached only through its own methods and cannot see one held as a struct field"
 type VerifiedBasicCache struct {
 	ttl time.Duration
 	max int

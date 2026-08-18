@@ -2324,7 +2324,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke current session */
+        /**
+         * Revoke current session
+         * @description Revokes the session the request presented — whatever scheme minted it, including a session an external identity provider vouched for — clears the cookie, and closes the caller's open WebSocket connections, so the command plane ends with the session rather than outliving it.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -2464,7 +2467,10 @@ export interface paths {
          * @description Removes the token identified by the path segment (the `id`
          *     field returned from `POST /auth/tokens` or `GET /auth/tokens`).
          *     The token immediately stops authenticating; in-flight requests
-         *     finish under the previous identity.
+         *     finish under the previous identity. The WebSocket connections the
+         *     token opened are closed as part of this call, because a socket
+         *     resolves its identity once at the upgrade and would otherwise keep
+         *     the revoked token's role until the client happened to reconnect.
          */
         delete: operations["deleteToken"];
         options?: never;

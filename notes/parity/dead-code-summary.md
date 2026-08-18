@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 23304d56
-HEAD: 23304d56
+Generated: 5bc5d11e
+HEAD: 5bc5d11e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29256 |
-| Reachable | 5092 |
-| Whitelisted | 21140 |
+| Total Exported | 29354 |
+| Reachable | 5094 |
+| Whitelisted | 21236 |
 | **Unreachable** | **3024** |
 
 ## Top-20 Packages by Dead Code

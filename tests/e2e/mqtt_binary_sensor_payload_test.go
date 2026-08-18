@@ -80,7 +80,7 @@ func TestE2EMQTTBinarySensorPayloadsMatchPublishedState(t *testing.T) {
 		stateTopic string
 		declared   map[string]any
 	)
-	waitFor(t, 60*time.Second, "a binary_sensor with a VALUE_LIST descriptor", func() bool {
+	waitForOrFail(t, 60*time.Second, "a binary_sensor with a VALUE_LIST descriptor", func() bool {
 		mu.Lock()
 		defer mu.Unlock()
 		for _, payload := range configs {
@@ -118,7 +118,7 @@ func TestE2EMQTTBinarySensorPayloadsMatchPublishedState(t *testing.T) {
 	}
 
 	var published any
-	waitFor(t, 30*time.Second, "a non-null value on "+stateTopic, func() bool {
+	waitForOrFail(t, 30*time.Second, "a non-null value on "+stateTopic, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
 		payload, ok := raw[stateTopic]
@@ -143,8 +143,9 @@ func TestE2EMQTTBinarySensorPayloadsMatchPublishedState(t *testing.T) {
 	}
 }
 
-// waitFor polls until done reports true or the deadline expires.
-func waitFor(t *testing.T, within time.Duration, what string, done func() bool) {
+// waitForOrFail polls until done reports true, and fails the test when the
+// deadline expires first.
+func waitForOrFail(t *testing.T, within time.Duration, what string, done func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(within)
 	for {
