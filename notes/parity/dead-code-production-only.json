@@ -1,6 +1,6 @@
 {
-  "generated": "71dedf9c",
-  "head": "71dedf9c",
+  "generated": "68b79ff8",
+  "head": "68b79ff8",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29524,
+    "total_exported": 29525,
     "reachable": 4943,
-    "whitelisted": 21396,
+    "whitelisted": 21397,
     "unreachable": 3185
   },
   "by_package": [
@@ -124484,17 +124484,17 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestAlarmPlaneGatesOnlyTheTopicDiscoveryDoesNotDeclare",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/alarm_publisher_test.go",
+      "line": 897
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestAlarmPlaneTopicsRoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/alarm_topics_roundtrip_test.go",
       "line": 52
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestAlarmRawPlanePublishersRespectRawEnabled",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/alarm_publisher_test.go",
-      "line": 898
     },
     {
       "package": "internal/north/mqtt",
@@ -128089,10 +128089,10 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestSecurityPlaneRawTopicsRespectRawEnabled",
+      "identifier": "TestSecurityPlaneFeedsTheEntitiesItDeclares",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/security_publisher_test.go",
-      "line": 32
+      "line": 27
     },
     {
       "package": "internal/north/mqtt",
@@ -156527,6 +156527,13 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/parameter/metadata.go",
       "line": 416
+    },
+    {
+      "package": "internal/parameter",
+      "identifier": "TestAsIntRejectsFloatsItCannotRepresent",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/parameter/coerce_test.go",
+      "line": 19
     },
     {
       "package": "internal/parameter",
