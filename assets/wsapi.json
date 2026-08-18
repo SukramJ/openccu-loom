@@ -350,7 +350,7 @@
   },
   {
    "category": "datapoint",
-   "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple. Subscribe with `classify:true` to receive inline category / data_point_type on the payload (default off).",
+   "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple. Subscribe with `classify:true` to receive inline category / data_point_type on the payload (default off). `value` is the raw CCU wire value; when the data point declares a non-trivial multiplier the payload also carries `display_value`, the same reading expressed in the unit the data point names. It matches the `display_value` on the REST data-point summary, so a client that seeds from REST and updates from here shows one consistent number.",
    "kind": "broadcast",
    "name": "datapoint.value_changed",
    "topic": "device.{address}.channels.{channel}.data_points.{parameter}",

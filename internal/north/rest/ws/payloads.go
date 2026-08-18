@@ -45,7 +45,15 @@ type DataPointValueChangedPayload struct {
 	// not "field absent"). See docs/external-clients/ha-unique-id-migration.md.
 	UniqueID string `json:"unique_id"`
 	Value    any    `json:"value"`
-	Previous any    `json:"previous,omitempty"`
+	// DisplayValue is Value expressed in the data point's reported unit
+	// (Value × multiplier), present only when that projection is
+	// non-trivial. It carries the same meaning as the field of the same
+	// name on the REST data-point summary, and must agree with it: a
+	// client seeds from REST and updates from here, so a value scaled on
+	// one plane and raw on the other makes the reading jump on the first
+	// push.
+	DisplayValue any `json:"display_value,omitempty"`
+	Previous     any `json:"previous,omitempty"`
 	// Available reports whether the new value is a confirmed reading:
 	// observed AND valid (refreshed, paired STATUS acceptable, value type as
 	// declared, within the declared bounds). For a calculated data point it
@@ -113,8 +121,13 @@ type ValueChange struct {
 	Parameter     string
 	ParamsetKey   string
 	Value         any
-	Previous      any
-	When          time.Time
+	// DisplayValue mirrors [DataPointValueChangedPayload.DisplayValue].
+	// The caller resolves it (it needs the data point's Multiplier(),
+	// which this package has no access to) and passes it through
+	// unchanged; empty/nil leaves the payload field absent.
+	DisplayValue any
+	Previous     any
+	When         time.Time
 	// Category / DataPointType classify the data point. They are always
 	// carried on the buffered payload (so a replay keeps them) and stripped
 	// per-client at write time unless the client opted into `classify` —
@@ -150,6 +163,7 @@ func (h *Hub) PublishDataPointValueChanged(ev ValueChange) {
 			ParamsetKey:   ev.ParamsetKey,
 			UniqueID:      ev.UniqueID,
 			Value:         ev.Value,
+			DisplayValue:  ev.DisplayValue,
 			Previous:      ev.Previous,
 			Available:     ev.Available,
 			ModifiedAt:    ev.When.UTC().Format(time.RFC3339Nano),

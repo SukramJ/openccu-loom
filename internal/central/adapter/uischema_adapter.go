@@ -464,9 +464,33 @@ func (a *UISchemaAdapter) buildParameters(
 		if len(pd.ValueList) > 0 {
 			entry.ValueList = a.valueList(locale, channelType, name, pd.ValueList)
 		}
+		// Multiplier/DisplayValue project the raw wire value into the unit
+		// Unit names, mirroring [DataPointSummary.DisplayValue] /
+		// [DataPointSummary.Multiplier] on the REST data-point summary so
+		// the config-panel editor and the device list agree. LINK paramset
+		// parameters never reach here — UISchema returns into
+		// buildLinkSchema before buildParameters runs for that key — and
+		// already scale through DisplayAsPercent, which would double-scale
+		// if this ran for them too.
+		//
+		// The multiplier is descriptor metadata, so it is reported whether
+		// or not a value has been observed: the editor divides by it before
+		// writing, and a parameter the CCU has not pushed yet is still
+		// writable. Gating it on observation would send an unobserved
+		// dimmer the displayed number as its wire value.
+		mult := generic.DefaultMultiplier
+		if m, ok := dp.(interface{ Multiplier() float64 }); ok {
+			if v := m.Multiplier(); v != 0 && v != generic.DefaultMultiplier {
+				mult = v
+				entry.Multiplier = v
+			}
+		}
 		if raw, observed := dp.RawValue(); observed {
 			entry.Value = raw
 			entry.Observed = true
+			if dv, dvOK := generic.DisplayValue(raw, mult); dvOK {
+				entry.DisplayValue = dv
+			}
 		}
 		if t := dp.ModifiedAt(); !t.IsZero() {
 			entry.ModifiedAt = t.UTC().Format("2006-01-02T15:04:05.000Z")

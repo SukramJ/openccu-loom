@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -315,6 +316,16 @@ func toCalculatedDPEntry(dp device.AttachableDataPoint, ch *device.Channel, labe
 		v, observed = rv.RawValue()
 		entry["value"] = v
 		entry["observed"] = observed
+		// display_value carries the same contract as the REST calc-dps
+		// record ([handlers.CalculatedDPSummary.DisplayValue]): Value ×
+		// multiplier, present only when non-trivial.
+		if observed {
+			if m, mOK := dp.(interface{ Multiplier() float64 }); mOK {
+				if dv, dvOK := generic.DisplayValue(v, m.Multiplier()); dvOK {
+					entry["display_value"] = dv
+				}
+			}
+		}
 	}
 	// `available` carries the same rule as the REST calc-dps record: observed
 	// AND valid, where validity folds in every source the value derives from.

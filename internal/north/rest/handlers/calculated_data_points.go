@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -31,7 +32,14 @@ type CalculatedDPSummary struct {
 	UniqueID string `json:"unique_id"`
 	Category string `json:"category,omitempty"`
 	Value    any    `json:"value"`
-	Observed bool   `json:"observed"`
+	// DisplayValue is Value expressed in the data point's reported unit
+	// (Value × multiplier), present only when that projection is
+	// non-trivial. Same contract as [DataPointSummary.DisplayValue]; every
+	// shipping calculated data point currently reports a trivial
+	// multiplier (1.0), so this stays absent today and starts populating
+	// automatically for any future one that does not.
+	DisplayValue any  `json:"display_value,omitempty"`
+	Observed     bool `json:"observed"`
 	// Available reports whether the value is a confirmed reading, using the
 	// same rule as the generic data-point state payload: observed AND valid.
 	// For a calculated data point validity folds in the validity of every
@@ -82,6 +90,13 @@ func toCalculatedDPSummary(dp device.AttachableDataPoint, ch *device.Channel, la
 		raw, observed := fv.RawValue()
 		s.Value = raw
 		s.Observed = observed
+		if observed {
+			if m, mOK := dp.(interface{ Multiplier() float64 }); mOK {
+				if dv, dvOK := generic.DisplayValue(raw, m.Multiplier()); dvOK {
+					s.DisplayValue = dv
+				}
+			}
+		}
 		if t := fv.ModifiedAt(); !t.IsZero() {
 			s.ModifiedAt = t.UTC().Format("2006-01-02T15:04:05.000Z")
 		}
