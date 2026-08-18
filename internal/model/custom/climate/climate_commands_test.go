@@ -131,6 +131,10 @@ func TestRFSetModeHeatWritesManuMode(t *testing.T) {
 // TestSetProfileWeekProgramIPMapsToActiveProfile verifies that on KindIP
 // the week-program profile writes ACTIVE_PROFILE with a 1-based int index
 // (HmIP shape).
+//
+// Starts from AUTO so only ACTIVE_PROFILE goes out — this isolates the
+// value shape from the AUTO/BOOST_MODE batching that
+// TestSetProfileWeekProgramIPSwitchesToAutoFirst covers.
 func TestSetProfileWeekProgramIPMapsToActiveProfile(t *testing.T) {
 	t.Parallel()
 
@@ -145,6 +149,9 @@ func TestSetProfileWeekProgramIPMapsToActiveProfile(t *testing.T) {
 	for _, tc := range cases {
 		w := &stubWriter{}
 		r := newRig(t, "x", KindIP, w, custom.ClimateCapabilities{SupportsProfile: true})
+		if err := r.climate.SetMode(context.Background(), ModeAuto, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("profile=%v: SetMode(Auto): %v", tc.profile, err)
+		}
 		if err := r.climate.SetProfile(context.Background(), tc.profile, hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("profile=%v: %v", tc.profile, err)
 		}
@@ -193,41 +200,42 @@ func TestSetProfileWeekProgramRFMapsToEnumLabel(t *testing.T) {
 }
 
 // TestSetProfileWeekProgramIPSwitchesToAutoFirst verifies that selecting a
-// week-program profile while the thermostat is not in AUTO first switches
-// it to AUTO (clearing BOOST_MODE) before writing ACTIVE_PROFILE — a week
-// program only executes in AUTO, so writing the pointer alone from MANU
+// week-program profile while the thermostat is not in AUTO batches the AUTO
+// switch, the BOOST_MODE clear and ACTIVE_PROFILE into one put_paramset — a
+// week program only executes in AUTO, so writing the pointer alone from MANU
 // stores it without effect. Mirrors CustomDpIpThermostat.set_profile's
-// week-program branch (climate.py:858-863).
+// week-program branch (climate.py:858-863): CONTROL_MODE, BOOST_MODE and
+// ACTIVE_PROFILE are all VALUES parameters on the same channel, and
+// @bind_collector groups every send_value call it makes there into one
+// put_paramset instead of one round-trip each (CallParameterCollector.
+// add_data_point / _send_paramset, model/data_point.py:1648-1667,1724-1776).
 func TestSetProfileWeekProgramIPSwitchesToAutoFirst(t *testing.T) {
 	t.Parallel()
 
-	w := &stubWriter{}
+	w := &putWriter{}
 	r := newRig(t, "x", KindIP, w, custom.ClimateCapabilities{SupportsProfile: true, SupportsBoost: true})
 	// Put the thermostat in HEAT (MANU) before selecting a week program.
 	if err := r.climate.SetMode(context.Background(), ModeHeat, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("SetMode(Heat): %v", err)
 	}
-	before := len(w.calls)
+	before := len(w.puts)
 
 	if err := r.climate.SetProfile(context.Background(), ProfileWeekProgram1, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("SetProfile(week_program_1): %v", err)
 	}
-	calls := w.calls[before:]
-	if len(calls) != 3 {
-		t.Fatalf("SetProfile(week_program_1) from MANU wrote %d calls, want CONTROL_MODE + BOOST_MODE + ACTIVE_PROFILE: %+v", len(calls), calls)
+	puts := w.puts[before:]
+	if len(puts) != 1 {
+		t.Fatalf("SetProfile(week_program_1) from MANU wrote %d put_paramset call(s), want CONTROL_MODE + BOOST_MODE + ACTIVE_PROFILE batched into one: %+v", len(puts), puts)
 	}
-	if calls[0].param != hmenum.ParameterControlMode || calls[0].value.(int32) != 0 {
-		t.Errorf("first write=%+v, want CONTROL_MODE=0 (AUTO)", calls[0])
+	got := puts[0]
+	if v, ok := got[string(hmenum.ParameterControlMode)].(int32); !ok || v != 0 {
+		t.Errorf("CONTROL_MODE=%#v, want int32(0) (AUTO)", got[string(hmenum.ParameterControlMode)])
 	}
-	if calls[1].param != hmenum.ParameterBoostMode {
-		t.Errorf("second write param=%v, want BOOST_MODE", calls[1].param)
+	if v, ok := got[string(hmenum.ParameterBoostMode)].(bool); !ok || v {
+		t.Errorf("BOOST_MODE=%#v, want false", got[string(hmenum.ParameterBoostMode)])
 	}
-	if on, ok := calls[1].value.(bool); !ok || on {
-		t.Errorf("BOOST_MODE write=%#v, want false", calls[1].value)
-	}
-	last := calls[2]
-	if last.param != hmenum.ParameterActiveProfile || last.value.(int32) != 1 {
-		t.Errorf("last write=%+v, want ACTIVE_PROFILE=1", last)
+	if v, ok := got[string(hmenum.ParameterActiveProfile)].(int32); !ok || v != 1 {
+		t.Errorf("ACTIVE_PROFILE=%#v, want int32(1)", got[string(hmenum.ParameterActiveProfile)])
 	}
 }
 

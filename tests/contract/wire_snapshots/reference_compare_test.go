@@ -656,17 +656,36 @@ func newClimateIPAwayFixtureRef(t *testing.T, w *fakeWriter) *climate.Climate {
 
 // partyTimeStartPlaceholder replaces the non-deterministic PARTY_TIME_START
 // value (encoded from time.Now() by Climate.SetAway) with a fixed sentinel so
-// the reference comparison stays deterministic across runs. Only this one
-// field is masked; every other field in the batch is compared verbatim.
+// the reference comparison stays deterministic across runs.
 const partyTimeStartPlaceholder = "<now>"
 
-func maskPartyTimeStart(wc WireCapture) WireCapture {
+// partyTimeEndPlaceholder replaces PARTY_TIME_END with a fixed sentinel for
+// the same reason, but for a different source of non-determinism:
+// Climate.encodePartyTime formats `until` through time.Time.Local (see
+// climate.go's encodePartyTime doc comment), because PARTY_TIME_START/END
+// carry no zone and the CCU reads them as its own local wall clock. The
+// formatted string therefore depends on the host's configured timezone, not
+// just the fixed `until` this test case passes in — masking it is what lets
+// the same reference file pass regardless of which zone the test runs in.
+const partyTimeEndPlaceholder = "<local-until>"
+
+// maskPartyTimes replaces the host- and clock-dependent PARTY_TIME_START/END
+// values with fixed sentinels so the reference comparison stays deterministic
+// across runs and hosts. Every other field in the batch is compared verbatim.
+func maskPartyTimes(wc WireCapture) WireCapture {
 	out := make(WireCapture, len(wc))
 	for i, call := range wc {
-		if _, ok := call.PutValues[string(hmenum.ParameterPartyTimeStart)]; ok {
+		_, hasStart := call.PutValues[string(hmenum.ParameterPartyTimeStart)]
+		_, hasEnd := call.PutValues[string(hmenum.ParameterPartyTimeEnd)]
+		if hasStart || hasEnd {
 			cp := make(map[string]any, len(call.PutValues))
 			maps.Copy(cp, call.PutValues)
-			cp[string(hmenum.ParameterPartyTimeStart)] = partyTimeStartPlaceholder
+			if hasStart {
+				cp[string(hmenum.ParameterPartyTimeStart)] = partyTimeStartPlaceholder
+			}
+			if hasEnd {
+				cp[string(hmenum.ParameterPartyTimeEnd)] = partyTimeEndPlaceholder
+			}
 			call.PutValues = cp
 		}
 		out[i] = call
@@ -1256,12 +1275,26 @@ func TestReferenceCompare(t *testing.T) {
 			},
 		},
 		// ClimateIP SetProfile: KindIP writes 1-based ACTIVE_PROFILE as a single
-		// SetValue once the device reports AUTO mode (the default state of a
-		// freshly-constructed fixture). Mirrors the reference implementation's
-		// CustomDpIpThermostat.set_profile (model/custom/climate.py:880-893);
-		// confirmed by tests/test_model_climate.py:1228-1237, which asserts
-		// `set_value(parameter="ACTIVE_PROFILE", value=1)` for WEEK_PROGRAM_1
-		// once SET_POINT_MODE reports AUTO.
+		// SetValue once the device already reports AUTO mode. The fixture seeds
+		// that with an OnSetPointMode(AUTO) event before calling SetProfile,
+		// mirroring the reference's own test_model_climate.py:1259-1266, which
+		// drives SET_POINT_MODE to AUTO via a data-point event before calling
+		// set_profile(profile=WEEK_PROGRAM_1) and asserts the single
+		// `set_value(parameter="ACTIVE_PROFILE", value=1)` this reference
+		// records.
+		//
+		// A freshly-constructed fixture (no observed mode yet) exercises a
+		// different scenario: CustomDpIpThermostat.set_profile's
+		// `if self.mode != ClimateMode.AUTO` branch (climate.py:859-861) then
+		// also switches to AUTO and clears BOOST_MODE first, and — because
+		// CONTROL_MODE, BOOST_MODE and ACTIVE_PROFILE are all VALUES
+		// parameters on the same channel — @bind_collector batches all three
+		// into one put_paramset instead of one round-trip each
+		// (CallParameterCollector.add_data_point / _send_paramset,
+		// model/data_point.py:1648-1667,1724-1776). That scenario is covered
+		// on the Go side by TestSetProfileWeekProgramIPSwitchesToAutoFirst in
+		// internal/model/custom/climate/climate_commands_test.go, not by this
+		// wire-reference case.
 		{
 			dpType: "ClimateIP", setter: "SetProfile",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
@@ -1269,6 +1302,7 @@ func TestReferenceCompare(t *testing.T) {
 				var out []WireCapture
 				for _, p := range []climate.Profile{climate.ProfileWeekProgram1, climate.ProfileWeekProgram2, climate.ProfileWeekProgram3} {
 					c := newClimateIPFixtureRef(t, w)
+					c.OnSetPointMode(int32(0)) // AUTO
 					_ = c.SetProfile(ctx, p, pri)
 					out = append(out, w.Capture())
 				}
@@ -1278,19 +1312,19 @@ func TestReferenceCompare(t *testing.T) {
 		// ClimateIP SetAway: KindIP batches the away-mode fields into one
 		// PutParamset. Mirrors the reference implementation's
 		// CustomDpIpThermostat.enable_away_mode_by_calendar
-		// (model/custom/climate.py:841-852); confirmed by
+		// (model/custom/climate.py:811-822); confirmed by
 		// tests/test_model_climate.py:1253-1265, which asserts
 		// put_paramset(values={"SET_POINT_MODE": 2, "SET_POINT_TEMPERATURE": 17.0,
 		// "PARTY_TIME_START": ..., "PARTY_TIME_END": ...}).
 		//
-		// Two known drifts are pinned here until the production code is
-		// corrected: Go writes PARTY_TEMPERATURE instead of
-		// SET_POINT_TEMPERATURE, and Go's PARTY_TIME_* encoding
-		// ("02.01.06 15:04") does not match the reference's "%Y_%m_%d %H:%M".
-		// PARTY_TIME_START is masked to a fixed placeholder (see
-		// maskPartyTimeStart) because Climate.SetAway encodes it from
-		// time.Now() and would otherwise make this case non-deterministic
-		// regardless of the drift.
+		// PARTY_TIME_START/END are masked to fixed placeholders (see
+		// maskPartyTimes) for two different reasons: PARTY_TIME_START is
+		// encoded from time.Now(), which is non-deterministic by construction;
+		// PARTY_TIME_END is encoded from the fixed `until` below through
+		// Climate.encodePartyTime's time.Time.Local conversion, so its
+		// formatted value depends on the host's configured timezone even
+		// though `until` itself is fixed. Masking both is what lets this
+		// reference pass on any host, in any zone.
 		{
 			dpType: "ClimateIP", setter: "SetAway",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
@@ -1298,7 +1332,7 @@ func TestReferenceCompare(t *testing.T) {
 				c := newClimateIPAwayFixtureRef(t, w)
 				until := time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC)
 				_ = c.SetAway(ctx, until, 17.0, pri)
-				return []WireCapture{maskPartyTimeStart(w.Capture())}
+				return []WireCapture{maskPartyTimes(w.Capture())}
 			},
 		},
 		{

@@ -1069,19 +1069,39 @@ func (c *Climate) SetProfile(ctx context.Context, p Profile, priority hmenum.Com
 		// thermostat is brought into AUTO (which also clears an active
 		// boost) before ACTIVE_PROFILE is written, mirroring the RF branch
 		// below.
-		if mode, ok := c.Mode(); !ok || mode != ModeAuto {
-			if err := c.setIPMode(custom.EnsureContext(ctx), ModeAuto, priority); err != nil {
-				return fmt.Errorf("climate: set profile: %w", err)
-			}
-			if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterBoostMode, false, priority); err != nil {
-				return fmt.Errorf("climate: set profile: %w", err)
-			}
-		}
+		//
 		// ACTIVE_PROFILE is 1-based INTEGER on HmIP — matches the
 		// `device_active_profile_index` we already surface in
 		// StatePayload.
-		if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterActiveProfile, idx+1, priority); err != nil {
+		params := map[hmenum.Parameter]any{
+			hmenum.ParameterActiveProfile: idx + 1,
+		}
+		switchingToAuto := false
+		if mode, ok := c.Mode(); !ok || mode != ModeAuto {
+			// CONTROL_MODE, BOOST_MODE and ACTIVE_PROFILE are all VALUES
+			// parameters on the same climate channel, so the Python
+			// reference's
+			// @bind_collector groups every send_value call set_profile makes
+			// here into one put_paramset instead of one round-trip each —
+			// CallParameterCollector.add_data_point buckets by
+			// (paramset_key, collector_order, channel_address) and
+			// _send_paramset sends the whole bucket as a single put_paramset
+			// once it holds more than one parameter (climate.py:859-863;
+			// data_point.py:1648-1667, 1724-1776). Splitting the write into
+			// separate calls would let a mid-sequence failure leave the
+			// device in AUTO with the old profile still active.
+			switchingToAuto = true
+			params[hmenum.ParameterControlMode] = int32(0) // AUTO
+			params[hmenum.ParameterBoostMode] = false
+		}
+		if err := custom.PutOrSet(custom.EnsureContext(ctx), c.writer, c.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 			return fmt.Errorf("climate: set profile: %w", err)
+		}
+		if switchingToAuto {
+			c.mu.Lock()
+			c.mode = ModeAuto
+			c.hasMode = true
+			c.mu.Unlock()
 		}
 	case KindRF:
 		// A week-program profile requires the thermostat to be in AUTO mode
