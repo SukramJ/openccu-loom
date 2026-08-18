@@ -11,9 +11,9 @@ import (
 
 // TestPin_CcuBackend_SetScriptRunner_CalledInWiring pins that ccu_wiring.go
 // calls SetScriptRunner on the CcuBackend after construction. Without this
-// call, ReGa-backed operations (CreateBackupAndDownload, GetServiceMessages
-// via ReGa, AcceptDeviceInInbox via ReGa, TriggerFirmwareUpdate via ReGa)
-// return ErrUnsupported in production.
+// call, ReGa-backed operations (GetServiceMessages via ReGa,
+// AcceptDeviceInInbox via ReGa, TriggerFirmwareUpdate via ReGa) return
+// ErrUnsupported in production.
 func TestPin_CcuBackend_SetScriptRunner_CalledInWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,

@@ -31,7 +31,14 @@ type BackupStorage interface {
 	// id must be a bare token (no path separators or dot segments); the
 	// implementation appends its own extension. Overwrites an existing
 	// backup with the same id.
-	Save(ctx context.Context, id string, data []byte) error
+	//
+	// filename is the archive's name in the CCU's own convention, to be
+	// returned as [hmapi.BackupEntry.Filename] and served as the download
+	// name. It is stored, not used as the storage key: the id owns the
+	// layout, the filename only describes the archive. Empty is allowed —
+	// the CCU may not have reported its system information yet — and reads
+	// back as empty, which callers render as `<id>.sbk`.
+	Save(ctx context.Context, id, filename string, data []byte) error
 	// Delete removes the backup stored under id. A missing backup is not an
 	// error (idempotent). Used by the scheduled-backup rotation (Prune).
 	Delete(ctx context.Context, id string) error
@@ -70,6 +77,23 @@ type FilesystemBackupStorage struct {
 // instead of a torso the SPA offers for download and Restore uploads to a CCU.
 const backupTempPattern = ".partial-*.tmp"
 
+// NoBackupTagName is the marker file that excludes a directory's contents
+// from a CCU backup. Both archive producers on the CCU side — the WebUI's
+// `create_backup` CGI and `/bin/createBackup.sh` — tar `/usr/local` with
+// GNU tar's `--exclude-tag=.nobackup`, which drops the contents of every
+// directory holding this file while keeping the directory itself.
+//
+// It matters when the daemon runs as a CCU add-on: its data directory then
+// lives under `/usr/local/addons/`, so without the marker every CCU backup
+// would contain all previously downloaded `.sbk` archives, and the next
+// backup would contain those in turn. Because the tag only masks the
+// containing directory, the sibling state beside it — the SQLite database,
+// the at-rest key — still travels in the CCU backup, which is what an
+// operator restoring a CCU wants.
+//
+// Off a CCU the file is inert.
+const NoBackupTagName = ".nobackup"
+
 // NewFilesystemBackupStorage constructs the storage and ensures the
 // directory exists.
 func NewFilesystemBackupStorage(dir string) (*FilesystemBackupStorage, error) {
@@ -79,7 +103,27 @@ func NewFilesystemBackupStorage(dir string) (*FilesystemBackupStorage, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("backup: mkdir %s: %w", dir, err)
 	}
+	writeNoBackupTag(dir)
 	return &FilesystemBackupStorage{Dir: dir}, nil
+}
+
+// writeNoBackupTag drops [NoBackupTagName] into dir. It is best-effort by
+// design: a directory that rejects the marker (read-only mount, foreign
+// ownership) can still serve every archive already in it, and failing
+// construction would take the whole backup surface down over a file whose
+// only reader is tar on a different machine.
+func writeNoBackupTag(dir string) {
+	path := filepath.Join(dir, NoBackupTagName)
+	if _, err := os.Stat(path); err == nil {
+		return
+	}
+	// The marker carries no content — only its presence is read, and only by
+	// a tar running as root — so it needs no group access.
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o600) // #nosec G304 — a fixed name inside the configured storage directory
+	if err != nil {
+		return
+	}
+	_ = f.Close()
 }
 
 // List implements [BackupStorage].
@@ -107,10 +151,12 @@ func (s *FilesystemBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, 
 			// empty file for download and lets Restore push it to a CCU.
 			continue
 		}
+		id := strings.TrimSuffix(name, ".sbk")
 		out = append(out, hmapi.BackupEntry{
-			ID:        strings.TrimSuffix(name, ".sbk"),
+			ID:        id,
 			Bytes:     info.Size(),
 			CreatedAt: info.ModTime().UTC(),
+			Filename:  s.readName(id),
 		})
 	}
 	return out, nil
@@ -151,7 +197,7 @@ func (s *FilesystemBackupStorage) Open(_ context.Context, id string) (io.ReadClo
 // leave a torso that List shows and Restore uploads to a CCU — and, on a
 // replace, would destroy the previous complete archive before the new one
 // exists.
-func (s *FilesystemBackupStorage) Save(_ context.Context, id string, data []byte) error {
+func (s *FilesystemBackupStorage) Save(_ context.Context, id, filename string, data []byte) error {
 	path, err := s.pathForID(id)
 	if err != nil {
 		return err
@@ -187,6 +233,11 @@ func (s *FilesystemBackupStorage) Save(_ context.Context, id string, data []byte
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("backup: publish %s: %w", path, err)
 	}
+	// The name is written after the archive is published, and its failure is
+	// not the save's failure: an archive without its name reads back as
+	// `<id>.sbk`, while a name without an archive would be a listing entry
+	// with nothing behind it.
+	s.writeName(id, filename)
 	// Best-effort: make the rename itself durable. A directory that cannot be
 	// synced (or a platform that does not support it) is not a reason to fail
 	// a save whose payload is already on disk.
@@ -195,6 +246,71 @@ func (s *FilesystemBackupStorage) Save(_ context.Context, id string, data []byte
 		_ = dir.Close()
 	}
 	return nil
+}
+
+// backupNameSuffix marks the sidecar that records an archive's CCU-convention
+// name. A sidecar rather than an encoded id because the id is parsed: the
+// owning-central lookup and the rotation pruner both recover the central by
+// stripping a fixed-width timestamp suffix, so anything else in the id breaks
+// both. It deliberately does not end in `.sbk`, which keeps it out of List's
+// own scan.
+const backupNameSuffix = ".name"
+
+// writeName records filename as the archive's display name. Best-effort: see
+// the call site in [FilesystemBackupStorage.Save].
+func (s *FilesystemBackupStorage) writeName(id, filename string) {
+	path, err := s.namePathForID(id)
+	if err != nil {
+		return
+	}
+	if filename == "" {
+		// An empty name is the absence of one, not a name that is empty. Drop
+		// a stale sidecar rather than leave it describing a replaced archive.
+		_ = os.Remove(path)
+		return
+	}
+	// 0o640 matches the archive the sidecar describes: operator-readable,
+	// never world-readable.
+	_ = os.WriteFile(path, []byte(filename), 0o640) // #nosec G306 — group-readable by design, not group-writable
+}
+
+// readName returns the recorded display name for id, or "" when none was
+// recorded — an archive taken before the sidecar existed, or one saved while
+// the CCU had not reported its system information yet.
+//
+// The value is sanitised on the way out rather than trusted: it reaches an
+// HTTP Content-Disposition header, and a name carrying a path separator or a
+// control character there is a header-injection and path-traversal vector. A
+// name that does not survive sanitising is dropped, which degrades to
+// `<id>.sbk`.
+func (s *FilesystemBackupStorage) readName(id string) string {
+	path, err := s.namePathForID(id)
+	if err != nil {
+		return ""
+	}
+	raw, err := os.ReadFile(path) // #nosec G304 — path is validated against s.Dir
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(string(raw))
+	if name == "" || len(name) > 255 || strings.ContainsAny(name, "/\\\r\n\"") {
+		return ""
+	}
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f {
+			return ""
+		}
+	}
+	return name
+}
+
+// namePathForID resolves id to its name sidecar, with the same containment
+// check [FilesystemBackupStorage.pathForID] applies to the archive itself.
+func (s *FilesystemBackupStorage) namePathForID(id string) (string, error) {
+	if _, err := s.pathForID(id); err != nil {
+		return "", err
+	}
+	return filepath.Clean(filepath.Join(s.Dir, id+backupNameSuffix)), nil
 }
 
 // Delete implements [BackupStorage]. A missing file is not an error.
@@ -206,6 +322,9 @@ func (s *FilesystemBackupStorage) Delete(_ context.Context, id string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("backup: delete %s: %w", path, err)
 	}
+	// The name sidecar goes with the archive it describes. Left behind, the
+	// next id to collide with it would inherit the deleted archive's name.
+	s.writeName(id, "")
 	return nil
 }
 
@@ -312,7 +431,10 @@ func (s *FilesystemBackupStorage) SaveUploaded(
 	if _, err := s.pathForID(id); err != nil {
 		return hmapi.BackupEntry{}, err
 	}
-	if err := s.Save(ctx, id, data); err != nil {
+	// No display name: the uploaded one is untrusted (see above) and there is
+	// no CCU behind this archive to derive one from. It lists and downloads as
+	// `<id>.sbk`, which is honest about where it came from.
+	if err := s.Save(ctx, id, "", data); err != nil {
 		return hmapi.BackupEntry{}, err
 	}
 	return hmapi.BackupEntry{

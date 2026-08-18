@@ -8,6 +8,7 @@ import (
 	gosql "database/sql"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,8 +36,8 @@ func (a auditReadService) Query(ctx context.Context, q audit.Query) ([]audit.Ent
 }
 
 // buildBackupAdapter wires the BackupAdapter against a filesystem-
-// backed BackupStorage. The directory lives under cfg.DataDir/backups
-// and is auto-created on first use. When the directory cannot be
+// backed BackupStorage. The directory is cfg.Backup.Dir, defaulting to
+// cfg.DataDir/backups, and is auto-created on first use. When it cannot be
 // created (read-only filesystem, missing permissions), the adapter
 // degrades to in-memory mode — List returns empty, Stream reports the
 // storage as not configured, Restore returns ErrRestoreUnsupported.
@@ -54,7 +55,10 @@ func buildBackupAdapter(cfg *config.Config, reg *central.Registry, logger *slog.
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	backupDir := filepath.Join(dataDir, ccuBackupsDirName)
+	backupDir := strings.TrimSpace(cfg.Backup.Dir)
+	if backupDir == "" {
+		backupDir = filepath.Join(dataDir, ccuBackupsDirName)
+	}
 	storage, err := adapter.NewFilesystemBackupStorage(backupDir)
 	if err != nil {
 		logger.Warn(

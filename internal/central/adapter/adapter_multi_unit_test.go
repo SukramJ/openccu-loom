@@ -9914,9 +9914,11 @@ func TestFilesystemBackupStorage_List_ReadDirError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFilesystemBackupStorage: %v", err)
 	}
-	// Remove the directory to make ReadDir fail.
-	if err := os.Remove(dir); err != nil {
-		t.Fatalf("os.Remove: %v", err)
+	// Remove the directory to make ReadDir fail. RemoveAll rather than
+	// Remove: construction seeds the exclusion marker, so the directory is
+	// not empty.
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("os.RemoveAll: %v", err)
 	}
 	_, err = s.List(context.Background())
 	if err == nil {

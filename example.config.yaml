@@ -201,7 +201,17 @@ bootstrap:
 # CCU and produces files, so it is opt-in). Each configured central is
 # backed up independently; the archives appear in the same Backups view as
 # manual backups. The first automatic backup runs one interval after start.
+#
+# `dir` moves the archives off the daemon's data directory. That matters
+# when the daemon runs as a CCU add-on: the data directory then lives
+# under /usr/local, which is the tree the CCU archives itself, so its own
+# backups would carry every archive downloaded so far. The add-on's
+# service script resolves this to the CCU's configured backup target; set
+# it by hand for any other deployment that wants the archives on a
+# separate mount. The daemon drops a `.nobackup` marker into whichever
+# directory it uses, which is what keeps the CCU's tar out of it.
 # backup:
+#   dir: /media/usb0/backup   # empty = <data_dir>/backups
 #   schedule: 24h     # how often each CCU is backed up; empty/0 = disabled
 #   keep_last: 7      # retain the newest N per CCU (0 = keep all)
 

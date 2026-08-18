@@ -231,6 +231,33 @@ API. These are admin-gated:
 omitted or empty body backs up the first registered central (the
 multi-CCU-correct path is naming the central).
 
+A listed entry carries `filename`, the archive's name in the CCU's own
+convention (`<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`),
+recorded when the archive was taken; the download is served under it. Show
+or store that name rather than deriving one from `id`, which is a storage
+key and carries no firmware version. It is absent for archives taken
+before the field existed — fall back to `<id>.sbk`.
+
+### Where the archives are stored
+
+By default in `<data_dir>/backups`. Set `backup.dir` to move them
+elsewhere, for instance onto a mount that is not the daemon's state
+directory.
+
+The default is the wrong one in a single case that matters: installed as
+CCU add-on software the daemon's data directory sits under
+`/usr/local/addons/`, which is exactly the tree the CCU packs into its own
+`.sbk`. Every CCU backup would then carry all previously downloaded
+archives, and the next one would carry those again. Two things prevent it:
+
+- the daemon writes a `.nobackup` marker into whichever directory it uses,
+  which the CCU's own `tar` honours (`--exclude-tag`), and
+- the CCU add-on's service script resolves `backup.dir` to the CCU's own
+  backup target at every start — `/usr/local/etc/config/CronBackupPath`
+  when the operator has set one, otherwise external storage when the
+  system reports any — so the archives land beside the CCU's own rather
+  than on its internal flash.
+
 See the REST + WebSocket API reference (`docs/integrations/rest-ws.md`)
 for request/response detail.
 

@@ -16,6 +16,7 @@ import (
 func baseConfig() *Config {
 	c := Default()
 	c.DataDir = "/var/lib/loom"
+	c.Backup.Dir = "/var/lib/loom/backups"
 	c.North.REST.Listen = ":8119"
 	c.Callback.Host = "192.0.2.1"
 	c.Callback.Port = 8120
@@ -88,6 +89,10 @@ func TestRestartRequiredDiff_SingleFieldChange(t *testing.T) {
 		{
 			path:   "north.rest.public_url",
 			mutate: func(c *Config) { c.North.REST.PublicURL = "https://loom.example.de" },
+		},
+		{
+			path:   "backup.dir",
+			mutate: func(c *Config) { c.Backup.Dir = "/mnt/other-backups" },
 		},
 		{
 			path:   "callback.host",

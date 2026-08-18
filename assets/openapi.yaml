@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.0.0
+  version: 7.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -12714,6 +12714,17 @@ components:
         central: { type: string }
         bytes: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
+        filename:
+          type: string
+          description: >-
+            The archive's name in the CCU's own convention,
+            `<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`,
+            recorded when the archive was taken. This is what the download
+            is served as; show or store this rather than rebuilding a name,
+            because the id is a storage key and carries no firmware version.
+            Absent for archives taken before this field existed, or when the
+            CCU had not reported its system information yet — fall back to
+            `<id>.sbk`.
 
     EditSessionRequest:
       type: object

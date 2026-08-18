@@ -17,6 +17,21 @@ type BackupEntry struct {
 	Central   string    `json:"central"`
 	Bytes     int64     `json:"bytes"`
 	CreatedAt time.Time `json:"created_at"`
+	// Filename is the archive's name in the CCU's own convention,
+	// `<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`, recorded
+	// when the archive was taken. It is what the download is served as and
+	// what a client should show or write to disk.
+	//
+	// It exists because the id alone cannot carry it: the id is a storage
+	// key with a fixed-width timestamp suffix that the owning-central lookup
+	// and the rotation pruner both parse, while the name has to state the
+	// firmware version the archive can be restored onto. Clients used to
+	// rebuild the name themselves and had no reliable source for that
+	// version — one of them stamped the daemon's build version into it.
+	//
+	// Empty for an archive taken before this field existed, or when the CCU
+	// had not reported its system information yet; fall back to `<id>.sbk`.
+	Filename string `json:"filename,omitempty"`
 }
 
 // --- Central links ---

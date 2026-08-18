@@ -695,11 +695,19 @@ config editor marks them accordingly.
 
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|
+| `backup.dir` | string | `<data_dir>/backups` | `OPENCCU_LOOM_BACKUP_DIR` | no |
 | `backup.schedule` | duration | `0` (disabled) | — | no |
 | `backup.keep_last` | int | `0` (keep all) | — | no |
 
 `keep_last` prunes the oldest scheduled backups per central beyond the
 given count after each successful run.
+
+`dir` decides where the downloaded `.sbk` archives are kept. The default
+is wrong in exactly one situation: as CCU add-on software the data
+directory lives in the tree the CCU backs up itself, so its own backups
+would grow with every archive. The add-on's service script sets the env
+override to the CCU's backup target for that reason; see
+[Backup & restore](backup.md) for the full rule.
 
 ### `security`
 

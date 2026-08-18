@@ -38,6 +38,37 @@ export OPENCCU_LOOM_LOG_FORMAT=text
 # leaving itself offline.
 export OPENCCU_LOOM_SUPERVISOR=1
 
+# resolve_backup_dir echoes where the downloaded CCU archives belong.
+#
+# The default, ${ADDON_DIR}/var/backups, is the one place they must not
+# stay on a CCU: /usr/local is exactly the tree createBackup.sh and the
+# WebUI's create_backup CGI pack into an .sbk, so every CCU backup would
+# carry all previously downloaded archives, and the next one would carry
+# those again. It is also the internal flash on most installs.
+#
+# The order mirrors cronBackup.sh, so the archives land beside the CCU's
+# own: an operator-set path wins, otherwise external storage when the
+# system reports some. /usr/local/sdcard looks like it contradicts the
+# rule but does not: on an OVA it is its own mount, and both tar runs pass
+# --one-file-system, so they stop at its boundary. Falling through to the
+# empty string leaves the daemon on its default, which still carries the
+# .nobackup marker those tar runs honour — degraded, not broken.
+resolve_backup_dir() {
+  if [ -s /usr/local/etc/config/CronBackupPath ]; then
+    head -n1 /usr/local/etc/config/CronBackupPath
+    return
+  fi
+  if [ -e /var/status/hasUSB ] && [ -d /media/usb0 ]; then
+    echo /media/usb0/backup
+    return
+  fi
+  if [ -d /usr/local/sdcard ]; then
+    echo /usr/local/sdcard/backup
+    return
+  fi
+  echo ""
+}
+
 stop() {
   logger -t ${ADDON_ID} -p user.debug "Stopping"
   start-stop-daemon -K -q -p ${PIDFILE}
@@ -47,6 +78,16 @@ stop() {
 
 start() {
   logger -t ${ADDON_ID} -p user.debug "Starting"
+  # Resolved per start, not once at script load: an operator can plug in a
+  # USB stick or set CronBackupPath between two starts, and a restart is
+  # what the SPA tells them a directory change needs anyway.
+  BACKUP_DIR=$(resolve_backup_dir)
+  if [ -n "${BACKUP_DIR}" ]; then
+    export OPENCCU_LOOM_BACKUP_DIR=${BACKUP_DIR}
+    logger -t ${ADDON_ID} -p user.info "CCU archives go to ${BACKUP_DIR}"
+  else
+    logger -t ${ADDON_ID} -p user.info "No CCU backup target found, keeping archives in ${ADDON_DIR}/var/backups"
+  fi
   cd ${ADDON_DIR}
   # -b: background, -m: write the pidfile for start-stop-daemon's child.
   start-stop-daemon -S -q -b -m -p ${PIDFILE} \

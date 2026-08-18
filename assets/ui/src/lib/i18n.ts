@@ -1445,6 +1445,7 @@ const EN: Catalog = {
   "config.field.persistence.values_cache.flush_interval":
     "Cache flush interval",
   "config.field.persistence.values_cache.disabled_centrals": "Excluded CCUs",
+  "config.field.backup.dir": "Backup directory",
   "config.field.backup.schedule": "Automatic backup interval",
   "config.field.backup.keep_last": "Keep last N backups",
   "config.field.alarm.enabled": "Alarm engine enabled",
@@ -1742,6 +1743,8 @@ const EN: Catalog = {
     "How often to flush queued cache writes to disk. Default 60 s — short enough to survive a crash with minimal loss, long enough to coalesce bursts.",
   "config.help.persistence.values_cache.disabled_centrals":
     "List of central names (one per line) whose data points are kept out of the cache. Useful for test rigs in a multi-CCU deployment.",
+  "config.help.backup.dir":
+    "Where downloaded CCU archives are stored. Empty means <data directory>/backups. On a CCU add-on install the data directory sits inside the tree the CCU backs up itself, so pointing this at external storage keeps the CCU's own backups from growing with every archive. Takes effect after a daemon restart.",
   "config.help.backup.schedule":
     "How often each configured CCU is backed up automatically (e.g. 24h). Zero disables scheduled backups; manual backups via the Backups view still work. The first automatic backup runs one interval after start, not immediately.",
   "config.help.backup.keep_last":
@@ -5562,6 +5565,7 @@ const DE: Catalog = {
     "Cache-Flush-Intervall",
   "config.field.persistence.values_cache.disabled_centrals":
     "Ausgeschlossene CCUs",
+  "config.field.backup.dir": "Backup-Verzeichnis",
   "config.field.backup.schedule": "Intervall für automatische Backups",
   "config.field.backup.keep_last": "Letzte N Backups behalten",
   "config.field.alarm.enabled": "Alarmanlage aktiviert",
@@ -5865,6 +5869,8 @@ const DE: Catalog = {
     "Wie oft gepufferte Schreibvorgänge auf Disk geschrieben werden. Default 60 s — kurz genug, um einen Crash gut zu überstehen, lang genug, um Bursts zu sammeln.",
   "config.help.persistence.values_cache.disabled_centrals":
     "Liste von Central-Namen (eine pro Zeile), deren Datenpunkte NICHT gecached werden. Praktisch für Test-Rigs in Multi-CCU-Setups.",
+  "config.help.backup.dir":
+    "Wo heruntergeladene CCU-Archive abgelegt werden. Leer bedeutet <Datenverzeichnis>/backups. Bei einer Installation als CCU-Zusatzsoftware liegt das Datenverzeichnis in genau dem Bereich, den die CCU selbst sichert — ein Pfad auf externem Speicher verhindert daher, dass die CCU-Backups mit jedem Archiv weiter wachsen. Wirksam nach einem Neustart des Daemons.",
   "config.help.backup.schedule":
     "Wie oft jede konfigurierte CCU automatisch gesichert wird (z. B. 24h). Null deaktiviert geplante Backups; manuelle Backups über die Backups-Ansicht funktionieren weiter. Das erste automatische Backup läuft ein Intervall nach dem Start, nicht sofort.",
   "config.help.backup.keep_last":

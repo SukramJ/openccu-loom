@@ -265,7 +265,7 @@
               <a
                 class="text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
                 href={api.backupDownloadUrl(entry.id)}
-                download={`${entry.id}.sbk`}
+                download={entry.filename || `${entry.id}.sbk`}
               >
                 {t("backup.download")}
               </a>
