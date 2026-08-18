@@ -151,46 +151,41 @@ func (b *Blind) TiltPosition() (custom.Position, bool) {
 }
 
 // levelForCommand returns the position axis to hold when the caller
-// commands only the tilt axis, plus whether that value is an in-flight
-// target rather than a settled position.
+// commands only the tilt axis, plus whether the level axis carries an
+// optimistic write the CCU has not yet confirmed — a write genuinely in
+// flight, not merely a value that happens to be cached. Callers use
+// `pending` to decide whether the device is still moving and needs a
+// STOP before it accepts new coordinates.
 //
-// The value is the CCU-unconfirmed LEVEL write while one is pending and
-// the currently observed position otherwise — mirroring the reference
-// pair `_target_level` (defined as the optimistic value *only* until the
-// CCU confirms it) and `_group_level` (cover.py:305-338). Holding a
-// target past its confirmation is what made a pure tilt command re-send
-// a position the blind had already reached and long since left.
+// The held level itself comes from [Blind.Position], which already
+// blends (highest priority first) an active optimistic write, the
+// CCU-unconfirmed value [Blind.sendCombined] stages on every combined
+// write, and the last CCU-confirmed observation (see [DataPoint.Value]).
+// Staging the just-sent value on every combined write is what lets the
+// untouched axis survive a follow-up command issued before the CCU
+// echoes back; [DataPoint.OnEventAt] clears that staged value
+// unconditionally the instant any CCU value for the axis arrives —
+// confirmed or not — so, unlike the boolean staging this replaced, a
+// superseded value can never be re-sent.
 func (b *Blind) levelForCommand() (level float64, pending bool) {
-	if b.Cover != nil && b.Float != nil && b.IsOptimistic() {
-		if v, ok := b.Value(); ok {
-			if b.Capabilities.InvertedControl {
-				v = 1 - v
-			}
-			return v, true
-		}
+	if b.Cover != nil && b.Float != nil {
+		pending = b.IsOptimistic()
 	}
 	if pos, ok := b.Position(); ok {
-		return pos.Level(), false
+		return pos.Level(), pending
 	}
-	return closedLevel, false
+	return closedLevel, pending
 }
 
-// tiltForCommand is [Blind.levelForCommand] for the slat axis: the
-// unconfirmed LEVEL_2 write while one is pending, the observed slat
-// position otherwise.
+// tiltForCommand is [Blind.levelForCommand] for the slat axis.
 func (b *Blind) tiltForCommand() (tilt float64, pending bool) {
-	if b.level2 != nil && b.level2.IsOptimistic() {
-		if v, ok := b.level2.Value(); ok {
-			if b.Capabilities.InvertedControl {
-				v = 1 - v
-			}
-			return v, true
-		}
+	if b.level2 != nil {
+		pending = b.level2.IsOptimistic()
 	}
 	if pos, ok := b.TiltPosition(); ok {
-		return pos.Level(), false
+		return pos.Level(), pending
 	}
-	return closedLevel, false
+	return closedLevel, pending
 }
 
 // SetPosition commands the vertical position. The slat axis rides along
@@ -314,6 +309,26 @@ func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving
 		if err := b.writer.SetValue(ctx, b.Address(), hmenum.ParameterCombinedParameter, s, priority); err != nil {
 			return fmt.Errorf("blind: COMBINED_PARAMETER: %w", err)
 		}
+	}
+
+	// A combined write goes straight to the writer, bypassing the LEVEL /
+	// LEVEL_2 data points' own Set() path — so it never arms their
+	// optimistic tracker (IsOptimistic stays false; a repeat combined
+	// write is never treated as "still moving" by [levelForCommand] /
+	// [tiltForCommand] — see TestBlindDoesNotStopWhenNeitherAxisHasAPendingWrite).
+	// What it must still do is record what was just told to the CCU, so
+	// [Blind.Position] / [Blind.TiltPosition] can hand it back to a
+	// follow-up command on the other axis before the echo arrives.
+	// [DataPoint.WriteUnconfirmedValue] is exactly that record: a slot
+	// [DataPoint.OnEventAt] clears unconditionally on the next CCU value
+	// for the axis, so it can never outlive its own confirmation the way
+	// the boolean staging this replaced did.
+	writeAt := time.Now()
+	if b.Float != nil {
+		b.WriteUnconfirmedValue(wireL, writeAt)
+	}
+	if b.level2 != nil {
+		b.level2.WriteUnconfirmedValue(wireT, writeAt)
 	}
 	return nil
 }

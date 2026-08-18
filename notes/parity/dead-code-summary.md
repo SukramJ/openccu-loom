@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 14852e7f
-HEAD: 14852e7f
+Generated: 71dedf9c
+HEAD: 71dedf9c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29523 |
+| Total Exported | 29524 |
 | Reachable | 5106 |
-| Whitelisted | 21395 |
+| Whitelisted | 21396 |
 | **Unreachable** | **3022** |
 
 ## Top-20 Packages by Dead Code

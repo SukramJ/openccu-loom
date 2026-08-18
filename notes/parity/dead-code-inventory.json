@@ -1,6 +1,6 @@
 {
-  "generated": "14852e7f",
-  "head": "14852e7f",
+  "generated": "71dedf9c",
+  "head": "71dedf9c",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29523,
+    "total_exported": 29524,
     "reachable": 5106,
-    "whitelisted": 21395,
+    "whitelisted": 21396,
     "unreachable": 3022
   },
   "by_package": [
@@ -81699,6 +81699,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
       "line": 59
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "identifier": "TestBlindFollowUpCommandCarriesTheJustCommandedOtherAxis",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/blind_target_staleness_test.go",
+      "line": 244
     },
     {
       "package": "internal/model/custom/cover",
