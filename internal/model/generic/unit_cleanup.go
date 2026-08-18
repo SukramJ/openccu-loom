@@ -27,9 +27,16 @@ var fixUnitByParam = map[hmenum.Parameter]string{
 	hmenum.ParameterRSSIDevice:              "dBm",
 	hmenum.ParameterRSSIPeer:                "dBm",
 	"SUNSHINE_DURATION":                     "min",
-	"SUNSHINEDURATION":                      "min",
-	"WIND_DIRECTION":                        "°",
-	"WIND_DIRECTION_RANGE":                  "°",
+	// The CCU counts seconds; multiplierByParam converts to days, so the
+	// unit has to say days. Without this the parameter reported a factor
+	// that lands in one unit next to a label naming another, and every
+	// consumer that applied the factor mislabelled the reading. The MQTT
+	// entity description already declared `d` for it, which is why only
+	// the REST-facing pair was wrong.
+	hmenum.ParameterTimeOfOperation: "d",
+	"SUNSHINEDURATION":              "min",
+	"WIND_DIRECTION":                "°",
+	"WIND_DIRECTION_RANGE":          "°",
 }
 
 // FixUnitReplace mirrors
@@ -133,4 +140,45 @@ func (d *DataPoint[T]) Multiplier() float64 {
 		return m
 	}
 	return MultiplierForUnit(d.Descriptor.Unit)
+}
+
+// DisplayValue projects a raw wire value into the unit the data point
+// reports, by applying multiplier. It returns ok=false when there is
+// nothing to project — a trivial multiplier, or a value that is not a
+// number — so the caller leaves its field unset rather than repeating
+// the wire value under a second name.
+//
+// It exists so the projection happens once, in one place, instead of in
+// every north-bound renderer. Every consumer that got this wrong got it
+// wrong the same way: a LEVEL reads 0.42 on the wire and the unit says
+// `%`, so anything that prints the pair without multiplying shows a
+// dimmer at 0.42 % instead of 42 %.
+//
+// It deliberately does NOT change what the domain stores or writes. The
+// wire value is what the CCU sends and expects back, what the custom
+// data points compute on, and what the Matter mappings convert from —
+// scaling it at the source would need every one of those to un-scale it
+// again, silently and per site.
+//
+// An integer parameter projects to a float (TIME_OF_OPERATION counts
+// seconds and reports days): the display value describes a quantity,
+// not a wire encoding.
+func DisplayValue(raw any, multiplier float64) (any, bool) {
+	if multiplier == 0 || multiplier == DefaultMultiplier {
+		return nil, false
+	}
+	switch v := raw.(type) {
+	case float64:
+		return v * multiplier, true
+	case float32:
+		return float64(v) * multiplier, true
+	case int:
+		return float64(v) * multiplier, true
+	case int32:
+		return float64(v) * multiplier, true
+	case int64:
+		return float64(v) * multiplier, true
+	default:
+		return nil, false
+	}
 }

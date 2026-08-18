@@ -137,3 +137,66 @@ func TestDataPointMultiplier_TimeOfOperation(t *testing.T) {
 		t.Errorf("86400 * multiplier = %v, want 1.0 (1 day)", days)
 	}
 }
+
+// TestDisplayValue_TrivialMultiplierAbsent pins the "nothing to
+// project" gate: both the identity multiplier and a zero multiplier
+// (an un-set field, not a real 0×) leave the result absent so a
+// caller does not re-publish the wire value under a second name.
+func TestDisplayValue_TrivialMultiplierAbsent(t *testing.T) {
+	t.Parallel()
+	for _, mult := range []float64{generic.DefaultMultiplier, 0} {
+		if _, ok := generic.DisplayValue(0.42, mult); ok {
+			t.Errorf("DisplayValue(0.42, %v) reported ok=true, want false (trivial multiplier)", mult)
+		}
+	}
+}
+
+// TestDisplayValue_NonNumericAbsent pins the type gate: a raw value
+// that is not one of the numeric kinds a wire value ever takes
+// (string ENUM tokens, bool, nil) leaves the projection absent rather
+// than panicking or silently coercing.
+func TestDisplayValue_NonNumericAbsent(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []any{"BLACK", true, nil, []byte("x")} {
+		if _, ok := generic.DisplayValue(raw, 100.0); ok {
+			t.Errorf("DisplayValue(%#v, 100) reported ok=true, want false (non-numeric)", raw)
+		}
+	}
+}
+
+// TestDisplayValue_ProjectsAndReportsFloat pins the projection itself
+// and its output type: every accepted numeric kind — including the
+// integer kinds TIME_OF_OPERATION arrives as — projects to a float64,
+// because the display value describes a quantity (e.g. 1.5 days), not
+// a wire encoding.
+func TestDisplayValue_ProjectsAndReportsFloat(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		raw  any
+		mult float64
+		want float64
+	}{
+		{"float64 LEVEL", float64(0.42), 100.0, 42.0},
+		{"float32", float32(0.5), 100.0, 50.0},
+		{"int", int(2), 100.0, 200.0},
+		{"int32", int32(3), 100.0, 300.0},
+		{"int64 TIME_OF_OPERATION seconds", int64(86400), 1.0 / 86400.0, 1.0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := generic.DisplayValue(tc.raw, tc.mult)
+			if !ok {
+				t.Fatalf("DisplayValue(%#v, %v) reported ok=false, want true", tc.raw, tc.mult)
+			}
+			f, isFloat := got.(float64)
+			if !isFloat {
+				t.Fatalf("DisplayValue(%#v, %v) = %T, want float64", tc.raw, tc.mult, got)
+			}
+			if f != tc.want {
+				t.Errorf("DisplayValue(%#v, %v) = %v, want %v", tc.raw, tc.mult, f, tc.want)
+			}
+		})
+	}
+}
