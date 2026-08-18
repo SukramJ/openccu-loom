@@ -10,9 +10,17 @@ The medium and low findings of the round-4 full-codebase audit — the tail
 behind 0.62.0's critical and high ones. Around 130 of the 212 were fixed; the
 rest were either already closed by the 0.62.0 wave, refuted on inspection, or
 left open with the reason recorded, because a safe fix needed a design decision
-rather than a local edit. The north-bound API contract moves to **6.4.0**
-(additive: new MCP tools, argument schemas for nineteen WebSocket commands, and
-a few response fields). Ships database migration **039**.
+rather than a local edit. Ships database migration **039**.
+
+The north-bound API contract moves to **7.0.0**. Nothing the daemon *does*
+changed incompatibly — the major step is because the specification was wrong
+and now is not: `GET /diagnostics/capture` has always answered with an array
+while the schema declared an object, and the nullable fields were written in
+the OpenAPI 3.0 spelling inside a 3.1 document, where it has no meaning. A
+client that generated code from the old schema gets different types out of the
+new one, which is exactly what a major version is for. Everything else in the
+contract is additive: new MCP tools, argument schemas for nineteen WebSocket
+commands, and a few response fields.
 
 ### Added
 
