@@ -44,6 +44,13 @@ installed to `/usr/local/addons/openccu-loom/` per `uname -m`.
 - `:8119` REST API + Config UI (SPA) + bootstrap surface (login, `/setup`, `/health`, `/about`)
 - `:8120` XML-RPC callback · `:8129` BIN-RPC callback
 - Persistent state (SQLite DB + filesystem): `/usr/local/addons/openccu-loom/var`
+- Downloaded CCU archives: the CCU's own backup target, resolved at every
+  start (`/usr/local/etc/config/CronBackupPath`, otherwise external
+  storage). They are deliberately kept out of `var/`: that path is inside
+  the tree the CCU packs into its own `.sbk`, so each CCU backup would
+  carry every archive taken before it. Where no target can be resolved
+  they stay in `var/backups`, which carries a `.nobackup` marker so the
+  CCU's `tar` skips it.
 
 Ports and data dir are set via `OPENCCU_LOOM_*` env vars in
 `rc.d/openccu-loom`; edit there to resolve a port clash with another

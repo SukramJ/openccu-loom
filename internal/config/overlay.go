@@ -25,6 +25,7 @@ import (
 //
 //   - OPENCCU_LOOM_LOCALE                    → c.Locale
 //   - OPENCCU_LOOM_DATA_DIR                  → c.DataDir
+//   - OPENCCU_LOOM_BACKUP_DIR                → c.Backup.Dir
 //   - OPENCCU_LOOM_LOG_LEVEL                 → c.Logging.Level
 //   - OPENCCU_LOOM_LOG_FORMAT                → c.Logging.Format
 //   - OPENCCU_LOOM_CALLBACK_HOST             → c.Callback.Host
@@ -49,6 +50,7 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) error {
 	}
 	overlayString(getenv, "OPENCCU_LOOM_LOCALE", &c.Locale)
 	overlayString(getenv, "OPENCCU_LOOM_DATA_DIR", &c.DataDir)
+	overlayString(getenv, "OPENCCU_LOOM_BACKUP_DIR", &c.Backup.Dir)
 	overlayString(getenv, "OPENCCU_LOOM_LOG_LEVEL", &c.Logging.Level)
 	overlayString(getenv, "OPENCCU_LOOM_LOG_FORMAT", &c.Logging.Format)
 	overlayString(getenv, "OPENCCU_LOOM_CALLBACK_HOST", &c.Callback.Host)

@@ -194,6 +194,14 @@ func scheduledJobRestartRules() []RestartRule {
 			Differs: func(b, e *Config) bool { return b.AddonUpdate.CheckInterval != e.AddonUpdate.CheckInterval },
 		},
 		{
+			// The archive store is constructed once during bring-up, so a
+			// new directory only takes effect on the next boot. Without the
+			// rule a save would answer restart_required:false while every
+			// backup kept landing in the old place.
+			Path:    "backup.dir",
+			Differs: func(b, e *Config) bool { return b.Backup.Dir != e.Backup.Dir },
+		},
+		{
 			Path:    "backup.schedule",
 			Differs: func(b, e *Config) bool { return b.Backup.Schedule != e.Backup.Schedule },
 		},

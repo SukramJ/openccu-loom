@@ -264,6 +264,19 @@ func (c AddonUpdateConfig) PeriodicCheckEnabled() bool {
 // (a backup touches the CCU and produces files, so it is opt-in). A change to
 // either field is hot-reloaded — it only re-tunes a scheduler job interval.
 type BackupConfig struct {
+	// Dir is where the downloaded `.sbk` archives are kept. Empty means
+	// `<data_dir>/backups`.
+	//
+	// It exists because the daemon's data directory is the wrong place for
+	// them on a CCU add-on install: the data directory then lives under
+	// /usr/local, which is exactly the tree the CCU's own backup archives,
+	// so every CCU backup would carry all previously downloaded archives
+	// and grow without bound. The add-on's service script points this at
+	// the CCU's configured backup target (external storage) instead, and
+	// any other deployment can aim it at a mount that is not the daemon's
+	// state directory. Changing it needs a restart — the storage is
+	// constructed once during bring-up.
+	Dir string `yaml:"dir,omitempty" json:"dir,omitzero" cfg:"expert"`
 	// Schedule is how often each configured central is backed up
 	// automatically. Zero disables scheduled backups (manual backups via the
 	// REST/UI surface still work).

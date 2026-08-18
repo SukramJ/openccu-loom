@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -52,6 +53,74 @@ func TestBuildBackupAdapter_EmptyDataDir_FallsBackToVar(t *testing.T) {
 	a := buildBackupAdapter(cfg, reg, logger)
 	if a == nil {
 		t.Fatal("expected non-nil adapter even when backup dir creation fails")
+	}
+}
+
+// TestBuildBackupAdapter_ConfiguredBackupDir_Wins verifies that an explicit
+// cfg.Backup.Dir is used verbatim instead of the <DataDir>/backups default —
+// the CCU add-on points it at the CCU's own backup target so the daemon's
+// data directory is never conflated with the downloaded archives.
+func TestBuildBackupAdapter_ConfiguredBackupDir_Wins(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.DataDir = t.TempDir()
+	backupDir := filepath.Join(t.TempDir(), "custom-backups")
+	cfg.Backup.Dir = backupDir
+	reg := central.NewRegistry()
+	logger := slog.New(slog.DiscardHandler)
+
+	a := buildBackupAdapter(cfg, reg, logger)
+	if a == nil {
+		t.Fatal("expected non-nil adapter")
+	}
+	if fi, err := os.Stat(backupDir); err != nil || !fi.IsDir() {
+		t.Fatalf("configured Backup.Dir %q was not created: %v", backupDir, err)
+	}
+	defaultDir := filepath.Join(cfg.DataDir, ccuBackupsDirName)
+	if _, err := os.Stat(defaultDir); err == nil {
+		t.Errorf("default backup dir %q was created even though Backup.Dir was configured", defaultDir)
+	}
+}
+
+// TestBuildBackupAdapter_WhitespaceBackupDir_FallsBackToDataDir verifies that
+// a whitespace-only Backup.Dir is treated the same as unset, not as a literal
+// (invalid) directory name.
+func TestBuildBackupAdapter_WhitespaceBackupDir_FallsBackToDataDir(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.DataDir = t.TempDir()
+	cfg.Backup.Dir = "   "
+	reg := central.NewRegistry()
+	logger := slog.New(slog.DiscardHandler)
+
+	a := buildBackupAdapter(cfg, reg, logger)
+	if a == nil {
+		t.Fatal("expected non-nil adapter")
+	}
+	wantDir := filepath.Join(cfg.DataDir, ccuBackupsDirName)
+	if fi, err := os.Stat(wantDir); err != nil || !fi.IsDir() {
+		t.Fatalf("fallback dir %q was not created for a whitespace-only Backup.Dir: %v", wantDir, err)
+	}
+}
+
+// TestBuildBackupAdapter_EmptyBackupDir_FallsBackToDataDir verifies the
+// documented default: an empty Backup.Dir resolves to <DataDir>/backups, and
+// that resolved directory actually exists on disk afterwards.
+func TestBuildBackupAdapter_EmptyBackupDir_FallsBackToDataDir(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.DataDir = t.TempDir()
+	cfg.Backup.Dir = ""
+	reg := central.NewRegistry()
+	logger := slog.New(slog.DiscardHandler)
+
+	a := buildBackupAdapter(cfg, reg, logger)
+	if a == nil {
+		t.Fatal("expected non-nil adapter")
+	}
+	wantDir := filepath.Join(cfg.DataDir, ccuBackupsDirName)
+	if fi, err := os.Stat(wantDir); err != nil || !fi.IsDir() {
+		t.Fatalf("fallback dir %q was not created for an empty Backup.Dir: %v", wantDir, err)
 	}
 }
 

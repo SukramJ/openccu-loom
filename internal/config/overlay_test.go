@@ -15,6 +15,7 @@ func TestOverlayFromEnv(t *testing.T) {
 	getenv := mapEnv{
 		"OPENCCU_LOOM_LOCALE":                 "de",
 		"OPENCCU_LOOM_DATA_DIR":               "/var/lib/gohm",
+		"OPENCCU_LOOM_BACKUP_DIR":             "/mnt/backups",
 		"OPENCCU_LOOM_LOG_LEVEL":              "debug",
 		"OPENCCU_LOOM_LOG_FORMAT":             "text",
 		"OPENCCU_LOOM_CALLBACK_HOST":          "127.0.0.1",
@@ -39,6 +40,7 @@ func TestOverlayFromEnv(t *testing.T) {
 	}{
 		{"Locale", cfg.Locale, "de"},
 		{"DataDir", cfg.DataDir, "/var/lib/gohm"},
+		{"Backup.Dir", cfg.Backup.Dir, "/mnt/backups"},
 		{"LogLevel", cfg.Logging.Level, "debug"},
 		{"LogFormat", cfg.Logging.Format, "text"},
 		{"CallbackHost", cfg.Callback.Host, "127.0.0.1"},
@@ -139,6 +141,28 @@ func TestDefaultWithEnvKeepsDefaultWhenUnset(t *testing.T) {
 	t.Setenv("OPENCCU_LOOM_DATA_DIR", "")
 	if got := DefaultWithEnv().DataDir; got != "./var" {
 		t.Errorf("DefaultWithEnv().DataDir = %q, want ./var (default preserved when env unset)", got)
+	}
+}
+
+// TestDefaultWithEnvAppliesBackupDir mirrors [TestDefaultWithEnvAppliesDataDir]
+// for OPENCCU_LOOM_BACKUP_DIR: a daemon with no config file must still place
+// downloaded CCU archives where the variable points (the CCU add-on's service
+// script sets it to the configured backup target) instead of the
+// <data_dir>/backups default. See DefaultWithEnv and BackupConfig.Dir.
+func TestDefaultWithEnvAppliesBackupDir(t *testing.T) {
+	t.Setenv("OPENCCU_LOOM_BACKUP_DIR", "/mnt/backups")
+	if got := DefaultWithEnv().Backup.Dir; got != "/mnt/backups" {
+		t.Errorf("DefaultWithEnv().Backup.Dir = %q, want /mnt/backups (OPENCCU_LOOM_BACKUP_DIR must apply without a config file)", got)
+	}
+}
+
+// TestDefaultWithEnvKeepsBackupDirDefaultWhenUnset confirms the overlay is a
+// no-op for an empty/unset variable, so BackupConfig.Dir stays empty (which
+// resolves to <data_dir>/backups downstream).
+func TestDefaultWithEnvKeepsBackupDirDefaultWhenUnset(t *testing.T) {
+	t.Setenv("OPENCCU_LOOM_BACKUP_DIR", "")
+	if got := DefaultWithEnv().Backup.Dir; got != "" {
+		t.Errorf("DefaultWithEnv().Backup.Dir = %q, want \"\" (default preserved when env unset)", got)
 	}
 }
 
