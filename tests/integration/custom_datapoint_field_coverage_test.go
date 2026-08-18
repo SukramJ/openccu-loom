@@ -29,7 +29,7 @@ import (
 //
 // The key is "<type>.<field>" as the failure message prints it.
 var customFieldsNeverFilled = map[string]string{
-	"light.ColorTempLight.kelvin":"COLOR_TEMPERATURE exists only on the HmIP families, and the fleet " +
+	"light.ColorTempLight.kelvin": "COLOR_TEMPERATURE exists only on the HmIP families, and the fleet " +
 		"attaches a bare ColorTempLight only for the RF tunable-white dimmers, which express their " +
 		"colour temperature through the white-point level instead — ColorTempLight.colorLevel, which " +
 		"the fleet does fill. The HmIP path is embedded inside DRGDaliLight, and this walk inspects " +
