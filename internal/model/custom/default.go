@@ -11,7 +11,7 @@ var (
 )
 
 // DefaultRegistry returns the process-wide profile registry populated
-// by [RegisterGeneratedProfiles]. Package consumers should fetch the
+// by [RegisterProfiles]. Package consumers should fetch the
 // registry through this accessor rather than constructing their own,
 // unless they need an isolated instance (tests, alternate profile
 // sets).
@@ -21,7 +21,7 @@ var (
 func DefaultRegistry() *Registry {
 	defaultOnce.Do(func() {
 		defaultRegistry = NewRegistry()
-		RegisterGeneratedProfiles(defaultRegistry)
+		RegisterProfiles(defaultRegistry)
 		registerDefaultBlacklist(defaultRegistry)
 	})
 	return defaultRegistry

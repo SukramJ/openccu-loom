@@ -2,32 +2,30 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // custom_profile_constructor_resolves_test.go closes three gaps in the
-// device-profile parity coverage:
+// device-profile coverage:
 //
 //  1. TestEveryRegisteredProfileHasConstructor asserts that every profile
 //     the registry maps to at least one CCU device model resolves to a
 //     registered custom.Constructor — the silent-skip branch in
 //     custom.CreateCustomDataPoint ("the constructor for the profile is not
 //     registered (skip + log)") is supposed to be unreachable for any
-//     profile the generator emits a device mapping for. Without this guard
-//     a generator run that adds a DeviceProfile without the matching
-//     hand-written Go wrapper (the "Add a new device type" workflow in
-//     CLAUDE.md) compiles and passes every other contract test while the
-//     daemon silently creates zero custom data points for it at runtime.
+//     profile that carries a device mapping. Without this guard, adding a
+//     DeviceProfile without the matching hand-written Go wrapper (the "Add
+//     a new device type" workflow in CLAUDE.md) compiles and passes every
+//     other contract test while the daemon silently creates zero custom
+//     data points for it at runtime.
 //  2. TestRealDeviceModelsMaterializeCustomDataPoint drives the real,
 //     unmodified custom.CreateCustomDataPoints pipeline against a handful
 //     of well-known CCU models and asserts the profile's primary channel
 //     ends up with a non-nil CustomDataPoint — catching a constructor that
 //     is registered but returns (nil, nil) once actually invoked, which
 //     TestEveryRegisteredProfileHasConstructor cannot see.
-//  3. TestProfileRegistryCountsMatchAiohomematicSource and
-//     TestProfileFieldMappingsMatchAiohomematicSource pin the generated
-//     profile catalogue against values independently derived from the
-//     reference implementation's own source (not read back from
-//     internal/model/custom/generated_profiles.go's own constants, which is
-//     what the existing profile_parity_generated_test.go compares against —
-//     a self-referential check that cannot catch a generator bug that
-//     miscounts identically on both sides of the same run).
+//  3. TestPinnedChannelGroupSchemasAreUnchanged pins four representative
+//     channel-group schemas field by field. Since the catalogue became
+//     hand-maintained (ADR 0063) this is the only content guard over it:
+//     the catalogue-wide invariants in device_profile_catalogue_test.go
+//     check coherence, not composition, and a mistyped parameter in a
+//     schema is otherwise caught by nothing until a device stops working.
 package contract
 
 import (
@@ -197,52 +195,7 @@ func TestRealDeviceModelsMaterializeCustomDataPoint(t *testing.T) {
 	}
 }
 
-// TestProfileRegistryCountsMatchAiohomematicSource pins the three generated
-// profile-catalogue counts against values independently counted from the
-// reference implementation's own registry, not read back from
-// internal/model/custom/generated_profiles.go's own constants (that
-// self-comparison is what profile_parity_generated_test.go already does,
-// and it cannot detect a generator bug that mis-counts identically on both
-// sides of the same run).
-//
-// Independently derived by running, against a checkout of the reference
-// implementation (module path elided; see script/generate_profiles.py for
-// the exact import root):
-//
-//	import model.custom  # noqa: F401 (triggers registrations)
-//	from model.custom.registry import DeviceProfileRegistry
-//	from model.custom.profile import DEFAULT_DATA_POINTS, PROFILE_CONFIGS
-//	sum(len(v) if isinstance(v, tuple) else 1
-//	    for m in DeviceProfileRegistry._configs.values() for v in m.values())  # profile entry count
-//	len(PROFILE_CONFIGS)      # profile-config catalogue size
-//	len(DEFAULT_DATA_POINTS)  # default-data-point channel-offset count
-//
-// Re-run the snippet above against the pinned reference-implementation
-// version whenever intentionally regenerating, and update the three
-// constants below together with script/generate_profiles.py's output — a
-// drift here means the generator's count and the source's count disagree,
-// which the generated file's own self-referential constant cannot reveal.
-func TestProfileRegistryCountsMatchAiohomematicSource(t *testing.T) {
-	// Counted against reference-implementation 2026.8.3, the version the
-	// checked-in tables were generated from.
-	const (
-		wantProfileCount          = 142
-		wantProfileConfigCount    = 33
-		wantDefaultDataPointCount = 3
-	)
-
-	if got := custom.DefaultRegistry().Len(); got != wantProfileCount {
-		t.Errorf("registry has %d profiles; aiohomematic DeviceProfileRegistry independently counts %d", got, wantProfileCount)
-	}
-	if got := len(custom.ProfileConfigs); got != wantProfileConfigCount {
-		t.Errorf("ProfileConfigs has %d entries; aiohomematic PROFILE_CONFIGS independently counts %d", got, wantProfileConfigCount)
-	}
-	if got := len(custom.DefaultDataPoints); got != wantDefaultDataPointCount {
-		t.Errorf("DefaultDataPoints has %d entries; aiohomematic DEFAULT_DATA_POINTS independently counts %d", got, wantDefaultDataPointCount)
-	}
-}
-
-// fieldValueRef is the independently-authored expected shape of a
+// fieldValueRef is the pinned expected shape of a
 // [custom.FieldValue]: the wire parameter plus the optional visibility
 // forcing decision, mirroring [custom.ResolveFieldValue]'s return shape.
 type fieldValueRef struct {
@@ -257,8 +210,8 @@ func visibleRef(p hmenum.Parameter) fieldValueRef {
 	return fieldValueRef{parameter: p, isVisible: &v}
 }
 
-// assertFieldsMatchReference compares a ProfileConfig's field map against an
-// independently-authored reference, field-by-field (both the wire parameter
+// assertFieldsMatchReference compares a ProfileConfig's field map against the
+// pinned shape, field-by-field (both the wire parameter
 // and the visibility-forcing decision), erroring on any key present in only
 // one side or a parameter/visibility mismatch on a shared key.
 func assertFieldsMatchReference(t *testing.T, label string, got map[hmenum.Field]custom.FieldValue, want map[hmenum.Field]fieldValueRef) {
@@ -266,7 +219,7 @@ func assertFieldsMatchReference(t *testing.T, label string, got map[hmenum.Field
 	for field, wantFV := range want {
 		gotFV, ok := got[field]
 		if !ok {
-			t.Errorf("%s: missing field %q (aiohomematic reference maps it to %q)", label, field, wantFV.parameter)
+			t.Errorf("%s: missing field %q (the pinned shape maps it to %q)", label, field, wantFV.parameter)
 			continue
 		}
 		gotParam, gotVisible := custom.ResolveFieldValue(gotFV)
@@ -279,7 +232,7 @@ func assertFieldsMatchReference(t *testing.T, label string, got map[hmenum.Field
 	}
 	for field := range got {
 		if _, ok := want[field]; !ok {
-			t.Errorf("%s: field %q is not in the aiohomematic reference composition", label, field)
+			t.Errorf("%s: field %q is not in the pinned composition", label, field)
 		}
 	}
 }
@@ -296,18 +249,22 @@ func boolPtrValue(b *bool) string {
 	return "hidden"
 }
 
-// TestProfileFieldMappingsMatchAiohomematicSource pins the wrapped
-// generic-DP composition (the Field→Parameter mapping, plus visibility
-// forcing) of four representative profiles — spanning cover, switch, lock
-// and climate — against literals hand-derived directly from the reference
-// implementation's model/custom/profile.py PROFILE_CONFIGS
-// entries (IP_COVER_CONFIG, IP_SWITCH_CONFIG, IP_LOCK_CONFIG,
-// IP_THERMOSTAT_CONFIG). The wrapped-DP set was previously only exercised
-// by the cross-stack model-snapshot pipeline, which tolerates it as an
-// unchecked field (notes/parity/by_design.md); this test cross-checks the
-// composition directly, at contract-test speed, without needing a live CCU
-// or the model-snapshot pipeline's ~70 MB fixtures.
-func TestProfileFieldMappingsMatchAiohomematicSource(t *testing.T) {
+// TestPinnedChannelGroupSchemasAreUnchanged pins the wrapped generic-DP
+// composition (the Field→Parameter mapping, plus visibility forcing) of
+// four representative profiles — spanning cover, switch, lock and
+// climate — field by field.
+//
+// The literals were hand-derived from the reference implementation's
+// PROFILE_CONFIGS when the catalogue was forked, so what the test pins
+// today is the fork point. That is deliberate: the catalogue is
+// hand-maintained now (ADR 0063), and an accidental edit to one of these
+// schemas is invisible until a device stops binding a field.
+//
+// A *deliberate* change to a pinned schema updates the literal here and
+// records the deviation in notes/parity/by_design.md with the wire fact
+// behind it. Updating the literal alone turns this guard into a
+// rubber stamp.
+func TestPinnedChannelGroupSchemasAreUnchanged(t *testing.T) {
 	registry := custom.DefaultRegistry()
 
 	cfg := func(name hmenum.DeviceProfile) custom.ChannelGroupConfig {
@@ -363,7 +320,7 @@ func TestProfileFieldMappingsMatchAiohomematicSource(t *testing.T) {
 	}
 	switchPC := custom.ProfileConfigs[hmenum.DeviceProfile("IPSwitch")]
 	if got := switchPC.AdditionalDataPoints[3]; !parameterSlicesEqualAsSets(got, wantSwitchAdditional) {
-		t.Errorf("IPSwitch.AdditionalDataPoints[3] = %v, want %v (aiohomematic profile.py:560)", got, wantSwitchAdditional)
+		t.Errorf("IPSwitch.AdditionalDataPoints[3] = %v, want %v (pinned at the fork point)", got, wantSwitchAdditional)
 	}
 
 	// IPLock — reference implementation model/custom/profile.py:618 IP_LOCK_CONFIG.

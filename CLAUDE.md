@@ -562,7 +562,6 @@ openccu-loom/
 │   ├── reference/           — CCU jpages contract, CONTROL inventory, …
 │   └── testplans/           — e2e-testplan, testplan
 ├── script/
-│   ├── generate_profiles.py — auto-generates profile registry from aiohomematic
 │   ├── aiohomematic_snapshot.py
 │   ├── homematicip_local_snapshot.py
 │   ├── model_snapshot_diff.py
@@ -598,8 +597,9 @@ documents are English-only.
 ### Prerequisites
 
 - Go 1.26 or newer
-- Python 3.14+ (only for the profile generator script; integration
-  tests run a pure-Go simulator and need no Python toolchain)
+- Python 3.14+ (only for the cross-stack snapshot scripts under
+  `script/`; the build, the tests and the integration simulator are
+  pure Go and need no Python toolchain)
 - `golangci-lint` v2 (the repo's `.golangci.yaml` is v2-format; CI
   installs `golangci-lint/v2` from source — a v1 binary rejects the config)
 - `gofumpt`
@@ -958,9 +958,7 @@ When you would otherwise create a `*_coverage`/`*_boostN`/`*_batchN` file,
 add the cases to the existing unit's test file instead. `parity` /
 `golden` / `contract` remain acceptable **only** when the file genuinely
 implements that test kind (e.g. a real matter.js parity check), never as a
-catch-all label. One generated file is exempt: the profile-parity table is
-emitted by `script/generate_profiles.py` to a fixed path and must keep its
-name.
+catch-all label.
 
 Three mandatory test pillars:
 
@@ -1135,23 +1133,30 @@ Callers that need a device-type revision at runtime should use
 than hard-coding a switch — that way the next `make generate-matter-schema`
 automatically propagates the update without requiring a second manual edit.
 
-### Regenerate device profiles from aiohomematic
+### Add a new device type
 
-```sh
-make generate
-# or run the generator directly — it takes no CLI args, auto-discovers
-# the repo root, reads aiohomematic from the active Python env, and
-# emits the fixed output paths:
-python3 script/generate_profiles.py
-```
+The device-profile catalogue is **hand-maintained** — there is no
+generator (ADR 0063). Adding a device is four edits and one measurement:
 
-### Add a new device type (new profile in aiohomematic → follow here)
-
-1. Update the installed aiohomematic version in the Python env.
-2. Regenerate profiles (`make generate`).
-3. Review the diff; any new `DeviceProfile` enum values require a
-   hand-written Go wrapper type under `internal/model/custom/<cat>/`.
-4. Add or update contract tests.
+1. Read the CCU's own device description for the model (the embedded
+   `godevccu` fixtures under
+   `../godevccu/internal/embed/data/paramset_descriptions/` carry it for
+   the simulated fleet). Note which channel holds which parameter — that
+   is the fact the rest of the work rests on, and guessing it produces a
+   profile that binds nothing.
+2. Add the registration to `internal/model/custom/profiles.go`
+   (device type, category, base channels, the schema pointer).
+3. Add or reuse a channel-group schema in
+   `internal/model/custom/profile_configs.go`. Reuse only when the
+   parameter *and* the channel offsets match — a schema shared by two
+   devices that place a field differently cannot serve both, and that is
+   what the per-registration `Config` pointer is for.
+4. A new `DeviceProfile` value needs a hand-written Go wrapper and a
+   registered constructor under `internal/model/custom/<cat>/`;
+   `TestEveryRegisteredProfileHasConstructor` fails without it.
+5. Where the catalogue deviates from the reference implementation,
+   record it in `notes/parity/by_design.md` with the wire fact behind
+   it.
 
 ### Add a REST endpoint
 

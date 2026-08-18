@@ -14,7 +14,7 @@ import (
 // helper: returns a Registry pre-populated with the generated profiles.
 func testDefaultRegistry() *Registry {
 	r := NewRegistry()
-	RegisterGeneratedProfiles(r)
+	RegisterProfiles(r)
 	return r
 }
 

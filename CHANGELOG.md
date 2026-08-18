@@ -129,6 +129,15 @@ and `display_value` on a data point, which carry the minor steps to 7.2.0.
 
 ### Internal
 
+- The device-profile catalogue is maintained in this repository instead of being
+  generated from the reference implementation ([ADR 0063](docs/adr/0063-self-maintained-device-profiles.md)).
+  A profile that cannot express the truth for two devices sharing it — the HmIP
+  door locks place the same field on different channels — was previously only
+  correctable upstream or by a runtime workaround. `script/generate_profiles.py`
+  is gone, the three catalogue files are ordinary source, and the pins that
+  compared their size against the generator's own output are replaced by
+  invariants over the catalogue itself. No behaviour changes; the profile data is
+  byte-identical to what the last generator run produced.
 - The text-display wire snapshots pinned an icon value the device does not have,
   so the guard was recording the defect rather than preventing it.
 - Two batches independently added the same health flag and the same pair of MCP

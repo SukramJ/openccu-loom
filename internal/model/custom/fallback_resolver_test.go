@@ -300,14 +300,20 @@ func TestRegistryDeviceTypesIsSorted(t *testing.T) {
 // Cluster B — DefaultRegistry coverage
 // =====================================================================
 
-// TestDefaultRegistryHasExpectedSize is a tripwire: the process-wide
-// registry must hold at least as many profiles as the generator
-// constant claims (138). A smaller count indicates lost profiles.
-func TestDefaultRegistryHasExpectedSize(t *testing.T) {
+// TestDefaultRegistryIsPopulated is a tripwire on the init() wiring:
+// the process-wide registry must come up carrying the catalogue. A
+// zero or near-zero count means RegisterProfiles never ran, which no
+// other test in this file would notice — they all build their own
+// registry.
+//
+// It deliberately does not pin an exact number. The catalogue is
+// hand-maintained (ADR 0063), so its size changes whenever a device is
+// added, and a count assertion would only ever be updated to match.
+func TestDefaultRegistryIsPopulated(t *testing.T) {
 	t.Parallel()
 	dr := DefaultRegistry()
-	if got := dr.Len(); got < GeneratedProfileCount {
-		t.Errorf("DefaultRegistry.Len()=%d, want >= %d (GeneratedProfileCount)", got, GeneratedProfileCount)
+	if got := dr.Len(); got < 100 {
+		t.Errorf("DefaultRegistry.Len()=%d, want the full catalogue — the init() registration looks broken", got)
 	}
 }
 
@@ -315,7 +321,7 @@ func TestDefaultRegistryHasExpectedSize(t *testing.T) {
 // within any single category no two profiles share the same
 // (category, deviceType, name) triple — the registry key itself
 // enforces this, but we exercise the global default registry to
-// confirm RegisterGeneratedProfiles is well-formed.
+// confirm RegisterProfiles is well-formed.
 func TestDefaultRegistryDeviceTypesAreUniquePerCategory(t *testing.T) {
 	t.Parallel()
 	dr := DefaultRegistry()

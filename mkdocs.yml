@@ -154,6 +154,7 @@ nav:
           - ADR 0060 — loom-prefixed interface IDs: adr/0060-loom-prefixed-interface-ids.md
           - ADR 0061 — Migration down-path unsupported: adr/0061-migration-down-path-unsupported.md
           - ADR 0062 — Suppression reasons are recomputed: adr/0062-suppression-reasons-are-recomputed.md
+          - ADR 0063 — Self-maintained device profiles: adr/0063-self-maintained-device-profiles.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

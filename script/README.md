@@ -54,7 +54,6 @@ aiohomematic install.
 
 ## Other scripts
 
-- `generate_profiles.py` — regenerates `internal/model/custom/generated_profiles.go` from the aiohomematic profile registry.
 - `gen_propkinds.go` — pre-computes `payload:"info|config|state"` descriptors per struct so the runtime payload extractor (`internal/payload`) can short-cut its reflection path. Skeleton only; the runtime wiring follows once we know which packages are hot enough to warrant the optimisation.
 - `clean-mqtt-discovery.sh` — clears retained Home Assistant Discovery configs that were published by OpenCCU-Loom. Run after any change to the discovery payload schema: HA replays retained configs on connect and rejects every entry whose schema no longer validates, which leaves stale `extra keys not allowed` errors in the HA log until the broker is purged. Requires `mosquitto-clients`. Defaults to a dry run; pass `-y` to actually clear.
 
