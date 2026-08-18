@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -239,8 +240,20 @@ type DataPointSummary struct {
 	UniqueID       string `json:"unique_id"`
 	ParameterLabel string `json:"parameter_label,omitempty"`
 	Value          any    `json:"value"`
-	Observed       bool   `json:"observed"`
-	ModifiedAt     string `json:"modified_at,omitempty"`
+	// DisplayValue is Value expressed in the unit `unit` names, i.e.
+	// Value × Multiplier. Present only when that projection is
+	// non-trivial; absent means Value already is the displayable
+	// number.
+	//
+	// It exists because Value is the raw CCU wire value and cannot stop
+	// being that — the write path sends it back, and the domain computes
+	// on it. A LEVEL reads 0.42 with unit `%`, so a client that renders
+	// the pair shows 0.42 % unless it multiplies. Rendering DisplayValue
+	// when present, and Value otherwise, is always correct and needs no
+	// arithmetic on the client.
+	DisplayValue any    `json:"display_value,omitempty"`
+	Observed     bool   `json:"observed"`
+	ModifiedAt   string `json:"modified_at,omitempty"`
 	// Source is the wire-side lifecycle token: "unobserved" | "cache"
 	// | "live" | "stale". Surfaced so UI consumers can render a
 	// freshness badge without inferring state from timestamps alone.
@@ -1018,6 +1031,12 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	s.UIHint = &hint
 	if ok {
 		s.Value = raw
+		// s.Multiplier is only ever non-zero for a non-trivial multiplier
+		// (the gate above), so DisplayValue and Multiplier agree on when
+		// the projection applies without a second lookup.
+		if dv, dvOK := generic.DisplayValue(raw, s.Multiplier); dvOK {
+			s.DisplayValue = dv
+		}
 	}
 	if t := dp.ModifiedAt(); !t.IsZero() {
 		s.ModifiedAt = t.UTC().Format("2006-01-02T15:04:05.000Z")

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.1.0
+  version: 7.2.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9075,6 +9075,20 @@ components:
             collapse is an entity-naming concern, row captions keep
             their label.
         value: {}
+        display_value:
+          type: number
+          description: >-
+            `value` expressed in the unit `unit` names, i.e.
+            `value * multiplier`. Present only when that projection is
+            non-trivial; absent means `value` already is the displayable
+            number.
+
+            It exists because `value` is the raw CCU wire value and has to
+            stay that: the write path sends it back unchanged. A LEVEL data
+            point reads 0.42 with unit `%`, so rendering the pair without
+            multiplying shows a dimmer at 0.42 %. Render `display_value`
+            when present and `value` otherwise — that is always correct and
+            needs no arithmetic on the client. Writes always carry `value`.
         observed: { type: boolean }
         modified_at:
           type: string

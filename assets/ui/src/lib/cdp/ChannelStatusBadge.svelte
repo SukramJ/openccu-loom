@@ -49,11 +49,23 @@
     load();
     const unsub = subscribe((ev) => {
       if (ev.type !== "data_point") return;
-      const e = ev.payload as { channel_address: string; parameter: string; value: unknown };
+      const e = ev.payload as {
+        channel_address: string;
+        parameter: string;
+        value: unknown;
+        display_value?: number;
+      };
       if (e.channel_address !== channelAddress) return;
       const idx = dataPoints.findIndex((dp) => dp.parameter === e.parameter);
       if (idx < 0) return;
-      dataPoints[idx] = { ...dataPoints[idx], value: e.value, observed: true };
+      // Carries display_value through so formatDP() never disagrees with
+      // the REST-seeded reading for the same data point after a live push.
+      dataPoints[idx] = {
+        ...dataPoints[idx],
+        value: e.value,
+        display_value: e.display_value,
+        observed: true,
+      };
     });
     // The boot snapshot no longer replays values into the stream; it
     // signals a resync and the tile reloads its own state.
@@ -113,14 +125,15 @@
   });
 
   // Format a DP value for the badge: numbers carry the descriptor unit
-  // when present (and the explicit LEVEL → percent conversion stays).
-  // An ENUM reaches the SPA as the raw value_list index, so it is
-  // resolved to its label first — a bare `2` says nothing about a smoke
-  // detector's alarm status.
+  // when present, projected through the daemon's display_value (value *
+  // multiplier) when it supplies one — LEVEL, DIRT_LEVEL, SMOKE_LEVEL and
+  // friends report a raw 0..1 with unit "%" otherwise. An ENUM reaches the
+  // SPA as the raw value_list index, so it is resolved to its label first —
+  // a bare `2` says nothing about a smoke detector's alarm status.
   function formatDP(dp: DataPointSummary): string {
     const label = enumValueLabel(dp);
     if (label !== undefined) return label;
-    return formatValue(dp.value, dp.parameter, dp.unit);
+    return formatValue(dp.display_value ?? dp.value, dp.parameter, dp.unit);
   }
 
   // Coarse human-readable age formatter for the freshness tooltip.
@@ -144,8 +157,9 @@
       return v ? t("quick.on") : t("quick.off");
     }
     if (typeof v === "number") {
-      // LEVEL is stored as 0..1 — render as percent regardless of unit.
-      if (key === "LEVEL") return `${Math.round(v * 100)} %`;
+      // The caller already passes display_value (value * multiplier) when
+      // the daemon projects one — LEVEL, DIRT_LEVEL, SMOKE_LEVEL, … arrive
+      // here already in percent, no per-parameter special-case needed.
       const formatted = Number.isInteger(v) ? String(v) : v.toFixed(1);
       if (unit) return `${formatted} ${unit}`;
       return formatted;

@@ -140,9 +140,12 @@
     const n = Number(v);
     if (!Number.isFinite(n)) return String(v);
     // INTEGER: show as integer. FLOAT: trim trailing zeros but keep
-    // at least one decimal when the step-resolution warrants it.
-    if (parameter.type === "INTEGER") return String(Math.round(n));
-    const formatted = Number.isInteger(n) ? n.toFixed(1) : String(n);
+    // at least one decimal when the step-resolution warrants it. A
+    // multiplier projection can turn an INTEGER field's displayed value
+    // fractional (TIME_OF_OPERATION: seconds -> days), so only round to
+    // integer when no projection is applied.
+    if (parameter.type === "INTEGER" && multiplier === 1) return String(Math.round(n));
+    const formatted = Number.isInteger(n) ? String(n) : n.toFixed(1);
     return formatted;
   }
 
@@ -184,6 +187,51 @@
     typeof parameter.max === "number" ? parameter.max : null,
   );
 
+  // Multiplier converts the raw CCU wire value into the unit `parameter.unit`
+  // names (LEVEL raw 0.42, unit "%", multiplier 100 -> 42). Absent/0 means no
+  // projection. LINK-paramset parameters never carry one — they route through
+  // `renderAsLevel` / ParameterLevelField (display_as_percent) instead, so
+  // this only ever applies to VALUES/MASTER numeric fields. Mirrors
+  // ParameterLevelField's *100 read / /100 write shape for the generic case.
+  const multiplier = $derived(
+    typeof parameter.multiplier === "number" && parameter.multiplier !== 0
+      ? parameter.multiplier
+      : 1,
+  );
+
+  // IEEE-754 multiplication/division leaves noise a human never asked for
+  // (0.55 * 100 === 55.00000000000001), which then defeats Number.isInteger
+  // checks and leaks as garbage digits into both the read-only display and
+  // the editable number input. Round-tripping through 12 significant digits
+  // discards that noise while keeping every decimal a real projection needs.
+  function cleanFloat(n: number): number {
+    return Number(n.toPrecision(12));
+  }
+
+  // Project a raw wire value into the displayed unit. Non-numeric values
+  // pass through unchanged so existing null/blank handling keeps working.
+  function toDisplay(v: unknown): unknown {
+    if (multiplier === 1 || typeof v !== "number" || !Number.isFinite(v)) {
+      return v;
+    }
+    return cleanFloat(v * multiplier);
+  }
+
+  // Inverse of toDisplay. Called only from onChange handlers, right before
+  // handing the value to the caller — the working-values map the parent
+  // owns always stays in raw wire units, exactly what the CCU write path
+  // and the schema's own `value` expect.
+  function fromDisplay(n: number): number {
+    return multiplier === 1 ? n : cleanFloat(n / multiplier);
+  }
+
+  const displayMin = $derived(
+    numericMin !== null ? (toDisplay(numericMin) as number) : null,
+  );
+  const displayMax = $derived(
+    numericMax !== null ? (toDisplay(numericMax) as number) : null,
+  );
+
   const renderAsSlider = $derived.by(() => {
     if (parameter.type !== "FLOAT" && parameter.type !== "INTEGER") return false;
     if (renderAsLevel) return false;
@@ -199,7 +247,12 @@
     return false;
   });
 
-  const sliderStep = $derived(parameter.type === "FLOAT" ? "any" : "1");
+  // A multiplier turns an INTEGER-declared field's displayed number
+  // fractional (TIME_OF_OPERATION: seconds -> days), so "1" is only the
+  // right step when no projection is happening.
+  const sliderStep = $derived(
+    parameter.type === "FLOAT" || multiplier !== 1 ? "any" : "1",
+  );
 
   // Coerce numbers out of input events before firing onChange. The
   // <input type="number"> emits strings, which we normalise to number
@@ -300,7 +353,7 @@
     {:else if parameter.type === "FLOAT" || parameter.type === "INTEGER"}
       <div class="flex items-baseline gap-2">
         <span class="font-mono text-lg font-semibold tabular-nums text-slate-800 dark:text-slate-100">
-          {numericDisplay(value)}
+          {numericDisplay(toDisplay(value))}
         </span>
         {#if parameter.unit}
           <span class="text-xs text-[var(--ha-secondary-text-color)]">{parameter.unit}</span>
@@ -369,28 +422,28 @@
     <div class="flex items-center gap-3">
       <input
         type="range"
-        min={numericMin ?? undefined}
-        max={numericMax ?? undefined}
+        min={displayMin ?? undefined}
+        max={displayMax ?? undefined}
         step={sliderStep}
-        value={value != null ? String(value) : numericMin ?? 0}
+        value={value != null ? String(toDisplay(value)) : displayMin ?? 0}
         disabled={interactionDisabled}
         class="h-3 flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 accent-brand-500 dark:bg-slate-700"
         oninput={(e) => {
           const n = toNumber((e.target as HTMLInputElement).value);
-          if (n !== null) onChange(n);
+          if (n !== null) onChange(fromDisplay(n));
         }}
       />
       <div class="w-24">
         <Input
           type="number"
           step={sliderStep}
-          min={numericMin ?? undefined}
-          max={numericMax ?? undefined}
-          value={value as number | null}
+          min={displayMin ?? undefined}
+          max={displayMax ?? undefined}
+          value={toDisplay(value) as number | null}
           disabled={interactionDisabled}
           oninput={(e) => {
             const n = toNumber((e.target as HTMLInputElement).value);
-            if (n !== null) onChange(n);
+            if (n !== null) onChange(fromDisplay(n));
           }}
         />
       </div>
@@ -398,14 +451,14 @@
   {:else if parameter.type === "FLOAT" || parameter.type === "INTEGER"}
     <Input
       type="number"
-      step={parameter.type === "FLOAT" ? "any" : "1"}
-      min={parameter.min as number | undefined}
-      max={parameter.max as number | undefined}
-      value={value as number | null}
+      step={sliderStep}
+      min={displayMin ?? undefined}
+      max={displayMax ?? undefined}
+      value={toDisplay(value) as number | null}
       disabled={interactionDisabled}
       oninput={(e) => {
         const n = toNumber((e.target as HTMLInputElement).value);
-        if (n !== null) onChange(n);
+        if (n !== null) onChange(fromDisplay(n));
       }}
     />
   {:else if parameter.type === "STRING"}

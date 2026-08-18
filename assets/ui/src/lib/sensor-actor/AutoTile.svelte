@@ -78,10 +78,17 @@
     }
   }
 
-  function patchDP(parameter: string, value: unknown) {
+  function patchDP(parameter: string, value: unknown, displayValue?: number) {
     dataPoints = dataPoints.map((dp) =>
       dp.parameter === parameter
-        ? { ...dp, value, observed: true, source: "live", modified_at: new Date().toISOString() }
+        ? {
+            ...dp,
+            value,
+            display_value: displayValue,
+            observed: true,
+            source: "live",
+            modified_at: new Date().toISOString(),
+          }
         : dp,
     );
   }
@@ -94,9 +101,13 @@
         channel_address: string;
         parameter: string;
         value: unknown;
+        display_value?: number;
       };
       if (e.channel_address !== channelAddress) return;
-      patchDP(e.parameter, e.value);
+      // Carries display_value through so NumericReadout (fed dataPoints
+      // here) never jumps between the scaled REST-seeded number and a raw
+      // WS-updated one for the same reading.
+      patchDP(e.parameter, e.value, e.display_value);
     });
     // The boot snapshot no longer replays values into the stream; it
     // signals a resync and the tile reloads its own state.

@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
@@ -1352,6 +1353,20 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 	// same helper answers for the MQTT slot state, so the two planes cannot
 	// disagree about one data point.
 	_, availDP := lookupDPSource(ch, e.Key.Parameter, bucket)
+	newValue := e.NewValue.Unwrap()
+	// DisplayValue mirrors the REST data-point summary's projection so a
+	// client that seeds from REST and updates from this stream never sees
+	// the reading jump between a scaled and a raw number for the same DP.
+	// MQTT is deliberately excluded from this projection — see
+	// [EventBridge.publishValueChangedMQTT] and
+	// internal/north/mqtt/discovery.go's applyMultiplierSensor /
+	// applyMultiplierNumber, which already scale via HA value templates.
+	var displayValue any
+	if m, ok := availDP.(interface{ Multiplier() float64 }); ok {
+		if dv, dvOK := generic.DisplayValue(newValue, m.Multiplier()); dvOK {
+			displayValue = dv
+		}
+	}
 	b.wsHub.PublishDataPointValueChanged(ws.ValueChange{
 		EnvelopeKind:  envKind,
 		Central:       centralName,
@@ -1360,7 +1375,8 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 		Channel:       channelNo,
 		Parameter:     e.Key.Parameter,
 		ParamsetKey:   string(e.Key.ParamsetKey),
-		Value:         e.NewValue.Unwrap(),
+		Value:         newValue,
+		DisplayValue:  displayValue,
 		Previous:      e.OldValue.Unwrap(),
 		When:          e.Timestamp(),
 		Category:      category,

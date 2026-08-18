@@ -94,6 +94,13 @@ type stubWSCalcDP struct {
 	category hmenum.DataPointCategory
 	value    float64
 	hasValue bool
+	// multiplier feeds the DisplayValue projection in toCalculatedDPEntry.
+	// Zero (the default every addWSCalculatedDP caller gets) is the
+	// trivial case: every shipping calculated data point reports it, so
+	// display_value stays absent. A non-zero value is only ever set
+	// directly by a test exercising the non-trivial branch, since no
+	// production calculated DP carries one yet.
+	multiplier float64
 }
 
 func (s *stubWSCalcDP) DataPointKey() hmtypes.DataPointKey { return s.key }
@@ -104,6 +111,7 @@ func (s *stubWSCalcDP) RawValue() (any, bool) {
 	}
 	return s.value, true
 }
+func (s *stubWSCalcDP) Multiplier() float64 { return s.multiplier }
 
 func addWSCalculatedDP(d *device.Device, addr, param string, no int, cat hmenum.DataPointCategory, value float64) {
 	chAddr := addr + ":" + string(rune('0'+no)) //nolint:gosec // G115: no is a small channel number (0..9) in test fixtures; '0'+no is 48..57
@@ -416,6 +424,72 @@ func TestCalculatedDPGet_MissingDeviceParam_ReturnsError(t *testing.T) {
 		jsonParam(`{"channel_no":1,"name":"DEW_POINT"}`))
 	if res.Error == nil {
 		t.Fatal("expected error when device param is missing")
+	}
+}
+
+// --- tests: calc_dp display_value ---
+
+// TestCalculatedDPGet_NonTrivialMultiplierProjectsDisplayValue pins the
+// WS calc_dp.get side of the DisplayValue projection through the real
+// router dispatch. No shipping calculated data point currently reports a
+// non-trivial multiplier, but the projection has to fire correctly the
+// moment one does — the stub's multiplier exercises the site now instead
+// of leaving it dark until a real non-trivial calculated DP exists.
+func TestCalculatedDPGet_NonTrivialMultiplierProjectsDisplayValue(t *testing.T) {
+	t.Parallel()
+	d := newWSTestDevice("DEV0034", "HmIP-STE2")
+	chAddr := "DEV0034:1"
+	ch := d.AddChannel(chAddr, 1, "SENSOR", hmenum.ParamsetKeyValues)
+	ch.AttachCalculatedDataPoint(&stubWSCalcDP{
+		key:        hmtypes.DataPointKey{ChannelAddress: chAddr, Parameter: "OPERATING_VOLTAGE_LEVEL"},
+		value:      0.5,
+		hasValue:   true,
+		multiplier: 100,
+	})
+	idx := &stubCustomDPIndex{devices: map[string]*device.Device{"DEV0034": d}}
+	r := NewRouter()
+	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx})
+
+	res := r.Dispatch(context.Background(), "calc_dp.get",
+		jsonParam(`{"device":"DEV0034","channel_no":1,"name":"OPERATING_VOLTAGE_LEVEL"}`))
+	if res.Error != nil {
+		t.Fatalf("dispatch error: %+v", res.Error)
+	}
+	m, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map, got %T", res.Data)
+	}
+	if fv, ok := m["value"].(float64); !ok || fv != 0.5 {
+		t.Fatalf("value = %#v, want the untouched raw 0.5", m["value"])
+	}
+	if fv, ok := m["display_value"].(float64); !ok || fv != 50 {
+		t.Fatalf("display_value = %#v, want 50 (0.5 * multiplier 100)", m["display_value"])
+	}
+}
+
+// TestCalculatedDPGet_TrivialMultiplierOmitsDisplayValue pins the
+// current, always-true state: every shipping calculated data point
+// reports the identity multiplier, so display_value must stay absent
+// from the calc_dp.get response map.
+func TestCalculatedDPGet_TrivialMultiplierOmitsDisplayValue(t *testing.T) {
+	t.Parallel()
+	d := newWSTestDevice("DEV0035", "HmIP-STE2")
+	addWSCalculatedDP(d, "DEV0035", "DEW_POINT", 1, hmenum.DataPointCategorySensor, 12.5)
+	idx := &stubCustomDPIndex{devices: map[string]*device.Device{"DEV0035": d}}
+	r := NewRouter()
+	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx})
+
+	res := r.Dispatch(context.Background(), "calc_dp.get",
+		jsonParam(`{"device":"DEV0035","channel_no":1,"name":"DEW_POINT"}`))
+	if res.Error != nil {
+		t.Fatalf("dispatch error: %+v", res.Error)
+	}
+	m, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map, got %T", res.Data)
+	}
+	if _, present := m["display_value"]; present {
+		t.Fatalf("display_value = %#v, want absent for the trivial multiplier", m["display_value"])
 	}
 }
 

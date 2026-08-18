@@ -27,6 +27,12 @@ type stubCalculatedDP struct {
 	rawValue   float64
 	hasValue   bool
 	modifiedAt time.Time
+	// multiplier feeds the DisplayValue projection (toCalculatedDPSummary).
+	// Every shipping calculated data point reports the trivial 1.0 (see
+	// calcMultiplier in internal/model/calculated/data_point.go), so this
+	// stub is the only way to exercise the non-trivial branch without
+	// inventing a production multiplier that does not exist yet.
+	multiplier float64
 }
 
 func (s *stubCalculatedDP) DataPointKey() hmtypes.DataPointKey { return s.key }
@@ -38,6 +44,7 @@ func (s *stubCalculatedDP) RawValue() (any, bool) {
 	return s.rawValue, true
 }
 func (s *stubCalculatedDP) ModifiedAt() time.Time { return s.modifiedAt }
+func (s *stubCalculatedDP) Multiplier() float64   { return s.multiplier }
 
 // addCalculatedDP attaches a stubCalculatedDP to channel channelNo of device d.
 func addCalculatedDP(d *device.Device, addr, param string, no int, cat hmenum.DataPointCategory, value float64) {
@@ -92,6 +99,54 @@ func TestListCalculatedDataPoints_HappyPath(t *testing.T) {
 	}
 	if !out[0].Observed {
 		t.Fatal("expected observed=true")
+	}
+}
+
+// TestCalculatedDPSummary_NonTrivialMultiplierProjectsDisplayValue pins
+// the calculated-DP side of the DisplayValue projection through the real
+// toCalculatedDPSummary converter. No shipping calculated data point
+// currently reports a non-trivial multiplier (calcMultiplier in
+// internal/model/calculated/data_point.go always returns 1.0), but the
+// projection has to fire correctly the moment one does — a stub
+// multiplier lets this call site be tested now instead of staying dark
+// until a real non-trivial calculated DP exists.
+func TestCalculatedDPSummary_NonTrivialMultiplierProjectsDisplayValue(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0099", "HmIP-STE2")
+	ch := d.AddChannel("DEV0099:1", 1, "SENSOR", hmenum.ParamsetKeyValues)
+	dp := &stubCalculatedDP{
+		key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: "OPERATING_VOLTAGE_LEVEL"},
+		rawValue:   0.5,
+		hasValue:   true,
+		multiplier: 100,
+	}
+	ch.AttachCalculatedDataPoint(dp)
+
+	s := toCalculatedDPSummary(dp, ch, nil, "")
+	if fv, ok := s.Value.(float64); !ok || fv != 0.5 {
+		t.Fatalf("value = %#v, want the untouched raw 0.5", s.Value)
+	}
+	if fv, ok := s.DisplayValue.(float64); !ok || fv != 50 {
+		t.Fatalf("display_value = %#v, want 50 (0.5 * multiplier 100)", s.DisplayValue)
+	}
+}
+
+// TestCalculatedDPSummary_TrivialMultiplierOmitsDisplayValue pins the
+// current, always-true state: every shipping calculated data point
+// reports the identity multiplier, so display_value must stay absent —
+// the same non-trivial-only gate the REST generic-DP summary applies.
+func TestCalculatedDPSummary_TrivialMultiplierOmitsDisplayValue(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0098", "HmIP-STE2")
+	addCalculatedDP(d, "DEV0098", "DEW_POINT", 1, hmenum.DataPointCategorySensor, 12.5)
+	ch := d.Channel("DEV0098:1")
+	dps := ch.CalculatedDataPoints()
+	if len(dps) != 1 {
+		t.Fatalf("expected 1 calculated DP, got %d", len(dps))
+	}
+	s := toCalculatedDPSummary(dps[0], ch, nil, "")
+	if s.DisplayValue != nil {
+		t.Fatalf("display_value = %#v, want absent for the trivial multiplier", s.DisplayValue)
 	}
 }
 

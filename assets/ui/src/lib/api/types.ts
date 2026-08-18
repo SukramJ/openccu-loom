@@ -80,6 +80,13 @@ export type DataPointChangedEvent = {
   channel_address: string;
   parameter: string;
   value: unknown;
+  // Mirrors DataPointSummary.display_value / the WS wire payload's
+  // display_value: `value` expressed in the reported unit. Present only
+  // when the projection is non-trivial; absent means `value` already is
+  // displayable. Carried through so a view seeded from REST and updated
+  // from this event never shows the reading jump between a scaled and a
+  // raw number for the same data point.
+  display_value?: number;
 };
 
 /** Aggregated state snapshot for a Custom-DP. Emitted whenever a
@@ -186,6 +193,16 @@ export type UISchemaParameter = {
   time_selector_type?: "timeOnOff" | "delay" | "rampOnOff" | string;
   time_presets?: UISchemaTimePreset[];
   presets?: UISchemaPreset[];
+  // `value` expressed in the unit `unit` names, i.e. `value * multiplier`.
+  // Present only when that projection is non-trivial; absent means `value`
+  // already is the displayable number. Mirrors DataPointSummary.display_value
+  // (see types.generated.ts) but is hand-written here because this endpoint
+  // has no openapi.yaml schema. Never present for LINK paramset parameters —
+  // those route through `display_as_percent` / ParameterLevelField instead.
+  display_value?: number;
+  // `value` -> display-unit conversion factor (`value * multiplier`).
+  // Absent means 1 (no projection). See display_value above.
+  multiplier?: number;
 };
 
 export type UISchemaPreset = {

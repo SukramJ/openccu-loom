@@ -721,6 +721,43 @@ func TestGetDataPoint_PercentFamilyUnit_CarriesMultiplier(t *testing.T) {
 	}
 }
 
+// TestGetDataPoint_LevelDisplayValue pins the north-bound projection: a
+// LEVEL data point observed at the raw wire value 0.42 must surface
+// `display_value` 42 (Value × Multiplier), through the real GetDataPoint
+// handler — not by calling generic.DisplayValue directly. A dimmer at
+// 42 % must never render as "0.42 %".
+func TestGetDataPoint_LevelDisplayValue(t *testing.T) {
+	t.Parallel()
+	d := newDeviceWithLevelDP(t)
+	ch := d.Channel("0001ABCD:1")
+	dp := ch.Parameter(hmenum.ParameterLevel).(*generic.Float)
+	dp.OnEvent(0.42)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{
+		"addr":  "0001ABCD",
+		"no":    "1",
+		"param": "LEVEL",
+	}))
+	w := httptest.NewRecorder()
+	GetDataPoint(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body DataPointSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if fv, ok := body.Value.(float64); !ok || fv != 0.42 {
+		t.Fatalf("value = %#v, want the untouched raw wire value 0.42", body.Value)
+	}
+	if fv, ok := body.DisplayValue.(float64); !ok || fv != 42 {
+		t.Fatalf("display_value = %#v, want 42 (0.42 * multiplier 100)", body.DisplayValue)
+	}
+}
+
 func TestGetDataPoint_HappyPath(t *testing.T) {
 	t.Parallel()
 	d := newDeviceWithDP(t, "0001ABCD", "HmIP-BSM", 1, hmenum.ParameterState)

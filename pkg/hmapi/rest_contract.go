@@ -549,11 +549,23 @@ type UISchemaParameter struct {
 	Category         string                   `json:"category,omitempty"`
 	KeypressGroup    string                   `json:"keypress_group,omitempty"`
 	DisplayAsPercent bool                     `json:"display_as_percent,omitempty"`
-	HasLastValue     bool                     `json:"has_last_value,omitempty"`
-	HiddenByDefault  bool                     `json:"hidden_by_default,omitempty"`
-	TimePairID       string                   `json:"time_pair_id,omitempty"`
-	TimeSelectorType string                   `json:"time_selector_type,omitempty"`
-	TimePresets      []UISchemaTimePreset     `json:"time_presets,omitempty"`
+	// DisplayValue is Value expressed in the unit this parameter
+	// reports (Value × Multiplier), present only when that projection
+	// is non-trivial. Multiplier is the factor itself, needed on the
+	// write path: the editor shows DisplayValue and must divide by it
+	// again before saving, because the CCU takes the wire value.
+	//
+	// DisplayAsPercent above is the LINK-paramset ancestor of this pair
+	// and stays as it is — it encodes the single factor 100 as a
+	// boolean, which cannot express the other multiplier the daemon
+	// knows.
+	DisplayValue     any                  `json:"display_value,omitempty"`
+	Multiplier       float64              `json:"multiplier,omitempty"`
+	HasLastValue     bool                 `json:"has_last_value,omitempty"`
+	HiddenByDefault  bool                 `json:"hidden_by_default,omitempty"`
+	TimePairID       string               `json:"time_pair_id,omitempty"`
+	TimeSelectorType string               `json:"time_selector_type,omitempty"`
+	TimePresets      []UISchemaTimePreset `json:"time_presets,omitempty"`
 	// Presets are EasyMode value chips for ENUM/INTEGER/FLOAT parameters. Each
 	// entry carries a localised label and the value to apply when the user
 	// clicks the chip.

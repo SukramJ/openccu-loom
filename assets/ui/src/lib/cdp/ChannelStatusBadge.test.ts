@@ -49,6 +49,7 @@ vi.mock("$lib/quickcontrol/domain", () => ({
 }));
 
 import { api } from "$lib/api/client";
+import { subscribe } from "$lib/stores/events.svelte";
 import ChannelStatusBadge from "./ChannelStatusBadge.svelte";
 import type { DataPointSummary } from "$lib/api/types";
 
@@ -137,6 +138,67 @@ describe("ChannelStatusBadge — value formatting", () => {
       props: { address: "ABC123", channel: 2 },
     });
     await vi.waitFor(() => expect(getByText("PRIMARY_ALARM")).toBeTruthy());
+  });
+});
+
+describe("ChannelStatusBadge — display_value projection", () => {
+  it("renders display_value (already in percent) instead of the raw 0..1 wire value", async () => {
+    listDataPointsMock.mockResolvedValue([
+      makeDP({
+        parameter: "LEVEL",
+        type: "FLOAT",
+        value: 0.3,
+        display_value: 30,
+        unit: "%",
+        observed: true,
+      }),
+    ]);
+    const { getByText } = render(ChannelStatusBadge, {
+      props: { address: "ABC123", channel: 4 },
+    });
+    await vi.waitFor(() => expect(getByText("30 %")).toBeTruthy());
+  });
+
+  it("falls back to the raw value when display_value is absent", async () => {
+    listDataPointsMock.mockResolvedValue([
+      makeDP({ parameter: "LEVEL", type: "FLOAT", value: 0.3, unit: "%", observed: true }),
+    ]);
+    const { getByText } = render(ChannelStatusBadge, {
+      props: { address: "ABC123", channel: 4 },
+    });
+    await vi.waitFor(() => expect(getByText("0.3 %")).toBeTruthy());
+  });
+
+  it("keeps a WS-pushed reading at the same scale as the initial REST render", async () => {
+    listDataPointsMock.mockResolvedValue([
+      makeDP({
+        parameter: "LEVEL",
+        type: "FLOAT",
+        value: 0.3,
+        display_value: 30,
+        unit: "%",
+        observed: true,
+      }),
+    ]);
+    const { getByText } = render(ChannelStatusBadge, {
+      props: { address: "ABC123", channel: 4 },
+    });
+    await vi.waitFor(() => expect(getByText("30 %")).toBeTruthy());
+
+    const handler = (subscribe as ReturnType<typeof vi.fn>).mock.calls[0][0] as (
+      ev: unknown,
+    ) => void;
+    handler({
+      type: "data_point",
+      payload: {
+        channel_address: "ABC123:4",
+        parameter: "LEVEL",
+        value: 0.55,
+        display_value: 55,
+      },
+    });
+
+    await vi.waitFor(() => expect(getByText("55 %")).toBeTruthy());
   });
 });
 
