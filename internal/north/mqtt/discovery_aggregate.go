@@ -356,6 +356,17 @@ func (c discoveryCtx) WireParameterStateTopic(parameter string) string {
 	)
 }
 
+func (c discoveryCtx) WireParameterStateTopicOn(channelAddress, parameter string) string {
+	deviceAddr, channelNo, ok := hmtypes.SplitChannelAddress(channelAddress)
+	if !ok {
+		return c.WireParameterStateTopic(parameter)
+	}
+	return c.d.TopicBuilder.ParameterState(
+		c.d.centralFor(c.ev), c.ev.Interface, deviceAddr, channelNo,
+		string(payload.BucketValues), parameter,
+	)
+}
+
 func (d *DefaultDiscoveryBuilder) discoveryContext(ev Event) discoveryCtx {
 	return discoveryCtx{d: d, ev: ev}
 }

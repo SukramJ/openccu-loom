@@ -13,6 +13,16 @@ pairs:
   events a controller reads right after pairing were being pushed out of the
   bridge's event buffer by the very reconnect above, which could leave the
   bridge showing as added but not supported.
+Classic BidCos thermostats. What you will notice:
+
+- **Classic HM-CC-TC wall thermostats show a temperature again.** Their
+  thermostat entity had neither a current nor a target temperature, and setting
+  one did nothing — the values were looked for under names and on a channel this
+  device family does not use.
+- **HM-TC-IT-WM-W-EU and HM-CC-VG-1 show their humidity** on the thermostat
+  entity.
+- **A thermostat's target temperature reaches the web UI right away** instead of
+  waiting for the next unrelated reading from the same device.
 
 ## 0.63.0
 

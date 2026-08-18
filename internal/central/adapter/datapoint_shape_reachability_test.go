@@ -328,7 +328,21 @@ func accessorCallsites(t *testing.T, root string, accessors map[string]string) (
 					return true
 				}
 				sel, ok := call.Args[1].(*ast.SelectorExpr)
-				if !ok || !strings.HasPrefix(sel.Sel.Name, "Parameter") {
+				if !ok || !strings.HasPrefix(sel.Sel.Name, "Parameter") || !isHmenumQualified(sel) {
+					// Not a constant `hmenum.ParameterX`: either a plain
+					// variable, or a struct field that merely happens to
+					// be named `Parameter` — which is what a slot
+					// resolved through the profile schema passes. The
+					// qualifier check matters: without it such a field
+					// read is mistaken for the constant `hmenum.Parameter`
+					// and reported as an unresolvable constant.
+					//
+					// A schema-resolved binding cannot be checked from
+					// the call site, because the parameter is chosen per
+					// device family at runtime. The per-family bindings
+					// are pinned end-to-end instead — see the profile
+					// materialisation tests in
+					// internal/model/custom/climate.
 					unresolved++
 					return true
 				}
@@ -347,6 +361,14 @@ func accessorCallsites(t *testing.T, root string, accessors map[string]string) (
 		}
 	}
 	return sites, unresolved
+}
+
+// isHmenumQualified reports whether the selector reads a constant off the
+// hmenum package (`hmenum.ParameterState`) rather than a field off some
+// value that happens to carry a Parameter-prefixed name.
+func isHmenumQualified(sel *ast.SelectorExpr) bool {
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "hmenum"
 }
 
 // calleeIdentName returns the called function's own name, whether the call

@@ -1388,8 +1388,17 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 	// `device.<addr>.cdps.<name>` so SPA tiles can subscribe
 	// once per CDP instead of N times per slot. The look-up is
 	// cheap (in-memory) and only runs when a CDP exists.
-	if ch != nil {
-		if cdp := ch.CustomDataPoint(); cdp != nil {
+	//
+	// A slot on a sibling channel resolves to the channel that hosts
+	// the composing Custom-DP — see [customDPHostChannel].
+	cdpChannel, cdpChannelNo := ch, channelNo
+	if ch == nil || ch.CustomDataPoint() == nil {
+		if host, hostNo := customDPHostChannel(b.registry, deviceAddr, e.Key); host != nil {
+			cdpChannel, cdpChannelNo = host, hostNo
+		}
+	}
+	if cdpChannel != nil {
+		if cdp := cdpChannel.CustomDataPoint(); cdp != nil {
 			if state, ok := customDPStatePayload(cdp); ok {
 				// The wire NAME must match the identity the cdps
 				// REST/WS surface assigns (`GET …/cdps`): a profile
@@ -1407,7 +1416,7 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 				// state topic aligned with the catalogue entry.
 				wireName := cdp.DataPointKey().Parameter
 				if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
-					wireName = custom.WireName(dev, cdp, channelNo)
+					wireName = custom.WireName(dev, cdp, cdpChannelNo)
 				}
 				// CHANNEL-level key (no parameter): the reference stack keys
 				// custom data points by their primary channel; the summary
@@ -1415,7 +1424,7 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 				// shape so clients can correlate both surfaces.
 				b.wsHub.PublishCustomDataPointStateChangedKind(
 					envKind,
-					centralName, deviceAddr, channelNo,
+					centralName, deviceAddr, cdpChannelNo,
 					wireName,
 					cdpkind.Of(cdp),
 					state, e.Timestamp(),
@@ -1557,6 +1566,16 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 	// reflected; the bridge diff-gates the broker traffic.
 	b.publishCustomDPState(ctx, centralName, iface, deviceAddr, channelNo, ch)
 	b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, channelNo, ch)
+	// A Custom-DP composes slots from sibling channels too (HM-CC-TC's
+	// setpoint). Those channels carry no Custom-DP of their own, so the
+	// two calls above are no-ops for them — resolve the hosting channel
+	// and publish its aggregate as well.
+	if ch == nil || ch.CustomDataPoint() == nil {
+		if host, hostNo := customDPHostChannel(b.registry, deviceAddr, e.Key); host != nil {
+			b.publishCustomDPState(ctx, centralName, iface, deviceAddr, hostNo, host)
+			b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, hostNo, host)
+		}
+	}
 	return true
 }
 
@@ -2584,6 +2603,59 @@ func customDPStatePayload(dp device.AttachableDataPoint) (map[string]any, bool) 
 		return nil, false
 	}
 	return state, true
+}
+
+// customDPHostChannel resolves the channel whose Custom-DP composes the
+// given wire data point, for a data point whose own channel carries no
+// Custom-DP.
+//
+// A Custom-DP does not necessarily live on the channel of every value it
+// composes. The classic HM-CC-TC keeps its setpoint on the regulator
+// channel while the thermostat Custom-DP is materialised on the weather
+// channel, and the profile schema says so. Every Custom-DP fan-out on
+// this path keys on the *event's* channel, so without this resolution a
+// setpoint change updates the model and reaches no aggregate surface at
+// all: the SPA tile and the MQTT `custom/<kind>/state` slot both keep the
+// previous value until some unrelated parameter on the primary channel
+// happens to change.
+//
+// Returns (nil, 0) when no Custom-DP on the device composes the key.
+func customDPHostChannel(reg *central.Registry, deviceAddr string, key hmtypes.DataPointKey) (host *device.Channel, channelNo int) {
+	dev := lookupDeviceObject(reg, deviceAddr)
+	if dev == nil {
+		return nil, 0
+	}
+	for _, ch := range dev.Channels() {
+		cdp := ch.CustomDataPoint()
+		if cdp == nil {
+			continue
+		}
+		agg, ok := cdp.(custom.AggregateDataPoint)
+		if !ok {
+			continue
+		}
+		for _, sub := range agg.SubDataPointKeys() {
+			if sameWireTarget(sub, key) {
+				return ch, ch.Number
+			}
+		}
+	}
+	return nil, 0
+}
+
+// sameWireTarget reports whether two data-point keys address the same wire
+// parameter. The interface id is ignored (a Custom-DP slot and the event
+// that carries it are the same central by construction) and the paramset
+// key only compared when both sides state one — a synthesised key may
+// leave it blank.
+func sameWireTarget(a, b hmtypes.DataPointKey) bool {
+	if a.ChannelAddress != b.ChannelAddress || a.Parameter != b.Parameter {
+		return false
+	}
+	if a.ParamsetKey == "" || b.ParamsetKey == "" {
+		return true
+	}
+	return a.ParamsetKey == b.ParamsetKey
 }
 
 func lookupDeviceObject(reg *central.Registry, address string) *device.Device {

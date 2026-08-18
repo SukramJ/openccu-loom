@@ -32,6 +32,10 @@ func (discoveryCtx) WireParameterStateTopic(parameter string) string {
 	return "test/" + parameter
 }
 
+func (discoveryCtx) WireParameterStateTopicOn(channelAddress, parameter string) string {
+	return "test/" + channelAddress + "/" + parameter
+}
+
 // compile-time check: discoveryCtx satisfies payload.HADiscoveryContext.
 var _ payload.HADiscoveryContext = discoveryCtx{}
 
@@ -111,11 +115,15 @@ func TestClimateHADiscoveryPayload_TopicValues(t *testing.T) {
 	if v, _ := body["mode_state_topic"].(string); v != ctx.CustomDPStateTopic() {
 		t.Errorf("body[mode_state_topic] = %q, want aggregate %q", v, ctx.CustomDPStateTopic())
 	}
-	if v, _ := body["current_temperature_topic"].(string); v != ctx.WireParameterStateTopic("ACTUAL_TEMPERATURE") {
-		t.Errorf("body[current_temperature_topic] = %q, want per-DP topic", v)
+	// Both wire values name the channel they resolved to — for an HmIP
+	// thermostat that is the custom DP's own channel.
+	wantCurrentTemp := ctx.WireParameterStateTopicOn("HmIP-BWTH:1", "ACTUAL_TEMPERATURE")
+	if v, _ := body["current_temperature_topic"].(string); v != wantCurrentTemp {
+		t.Errorf("body[current_temperature_topic] = %q, want per-DP topic %q", v, wantCurrentTemp)
 	}
-	if v, _ := body["temperature_state_topic"].(string); v != ctx.WireParameterStateTopic("SET_POINT_TEMPERATURE") {
-		t.Errorf("body[temperature_state_topic] = %q, want per-DP topic", v)
+	wantSetpoint := ctx.WireParameterStateTopicOn("HmIP-BWTH:1", "SET_POINT_TEMPERATURE")
+	if v, _ := body["temperature_state_topic"].(string); v != wantSetpoint {
+		t.Errorf("body[temperature_state_topic] = %q, want per-DP topic %q", v, wantSetpoint)
 	}
 
 	wantModeCmd := ctx.ServiceMethodCommandTopic("set_mode")

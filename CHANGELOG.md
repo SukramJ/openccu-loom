@@ -133,6 +133,35 @@ should never have run.
   files are reformatted in the same change: local `make fmt` and CI had drifted
   apart on a rule gofumpt relaxed in v0.11.0, and they now satisfy both
   versions.
+## [0.63.1]
+
+Classic BidCos thermostats. A custom data point binds the values it composes by
+parameter name on its own channel, and the profile schema has always said that
+neither is universal: it names both the parameter and the channel per device
+family. Where the two disagreed, the binding silently produced nothing — most
+visibly on the HM-CC-TC, whose thermostat entity carried no temperature at all.
+Every composed field now resolves through the schema.
+
+The north-bound API contract is unchanged.
+
+### Fixed
+
+- Classic HM-CC-TC thermostats (and the ZEL STG RM FWT that shares their
+  profile) now report a temperature and a target temperature. Their setpoint is
+  `SETPOINT` on the regulator channel while the thermostat entity is
+  materialised on the weather channel, and their current temperature is
+  `TEMPERATURE`, not the `ACTUAL_TEMPERATURE` every other thermostat family
+  uses. Neither value bound, so the entity showed no temperatures at all, its HA
+  discovery named state topics nothing publishes to, and `set_temperature` wrote
+  a parameter the device does not have.
+- The classic RF wall thermostats (HM-TC-IT-WM-W-EU, HM-CC-VG-1) now report
+  their humidity on the thermostat entity — they publish it as
+  `ACTUAL_HUMIDITY`, which the fixed `HUMIDITY` lookup never found.
+- A wire value that belongs to a custom data point on *another* channel now
+  updates that data point's aggregate on the WebSocket and MQTT planes. The
+  fan-out keyed on the channel the value arrived on, so an HM-CC-TC setpoint
+  change reached no aggregate surface until an unrelated parameter on the
+  thermostat's own channel happened to change.
 
 ## [0.63.0]
 

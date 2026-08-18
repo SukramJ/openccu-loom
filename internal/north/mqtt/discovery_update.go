@@ -73,6 +73,12 @@ func (c updateDiscoveryCtx) WireParameterStateTopic(parameter string) string {
 	return c.topics.DataPointState(c.centralName, c.iface, c.address, 0, parameter)
 }
 
+func (c updateDiscoveryCtx) WireParameterStateTopicOn(_, parameter string) string {
+	// Update entities compose no sibling-channel fields; the device-level
+	// channel 0 is the only target they ever name.
+	return c.WireParameterStateTopic(parameter)
+}
+
 // BuildUpdateDiscovery builds the HA Discovery `update` payload for one
 // device's firmware-update entity.
 //

@@ -34,6 +34,10 @@ func (s *stubDiscoveryCtx) WireParameterCommandTopic(param string) string { retu
 
 func (s *stubDiscoveryCtx) WireParameterStateTopic(param string) string { return "wire/state/" + param }
 
+func (s *stubDiscoveryCtx) WireParameterStateTopicOn(_, param string) string {
+	return s.WireParameterStateTopic(param)
+}
+
 func newPayloadSwitch(t *testing.T) *Switch {
 	t.Helper()
 	addr := "VCU2128127:4"

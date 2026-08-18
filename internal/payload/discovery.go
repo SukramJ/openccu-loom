@@ -88,4 +88,22 @@ type HADiscoveryContext interface {
 	// CustomDPStateTopic is the canonical read surface for
 	// custom-DP-derived fields.
 	WireParameterStateTopic(parameter string) string
+
+	// WireParameterStateTopicOn is [WireParameterStateTopic] for a
+	// parameter that lives on a named channel of the device rather
+	// than on the custom DP's own channel.
+	//
+	// A custom DP may compose a field from a sibling channel — the
+	// classic HM-CC-TC keeps its setpoint on the regulator channel
+	// while the thermostat entity is materialised on the weather
+	// channel. The per-DP slot state is published under the channel
+	// the parameter actually lives on, so a payload that declares the
+	// topic under its own channel names a topic nothing ever writes
+	// and the field stays empty forever. Pass the resolved slot's
+	// channel address (`<device>:<n>`) to name the published topic.
+	//
+	// An address without a parsable channel suffix falls back to the
+	// event's own channel, which is what [WireParameterStateTopic]
+	// would have returned.
+	WireParameterStateTopicOn(channelAddress, parameter string) string
 }

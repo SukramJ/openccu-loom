@@ -131,6 +131,10 @@ func (roundtripDiscoveryCtx) ServiceMethodCommandTopic(m string) string {
 func (roundtripDiscoveryCtx) WireParameterCommandTopic(p string) string { return "rt/" + p + "/set" }
 func (roundtripDiscoveryCtx) WireParameterStateTopic(p string) string   { return "rt/" + p }
 
+func (roundtripDiscoveryCtx) WireParameterStateTopicOn(addr, p string) string {
+	return "rt/" + addr + "/" + p
+}
+
 var _ pload.HADiscoveryContext = roundtripDiscoveryCtx{}
 
 // rtPutFloat registers a writable FLOAT wire DP on ch under parameter.
