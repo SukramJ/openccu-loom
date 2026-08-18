@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.63.0
+
+- Version alignment with OpenCCU-Loom 0.63.0. The proxy itself is unchanged; the
+  release carries the medium and low findings of the full-codebase audit —
+  saving channel configuration, configuration entities keeping their value,
+  colour reaching Matter controllers, the raw-topic switch taking effect, and a
+  number of device commands that sent values real hardware rejects.
+
 # 0.62.0
 
 - Version alignment with OpenCCU-Loom 0.62.0. The proxy itself is unchanged; the
