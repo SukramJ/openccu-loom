@@ -108,6 +108,18 @@ whether that belongs in `ResolveFieldSlot` (as an opt-in) or at the call site �
 climate currently relies on the mapped channel always carrying the parameter,
 so changing the shared helper's contract needs its tests re-run.
 
+That fallback is a **deliberate divergence from the reference stack and needs
+an entry in [`notes/parity/by_design.md`](../parity/by_design.md)**. The
+reference maps the same field at the same offset
+(`aiohomematic/model/custom/profile.py:618-630`, `IP_LOCK_CONFIG`, with
+`ChannelOffset.STATE = -1` in `const.py:478`) and its binder takes the rebased
+channel or nothing — `_add_channel_data_points` resolves one address and
+`_add_data_point` returns early when the lookup is empty
+(`aiohomematic/model/custom/data_point.py:229-256`). Reproducing it faithfully
+therefore reproduces its blind spot on the DLP. This is an inference from
+reading that code plus the CCU's own descriptions, not something measured
+against a running reference stack.
+
 ## Open finding 3 — IP locks never report a direction
 
 | | |
