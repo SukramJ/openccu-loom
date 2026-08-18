@@ -165,6 +165,28 @@ func asBool(raw any) (bool, error) {
 	}
 }
 
+// intFromFloat narrows a float to int with the guards Go's own conversion
+// does not perform.
+//
+// A conversion whose value does not fit the destination — or is NaN or an
+// infinity — is undefined in Go: the result is whatever the platform
+// produces, and on the 32-bit shipped target that starts just past two
+// billion rather than at nine quintillion. A CCU that reports a runaway
+// counter, or a NaN the wire decoder let through, would otherwise land in
+// the parameter store as a plausible-looking small number instead of a
+// rejected write.
+//
+// Truncation toward zero is preserved: only the guard is new.
+func intFromFloat(v float64) (int, error) {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, fmt.Errorf("parameter: %v is not a finite number", v)
+	}
+	if v > float64(math.MaxInt) || v < float64(math.MinInt) {
+		return 0, fmt.Errorf("parameter: float value %v overflows int", v)
+	}
+	return int(v), nil
+}
+
 func asInt(raw any) (int, error) {
 	switch v := raw.(type) {
 	case int:
@@ -203,9 +225,9 @@ func asInt(raw any) (int, error) {
 		}
 		return int(v), nil //nolint:gosec // bounds-checked above; see #20
 	case float32:
-		return int(v), nil
+		return intFromFloat(float64(v))
 	case float64:
-		return int(v), nil
+		return intFromFloat(v)
 	case bool:
 		if v {
 			return 1, nil
