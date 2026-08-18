@@ -8,12 +8,12 @@ import (
 	"slices"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// FieldSlot is the wire target a profile field resolves to: the channel
-// that carries the parameter plus the parameter name itself.
+// ResolveFieldSlot resolves one profile field against the rebased
+// channel-group schema and returns the channel that carries it plus the
+// wire parameter it maps to.
 //
 // A custom DP must not assume that every field it composes lives on its
 // own channel under a fixed parameter name. The profile's channel-group
@@ -23,17 +23,8 @@ import (
 // materialised on the WEATHER channel, and it maps
 // [hmenum.FieldTemperature] to TEMPERATURE rather than the
 // ACTUAL_TEMPERATURE its HmIP and classic-RF siblings use. Resolving
-// through the schema instead of a hard-coded parameter name is what
-// keeps those devices bound.
-type FieldSlot struct {
-	// Channel carries the parameter. Never nil when the slot resolved.
-	Channel *device.Channel
-	// Parameter is the wire parameter name the field maps to.
-	Parameter hmenum.Parameter
-}
-
-// ResolveFieldSlot resolves one profile field against the rebased
-// channel-group schema and returns the channel + parameter it maps to.
+// through the schema instead of a hard-coded parameter name is what keeps
+// those devices bound.
 //
 // The lookup order mirrors [applyFieldVisibility] so a field binds to
 // exactly the data point whose visibility the materializer forced:
@@ -48,20 +39,24 @@ type FieldSlot struct {
 // that as "fall back to the caller's own convention" rather than as an
 // error — profiles are shared across device types that expose different
 // channel counts.
-func ResolveFieldSlot(ch *device.Channel, group RebasedChannelGroupConfig, field hmenum.Field) (FieldSlot, bool) {
+func ResolveFieldSlot(
+	ch *device.Channel,
+	group RebasedChannelGroupConfig,
+	field hmenum.Field,
+) (target *device.Channel, parameter hmenum.Parameter, ok bool) {
 	if ch == nil {
-		return FieldSlot{}, false
+		return nil, "", false
 	}
-	if fv, ok := group.Fields[field]; ok {
+	if fv, found := group.Fields[field]; found {
 		p, _ := ResolveFieldValue(fv)
-		return FieldSlot{Channel: ch, Parameter: p}, true
+		return ch, p, true
 	}
-	if fv, ok := group.ChannelFields[AnyChannelOffset][field]; ok {
+	if fv, found := group.ChannelFields[AnyChannelOffset][field]; found {
 		p, _ := ResolveFieldValue(fv)
-		return FieldSlot{Channel: ch, Parameter: p}, true
+		return ch, p, true
 	}
-	if slot, ok := resolveChannelKeyedField(ch, group.ChannelFields, field); ok {
-		return slot, true
+	if t, p, found := resolveChannelKeyedField(ch, group.ChannelFields, field); found {
+		return t, p, true
 	}
 	return resolveChannelKeyedField(ch, group.FixedChannelFields, field)
 }
@@ -74,23 +69,23 @@ func resolveChannelKeyedField(
 	ch *device.Channel,
 	byChannel map[int]map[hmenum.Field]FieldValue,
 	field hmenum.Field,
-) (FieldSlot, bool) {
+) (target *device.Channel, parameter hmenum.Parameter, ok bool) {
 	for _, chNo := range slices.Sorted(maps.Keys(byChannel)) {
 		if chNo == AnyChannelOffset {
 			continue
 		}
-		fv, ok := byChannel[chNo][field]
-		if !ok {
+		fv, found := byChannel[chNo][field]
+		if !found {
 			continue
 		}
-		target := siblingChannel(ch, chNo)
-		if target == nil {
+		sibling := siblingChannel(ch, chNo)
+		if sibling == nil {
 			continue
 		}
 		p, _ := ResolveFieldValue(fv)
-		return FieldSlot{Channel: target, Parameter: p}, true
+		return sibling, p, true
 	}
-	return FieldSlot{}, false
+	return nil, "", false
 }
 
 // siblingChannel returns the channel with the given number on the same
@@ -112,35 +107,4 @@ func siblingChannel(ch *device.Channel, chNo int) *device.Channel {
 		}
 	}
 	return nil
-}
-
-// MappedFloatField resolves `field` through the profile schema and
-// returns the *generic.Float behind it, or nil when the field is
-// unmapped, the channel absent, or the data point of a different type.
-func MappedFloatField(ch *device.Channel, group RebasedChannelGroupConfig, field hmenum.Field) *generic.Float {
-	slot, ok := ResolveFieldSlot(ch, group, field)
-	if !ok {
-		return nil
-	}
-	return FloatField(slot.Channel, slot.Parameter)
-}
-
-// MappedFloatSensorField is [MappedFloatField] for read-only FLOAT
-// parameters (which the resolver projects onto *generic.Sensor[float64]).
-func MappedFloatSensorField(ch *device.Channel, group RebasedChannelGroupConfig, field hmenum.Field) *generic.Sensor[float64] {
-	slot, ok := ResolveFieldSlot(ch, group, field)
-	if !ok {
-		return nil
-	}
-	return FloatSensorField(slot.Channel, slot.Parameter)
-}
-
-// MappedIntegerSensorField is [MappedFloatField] for read-only INTEGER
-// parameters (HUMIDITY on the classic-RF weather channels).
-func MappedIntegerSensorField(ch *device.Channel, group RebasedChannelGroupConfig, field hmenum.Field) *generic.Sensor[int32] {
-	slot, ok := ResolveFieldSlot(ch, group, field)
-	if !ok {
-		return nil
-	}
-	return IntegerSensorField(slot.Channel, slot.Parameter)
 }

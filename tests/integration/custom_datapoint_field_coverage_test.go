@@ -29,10 +29,7 @@ import (
 //
 // The key is "<type>.<field>" as the failure message prints it.
 var customFieldsNeverFilled = map[string]string{
-	"climate.Climate.humidity": "HmIP thermostats report HUMIDITY as INTEGER (OPERATIONS 5), which the " +
-		"resolver projects onto Sensor[int32] — Climate.humidityInt covers every model in the fleet. The " +
-		"float accessor exists for wired/BidCos thermostats that report it as FLOAT.",
-	"light.ColorTempLight.kelvin": "COLOR_TEMPERATURE exists only on the HmIP families, and the fleet " +
+	"light.ColorTempLight.kelvin":"COLOR_TEMPERATURE exists only on the HmIP families, and the fleet " +
 		"attaches a bare ColorTempLight only for the RF tunable-white dimmers, which express their " +
 		"colour temperature through the white-point level instead — ColorTempLight.colorLevel, which " +
 		"the fleet does fill. The HmIP path is embedded inside DRGDaliLight, and this walk inspects " +

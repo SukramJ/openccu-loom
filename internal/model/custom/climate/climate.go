@@ -290,10 +290,10 @@ func New(cfg Config) *Climate {
 	// Resolve the three composed wire fields through the profile
 	// schema, each with the per-kind parameter name on the own channel
 	// as the fallback for a Climate built without one.
-	setpointSlot := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldSetpoint, paramForSetpoint(cfg.Kind))
-	temperatureSlot := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldTemperature, hmenum.ParameterActualTemperature)
-	humiditySlot := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldHumidity, hmenum.ParameterHumidity)
-	setpointDP := custom.FloatField(setpointSlot.Channel, setpointSlot.Parameter)
+	setpointCh, setpointParam := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldSetpoint, paramForSetpoint(cfg.Kind))
+	temperatureCh, temperatureParam := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldTemperature, hmenum.ParameterActualTemperature)
+	humidityCh, humidityParam := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldHumidity, hmenum.ParameterHumidity)
+	setpointDP := custom.FloatField(setpointCh, setpointParam)
 
 	var key hmtypes.DataPointKey
 	if cfg.Channel != nil {
@@ -310,12 +310,12 @@ func New(cfg Config) *Climate {
 		// all derive from it — and that identity is the channel the DP
 		// is attached to, never the channel one of its slots happens to
 		// live on.
-		if setpointDP != nil && setpointSlot.Channel == cfg.Channel {
+		if setpointDP != nil && setpointCh == cfg.Channel {
 			key = setpointDP.DataPointKey()
 		} else {
 			key = hmtypes.DataPointKey{
 				ChannelAddress: address,
-				Parameter:      string(setpointSlot.Parameter),
+				Parameter:      string(setpointParam),
 			}
 		}
 	}
@@ -326,14 +326,14 @@ func New(cfg Config) *Climate {
 		key:                key,
 		writer:             cfg.Writer,
 		setpoint:           setpointDP,
-		actualTemperature:  custom.FloatSensorField(temperatureSlot.Channel, temperatureSlot.Parameter),
-		humidity:           custom.FloatSensorField(humiditySlot.Channel, humiditySlot.Parameter),
-		humidityInt:        custom.IntegerSensorField(humiditySlot.Channel, humiditySlot.Parameter),
+		actualTemperature:  custom.FloatSensorField(temperatureCh, temperatureParam),
+		humidity:           custom.FloatSensorField(humidityCh, humidityParam),
+		humidityInt:        custom.IntegerSensorField(humidityCh, humidityParam),
 		temperatureMinimum: custom.FloatField(cfg.Channel, hmenum.ParameterTemperatureMinimum),
 		temperatureMaximum: custom.FloatField(cfg.Channel, hmenum.ParameterTemperatureMaximum),
-		setpointSlot:       slotRefOf(setpointSlot, address),
-		temperatureSlot:    slotRefOf(temperatureSlot, address),
-		humiditySlot:       slotRefOf(humiditySlot, address),
+		setpointSlot:       slotRefOf(setpointCh, setpointParam, address),
+		temperatureSlot:    slotRefOf(temperatureCh, temperatureParam, address),
+		humiditySlot:       slotRefOf(humidityCh, humidityParam, address),
 		// channelRef carries the climate channel so the lazy week-
 		// program-pointer lookup in `numWeekPrograms` can walk to the
 		// device root at call time. Construction-time resolution
@@ -376,22 +376,22 @@ func resolveSlot(
 	group custom.RebasedChannelGroupConfig,
 	field hmenum.Field,
 	fallback hmenum.Parameter,
-) custom.FieldSlot {
-	if slot, ok := custom.ResolveFieldSlot(ch, group, field); ok {
-		return slot
+) (target *device.Channel, parameter hmenum.Parameter) {
+	if t, p, ok := custom.ResolveFieldSlot(ch, group, field); ok {
+		return t, p
 	}
-	return custom.FieldSlot{Channel: ch, Parameter: fallback}
+	return ch, fallback
 }
 
-// slotRefOf flattens a resolved [custom.FieldSlot] into the address +
-// parameter pair Climate keeps. `ownAddress` covers the slot whose
-// channel is nil (a Climate constructed without a channel at all).
-func slotRefOf(slot custom.FieldSlot, ownAddress string) slotRef {
+// slotRefOf flattens a resolved slot into the address + parameter pair
+// Climate keeps. `ownAddress` covers the slot whose channel is nil (a
+// Climate constructed without a channel at all).
+func slotRefOf(ch *device.Channel, parameter hmenum.Parameter, ownAddress string) slotRef {
 	addr := ownAddress
-	if slot.Channel != nil {
-		addr = slot.Channel.Address
+	if ch != nil {
+		addr = ch.Address
 	}
-	return slotRef{ChannelAddress: addr, Parameter: slot.Parameter}
+	return slotRef{ChannelAddress: addr, Parameter: parameter}
 }
 
 // DataPointKey returns the composite identifier used by the materializer
