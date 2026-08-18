@@ -691,18 +691,10 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	case HAComponentBinarySensor:
 		// Read-only — no command_topic / state_on / state_off.
 		//
-		// PerDPState envelope carries the value as a JSON boolean
-		// (`{"value":true,...}`). Jinja's default rendering of a
-		// Python boolean is `True`/`False` (capitalised). HA's
-		// binary_sensor defaults are `payload_on:"ON"`
-		// `payload_off:"OFF"` (uppercase). Without explicit
-		// overrides every binary_sensor stuck in `unknown`. Mirror
-		// the switch path: pipe the scalar through `| lower` and
-		// declare `payload_on/off="true"/"false"` so the comparison
-		// is case-stable.
+		// The declared payloads must be what the state plane actually
+		// renders for THIS descriptor — see [binarySensorPayloads].
 		body["value_template"] = valueJSONValueLowerTemplate
-		body["payload_on"] = "true"
-		body["payload_off"] = "false"
+		body["payload_off"], body["payload_on"] = binarySensorPayloads(ev)
 		// NOTE on expire_after: deliberately NOT set for
 		// binary_sensor. Door / window contacts, sabotage flags,
 		// alarm bits and similar are event-driven — they only emit
@@ -995,6 +987,37 @@ func localisedEnumOptions(ev Event) ([]any, bool) {
 		out[i] = l
 	}
 	return out, true
+}
+
+// binarySensorPayloads returns the (off, on) tokens a binary_sensor has to
+// declare so they match what the state plane renders for that data point
+// through [valueJSONValueLowerTemplate].
+//
+// A BOOL data point publishes the JSON boolean, which the template renders
+// as "false" / "true" — the case-stable spelling of Jinja's `True`/`False`
+// that HA's uppercase `payload_on:"ON"` defaults would never match.
+//
+// An ENUM data point publishes its VALUE_LIST label instead:
+// [ResolveEnumLabel] replaces the wire index before the state topic is
+// written, so the slot carries `{"value":"OPEN"}` and the template renders
+// "open". Declaring the boolean pair for those compares "open" against
+// "true", and HA's binary_sensor matches payload_on / payload_off by exact
+// string — on a miss it logs at INFO and returns without touching the
+// entity's state. The contact therefore stays *available* and `unknown`
+// forever, with no error anywhere. Every door / window contact in the
+// fleet is one of these.
+//
+// Two-entry lists map first→off, second→on, which is the same shape that
+// makes the model classify such a descriptor as binary in the first place
+// (CLOSED/OPEN, DRY/RAIN, STABLE/NOT_STABLE). A longer list has no correct
+// declaration — HA offers exactly one on and one off token — so it keeps
+// the boolean pair rather than silently claiming two of its values;
+// no descriptor in the fleet reaches that branch.
+func binarySensorPayloads(ev Event) (off, on string) {
+	if vl := ev.descValueList(); ev.descType() == hmenum.ParameterTypeEnum && len(vl) == 2 {
+		return strings.ToLower(vl[0]), strings.ToLower(vl[1])
+	}
+	return "false", "true"
 }
 
 func lowercasedOptions(valueList []string) []any {

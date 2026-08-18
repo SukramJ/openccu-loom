@@ -125,7 +125,7 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 	body := map[string]any{
 		"name":                 zoneName,
 		"unique_id":            uniqueID,
-		"object_id":            uniqueID,
+		"default_entity_id":    defaultEntityID(string(HAComponentAlarmControlPanel), uniqueID),
 		"state_topic":          alarmStateTopic(base, zone),
 		"command_topic":        alarmCommandTopic(base, zone),
 		"code_arm_required":    codeArmRequired,
@@ -184,12 +184,12 @@ func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName, label string, master
 	}
 	uniqueID := "openccu-loom_alarm_" + zone + "_reset_motion"
 	body := map[string]any{
-		"name":          zoneName + " — " + label,
-		"unique_id":     uniqueID,
-		"object_id":     uniqueID,
-		"command_topic": alarmCommandTopic(base, zone),
-		"payload_press": alarmCommandResetMotion,
-		"icon":          "mdi:motion-sensor-off",
+		"name":              zoneName + " — " + label,
+		"unique_id":         uniqueID,
+		"default_entity_id": defaultEntityID(string(HAComponentButton), uniqueID),
+		"command_topic":     alarmCommandTopic(base, zone),
+		"payload_press":     alarmCommandResetMotion,
+		"icon":              "mdi:motion-sensor-off",
 		// No entity_category on purpose. Home Assistant files `config`
 		// entities away in a collapsed section of the device page and
 		// keeps them out of dashboards and the entity picker's default
@@ -235,7 +235,7 @@ func BuildAlarmTriggeredMotionDiscovery(base, zoneID, zoneName, label string, ma
 	body := map[string]any{
 		"name":                zoneName + " — " + label,
 		"unique_id":           uniqueID,
-		"object_id":           uniqueID,
+		"default_entity_id":   defaultEntityID(string(HAComponentSensor), uniqueID),
 		"state_topic":         alarmTriggeredMotionTopic(base, zone),
 		"state_class":         "measurement",
 		"icon":                "mdi:motion-sensor",

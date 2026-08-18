@@ -203,6 +203,24 @@ the central slot and the `loom_` namespace (see
 `entry_id[-10:]` prefix is only the *source* side of the one-time registry
 migration, not the new key.
 
+**One declared divergence: CUxD.** The scoped address classes are the hub
+roots (`sysvar` / `program` / `install_mode`), `INT000*`, the
+virtual-remote buses (`BidCoS-*`, `HmIP-RCV-1`) **and `CUX*`**. The last
+one is not in the legacy reference key: CUxD serials are `CUX` + a
+two-digit device type + a per-CCU running number that conventionally
+starts at 1, so two CCUs bridged into one Home Assistant declare
+identical CUxD keys and HA keeps only the first. Because the daemon is
+multi-CCU-first (ADR-0002) it scopes that class; the reference, which runs
+one CCU per config entry, does not. A client rebuilding the key must
+apply the same rule — or consume the `unique_id` the push payloads carry
+(P6), which already has it. Only the *parameter-level* key is affected;
+the channel-level key is unscoped for CUxD on both sides. The divergence
+is pinned from both ends by
+`tests/contract/testdata/routing_key/cuxd_scoping_golden.json` (Go
+contract test + `make routing-key-parity`) and catalogued as
+[`by_design.md` → BD-Identity-CUxDCentralScoping](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md),
+whose retirement condition is the reference adopting the rule.
+
 **Resolved (P6):** the canonical `unique_id` is now carried on the
 value-bearing push payloads (`datapoint.value_changed`,
 `custom_data_point.state_changed`, `hub.sysvar_changed`,

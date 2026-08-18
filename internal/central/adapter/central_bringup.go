@@ -314,6 +314,27 @@ func (m *BringUpManager) AddCentral(cc *config.CentralConfig, unit *central.Unit
 	return true
 }
 
+// LifecycleContext returns the teardown-bounded daemon-lifetime context every
+// bring-up handle derives its per-generation context from. [WireCentrals]
+// derives it from the daemon's run context; the aggregate teardown cancels it
+// once, after all handles have shut down.
+//
+// It exists for the composition root's runtime-adopt path, which has to start
+// machinery that outlives the call that adopted the central. Every caller of
+// that path is an HTTP handler — POST/PUT /api/v1/centrals and the first-run
+// setup wizard — and net/http cancels the request context the instant the
+// response is written, so anything started on it (the central's scheduler
+// above all) dies before the operator's browser has rendered the result.
+//
+// Returns [context.Background] on a manager that never went through
+// WireCentrals, which only a test constructs.
+func (m *BringUpManager) LifecycleContext() context.Context {
+	if m == nil || m.parentCtx == nil {
+		return context.Background()
+	}
+	return m.parentCtx
+}
+
 // RemoveCentral tears down a single central's southbound wiring at runtime: it
 // drops the handle from the manager, then shuts it down — draining the gated
 // bring-up + InterfaceClient goroutines and deregistering the callback routes

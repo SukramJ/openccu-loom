@@ -55,8 +55,11 @@ func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 	if got, want := body["unique_id"], "openccu-loom_alarm_eg"; got != want {
 		t.Errorf("unique_id = %v, want %v", got, want)
 	}
-	if got, want := body["object_id"], "openccu-loom_alarm_eg"; got != want {
-		t.Errorf("object_id = %v, want %v", got, want)
+	if got, want := body["default_entity_id"], "alarm_control_panel.openccu-loom_alarm_eg"; got != want {
+		t.Errorf("default_entity_id = %v, want %v", got, want)
+	}
+	if _, has := body["object_id"]; has {
+		t.Errorf("discovery payload must not carry the removed object_id key; got %v", body["object_id"])
 	}
 	if got, want := body["state_topic"], "gh/alarm/eg/state"; got != want {
 		t.Errorf("state_topic = %v, want %v", got, want)

@@ -23,11 +23,16 @@ import (
 // is only ever in transit during [UserStore.Put] / authentication.
 type UserStore struct {
 	db *sql.DB
+	// verified short-circuits the repeat password verification of a
+	// credential this store has already checked — see
+	// [auth.VerifiedBasicCache] for why that is safe. A nil cache verifies
+	// every time.
+	verified *auth.VerifiedBasicCache
 }
 
 // NewUserStore returns a store backed by db.
 func NewUserStore(db *sql.DB) *UserStore {
-	return &UserStore{db: db}
+	return &UserStore{db: db, verified: auth.NewVerifiedBasicCache()}
 }
 
 // Compile-time assertion.
@@ -208,7 +213,10 @@ func (s *UserStore) AuthenticateBasic(ctx context.Context, username, password st
 	if err != nil {
 		return auth.Identity{}, fmt.Errorf("sqlite: users authn: %w", err)
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+	ok := s.verified.Verify(subject, hash, password, func() bool {
+		return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+	})
+	if !ok {
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE users SET last_seen_at = ? WHERE subject = ?`, time.Now().UTC(), subject)

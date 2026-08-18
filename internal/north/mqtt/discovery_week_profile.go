@@ -84,7 +84,7 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 	if !scoped {
 		return DiscoveryItem{}
 	}
-	// object_id is the normalised (colon→underscore, lower-case) form of the
+	// objectID is the normalised (colon→underscore, lower-case) form of the
 	// legacy "<central>:<addr>:WEEKPROFILE" identifier — kept for HA topic
 	// continuity. The unique_id is the canonical routing-key form.
 	rawUID := ev.WP.UniqueID()
@@ -109,7 +109,7 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 	body := map[string]any{
 		"name":              d.tr("discovery.week_profile"),
 		"unique_id":         uniqueID,
-		"object_id":         objectID,
+		"default_entity_id": defaultEntityID(string(HAComponentSelect), objectID),
 		"state_topic":       stateTopic,
 		"command_topic":     commandTopic,
 		"options":           profiles,

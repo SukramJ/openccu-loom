@@ -6,11 +6,9 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
-	"strconv"
-	"strings"
+	"log/slog"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -173,22 +171,106 @@ func TestDevicePlaneTopicsRoundTrip(t *testing.T) {
 		t.Fatal("no topics declared; the walk found no discovery payloads and would pass vacuously")
 	}
 
-	published := devicePublishedTopics(base, central, iface, addr)
-	if len(published) == 0 {
-		t.Fatal("no topics published/subscribed; the walk found nothing and would pass vacuously")
+	obs := runDevicePlane(t, base, central, iface, addr)
+	planeRoundTrip(t, "device plane", declared, obs.publishedTopics(), obs.subscribedFilters(), nil)
+}
+
+// runDevicePlane drives every real [Bridge] publish call site the
+// fixtures above declare an entity for, plus the real
+// [CommandSubscriber], against a recording broker and returns
+// everything carried.
+//
+// Each state write goes through the same [Bridge] method the
+// production publish call sites use (eventbridge.go's
+// publishSlotState/publishCustomDPState via PublishSlotState/
+// PublishSlotConfig/PublishCustomDPState, PublishChannelEventState,
+// PublishScheduleEntityState/Attrs, PublishScheduleSwitchState,
+// PublishWeekProfileState, PublishCombinedTimerState/
+// PublishCombinedSensorState, PublishUpdateState) — the topic is
+// never re-derived by hand. The command half is registered by
+// starting the real [CommandSubscriber]; a declared command topic
+// counts as carried only when one of its real wildcard subscriptions
+// matches it — see [topicMatchesFilter].
+func runDevicePlane(t *testing.T, base, central, iface, addr string) *observedPlane {
+	t.Helper()
+	ctx := context.Background()
+	obs := newObservedPlane()
+	bridge := NewBridge(BridgeConfig{
+		Base: base, CentralName: central,
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, obs)
+
+	// --- Main per-parameter path: switch (state+command+json_attrs) ---
+	switchSlot := payload.TopicSlot{Address: addr, Channel: 1, Bucket: payload.BucketValues, Parameter: "STATE"}
+	if err := bridge.PublishSlotState(ctx, central, iface, switchSlot, payload.PerDPState{Value: true, Available: true}); err != nil {
+		t.Fatalf("publish switch state: %v", err)
+	}
+	if err := bridge.PublishSlotConfig(ctx, central, iface, switchSlot, map[string]any{"type": "boolean"}); err != nil {
+		t.Fatalf("publish switch config: %v", err)
 	}
 
-	for topic := range declared {
-		if !published[topic] {
-			t.Errorf("declared but never published/subscribed: %q — a consumer creates this entity "+
-				"and it either stays unavailable forever (state) or its commands vanish silently (command)", topic)
-		}
+	// --- Main per-parameter path: read-only sensor (state+json_attrs, no command) ---
+	sensorSlot := payload.TopicSlot{Address: addr, Channel: 1, Bucket: payload.BucketValues, Parameter: "ACTUAL_TEMPERATURE"}
+	if err := bridge.PublishSlotState(ctx, central, iface, sensorSlot, payload.PerDPState{Value: 21.5, Available: true}); err != nil {
+		t.Fatalf("publish sensor state: %v", err)
 	}
-	for topic := range published {
-		if !declared[topic] {
-			t.Logf("published but not declared: %q (no entity is created for it)", topic)
-		}
+	if err := bridge.PublishSlotConfig(ctx, central, iface, sensorSlot, map[string]any{"unit": "°C"}); err != nil {
+		t.Fatalf("publish sensor config: %v", err)
 	}
+
+	// --- Channel-level keypress event (state only) ---
+	if err := bridge.PublishChannelEventState(ctx, central, iface, addr, 2, "", "press_short"); err != nil {
+		t.Fatalf("publish channel event state: %v", err)
+	}
+
+	// --- Generic custom-DP aggregate (shared slot-topic plumbing) ---
+	customSlot := payload.TopicSlot{Address: addr, Channel: 3, Bucket: payload.BucketCustom, Parameter: "switch"}
+	if err := bridge.PublishCustomDPState(ctx, central, iface, customSlot, map[string]any{"switch": "on"}); err != nil {
+		t.Fatalf("publish custom-DP state: %v", err)
+	}
+
+	// --- Schedule entity + schedule switch ---
+	if err := bridge.PublishScheduleEntityState(ctx, central, iface, addr, 4, 2); err != nil {
+		t.Fatalf("publish schedule entity state: %v", err)
+	}
+	if err := bridge.PublishScheduleEntityAttrs(ctx, central, iface, addr, 4, map[string]any{"schedule_enabled": true}); err != nil {
+		t.Fatalf("publish schedule entity attrs: %v", err)
+	}
+	if err := bridge.PublishScheduleSwitchState(ctx, central, iface, addr, 4, "1_1", true); err != nil {
+		t.Fatalf("publish schedule switch state: %v", err)
+	}
+
+	// --- Week profile ---
+	if err := bridge.PublishWeekProfileState(ctx, central, iface, addr, 1, "P1"); err != nil {
+		t.Fatalf("publish week profile state: %v", err)
+	}
+
+	// --- Combined timer + combined sensor ---
+	if err := bridge.PublishCombinedTimerState(ctx, central, iface, addr, 3, "duration", 30); err != nil {
+		t.Fatalf("publish combined timer state: %v", err)
+	}
+	if err := bridge.PublishCombinedSensorState(ctx, central, iface, addr, 3, "hs_color", `{"hue":120}`); err != nil {
+		t.Fatalf("publish combined sensor state: %v", err)
+	}
+
+	// --- Firmware update entity ---
+	if err := bridge.PublishUpdateState(ctx, central, iface, addr, map[string]any{
+		"firmware": "1.0", "latest_firmware": "1.1", "in_progress": false,
+	}); err != nil {
+		t.Fatalf("publish update state: %v", err)
+	}
+
+	// The command half is observed rather than mirrored: the real
+	// subscriber registers its own wildcards, and a declared command
+	// topic counts as heard only when one of them matches it.
+	cs := NewCommandSubscriber(obs, NewTopicBuilder(base), nil, slog.Default())
+	if err := cs.Start(ctx); err != nil {
+		t.Fatalf("command subscriber start: %v", err)
+	}
+	t.Cleanup(cs.Close)
+
+	obs.settle(t)
+	return obs
 }
 
 // collectDeviceDeclaredTopics is the (component, nodeID, objectID,
@@ -225,82 +307,6 @@ func collectDeviceDeclaredBody(t *testing.T, out map[string]bool, label string, 
 			out[v] = true
 		}
 	}
-}
-
-// devicePublishedTopics is the set of topics the device plane actually
-// writes to or subscribes on for the fixture built above.
-//
-// State/json-attributes/latest-version entries are derived from the
-// same [TopicBuilder] method the real publish call site uses
-// (eventbridge.go's publishSlotState/publishCustomDPState via
-// bridge.go's PublishSlotState/PublishSlotConfig/PublishCustomDPState,
-// PublishChannelEventState, PublishScheduleEntityState/Attrs,
-// PublishScheduleSwitchState, PublishWeekProfileState,
-// PublishCombinedTimerState/PublishCombinedSensorState,
-// PublishUpdateState) — never by re-deriving the topic string by hand.
-// The custom-DP service-method entry is the one command topic derived
-// the same way: [CommandSubscriber.handleServiceMethod] subscribes the
-// exact wildcard shape [TopicBuilder.CustomDPServiceMethod] produces,
-// so both discovery's declaration and this "published" anchor calling
-// the same [TopicBuilder] method mirrors the two independent call
-// sites converging on one shared helper — same pattern as
-// [TestSecurityPlaneTopicsRoundTrip]'s reuse of [securityAvailabilityTopic].
-//
-// Every other command-only entry (bucket-aware per-parameter, press
-// button, schedule switch, week profile, combined-DP) is NOT derived
-// by calling the matching [TopicBuilder] method again — for these,
-// unlike the custom-DP service method above, nothing outside discovery
-// ever calls that method; [CommandSubscriber.Start] only matches a
-// hand-written wildcard literal, so reusing the builder method would
-// only prove discovery agrees with itself. [devWildcardCommand]
-// reproduces each wildcard's literal shape independently instead, so a
-// drift in either side is what makes the comparison fail.
-func devicePublishedTopics(base, central, iface, addr string) map[string]bool {
-	const valuesBucket = "values"
-	tb := NewTopicBuilder(base)
-	return map[string]bool{
-		tb.ParameterState(central, iface, addr, 1, valuesBucket, "STATE"):                     true,
-		devWildcardCommand(base, central, iface, addr, 1, valuesBucket, "STATE", "set"):       true,
-		tb.ParameterConfig(central, iface, addr, 1, valuesBucket, "STATE"):                    true,
-		tb.ParameterState(central, iface, addr, 1, valuesBucket, "ACTUAL_TEMPERATURE"):        true,
-		tb.ParameterConfig(central, iface, addr, 1, valuesBucket, "ACTUAL_TEMPERATURE"):       true,
-		devWildcardCommand(base, central, iface, addr, 1, valuesBucket, "PRESS_SHORT", "set"): true,
-		tb.ChannelEvent(central, iface, addr, 2):                                              true,
-		tb.SlotState(central, iface, payload.TopicSlot{
-			Address: addr, Channel: 3, Bucket: payload.BucketCustom, Parameter: "switch",
-		}): true,
-		tb.CustomDPServiceMethod(central, iface, payload.TopicSlot{
-			Address: addr, Channel: 3, Bucket: payload.BucketCustom, Parameter: "switch",
-		}, "set"): true,
-		tb.ScheduleEntityState(central, iface, addr, 4):                                  true,
-		tb.ScheduleEntityAttrs(central, iface, addr, 4):                                  true,
-		tb.ScheduleSwitchState(central, iface, addr, 4, "1_1"):                           true,
-		devWildcardCommand(base, central, iface, addr, 4, "schedule", "1_1", "set"):      true,
-		tb.WeekProfileState(central, iface, addr, 1):                                     true,
-		devWildcardCommand(base, central, iface, addr, 1, "week_profile", "set"):         true,
-		tb.CombinedState(central, iface, addr, 3, "duration"):                            true,
-		devWildcardCommand(base, central, iface, addr, 3, "combined", "duration", "set"): true,
-		tb.CombinedState(central, iface, addr, 3, "hs_color"):                            true,
-		tb.DeviceUpdateState(central, iface, addr):                                       true,
-	}
-}
-
-// devWildcardCommand reproduces one of [CommandSubscriber.Start]'s
-// literal command-topic wildcard registrations
-// (`<base>/+/+/+/+/+/+/set`, `<base>/+/+/+/+/schedule/+/set`,
-// `<base>/+/+/+/+/week_profile/set`, `<base>/+/+/+/+/combined/+/set`)
-// with every wildcard segment after `<addr>` substituted by segments,
-// and every `+` before it substituted by central/iface/addr. Built as
-// a plain string — see the doc comment on [devicePublishedTopics] for
-// why this must NOT call a [TopicBuilder] method instead.
-//
-// The central `+` is substituted with the escaped name, because that is the
-// segment a real publisher writes and therefore the only one the wildcard
-// can ever match. Substituting the raw name would make the mirror agree with
-// a discovery payload that had skipped the escaping.
-func devWildcardCommand(base, central, iface, addr string, channel int, segments ...string) string {
-	parts := append([]string{base, naming.TopicSafe(central), iface, addr, strconv.Itoa(channel)}, segments...)
-	return strings.Join(parts, "/")
 }
 
 // fakePressChannel is a minimal [ChannelInspector] exposing exactly one

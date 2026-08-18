@@ -160,6 +160,87 @@ func TestPutConfigSection_RestartRequiredPerField(t *testing.T) {
 	}
 }
 
+// TestPutConfigSection_RestartRequiredForBootWiredSections covers the sections
+// whose values are captured once, while the daemon wires itself, and are never
+// re-read: the OIDC client, the rate limiter, the TLS listener, the locale the
+// label/bridge wiring bakes in, the CCU metadata archives, the reliability
+// stack of each interface client, and the persistence recorders.
+//
+// The response asserted here is the operator's only signal — the SPA renders
+// the save result and the restart-pending banner from it. While these sections
+// had no rule, rotating a leaked OIDC client_secret, enabling the rate limiter
+// under a brute-force load or pointing the listener at a certificate all
+// answered restart_required:false, so the operator believed a security control
+// was live while the daemon kept running on the value it booted with.
+func TestPutConfigSection_RestartRequiredForBootWiredSections(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		section string
+		body    string
+	}{
+		{
+			name:    "oidc client secret rotation",
+			section: "north.rest.auth.oidc",
+			body:    `{"enabled":true,"issuer":"https://idp.example","client_id":"loom","client_secret":"rotated","redirect_url":"https://loom.example/auth/callback"}`,
+		},
+		{
+			name:    "rate limiter enabled",
+			section: "north.rest",
+			body:    `{"rate_limit":{"enabled":true,"requests_per_second":5,"burst":10}}`,
+		},
+		{
+			name:    "tls certificate configured",
+			section: "north.rest",
+			body:    `{"tls_cert_file":"/etc/loom/tls.crt","tls_key_file":"/etc/loom/tls.key"}`,
+		},
+		{
+			name:    "locale changed",
+			section: "locale",
+			body:    `{"locale":"de"}`,
+		},
+		{
+			name:    "ccu data archive path changed",
+			section: "ccu_data",
+			body:    `{"translations_path":"/srv/ccu/translations"}`,
+		},
+		{
+			name:    "reliability retry delay tuned",
+			section: "reliability",
+			body:    `{"command_retry_initial_delay":3000000000}`,
+		},
+		{
+			name:    "values cache disabled",
+			section: "persistence",
+			body:    `{"values_cache":{"enabled":false}}`,
+		},
+		{
+			name:    "history recorder enabled",
+			section: "persistence",
+			body:    `{"history":{"enabled":true}}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: config.Default()}}
+			w := putSection(fake, tc.section, tc.body)
+			if w.Code != http.StatusOK {
+				t.Fatalf("save should succeed, got %d: %s", w.Code, w.Body.String())
+			}
+			var resp map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("response not JSON: %v", err)
+			}
+			if got, _ := resp["restart_required"].(bool); !got {
+				t.Errorf("restart_required=false for %s — the SPA shows the save as applied "+
+					"while the daemon keeps the value it booted with", tc.section)
+			}
+		})
+	}
+}
+
 // TestPutConfigSection_PartialPutKeepsUntouchedFields reproduces the reported
 // defect: PutSection REPLACES the row, so persisting the request fragment
 // instead of the candidate that was validated silently drops every field the

@@ -631,6 +631,19 @@ type ConnectivityChangedEvent struct {
 	// triggered this event, in milliseconds. Zero when no probe measured
 	// latency — e.g. an interface that vanished from the CCU's list.
 	LatencyMs float64
+	// Unconfirmed marks a reachability the daemon derived from its own
+	// view instead of from the CCU's interface list: while a central is
+	// not operational the probe cannot run at all, so every interface is
+	// reported unreachable because nothing can confirm it — not because
+	// the CCU said so.
+	//
+	// Diagnostic surfaces (MQTT, REST, WebSocket) render it like any
+	// other unreachable state; that honesty is the point. Consumers that
+	// escalate physically on reachability — the alarm domain's
+	// central-loss policy — must ignore it, or a routine CCU reboot
+	// sounds the siren on a zone configured to trigger and writes a fault
+	// to every armed zone's journal on the default policy.
+	Unconfirmed bool
 }
 
 // Type implements Event.

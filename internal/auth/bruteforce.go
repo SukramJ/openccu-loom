@@ -4,6 +4,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -16,41 +17,62 @@ import (
 // matter which Resolve-protected route carries the Basic header — not just
 // POST /auth/login.
 //
-// The two operations are deliberately split so a successful verification costs
-// nothing: Budget only peeks, and Charge is called for a failed attempt alone.
+// Its two halves sit on opposite sides of the password KDF.
+// ReserveBasicAttempt is called by [Middleware.Resolve] immediately BEFORE
+// the verification, because the verification itself is the expensive
+// operation the throttle exists to bound — a bcrypt compare at cost 12 costs
+// hundreds of milliseconds of CPU, so a throttle downstream of it protects
+// nothing. Budget is the read-only peek [GuardBasicAuth] uses afterwards to
+// turn a spent budget into a 429.
 type BasicAuthThrottle interface {
-	// Budget reports whether the source of r may attempt a Basic verification
-	// — a token is available in its bucket — WITHOUT consuming one, and the
-	// integer Retry-After seconds when it may not.
+	// Budget reports whether the source of r has a verification token left —
+	// WITHOUT consuming one — and the integer Retry-After seconds when it
+	// does not.
 	Budget(r *http.Request) (ok bool, retryAfter int)
-	// Charge records one failed Basic verification against the source of r,
-	// consuming a token from the shared per-IP bucket.
+	// ReserveBasicAttempt consumes one token for a Basic verification that is
+	// about to run. ok is false when the source is out of budget, and the
+	// caller must then skip the verification entirely. refund returns the
+	// token and is called when the credential verified — a valid credential
+	// must cost nothing. refund is nil when ok is false.
+	ReserveBasicAttempt(r *http.Request) (refund func(), ok bool)
+	// Charge records one failed verification the resolver did not account
+	// for. It is the fallback [GuardBasicAuth] uses behind a resolver with no
+	// throttle wired, so a mount that misses that wiring is still throttled —
+	// after the verification rather than before it.
 	Charge(r *http.Request)
 }
 
-// GuardBasicAuth throttles per-source HTTP Basic credential guessing on every
-// route it wraps. It closes the gap where the login limiter only guards POST
+// GuardBasicAuth answers 429 for a source that has spent its Basic-auth
+// budget. It closes the gap where the login limiter only guards POST
 // /auth/login while GET /auth/me — and every other route behind Resolve —
 // accepts an unlimited stream of `Authorization: Basic` probes (200 reveals a
 // correct password, 401 a wrong one).
 //
-// Mount it immediately AFTER Resolve so it can read the identity Resolve
-// attached:
+// Mount it immediately AFTER Resolve so it observes the bucket the
+// verification just charged:
 //
 //   - A request that carries no Basic credentials is never a guess: it passes
 //     untouched and the bucket is not consulted.
-//   - When the source's budget is already spent, every Basic attempt — valid or
-//     not — is answered 429 before the downstream handler can reveal whether the
+//   - When the source's budget is spent, every Basic attempt — valid or not —
+//     is answered 429 rather than the downstream handler revealing whether the
 //     credential was good, closing the "exhaust the bucket, then probe for the
 //     200" side channel.
-//   - Within budget, a valid credential passes and consumes nothing; an invalid
-//     one charges the source one token and then falls through to the normal 401.
+//   - Within budget, a valid credential passes and consumes nothing (Resolve
+//     refunds it); an invalid one has already cost the source one token.
+//
+// The accounting itself lives in [Middleware.Resolve] rather than here, so an
+// out-of-budget source never reaches the password KDF at all — see
+// [BasicAuthThrottle].
 //
 // A nil throttle disables the guard (test fixtures, builds without the limiter).
 func GuardBasicAuth(t BasicAuthThrottle) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if t == nil || !hasBasicCredentials(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if _, resolved := IdentityFrom(r.Context()); resolved {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -62,15 +84,36 @@ func GuardBasicAuth(t BasicAuthThrottle) func(http.Handler) http.Handler {
 						"too many failed credential attempts — wait "+strconv.Itoa(retry)+"s and retry"))
 				return
 			}
-			if _, resolved := IdentityFrom(r.Context()); !resolved {
-				// Basic header present, budget available, yet Resolve attached no
-				// identity: a failed guess. Charge the source, then let the normal
-				// unauthenticated flow answer 401.
+			if !basicAttemptAccounted(r.Context()) {
+				// The resolver in front of this guard has no throttle wired, so
+				// nothing charged the failed verification it just ran. Charge it
+				// here rather than leave the sweep unbounded — the source is
+				// still limited, it just paid the key derivation first.
 				t.Charge(r)
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// keyBasicAccounted marks a request whose Basic verification the resolver
+// already put through the throttle. It exists so the two accounting points
+// cannot both charge the same attempt: [Middleware.Resolve] charges before the
+// verification (where it bounds the cost), and [GuardBasicAuth] only falls
+// back to charging after it when the resolver had no throttle to consult.
+const keyBasicAccounted ctxKey = "basic-attempt-accounted"
+
+// markBasicAttemptAccounted returns a context recording that the throttle has
+// already seen this request's Basic verification.
+func markBasicAttemptAccounted(ctx context.Context) context.Context {
+	return context.WithValue(ctx, keyBasicAccounted, true)
+}
+
+// basicAttemptAccounted reports whether the resolver already charged this
+// request's Basic verification.
+func basicAttemptAccounted(ctx context.Context) bool {
+	accounted, _ := ctx.Value(keyBasicAccounted).(bool)
+	return accounted
 }
 
 // hasBasicCredentials reports whether r carries a parseable HTTP Basic

@@ -799,6 +799,12 @@ func (l *ColorLight) HADiscoveryPayload(ctx payload.HADiscoveryContext) (compone
 	if body == nil {
 		body = map[string]any{}
 	}
+	if !l.SupportsColor() {
+		// No HUE / SATURATION pair and no COLOR integer: declaring the
+		// hs mode would render a colour wheel whose every command is
+		// refused, and the state payload would never carry a colour.
+		return "light", body
+	}
 	// Override supported_color_modes to "hs" — ColorLight adds HSV.
 	body["supported_color_modes"] = []string{"hs"}
 	// HS flag enables the color picker in HA JSON-Schema mode.
@@ -885,11 +891,15 @@ func (l *EffectLight) HADiscoveryPayload(ctx payload.HADiscoveryContext) (compon
 	if body == nil {
 		body = map[string]any{}
 	}
-	body["effect"] = true
 	effects := l.Effects()
 	if len(effects) == 0 {
-		effects = []string{"NONE", "SLOW_COLOR_CHANGE", "MEDIUM_COLOR_CHANGE", "FAST_COLOR_CHANGE"}
+		// No vocabulary, no picker. A substituted list is worse than
+		// none: Home Assistant renders the dropdown, and every entry it
+		// offers is refused on the way back because no lookup resolves
+		// it.
+		return "light", body
 	}
+	body["effect"] = true
 	body["effect_list"] = effects
 	return "light", body
 }
@@ -991,7 +1001,9 @@ func rgbwModeName(m RGBWMode) string {
 
 // LocalisableSelections implements [payload.LocalisableSelections]: the
 // effect list is the VALUE_LIST of PROGRAM, and Home Assistant returns
-// the operator's pick as `effect`.
+// the operator's pick as `effect`. A device whose PROGRAM carries no
+// VALUE_LIST falls back to the actuator's own vocabulary, whose labels
+// are already human-readable and simply miss the translation lookup.
 func (l *EffectLight) LocalisableSelections() []payload.LocalisableSelection {
 	if l == nil || len(l.Effects()) == 0 {
 		return nil

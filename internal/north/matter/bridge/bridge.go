@@ -155,7 +155,7 @@ func (c Config) validate() error {
 type Bridge struct {
 	cfg         Config
 	store       endpoint.Store
-	aclLister   endpoint.ACLLister // ACL source for the dispatcher's CheckACL; nil = enforcement off
+	aclLister   endpoint.ACLLister // ACL source for the dispatcher's CheckACL; nil denies every operational request
 	snapshotter Snapshotter
 	logger      *slog.Logger
 	advertiser  mdns.Advertiser
@@ -656,9 +656,9 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 		agg.PublishClusterServers(aggregatorClusters)
 	}
 	dispatcher := endpoint.NewTopologyDispatcher(topology)
-	// Wire ACL enforcement onto the fresh dispatcher (Matter §9.10). Nil
-	// lister leaves CheckACL fail-open — production daemons attach a
-	// store-backed lister via AttachACLLister.
+	// Wire ACL enforcement onto the fresh dispatcher (Matter §9.10). A nil
+	// lister leaves CheckACL denying every operational request — production
+	// daemons attach a store-backed lister via AttachACLLister.
 	b.mu.RLock()
 	aclLister := b.aclLister
 	b.mu.RUnlock()
@@ -925,8 +925,13 @@ func (b *Bridge) AttachExposureChecker(c endpoint.ExposureChecker) {
 // against (Matter §9.10). Production daemons MUST pass a
 // `matter/store.Store`-backed lister so operational (CASE) reads / writes /
 // invokes are gated by the AccessControl cluster's stored entries; without
-// it the dispatcher's CheckACL fails open. The lister is applied to the
-// dispatcher on the next [Reassemble] and on every subsequent rebuild.
+// one the dispatcher's CheckACL denies every operational request, so a
+// bridge left unwired answers nothing rather than answering everything. The
+// lister is applied to the dispatcher on the next [Reassemble] and on every
+// subsequent rebuild.
+//
+// A setup that means to run without stored entries passes
+// [endpoint.UnenforcedACL].
 func (b *Bridge) AttachACLLister(l endpoint.ACLLister) {
 	if b == nil {
 		return

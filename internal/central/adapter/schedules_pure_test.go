@@ -147,87 +147,40 @@ func TestHasSimpleScheduleParamsEmpty(t *testing.T) {
 // domainFromWeekProfileType tests
 // ============================================================
 
-func TestDomainFromWeekProfileTypeSwitch(t *testing.T) {
+// TestDomainFromWeekProfileTypeCoversTheRealTypeSet pins the mapping for
+// every `*_WEEK_PROFILE` channel type that exists, and pins that a name
+// no firmware declares resolves to nothing rather than to a plausible
+// guess.
+//
+// The table this replaced asserted nine types no device carries
+// (LIGHT_WEEK_PROFILE, COVER_WEEK_PROFILE, SHUTTER_WEEK_PROFILE,
+// LOCK_WEEK_PROFILE, DOOR_LOCK_WEEK_PROFILE, VALVE_WEEK_PROFILE,
+// WATER_WEEK_PROFILE, HEATING_WEEK_PROFILE, CLIMATECONTROL_WEEK_PROFILE)
+// while the two that most needed a rule — UNIVERSAL_LIGHT_WEEK_PROFILE
+// and SHADING_WEEK_PROFILE — went unmentioned and unresolved. A table of
+// invented inputs is green by construction.
+func TestDomainFromWeekProfileTypeCoversTheRealTypeSet(t *testing.T) {
 	t.Parallel()
-	if got := domainFromWeekProfileType("SWITCH_WEEK_PROFILE"); got != "switch" {
-		t.Errorf("SWITCH_WEEK_PROFILE → %q, want switch", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeDimmer(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("DIMMER_WEEK_PROFILE"); got != "light" {
-		t.Errorf("DIMMER_WEEK_PROFILE → %q, want light", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeLightWeek(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("LIGHT_WEEK_PROFILE"); got != "light" {
-		t.Errorf("LIGHT_WEEK_PROFILE → %q, want light", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeBlind(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("BLIND_WEEK_PROFILE"); got != "cover" {
-		t.Errorf("BLIND_WEEK_PROFILE → %q, want cover", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeShutter(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("SHUTTER_WEEK_PROFILE"); got != "cover" {
-		t.Errorf("SHUTTER_WEEK_PROFILE → %q, want cover", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeLock(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("LOCK_WEEK_PROFILE"); got != "lock" {
-		t.Errorf("LOCK_WEEK_PROFILE → %q, want lock", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeDoorLock(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("DOOR_LOCK_WEEK_PROFILE"); got != "lock" {
-		t.Errorf("DOOR_LOCK_WEEK_PROFILE → %q, want lock", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeValve(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("VALVE_WEEK_PROFILE"); got != "valve" {
-		t.Errorf("VALVE_WEEK_PROFILE → %q, want valve", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeWater(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("WATER_WEEK_PROFILE"); got != "valve" {
-		t.Errorf("WATER_WEEK_PROFILE → %q, want valve", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeHeating(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("HEATING_WEEK_PROFILE"); got != "climate" {
-		t.Errorf("HEATING_WEEK_PROFILE → %q, want climate", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeClimatecontrol(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("CLIMATECONTROL_WEEK_PROFILE"); got != "climate" {
-		t.Errorf("CLIMATECONTROL_WEEK_PROFILE → %q, want climate", got)
-	}
-}
-
-func TestDomainFromWeekProfileTypeUnknown(t *testing.T) {
-	t.Parallel()
-	if got := domainFromWeekProfileType("UNKNOWN_THING"); got != "" {
-		t.Errorf("unknown type → %q, want empty", got)
+	for _, tc := range []struct {
+		channelType string
+		want        string
+	}{
+		{"SWITCH_WEEK_PROFILE", "switch"},
+		{"DIMMER_WEEK_PROFILE", "light"},
+		{"DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE", "light"},
+		{"UNIVERSAL_LIGHT_WEEK_PROFILE", "light"},
+		{"BLIND_WEEK_PROFILE", "cover"},
+		{"SHADING_WEEK_PROFILE", "cover"},
+		{"WATER_SWITCH_WEEK_PROFILE", "valve"},
+		{"SERVO_WEEK_PROFILE", "valve"},
+		{"UNKNOWN_THING", ""},
+		{"LIGHT_WEEK_PROFILE", ""},
+		{"COVER_WEEK_PROFILE", ""},
+		{"HEATING_WEEK_PROFILE", ""},
+	} {
+		if got := domainFromWeekProfileType(tc.channelType); got != tc.want {
+			t.Errorf("%s -> %q, want %q", tc.channelType, got, tc.want)
+		}
 	}
 }
 

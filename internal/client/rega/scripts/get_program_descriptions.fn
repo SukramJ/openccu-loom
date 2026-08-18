@@ -1,6 +1,13 @@
 !# openccu-loom — get_program_descriptions
 !# Output: [{"id":"<program-id>","description":"<uri-encoded info>",
-!#          "condition_summary":"<uri-encoded>","activity_summary":"<uri-encoded>"}...]
+!#          "condition_summary":"<uri-encoded>","activity_summary":"<uri-encoded>",
+!#          "last_execute_seconds":<unix-seconds>}...]
+!#
+!# last_execute_seconds is when the CCU last ran the program, in Unix
+!# seconds (UTC), 0 when it never ran. Program.getAll carries the same
+!# instant as a CCU-LOCAL wall-clock string with no zone offset, which is
+!# not parsable on its own; the *Seconds() accessor is a true epoch, so it
+!# is read here instead — same reasoning as get_service_messages.fn.
 !#
 !# Walks every registered program and emits its PrgInfo description plus a
 !# compact, language-neutral summary of the program's root rule: the
@@ -22,6 +29,7 @@ string sCondIdx; string sSingleIdx; string sDestIdx; string sName;
 object oProgram; object oRule; object oC; object oSC; object oCC; object oLV;
 object oDest; object oSD; object oCH;
 integer iCondCount; integer iSingleCount; integer iLVT; integer iCT;
+integer iLastExec;
 integer iRV1; integer iRV2; integer iDestCount; integer iP; integer iV;
 boolean bValue;
 boolean bFirst = true;
@@ -31,6 +39,7 @@ foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
     oProgram = dom.GetObject(sProgramId);
     if (oProgram) {
         sDescription = oProgram.PrgInfo().UriEncode();
+        iLastExec = oProgram.ProgramLastExecuteTimeSeconds();
         sCond = "";
         sAct = "";
 
@@ -128,7 +137,7 @@ foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
             WriteLine(',');
         }
 
-        Write('{"id":"' # sProgramId # '","description":"' # sDescription # '","condition_summary":"' # sCond.UriEncode() # '","activity_summary":"' # sAct.UriEncode() # '"}');
+        Write('{"id":"' # sProgramId # '","description":"' # sDescription # '","condition_summary":"' # sCond.UriEncode() # '","activity_summary":"' # sAct.UriEncode() # '","last_execute_seconds":' # iLastExec # '}');
     }
 }
 Write(']');

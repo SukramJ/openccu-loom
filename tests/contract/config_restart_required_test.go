@@ -28,6 +28,16 @@ var restartPathsNotDiffableByMutation = map[string]string{
 	// restart-required, so the rule needs two configs sharing a central name —
 	// TestCentralsRestartRuleNeedsAnInPlaceModification covers it directly.
 	"centrals": "add/remove are live operations; only an in-place change counts",
+	// The mutator turns an unset tri-state into an explicit false. The three
+	// gates below default to OFF, so that mutation changes the encoding and
+	// not the state — and a rule that reported a restart for it would light
+	// the pending-restart banner for a save that changed nothing. Their rules
+	// compare the resolved value; the edit that matters (turning the feature
+	// on) is covered by TestRestartRequiredDiff_OptInGatesTurnedOn in
+	// internal/config.
+	"persistence.history.enabled":        "unset and explicit false are the same state (opt-in feature)",
+	"persistence.history.export.enabled": "unset and explicit false are the same state (opt-in exporter)",
+	"north.matter.enable_time_sync":      "unset and explicit false are the same state (cluster not mounted)",
 }
 
 // TestEveryRestartRequiredFieldIsDetectedByDiff is the guard that keeps the
@@ -68,6 +78,114 @@ func TestEveryRestartRequiredFieldIsDetectedByDiff(t *testing.T) {
 			}
 		})
 	}
+}
+
+// configSubtreesAppliedWithoutRestart names config sub-trees whose leaves need
+// no rule of their own, because one rule already compares the WHOLE sub-tree —
+// so a field added under the prefix later is covered the day it is added.
+// Anything else needs a per-leaf decision.
+var configSubtreesAppliedWithoutRestart = map[string]string{
+	"centrals.": "the centrals rule compares whole entries; adding or removing a CCU is a live " +
+		"orchestrator operation and an in-place edit is reported as `centrals`",
+	"north.mqtt.": "a structural diff of the whole block tears down and rebuilds the MQTT stack, " +
+		"so every field in it is re-read on reload",
+}
+
+// configLeavesAppliedWithoutRestart names the individual config leaves that
+// genuinely take effect without a restart, with the mechanism that makes them
+// live. It is the counterweight to restartRules(): a leaf in neither is a leaf
+// nobody classified, and the class of unclassified-but-boot-wired leaves is
+// what let the OIDC client secret, the rate limiter and the TLS paths report
+// "saved, no restart needed" for changes that never happened.
+//
+// Adding an entry here is a claim that has to be traced to the read site, not
+// a way to silence the guard.
+var configLeavesAppliedWithoutRestart = map[string]string{
+	"north.ui.embedded": "read per request while the surface profile is resolved, " +
+		"through the effective config rather than a boot snapshot",
+	"north.ui.embedded_scope": "read per request while the surface profile is resolved",
+	"north.ui.profiles":       "read per request while the surface profile is resolved",
+	"north.rest.auth.users": "credentials live in the SQLite user store, which the login chain reads live; " +
+		"the config map is a one-time seed for a database with no users",
+	"north.rest.auth.tokens": "credentials live in the SQLite token store, which the login chain reads live; " +
+		"the config map is a one-time seed for a database with no tokens",
+	"north.mqtt.retain_cleanup_window_ms": "boot-only inside an otherwise live block: it bounds the " +
+		"retain scrub that runs once at boot, so a new value applies to the next boot's scrub and there " +
+		"is nothing a restart would make happen sooner",
+}
+
+// TestEveryConfigLeafIsEitherRestartRequiredOrDeclaredLive is the completeness
+// half of the restart contract. TestEveryRestartRequiredFieldIsDetectedByDiff
+// proves the badged fields are diffed; this proves nothing was left out.
+//
+// The failure it exists to catch is silent by construction: a config leaf that
+// is bound once at boot and carries no rule makes the save response answer
+// restart_required:false and the restart-pending banner stay dark, so the
+// operator is told a setting took effect while the daemon keeps running on the
+// value it booted with. Nothing fails, nothing logs — the whole signal is the
+// absence of a rule.
+func TestEveryConfigLeafIsEitherRestartRequiredOrDeclaredLive(t *testing.T) {
+	t.Parallel()
+
+	badged := config.RestartRequiredFieldPaths()
+	var unclassified []string
+	for _, f := range config.ClassifyFields(&config.Config{}) {
+		if _, ok := badged[f.Path]; ok {
+			continue
+		}
+		if _, ok := configLeavesAppliedWithoutRestart[f.Path]; ok {
+			continue
+		}
+		if coveredBySubtree(f.Path) {
+			continue
+		}
+		unclassified = append(unclassified, f.Path)
+	}
+	sort.Strings(unclassified)
+	for _, path := range unclassified {
+		t.Errorf("config leaf %q has no restart rule and no entry in configLeavesAppliedWithoutRestart — "+
+			"trace where the daemon reads it: add a rule when it is captured at boot, or declare it live "+
+			"with the read site", path)
+	}
+}
+
+// TestDeclaredLiveConfigLeavesStillExist keeps the two declarations above from
+// outliving the fields they describe: a renamed or removed leaf must not leave
+// a stale excuse behind that would cover its replacement.
+func TestDeclaredLiveConfigLeavesStillExist(t *testing.T) {
+	t.Parallel()
+
+	known := make(map[string]struct{})
+	for _, f := range config.ClassifyFields(&config.Config{}) {
+		known[f.Path] = struct{}{}
+	}
+	for path := range configLeavesAppliedWithoutRestart {
+		if _, ok := known[path]; !ok {
+			t.Errorf("configLeavesAppliedWithoutRestart names %q, which is not a config field any more", path)
+		}
+	}
+	for prefix := range configSubtreesAppliedWithoutRestart {
+		found := false
+		for path := range known {
+			if strings.HasPrefix(path, prefix) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("configSubtreesAppliedWithoutRestart names %q, under which no config field exists any more", prefix)
+		}
+	}
+}
+
+// coveredBySubtree reports whether path lies under a declared sub-tree.
+func coveredBySubtree(path string) bool {
+	for prefix := range configSubtreesAppliedWithoutRestart {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestCentralsRestartRuleNeedsAnInPlaceModification covers the one rule the

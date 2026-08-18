@@ -156,9 +156,13 @@ func (a *matterCommissioningCloserAdapter) CloseCommissioningWindow(ctx context.
 
 // matterCandidateProviderAdapter walks the daemon's central registry and
 // returns the eligibility candidate list for the allowlist UI. The registry is
-// walked on every call so freshly-discovered devices surface immediately, and
-// cfg is read live so the operator's expose_secondary_channels choice is always
-// current.
+// walked on every call, so freshly-discovered devices surface immediately.
+//
+// cfg is the config the daemon booted with, not a live view: nothing mutates
+// North.Matter after boot, so a saved expose_secondary_channels change is
+// reflected here only on the next start. That is the same restriction the
+// Matter bridge itself has — the field is restart-required in
+// [config.RestartRules], so the SPA badges it and the save response says so.
 type matterCandidateProviderAdapter struct {
 	reg *central.Registry
 	cfg *config.Config

@@ -151,7 +151,7 @@ HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[s
 
 The returned `body` carries the HA-platform-specific keys (`min_temp`,
 `mode_state_template`, `preset_modes`, …); the bridge attaches
-`name`, `unique_id`, `object_id`, `availability`, `device`, `origin`
+`name`, `unique_id`, `default_entity_id`, `availability`, `device`, `origin`
 on top.
 
 Use the `ctx` helpers to assemble topic references:

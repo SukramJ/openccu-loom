@@ -63,6 +63,35 @@ func jsonrpcPort(m *MockCCU) int {
 	return addr.Port
 }
 
+// XMLRPCPort returns the OS-assigned XML-RPC port, or 0 when the mock
+// is not running. Tests that adopt this CCU over the REST API need the
+// bare number for the `port` field of the central row.
+func (m *MockCCU) XMLRPCPort() int {
+	if m == nil || m.v == nil {
+		return 0
+	}
+	addr, ok := m.v.XMLRPCAddr().(*net.TCPAddr)
+	if !ok || addr == nil {
+		return 0
+	}
+	return addr.Port
+}
+
+// JSONRPCPort returns the OS-assigned JSON-RPC port, or 0 when the mock
+// has no JSON-RPC listener.
+func (m *MockCCU) JSONRPCPort() int { return jsonrpcPort(m) }
+
+// StartCCU brings up an ADDITIONAL godevccu instance beside the one
+// [Start] already runs, on its own OS-assigned ports and with its own
+// t.Cleanup. It exists for the multi-CCU paths — above all the runtime
+// adopt of a second CCU over `POST /api/v1/centrals` — where pointing a
+// second central at the harness's own simulator would make the two
+// share callback state. An empty devices slice loads [DefaultDevices].
+func StartCCU(t *testing.T, devices []string) *MockCCU {
+	t.Helper()
+	return startMockCCU(t, devices, false)
+}
+
 // V returns the underlying VirtualCCU. Tests that need to inject
 // events or add devices at runtime (hot-plug tests) use this to
 // drive godevccu's RPC surface directly.

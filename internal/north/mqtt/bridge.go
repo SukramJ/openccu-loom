@@ -477,9 +477,26 @@ type Bridge struct {
 	subscriber Subscriber
 	mu         sync.Mutex
 	declared   map[string][]byte // discovery topic → last published payload
-	// planesDeclared marks the daemon-level planes that have completed a
-	// discovery pass, so the orphan sweep can tell an orphan from an
-	// entity that simply has not been published yet.
+	// announced names every discovery topic this process has put on the
+	// wire, recorded BEFORE the publish call rather than after it.
+	//
+	// `declared` cannot answer "is this topic mine?" during boot: it is
+	// written only once Publish returns, i.e. after the broker has already
+	// accepted the message and fanned it out — including to the orphan
+	// sweep's own `homeassistant/#` subscription. Every config published
+	// while a sweep window is open therefore reaches the sweep as a topic
+	// nothing has declared, and the sweep retracts an entity the daemon
+	// is actively driving. Measured on one boot: 42 hub configs published,
+	// then cleared with an empty payload two seconds later, and — because
+	// the hub pass runs once per boot — gone from Home Assistant for the
+	// life of that daemon.
+	//
+	// A retraction removes the topic again, so the set keeps naming
+	// exactly the entities this process claims.
+	announced map[string]bool
+	// planesDeclared marks the planes that have completed a discovery
+	// pass, so the orphan sweep can tell an orphan from an entity that
+	// simply has not been published yet.
 	planesDeclared map[string]bool
 	// configCache diff-gates ADR 0011 `/config` companion publishes.
 	// Config payloads are static descriptor projections (min/max/
@@ -562,6 +579,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 		legacy:      legacy,
 		client:      client,
 		declared:    make(map[string][]byte),
+		announced:   make(map[string]bool),
 		configCache: make(map[string][]byte),
 		rawTopics:   make(map[string][]byte),
 		collector:   cfg.Collector,
@@ -890,6 +908,33 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 	}
 	_ = b.client.Publish(ctx, b.topics.BridgeHealth(), body, b.cfg.QoS.State, true)
 	return nil
+}
+
+// AnnounceOffline publishes the retained `offline` marker on
+// `<base>/bridge/status` — the counterpart of [Bridge.AnnounceOnline] and the
+// same payload the broker publishes as the connection's Last Will.
+//
+// It exists because a graceful stop sends a clean DISCONNECT, and an MQTT
+// broker discards the will of a client that disconnects cleanly. Without this
+// call a `systemctl stop`, an add-on stop or a `docker stop` leaves the topic
+// retained at `online` while nothing is running, so every entity whose
+// discovery payload lists it as an availability source — which is all of them
+// — stays available in Home Assistant, showing its last value forever. A
+// SIGKILL, by contrast, has always been reported correctly by the will.
+//
+// The per-device availability topics are deliberately left untouched. They
+// answer "is this device reachable", a property of the CCU-to-device link
+// that the daemon can no longer observe once it is gone, and every discovery
+// payload declares `availability_mode: all` with the bridge status alongside
+// them precisely so the whole retained state can be read as "last known,
+// valid while the bridge is online". A kill cannot rewrite those topics
+// either, so rewriting them on a clean stop would only make the two shutdown
+// paths disagree while destroying the last-known state a restart starts from.
+//
+// The health snapshot on `<base>/bridge/health` is left at its last value for
+// the same reason: it describes the run that just ended.
+func (b *Bridge) AnnounceOffline(ctx context.Context) error {
+	return b.client.Publish(ctx, b.topics.BridgeStatus(), []byte("offline"), QoS1, true)
 }
 
 // PublishState publishes a device data point's current value to the
@@ -1787,6 +1832,10 @@ func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte,
 		if match(strings.ToLower(topic)) {
 			topics = append(topics, topic)
 			delete(m, topic)
+			// A retracted entity is no longer ours to protect: drop the
+			// claim so a later boot's orphan sweep can still reach the
+			// topic if the retraction never made it to the broker.
+			delete(b.announced, topic)
 		}
 	}
 	b.mu.Unlock()
@@ -1914,6 +1963,16 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 	if declared && bytesEqual(previous, payload) {
 		return nil
 	}
+	// Claim the topic BEFORE it reaches the broker. The broker fans a
+	// message out to its subscribers — the orphan sweep's own snapshot
+	// subscription included — before this call returns, so a claim taken
+	// afterwards arrives too late to keep the sweep off an entity this
+	// daemon is publishing right now. See [Bridge.announced].
+	if len(payload) > 0 {
+		b.mu.Lock()
+		b.announced[topic] = true
+		b.mu.Unlock()
+	}
 	if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.Discovery, true); err != nil {
 		b.incPublishErrors()
 		return err
@@ -1933,6 +1992,7 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 	b.mu.Lock()
 	if len(payload) == 0 {
 		delete(b.declared, topic)
+		delete(b.announced, topic)
 	} else {
 		b.declared[topic] = payload
 	}

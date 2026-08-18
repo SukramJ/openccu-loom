@@ -24,8 +24,8 @@ var (
 
 // HADiscoveryPayload returns the HA Climate-platform-specific payload
 // skeleton. The bridge attaches the shared availability / device
-// origin block plus name / unique_id / object_id; the builder fills
-// in climate-specific state references and command topics.
+// origin block plus name / unique_id; the builder fills in
+// climate-specific state references and command topics.
 //
 // **ADR 0011 — per-DP topology:**
 //

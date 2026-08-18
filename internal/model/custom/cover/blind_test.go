@@ -168,7 +168,17 @@ func TestBlindCommandLockSerialisesConcurrentMoves(t *testing.T) {
 	}
 }
 
-func TestBlindStopFiresBeforeNewLevelWhenMoving(t *testing.T) {
+// TestBlindDoesNotStopWhenNeitherAxisHasAPendingWrite pins that a second
+// command on the same axis goes straight to the wire.
+//
+// A combined write never touches the LEVEL / LEVEL_2 data points, so
+// neither axis carries an unconfirmed target after it and there is
+// nothing in motion to stop. The STOP condition is an axis the caller
+// did *not* name still holding a write the CCU has not confirmed — see
+// TestBlindStopsFirstWhileTheOtherAxisIsStillUnconfirmed. Sending STOP on
+// every repeat command interrupts a blind that is travelling to the
+// position the operator asked for a moment ago.
+func TestBlindDoesNotStopWhenNeitherAxisHasAPendingWrite(t *testing.T) {
 	w := &putWriter{}
 	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
 	if err := b.SetTilt(context.Background(), 0.4, hmenum.CommandPriorityHigh); err != nil {
@@ -179,8 +189,8 @@ func TestBlindStopFiresBeforeNewLevelWhenMoving(t *testing.T) {
 	if err := b.SetTilt(context.Background(), 0.6, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
-	if delta := w.stopCount() - stops0; delta != 1 {
-		t.Errorf("expected exactly one STOP call between the two motions, got %d", delta)
+	if delta := w.stopCount() - stops0; delta != 0 {
+		t.Errorf("STOP calls between the two motions = %d, want 0", delta)
 	}
 	if len(w.combinedCalls()) <= combined0 {
 		t.Errorf("expected new LEVEL_COMBINED SetValue for second motion")
@@ -289,12 +299,22 @@ func TestBlindOperationMode(t *testing.T) {
 	}
 }
 
+// TestBlindHMSetPositionAfterTiltSendsLevelCombined pins that a
+// position-only command carries the slat axis along in the same combined
+// write, at the angle the device reports.
+//
+// The tilt value comes from the CCU-confirmed LEVEL_2 echo, not from the
+// earlier command: a staged target that outlives its confirmation makes
+// every later position move re-send an angle the slats may have left long
+// ago.
 func TestBlindHMSetPositionAfterTiltSendsLevelCombined(t *testing.T) {
 	w := &putWriter{}
 	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	if err := b.SetTilt(context.Background(), 0.5, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
+	// The device confirms the new slat angle.
+	b.level2.OnEvent(0.5)
 	w.mu.Lock()
 	w.calls = nil
 	w.mu.Unlock()
@@ -308,7 +328,7 @@ func TestBlindHMSetPositionAfterTiltSendsLevelCombined(t *testing.T) {
 	if cc[0].param != hmenum.ParameterLevelCombined {
 		t.Errorf("param=%v, want LEVEL_COMBINED", cc[0].param)
 	}
-	// level=1.0 → int(1.0*100*2)=200=0xc8; tilt staged=0.5 → int(0.5*100*2)=100=0x64 → "0xc8,0x64"
+	// level=1.0 → int(1.0*100*2)=200=0xc8; observed tilt=0.5 → int(0.5*100*2)=100=0x64 → "0xc8,0x64"
 	if got, ok := cc[0].value.(string); !ok || got != "0xc8,0x64" {
 		t.Errorf("LEVEL_COMBINED=%v, want 0xc8,0x64", cc[0].value)
 	}

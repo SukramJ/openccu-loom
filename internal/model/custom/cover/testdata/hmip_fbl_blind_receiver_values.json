@@ -1,0 +1,59 @@
+{
+ "ACTIVITY_STATE": {
+  "CONTROL": "BLIND_VIRTUAL_RECEIVER.ACTIVITY_STATE",
+  "DEFAULT": "UNKNOWN",
+  "FLAGS": 1,
+  "ID": "ACTIVITY_STATE",
+  "MAX": "STABLE",
+  "MIN": "UNKNOWN",
+  "OPERATIONS": 5,
+  "TYPE": "ENUM",
+  "VALUE_LIST": [
+   "UNKNOWN",
+   "UP",
+   "DOWN",
+   "STABLE"
+  ]
+ },
+ "COMBINED_PARAMETER": {
+  "DEFAULT": "",
+  "FLAGS": 1,
+  "ID": "COMBINED_PARAMETER",
+  "MAX": "",
+  "MIN": "",
+  "OPERATIONS": 2,
+  "TYPE": "STRING"
+ },
+ "LEVEL": {
+  "CONTROL": "BLIND_VIRTUAL_RECEIVER.LEVEL",
+  "DEFAULT": 0.0,
+  "FLAGS": 1,
+  "ID": "LEVEL",
+  "MAX": 1.01,
+  "MIN": 0.0,
+  "OPERATIONS": 7,
+  "TYPE": "FLOAT",
+  "UNIT": "100%"
+ },
+ "LEVEL_2": {
+  "CONTROL": "BLIND_VIRTUAL_RECEIVER.LEVEL_2",
+  "DEFAULT": 0.0,
+  "FLAGS": 1,
+  "ID": "LEVEL_2",
+  "MAX": 1.01,
+  "MIN": 0.0,
+  "OPERATIONS": 7,
+  "TYPE": "FLOAT",
+  "UNIT": "100%"
+ },
+ "STOP": {
+  "CONTROL": "BLIND_VIRTUAL_RECEIVER.STOP",
+  "DEFAULT": false,
+  "FLAGS": 1,
+  "ID": "STOP",
+  "MAX": true,
+  "MIN": false,
+  "OPERATIONS": 2,
+  "TYPE": "ACTION"
+ }
+}

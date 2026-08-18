@@ -260,6 +260,13 @@ func SessionMiddleware(store *SessionStore) func(http.Handler) http.Handler {
 				if c, err := r.Cookie(SessionCookieName); err == nil && c.Value != "" {
 					if sess := store.Lookup(c.Value); sess != nil { //nolint:contextcheck // Lookup is ctx-free by API contract; its best-effort persist uses a background ctx
 						id := sess.Identity
+						// Carry the session's absolute expiry with the identity.
+						// Lookup enforces it on every HTTP request, but a
+						// consumer that resolves once and keeps the snapshot —
+						// the WebSocket upgrade — has no second resolve to
+						// enforce it at, and would otherwise hold the session's
+						// role indefinitely past its TTL.
+						id.ExpiresAt = sess.Expires
 						if !id.Scheme.Federated() {
 							// The stored scheme records the credential the
 							// session was minted from; the request presented a

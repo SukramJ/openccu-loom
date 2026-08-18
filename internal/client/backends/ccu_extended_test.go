@@ -14,6 +14,7 @@ package backends
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -1204,50 +1205,79 @@ func TestCcuGetIseIDByAddressNoJSON(t *testing.T) {
 	}
 }
 
-func TestCcuGetIseIDByAddressReturnsInt(t *testing.T) {
+// The CCU has no address→ise-id method, so the lookup reads
+// Device.listAllDetail and matches the address itself. The reply below is
+// decoded from the CCU's verbatim response envelope (device-level fields
+// are strings, channel ids too) the same way the production caller decodes
+// it.
+const iseDetailEnvelope = `{"result":[{"id":"18470","name":"Alarmsirene FL",` +
+	`"address":"00245A49949662","interface":"HmIP-RF","type":"HmIP-ASIR-2",` +
+	`"channels":[{"id":"18471","name":"Alarmsirene FL:0","address":"00245A49949662:0"},` +
+	`{"id":"18499","name":"Alarmsirene FL:1","address":"00245A49949662:1"}]}],"error":null}`
+
+func TestCcuGetIseIDByAddressResolvesChannelFromDeviceList(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: int(1234)}
+	j := &fakeCaller{reply: decodeCCUResult(t, iseDetailEnvelope)}
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	id, err := b.GetIseIDByAddress(context.Background(), "AABBCCDD")
+	id, err := b.GetIseIDByAddress(context.Background(), "00245A49949662:1")
 	if err != nil {
 		t.Fatalf("GetIseIDByAddress: %v", err)
 	}
-	if id != 1234 {
-		t.Fatalf("id=%d, want 1234", id)
+	if id != 18499 {
+		t.Fatalf("id=%d, want 18499", id)
 	}
-	method, args, ok := loadArgs(j)
-	if !ok || method != "Interface.getIseIDByAddress" {
-		t.Fatalf("method=%s", method)
-	}
-	params := args[0].(map[string]any)
-	if params["address"] != "AABBCCDD" {
-		t.Fatalf("address=%v", params["address"])
+	method, _, ok := loadArgs(j)
+	if !ok || method != "Device.listAllDetail" {
+		t.Fatalf("method=%s, want Device.listAllDetail (the CCU implements no address lookup)", method)
 	}
 }
 
-func TestCcuGetIseIDByAddressReturnsFloat64(t *testing.T) {
+func TestCcuGetIseIDByAddressResolvesDeviceFromDeviceList(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: float64(5678)}
+	j := &fakeCaller{reply: decodeCCUResult(t, iseDetailEnvelope)}
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	id, err := b.GetIseIDByAddress(context.Background(), "ADDR")
+	id, err := b.GetIseIDByAddress(context.Background(), "00245A49949662")
 	if err != nil {
-		t.Fatalf("GetIseIDByAddress float64: %v", err)
+		t.Fatalf("GetIseIDByAddress: %v", err)
+	}
+	if id != 18470 {
+		t.Fatalf("id=%d, want 18470", id)
+	}
+}
+
+func TestCcuGetIseIDByAddressAcceptsNumericIDs(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: decodeCCUResult(t,
+		`{"result":[{"id":5677,"address":"ABC","channels":[{"id":5678,"address":"ABC:3"}]}],"error":null}`)}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	id, err := b.GetIseIDByAddress(context.Background(), "ABC:3")
+	if err != nil {
+		t.Fatalf("GetIseIDByAddress: %v", err)
 	}
 	if id != 5678 {
 		t.Fatalf("id=%d, want 5678", id)
 	}
 }
 
-func TestCcuGetIseIDByAddressUnknownTypeIsZero(t *testing.T) {
+func TestCcuGetIseIDByAddressUnknownAddressIsZero(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: "unexpected"}
+	j := &fakeCaller{reply: decodeCCUResult(t, iseDetailEnvelope)}
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	id, err := b.GetIseIDByAddress(context.Background(), "ADDR")
+	id, err := b.GetIseIDByAddress(context.Background(), "NOSUCH:1")
 	if err != nil {
 		t.Fatalf("GetIseIDByAddress unknown: %v", err)
 	}
 	if id != 0 {
-		t.Fatalf("id=%d, want 0", id)
+		t.Fatalf("id=%d, want 0 for an address the CCU does not list", id)
+	}
+}
+
+func TestCcuGetIseIDByAddressUnexpectedResultErrors(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: "unexpected"}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	if _, err := b.GetIseIDByAddress(context.Background(), "ADDR"); err == nil {
+		t.Fatal("expected an error for an undecodable device list")
 	}
 }
 
@@ -1392,17 +1422,69 @@ func TestCcuGetSuppressedServiceMessagesFiltersEmpty(t *testing.T) {
 	}
 }
 
-func TestCcuGetSuppressedServiceMessagesBadListType(t *testing.T) {
+// An undecodable result must surface as an error. The reconciler in
+// hub.ServiceMessages.Suppressed treats an empty list as "the CCU cleared
+// this channel" and drops every parameter-scoped record, so answering
+// (nil, nil) on a shape we cannot read erases the operator's suppression
+// view; an error leaves the records in place.
+func TestCcuGetSuppressedServiceMessagesUndecodableResultErrors(t *testing.T) {
 	t.Parallel()
 	j := &fakeCaller{reply: "not a list"}
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
 	ids, err := b.GetSuppressedServiceMessages(context.Background(), "HmIP-RF", "ADDR:1")
-	if err != nil {
-		t.Fatalf("GetSuppressedServiceMessages bad type: %v", err)
+	if err == nil {
+		t.Fatalf("expected an error for an undecodable result, got ids=%v", ids)
 	}
 	if ids != nil {
-		t.Fatalf("expected nil for bad type, got %v", ids)
+		t.Fatalf("expected nil ids on error, got %v", ids)
 	}
+}
+
+// The CCU renders the parameter array as text and then JSON-encodes that
+// text a second time, so the result arrives as a string carrying the array
+// rather than as an array. Both the populated and the empty answer take
+// that shape. The replies below are decoded from the CCU's verbatim
+// response envelope the same way the production caller decodes it (into
+// `any`), so the test asserts against the real wire shape rather than a
+// hand-built Go value.
+func TestCcuGetSuppressedServiceMessagesDoubleEncodedList(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: decodeCCUResult(t, `{"result":"[\"LOW_BAT\",\"UNREACH\"]","error":null}`)}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	ids, err := b.GetSuppressedServiceMessages(context.Background(), "HmIP-RF", "00245A49949662:0")
+	if err != nil {
+		t.Fatalf("GetSuppressedServiceMessages: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != "LOW_BAT" || ids[1] != "UNREACH" {
+		t.Fatalf("ids=%v, want [LOW_BAT UNREACH]", ids)
+	}
+}
+
+func TestCcuGetSuppressedServiceMessagesDoubleEncodedEmptyList(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: decodeCCUResult(t, `{"result":"[]","error":null}`)}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	ids, err := b.GetSuppressedServiceMessages(context.Background(), "HmIP-RF", "00245A49949662:0")
+	if err != nil {
+		t.Fatalf("GetSuppressedServiceMessages: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Fatalf("ids=%v, want empty", ids)
+	}
+}
+
+// decodeCCUResult extracts the `result` member of a verbatim CCU JSON-RPC
+// response into `any`, mirroring how the production caller hands a decoded
+// result to the backend.
+func decodeCCUResult(t *testing.T, envelope string) any {
+	t.Helper()
+	var out struct {
+		Result any `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(envelope), &out); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	return out.Result
 }
 
 // ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ package payload
 // command-topic references, …).
 //
 // Returned `body` is the HA-Discovery payload skeleton. The bridge
-// overlays the shared base fields (`name`, `unique_id`, `object_id`,
+// overlays the shared base fields (`name`, `unique_id`,
 // `availability`, `device`, `origin`) and the `state_topic` reference
 // to the channel's aggregated state topic. Builders SHOULD NOT
 // populate those — overlap is silently overwritten by the bridge.

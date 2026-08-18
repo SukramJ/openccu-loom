@@ -689,7 +689,9 @@ parameter / model names if a path is set but cannot be read.
 
 Automatic, scheduled CCU backups. Off by default (a backup touches the
 CCU and produces files, so it is opt-in); manual backups via the
-REST/UI surface work regardless. Both fields are hot-reloaded.
+REST/UI surface work regardless. Both fields are read when the scheduled
+job is registered at boot, so changing either is restart-required — the
+config editor marks them accordingly.
 
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|

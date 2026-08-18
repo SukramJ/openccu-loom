@@ -498,6 +498,9 @@ func TestRunDiscoveryOrphanCleanupOnce_NonSlugCentralName(t *testing.T) {
 	b.mu.Lock()
 	b.declared[liveTopic] = []byte(`{}`)
 	b.mu.Unlock()
+	// The hub plane is only judged once its publisher reports the pass done;
+	// this test is about the node-id spelling, so put it in that state.
+	b.MarkHubPlaneDeclared(centralName)
 
 	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "", 50*time.Millisecond); err != nil {
 		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
@@ -978,6 +981,9 @@ func TestRunDiscoveryOrphanCleanupOnce_PrefixSiblingCentralNotEvicted(t *testing
 	b := NewBridge(BridgeConfig{
 		Base: "openccu-loom", HADiscoveryEnabled: true, CentralName: central,
 	}, mc)
+	// The hub plane is only judged once its publisher reports the pass done;
+	// this test is about the node-id boundary, so put it in that state.
+	b.MarkHubPlaneDeclared(central)
 
 	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), central, 50*time.Millisecond); err != nil {
 		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)

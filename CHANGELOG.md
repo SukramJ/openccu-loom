@@ -4,6 +4,110 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.62.0]
+
+The critical and high findings of the round-4 full-codebase audit
+(`notes/audits/2026-08-17-round4-audit-findings.json`). The north-bound API
+contract moves to **6.3.0** (two endpoint descriptions clarified; no shape
+change). Ships database migration **038**.
+
+### Changed
+
+- **Matter access control now fails closed.** A bridge with no ACL source
+  attached refuses every operational (CASE) read, write, invoke and subscribe
+  instead of granting them at any privilege. Commissioning over PASE and a
+  commissioned controller with stored `AccessControl` entries are unaffected.
+  Setups that deliberately run without stored entries can opt out explicitly.
+- **MASTER paramset saves now succeed for every writable parameter the
+  configuration UI offers.** Writability comes from the parameter descriptor
+  rather than from the data-point-creation whitelist, which was never an
+  authorisation list.
+- More settings correctly report `restart_required`. Saving OIDC, the rate
+  limiter, TLS paths, locale, logging, CCU data, reliability, persistence and
+  several Matter and REST fields now lights the restart banner instead of
+  silently doing nothing.
+
+### Fixed
+
+- **MQTT reconnects after a reload again.** Reloading MQTT from the SPA or by
+  editing the config file bound the reconnect loop to the request, so the next
+  broker restart took the whole plane down until the daemon was restarted. The
+  hub publish worker was bound the same way.
+- **A CCU adopted at runtime keeps its periodic jobs.** All 18 per-central jobs
+  were started on the adopting HTTP request and died when it completed —
+  including on the first-run wizard's path — so that CCU's hub data froze at
+  its bring-up values and its health decayed to unknown.
+- **A dead CCU is now reported as dead.** REST, MQTT and Matter kept every
+  device online with frozen values for as long as the CCU stayed down.
+- **A device going unreachable produces an availability broadcast** and a
+  retained `offline` topic; the announcement was gated on the visibility of the
+  very parameters that carry reachability, which are suppressed by default.
+- **A graceful stop publishes `bridge/status = offline`.** Only a hard kill did,
+  through the broker's last will.
+- **Upgrading an install first started on v0.4.0–v0.25.x no longer disables
+  HTTP Basic and Bearer authentication** (401 for the CLI, the Node-RED contrib,
+  API-token WebSocket upgrades and every REST automation, with a green health
+  endpoint and a working SPA login). Same for restoring a backup from those
+  releases. Migration 038 repairs the affected rows.
+- **Logout ends the session server-side for federated logins too**, and closes
+  the caller's WebSocket connections in every scheme.
+- **A WebSocket connection no longer outlives its credential.** Session TTL and
+  bearer-token expiry were only evaluated on HTTP requests, so an expired
+  credential kept full command authority — including alarm disarm — for as long
+  as the client answered the ping.
+- HTTP Basic no longer runs a bcrypt verification ahead of the rate limiter.
+- **A CCU reboot no longer runs the alarm central-loss policy** — no fault entry
+  per armed zone, and no siren on `central_loss: trigger`.
+- **Stopping the daemon silences smoke-detector sounders and alarm lights**
+  instead of leaving them latched with their only bound removed.
+- **An enrolled sensor whose device disappears from the CCU is marked
+  unavailable**, so a zone no longer reports ready-to-arm with an unmonitored
+  opening.
+- Alarm code verification no longer stalls sensor ingest and countdown timers.
+- **CUxD entities survive the upgrade.** The stale retained discovery config is
+  cleared before republishing, so Home Assistant keeps one entity per data point
+  instead of an unavailable orphan beside a duplicate. Installs already on
+  0.61.3/0.61.4 that have since restarted Home Assistant must delete the
+  orphaned entities by hand.
+- **Door and window contacts report their state** instead of staying `unknown`:
+  enum-typed binary sensors published the value-list label while declaring
+  `true`/`false` payloads.
+- **Hub entities stop disappearing after a restart.** The discovery orphan sweep
+  retracted configs the daemon was still publishing.
+- Discovery emits `default_entity_id`; Home Assistant removed `object_id` from
+  its schema in 2026.3 and dropped it silently.
+- **A MASTER value change is published** on the master state topic and the
+  WebSocket stream, so configuration entities no longer revert to their boot
+  value after every write.
+- **CCU alarm system variables report their real state.** Both real CCUs answer
+  with an empty value for the alarm type; the state lives in a different
+  accessor.
+- **Assigning a channel to a system variable works**, and device/channel rename
+  with it: both called an interface method no real CCU implements.
+- Suppressed service messages are no longer dropped; programs report
+  `last_executed`.
+- Schedules of the HmIP-RGBW/LSC/DRG-DALI lights and the HmIP-HDM shading
+  actuators are classified correctly instead of appearing as switches.
+- Blind slat and level targets are no longer re-sent from a stale staged value.
+- The HmIP-MP3P plays every tone it advertises; the HM-LC-RGBW-WM accepts colour
+  commands and offers the effect names it really has.
+- A stored central whose name the callback router rejects is no longer started
+  silently receiving no push events.
+
+### Internal
+
+- Three guard families were shown by mutation testing to stay green while the
+  defect they exist to prevent is reintroduced, and were repaired: the MQTT
+  plane round-trip guards now observe the real publisher instead of a restated
+  copy of it, the registry-walker guard follows the data flow rather than one
+  syntactic form, and the dormant-capability pins assert that a capability is
+  reachable at runtime rather than that a method name appears in the source.
+- Every `cfg:` leaf is now either restart-required or carries a declared live
+  read site, enforced by a completeness guard.
+- The persisted config-section payload shape is pinned by a golden covering
+  every leaf, so a change that makes old rows decode wrong is separated from a
+  harmless new key.
+
 ## [0.61.4]
 
 Follow-ups to the 0.61.3 post-release audit. The north-bound API contract moves

@@ -34,7 +34,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -777,12 +776,17 @@ func jsonrpcHTTPClient(cc config.CentralConfig) *http.Client {
 
 // programEntry mirrors the fields Program.getAll surfaces that we
 // care about. Unknown fields are ignored by the JSON decoder.
+//
+// The response also carries lastExecuteTime, which is deliberately not
+// decoded here: it is a CCU-LOCAL wall-clock string with no zone offset,
+// so it cannot be turned into an instant on its own. The same timestamp
+// arrives as a Unix epoch through the program-description script
+// ([programMeta.lastExecute]).
 type programEntry struct {
-	ID              string          `json:"id"`
-	Name            string          `json:"name"`
-	IsActive        bool            `json:"isActive"`
-	IsInternal      bool            `json:"isInternal"`
-	LastExecuteTime json.RawMessage `json:"lastExecuteTime"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	IsActive   bool   `json:"isActive"`
+	IsInternal bool   `json:"isInternal"`
 }
 
 // hubScanOptions carries the per-central hub-scan toggles resolved
@@ -879,6 +883,13 @@ type programMeta struct {
 	description      string
 	conditionSummary string
 	activitySummary  string
+	// lastExecute is when the CCU last ran the program, zero when it
+	// never ran. It is read from the script rather than from
+	// Program.getAll's lastExecuteTime, which is a CCU-local wall-clock
+	// string with no zone offset; without it the model only ever knows
+	// the executions the daemon itself triggered, so last_executed stays
+	// absent on REST / MCP / MQTT for every CCU-scheduled program.
+	lastExecute time.Time
 }
 
 // ruleSummaryMaxRunes caps a rule summary so a program with a large
@@ -908,6 +919,7 @@ func programMetadata(ctx context.Context, runner *rega.Runner) map[string]progra
 			description:      decodeRegaField(d.Description),
 			conditionSummary: truncateRuleSummary(decodeRegaField(d.ConditionSummary)),
 			activitySummary:  truncateRuleSummary(decodeRegaField(d.ActivitySummary)),
+			lastExecute:      regaUnixTime(d.LastExecuteSeconds),
 		}
 	}
 	return out
@@ -979,11 +991,16 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			existing.EnabledDefault = hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers)
 			existing.OnActive(p.IsActive)
 			existing.SetRuleSummary(meta.conditionSummary, meta.activitySummary)
+			existing.SeedLastExecution(meta.lastExecute)
 		} else {
 			prog := hub.NewProgram(h.CentralName, p.ID, p.Name, desc, p.IsInternal, writer)
 			prog.EnabledDefault = hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers)
 			prog.OnActive(p.IsActive)
 			prog.SetRuleSummary(meta.conditionSummary, meta.activitySummary)
+			// A CCU-scheduled run happened before the daemon ever saw the
+			// program; without this seed the model reports "never executed"
+			// until the daemon itself triggers it.
+			prog.SeedLastExecution(meta.lastExecute)
 			h.PutProgram(prog)
 		}
 	}
@@ -1092,12 +1109,16 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 	// instead of clearing them.
 	descByID := make(map[string]string)
 	chanByID := make(map[string]string)
+	alarmByID := make(map[string]string)
 	haveDescs := false
 	if runner != nil {
 		if descs, err := runner.GetSystemVariableDescriptions(ctx); err == nil {
 			haveDescs = true
 			for _, d := range descs {
 				descByID[d.ID] = decodeRegaField(d.Description)
+				if d.AlarmState != "" {
+					alarmByID[d.ID] = d.AlarmState
+				}
 				if d.ChannelAddress == "" {
 					continue
 				}
@@ -1134,7 +1155,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		// The only marker that genuinely gates inclusion is INTERNAL, and
 		// that is handled by the includeInternalSysvars check above.
 		freshNames[v.Name] = struct{}{}
-		upsertSysvar(h, v, writer, opts, rawDesc, valueType, valueList, chanByID[v.ID], haveDescs)
+		upsertSysvar(h, v, writer, opts, rawDesc, valueType, valueList, chanByID[v.ID], alarmByID[v.ID], haveDescs)
 	}
 	pruneRemovedSysvars(h, freshNames)
 	return nil
@@ -1169,7 +1190,11 @@ func pruneRemovedSysvars(h *hub.Hub, fresh map[string]struct{}) {
 // transiently failing description script keeps the last known
 // assignment instead of clearing it (a fresh Sysvar always applies the
 // current value — there is no prior state to preserve).
-func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubScanOptions, rawDesc string, valueType hmenum.HubValueType, valueList []string, explicitChannel string, haveDescs bool) {
+//
+// alarmState is the ReGa-reported triggered flag for an ALARM variable
+// ("" when unknown or when the variable is not an alarm); see
+// [sysvarObservedValue] for why the getAll value cannot carry it.
+func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubScanOptions, rawDesc string, valueType hmenum.HubValueType, valueList []string, explicitChannel, alarmState string, haveDescs bool) {
 	desc, isExtended := parseSysvarDescription(rawDesc)
 	existing, ok := h.Sysvar(v.Name)
 	if !ok {
@@ -1217,7 +1242,7 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	if haveDescs || !ok {
 		existing.SetExplicitChannel(explicitChannel)
 	}
-	if pv, pok := parseSysvarValue(valueType, v.Value); pok {
+	if pv, pok := sysvarObservedValue(valueType, v.Value, alarmState); pok {
 		existing.OnValue(pv)
 	}
 	if !ok {
@@ -1844,6 +1869,31 @@ func inferSysvarType(declaredType string, rawValue json.RawMessage) hmenum.HubVa
 	return vt
 }
 
+// sysvarObservedValue resolves the value one refresh records for a
+// system variable.
+//
+// ALARM variables need a source of their own: the CCU keeps the
+// triggered flag on the variable object (AlState()) and its Value() is
+// structurally EMPTY, which is exactly what SysVar.getAll reports for
+// every alarm variable. Taken from getAll alone the variable therefore
+// has no state at all — the north-bound binary sensor declared for it
+// (payload_on "true" / payload_off "false") would never see either
+// payload and stay unknown forever. alarmState carries the flag the
+// description script reads off AlState(); an unknown flag records no
+// value rather than a made-up "not triggered", so a smoke or water
+// alarm reads as "no data" instead of as "all clear".
+func sysvarObservedValue(vt hmenum.HubValueType, raw json.RawMessage, alarmState string) (hmtypes.ParamValue, bool) {
+	if vt == hmenum.HubValueTypeAlarm {
+		switch strings.TrimSpace(alarmState) {
+		case "1":
+			return hmtypes.BoolValue(true), true
+		case "0":
+			return hmtypes.BoolValue(false), true
+		}
+	}
+	return parseSysvarValue(vt, raw)
+}
+
 // parseSysvarValue converts the raw JSON payload the CCU sends (a
 // quoted string for most types) into a [hmtypes.ParamValue] matching
 // the declared value type. The numeric branches must parse the string
@@ -1875,6 +1925,13 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 		case "false", "0":
 			return hmtypes.BoolValue(false), true
 		}
+		// A boolean type whose payload is neither records NO value: the
+		// string fallback below would give the data point a string kind
+		// that no downstream bool dispatch matches, and would publish that
+		// raw token on the state topic of an entity declared with
+		// payload_on / payload_off. The CCU sends an empty value for every
+		// ALARM variable, which is what made this reachable.
+		return hmtypes.ParamValue{}, false
 	case hmenum.HubValueTypeInteger, hmenum.HubValueTypeList:
 		// LIST carries the zero-based index into the value list.
 		// bitSize 32 bounds the parse so the int conversion stays safe
@@ -2118,32 +2175,39 @@ func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCrea
 }
 
 // resolveChannelISEID resolves a device or channel address to its ReGa ise
-// id via the canonical Interface.getIseIDByAddress JSON-RPC method — the
-// numeric id oSv.Channel() / SysVar.create* bind for the "Kanalzuordnung".
-// A CCU-side fault or a non-positive id means the address does not name a
-// channel on this CCU; both surface as [hub.ErrSysvarChannelUnknown] so the
-// REST handler answers 422 (bad channel address) rather than 502. A genuine
-// transport failure propagates unchanged.
+// id — the numeric id oSv.Channel() / SysVar.create* bind for the
+// "Kanalzuordnung".
+//
+// The resolution reads Device.listAllDetail, which reports every device's
+// and every channel's id next to its address (the same payload
+// [loadDeviceNames] flattens at bring-up). It does NOT ask the CCU to
+// resolve the address: the JSON-RPC API exposes no address→ise-id lookup
+// for channels at all. Device.getReGaIDByAddress answers only for a device
+// address ("noDeviceFound" for a channel), and Interface.getIseIDByAddress
+// — which this used to call — is absent from the CCU's method directory,
+// so every address answered "method not found" and every assignment was
+// rejected as an invalid address.
+//
+// An address the CCU does not list is reported as
+// [hub.ErrSysvarChannelUnknown] so the REST handler answers 422 (bad
+// channel address); a transport failure propagates unchanged, which keeps
+// "the CCU is unreachable" out of the input-validation bucket.
 func (w *hubJSONRPCWriter) resolveChannelISEID(ctx context.Context, address string) (int, error) {
-	var raw any
-	if err := w.json.Call(ctx, "Interface.getIseIDByAddress", map[string]any{"address": address}, &raw); err != nil {
-		var rpcErr *hmerr.JSONRPCError
-		if errors.As(err, &rpcErr) {
-			return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
+	_, iseToAddress, err := loadDeviceNames(ctx, w.json)
+	if err != nil {
+		return 0, fmt.Errorf("resolve channel %s: %w", address, err)
+	}
+	for ise, addr := range iseToAddress {
+		if addr != address {
+			continue
 		}
-		return 0, err
+		id, convErr := strconv.Atoi(strings.TrimSpace(ise))
+		if convErr != nil || id <= 0 {
+			continue
+		}
+		return id, nil
 	}
-	id := 0
-	switch v := raw.(type) {
-	case float64:
-		id = int(v)
-	case string:
-		id, _ = strconv.Atoi(strings.TrimSpace(v))
-	}
-	if id <= 0 {
-		return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
-	}
-	return id, nil
+	return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
 }
 
 // DeleteSysvar removes a sysvar via the CCU's native JSON-RPC method

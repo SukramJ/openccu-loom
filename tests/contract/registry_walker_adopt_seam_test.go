@@ -55,10 +55,15 @@ var registryWalkersWithoutAdoptSeam = map[string]string{
 // helper shared with the boot walk, a composite hook). The signature is
 // exact:
 //
-//  1. a range over (*central.Registry).List(), and
+//  1. a range over (*central.Registry).List() or .Names() — directly, or
+//     through a local variable assigned from one of those calls earlier in
+//     the same function, so hoisting the call out of the range expression
+//     does not hide the walk, and
 //  2. inside that loop, a call that carries something derived from the loop
 //     variable into a subscription — events.Subscribe itself, or any function
-//     that reaches one — and
+//     that reaches one — tracked through local reassignment, so a Names()
+//     walk that resolves the unit via Registry.Get before subscribing is
+//     caught too, and
 //  3. no per-central entry point on the same receiver that the composition
 //     root under cmd/ calls with a *central.Unit.
 //
@@ -79,6 +84,25 @@ func TestEveryRegistryWalkerHasAnAdoptSeam(t *testing.T) {
 	g := buildCentralCallGraph(pkgs)
 	if len(g.funcs) == 0 {
 		t.Fatal("no functions resolved; the walk is broken and this test would pass vacuously")
+	}
+	// Two vacuity floors on the analysis machinery itself, ahead of the
+	// walker-count floor below. A walker count is a poor floor on its own
+	// for a guard whose remedy — central.Registry.OnRegister — is meant to
+	// shrink that count over time: a healthy tree trending toward fewer
+	// walkers looks identical, from the count alone, to a resolver that
+	// silently stopped seeing them. These two checks instead assert that
+	// the resolution steps the count depends on actually ran: the
+	// registry's own traversal methods resolved as callees somewhere in
+	// the loaded tree, and the "reaches a subscription" fixpoint found at
+	// least one function.
+	if len(g.callers[modulePath+"/internal/central.Registry.List"])+
+		len(g.callers[modulePath+"/internal/central.Registry.Names"]) == 0 {
+		t.Fatal("no call resolved to (*central.Registry).List or .Names; the callee resolver is " +
+			"broken and this test would pass vacuously")
+	}
+	if len(g.subscribes) == 0 {
+		t.Fatal("no function reaches events.Subscribe; the subscribes fixpoint is broken " +
+			"and this test would pass vacuously")
 	}
 	walkers := g.subscribingRegistryWalkers()
 	// The current tree has one walker per north-bound plane that fans a
@@ -149,8 +173,8 @@ type analysedFunc struct {
 	calls map[string]bool
 }
 
-// registryWalk is one range over (*central.Registry).List() that carries the
-// loop variable into a subscription.
+// registryWalk is one range over (*central.Registry).List() or .Names()
+// that carries the loop variable into a subscription.
 type registryWalk struct {
 	key  string // the enclosing function
 	pos  string
@@ -290,8 +314,8 @@ func calleeKey(fn *types.Func) string {
 }
 
 // subscribingRegistryWalkers finds every function that ranges over
-// (*central.Registry).List() and carries the loop variable into a
-// subscription.
+// (*central.Registry).List() or .Names() — directly or through a hoisted
+// local — and carries the loop variable into a subscription.
 func (g *centralCallGraph) subscribingRegistryWalkers() []registryWalk {
 	var out []registryWalk
 	// One function can hold several walks — the Matter runtime wiring holds
@@ -301,11 +325,11 @@ func (g *centralCallGraph) subscribingRegistryWalkers() []registryWalk {
 	for _, af := range g.funcs {
 		ast.Inspect(af.decl.Body, func(n ast.Node) bool {
 			rng, ok := n.(*ast.RangeStmt)
-			if !ok || !g.rangesOverRegistryList(af.pkg, rng) {
+			if !ok || !g.rangesOverRegistryList(af, rng) {
 				return true
 			}
-			unit, ok := af.pkg.TypesInfo.Defs[identOf(rng.Value)].(*types.Var)
-			if !ok || unit == nil {
+			unit := identVar(af.pkg, identOf(rng.Value))
+			if unit == nil {
 				return true
 			}
 			args, subscribes := g.loopCarriesUnitIntoSubscription(af, rng, unit)
@@ -331,24 +355,115 @@ func identOf(e ast.Expr) *ast.Ident {
 	return id
 }
 
-// rangesOverRegistryList reports whether the range expression is a call to
-// (*central.Registry).List.
-func (g *centralCallGraph) rangesOverRegistryList(p *packages.Package, rng *ast.RangeStmt) bool {
-	call, ok := ast.Unparen(rng.X).(*ast.CallExpr)
-	if !ok {
+// rangesOverRegistryList reports whether the range expression walks
+// (*central.Registry).List() or .Names() — directly, or through a local
+// variable assigned from one of those calls earlier in the enclosing
+// function.
+//
+// The indirect form is not a hypothetical: `units := s.reg.List()` followed
+// by `for _, u := range units` walks exactly the same centrals as `for _, u
+// := range s.reg.List()`, and a resolver that only matched the syntactic
+// range-over-call shape stopped seeing the walk the moment the call was
+// hoisted one line up — which is indistinguishable, to an author, from
+// simply naming an intermediate variable for readability.
+func (g *centralCallGraph) rangesOverRegistryList(af *analysedFunc, rng *ast.RangeStmt) bool {
+	if call, ok := ast.Unparen(rng.X).(*ast.CallExpr); ok && isRegistryListCall(af.pkg, call) {
+		return true
+	}
+	v := identVar(af.pkg, identOf(rng.X))
+	if v == nil {
 		return false
 	}
+	return sourcedFromRegistryList(af.pkg, af.decl.Body, v, map[*types.Var]bool{})
+}
+
+// isRegistryListCall reports whether call invokes (*central.Registry).List
+// or (*central.Registry).Names — the two ways to walk every central the
+// registry holds. Names returns central names rather than units, so a walk
+// built on it only reaches a subscription by resolving the unit through
+// Registry.Get inside the loop first; loopCarriesUnitIntoSubscription's
+// taint tracking is what makes that shape visible.
+func isRegistryListCall(p *packages.Package, call *ast.CallExpr) bool {
 	fn := calleeFunc(p, call)
-	if fn == nil || fn.Name() != "List" {
+	if fn == nil || (fn.Name() != "List" && fn.Name() != "Names") {
 		return false
 	}
 	return receiverTypeName(fn) == "Registry" &&
 		fn.Pkg() != nil && fn.Pkg().Path() == modulePath+"/internal/central"
 }
 
+// sourcedFromRegistryList reports whether v was assigned, somewhere in
+// body, from a call to (*central.Registry).List or .Names — directly, or
+// through a chain of local reassignments (units := reg.List(); walk :=
+// units). visited guards the recursion against a cycle through a variable
+// reassigned to itself.
+func sourcedFromRegistryList(p *packages.Package, body *ast.BlockStmt, v *types.Var, visited map[*types.Var]bool) bool {
+	if visited[v] {
+		return false
+	}
+	visited[v] = true
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		assign, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		for i, lhs := range assign.Lhs {
+			id, ok := lhs.(*ast.Ident)
+			if !ok || identVar(p, id) != v {
+				continue
+			}
+			rhs := assign.Rhs[0]
+			if len(assign.Rhs) == len(assign.Lhs) {
+				rhs = assign.Rhs[i]
+			}
+			switch r := ast.Unparen(rhs).(type) {
+			case *ast.CallExpr:
+				if isRegistryListCall(p, r) {
+					found = true
+				}
+			case *ast.Ident:
+				if rv := identVar(p, r); rv != nil && sourcedFromRegistryList(p, body, rv, visited) {
+					found = true
+				}
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// identVar resolves an identifier to the *types.Var it denotes, whether it
+// is the declaring occurrence (the left side of a ":=") or a later
+// reference (the left side of a plain "=", or any read).
+func identVar(p *packages.Package, id *ast.Ident) *types.Var {
+	if id == nil {
+		return nil
+	}
+	if v, ok := p.TypesInfo.Defs[id].(*types.Var); ok {
+		return v
+	}
+	v, _ := p.TypesInfo.Uses[id].(*types.Var)
+	return v
+}
+
 // loopCarriesUnitIntoSubscription reports whether the loop body hands
-// something derived from the unit to a call that reaches a subscription, and
-// returns the callees it was handed to.
+// something derived from the loop variable to a call that reaches a
+// subscription, and returns the callees it was handed to.
+//
+// "Derived from" is the fixpoint taint set computed by [taintedVars], not
+// just the loop variable itself. Two shapes need that. First, the same
+// hoist-out-of-the-call trick that can hide the walk (see
+// [rangesOverRegistryList]) also hides the carry if this only checked the
+// original loop variable: `c := u; subscribeSomething(c)` carries the unit
+// exactly as much as `subscribeSomething(u)` does. Second, and more
+// commonly for a .Names()-shaped walk, the loop variable is a central name,
+// not a unit, so the pattern is `u := reg.Get(name);
+// subscribeSomething(u)` — the argument that reaches the subscribing call
+// is several assignments removed from the loop variable.
 //
 // Only argument positions count. A method called on the unit itself is the
 // unit's own lifecycle — Start, Stop, WireDevicesCreatedGate — and the adopt
@@ -357,6 +472,7 @@ func (g *centralCallGraph) rangesOverRegistryList(p *packages.Package, rng *ast.
 func (g *centralCallGraph) loopCarriesUnitIntoSubscription(
 	af *analysedFunc, rng *ast.RangeStmt, unit *types.Var,
 ) (args []string, subscribes bool) {
+	tainted := taintedVars(af.pkg, rng.Body, unit)
 	seen := map[string]bool{}
 	ast.Inspect(rng.Body, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -365,7 +481,7 @@ func (g *centralCallGraph) loopCarriesUnitIntoSubscription(
 		}
 		carries := false
 		for _, arg := range call.Args {
-			if mentions(af.pkg, arg, unit) {
+			if mentions(af.pkg, arg, tainted) {
 				carries = true
 				break
 			}
@@ -392,15 +508,58 @@ func (g *centralCallGraph) loopCarriesUnitIntoSubscription(
 	return args, subscribes
 }
 
-// mentions reports whether the expression reads the loop variable.
-func mentions(p *packages.Package, e ast.Expr, unit *types.Var) bool {
+// taintedVars computes the fixpoint of locals derived from seed within
+// body: seed itself, plus every local variable an *ast.AssignStmt's left
+// side names whose right side mentions a variable already in the set,
+// repeated until nothing new is added.
+//
+// Only *ast.AssignStmt left-hand identifiers seed new taint. A field or
+// struct write (x.Field = u) does not launder the loop variable out of
+// this analysis — every observed instance of the defect, and every fix for
+// it, carries the unit through a local variable, not a struct field.
+func taintedVars(p *packages.Package, body *ast.BlockStmt, seed *types.Var) map[*types.Var]bool {
+	tainted := map[*types.Var]bool{seed: true}
+	for changed := true; changed; {
+		changed = false
+		ast.Inspect(body, func(n ast.Node) bool {
+			assign, ok := n.(*ast.AssignStmt)
+			if !ok {
+				return true
+			}
+			for i, lhs := range assign.Lhs {
+				id, ok := lhs.(*ast.Ident)
+				if !ok {
+					continue
+				}
+				v := identVar(p, id)
+				if v == nil || tainted[v] {
+					continue
+				}
+				rhs := assign.Rhs[0]
+				if len(assign.Rhs) == len(assign.Lhs) {
+					rhs = assign.Rhs[i]
+				}
+				if mentions(p, rhs, tainted) {
+					tainted[v] = true
+					changed = true
+				}
+			}
+			return true
+		})
+	}
+	return tainted
+}
+
+// mentions reports whether the expression reads one of the tainted
+// variables.
+func mentions(p *packages.Package, e ast.Expr, tainted map[*types.Var]bool) bool {
 	found := false
 	ast.Inspect(e, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
 		if !ok {
 			return true
 		}
-		if p.TypesInfo.Uses[id] == unit {
+		if v, ok := p.TypesInfo.Uses[id].(*types.Var); ok && tainted[v] {
 			found = true
 		}
 		return !found

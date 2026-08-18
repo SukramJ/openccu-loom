@@ -60,10 +60,34 @@ type TopologyDispatcher struct {
 }
 
 // ACLLister is the subset of the Matter ACL store [TopologyDispatcher.CheckACL]
-// consults. Production daemons wire the SQLite-backed `matter/store.Store`;
-// tests may pass a fake or leave it nil (which disables enforcement).
+// consults. Production daemons wire the SQLite-backed `matter/store.Store`.
+// Leaving it nil does NOT disable enforcement — [TopologyDispatcher.CheckACL]
+// then denies every operational request; a setup that deliberately runs
+// without stored entries wires [UnenforcedACL] instead.
 type ACLLister interface {
 	ListACL(ctx context.Context, fabricIndex uint8) ([]store.ACLEntry, error)
+}
+
+// UnenforcedACL is an [ACLLister] that grants every operational request on
+// every fabric.
+//
+// It exists so that running without stored AccessControl entries is a
+// decision written down in one greppable place. The alternative — treating a
+// missing lister as "enforcement off" — made the whole gate depend on a
+// single wiring line whose removal no test could observe: the capability kept
+// passing its own tests, the pin that watched the wiring only looked for the
+// method name in the source, and every ACL entry a controller had written was
+// silently unenforced on operational reads, writes and invokes.
+//
+// Production never wires this. Tests and local development do, where the
+// alternative is that no request at all is answered.
+// loom:reachable:reason="the documented opt-out for a deployment that deliberately runs the Matter bridge without stored access-control entries, selected by an operator rather than by the daemon; nothing in production selects it, which is the point — access control now fails closed by default"
+type UnenforcedACL struct{}
+
+// ListACL returns one wildcard CASE entry at Administer privilege: no
+// subject restriction, no target restriction, every fabric.
+func (UnenforcedACL) ListACL(context.Context, uint8) ([]store.ACLEntry, error) {
+	return []store.ACLEntry{{Privilege: store.PrivilegeAdminister, AuthMode: store.AuthModeCASE}}, nil
 }
 
 // NewTopologyDispatcher wraps t. Returns nil when t is nil so the
@@ -76,9 +100,11 @@ func NewTopologyDispatcher(t *Topology) *TopologyDispatcher {
 }
 
 // SetACLLister wires the ACL source that [TopologyDispatcher.CheckACL]
-// enforces against. With no lister set CheckACL fails open (every request
-// allowed) so unwired tests and dev setups behave as before; production
-// daemons MUST wire it (see Bridge.AttachACLLister).
+// enforces against (see Bridge.AttachACLLister).
+//
+// Passing nil leaves the gate closed rather than open: every operational
+// (CASE) request is denied until a source is wired. Pass [UnenforcedACL] to
+// run without stored entries on purpose.
 func (d *TopologyDispatcher) SetACLLister(l ACLLister) {
 	if d != nil {
 		d.acl = l
@@ -751,6 +777,9 @@ func (d *TopologyDispatcher) MinInvokePrivilege(endpoint uint16, clusterID, cmdI
 // UnsupportedAccess (0x7e). PASE sessions (fabricIndex 0) are already
 // bypassed by the IM gate before this is called.
 //
+// Every path that is not an explicit grant denies, including the one where
+// no ACL source is wired at all — see [TopologyDispatcher.SetACLLister].
+//
 // Mirrors connectedhomeip/src/access/AccessControl.cpp:441-559 — the
 // chip iterator walks every ACE on the fabric and applies the AuthMode →
 // Privilege → Subjects → Targets filter chain in that order. Subjects with
@@ -760,11 +789,17 @@ func (d *TopologyDispatcher) MinInvokePrivilege(endpoint uint16, clusterID, cmdI
 // 0xFFFF'FFFD'0000'0000..0xFFFF'FFFD'FFFF'FFFF) match via
 // [matchesCATSubject] against the requester's CAT set.
 func (d *TopologyDispatcher) CheckACL(ctx context.Context, fabricIndex uint8, subjectNodeID uint64, subjectCATs []uint32, endpoint uint16, clusterID uint32, requiredPrivilege uint8) im.StatusCode {
-	if d == nil || d.acl == nil {
-		return im.StatusSuccess // enforcement not wired — fail open
-	}
 	if fabricIndex == 0 {
 		return im.StatusSuccess // PASE / no fabric — commissioning
+	}
+	if d == nil || d.acl == nil {
+		// Fail closed. A dispatcher without an ACL source cannot tell an
+		// authorised controller from any other node that completed CASE, so
+		// answering the request would serve exactly what the AccessControl
+		// entries exist to gate. The commissioning path is unaffected: it
+		// runs over PASE and returned above. A deployment that means to run
+		// without stored entries wires [UnenforcedACL].
+		return im.StatusUnsupportedAccess
 	}
 	entries, err := d.acl.ListACL(ctx, fabricIndex)
 	if err != nil {

@@ -451,6 +451,11 @@ func (s *Service) Start(ctx context.Context) error {
 		s.attachUnit(u)
 	}
 	s.reconcile(ctx)
+	// A central that is already southbound-ready fires no readiness event
+	// this service will hear, so its enrolled sensors are checked against
+	// the model here: a device deleted while the daemon was down is
+	// otherwise restored as available and never corrected.
+	s.refreshSensorPresence(ctx)
 	s.seedPanels(ctx)
 	s.scheduleRetention()
 	s.schedules.start(ctx)
@@ -495,7 +500,11 @@ func (s *Service) Stop(ctx context.Context) error {
 		retention()
 	}
 	s.schedules.stop()
-	s.manager.StopWatchdogs()
+	// Shutdown, not StopWatchdogs: an output class the device does not
+	// bound itself keeps running after this process is gone, and the
+	// watchdog it drops here was the only thing that would ever have
+	// stopped it.
+	s.manager.Shutdown(ctx)
 	s.sysvarMirror.stop()
 	s.engine.Stop(ctx)
 	return nil
@@ -517,6 +526,7 @@ func (s *Service) AttachCentral(name string) {
 		ctx := context.Background()
 		s.reconcile(ctx)
 		s.engine.ReevaluateSensors(ctx)
+		s.refreshSensorPresence(ctx)
 	}
 }
 

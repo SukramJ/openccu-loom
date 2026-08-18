@@ -16,6 +16,14 @@ package visibility
 // write reaches the CCU backend. Hidden parameters cause those methods
 // to return pkg/hmerr.ErrParameterHidden.
 //
+// The MASTER paramset is the documented exception. This package's MASTER arm
+// is the data-point-CREATION whitelist, not an authorization list, and the
+// configuration surfaces hand out a channel's full MASTER descriptor — so
+// asking it on the write side rejected the operator's save of every parameter
+// the whitelist does not name. MASTER writability is decided by the parameter
+// descriptor instead. See gateDecidesWrites in
+// internal/central/adapter/paramsets.go.
+//
 // The REST handlers (internal/north/rest/handlers/paramsets.go) translate
 // ErrParameterHidden to HTTP 403 Forbidden. The WS dispatcher
 // (internal/north/rest/ws/commands.go) translates it to

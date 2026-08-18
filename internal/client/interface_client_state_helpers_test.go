@@ -6,12 +6,15 @@ package client
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // newTestClient returns a minimal InterfaceClient for state-helper tests.
@@ -368,5 +371,86 @@ func TestCheckConnectionAvailabilityShedProbeRecordsNoPing(t *testing.T) {
 	}
 	if n := c.PingPong().PendingCount(); n != 0 {
 		t.Errorf("PendingCount = %d after a shed probe, want 0", n)
+	}
+}
+
+// TestRecordConnectivityProbeDrivesTheStateMachine pins the feedback loop
+// between the periodic connectivity probe and the client's own lifecycle
+// state.
+//
+// A CCU that stops answering produces no wire traffic, so nothing else can
+// move a client that reached CONNECTED: the reconnect path only runs once the
+// CCU answers again. Without this feedback the interface reports CONNECTED
+// for as long as the daemon lives, and every north-bound availability surface
+// repeats that answer for every device behind it.
+func TestRecordConnectivityProbeDrivesTheStateMachine(t *testing.T) {
+	bus := events.NewBus()
+	var (
+		mu   sync.Mutex
+		seen []hmevent.ClientStateChangedEvent
+	)
+	unsub := events.Subscribe(bus, func(e hmevent.ClientStateChangedEvent) {
+		mu.Lock()
+		defer mu.Unlock()
+		seen = append(seen, e)
+	})
+	defer unsub()
+
+	c := newTestClientForState(t)
+	c.SetStateChangedBus(bus, "ccu-01-HmIP-RF")
+	c.SetState(hmenum.ClientStateConnected)
+
+	// One failure is absorbed: a single dropped ping must not flap every
+	// availability surface of the fleet.
+	c.RecordConnectivityProbe(false)
+	if got := c.ClientState(); got != hmenum.ClientStateConnected {
+		t.Fatalf("state after one failed probe = %s, want CONNECTED", got)
+	}
+
+	// A success in between clears the streak, so the tolerance is for
+	// CONSECUTIVE failures rather than a running total.
+	c.RecordConnectivityProbe(true)
+	c.RecordConnectivityProbe(false)
+	if got := c.ClientState(); got != hmenum.ClientStateConnected {
+		t.Fatalf("state after a success reset the streak = %s, want CONNECTED", got)
+	}
+
+	c.RecordConnectivityProbe(false)
+	if got := c.ClientState(); got != hmenum.ClientStateDisconnected {
+		t.Fatalf("state after two consecutive failed probes = %s, want DISCONNECTED", got)
+	}
+
+	// The transition has to reach the bus: the forced-availability
+	// propagation that clears the stale online entities hangs off this
+	// event and nothing else.
+	mu.Lock()
+	defer mu.Unlock()
+	last := seen[len(seen)-1]
+	if last.From != hmenum.ClientStateConnected || last.To != hmenum.ClientStateDisconnected ||
+		last.InterfaceID != "ccu-01-HmIP-RF" {
+		t.Fatalf("published event = %+v, want CONNECTED→DISCONNECTED on ccu-01-HmIP-RF", last)
+	}
+}
+
+// TestRecordConnectivityProbeResetsOnReconnect pins that a streak accumulated
+// during an outage does not survive the comeback: the first failed probe
+// after a reconnect must not be read as a second consecutive failure.
+func TestRecordConnectivityProbeResetsOnReconnect(t *testing.T) {
+	c := newTestClientForState(t)
+	c.SetState(hmenum.ClientStateConnected)
+
+	c.RecordConnectivityProbe(false)
+	c.RecordConnectivityProbe(false)
+	if got := c.ClientState(); got != hmenum.ClientStateDisconnected {
+		t.Fatalf("state = %s, want DISCONNECTED", got)
+	}
+	// Keep failing while the interface is down — the streak grows.
+	c.RecordConnectivityProbe(false)
+	c.RecordConnectivityProbe(false)
+
+	c.SetState(hmenum.ClientStateConnected)
+	c.RecordConnectivityProbe(false)
+	if got := c.ClientState(); got != hmenum.ClientStateConnected {
+		t.Fatalf("state after one failed probe post-reconnect = %s, want CONNECTED", got)
 	}
 }

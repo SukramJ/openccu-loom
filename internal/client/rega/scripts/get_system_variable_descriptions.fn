@@ -1,5 +1,12 @@
 !# openccu-loom — get_system_variable_descriptions
-!# Output: [{"id":"<sysvar-id>","description":"<uri-encoded info>","channel_address":"<uri-encoded addr or empty>"}...]
+!# Output: [{"id":"<sysvar-id>","description":"<uri-encoded info>","channel_address":"<uri-encoded addr or empty>","alarm_state":"<0|1|empty>"}...]
+!#
+!# alarm_state carries the triggered flag of an ALARM variable: "1" when
+!# it is currently raised, "0" when it is not, and "" for every variable
+!# that is not of the alarm sub-type. It is read here because an alarm
+!# variable keeps its state in AlState() and reports an EMPTY Value() —
+!# SysVar.getAll sources the value field from Value(), so the JSON-RPC
+!# catalogue carries no usable state for these variables at all.
 !#
 !# Walks the system-variable collection and emits a JSON array. The
 !# description is URL-encoded because sysvar .DPInfo() strings may
@@ -13,7 +20,7 @@
 !# assignments emit an empty string. The address is URL-encoded
 !# defensively, matching the framing convention of the other fields.
 
-string sVarId; string sDescription; string sChannelAddress;
+string sVarId; string sDescription; string sChannelAddress; string sAlarmState;
 object oVar; object oCh;
 integer iChn;
 boolean bFirst = true;
@@ -32,13 +39,18 @@ foreach (sVarId, dom.GetObject(ID_SYSTEM_VARIABLES).EnumIDs()) {
             }
         }
 
+        sAlarmState = "";
+        if (oVar.ValueSubType() == istAlarm) {
+            sAlarmState = oVar.AlState().ToString();
+        }
+
         if (bFirst) {
             bFirst = false;
         } else {
             WriteLine(',');
         }
 
-        Write('{"id":"' # sVarId # '","description":"' # sDescription # '","channel_address":"' # sChannelAddress # '"}');
+        Write('{"id":"' # sVarId # '","description":"' # sDescription # '","channel_address":"' # sChannelAddress # '","alarm_state":"' # sAlarmState # '"}');
     }
 }
 Write(']');

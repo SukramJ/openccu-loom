@@ -47,7 +47,7 @@ func (d *DefaultDiscoveryBuilder) BuildAddonUpdateDiscovery() DiscoveryItem {
 	body := map[string]any{
 		"name":                    d.tr("discovery.addon_update"),
 		"unique_id":               addonUpdateUniqueID,
-		"object_id":               addonUpdateUniqueID,
+		"default_entity_id":       defaultEntityID(string(HAComponentUpdate), addonUpdateUniqueID),
 		"state_topic":             topic,
 		"value_template":          "{{ value_json.installed_version }}",
 		"latest_version_topic":    topic,

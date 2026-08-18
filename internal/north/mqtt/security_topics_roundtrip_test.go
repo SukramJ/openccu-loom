@@ -4,9 +4,12 @@
 package mqtt
 
 import (
-	"encoding/json"
+	"context"
+	"log/slog"
 	"testing"
+	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -23,6 +26,14 @@ import (
 // compared the two sets — so every class and zone entity appeared in a
 // consumer and stayed unavailable forever.
 //
+// Both sets come from ONE run of the real publisher against a recording
+// broker: the declarations are read out of the discovery configs the plane
+// published, the writes are the state topics of the same run. The earlier
+// version assembled the "published" side by calling the plane's own topic
+// helpers a second time, which made the two halves move in lockstep by
+// construction — a rename inside [SecurityMQTTPublisher.reconcile] left
+// this guard, and the whole package, green.
+//
 // The comparison is one-directional on purpose: a declared topic nobody
 // writes is the defect. A topic written without a declaration is a
 // lesser problem (an operator simply does not get an entity for it) and
@@ -38,108 +49,55 @@ import (
 func TestSecurityPlaneTopicsRoundTrip(t *testing.T) {
 	t.Parallel()
 	for _, base := range []string{"gh", "gh/"} {
-		snap := roundTripSnapshot()
-
-		declared := map[string]bool{}
-		for _, item := range securityDiscoveryItems(base, snap) {
-			var body map[string]any
-			if err := json.Unmarshal(item.Payload, &body); err != nil {
-				t.Fatalf("discovery payload for %q is not JSON: %v", item.ObjectID, err)
-			}
-			for _, field := range []string{"state_topic", "json_attributes_topic"} {
-				if v, ok := body[field].(string); ok && v != "" {
-					declared[v] = true
-				}
-			}
-			collectAvailabilityTopics(t, body, declared)
-		}
-		if len(declared) == 0 {
-			t.Fatal("no topics declared; the walk found no discovery payloads and would pass vacuously")
-		}
-
-		published := securityPublishedTopics(base, snap)
-		if len(published) == 0 {
-			t.Fatal("no topics published; the walk found no state writes and would pass vacuously")
-		}
-
-		for topic := range declared {
-			if !published[topic] {
-				t.Errorf("base %q: declared but never published: %q — a consumer creates this entity and it stays unavailable forever", base, topic)
-			}
-		}
-		for topic := range published {
-			if !declared[topic] {
-				t.Logf("base %q: published but not declared: %q (no entity is created for it)", base, topic)
-			}
-		}
+		obs := runSecurityPlane(t, base)
+		planeRoundTrip(t, "base "+base,
+			obs.declaredTopics(t), obs.publishedTopics(), obs.subscribedFilters(), nil)
 	}
 }
 
-// collectAvailabilityTopics adds every `availability[].topic` of one
-// discovery payload to out. An availability source is a declared topic
-// like any other — with `availability_mode: "all"` a source nothing
-// publishes to is strictly worse than a missing state topic, because it
-// takes the whole entity down rather than one value.
-func collectAvailabilityTopics(t *testing.T, body map[string]any, out map[string]bool) {
+// runSecurityPlane drives the real plane end to end against a recording
+// broker and returns everything it carried.
+//
+// Every write comes from production code: the bridge announces its own
+// status, the publisher reconciles the retained half and declares the
+// entities, and one hazard plus one fault report drive the four topics
+// only [SecurityMQTTPublisher.onNotification] produces. The domain event
+// is what lifts the declaration gate — the plane deliberately withholds
+// its configs until the domain has spoken once (see
+// [SecurityMQTTPublisher.declareEntities]) — so without it the run would
+// observe no declarations at all.
+func runSecurityPlane(t *testing.T, base string) *observedPlane {
 	t.Helper()
-	// The payload is decoded generically because it is compared as wire
-	// JSON, not as a Go struct.
-	list, ok := body["availability"].([]any)
-	if !ok {
-		return
+	obs := newObservedPlane()
+	bridge := NewBridge(BridgeConfig{
+		Base: base, CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, obs)
+	if err := bridge.AnnounceOnline(context.Background()); err != nil {
+		t.Fatalf("bridge announce: %v", err)
 	}
-	for _, entry := range list {
-		src, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		if v, ok := src["topic"].(string); ok && v != "" {
-			out[v] = true
-		}
-	}
-}
 
-// securityDiscoveryItems builds every discovery payload the plane would
-// publish for a snapshot, through the real builders.
-func securityDiscoveryItems(base string, snap security.Snapshot) []DiscoveryItem {
-	tr := func(_, fallback string) string { return fallback }
-	system := securitySystemEntities(tr)
-	out := make([]DiscoveryItem, 0, len(system)+len(snap.Classes)+len(snap.Zones))
-	for i := range system {
-		out = append(out, BuildSecurityDiscovery(base, "Security", "", system[i]))
-	}
-	for class := range snap.Classes {
-		out = append(out, BuildSecurityDiscovery(base, "Security", "", securityClassEntity(base, class, tr)))
-	}
-	for slug := range snap.Zones {
-		out = append(out, BuildSecurityDiscovery(base, "Security", "",
-			securityZoneEntity(base, slug, snap.Zones[slug].Name, tr)))
-	}
-	return out
-}
+	p := NewSecurityMQTTPublisher(staticSecuritySnapshot{roundTripSnapshot()},
+		NewWiring(bridge, slog.Default()), "en", "", slog.Default())
+	bus := events.NewBus()
+	p.Start(bus)
+	t.Cleanup(p.Stop)
 
-// securityPublishedTopics mirrors the topic set reconcile writes. It is
-// deliberately derived from the same builders the publisher uses, so a
-// rename on either side keeps both in step and only a genuine
-// declaration/publication divergence fails the test.
-func securityPublishedTopics(base string, snap security.Snapshot) map[string]bool {
-	out := map[string]bool{
-		securityAvailabilityTopic(base): true,
-		// The bridge writes its retained status through the topic
-		// builder, so the published side is spelled the way the bridge
-		// spells it — not the way the plane's own helper does.
-		NewTopicBuilder(base).BridgeStatus(): true,
+	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	for _, fault := range []bool{false, true} {
+		events.Publish(bus, hmevent.SecurityNotificationEvent{
+			Base:       hmevent.NewBaseAt(time.Now()),
+			Class:      hmenum.SecurityClassSmoke,
+			Severity:   hmenum.SecuritySeverityCritical,
+			Subject:    "Rauch",
+			Message:    "Rauch erkannt",
+			AtMS:       time.Now().UnixMilli(),
+			Fault:      fault,
+			Retainable: true,
+		})
 	}
-	for _, key := range []string{"state", "alarm", "problem", "health", "last_alarm", "last_fault", "event", "fault"} {
-		out[securityStateTopic(base, key)] = true
-	}
-	for class := range snap.Classes {
-		out[securityClassTopic(base, class)] = true
-	}
-	for slug := range snap.Zones {
-		out[securityZoneTopic(base, slug)] = true
-	}
-	return out
+	obs.settle(t)
+	return obs
 }
 
 func roundTripSnapshot() security.Snapshot {

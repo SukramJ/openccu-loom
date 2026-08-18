@@ -4,6 +4,15 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.62.0
+
+- Version alignment with OpenCCU-Loom 0.62.0. The proxy itself is unchanged; the
+  release carries the critical and high findings of a full-codebase audit —
+  availability reporting during a CCU outage, MQTT reconnect after a reload,
+  runtime-adopted CCUs keeping their periodic jobs, session and token revocation,
+  the alarm domain's outage and shutdown behaviour, and several CCU-side reads
+  that only ever worked against the simulator.
+
 # 0.61.4
 
 - Version alignment with OpenCCU-Loom 0.61.4. The proxy itself is unchanged;

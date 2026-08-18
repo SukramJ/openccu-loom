@@ -347,6 +347,46 @@ func (c *client) SetIdentity(id auth.Identity) {
 	c.mu.Unlock()
 }
 
+// watchCredentialExpiry closes the connection once the credential behind
+// its captured identity stops being valid.
+//
+// A connection resolves its credential once, at the upgrade, and the command
+// router gates every later write on that snapshot. Both credential classes
+// carry a server-side expiry — a session's absolute TTL, a bearer token's
+// expires_at — that is enforced where the credential is resolved, i.e. on an
+// HTTP request. Nothing re-resolves an established socket, so without this
+// watch an expired session or token keeps operator/admin command authority
+// (paramset writes, alarm disarm) for as long as the client answers pings,
+// while every REST call from the same principal already answers 401.
+//
+// Lifecycle: one goroutine per connection, started by the upgrade handler and
+// released when the connection closes. An identity with no deadline is
+// re-checked every [pingInterval] rather than watched, so a later in-band
+// reauth to an expiring token is picked up too.
+func (c *client) watchCredentialExpiry() {
+	timer := time.NewTimer(pingInterval)
+	defer timer.Stop()
+	for {
+		wait := pingInterval
+		if id := c.Identity(); !id.ExpiresAt.IsZero() {
+			if id.Expired(time.Now()) {
+				c.logger.Info("ws.credential.expired",
+					slog.String("subject", id.Subject),
+					slog.String("scheme", string(id.Scheme)))
+				c.close()
+				return
+			}
+			wait = time.Until(id.ExpiresAt)
+		}
+		timer.Reset(wait)
+		select {
+		case <-c.closed:
+			return
+		case <-timer.C:
+		}
+	}
+}
+
 // Identity returns the current connection identity (zero-value when
 // the upgrade handshake did not resolve one).
 func (c *client) Identity() auth.Identity {
@@ -699,6 +739,12 @@ func (c *client) handleCommand(msg inboundMessage) {
 		resp.Error = NewCommandError(CommandErrorBadRequest, "missing id")
 	case msg.Command == "":
 		resp.Error = NewCommandError(CommandErrorBadRequest, "missing command")
+	case c.Identity().Expired(time.Now()):
+		// The identity snapshot outlives the credential it was resolved
+		// from. [client.watchCredentialExpiry] closes the connection at the
+		// deadline; this closes the window between the deadline and that
+		// close, so no command is ever dispatched on an expired credential.
+		resp.Error = NewCommandError(CommandErrorUnauthorized, "credential expired — reconnect to re-authenticate")
 	default:
 		// Carry the connection's authenticated identity into the dispatch
 		// context. The command outlives the inbound frame read, so the base

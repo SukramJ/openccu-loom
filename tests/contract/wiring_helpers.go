@@ -4,6 +4,7 @@
 package contract
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -13,6 +14,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 // repoRootForHelpers resolves the repository root relative to this file's
@@ -30,12 +33,26 @@ func repoRootForHelpers(t *testing.T) string {
 	return abs
 }
 
-// parseFiles parses callerPath and returns the AST of every Go source file it
-// covers. callerPath is repo-root-relative; it may be a single file
-// ("cmd/openccu-loom/daemon.go") or a package directory ("cmd/openccu-loom"),
-// in which case all non-_test.go files are parsed. Passing the directory keeps
-// a wiring pin valid when the code moves between files of the same package.
-func parseFiles(t *testing.T, callerPath string) []*ast.File {
+// parsedUnit is the source the pin helpers reason over: the files
+// callerPath covers, plus the position information and package name the
+// reachability checks need.
+type parsedUnit struct {
+	files []*ast.File
+	fset  *token.FileSet
+	// wholePackage records that callerPath named a directory, so the file
+	// set is the complete package and a call graph over it is complete
+	// too. A single-file unit sees only part of the package, and the
+	// reachability check is skipped for it.
+	wholePackage bool
+	pkgName      string
+}
+
+// parseUnit parses callerPath. It is repo-root-relative; it may be a single
+// file ("cmd/openccu-loom/daemon.go") or a package directory
+// ("cmd/openccu-loom"), in which case all non-_test.go files are parsed.
+// Passing the directory keeps a wiring pin valid when the code moves
+// between files of the same package.
+func parseUnit(t *testing.T, callerPath string) parsedUnit {
 	t.Helper()
 	root := repoRootForHelpers(t)
 	absPath := filepath.Join(root, callerPath)
@@ -51,19 +68,27 @@ func parseFiles(t *testing.T, callerPath string) []*ast.File {
 		if err != nil {
 			t.Fatalf("wiring_helpers: cannot parse dir %s: %v", callerPath, err)
 		}
-		var out []*ast.File
-		for _, pkg := range pkgs {
+		unit := parsedUnit{fset: fset, wholePackage: true}
+		for name, pkg := range pkgs {
+			unit.pkgName = name
 			for _, f := range pkg.Files {
-				out = append(out, f)
+				unit.files = append(unit.files, f)
 			}
 		}
-		return out
+		return unit
 	}
 	f, err := parser.ParseFile(fset, absPath, nil, 0)
 	if err != nil {
 		t.Fatalf("wiring_helpers: cannot parse %s: %v", callerPath, err)
 	}
-	return []*ast.File{f}
+	return parsedUnit{files: []*ast.File{f}, fset: fset, pkgName: f.Name.Name}
+}
+
+// parseFiles is the file-list view of [parseUnit], for the checks that do
+// not need positions or the package name.
+func parseFiles(t *testing.T, callerPath string) []*ast.File {
+	t.Helper()
+	return parseUnit(t, callerPath).files
 }
 
 // MustFindCallerInFile asserts that callerFile (repo-root-relative) contains
@@ -78,58 +103,305 @@ func parseFiles(t *testing.T, callerPath string) []*ast.File {
 // that defines it — passing the definition file is an anti-pattern that this
 // guard makes harmless but does not endorse.
 //
+// Like [MustFindMethodCall], at least one occurrence must be one the running
+// daemon executes — see [callIsExecutable] for what that check can and
+// cannot establish.
+//
 // Usage:
 //
 //	MustFindCallerInFile(t, "cmd/openccu-loom/daemon.go",
 //	    "internal/metrics", "NewMqttCollector")
 func MustFindCallerInFile(t *testing.T, callerFile, calleePackage, calleeIdent string) {
 	t.Helper()
-	for _, f := range parseFiles(t, callerFile) {
-		if astContainsIdentNotDefinition(f, calleeIdent) {
-			return
+	unit := parseUnit(t, callerFile)
+	var matches []matchedCall
+	for _, f := range unit.files {
+		for _, use := range identUsesNotDefinition(f, calleeIdent) {
+			matches = append(matches, matchedCall{file: f, node: use})
 		}
 	}
-	t.Errorf(
-		"wiring pin: %s not found in %s\n  expected a call to %s.%s",
-		calleeIdent, callerFile, calleePackage, calleeIdent,
-	)
+	if len(matches) == 0 {
+		t.Errorf(
+			"wiring pin: %s not found in %s\n  expected a call to %s.%s",
+			calleeIdent, callerFile, calleePackage, calleeIdent,
+		)
+		return
+	}
+	assertAnyCallExecutable(t, unit, matches, calleeIdent, callerFile)
+}
+
+// matchedCall is one occurrence a pin's name search found.
+type matchedCall struct {
+	file *ast.File
+	node ast.Node
 }
 
 // MustFindMethodCall asserts that callerFile contains a SelectorExpr whose
-// X ends with receiverIdent and whose Sel is methodName.  This pins
-// method-call wiring such as HubCoordinator.SetProgramExecutor.
+// X ends with receiverIdent and whose Sel is methodName, and that the call
+// is one the running daemon executes.  This pins method-call wiring such as
+// HubCoordinator.SetProgramExecutor.
+//
+// The second half is not decoration. A pin that only asked whether the
+// method name appeared somewhere in the package source stayed green when
+// the archetype call was rewritten as `_ = func() { bridge.AttachACLLister(store) }`
+// — present in the file, executed by nothing — and so did every Matter unit
+// test and the whole contract suite, while the ACL gate had no source and
+// every stored AccessControl entry went unenforced.
+//
+// What "executed" means here is described on [callIsExecutable]. It is
+// a source-level approximation, not a proof: the strongest form of this pin
+// asserts the capability's effect through the composition root instead (see
+// cmd/openccu-loom/daemon_matter_acl_wiring_test.go). Use this helper when
+// the effect is out of reach, and say so in the pin's doc comment.
 func MustFindMethodCall(t *testing.T, callerFile, receiverIdent, methodName string) {
 	t.Helper()
-	found := false
-	for _, f := range parseFiles(t, callerFile) {
+	unit := parseUnit(t, callerFile)
+	var matches []matchedCall
+	for _, f := range unit.files {
 		ast.Inspect(f, func(n ast.Node) bool {
-			if found {
-				return false
-			}
 			sel, ok := n.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			if sel.Sel.Name != methodName {
+			if !ok || sel.Sel.Name != methodName {
 				return true
 			}
 			// Accept any expression whose string representation ends with receiverIdent.
 			xStr := exprString(sel.X)
 			if strings.HasSuffix(xStr, receiverIdent) || strings.Contains(xStr, receiverIdent+".") {
-				found = true
+				matches = append(matches, matchedCall{file: f, node: sel})
 			}
 			return true
 		})
-		if found {
-			break
-		}
 	}
-	if !found {
+	if len(matches) == 0 {
 		t.Errorf(
 			"wiring pin: method call %s.%s not found in %s",
 			receiverIdent, methodName, callerFile,
 		)
+		return
 	}
+	assertAnyCallExecutable(t, unit, matches,
+		fmt.Sprintf("%s.%s", receiverIdent, methodName), callerFile)
+}
+
+// assertAnyCallExecutable passes when at least one of the occurrences the
+// name search found is one the running daemon reaches, and otherwise
+// reports why the first one is not.
+//
+// Every occurrence is considered rather than the first, because a wiring
+// call is often written twice — once on the boot path and once on a reload
+// or a hook — and failing on whichever the file order happened to yield
+// first would be noise rather than a finding.
+func assertAnyCallExecutable(t *testing.T, unit parsedUnit, matches []matchedCall, what, callerPath string) {
+	t.Helper()
+	// The reachability set is derived once: it is a walk over the whole
+	// package, and a pin can match a dozen occurrences.
+	var reachable map[string]bool
+	if unit.wholePackage && unit.pkgName == "main" {
+		reachable = reachableFromEntryPoints(unit)
+	}
+	var firstReason string
+	for _, m := range matches {
+		ok, reason := callIsExecutable(unit, m, reachable)
+		if ok {
+			return
+		}
+		if firstReason == "" {
+			firstReason = reason
+		}
+	}
+	t.Errorf("wiring pin: %s in %s %s", what, callerPath, firstReason)
+}
+
+// callIsExecutable reports whether the running daemon can reach the matched
+// call, as far as a name-based AST scan can tell, and why not when it
+// cannot.
+//
+// Two things are checked, both of which have been observed to hide a dead
+// wiring line:
+//
+//  1. The call must not sit in a function literal that nothing can run.
+//     Assigning the literal to the blank identifier keeps the call in the
+//     file — greppable, reviewable, and never executed.
+//  2. When callerPath names a whole `main` package, the enclosing top-level
+//     function must be reachable from `main`, `init`, or a package-level
+//     initialiser. A wiring call that survives inside a helper the
+//     composition root has stopped calling is the same defect one
+//     indirection further out.
+//
+// Neither check can prove the branch containing the call is taken; a
+// capability behind a config flag that is never set still looks wired from
+// here. That gap is why a security-relevant capability belongs in an
+// effect assertion through the composition root rather than in a pin.
+func callIsExecutable(unit parsedUnit, m matchedCall, reachable map[string]bool) (ok bool, reason string) {
+	path, _ := astutil.PathEnclosingInterval(m.file, m.node.Pos(), m.node.End())
+	if lit, dead := deadFuncLiteral(path); dead {
+		return false, fmt.Sprintf(
+			"sits in a function literal nothing runs (%s) — the call is in the source and is "+
+				"never executed, which is the exact shape this pin exists to reject",
+			unit.fset.Position(lit.Pos()),
+		)
+	}
+	if reachable == nil {
+		// A single file, or a library package: this unit does not contain
+		// the entry point, so reachability cannot be decided here.
+		return true, ""
+	}
+	enclosing := enclosingFuncDecl(path)
+	if enclosing == nil {
+		// A package-level initialiser: it runs before main.
+		return true, ""
+	}
+	if reachable[enclosing.Name.Name] {
+		return true, ""
+	}
+	return false, fmt.Sprintf(
+		"sits in %s (%s), which nothing in the composition root reaches — "+
+			"the wiring is present but the daemon never runs it",
+		enclosing.Name.Name, unit.fset.Position(enclosing.Pos()),
+	)
+}
+
+// deadFuncLiteral reports the outermost function literal enclosing the
+// matched node when that literal is assigned to nothing but blank
+// identifiers, which is the one shape that keeps a call in the file while
+// guaranteeing it never runs.
+//
+// A literal handed to a call, stored in a struct, returned, or launched
+// with go/defer is NOT reported: those are how callbacks are wired, and
+// rejecting them would fail the pins that watch exactly that.
+func deadFuncLiteral(path []ast.Node) (*ast.FuncLit, bool) {
+	var outermost *ast.FuncLit
+	var parent ast.Node
+	for i, n := range path {
+		if lit, ok := n.(*ast.FuncLit); ok {
+			outermost = lit
+			if i+1 < len(path) {
+				parent = path[i+1]
+			}
+		}
+		if _, ok := n.(*ast.FuncDecl); ok {
+			break
+		}
+	}
+	if outermost == nil {
+		return nil, false
+	}
+	switch p := parent.(type) {
+	case *ast.AssignStmt:
+		return outermost, allBlank(p.Lhs)
+	case *ast.ValueSpec:
+		names := make([]ast.Expr, 0, len(p.Names))
+		for _, n := range p.Names {
+			names = append(names, n)
+		}
+		return outermost, allBlank(names)
+	default:
+		return nil, false
+	}
+}
+
+// allBlank reports whether every expression is the blank identifier.
+func allBlank(exprs []ast.Expr) bool {
+	if len(exprs) == 0 {
+		return false
+	}
+	for _, e := range exprs {
+		id, ok := e.(*ast.Ident)
+		if !ok || id.Name != "_" {
+			return false
+		}
+	}
+	return true
+}
+
+// enclosingFuncDecl returns the top-level declaration containing the
+// matched node, or nil when it sits in a package-level initialiser.
+func enclosingFuncDecl(path []ast.Node) *ast.FuncDecl {
+	for _, n := range path {
+		if fd, ok := n.(*ast.FuncDecl); ok {
+			return fd
+		}
+	}
+	return nil
+}
+
+// reachableFromEntryPoints returns the names of every top-level function
+// the package's entry points can reach.
+//
+// The edge relation is deliberately permissive: a function counts as
+// reached when its name appears anywhere in a reachable body, not only in
+// call position. A method value handed to a setter, a function stored in a
+// table and invoked later, an interface dispatch — all of those are real
+// paths a call-position-only graph would report as dead, and a pin that
+// cries wolf gets deleted. What survives the permissiveness is the case
+// that matters: a function nothing in the package mentions at all.
+func reachableFromEntryPoints(unit parsedUnit) map[string]bool {
+	// One name can carry several declarations — a plain function and a
+	// method of the same name, or two methods on different receivers. All
+	// of them are followed: keeping only the last would silently drop the
+	// edge that leads to the composition root, and every pin under it
+	// would report a live wiring line as dead.
+	decls := map[string][]*ast.FuncDecl{}
+	var roots []string
+	for _, f := range unit.files {
+		for _, d := range f.Decls {
+			switch decl := d.(type) {
+			case *ast.FuncDecl:
+				if decl.Name == nil || decl.Body == nil {
+					continue
+				}
+				decls[decl.Name.Name] = append(decls[decl.Name.Name], decl)
+				if decl.Name.Name == "main" || decl.Name.Name == "init" {
+					roots = append(roots, decl.Name.Name)
+				}
+			case *ast.GenDecl:
+				// A package-level initialiser runs before main, so every
+				// name it mentions is an entry point too.
+				for _, spec := range decl.Specs {
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for _, v := range vs.Values {
+						roots = append(roots, identsIn(v)...)
+					}
+				}
+			}
+		}
+	}
+	seen := map[string]bool{}
+	queue := roots
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		for _, decl := range decls[name] {
+			for _, next := range identsIn(decl.Body) {
+				if !seen[next] {
+					queue = append(queue, next)
+				}
+			}
+		}
+	}
+	return seen
+}
+
+// identsIn returns every identifier name mentioned in a node, including
+// selector selectors so a method call reaches the method's declaration.
+func identsIn(n ast.Node) []string {
+	var out []string
+	ast.Inspect(n, func(node ast.Node) bool {
+		switch v := node.(type) {
+		case *ast.Ident:
+			out = append(out, v.Name)
+		case *ast.SelectorExpr:
+			out = append(out, v.Sel.Name)
+		}
+		return true
+	})
+	return out
 }
 
 // MustFindStructLiteralField asserts that callerFile contains a composite
@@ -287,8 +559,8 @@ func MustFindStringLiteralInFile(t *testing.T, callerFile, wantValue string) {
 
 // --- AST helpers ---
 
-// astContainsIdentNotDefinition reports whether f contains an occurrence of
-// ident that is NOT the FuncDecl name at the top level of f.  This prevents
+// identUsesNotDefinition returns every occurrence of ident in f that is
+// NOT the FuncDecl name at the top level of f.  This prevents
 // the self-caller false positive where the definition file is mistakenly
 // supplied as callerFile: a file that only defines SetFoo will not match
 // even though SetFoo appears as an *ast.Ident.
@@ -296,7 +568,7 @@ func MustFindStringLiteralInFile(t *testing.T, callerFile, wantValue string) {
 // The check treats a top-level FuncDecl whose Name.Name == ident as the
 // "definition" position.  Any other occurrence — CallExpr arguments,
 // SelectorExpr selectors, variable initialisers — counts as a usage.
-func astContainsIdentNotDefinition(f *ast.File, ident string) bool {
+func identUsesNotDefinition(f *ast.File, ident string) []*ast.Ident {
 	// Collect the position range of every top-level FuncDecl that is named
 	// exactly ident.  Identifiers that fall inside that range are definitions
 	// and must be skipped.
@@ -321,17 +593,14 @@ func astContainsIdentNotDefinition(f *ast.File, ident string) bool {
 		return false
 	}
 
-	found := false
+	var found []*ast.Ident
 	ast.Inspect(f, func(n ast.Node) bool {
-		if found {
-			return false
-		}
 		id, ok := n.(*ast.Ident)
 		if !ok {
 			return true
 		}
 		if id.Name == ident && !inDefinitionSpan(id.Pos()) {
-			found = true
+			found = append(found, id)
 		}
 		return true
 	})

@@ -144,13 +144,17 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 		// gates every command this connection later dispatches. It is only
 		// as current as the connection: the raw credential is not retained,
 		// so it cannot be re-resolved here. A revocation reaches the socket
-		// from the other side instead — see [Hub.CloseBySubject] — and the
-		// in-band reauth op replaces it without a reconnect.
+		// from the other side instead — see [Hub.CloseBySubject] — the
+		// credential's own expiry is watched by the connection itself (see
+		// [client.watchCredentialExpiry]), and the in-band reauth op
+		// replaces the identity without a reconnect.
 		if id, ok := auth.IdentityFrom(r.Context()); ok {
 			c.SetIdentity(id)
 		}
 		hub.register(c)
 		defer hub.deregister(c)
+
+		go c.watchCredentialExpiry()
 
 		done := make(chan struct{})
 		go func() {

@@ -13,6 +13,11 @@ import (
 	"testing"
 	"time"
 
+	mochi "github.com/mochi-mqtt/server/v2"
+	"github.com/mochi-mqtt/server/v2/hooks/auth"
+	"github.com/mochi-mqtt/server/v2/listeners"
+	"github.com/mochi-mqtt/server/v2/packets"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -659,5 +664,194 @@ func TestSupervisorRegistersEachConnectHookExactlyOnce(t *testing.T) {
 	if got := fired.Load(); got != 2 {
 		t.Errorf("connect hook fired %d times over one announce plus one connect, want 2; "+
 			"a hook registered while the stack was published but not yet announced is registered twice", got)
+	}
+}
+
+// brokerConnectCounter is a mochi hook that counts CONNECT packets per client
+// id. A second CONNECT under the same id is the only evidence from outside the
+// daemon that a lifecycle's reconnect loop is still alive.
+type brokerConnectCounter struct {
+	mochi.HookBase
+	mu     sync.Mutex
+	counts map[string]int
+}
+
+func (h *brokerConnectCounter) ID() string { return "connect-counter" }
+
+func (h *brokerConnectCounter) Provides(b byte) bool { return b == mochi.OnConnect }
+
+func (h *brokerConnectCounter) OnConnect(cl *mochi.Client, _ packets.Packet) error {
+	h.mu.Lock()
+	if h.counts == nil {
+		h.counts = make(map[string]int)
+	}
+	h.counts[cl.ID]++
+	h.mu.Unlock()
+	return nil
+}
+
+func (h *brokerConnectCounter) count(id string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.counts[id]
+}
+
+// startTestBroker brings up a real in-process MQTT broker on an OS-assigned
+// loopback port and returns its URL plus the CONNECT counter. A real broker is
+// what makes the assertion meaningful: the reconnect loop lives inside
+// go-mqtt's Lifecycle, and the only way to observe it from the supervisor's
+// public surface is to drop the socket and watch the daemon dial again.
+func startTestBroker(t *testing.T) (url string, connects *brokerConnectCounter, srv *mochi.Server) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv = mochi.New(&mochi.Options{InlineClient: true, Logger: supervisorLogger()})
+	connects = &brokerConnectCounter{counts: make(map[string]int)}
+	if err := srv.AddHook(new(auth.AllowHook), nil); err != nil {
+		t.Fatalf("broker: add auth hook: %v", err)
+	}
+	if err := srv.AddHook(connects, nil); err != nil {
+		t.Fatalf("broker: add connect counter: %v", err)
+	}
+	if err := srv.AddListener(listeners.NewNet("supervisor-test", ln)); err != nil {
+		t.Fatalf("broker: add listener: %v", err)
+	}
+	go func() { _ = srv.Serve() }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return "tcp://" + ln.Addr().String(), connects, srv
+}
+
+// brokerMQTTCfg is [mqttCfg] pointed at a real broker under clientID.
+func brokerMQTTCfg(brokerURL, clientID string) *config.Config {
+	c := mqttCfg(true)
+	c.North.MQTT.BrokerURL = brokerURL
+	c.North.MQTT.ClientID = clientID
+	return c
+}
+
+// TestSupervisorSwappedStackReconnectsAfterTheCallersContextIsCancelled pins
+// the context a swapped-in MQTT stack's reconnect loop runs on.
+//
+// go-mqtt's Lifecycle.Start binds the WHOLE reconnect loop to the context it
+// receives, and both operator-triggered Swap callers hand over a short-lived
+// one — the REST reload handler passes r.Context(), which net/http cancels the
+// instant the response is written, and the config watcher passes a 30 s timeout
+// it cancels as soon as Swap returns. A stack built on either keeps whatever
+// TCP session it happens to have and never reconnects again: the next broker
+// restart drops every Home Assistant entity to `unavailable` via the LWT and
+// leaves it there, with no log line, until the daemon process is restarted.
+//
+// The test drives the production entry points in the production order — Start
+// with the daemon context, then Swap with a request-scoped one that is
+// cancelled the way net/http cancels it — against a real broker, then closes
+// the session server-side. A second CONNECT can only happen while the
+// reconnect loop's context is alive.
+func TestSupervisorSwappedStackReconnectsAfterTheCallersContextIsCancelled(t *testing.T) {
+	t.Parallel()
+	brokerURL, connects, srv := startTestBroker(t)
+
+	daemonCtx, cancelDaemon := context.WithCancel(context.Background())
+	t.Cleanup(cancelDaemon)
+
+	s := newSup(t)
+	t.Cleanup(func() { s.Shutdown(context.Background()) })
+
+	// Boot: the composition root hands Start the daemon-lifetime context.
+	const bootID = "supervisor-test-boot"
+	if err := s.Start(daemonCtx, brokerMQTTCfg(brokerURL, bootID)); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Reload: the operator presses "Reload MQTT" in the SPA. The handler's
+	// context lives exactly as long as the request.
+	const reloadID = "supervisor-test-reload"
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	if err := s.Swap(reqCtx, brokerMQTTCfg(brokerURL, reloadID)); err != nil {
+		cancelReq()
+		t.Fatalf("Swap: %v", err)
+	}
+	// ServeHTTP returned.
+	cancelReq()
+
+	waitForCond(t, 5*time.Second, func() bool { return connects.count(reloadID) == 1 })
+
+	// The broker restarts / the link blips: the session is closed underneath
+	// the daemon.
+	cl, ok := srv.Clients.Get(reloadID)
+	if !ok {
+		t.Fatalf("the swapped-in stack never connected as %q", reloadID)
+	}
+	cl.Stop(errors.New("broker dropped the session"))
+
+	deadline := time.Now().Add(15 * time.Second)
+	for connects.count(reloadID) < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("the swapped-in MQTT stack never reconnected after the session dropped "+
+				"(CONNECTs as %q: %d, want 2) — its reconnect loop was bound to the reload "+
+				"caller's context and died with the HTTP response, so the bridge stays down "+
+				"until the daemon is restarted", reloadID, connects.count(reloadID))
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+// TestSupervisorConnectHooksRunOnALiveContextAfterAReloadRequest pins the
+// context handed to the supervisor's connect callbacks.
+//
+// A connect callback is not pure republish work. The hub publisher's callback
+// re-Starts its fan-out worker on the context it receives, and that worker is
+// what drains every hub publish afterwards — programs, system variables,
+// connectivity, install mode, service and alarm messages. Handed the reload
+// handler's request context, the worker exits with the HTTP response and every
+// later hub publish is queued for a drain loop that is already gone: no error,
+// no log line, and Home Assistant simply stops seeing the CCU's hub entities
+// change.
+//
+// The callback the test registers stands in for that worker: it captures the
+// context it is given, and the assertion is that the context is still alive
+// once the request that triggered the swap has completed.
+func TestSupervisorConnectHooksRunOnALiveContextAfterAReloadRequest(t *testing.T) {
+	t.Parallel()
+	brokerURL, _, _ := startTestBroker(t)
+
+	daemonCtx, cancelDaemon := context.WithCancel(context.Background())
+	t.Cleanup(cancelDaemon)
+
+	s := newSup(t)
+	t.Cleanup(func() { s.Shutdown(context.Background()) })
+
+	hookCtx := make(chan context.Context, 4)
+	s.OnConnect(func(ctx context.Context) { hookCtx <- ctx })
+
+	if err := s.Start(daemonCtx, brokerMQTTCfg(brokerURL, "hook-ctx-boot")); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	select {
+	case <-hookCtx:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the connect hook never ran for the boot stack")
+	}
+
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	if err := s.Swap(reqCtx, brokerMQTTCfg(brokerURL, "hook-ctx-reload")); err != nil {
+		cancelReq()
+		t.Fatalf("Swap: %v", err)
+	}
+	var swapHookCtx context.Context
+	select {
+	case swapHookCtx = <-hookCtx:
+	case <-time.After(5 * time.Second):
+		cancelReq()
+		t.Fatal("the connect hook never ran for the swapped-in stack")
+	}
+	// ServeHTTP returned.
+	cancelReq()
+
+	if err := swapHookCtx.Err(); err != nil {
+		t.Fatalf("the connect hook's context was cancelled when the reload request finished: %v — "+
+			"anything the hook started on it (the hub publisher's fan-out worker above all) is "+
+			"dead, so every later hub publish is queued for a drain loop that has exited", err)
 	}
 }

@@ -26,7 +26,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
-	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -37,7 +36,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -134,7 +132,7 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// SessionBackend: wsSessionBackend delegates Open to the device-query path
 		// and PutParamset to the paramsets domain.
 		Sessions:       w.sessionStore,
-		SessionBackend: &wsSessionBackend{deviceQuery: deviceQuery, paramsets: &wsParamsetWriter{domain: w.paramsets, registry: w.registry, writer: w.valueWriter}},
+		SessionBackend: &wsSessionBackend{deviceQuery: deviceQuery, paramsets: &wsParamsetWriter{domain: w.paramsets}},
 		// ChangeLog receives one entry per successful config.session.save.
 		ChangeLog: w.changeLog,
 		// DeviceReloader backs config.reload_device_config and
@@ -152,7 +150,7 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 
 	ws.RegisterExtendedCommands(router, ws.ExtendedCommandsConfig{
 		Devices:   &wsDeviceWriter{admin: w.deviceAdmin},
-		Paramsets: &wsParamsetWriter{domain: w.paramsets, registry: w.registry, writer: w.valueWriter},
+		Paramsets: &wsParamsetWriter{domain: w.paramsets},
 		// EditLocks: shared registry — MASTER/LINK paramset.put writes
 		// must hold the edit lock, mirroring the REST strict gate.
 		EditLocks:      w.editSessions,
@@ -1070,34 +1068,22 @@ func (w *wsDeviceQuery) GetParamset(ctx context.Context, key configui.SessionKey
 	if psKey == "" {
 		psKey = hmenum.ParamsetKeyMaster
 	}
-	// A session scoped to a central must read that central. The domain
-	// resolves an address to the first matching central (registry order is
-	// name-sorted), which is the correct one whenever device addresses are
-	// unique across CCUs; only when the scoped central differs does the
-	// session risk reading the wrong CCU, so route directly to the scoped
-	// backend in that case. GetParamsetDescription already honours the
-	// scope this way — this restores the same guarantee to the value read.
-	if key.CentralName != "" && key.CentralName != firstMatchCentralName(w.registry, key.ChannelAddress) {
-		b, err := scopedParamsetBackend(w.registry, w.writer, key.CentralName, key.ChannelAddress)
-		if err != nil {
-			return nil, err
-		}
-		return b.GetParamset(ctx, key.ChannelAddress, psKey)
-	}
-	return w.paramsets.GetParamset(ctx, key.ChannelAddress, psKey)
+	// A session scoped to a central must read that central: the unscoped
+	// domain call resolves an address to the first matching central (registry
+	// order is name-sorted), which is the wrong CCU whenever the address
+	// repeats across them. The scoped domain method keeps the model-first
+	// read, the refresh fallback and the backend fallback intact while
+	// pinning every one of them to the named central.
+	return w.paramsets.GetParamsetOn(ctx, key.CentralName, key.ChannelAddress, psKey)
 }
 
 // ── wsParamsetWriter ─────────────────────────────────────────────────────────
 
 // wsParamsetWriter bridges *adapter.ParamsetsDomain onto ws.ParamsetWriter.
-// The WS layer passes a configui.SessionKey; the domain takes (address, key).
-// registry + writer are held so a central-scoped session save can target the
-// named CCU's backend directly when it diverges from the domain's first-match
-// resolution (see PutParamset).
+// The WS layer passes a configui.SessionKey; the domain takes
+// (central, address, key) and owns every resolution the write needs.
 type wsParamsetWriter struct {
-	domain   *adapter.ParamsetsDomain
-	registry *central.Registry
-	writer   *clientpkg.ValueWriter
+	domain *adapter.ParamsetsDomain
 }
 
 func (w *wsParamsetWriter) PutParamset(ctx context.Context, key configui.SessionKey, values map[string]any) error {
@@ -1109,71 +1095,13 @@ func (w *wsParamsetWriter) PutParamset(ctx context.Context, key configui.Session
 		psKey = hmenum.ParamsetKeyMaster
 	}
 	// A session scoped to a central must write that central (see the matching
-	// note on wsDeviceQuery.GetParamset). Route around the domain only when
-	// the scoped central differs from the domain's first-match resolution; in
-	// the common case (unique device addresses across CCUs) the domain path is
-	// used, keeping validation, the visibility gate, audit and the post-write
-	// model refresh.
-	if key.CentralName != "" && key.CentralName != firstMatchCentralName(w.registry, key.ChannelAddress) {
-		// Preserve the visibility gate the domain would apply: a hidden
-		// parameter rejects the whole write, mirroring ParamsetsDomain.PutParamset.
-		if visible := w.domain.VisibleValues(key.ChannelAddress, psKey, values); len(visible) != len(values) {
-			return fmt.Errorf("%w: hidden parameter in central-scoped paramset write", hmerr.ErrParameterHidden)
-		}
-		b, err := scopedParamsetBackend(w.registry, w.writer, key.CentralName, key.ChannelAddress)
-		if err != nil {
-			return err
-		}
-		return b.PutParamset(ctx, key.ChannelAddress, psKey, values, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset)
-	}
-	return w.domain.PutParamset(ctx, key.ChannelAddress, psKey, values)
-}
-
-// scopedParamsetBackend resolves the backend of the named central for the
-// device behind channelAddress, so the config edit-session path can honour
-// central_name on the value read and the save the same way
-// GetParamsetDescription already does — a session scoped to one CCU must never
-// touch another.
-func scopedParamsetBackend(
-	registry *central.Registry,
-	writer *clientpkg.ValueWriter,
-	centralName, channelAddress string,
-) (backends.Operations, error) {
-	if registry == nil || writer == nil {
-		return nil, errors.New("ws: paramset backend not wired")
-	}
-	unit, ok := registry.Get(centralName)
-	if !ok {
-		return nil, fmt.Errorf("ws: central %q not found", centralName)
-	}
-	dev, ok := unit.ModelRegistry.Get(deviceAddrFromChannel(channelAddress))
-	if !ok {
-		return nil, fmt.Errorf("ws: device for channel %s not found on central %q", channelAddress, centralName)
-	}
-	b, ok := writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
-	if !ok {
-		return nil, fmt.Errorf("ws: no backend for %s/%s", unit.Name(), dev.InterfaceID)
-	}
-	return b, nil
-}
-
-// firstMatchCentralName returns the name of the first central (registry order
-// is name-sorted) that holds the device behind channelAddress, or "" when none
-// does. It mirrors how ParamsetsDomain resolves an address so the session path
-// can tell when a scoped central would diverge from the domain's own
-// resolution and route around it, leaving the common case on the full domain
-// path.
-func firstMatchCentralName(registry *central.Registry, channelAddress string) string {
-	if registry == nil {
-		return ""
-	}
-	deviceAddr := deviceAddrFromChannel(channelAddress)
-	for _, u := range registry.List() {
-		if _, ok := u.ModelRegistry.Get(deviceAddr); ok {
-			return u.Name()
-		}
-	}
-	return ""
+	// note on wsDeviceQuery.GetParamset). The scoped domain method pins the
+	// resolution without losing anything the unscoped one does: descriptor
+	// coercion (a JSON number is a float64 and would reach the CCU as
+	// <double> for an INTEGER parameter), min/max validation, the visibility
+	// gate, the post-write model refresh and the audit row. Writing to the
+	// scoped backend directly skipped all five.
+	return w.domain.PutParamsetOn(ctx, key.CentralName, key.ChannelAddress, psKey, values)
 }
 
 // ── wsSessionBackend ─────────────────────────────────────────────────────────

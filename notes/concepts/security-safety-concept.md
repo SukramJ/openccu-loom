@@ -117,7 +117,7 @@ scope  := ""            (system)
         | <class>       (smoke|water|gas|co|tamper|battery|technical|intrusion|panic)
         | <zone-slug>   (stabiler Slug, NICHT die UUID)
 
-unique_id := "loom_security" ["_" scope] "_" key      (object_id == unique_id)
+unique_id := "loom_security" ["_" scope] "_" key      (default_entity_id == "<component>." + unique_id)
 topic     := <base>/security/<kind>[/<scope>]/<key>
 discovery := <disco>/<component>/security/<unique_id>/config      (node_id: "security")
 ```
@@ -592,7 +592,7 @@ Jedes deklarierte Topic wird auch geschrieben — `TestSecurityPlaneTopicsRoundT
 vergleicht beide Mengen, weil sie es einmal nicht taten und beide Hälften ihre
 eigenen Tests bestanden.
 
-* Discovery `node_id: "security"`, `object_id == unique_id`.
+* Discovery `node_id: "security"`, `default_entity_id == "<component>." + unique_id`.
 * Zweistufige Availability (Bridge-LWT + `<base>/security/availability`, `availability_mode: all`) — dasselbe Muster wie die Alarmebene.
 * `internal/north/mqtt/retain_cleanup.go` kennt beide daemon-level Bäume
   (`security/` **und** `alarm/`). Der Sweep läuft für einen daemon-level Knoten
@@ -706,7 +706,7 @@ Zusätzlich: die drei toten Nachschlageschlüssel aus §6.2 entfernen, und `asse
 
 | Garantie | Umsetzung |
 |---|---|
-| Jede bestehende `alarm_control_panel`-Entität behält `unique_id` **und** `object_id` `openccu-loom_alarm_<zoneID>` | `routingkey.DaemonUniqueID` bekommt einen eingefrorenen Legacy-Zweig; Golden-Fixture-Contract-Test mit beiden Schreibweisen. Muss dieser Test je aktualisiert werden, ist das das Signal, dass Entitäten zu verwaisen drohen. |
+| Jede bestehende `alarm_control_panel`-Entität behält `unique_id` **und** `default_entity_id` `openccu-loom_alarm_<zoneID>` (die `object_id`-Option hat Home Assistant in 2026.3 entfernt) | `routingkey.DaemonUniqueID` bekommt einen eingefrorenen Legacy-Zweig; Golden-Fixture-Contract-Test mit beiden Schreibweisen. Muss dieser Test je aktualisiert werden, ist das das Signal, dass Entitäten zu verwaisen drohen. |
 | Die Gerätekarte `openccu-loom_alarm` bleibt **unverändert** (Identifier, Name, Manufacturer) | Die neue Domäne bekommt eine **eigene** Karte `openccu-loom_security`. Kein Flattern, keine Friendly-Name-Änderung an Bestandsentitäten. |
 | `<base>/alarm/**` bleibt unverändert | Die neue Ebene lebt vollständig unter `<base>/security/**`, node_id `security`, Präfix `loom_security_*` — kollisionsfrei zu `loom_addon_update`, `loom_<serial10>_*` und `openccu-loom_alarm_*`. |
 | `<base>/alarm/<zone>/event` bekommt **kein** nachträgliches Discovery-Entity | Zwei Discovery-Quellen für dieselbe Semantik wären schlimmer als eine. ADR 0052 hat die Topic-Form dieser Ebene festgeschrieben. |

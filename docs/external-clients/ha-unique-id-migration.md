@@ -48,8 +48,19 @@ contract test). The leading `central_id` slot of the routing key is:
 - the **CCU serial, last 10 characters, lower-cased** for the address
   classes whose addresses repeat across CCUs: hub roots
   (`sysvar` / `program` / `install_mode`), internal addresses
-  (`INT000*`), and virtual-remote channels (`BidCoS-*`, `HmIP-RCV-1`,
-  `VCU` virtual-remote range).
+  (`INT000*`), virtual-remote channels (`BidCoS-*`, `HmIP-RCV-1`,
+  `VCU` virtual-remote range), and **CUxD addresses (`CUX*`)**.
+
+!!! warning "CUxD is scoped here and not in the legacy reference"
+    A CUxD serial is `CUX` + a two-digit device type + a five-digit
+    running number chosen per CCU, conventionally starting at 1 — the
+    first `(28) System` device is `CUX2801001` on essentially every
+    install. Two CCUs therefore declare byte-identical keys for their
+    CUxD data points. The daemon adds the serial suffix for this class;
+    the legacy reference key does not, so a CUxD key is the one case
+    where the migration below cannot simply prepend `loom_`. Channel-level
+    keys stay unscoped on both sides. Background:
+    [`by_design.md` → BD-Identity-CUxDCentralScoping](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md).
 
 Hub data-point names are slugged with the shared `hub_slug` rule
 (python-slugify defaults: Unicode transliteration, dash separator,
@@ -67,6 +78,7 @@ CCU serial `3014F711A0001234` → serial suffix `11a0001234`.
 | Program `My Prog` | `a1b2c3d4e5_program_my-prog` | `loom_11a0001234_program_my-prog` |
 | Internal `INT0001234:1` `LEVEL` | `a1b2c3d4e5_int0001234_1_level` | `loom_11a0001234_int0001234_1_level` |
 | Virtual remote `BidCoS-RF:1` `PRESS_SHORT` | `a1b2c3d4e5_bidcos_rf_1_press_short` | `loom_11a0001234_bidcos_rf_1_press_short` |
+| CUxD `CUX2801001:1` `STATE` | `cux2801001_1_state` | `loom_11a0001234_cux2801001_1_state` |
 
 `a1b2c3d4e5` above is the legacy `entry_id[-10:]`; `11a0001234` is the new
 `serial[-10:]`.
@@ -85,6 +97,15 @@ The rewrite is purely string-level, so it does not depend on the device
 tree being loaded:
 
 ```python
+import re
+
+# A CUxD address anywhere in the key: at the start for a plain data point,
+# behind a family prefix (`event_<central>_…`, `calculated_…`) otherwise.
+# Matching the address rather than enumerating prefixes keeps the rule
+# stable when a new family prefix appears.
+_CUXD_ADDRESS = re.compile(r"(?:^|_)cux\d+_")
+
+
 def migrate_unique_id(old: str, *, entry_suffix: str, serial_suffix: str) -> str | None:
     # Idempotent: already migrated.
     if old.startswith("loom_"):
@@ -94,6 +115,10 @@ def migrate_unique_id(old: str, *, entry_suffix: str, serial_suffix: str) -> str
     prefix = f"{entry_suffix}_"
     if old.startswith(prefix):
         return f"loom_{serial_suffix}_{old[len(prefix):]}"
+    # CUxD addresses repeat across CCUs but carried NO central prefix in the
+    # legacy key, so the serial suffix is inserted rather than swapped.
+    if _CUXD_ADDRESS.search(old):
+        return f"loom_{serial_suffix}_{old}"
     # Everything else (devices, button events) had no central prefix.
     return f"loom_{old}"
 ```
@@ -137,6 +162,14 @@ for that entry, so newly-created entities already see the migrated keys.
   because the target `unique_id` already exists; the entity keeps its old
   key. Log these; they indicate a pre-existing slug collision on the CCU
   side, not a migration bug.
+- **CUxD needs the rule in the rebuild path too.** Rewriting the registry
+  is only half of it: a client that rebuilds the key from `address` +
+  `parameter` must also put the serial suffix in front for `CUX*`
+  addresses, or it rebuilds a key the daemon never emits and every CUxD
+  value update routes to nothing. The daemon's optional `unique_id` field
+  on the push payloads (below) already carries the scoped key, so a client
+  that consumes it inherits the rule for free and can verify its own
+  rebuild against it.
 - **Forced-sensor suffix.** Daemon-side data points that carry the
   `_sensor` disambiguation suffix already include it in the routing key,
   so it survives the `loom_` prepend unchanged — no special handling.

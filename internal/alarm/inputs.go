@@ -78,6 +78,16 @@ func (s *Service) attachUnit(u *central.Unit) {
 		events.Subscribe(u.EventBus, func(e hmevent.SysvarChangedEvent) {
 			s.sysvarMirror.onInbound(name, e)
 		}),
+		// Device lifecycle: a device that leaves the model sends no
+		// UNREACH — it sends nothing ever again — so nothing else in this
+		// domain would ever notice that an enrolled sensor stopped
+		// existing.
+		events.Subscribe(u.EventBus, func(e hmevent.DeviceRemovedEvent) {
+			s.onDeviceLifecycle(name, e.Address)
+		}),
+		events.Subscribe(u.EventBus, func(e hmevent.DeviceCreatedEvent) {
+			s.onDeviceLifecycle(name, e.Address)
+		}),
 		// The southbound bring-up is readiness-gated, so the device
 		// model arrives long after the alarm service starts — on a
 		// co-booting CCU, tens of seconds after. The reconcile pass at
@@ -93,6 +103,10 @@ func (s *Service) attachUnit(u *central.Unit) {
 			ctx := context.Background()
 			s.reconcile(ctx)
 			s.engine.ReevaluateSensors(ctx)
+			// The model is complete now, so "this channel is not in it"
+			// finally means something: a device deleted while the daemon
+			// was down produced no removal event anybody heard.
+			s.refreshSensorPresence(ctx)
 		}),
 	}
 	s.mu.Lock()
@@ -151,6 +165,94 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	}
 }
 
+// onDeviceLifecycle re-derives the availability of every sensor enrolled
+// on a device whose presence in the model just changed.
+//
+// A device that is unpaired, deleted, or re-paired under a new address
+// emits no UNREACH — it emits nothing at all, ever again — so the
+// enrolled sensors kept available=true and their last activation value
+// for the lifetime of the daemon. The zone then reported ready-to-arm
+// and armed with a window that can never fire: the default
+// unreachable=block policy defeated by the one case it exists for, with
+// no blocker, no journal entry and no health signal anywhere.
+func (s *Service) onDeviceLifecycle(centralName, address string) {
+	s.mu.Lock()
+	sensors := append([]string(nil), s.devIndex[devKey(centralName, address)]...)
+	s.mu.Unlock()
+	if len(sensors) == 0 {
+		return
+	}
+	available := s.deviceReachable(centralName, address)
+	ctx := context.Background()
+	for _, id := range sensors {
+		s.engine.SetSensorAvailability(ctx, id, available)
+	}
+}
+
+// refreshSensorPresence re-derives availability for every enrolled
+// sensor of every central whose model is complete.
+//
+// It is the boot-side half of [Service.onDeviceLifecycle]: a device
+// removed while the daemon was down publishes no event anyone hears, and
+// the restore marks every sensor available. Centrals that are not
+// southbound-ready yet are skipped — before the bring-up has loaded the
+// devices, "absent from the model" means "not loaded", and reading it as
+// "gone" would degrade every sensor of a CCU that is merely still
+// booting.
+func (s *Service) refreshSensorPresence(ctx context.Context) {
+	type target struct {
+		central, address string
+		sensors          []string
+	}
+	s.mu.Lock()
+	targets := make([]target, 0, len(s.devIndex))
+	for key, ids := range s.devIndex {
+		centralName, address, ok := splitDevKey(key)
+		if !ok {
+			continue
+		}
+		targets = append(targets, target{
+			central: centralName, address: address,
+			sensors: append([]string(nil), ids...),
+		})
+	}
+	s.mu.Unlock()
+
+	ready := map[string]bool{}
+	for _, t := range targets {
+		isReady, seen := ready[t.central]
+		if !seen {
+			u, ok := s.reg.Get(t.central)
+			isReady = ok && u.IsSouthboundReady()
+			ready[t.central] = isReady
+		}
+		if !isReady {
+			continue
+		}
+		available := s.deviceReachable(t.central, t.address)
+		for _, id := range t.sensors {
+			s.engine.SetSensorAvailability(ctx, id, available)
+		}
+	}
+}
+
+// deviceReachable reports the model's view of one device: present in the
+// central's model and not reporting UNREACH. That is the same truth the
+// UNREACH data-point path carries, read from the model instead of from an
+// event, so the two cannot contradict each other — and a device that is
+// no longer in the model reads unreachable rather than "unchanged".
+func (s *Service) deviceReachable(centralName, address string) bool {
+	u, ok := s.reg.Get(centralName)
+	if !ok || u.ModelRegistry == nil {
+		return false
+	}
+	dev, ok := u.ModelRegistry.Get(address)
+	if !ok || dev == nil {
+		return false
+	}
+	return dev.Availability().IsReachable()
+}
+
 // journalDeviceBlocked records a keypad temporary/permanent lockout as a
 // fault-class journal entry (fail-visible, S7). The lockout is a
 // device-level signal, so the entry carries the device address rather
@@ -196,7 +298,19 @@ func (s *Service) updateDeviceHealth(ctx context.Context, centralName string, ke
 // doubled id ("<central>-<central>-BidCos-RF") that matched no enrolled
 // sensor, which left every contact on a lost radio reporting its last known
 // state while armed and never ran the zone's central-loss policy.
+//
+// An unconfirmed reachability is not an input here. It is the daemon's own
+// view of a central it cannot reach at all, so it says nothing about the
+// radios behind that CCU — deriving down-events from an unreachable CCU is
+// exactly what the reconciler refuses to do for its vanished-interface
+// pass. Acting on it turns every CCU reboot into the zone's central-loss
+// escalation: a fault in each armed zone's journal on the default policy,
+// and a sounding siren plus an incident on `trigger`. The diagnostic planes
+// still receive the event and still show the interfaces as down.
 func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChangedEvent) {
+	if e.Unconfirmed {
+		return
+	}
 	ctx := context.Background()
 	wireID := e.InterfaceID
 	s.mu.Lock()
@@ -292,6 +406,15 @@ func dpKeyPrefix(centralName, interfaceID string) string {
 // devKey builds the routing key of a device.
 func devKey(centralName, deviceAddr string) string {
 	return centralName + "|" + deviceAddr
+}
+
+// splitDevKey is the inverse of [devKey].
+func splitDevKey(key string) (centralName, deviceAddr string, ok bool) {
+	parts := strings.SplitN(key, "|", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 // deviceAddress strips the channel suffix of a channel address.

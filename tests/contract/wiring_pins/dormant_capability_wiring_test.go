@@ -27,18 +27,37 @@ import (
 // failsafe hooks, MQTT origin version).
 //
 // Each pin asserts the production call exists in the file that is supposed to
-// make it. A green unit test for the capability is NOT enough — these pins
-// fail the build the moment the wiring is deleted, even though the capability
-// keeps passing its own tests. When a wiring site is intentionally moved,
-// update the pin to the new file; when a capability is intentionally retired,
-// delete its pin in the same change that removes the wiring.
+// make it, and that the daemon can reach it. A green unit test for the
+// capability is NOT enough — these pins fail the build the moment the wiring
+// is deleted, even though the capability keeps passing its own tests. When a
+// wiring site is intentionally moved, update the pin to the new file; when a
+// capability is intentionally retired, delete its pin in the same change that
+// removes the wiring.
+//
+// What a pin here can and cannot establish is worth stating plainly, because
+// the gap has been exploited once already. contract.MustFindMethodCall reads
+// source: it rejects a call that sits in a function literal nothing runs and,
+// for a whole `main` package, a call in a function the composition root never
+// reaches — but it cannot tell whether the branch around the call is taken,
+// and it cannot see the effect. A capability whose absence is a security
+// problem therefore also gets an effect assertion through the composition
+// root; the Matter ACL gate's lives in
+// cmd/openccu-loom/daemon_matter_acl_wiring_test.go and asserts that an
+// authorised subject is served and an unauthorised one is refused.
 
 // --- Matter ACL gate (the archetype) ---
 
 // TestPin_ACLLister_AttachedInDaemon pins that the daemon attaches the
 // store-backed ACL source to the Matter bridge. Without it the
-// TopologyDispatcher has no ACL source, CheckACL fails open, and every
-// AccessControl entry the controller writes is silently unenforced.
+// TopologyDispatcher has no ACL source and denies every operational (CASE)
+// read, write and invoke — the bridge answers a commissioned controller
+// nothing at all.
+//
+// The behavioural half of this pin is
+// TestMatterBridgeEnforcesStoredACLAfterBoot in cmd/openccu-loom: it boots
+// the real bridge, seeds one stored entry, and asserts that the named
+// subject is served while another subject on the same fabric is refused.
+// This pin is the cheap source-level companion, not the proof.
 func TestPin_ACLLister_AttachedInDaemon(t *testing.T) {
 	contract.MustFindMethodCall(t,
 		"cmd/openccu-loom",

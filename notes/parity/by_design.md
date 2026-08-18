@@ -97,7 +97,8 @@ entity-identity stability.
 
 3. **Cross-backend HA routing key** — `internal/routingkey`
    (`GenerateUniqueID`, `GenerateChannelUniqueID`, `HubSlug`) mirrors the
-   shared routing-key contract bit-for-bit and is locked by a
+   shared routing-key contract bit-for-bit **except for the one declared
+   divergence below (BD-Identity-CUxDCentralScoping)**, and is locked by a
    golden-fixture test under `tests/contract/`. It exists so the Go side
    can reproduce / validate the key that the HA drop-in client rebuilds
    from `address` + `parameter` (+ `entry_id[-10:]` as the HA-owned
@@ -113,6 +114,55 @@ roots), so it must not be used where the HA routing key is expected; new
 consumers use `internal/routingkey` instead. See
 `docs/external-clients/ha-drop-in-identity-and-scoping.md` for the full
 owner split (client injects the HA prefix; daemon supplies scoping).
+
+### BD-Identity-CUxDCentralScoping — CUxD addresses are namespaced by the central; the reference leaves them bare
+
+**Divergence.** `internal/routingkey.needsCentralPrefix` treats a `CUX*`
+address like the hub pseudo-addresses, `INT000*` and the virtual-remote
+buses: the *parameter-level* key carries the central discriminator
+(`loom_<serial10>_cux2801001_1_state`). The Python reference
+(`aiohomematic/model/support.py:generate_unique_id`) scopes only the four
+hub pseudo-addresses, `INT000*` and `VIRTUAL_REMOTE_ADDRESSES` — a CUxD
+address comes out bare (`cux2801001_1_state`). The *channel-level* key
+(`GenerateChannelUniqueID`) is scoped on neither side, so the asymmetry
+is parameter-level only.
+
+**Why.** CUxD device serials are `CUX` + a two-digit device type + a
+five-digit running number the operator picks per CCU, conventionally
+starting at 1 — nothing in the address derives from the CCU. The first
+`(28) System` device is `CUX2801001` on essentially every CUxD install,
+so two CCUs bridged into one Home Assistant would declare byte-identical
+`unique_id`s. HA keeps whichever arrived first and drops the other CCU's
+entities; because the MQTT discovery payload is retained, the loss
+outlives the daemon that caused it. The daemon is multi-CCU-first
+(ADR 0002) while the reference runs one CCU per config entry, so the
+collision is reachable here in a way it is not there.
+
+**Cost, and the guards that hold it.** This is a genuine fork of a shared
+contract, not a port artefact, and it carries two costs that must stay
+visible:
+
+- a drop-in client that rebuilds the key from the reference emits an id
+  the daemon never publishes for CUxD data points, so the client needs
+  the same rule (and the one-time registry rewrite in
+  `docs/external-clients/ha-unique-id-migration.md`);
+- every install that upgraded across the change re-keyed its CUxD
+  entities once.
+
+Pinned from both ends by
+`tests/contract/testdata/routing_key/cuxd_scoping_golden.json`:
+`TestRoutingKeyCUxDScopingGolden` asserts the Go output,
+`script/routing_key_parity.py` asserts the reference output, and each
+also fails when the two stop differing. The shared fixtures
+(`unique_id_golden.json`, `channel_unique_id_golden.json`) stay
+byte-identical copies so the contract they represent is not quietly
+rewritten.
+
+**Retirement condition.** The right end state is no divergence: land the
+same rule in the reference implementation, then fold the CUxD cases into
+the shared fixtures and delete this entry. The guards above will demand
+it — once the reference scopes CUxD, both halves of the divergence
+fixture fail on the same run.
 
 ### CCU Link Management (v1.0 scope exclusion)
 
@@ -3327,13 +3377,17 @@ registration: `internal/model/custom/valve/init.go`.
 
 ---
 
-### A2-BD04 — `EffectLight.Effects()` sourced dynamically from `PROGRAM.VALUE_LIST`
+### A2-BD04 — `EffectLight.Effects()` prefers `PROGRAM.VALUE_LIST`, falls back to the reference's fixed list
 
-`EffectLight` (`internal/model/custom/light/effect.go:27-44`) populates its effects list from the PROGRAM data point's `VALUE_LIST` at construction time. The reference implementation uses a fixed seven-element list `("Off", "Slow color change", …, "TV simulation")`.
+`EffectLight` (`internal/model/custom/light/effect.go`) populates its effects list from the PROGRAM data point's `VALUE_LIST` at construction time and falls back to the reference's fixed seven-element list `("Off", "Slow color change", "Medium color change", "Fast color change", "Campemit", "Waterfall", "TV simulation")` when the descriptor carries none.
 
-This is a deliberate improvement: the dynamic approach automatically reflects any firmware-added effects without a code change. The fixed Python list was chosen for simplicity; Go's approach is strictly more correct for future-proof effect discovery. The downside (empty list before subscription) is guarded by the nil check in `Effects()`.
+The fallback is not optional. `RfDimmer_Color` is registered for exactly one model, HM-LC-RGBW-WM, and its PROGRAM parameter (`VCU3747418:3`, RGBW_AUTOMATIC) is `INTEGER MIN 0 MAX 255` with **no** `VALUE_LIST` — the CCU's own string table labels it "Program number". So on the only device this profile covers, the dynamic source is always empty. Until 0.61.4 the discovery payload papered over that with four substituted labels (`NONE`, `SLOW_COLOR_CHANGE`, `MEDIUM_COLOR_CHANGE`, `FAST_COLOR_CHANGE`) that exist in no `VALUE_LIST` on any device in the fleet and in no CCU string table: Home Assistant rendered an effect picker in which every entry was refused by `SetEffectByLabel`, and `Effect()` reported an empty label forever.
 
-Go path: `internal/model/custom/light/effect.go::EffectLight`.
+The earlier version of this entry claimed the dynamic approach "automatically reflects firmware-added effects". That premise was false for the one device concerned, and the entry blessed a surface that did not work.
+
+The index written to PROGRAM is the position in the list, so the order of the seven labels is the wire contract, not a presentation choice.
+
+Go path: `internal/model/custom/light/effect.go::EffectLight`, `colorDimmerEffects`.
 
 ---
 
@@ -3354,6 +3408,33 @@ Go path: `internal/model/custom/climate/climate.go::numWeekPrograms`.
 This is by design: the Go surface decomposes the combined kwargs dict into explicit typed arguments at the call site. A caller that passes both `turnOn=true` and a non-nil `brightness` is asking for both changes, and the state-change check should reflect that. The `len==1` Python guard exists because `kwargs` is a dynamic dict and the ON/OFF short-circuit would otherwise suppress the brightness check — a problem that cannot arise in Go's statically-typed signature. The full-parity `IsStateChangeFull` form additionally checks HSColor, ColorTemp, Effect, OnTime, and RampTime, which covers the multi-kwarg case faithfully.
 
 Go path: `internal/model/custom/light/light.go::IsStateChange`, `internal/model/custom/light/light.go::IsStateChangeFull`.
+
+---
+
+### A2-BD07 — soundfile index range follows the device, not the reference's 189
+
+`ConvertSoundfileIndex` (`internal/model/custom/siren/sound.go`) accepts `1..252`; the reference's `_convert_soundfile_index` (`model/custom/siren.py`) raises above 189.
+
+The HmIP-MP3P — the only device in the fleet carrying `SOUNDFILE` — advertises a 256-entry `VALUE_LIST`: `INTERNAL_SOUNDFILE`, `SOUNDFILE_001` … `SOUNDFILE_252`, `RANDOM_SOUNDFILE`, `OLD_VALUE`, `DO_NOT_CARE`. The reference bound is only ever applied to its integer convenience form; a string soundfile is passed through to the wire untouched, so 190..252 remain reachable there. openccu-loom publishes the whole list as Home Assistant's `available_tones`, which means the numeric round-trip is on the hot path — a 189 cap made the daemon offer 63 tones it then silently dropped, and the player replayed the previously selected file.
+
+Two related decisions in the same place:
+
+- `OLD_VALUE` and `DO_NOT_CARE` are filtered out of `AvailableSoundfiles()`. They are link-profile sentinels ("restore the previous value" / "leave untouched"), not playable files.
+- A tone the device does not offer is an error (`ErrUnknownSoundfile`), not a dropped parameter. The surrounding parameters are written either way, so a silent drop looks like success.
+
+Go path: `internal/model/custom/siren/sound.go::ConvertSoundfileIndex`, `SoundPlayer.AvailableSoundfiles`, `SoundPlayer.PlaySound`.
+
+---
+
+### A2-BD08 — RF colour dimmers drive colour through the single `COLOR` integer
+
+`ColorLight` (`internal/model/custom/light/color.go`) resolves HUE + SATURATION on the light's own channel and, when that pair is absent, the profile's `FieldColor` mapping on the sibling channel.
+
+HM-LC-RGBW-WM carries no HUE and no SATURATION on any channel; its colour is one `INTEGER 0..255` named `COLOR` on `VCU3747418:2` (RGBW_COLOR), which `RfDimmer_Color` maps at channel offset 1. The projection mirrors the reference `CustomDpColorDimmer` (`model/custom/light.py`): `COLOR >= 200` is the white point (saturation 0), otherwise the hue circle maps onto `0..199` and saturation reads back as 100.
+
+`ColorLight.SupportsColor()` gates the `hs` colour mode in the discovery payload on one of the two sources being present, so a light with neither no longer advertises a colour wheel whose every command is refused.
+
+Go path: `internal/model/custom/light/color.go::ColorLight`, `internal/model/custom/light/init.go::colorChannel`.
 
 ---
 

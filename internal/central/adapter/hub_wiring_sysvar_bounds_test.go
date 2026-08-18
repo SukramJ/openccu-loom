@@ -27,7 +27,7 @@ func TestUpsertSysvarCarriesDeclaredRange(t *testing.T) {
 		MinValue: json.RawMessage(`"0.0"`),
 		MaxValue: json.RawMessage(`"50.0"`),
 	}
-	upsertSysvar(h, entry, nil, hubScanOptions{}, "", hmenum.HubValueTypeFloat, nil, "", false)
+	upsertSysvar(h, entry, nil, hubScanOptions{}, "", hmenum.HubValueTypeFloat, nil, "", "", false)
 
 	sv, ok := h.Sysvar("Sollwert")
 	if !ok {
@@ -57,7 +57,7 @@ func TestUpsertSysvarIntegerRangeIsInt(t *testing.T) {
 		MinValue: json.RawMessage(`"1"`),
 		MaxValue: json.RawMessage(`"5"`),
 	}
-	upsertSysvar(h, entry, nil, hubScanOptions{}, "", hmenum.HubValueTypeInteger, nil, "", false)
+	upsertSysvar(h, entry, nil, hubScanOptions{}, "", hmenum.HubValueTypeInteger, nil, "", "", false)
 
 	sv, _ := h.Sysvar("Stufe")
 	if sv.Min == nil || sv.Min.Kind != hmtypes.ValueKindInt || sv.Min.Int != 1 {
@@ -89,7 +89,7 @@ func TestUpsertSysvarNonNumericHasNoRange(t *testing.T) {
 			MinValue: json.RawMessage(`"0"`),
 			MaxValue: json.RawMessage(`"1"`),
 		}
-		upsertSysvar(h, entry, nil, hubScanOptions{}, "", tc.vt, nil, "", false)
+		upsertSysvar(h, entry, nil, hubScanOptions{}, "", tc.vt, nil, "", "", false)
 		sv, ok := h.Sysvar(tc.name)
 		if !ok {
 			t.Fatalf("%s: sysvar was not registered", tc.name)
@@ -106,7 +106,7 @@ func TestUpsertSysvarOmittedRangeStaysNil(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("ccu-01")
 	entry := &sysvarEntry{ID: "9", Name: "Frei", Value: json.RawMessage(`"1.0"`)}
-	upsertSysvar(h, entry, nil, hubScanOptions{}, "", hmenum.HubValueTypeFloat, nil, "", false)
+	upsertSysvar(h, entry, nil, hubScanOptions{}, "", hmenum.HubValueTypeFloat, nil, "", "", false)
 
 	sv, _ := h.Sysvar("Frei")
 	if sv.Min != nil || sv.Max != nil {

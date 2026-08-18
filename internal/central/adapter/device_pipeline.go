@@ -1534,6 +1534,72 @@ type dpAvailabilitySetter interface {
 	SetAvailabilityProvider(fn func() bool)
 }
 
+// updatePublisher is the optional surface a data point exposes to route its
+// value changes onto the central event bus. Every [generic.DataPoint]
+// satisfies it via OnAnyUpdate — the type-erased counterpart lets a single
+// registration span the typed specialisations.
+type updatePublisher interface {
+	OnAnyUpdate(fn func(old, next any)) func()
+}
+
+// bridgeMasterDataPointToBus publishes a [hmevent.DataPointValueChangedEvent]
+// carrying the MASTER paramset key whenever dp's value changes.
+//
+// MASTER is a read/write north-bound plane: the boot snapshot declares each
+// MASTER data point the visibility rules expose as a writable HA entity with
+// `optimistic: false` plus its retained `<addr>/<channel>/master/<param>` slot
+// topic, and writes arrive from MQTT `.../master/<param>/set`, from REST/MCP
+// and from the config edit session. Nothing re-published the state after a
+// write: the CCU emits no event() callback for a MASTER write, and the only
+// runtime producer of the value-changed event is the CCU push path, which
+// hard-codes the VALUES key. The HA entity therefore snapped back to the boot
+// value after every write and stayed there until the daemon restarted, and a
+// second UI session never saw the change either.
+//
+// Hooking the data point rather than one write path covers every producer at
+// once — the paramset domain's post-write re-read, the optimistic write of the
+// MQTT command sink, the CONFIG_PENDING settle refresh and the classic-HM
+// MasterPoller all land on the same data point.
+//
+// Only real changes are forwarded. Those refreshes re-apply the whole paramset
+// and fire the update callback for every parameter whether or not its value
+// moved; publishing those would put one bus event per configuration parameter
+// per channel on the wire after every settle.
+//
+// The returned unsubscribe is intentionally dropped, for the same reason
+// [bridgeDataPointRollbacksToBus] drops it: the subscription lives as long as
+// the data point, and a re-ingest builds fresh data points that are wired
+// again.
+func bridgeMasterDataPointToBus(bus *events.Bus, dp device.ParameterDataPoint) {
+	pub, ok := dp.(updatePublisher)
+	if !ok {
+		return
+	}
+	key := dp.DataPointKey()
+	if key.ParamsetKey != hmenum.ParamsetKeyMaster {
+		return
+	}
+	pub.OnAnyUpdate(func(old, next any) {
+		newVal, err := hmtypes.NewParamValue(next)
+		if err != nil {
+			return
+		}
+		oldVal, oldErr := hmtypes.NewParamValue(old)
+		if oldErr != nil {
+			oldVal = hmtypes.NoneValue()
+		}
+		if oldVal.Equal(newVal) {
+			return
+		}
+		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+			Base:     hmevent.NewBase(),
+			Key:      key,
+			OldValue: oldVal,
+			NewValue: newVal,
+		})
+	})
+}
+
 // weekProfileBusPublisher implements [datapoint.EventPublisher] for
 // weekprofile ProfileDataPoints. On each [PublishUpdate] call it fires a
 // [hmevent.WeekProfileChangedEvent] on the event bus.
@@ -1577,6 +1643,16 @@ func (w *weekProfileBusPublisher) PublishUpdate(_ context.Context, _ string, _ a
 //     Generic DPs already publish changes via their OnUpdate callback bridge
 //     (see bridgeDataPointRollbacksToBus + bridgeCalculatedSensorToBus) and
 //     do not need a separate SetPublisher path.
+//
+//  3. OnAnyUpdate (MASTER DPs only) — forwards configuration-value changes
+//     onto the bus so the MQTT master state topic and the WebSocket stream
+//     follow a write. VALUES changes reach the bus from the CCU push path;
+//     MASTER has no such callback, so the data point is the only place the
+//     change can be observed. See [bridgeMasterDataPointToBus].
+//
+// It must run after hydration: the MASTER seed pushes the CCU's current
+// configuration through the same callback, and wiring earlier would announce
+// the whole paramset of every channel as a change at boot.
 func wireDataPointLifecycle(bus *events.Bus, centralName string, dev *device.Device) {
 	if bus == nil || dev == nil {
 		return
@@ -1589,11 +1665,12 @@ func wireDataPointLifecycle(bus *events.Bus, centralName string, dev *device.Dev
 				as.SetAvailabilityProvider(avail)
 			}
 		}
-		// Wire availability on all MASTER DPs.
+		// Wire availability on all MASTER DPs, and forward their changes.
 		for _, dp := range ch.MasterDataPoints() {
 			if as, ok := dp.(dpAvailabilitySetter); ok {
 				as.SetAvailabilityProvider(avail)
 			}
+			bridgeMasterDataPointToBus(bus, dp)
 		}
 		// Wire the weekprofile ProfileDataPoint (not a ParameterDataPoint; held
 		// separately via Channel.WeekProfile). Wire both availability and the bus

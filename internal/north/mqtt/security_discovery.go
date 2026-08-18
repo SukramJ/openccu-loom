@@ -145,7 +145,7 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 	body := map[string]any{
 		"name":              e.name,
 		"unique_id":         uniqueID,
-		"object_id":         uniqueID,
+		"default_entity_id": defaultEntityID(string(e.component), uniqueID),
 		"state_topic":       stateTopic,
 		"availability":      securityAvailability(base),
 		"availability_mode": "all",

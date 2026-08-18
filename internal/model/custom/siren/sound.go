@@ -20,17 +20,37 @@ import (
 )
 
 // minSoundfileIndex / maxSoundfileIndex bound the accepted integer range for
-// [ConvertSoundfileIndex].
+// [ConvertSoundfileIndex]. The upper bound is the highest numbered entry the
+// device's own SOUNDFILE VALUE_LIST offers (SOUNDFILE_001 .. SOUNDFILE_252);
+// a lower bound silently drops the parameter for every file above it, and the
+// player then repeats whatever was selected before.
 const (
 	minSoundfileIndex = 1
-	maxSoundfileIndex = 189
+	maxSoundfileIndex = 252
 )
 
 // ErrInvalidSoundfileIndex is returned when [ConvertSoundfileIndex] receives
-// an integer outside the 1..189 range.
+// an integer outside the accepted range.
 var ErrInvalidSoundfileIndex = fmt.Errorf("siren: soundfile index out of range (1..%d)", maxSoundfileIndex)
 
-// ConvertSoundfileIndex converts an integer file index (1..189) to the
+// ErrUnknownSoundfile is returned when a caller names a soundfile the
+// device does not offer. It is an error rather than a silent skip: the
+// player accepts the surrounding parameters either way, so a dropped
+// SOUNDFILE plays the previously selected file and looks like success.
+// loom:reachable:reason="wrapped and returned by PlaySound in this package when a caller names a tone the device does not offer, and exported so a caller can match it with errors.Is; the analyzer does not follow sentinel-var references"
+var ErrUnknownSoundfile = errors.New("siren: unknown soundfile")
+
+// nonPlayableSoundfiles are the SOUNDFILE VALUE_LIST members that are
+// link-profile sentinels rather than playable files: OLD_VALUE restores
+// the previous selection and DO_NOT_CARE is the "leave untouched" slot.
+// Advertising them as tones offers the operator two entries that play
+// nothing.
+var nonPlayableSoundfiles = map[string]struct{}{
+	"OLD_VALUE":   {},
+	"DO_NOT_CARE": {},
+}
+
+// ConvertSoundfileIndex converts an integer file index to the
 // device-wire label "SOUNDFILE_<NNN>". Returns [ErrInvalidSoundfileIndex]
 // when the index is out of range.
 func ConvertSoundfileIndex(index int) (string, error) {
@@ -124,7 +144,12 @@ func NewSoundPlayer(cfg SoundPlayerConfig) *SoundPlayer {
 	}
 	if cfg.Channel != nil {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterSoundfile); dp != nil {
-			sp.availableSF = append([]string(nil), dp.ParameterData().ValueList...)
+			for _, v := range dp.ParameterData().ValueList {
+				if _, skip := nonPlayableSoundfiles[v]; skip {
+					continue
+				}
+				sp.availableSF = append(sp.availableSF, v)
+			}
 		}
 		if dp := cfg.Channel.Parameter(hmenum.ParameterRepetitions); dp != nil {
 			sp.availableRep = append([]string(nil), dp.ParameterData().ValueList...)
@@ -140,35 +165,39 @@ func NewSoundPlayer(cfg SoundPlayerConfig) *SoundPlayer {
 // a type assertion.
 func (sp *SoundPlayer) AvailableLights() []string { return nil }
 
-// AvailableSoundfiles returns the labels of accepted SOUNDFILE values
-// (typically "SOUNDFILE_001" .. "SOUNDFILE_189").
+// AvailableSoundfiles returns the playable labels of the SOUNDFILE
+// VALUE_LIST — the numbered files plus the device's own generators
+// (INTERNAL_SOUNDFILE, RANDOM_SOUNDFILE), without the link-profile
+// sentinels.
 func (sp *SoundPlayer) AvailableSoundfiles() []string {
 	return append([]string(nil), sp.availableSF...)
 }
 
-// soundfileIndexFor resolves a SOUNDFILE label back to the file index.
+// offersSoundfile reports whether label is one the device advertises.
+func (sp *SoundPlayer) offersSoundfile(label string) bool {
+	if sp == nil || label == "" {
+		return false
+	}
+	for _, v := range sp.availableSF {
+		if v == label {
+			return true
+		}
+	}
+	return false
+}
+
+// soundfileIndexFor resolves a numbered SOUNDFILE label back to its file
+// index. ok is false for a label the device does not offer and for the
+// non-numbered entries (INTERNAL_SOUNDFILE, RANDOM_SOUNDFILE), which
+// carry no index at all and have to travel as labels.
 //
 // The inverse is arithmetic, not positional: [ConvertSoundfileIndex]
 // builds the label as SOUNDFILE_%03d, so the number in the label *is*
 // the index. Deriving it from the position in the VALUE_LIST would
 // agree only for a gapless list starting at 001 and would otherwise
 // play a different file than the operator picked.
-//
-// Membership is still required — a label the device does not offer has
-// no business being sent, and rejecting it here keeps a typo from
-// becoming a plausible-looking index.
 func (sp *SoundPlayer) soundfileIndexFor(label string) (int, bool) {
-	if sp == nil || label == "" {
-		return 0, false
-	}
-	known := false
-	for _, v := range sp.availableSF {
-		if v == label {
-			known = true
-			break
-		}
-	}
-	if !known {
+	if !sp.offersSoundfile(label) {
 		return 0, false
 	}
 	digits, found := strings.CutPrefix(label, "SOUNDFILE_")
@@ -264,8 +293,14 @@ func ConvertPlayRepetitionsIndex(index int, availableRep []string) (string, erro
 
 // PlayConfig bundles the optional fields a [PlaySound] call accepts.
 type PlayConfig struct {
-	// SoundfileIndex is the 1-based file index (1..189).
+	// SoundfileIndex is the 1-based file index.
 	SoundfileIndex int
+	// SoundfileLabel names the wire value verbatim and takes precedence
+	// over SoundfileIndex. It is the only way to reach the entries that
+	// carry no index — INTERNAL_SOUNDFILE and RANDOM_SOUNDFILE — which
+	// is what Home Assistant sends back when the operator picks one out
+	// of the advertised `available_tones`.
+	SoundfileLabel string
 	// Volume is the playback level 0..1.
 	Volume float64
 	// Duration limits the total playback time. Encoded as
@@ -307,8 +342,17 @@ func (sp *SoundPlayer) PlaySound(
 	defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	const defaultVolume = 0.5
 	params := make(map[hmenum.Parameter]any, 6)
-	if cfg.SoundfileIndex >= minSoundfileIndex && cfg.SoundfileIndex <= maxSoundfileIndex {
-		sfLabel, _ := ConvertSoundfileIndex(cfg.SoundfileIndex)
+	switch {
+	case cfg.SoundfileLabel != "":
+		if !sp.offersSoundfile(cfg.SoundfileLabel) {
+			return fmt.Errorf("%w %q", ErrUnknownSoundfile, cfg.SoundfileLabel)
+		}
+		params[hmenum.ParameterSoundfile] = cfg.SoundfileLabel
+	case cfg.SoundfileIndex >= minSoundfileIndex && cfg.SoundfileIndex <= maxSoundfileIndex:
+		sfLabel, err := ConvertSoundfileIndex(cfg.SoundfileIndex)
+		if err != nil {
+			return fmt.Errorf("soundplayer: play: %w", err)
+		}
 		params[hmenum.ParameterSoundfile] = sfLabel
 	}
 	repIdx := cfg.RepetitionsIndex

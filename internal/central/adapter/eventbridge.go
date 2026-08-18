@@ -357,6 +357,28 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceCreated(jobCtx, u, e) })
 		}),
+		// An availability flip that did NOT come from an inbound value —
+		// the interface-wide force applied when its client leaves
+		// CONNECTED — has no value-change event to ride, so the retained
+		// per-device availability topic would keep the value it had when
+		// the CCU went silent. Home Assistant reads that topic as one of
+		// the entity's availability sources, so a device on a powered-off
+		// CCU would stay `online` on the broker for as long as the daemon
+		// runs. The shared transition gate in markAvailability makes this
+		// a no-op for flips the value path already published, so the two
+		// producers cannot double-publish or feed each other.
+		events.Subscribe(bus, func(e hmevent.DeviceLifecycleEvent) {
+			if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
+				return
+			}
+			centralName, iface, addr, online := e.CentralName, e.InterfaceID, e.Address, e.Available
+			if centralName == "" {
+				centralName = u.Name()
+			}
+			b.enqueueDurable(func(jobCtx context.Context) {
+				b.markAvailability(jobCtx, centralName, iface, addr, online)
+			})
+		}),
 	}
 }
 
@@ -1178,18 +1200,51 @@ func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPo
 		// value may carry still has to reach the bus consumers — the
 		// WebSocket device-lifecycle plane and the Matter reachability
 		// forward exist in a deployment without MQTT too.
-		deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
-		b.refreshDeviceAvailability(b.lifetimeCtx, centralName, inferInterface(e.Key), deviceAddr, e.Key.Parameter)
+		b.refreshDeviceAvailabilityFor(b.lifetimeCtx, centralName, e)
 		return
 	}
 	f := b.fanout.Load()
 	if f == nil {
-		b.publishValueChangedMQTT(b.lifetimeCtx, centralName, envKind, e)
+		b.publishValueChangedSinks(b.lifetimeCtx, centralName, envKind, e)
 		return
 	}
 	f.enqueue(func() {
-		b.publishValueChangedMQTT(f.ctx, centralName, envKind, e)
+		b.publishValueChangedSinks(f.ctx, centralName, envKind, e)
 	})
+}
+
+// publishValueChangedSinks runs the MQTT fan-out for one value change and
+// then re-evaluates the owning device's availability.
+//
+// The availability refresh is deliberately NOT the tail of
+// [EventBridge.publishValueChangedMQTT]: that function returns early for a
+// parameter the global visibility filter suppresses, and UNREACH /
+// STICKY_UNREACH / CONFIG_PENDING — the three parameters that carry
+// reachability at all — are exactly the suppressed ones. Announcing that a
+// device went offline must not depend on whether the parameter carrying that
+// news is exposed as an entity: gated there, a device dying produced no
+// device-availability broadcast on the WebSocket plane, no Matter
+// ReachableChanged, and no retained availability topic — on every deployment,
+// because the suppression is the shipped default.
+// The hoist is scoped to the reachability parameters on purpose. For any
+// other parameter the refresh only ever flips a device back to online — news
+// that the value publish itself already carries — so running it for a
+// parameter the filter dropped would put a retained availability topic on the
+// broker for a data point the operator asked not to see, and for a device
+// whose data points are all hidden it would create an availability topic with
+// no entity to own it.
+func (b *EventBridge) publishValueChangedSinks(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+	published := b.publishValueChangedMQTT(ctx, centralName, envKind, e)
+	if published || isReachabilityParameter(e.Key.Parameter) {
+		b.refreshDeviceAvailabilityFor(ctx, centralName, e)
+	}
+}
+
+// refreshDeviceAvailabilityFor resolves the device coordinates of a value
+// change and re-evaluates that device's availability.
+func (b *EventBridge) refreshDeviceAvailabilityFor(ctx context.Context, centralName string, e hmevent.DataPointValueChangedEvent) {
+	deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
+	b.refreshDeviceAvailability(ctx, centralName, inferInterface(e.Key), deviceAddr, e.Key.Parameter)
 }
 
 // onValueChangedKind is the envelope-kind-aware variant. Callers in
@@ -1204,7 +1259,7 @@ func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPo
 // side inline and hands the MQTT side to the fan-out worker.
 func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedWS(centralName, envKind, e)
-	b.publishValueChangedMQTT(ctx, centralName, envKind, e)
+	b.publishValueChangedSinks(ctx, centralName, envKind, e)
 }
 
 // publishSnapshotValue publishes one data point of a boot snapshot.
@@ -1218,6 +1273,12 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 // frames arriving faster than a browser drains them. Subscribers get a
 // single resync signal at the end of the walk instead; see
 // [Hub.SignalResync] and the call in [EventBridge.publishCentralSnapshot].
+//
+// It does not go through [EventBridge.publishValueChangedSinks] the way the
+// live path does: [EventBridge.publishDeviceSnapshot] — the only caller's
+// caller — publishes the device's availability once, up front, before walking
+// its data points, so re-evaluating it per data point would look up the device
+// in the registry tens of thousands of times to reach the same cached verdict.
 func (b *EventBridge) publishSnapshotValue(ctx context.Context, centralName string, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedMQTT(ctx, centralName, ws.KindInitial, e)
 }
@@ -1312,14 +1373,23 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 }
 
 // publishValueChangedMQTT emits the MQTT-side fan-out for a value change: raw
-// plane, HA-Discovery, per-DP slot state, custom-DP aggregates and device
-// availability. Every call in its body may block on the broker (a QoS1 publish
-// waits for a PUBACK up to the transport's AckTimeout), so on the live path it
-// runs on the fan-out worker rather than the bus dispatch goroutine. The
-// boot-time snapshot path calls it inline via [onValueChangedKind].
-func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+// plane, HA-Discovery, per-DP slot state and custom-DP aggregates. Every call
+// in its body may block on the broker (a QoS1 publish waits for a PUBACK up to
+// the transport's AckTimeout), so on the live path it runs on the fan-out
+// worker rather than the bus dispatch goroutine. The boot-time snapshot path
+// calls it inline via [onValueChangedKind].
+//
+// Device availability is NOT refreshed here — it is a sibling step in
+// [EventBridge.publishValueChangedSinks], because this function drops
+// everything for a globally suppressed parameter and the reachability
+// parameters are suppressed by default.
+// It reports whether the value reached the broker — false when there is no
+// wiring, or when the global visibility filter dropped the parameter. The
+// availability refresh in [EventBridge.publishValueChangedSinks] keys on that
+// answer.
+func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) bool {
 	if b.mqtt == nil {
-		return
+		return false
 	}
 	channel, channelNo := parseChannel(e.Key.ChannelAddress)
 	deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
@@ -1331,7 +1401,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 		// Globally suppressed (operator's ignoredParameters
 		// hiddenParameters / un-ignore overrides) — drop every
 		// downstream publish.
-		return
+		return false
 	}
 	// Discovery has TWO independent gates:
 	//
@@ -1433,8 +1503,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 	// reflected; the bridge diff-gates the broker traffic.
 	b.publishCustomDPState(ctx, centralName, iface, deviceAddr, channelNo, ch)
 	b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, channelNo, ch)
-
-	b.refreshDeviceAvailability(ctx, centralName, iface, deviceAddr, e.Key.Parameter)
+	return true
 }
 
 // refreshDeviceAvailability re-evaluates a device's effective availability
@@ -1449,9 +1518,10 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 //
 // The bus announcement is what carries a per-device reachability change north
 // beyond MQTT — the WebSocket device-lifecycle plane and the Matter
-// reachability forward both read it. Only the interface-level forced-
-// availability path published it before, so a single device the CCU stopped
-// reaching never reached those consumers at all.
+// reachability forward both read it. The interface-level forced-availability
+// path is the only other producer, and it speaks for a whole interface, so
+// without this a single device the CCU stopped reaching reaches no consumer
+// at all.
 func (b *EventBridge) refreshDeviceAvailability(ctx context.Context, centralName, iface, deviceAddr, parameter string) {
 	dev := lookupDeviceObject(b.registry, deviceAddr)
 	if dev == nil {

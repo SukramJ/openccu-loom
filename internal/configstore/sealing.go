@@ -25,8 +25,18 @@ func sectionTarget(sec Section) any {
 		return new(config.NorthMQTT)
 	case SectionMatter:
 		return new(config.NorthMatter)
+	case SectionMCP:
+		// No secret fields today, so secretPaths is empty and
+		// TransformSectionJSON no-ops. The target is wired anyway: without
+		// it a cfg:"secret" field added later would be stored in the clear
+		// with nothing failing, which is the whole point of ADR 0027.
+		return new(config.NorthMCP)
 	case SectionDiscovery:
 		return new(config.NorthDiscovery)
+	case SectionAlarm:
+		// Same reasoning as SectionMCP — no secret fields today, wired so a
+		// future one is sealed automatically.
+		return new(config.AlarmConfig)
 	case SectionWebhook:
 		// Has the north.webhook.secret signing key (cfg:"secret"), so the
 		// section store seals it at rest by reflection.

@@ -357,7 +357,14 @@ func (r *Reconciler) reconcileUnobservedDataPoints(ctx context.Context) {
 //     render as "unknown". A metric that was never observed stays unobserved —
 //     no spurious value (a 0 would read as "0% healthy") is manufactured.
 //   - connectivity: every interface still marked reachable is set unreachable,
-//     the honest state while the CCU is down.
+//     the honest state while the CCU is down. Those events carry
+//     [hmevent.ConnectivityChangedEvent.Unconfirmed], because nothing
+//     confirmed them: they are derived from the central's own state, not
+//     from the CCU's interface list. The same reason
+//     reconcileVanishedInterfaces refuses to read an empty probe answer as a
+//     down burst applies here — a consumer that escalates physically must
+//     not act on a CCU that is merely away, or a maintenance reboot sounds
+//     the siren.
 func (r *Reconciler) EmitNotReady(_ context.Context) error {
 	if r == nil {
 		return errors.New("reconciler: nil receiver")
@@ -403,6 +410,7 @@ func (r *Reconciler) emitNotReadyConnectivity() {
 				CentralName: r.CentralName,
 				InterfaceID: entry.InterfaceID,
 				Reachable:   false,
+				Unconfirmed: true,
 			})
 		}
 	}

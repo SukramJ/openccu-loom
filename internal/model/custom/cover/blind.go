@@ -67,12 +67,6 @@ type Blind struct {
 
 	level2 *generic.Float
 
-	muTarget sync.RWMutex
-	target   float64 // optimistic target level
-	target2  float64 // optimistic target tilt
-	hasTgt   bool
-	hasTgt2  bool
-
 	// commandLock is a channel-of-1 used as a Mutex-with-timeout.
 	// Buffer slot full ⇒ held; empty ⇒ free. We initialise it on
 	// first use via initOnce.
@@ -156,11 +150,48 @@ func (b *Blind) TiltPosition() (custom.Position, bool) {
 	return custom.NewPosition(v), true
 }
 
-// SetPosition commands the vertical position. When the cover has
-// observed (or staged) a tilt target, the LEVEL + LEVEL_2 pair is
-// Sent atomically through put_paramset — mirrors
-// blind `set_position` (`tests/test_model_cover.py: put_paramset({
-// "LEVEL_2": ..., "LEVEL": ...})`).
+// levelForCommand returns the position axis to hold when the caller
+// commands only the tilt axis, plus whether the level axis carries an
+// optimistic write the CCU has not yet confirmed — a write genuinely in
+// flight, not merely a value that happens to be cached. Callers use
+// `pending` to decide whether the device is still moving and needs a
+// STOP before it accepts new coordinates.
+//
+// The held level itself comes from [Blind.Position], which already
+// blends (highest priority first) an active optimistic write, the
+// CCU-unconfirmed value [Blind.sendCombined] stages on every combined
+// write, and the last CCU-confirmed observation (see [DataPoint.Value]).
+// Staging the just-sent value on every combined write is what lets the
+// untouched axis survive a follow-up command issued before the CCU
+// echoes back; [DataPoint.OnEventAt] clears that staged value
+// unconditionally the instant any CCU value for the axis arrives —
+// confirmed or not — so, unlike the boolean staging this replaced, a
+// superseded value can never be re-sent.
+func (b *Blind) levelForCommand() (level float64, pending bool) {
+	if b.Cover != nil && b.Float != nil {
+		pending = b.IsOptimistic()
+	}
+	if pos, ok := b.Position(); ok {
+		return pos.Level(), pending
+	}
+	return closedLevel, pending
+}
+
+// tiltForCommand is [Blind.levelForCommand] for the slat axis.
+func (b *Blind) tiltForCommand() (tilt float64, pending bool) {
+	if b.level2 != nil {
+		pending = b.level2.IsOptimistic()
+	}
+	if pos, ok := b.TiltPosition(); ok {
+		return pos.Level(), pending
+	}
+	return closedLevel, pending
+}
+
+// SetPosition commands the vertical position. The slat axis rides along
+// unchanged: LEVEL + LEVEL_2 are sent atomically through the device's
+// combined-parameter slot, with the tilt value taken from
+// [Blind.tiltForCommand].
 //
 // Always routes through [sendCombined] so the command-processing
 // lock and the "currently moving → STOP first" detection apply
@@ -171,26 +202,13 @@ func (b *Blind) SetPosition(ctx context.Context, target float64, priority hmenum
 	if !b.IsStateChangeArgs(StateChangeArgs{Position: &target}) {
 		return nil
 	}
-	b.muTarget.Lock()
-	wasMoving := b.hasTgt || b.hasTgt2
-	b.target = target
-	b.hasTgt = true
-	tilt, hasTilt := b.target2, b.hasTgt2
-	b.muTarget.Unlock()
-	if !hasTilt {
-		// No tilt target yet — hold the last-observed tilt (or 0
-		// when never observed). Still routes through sendCombined so
-		// the lock applies.
-		if pos, ok := b.TiltPosition(); ok {
-			tilt = pos.Level()
-		}
-	}
-	return b.sendCombined(ctx, target, tilt, wasMoving, priority)
+	tilt, tiltPending := b.tiltForCommand()
+	return b.sendCombined(ctx, target, tilt, tiltPending, priority)
 }
 
 // SetTilt commands a new slat-tilt position (0..1, 1.0 = fully open). LEVEL +
-// LEVEL_2 are sent atomically (LEVEL is held at the last observed position
-// when no override is staged).
+// LEVEL_2 are sent atomically, with the position axis taken from
+// [Blind.levelForCommand].
 func (b *Blind) SetTilt(ctx context.Context, target float64, priority hmenum.CommandPriority) error {
 	if !b.IsStateChangeArgs(StateChangeArgs{TiltPosition: &target}) {
 		return nil
@@ -204,21 +222,8 @@ func (b *Blind) SetTilt(ctx context.Context, target float64, priority hmenum.Com
 	if b.level2 == nil {
 		return errors.New("blind: SET tilt: channel has no LEVEL_2 data point")
 	}
-	b.muTarget.Lock()
-	wasMoving := b.hasTgt || b.hasTgt2
-	b.target2 = target
-	b.hasTgt2 = true
-	level := b.target
-	hasLevel := b.hasTgt
-	b.muTarget.Unlock()
-	if !hasLevel {
-		// Hold the current observed position when the caller has not staged a level
-		// target.
-		if pos, ok := b.Position(); ok {
-			level = pos.Level()
-		}
-	}
-	return b.sendCombined(ctx, level, target, wasMoving, priority)
+	level, levelPending := b.levelForCommand()
+	return b.sendCombined(ctx, level, target, levelPending, priority)
 }
 
 // acquireCommandLock blocks until the command-processing lock is
@@ -258,11 +263,13 @@ func (b *Blind) acquireCommandLock(ctx context.Context) (release func(), acquire
 // 4-digit hex notation `#04x` (e.g. level=1.0, tilt=0.5 → "0xc8,0x64").
 // This matches the CCU wire format expected by HM blind actuators.
 //
-// wasMoving must be captured by the caller before staging new targets so
-// the STOP guard sees only the pre-command motion state. STOP is sent only
-// when the device was already moving (i.e. a prior unconfirmed target existed)
-// — mirroring cover.py:538-540 where STOP fires only when _target_level != None
-// indicates an in-flight motion.
+// wasMoving reports that one of the two axes carried a CCU-unconfirmed
+// write the caller did not command itself, i.e. the blind is still moving
+// towards a coordinate nobody asked to change. Blind actuators ignore new
+// coordinates while in motion, so those are stopped first — mirroring
+// cover.py:538-540, where STOP fires exactly when the axis fell back to
+// `_target_level` / `_target_tilt_level` rather than to the observed
+// group level. A command that names both axes never stops.
 func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving bool, priority hmenum.CommandPriority) error {
 	if level < 0 {
 		level = 0
@@ -303,6 +310,26 @@ func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving
 			return fmt.Errorf("blind: COMBINED_PARAMETER: %w", err)
 		}
 	}
+
+	// A combined write goes straight to the writer, bypassing the LEVEL /
+	// LEVEL_2 data points' own Set() path — so it never arms their
+	// optimistic tracker (IsOptimistic stays false; a repeat combined
+	// write is never treated as "still moving" by [levelForCommand] /
+	// [tiltForCommand] — see TestBlindDoesNotStopWhenNeitherAxisHasAPendingWrite).
+	// What it must still do is record what was just told to the CCU, so
+	// [Blind.Position] / [Blind.TiltPosition] can hand it back to a
+	// follow-up command on the other axis before the echo arrives.
+	// [DataPoint.WriteUnconfirmedValue] is exactly that record: a slot
+	// [DataPoint.OnEventAt] clears unconditionally on the next CCU value
+	// for the axis, so it can never outlive its own confirmation the way
+	// the boolean staging this replaced did.
+	writeAt := time.Now()
+	if b.Float != nil {
+		b.WriteUnconfirmedValue(wireL, writeAt)
+	}
+	if b.level2 != nil {
+		b.level2.WriteUnconfirmedValue(wireT, writeAt)
+	}
 	return nil
 }
 
@@ -337,14 +364,9 @@ func (b *Blind) SetCombined(ctx context.Context, level, tilt float64, priority h
 	if tilt > 1 {
 		tilt = 1
 	}
-	b.muTarget.Lock()
-	wasMoving := b.hasTgt || b.hasTgt2
-	b.target = level
-	b.target2 = tilt
-	b.hasTgt = true
-	b.hasTgt2 = true
-	b.muTarget.Unlock()
-	return b.sendCombined(ctx, level, tilt, wasMoving, priority)
+	// Both axes are named, so neither falls back to a pending target and
+	// the STOP guard never fires (cover.py:513-535).
+	return b.sendCombined(ctx, level, tilt, false, priority)
 }
 
 // Open routes through [Blind.SetPosition] so the combined-parameter wire path

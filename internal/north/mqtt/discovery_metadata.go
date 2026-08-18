@@ -105,6 +105,22 @@ func resolveSwitchDeviceClass(deviceModel, param string) string {
 	return quantityToSwitchDeviceClass[md.Quantity]
 }
 
+// defaultEntityID renders the HA `default_entity_id` discovery option:
+// the entity's domain, a dot, and the object id HA derives its
+// entity_id from. Home Assistant partitions the value on the first "."
+// and keeps only what follows it
+// (homeassistant/components/mqtt/entity.py:
+// `_, _, object_id = default_entity_id.partition(".")`), so a value
+// without the domain prefix yields an empty object id and the entity
+// falls back to a name-derived one. Replaces the `object_id` discovery
+// option, which HA core commit 87b83dcc1bc (HA 2026.3) removed —
+// every platform's discovery schema extends
+// `PLATFORM_SCHEMA_MODERN` with `extra=vol.REMOVE_EXTRA`, so a stray
+// `object_id` key is silently stripped rather than rejected.
+func defaultEntityID(component, objectID string) string {
+	return component + "." + objectID
+}
+
 // componentDeviceClass routes to the right Quantity-based resolver
 // for the chosen HA component. Keeps the discovery builder one-liner
 // and the per-component map definitions co-located.

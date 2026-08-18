@@ -111,8 +111,8 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 	}
 
 	// Overlay the shared HA-Discovery scaffolding fields that every entity
-	// must carry: name, unique_id, object_id, availability, device, origin.
-	// Mirrors channelBaseBody but without a channel-number postfix.
+	// must carry: name, unique_id, default_entity_id, availability, device,
+	// origin. Mirrors channelBaseBody but without a channel-number postfix.
 	availability := []map[string]string{
 		{
 			"topic":                 d.TopicBuilder.BridgeStatus(),
@@ -134,7 +134,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 	base := map[string]any{
 		"name":              d.tr("discovery.firmware"),
 		"unique_id":         objectID,
-		"object_id":         objectID,
+		"default_entity_id": defaultEntityID(comp, objectID),
 		"availability":      availability,
 		"availability_mode": "all",
 		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),

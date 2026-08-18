@@ -418,31 +418,23 @@ type ArmResult struct {
 // *NotReadyError when blockers remain and Force is not set; pending
 // and triggered zones must be disarmed first.
 func (e *Engine) Arm(ctx context.Context, zoneID string, req ArmRequest) (ArmResult, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	// Arm is refused on an engine that is not running; silence and
-	// disarm stay deliberately ungated (S3/S6).
-	if !e.started {
-		return ArmResult{}, ErrInvalidState
+	// The preconditions are checked first so their errors keep precedence
+	// over a code refusal, then the code is resolved without the lock,
+	// then the preconditions are re-checked: the state can move while the
+	// validator derives its hashes (see [Engine.resolveCode]).
+	policy, err := e.armPreflight(zoneID, req.Mode)
+	if err != nil {
+		return ArmResult{}, err
 	}
-	a, ok := e.zones[zoneID]
-	if !ok {
-		return ArmResult{}, ErrUnknownZone
-	}
-	if !req.Mode.Armed() {
-		return ArmResult{}, ErrUnknownMode
-	}
-	mcfg, ok := a.cfg.Modes[req.Mode]
-	if !ok {
-		return ArmResult{}, ErrUnknownMode
-	}
-	if a.state == hmenum.AlarmZoneStatePending || a.state == hmenum.AlarmZoneStateTriggered {
-		return ArmResult{}, ErrInvalidState
-	}
-
-	identity, duress, cerr := e.authorize(ctx, a, codeVerbArm, req.Code, req.Source)
+	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, codeVerbArm, req.Code, req.Source)
 	if cerr != nil {
 		return ArmResult{}, cerr
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	a, mcfg, err := e.armPreconditionsLocked(zoneID, req.Mode)
+	if err != nil {
+		return ArmResult{}, err
 	}
 	if identity != "" && req.By == "" {
 		req.By = identity
@@ -451,6 +443,43 @@ func (e *Engine) Arm(ctx context.Context, zoneID string, req ArmRequest) (ArmRes
 		e.fireDuress(ctx, a, codeVerbArm, req.By, req.Source)
 	}
 	return e.beginArm(ctx, a, req, mcfg)
+}
+
+// armPreflight runs the arm preconditions and returns the zone's code
+// policy, so the code can be resolved outside the lock.
+func (e *Engine) armPreflight(zoneID string, mode hmenum.AlarmMode) (CodePolicy, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	a, _, err := e.armPreconditionsLocked(zoneID, mode)
+	if err != nil {
+		return CodePolicy{}, err
+	}
+	return a.cfg.CodePolicy, nil
+}
+
+// armPreconditionsLocked resolves the zone and the mode configuration an
+// arm needs, applying the state gates. Arm is refused on an engine that
+// is not running; silence and disarm stay deliberately ungated (S3/S6).
+// The caller holds the lock.
+func (e *Engine) armPreconditionsLocked(zoneID string, mode hmenum.AlarmMode) (*zone, ModeConfig, error) {
+	if !e.started {
+		return nil, ModeConfig{}, ErrInvalidState
+	}
+	a, ok := e.zones[zoneID]
+	if !ok {
+		return nil, ModeConfig{}, ErrUnknownZone
+	}
+	if !mode.Armed() {
+		return nil, ModeConfig{}, ErrUnknownMode
+	}
+	mcfg, ok := a.cfg.Modes[mode]
+	if !ok {
+		return nil, ModeConfig{}, ErrUnknownMode
+	}
+	if a.state == hmenum.AlarmZoneStatePending || a.state == hmenum.AlarmZoneStateTriggered {
+		return nil, ModeConfig{}, ErrInvalidState
+	}
+	return a, mcfg, nil
 }
 
 // beginArm resolves blockers and drives the disarmed→arming/armed
@@ -584,25 +613,39 @@ func (e *Engine) recaptureOpenBaseline(a *zone) {
 	}
 }
 
-// authorize applies the zone's CodePolicy to one verb. It returns the
+// resolveCode applies the zone's CodePolicy to one verb. It returns the
 // resolved code identity (for changed-by attribution), whether the code
 // is a duress code, and a refusal error (ErrInvalidCode) when a required
 // code is missing or wrong. A nil CodeValidator disables codes entirely.
 // Pre-authenticated sources (operator sessions, hardware keypad/remote
 // bindings) bypass the requirement; operator sources still get duress
-// detection on a supplied code. The caller holds the lock.
-func (e *Engine) authorize(ctx context.Context, a *zone, verb, code, source string) (identity string, duress bool, refuse error) {
+// detection on a supplied code.
+//
+// The caller must NOT hold the engine lock. A validator that stores
+// argon2id hashes derives one key per enabled code, hundreds of
+// milliseconds each, and this mutex serialises every mutating entry
+// point — sensor activations, the entry/exit countdowns, every other
+// zone's verbs. Verifying under it froze the whole alarm system for
+// seconds on a single mistyped PIN, at exactly the moment somebody was
+// standing in the doorway with the entry delay running.
+//
+// Resolving before the lock lets the zone move underneath the answer, so
+// every caller re-checks its preconditions after taking the lock instead
+// of trusting the snapshot the policy came from.
+func (e *Engine) resolveCode(
+	ctx context.Context, zoneID string, policy CodePolicy, verb, code, source string,
+) (identity string, duress bool, refuse error) {
 	if e.validator == nil {
 		return "", false, nil
 	}
-	required := a.cfg.CodePolicy.requires(verb, source)
+	required := policy.requires(verb, source)
 	if isPreAuthenticatedSource(source) {
 		required = false
 	}
 	if !required && code == "" {
 		return "", false, nil
 	}
-	identity, duress, err := e.validator.Validate(ctx, a.id, verb, code, source)
+	identity, duress, err := e.validator.Validate(ctx, zoneID, verb, code, source)
 	if err != nil {
 		if isOperatorSource(source) {
 			// The operator session is the second factor: a bad or absent
@@ -615,18 +658,32 @@ func (e *Engine) authorize(ctx context.Context, a *zone, verb, code, source stri
 	return identity, duress, nil
 }
 
-// matchDuress resolves a supplied code against the zone's duress codes
+// probeDuress resolves a supplied code against the zone's duress codes
 // only, without any of the validator's side effects (see
 // [DuressMatcher]). It is what the verbs use where the outcome is a
 // no-op regardless of the code, so a wrong code neither refuses, nor
 // counts toward a lockout, nor journals a fault. An absent or
-// non-matching matcher simply reports "not duress". The caller holds
-// the lock.
-func (e *Engine) matchDuress(ctx context.Context, a *zone, verb, code, source string) (identity string, duress bool) {
+// non-matching matcher simply reports "not duress".
+//
+// Like [Engine.resolveCode] it runs without the engine lock, and for the
+// same reason: the match derives the same expensive hashes.
+func (e *Engine) probeDuress(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool) {
 	if code == "" || e.duress == nil {
 		return "", false
 	}
-	return e.duress.MatchDuress(ctx, a.id, verb, code, source)
+	return e.duress.MatchDuress(ctx, zoneID, verb, code, source)
+}
+
+// zoneCodeContext snapshots what resolving a code needs: the zone's code
+// policy and the state that decides which resolution applies.
+func (e *Engine) zoneCodeContext(zoneID string) (policy CodePolicy, state hmenum.AlarmZoneState, ok bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	a, exists := e.zones[zoneID]
+	if !exists {
+		return CodePolicy{}, "", false
+	}
+	return a.cfg.CodePolicy, a.state, true
 }
 
 // fireDuress emits the silent duress fan-out: a Hidden journal entry
@@ -694,22 +751,86 @@ func (e *Engine) Disarm(ctx context.Context, zoneID, by, source string) error {
 // rate-limit budget, no fault row. The fan-out is silent and the
 // verb's own outcome stays unchanged.
 func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code string) error {
+	// Which resolution applies depends on the state, and the resolution
+	// itself runs without the lock (see [Engine.resolveCode]), so the
+	// state is read first and re-read afterwards.
+	_, state, ok := e.zoneCodeContext(zoneID)
+	if !ok {
+		return ErrUnknownZone
+	}
+	if state == hmenum.AlarmZoneStateDisarmed {
+		identity, duress := e.probeDuress(ctx, zoneID, codeVerbDisarm, code, source)
+		if applied, err := e.disarmIdle(ctx, zoneID, by, source, identity, duress); applied {
+			return err
+		}
+		// The zone was armed while the probe ran. A duress probe
+		// authenticated nothing, so this must not disarm on it: fall
+		// through and resolve the code for real.
+	}
+	policy, _, ok := e.zoneCodeContext(zoneID)
+	if !ok {
+		return ErrUnknownZone
+	}
+	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, codeVerbDisarm, code, source)
+	if cerr != nil {
+		return cerr
+	}
+	return e.disarmResolved(ctx, zoneID, by, source, identity, duress)
+}
+
+// disarmIdle applies the no-op branch of a disarm to an already-disarmed
+// zone: the covert duress fan-out on a duress code, plus the cancel of a
+// pending auto-rearm, because an explicit disarm means the operator wants
+// the zone to stay off.
+//
+// It reports applied=false — without touching anything — when the zone
+// left the disarmed state while the code was being resolved, so the
+// caller can resolve the code properly instead of disarming on a probe.
+func (e *Engine) disarmIdle(ctx context.Context, zoneID, by, source, identity string, duress bool) (applied bool, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	a, ok := e.zones[zoneID]
+	if !ok {
+		return true, ErrUnknownZone
+	}
+	if a.state != hmenum.AlarmZoneStateDisarmed {
+		return false, nil
+	}
+	if duress {
+		if identity != "" && by == "" {
+			by = identity
+		}
+		e.fireDuress(ctx, a, codeVerbDisarm, by, source)
+	}
+	if a.autoRearmCancel != nil {
+		a.cancelAutoRearm()
+		e.persist(ctx, a)
+		e.journalEntry(ctx, a, JournalEntry{
+			Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_cancelled",
+			Actor: by, Source: source,
+		})
+	}
+	return true, nil
+}
+
+// disarmResolved applies a disarm whose code has already been resolved.
+// A zone that returned to disarmed while the code was being verified
+// takes the idempotent no-op branch, with the duress fan-out the resolved
+// code carries.
+func (e *Engine) disarmResolved(ctx context.Context, zoneID, by, source, identity string, duress bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	a, ok := e.zones[zoneID]
 	if !ok {
 		return ErrUnknownZone
 	}
+	if identity != "" && by == "" {
+		by = identity
+	}
+	if duress {
+		e.fireDuress(ctx, a, codeVerbDisarm, by, source)
+	}
 	if a.state == hmenum.AlarmZoneStateDisarmed {
-		if identity, duress := e.matchDuress(ctx, a, codeVerbDisarm, code, source); duress {
-			if identity != "" && by == "" {
-				by = identity
-			}
-			e.fireDuress(ctx, a, codeVerbDisarm, by, source)
-		}
-		// An explicit disarm of an already-disarmed zone is a no-op, but
-		// it cancels any pending auto-rearm — the operator wants it to
-		// stay off.
 		if a.autoRearmCancel != nil {
 			a.cancelAutoRearm()
 			e.persist(ctx, a)
@@ -719,16 +840,6 @@ func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code st
 			})
 		}
 		return nil
-	}
-	identity, duress, cerr := e.authorize(ctx, a, codeVerbDisarm, code, source)
-	if cerr != nil {
-		return cerr
-	}
-	if identity != "" && by == "" {
-		by = identity
-	}
-	if duress {
-		e.fireDuress(ctx, a, codeVerbDisarm, by, source)
 	}
 	prevPolicy := a.cfg.Modes[a.mode].Outputs
 	e.disarmLocked(ctx, a, by, source)
@@ -753,15 +864,19 @@ func (e *Engine) Silence(ctx context.Context, zoneID, by, source string) error {
 // code-free (S3); a per-source RequireSilence policy or a supplied code
 // engages the CodeValidator (notes/concepts/alarm-concept.md §11).
 func (e *Engine) SilenceWithCode(ctx context.Context, zoneID, by, source, code string) error {
+	policy, _, ok := e.zoneCodeContext(zoneID)
+	if !ok {
+		return ErrUnknownZone
+	}
+	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, codeVerbSilence, code, source)
+	if cerr != nil {
+		return cerr
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	a, ok := e.zones[zoneID]
 	if !ok {
 		return ErrUnknownZone
-	}
-	identity, duress, cerr := e.authorize(ctx, a, codeVerbSilence, code, source)
-	if cerr != nil {
-		return cerr
 	}
 	if identity != "" && by == "" {
 		by = identity
