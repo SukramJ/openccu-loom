@@ -58,6 +58,9 @@ type WireDataPointPayload = {
   parameter?: string;
   paramset_key?: string;
   value?: unknown;
+  // display_value mirrors the REST data-point summary's field of the same
+  // name (value * multiplier), present only for a non-trivial multiplier.
+  display_value?: number;
 };
 
 /** True for the server heartbeat frame `{op:"ping"}` the client must pong. */
@@ -116,6 +119,7 @@ function normalizeEvent(raw: unknown): EventEnvelope | null {
         channel_address: `${p.device_address}:${p.channel}`,
         parameter: p.parameter,
         value: p.value,
+        display_value: p.display_value,
       },
     };
   }

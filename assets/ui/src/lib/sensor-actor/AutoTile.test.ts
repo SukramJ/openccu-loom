@@ -16,13 +16,17 @@ vi.mock("$lib/api/client", () => ({
 }));
 
 // No live event stream in a unit test; both subscriptions hand back an
-// unsubscribe so the tile's onMount cleanup stays valid.
+// unsubscribe so the tile's onMount cleanup stays valid. `subscribe` is a
+// vi.fn (not a plain arrow) so display-value-coherence tests below can
+// pull the registered handler back out of `.mock.calls` and drive a
+// synthetic WS event through it.
 vi.mock("$lib/stores/events.svelte", () => ({
-  subscribe: () => () => {},
+  subscribe: vi.fn(() => () => {}),
   onResync: () => () => {},
 }));
 
 import AutoTile from "./AutoTile.svelte";
+import { subscribe } from "$lib/stores/events.svelte";
 import type { ChannelSummary, DataPointSummary } from "$lib/api/types";
 
 const channel: ChannelSummary = {
@@ -61,6 +65,22 @@ function level(over: Partial<DataPointSummary> = {}): DataPointSummary {
   };
 }
 
+/** A read-only FLOAT DP so it lands in the headline / readout path
+ *  (NumericReadout), never the writable "numeric" control bucket. */
+function humidity(over: Partial<DataPointSummary> = {}): DataPointSummary {
+  return {
+    unique_id: "ABC123:3.HUMIDITY",
+    parameter: "HUMIDITY",
+    observed: true,
+    value: 0.3,
+    display_value: 30,
+    type: "FLOAT",
+    unit: "%",
+    operations: { read: true, write: false, event: true },
+    ...over,
+  };
+}
+
 afterEach(() => {
   vi.clearAllMocks();
   cleanup();
@@ -94,5 +114,52 @@ describe("AutoTile — slider granularity", () => {
 
     await waitFor(() => expect(setValue).toHaveBeenCalled());
     expect(setValue).toHaveBeenCalledWith("ABC123", 3, "SETPOINT", 1);
+  });
+});
+
+describe("AutoTile — display_value projection", () => {
+  it("renders display_value instead of the raw wire value when present", async () => {
+    listDataPoints.mockResolvedValue([humidity()]);
+    const { findByText } = render(AutoTile, {
+      props: { address: "ABC123", channel },
+    });
+
+    expect(await findByText("30 %")).toBeInTheDocument();
+  });
+
+  it("falls back to the raw value when display_value is absent", async () => {
+    listDataPoints.mockResolvedValue([humidity({ display_value: undefined })]);
+    const { findByText } = render(AutoTile, {
+      props: { address: "ABC123", channel },
+    });
+
+    // NumericReadout formats fractional numbers via `toLocaleString(undefined,
+    // …)`, so the separator follows the machine's locale (e.g. "0,3" under a
+    // German locale) — derive the expectation the same way instead of
+    // hard-coding a decimal point.
+    expect(await findByText(`${(0.3).toLocaleString(undefined, { maximumFractionDigits: 2 })} %`)).toBeInTheDocument();
+  });
+
+  it("keeps a WS-pushed reading at the same scale as the initial REST render", async () => {
+    listDataPoints.mockResolvedValue([humidity()]);
+    const { findByText } = render(AutoTile, {
+      props: { address: "ABC123", channel },
+    });
+    expect(await findByText("30 %")).toBeInTheDocument();
+
+    const handler = (subscribe as ReturnType<typeof vi.fn>).mock.calls[0][0] as (
+      ev: unknown,
+    ) => void;
+    handler({
+      type: "data_point",
+      payload: {
+        channel_address: "ABC123:3",
+        parameter: "HUMIDITY",
+        value: 0.55,
+        display_value: 55,
+      },
+    });
+
+    expect(await findByText("55 %")).toBeInTheDocument();
   });
 });

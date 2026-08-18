@@ -1327,6 +1327,7 @@
                   parameter={historyParameter}
                   parameterLabel={selectedDP?.parameter_label || selectedDP?.parameter}
                   unit={selectedDP?.unit ?? ""}
+                  multiplier={selectedDP?.multiplier ?? 1}
                 />
               {/if}
             </div>

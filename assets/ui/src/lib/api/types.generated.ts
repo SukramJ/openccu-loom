@@ -6856,6 +6856,11 @@ export interface components {
              */
             parameter_label?: string;
             value?: unknown;
+            /**
+             * @description `value` expressed in the unit `unit` names, i.e. `value * multiplier`. Present only when that projection is non-trivial; absent means `value` already is the displayable number.
+             *     It exists because `value` is the raw CCU wire value and has to stay that: the write path sends it back unchanged. A LEVEL data point reads 0.42 with unit `%`, so rendering the pair without multiplying shows a dimmer at 0.42 %. Render `display_value` when present and `value` otherwise — that is always correct and needs no arithmetic on the client. Writes always carry `value`.
+             */
+            display_value?: number;
             observed: boolean;
             /**
              * Format: date-time

@@ -102,6 +102,39 @@ describe("connectEvents event normalisation", () => {
     ]);
   });
 
+  it("carries display_value through the datapoint.value_changed normalisation", () => {
+    // display_value is the daemon's value*multiplier projection (LEVEL,
+    // DIRT_LEVEL, TIME_OF_OPERATION, ...); it has to survive this
+    // normalisation step unchanged or every SPA consumer downstream of
+    // ws.ts loses live coherence with its REST-seeded display.
+    expect(
+      received({
+        type: "datapoint.value_changed",
+        payload: {
+          central: "ccu1",
+          interface: "HmIP-RF",
+          device_address: "ABC0000001",
+          channel: 4,
+          parameter: "LEVEL",
+          value: 0.42,
+          display_value: 42,
+        },
+      }),
+    ).toEqual([
+      {
+        type: "data_point",
+        payload: {
+          central: "ccu1",
+          interface: "HmIP-RF",
+          channel_address: "ABC0000001:4",
+          parameter: "LEVEL",
+          value: 0.42,
+          display_value: 42,
+        },
+      },
+    ]);
+  });
+
   it("normalises hub.sysvar_changed into the sysvar shape", () => {
     expect(
       received({

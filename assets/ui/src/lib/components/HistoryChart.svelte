@@ -14,6 +14,15 @@
     /** Localised caption for the parameter; falls back to the raw key. */
     parameterLabel?: string;
     unit?: string;
+    /**
+     * `value -> unit` conversion factor (DataPointSummary.multiplier).
+     * History buckets come back from `/history` as raw CCU wire values —
+     * that endpoint carries no multiplier of its own — so the chart scales
+     * min/avg/max with this factor before plotting/labelling. Default 1
+     * (no projection), matching `multiplier` being absent for a trivial
+     * conversion everywhere else in the SPA.
+     */
+    multiplier?: number;
     /** How many hours of history to show by default. Default 24. */
     hoursBack?: number;
   };
@@ -25,12 +34,20 @@
     parameter,
     parameterLabel,
     unit = "",
+    multiplier = 1,
     // hoursBack is intentionally not wired into $state — the range selector
     // below owns the mutable state. The prop serves as a hint for callers but
     // is not expected to change after mount (same pattern as other one-time
     // initialisation props in this codebase).
     hoursBack: _hoursBack = 24,
   }: Props = $props();
+
+  // Project a raw history sample into the displayed unit. See the
+  // `multiplier` prop doc above for why this happens here instead of on
+  // the daemon side.
+  function scale(v: number): number {
+    return multiplier === 1 ? v : v * multiplier;
+  }
 
   type ChartStatus =
     | { kind: "idle" }
@@ -137,8 +154,8 @@
     const tMax = Math.max(...times);
     const tRange = tMax - tMin || 1;
 
-    const allMin = Math.min(...buckets.map((b: HistoryBucket) => b.min));
-    const allMax = Math.max(...buckets.map((b: HistoryBucket) => b.max));
+    const allMin = Math.min(...buckets.map((b: HistoryBucket) => scale(b.min)));
+    const allMax = Math.max(...buckets.map((b: HistoryBucket) => scale(b.max)));
     const vPad = (allMax - allMin) * 0.1 || 0.5;
     const vMin = allMin - vPad;
     const vMax = allMax + vPad;
@@ -147,16 +164,16 @@
     // Avg line polyline points.
     const avgPts = buckets
       .map((b: HistoryBucket) =>
-        `${xOf(new Date(b.ts).getTime(), tMin, tRange).toFixed(1)},${yOf(b.avg, vMin, vRange).toFixed(1)}`,
+        `${xOf(new Date(b.ts).getTime(), tMin, tRange).toFixed(1)},${yOf(scale(b.avg), vMin, vRange).toFixed(1)}`,
       )
       .join(" ");
 
     // Min/max band: trace min left→right, then max right→left (polygon).
     const minPts = buckets.map((b: HistoryBucket) =>
-      `${xOf(new Date(b.ts).getTime(), tMin, tRange).toFixed(1)},${yOf(b.min, vMin, vRange).toFixed(1)}`,
+      `${xOf(new Date(b.ts).getTime(), tMin, tRange).toFixed(1)},${yOf(scale(b.min), vMin, vRange).toFixed(1)}`,
     );
     const maxPts = [...buckets].reverse().map((b: HistoryBucket) =>
-      `${xOf(new Date(b.ts).getTime(), tMin, tRange).toFixed(1)},${yOf(b.max, vMin, vRange).toFixed(1)}`,
+      `${xOf(new Date(b.ts).getTime(), tMin, tRange).toFixed(1)},${yOf(scale(b.max), vMin, vRange).toFixed(1)}`,
     );
     const bandPolygon = [...minPts, ...maxPts].join(" ");
 

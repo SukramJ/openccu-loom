@@ -26,8 +26,14 @@
   function formatNumber(v: unknown, unit?: string): string {
     if (typeof v !== "number" || !Number.isFinite(v)) return "—";
     const t = (dp.type ?? "").toUpperCase();
+    // An INTEGER-declared parameter projected through a non-trivial
+    // multiplier (e.g. TIME_OF_OPERATION: seconds -> days) is no longer
+    // integral in the displayed unit — only force integer rounding when
+    // no projection happened, otherwise let the fractional branch below
+    // pick the right precision.
+    const forceInteger = t === "INTEGER" && dp.display_value == null;
     let s: string;
-    if (t === "INTEGER" || Number.isInteger(v)) {
+    if (forceInteger || Number.isInteger(v)) {
       s = String(Math.round(v));
     } else {
       const abs = Math.abs(v);
@@ -40,7 +46,11 @@
     return unit ? `${s} ${unit}` : s;
   }
 
-  const display = $derived(formatNumber(dp.value, dp.unit));
+  // `display_value` is the daemon's value*multiplier projection (present
+  // only when non-trivial); `value` is already displayable otherwise. No
+  // client-side multiplication happens here — the daemon is the single
+  // place that computes the projection.
+  const display = $derived(formatNumber(dp.display_value ?? dp.value, dp.unit));
   const label = $derived(dpLabel(dp));
   const age = $derived(showAge ? formatValueAge(dp.value_age_seconds) : "");
 </script>
