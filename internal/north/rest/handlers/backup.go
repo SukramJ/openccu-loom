@@ -166,7 +166,7 @@ func DownloadBackup(svc BackupService) http.HandlerFunc {
 			return
 		}
 		id := chi.URLParam(r, "id")
-		body := &downloadBody{w: w, filename: id + ".sbk"}
+		body := &downloadBody{w: w, filename: downloadFilename(r.Context(), svc, id)}
 		err := svc.Stream(r.Context(), id, body)
 		if err == nil && !body.started {
 			// A clean stream that produced nothing is not a download: it
@@ -190,6 +190,28 @@ func DownloadBackup(svc BackupService) http.HandlerFunc {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup stream failed", err)
 		}
 	}
+}
+
+// downloadFilename resolves the name the archive is served under: the
+// CCU-convention name recorded when it was taken, falling back to the
+// storage id. The id is a key, not a name — it carries no hostname and no
+// firmware version, so an operator downloading two archives from two CCUs
+// could not tell from the files which CCU either belongs to.
+//
+// A failed or missing lookup degrades to the id rather than failing the
+// download: the archive is what the operator asked for, and a name is not
+// worth losing it over.
+func downloadFilename(ctx context.Context, svc BackupService, id string) string {
+	entries, err := svc.List(ctx)
+	if err != nil {
+		return id + ".sbk"
+	}
+	for _, e := range entries {
+		if e.ID == id && e.Filename != "" {
+			return e.Filename
+		}
+	}
+	return id + ".sbk"
 }
 
 // errEmptyBackupStream reports a stream that completed without writing a

@@ -9622,6 +9622,8 @@ export interface components {
             bytes: number;
             /** Format: date-time */
             created_at: string;
+            /** @description The archive's name in the CCU's own convention, `<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`, recorded when the archive was taken. This is what the download is served as; show or store this rather than rebuilding a name, because the id is a storage key and carries no firmware version. Absent for archives taken before this field existed, or when the CCU had not reported its system information yet — fall back to `<id>.sbk`. */
+            filename?: string;
         };
         /** @description Identifies a live edit session on the heartbeat and close routes. The token is what proves ownership; a request that omits it is accepted syntactically but cannot refresh or release the lock. */
         EditSessionRequest: {

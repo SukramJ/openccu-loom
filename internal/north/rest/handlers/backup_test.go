@@ -463,6 +463,120 @@ func TestDownloadBackupRejectsAnEmptyStream(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// downloadFilename / DownloadBackup — recorded display name
+// ---------------------------------------------------------------------------
+
+// TestDownloadFilename_UsesRecordedFilename verifies the recorded
+// CCU-convention name from List wins over the bare "<id>.sbk" fallback.
+func TestDownloadFilename_UsesRecordedFilename(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{listResult: []BackupEntry{
+		{ID: "b1", Filename: "ccu-01.local-3.87.6.20260404-2026-08-17-1405.sbk"},
+	}}
+	got := downloadFilename(context.Background(), svc, "b1")
+	want := "ccu-01.local-3.87.6.20260404-2026-08-17-1405.sbk"
+	if got != want {
+		t.Fatalf("downloadFilename = %q, want %q", got, want)
+	}
+}
+
+// TestDownloadFilename_UnknownID_FallsBackToIDDotSbk verifies that an id not
+// present in List's result degrades to "<id>.sbk" rather than an empty or
+// mismatched name.
+func TestDownloadFilename_UnknownID_FallsBackToIDDotSbk(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{listResult: []BackupEntry{
+		{ID: "other", Filename: "ccu-01.local-3.87.6.20260404-2026-08-17-1405.sbk"},
+	}}
+	got := downloadFilename(context.Background(), svc, "b1")
+	if got != "b1.sbk" {
+		t.Fatalf("downloadFilename = %q, want %q", got, "b1.sbk")
+	}
+}
+
+// TestDownloadFilename_EmptyRecordedFilename_FallsBackToIDDotSbk verifies an
+// entry that matches the id but carries no recorded name (e.g. taken before
+// the CCU had reported its system information) also degrades to
+// "<id>.sbk", rather than serving an empty Content-Disposition filename.
+func TestDownloadFilename_EmptyRecordedFilename_FallsBackToIDDotSbk(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{listResult: []BackupEntry{
+		{ID: "b1", Filename: ""},
+	}}
+	got := downloadFilename(context.Background(), svc, "b1")
+	if got != "b1.sbk" {
+		t.Fatalf("downloadFilename = %q, want %q", got, "b1.sbk")
+	}
+}
+
+// TestDownloadFilename_ListError_FallsBackToIDDotSbk verifies a List
+// failure degrades to "<id>.sbk" instead of failing the whole download —
+// the archive is what the operator asked for, and a name is not worth
+// losing it over. listResult also carries a matching entry so the case
+// actually exercises the error short-circuit: were the error check dropped,
+// the loop below would find the match and return its Filename instead of
+// the id-based fallback.
+func TestDownloadFilename_ListError_FallsBackToIDDotSbk(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{
+		listErr:    errors.New("store unavailable"),
+		listResult: []BackupEntry{{ID: "b1", Filename: "should-not-be-used.sbk"}},
+	}
+	got := downloadFilename(context.Background(), svc, "b1")
+	if got != "b1.sbk" {
+		t.Fatalf("downloadFilename = %q, want %q", got, "b1.sbk")
+	}
+}
+
+// TestDownloadBackup_ContentDispositionCarriesTheRecordedFilename is the
+// handler-level twin of TestDownloadFilename_UsesRecordedFilename: it
+// exercises the full DownloadBackup path and asserts the recorded name
+// reaches the Content-Disposition header the client actually receives.
+func TestDownloadBackup_ContentDispositionCarriesTheRecordedFilename(t *testing.T) {
+	t.Parallel()
+	const name = "ccu-01.local-3.87.6.20260404-2026-08-17-1405.sbk"
+	svc := &stubBackupService{
+		streamData: "SBKDATA",
+		listResult: []BackupEntry{{ID: "b1", Filename: name}},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/b1/download", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "b1"}))
+	w := httptest.NewRecorder()
+	DownloadBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	cd := w.Header().Get("Content-Disposition")
+	_, params, err := mime.ParseMediaType(cd)
+	if err != nil {
+		t.Fatalf("Content-Disposition is not parseable: %q: %v", cd, err)
+	}
+	if params["filename"] != name {
+		t.Fatalf("filename param = %q, want %q (header: %q)", params["filename"], name, cd)
+	}
+}
+
+// TestDownloadBackup_NoRecordedFilename_FallsBackToIDDotSbk verifies the
+// handler-level fallback: when List reports no entry for the id (or no
+// name on it), the download is still served, named "<id>.sbk".
+func TestDownloadBackup_NoRecordedFilename_FallsBackToIDDotSbk(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{streamData: "SBKDATA", listResult: nil}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/b1/download", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "b1"}))
+	w := httptest.NewRecorder()
+	DownloadBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "b1.sbk") {
+		t.Fatalf("Content-Disposition = %q, want it to name b1.sbk", cd)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // UploadBackup
 // ---------------------------------------------------------------------------
 
