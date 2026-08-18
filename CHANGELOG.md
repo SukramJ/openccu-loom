@@ -12,7 +12,7 @@ rest were either already closed by the 0.62.0 wave, refuted on inspection, or
 left open with the reason recorded, because a safe fix needed a design decision
 rather than a local edit. Ships database migration **039**.
 
-The north-bound API contract moves to **7.0.0**. Nothing the daemon *does*
+The north-bound API contract moves to **7.1.0**. Nothing the daemon *does*
 changed incompatibly — the major step is because the specification was wrong
 and now is not: `GET /diagnostics/capture` has always answered with an array
 while the schema declared an object, and the nullable fields were written in
@@ -20,10 +20,19 @@ the OpenAPI 3.0 spelling inside a 3.1 document, where it has no meaning. A
 client that generated code from the old schema gets different types out of the
 new one, which is exactly what a major version is for. Everything else in the
 contract is additive: new MCP tools, argument schemas for nineteen WebSocket
-commands, and a few response fields.
+commands, and a few response fields — among them `filename` on a backup entry,
+which is what carries the minor step to 7.1.0.
 
 ### Added
 
+- A backup entry now carries `filename`, the archive's name in the CCU's own
+  convention (`<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`),
+  recorded when the archive was taken. The download is served under it, and a
+  client no longer has to rebuild a name from an id that carries no firmware
+  version — one of them stamped the daemon's build version into it instead.
+- `backup.dir` moves the downloaded CCU archives off the daemon's data
+  directory — for a mount that is not the daemon's state directory, or for the
+  CCU's own backup target when running as add-on software.
 - MCP gained tools to open and close an edit session, without which writing a
   MASTER paramset over MCP was unreachable — the write is fail-closed on an edit
   token and no tool could mint one. Also a schedule read tool.
@@ -40,6 +49,21 @@ commands, and a few response fields.
 
 ### Fixed
 
+- Downloaded CCU archives no longer end up inside the CCU's own backups
+  ([#584](https://github.com/SukramJ/openccu-loom/issues/584)). Installed as CCU
+  add-on software the daemon kept them under `/usr/local/addons/`, which is
+  exactly the tree the CCU packs into an `.sbk` — so every CCU backup carried
+  all previously downloaded archives, and the next one carried those again. The
+  archive directory now gets the `.nobackup` marker the CCU's own tar honours,
+  and the add-on's service script points the daemon at the CCU's configured
+  backup target (`CronBackupPath`, otherwise external storage) so the archives
+  land beside the CCU's own instead of on its internal flash.
+- Creating a CCU backup no longer builds it twice. The flow started
+  `createBackup.sh` on the CCU, waited for it, and then downloaded an archive
+  the maintenance CGI had built independently — the first one was never read. It
+  cost a second full tar, gzip and signature run of the CCU's whole state, left
+  a multi-megabyte file behind in `/usr/local/tmp` until the next backup, and
+  spent most of the timeout budget on the half that was discarded.
 - A dead CCU's leftovers: removing a central now also deletes its visibility
   overrides, channel flags, recording overrides and Matter exposures, so a CCU
   re-adopted under the same name no longer inherits the previous incarnation's
