@@ -1,459 +1,223 @@
 # CLAUDE.md — AI Assistant Guide for OpenCCU-Loom
 
-This document is the entry point for AI assistants (like Claude)
-working on **OpenCCU-Loom**. It is intentionally concise. The design
-intent (goals, non-goals, constraints, resolved decisions, risk
-register) lives in [`SPECIFICATION.md`](./SPECIFICATION.md);
-everything else lives in the authoritative sources listed in that
-spec's preamble (code, ADRs, `assets/openapi.yaml`,
-`example.config.yaml`, etc.). When in doubt about *intent*, read
-the spec; when in doubt about *implementation*, read the code.
+The entry point for AI assistants working on **OpenCCU-Loom**. It is
+deliberately short: it states each rule once and names the guard or the
+document that carries the rest. Design intent lives in
+[`SPECIFICATION.md`](./SPECIFICATION.md); implementation detail lives in the
+code. When in doubt about *intent*, read the spec; about *implementation*,
+read the code.
 
----
+**Rules that apply only inside one subtree live in that subtree**, so you
+pay for them only when you work there:
 
-## Table of Contents
+| File | Covers |
+|---|---|
+| [`internal/north/matter/CLAUDE.md`](./internal/north/matter/CLAUDE.md) | the matter.js gold-standard workflow, schema regeneration |
+| [`assets/ui/CLAUDE.md`](./assets/ui/CLAUDE.md) | SPA operating concept, i18n + theme duty, Playwright suite |
+| [`tests/CLAUDE.md`](./tests/CLAUDE.md) | the test pillars, test naming, the snapshot-parity pipeline |
+| [`internal/model/custom/CLAUDE.md`](./internal/model/custom/CLAUDE.md) | adding a device profile |
 
-1. [Orientation](#orientation)
-2. [Project Overview](#project-overview)
-3. [Critical Rules (do not violate)](#critical-rules)
-4. [Repository Structure](#repository-structure)
-5. [Development Environment](#development-environment)
-6. [Code Quality & Standards](#code-quality--standards)
-7. [Architecture Quick Reference](#architecture-quick-reference)
-8. [Testing Guidelines](#testing-guidelines)
-9. [Common Tasks](#common-tasks)
-10. [Git Workflow](#git-workflow)
-11. [aiohomematic as a Reference](#aiohomematic-as-a-reference)
-12. [matter.js as the Matter Gold Standard](#matterjs-as-the-matter-gold-standard)
-13. [Implementation Policy](#implementation-policy)
-14. [Sub-Agent Delegation](#sub-agent-delegation)
-15. [Interaction Protocol](#interaction-protocol)
-16. [Tips for AI Assistants](#tips-for-ai-assistants)
+Two long-form companions carry the reasoning behind the compressed rules
+below — read them when a guard fires and you want to know what it protects:
+[`notes/contributor/engineering-rules.md`](./notes/contributor/engineering-rules.md)
+and
+[`notes/contributor/subagent-delegation.md`](./notes/contributor/subagent-delegation.md).
 
 ---
 
 ## Orientation
 
-**If you are a fresh agent starting work on this repo:**
+If you are a fresh agent starting work on this repo:
 
-1. Read [`SPECIFICATION.md`](./SPECIFICATION.md) end-to-end. It is
-   short by design (~600 lines): goals, constraints, resolved
-   decisions, risk register. The preamble points at the
-   authoritative sources for everything else (code, ADRs,
-   openapi.yaml, etc.) — follow those pointers when you need
-   implementation detail.
-2. Read [`docs/adr/0001-license-mit.md`](./docs/adr/0001-license-mit.md)
-   and [`docs/adr/0002-multi-ccu-first-class.md`](./docs/adr/0002-multi-ccu-first-class.md)
-   for the two most consequential design decisions.
-3. When the user mentions "aiohomematic", treat it as a shorthand
-   for the whole Python reference family
-   (`aiohomematic`, `aiohomematic-config`, `homematicip_local`,
-   `homematicip-local-frontend`, `openccu-data`). They live side by
-   side under `../` on the developer's
-   machine. See §[aiohomematic as a Reference](#aiohomematic-as-a-reference)
-   for the mapping and when to consult which.
-4. The project has shipped through **v0.34.0** (latest git tag;
-   `internal/build/version.go` reads `0.34.0`; the REST `APIVersion`
-   `2.16.0` lives in `internal/north/rest/handlers/info.go` and is
-   bumped independently of the build version); the authoritative
-   release history is `CHANGELOG.md`. It is a large Go codebase
-   spanning all 8 coordinators and all three transports (XML-RPC,
-   BIN-RPC, JSON-RPC), with roughly 68 REST handler files (~148 paths /
-   ~190 operations in `assets/openapi.yaml`), ~95 WebSocket commands
-   (+23 broadcasts) in `assets/wsapi.json`, 27 ReGa scripts, and 141
-   generated device profiles. Prefer the schema files and `CHANGELOG.md`
-   over these counts when a number matters — they re-drift every
-   release. The primary config UI is a Svelte 5 SPA under `assets/ui/`
-   (embedded via `go:embed all:spa_dist`); login, OIDC, and the
-   first-run onboarding wizard all live in the SPA (ADR 0045). A minimal
-   server-rendered surface (`/health`, `/about`) remains only as a
-   no-JS SPA-down diagnostic anchor. The SPA has a shared design-system
-   (`assets/ui/src/lib/components/ui/`) and a homogeneous operating
-   concept (toasts for action results, the shared confirm dialog for
-   destructive actions, and shared `LoadingState`/`EmptyState`/
-   `ErrorState` surfaces — see §[Architecture Quick Reference](#architecture-quick-reference)),
-   locked in by a committed Playwright browser-e2e + visual-regression
-   layer (`assets/ui/tests/e2e/`). Open work is driven by
-   OpenCCU-Loom's own product needs; aiohomematic remains a reference
-   implementation and its knowledge is preserved in `notes/parity/`.
-   Standing build- and test-time parity guards remain regression
-   detectors, not the roadmap; for the Matter side the binding contract
-   is [`docs/matter-parity-contract.md`](./docs/matter-parity-contract.md).
+1. Read [`SPECIFICATION.md`](./SPECIFICATION.md) end-to-end (~900 lines):
+   goals, constraints, resolved decisions, risk register. Its preamble points
+   at the authoritative source for everything else.
+2. Read [`docs/adr/0001-license-mit.md`](./docs/adr/0001-license-mit.md) and
+   [`docs/adr/0002-multi-ccu-first-class.md`](./docs/adr/0002-multi-ccu-first-class.md)
+   — the two most consequential decisions.
+3. "aiohomematic" is shorthand for the whole Python reference family; see
+   [References](#references).
+4. `CHANGELOG.md` is the authoritative release history. The build version is
+   `internal/build/version.go`; the REST `APIVersion` in
+   `internal/north/rest/handlers/info.go` is bumped independently. Counts of
+   handlers / commands / profiles drift every release — read
+   `assets/openapi.yaml`, `assets/wsapi.json` and the registry instead of
+   trusting a number in prose.
+
+The project is a large Go codebase spanning all 8 coordinators and all three
+transports (XML-RPC, BIN-RPC, JSON-RPC). The primary config UI is a Svelte 5
+SPA under `assets/ui/`, embedded via `go:embed all:spa_dist`; login, OIDC and
+the first-run wizard all live there (ADR 0045). A minimal server-rendered
+surface (`/health`, `/about`) remains only as a no-JS SPA-down diagnostic
+anchor. Open work is driven by OpenCCU-Loom's own product needs; aiohomematic
+is a reference implementation, and the standing parity guards are regression
+detectors, not the roadmap.
 
 ---
 
 ## Project Overview
 
-**OpenCCU-Loom** is a standalone Go daemon that talks to Homematic CCUs
-and bridges their devices to MQTT, a REST + WebSocket API, a web
-Config UI, and a Matter bridge. It originated as a Go port of
-[`aiohomematic`](https://github.com/SukramJ/aiohomematic) and now
-develops independently; `aiohomematic` remains a reference
-implementation for CCU-side semantics. The two projects coexist —
-`aiohomematic` powers the Home Assistant integration, OpenCCU-Loom
-serves users who want MQTT / REST / UI / Matter access without HA.
+**OpenCCU-Loom** is a standalone Go daemon that talks to Homematic CCUs and
+bridges their devices to MQTT, a REST + WebSocket API, a web Config UI, and a
+Matter bridge. It originated as a Go port of
+[`aiohomematic`](https://github.com/SukramJ/aiohomematic) and now develops
+independently. The two projects coexist — aiohomematic powers the Home
+Assistant integration, OpenCCU-Loom serves users who want MQTT / REST / UI /
+Matter access without HA.
 
-### Key Characteristics
-
-- **Language**: Go 1.26+
-- **License**: MIT (source); binary aggregates openccu-data extracts
-  under the eQ-3 HomeMatic Software License (non-commercial). See
-  ADR 0003.
-- **Module path**: `github.com/SukramJ/openccu-loom`
-- **Deployment**: single static binary (`CGO_ENABLED=0`) + Docker
-  (linux/amd64, arm64, armv7). No CGo dependencies.
+- **Language**: Go 1.26+ · module `github.com/SukramJ/openccu-loom`
+- **License**: MIT (source); the binary aggregates openccu-data extracts under
+  the eQ-3 HomeMatic Software License (non-commercial) — ADR 0003.
+- **Deployment**: one static binary (`CGO_ENABLED=0`) + Docker
+  (linux/amd64, arm64, armv7). No CGo.
 - **Persistence**: SQLite (`modernc.org/sqlite`, pure Go) + filesystem.
-- **Architecture**: hexagonal / ports & adapters, plus an internal
-  typed generic event bus for cross-domain communication.
-- **Multi-CCU**: first-class feature from 0.1.0 — one daemon, many CCUs.
-- **Matter**: ships in 0.1.0.
+- **Architecture**: hexagonal / ports & adapters, plus an internal typed
+  generic event bus.
+- **Multi-CCU**: first-class since 0.1.0 — one daemon, many CCUs.
 
-### Primary bridges (0.1.0)
+North-bound: MQTT (HA Discovery **and** raw topic planes in parallel), REST +
+WebSocket, the Svelte SPA, and a native-Go Matter bridge (default off, opt-in
+via `cfg.North.Matter.Enabled` — SPECIFICATION.md §6, ADR 0012).
 
-- MQTT — Home Assistant Discovery **and** raw topic planes in parallel.
-- REST + WebSocket API.
-- Config UI — Svelte 5 SPA (Tailwind 4 + Vite, embedded via `go:embed`)
-  as primary surface, including login, OIDC, and the first-run
-  onboarding wizard (ADR 0045). A tiny server-rendered surface
-  (`/health`, `/about`) remains only as the no-JS SPA-down diagnosis case.
-- Matter — native-Go bridge, default off; operator opt-in via
-  `cfg.North.Matter.Enabled`. See SPECIFICATION.md §6 and ADR 0012.
-
-### South-bound protocols (0.1.0)
+South-bound:
 
 | Transport | Interfaces | Callback |
 |---|---|---|
 | XML-RPC + JSON-RPC | HmIP-RF, BidCos-RF, BidCos-Wired, HmIP-Wired, VirtualDevices | HTTP (`:8120`) |
 | BIN-RPC | CUxD | raw TCP (`:8129`) |
 
-Every interface in 0.1.0 supports push callbacks. **There is no
-polling / JSON-RPC-only code path in the MVP** — this is a deliberate
-divergence from aiohomematic.
+Every interface supports push callbacks. **There is no polling / JSON-RPC-only
+code path** — a deliberate divergence from aiohomematic.
 
 ---
 
 ## Critical Rules
 
-These rules are non-negotiable. Violating them breaks design intent.
+Non-negotiable. Each one is followed by the guard that enforces it, or by
+"reviewed" where none exists.
 
-### License headers (MIT)
+### Licensing and build
 
-Every Go source file must start with:
+- **License header** on every Go file:
+  `// SPDX-License-Identifier: MIT` + `// Copyright (C) 2026 OpenCCU-Loom authors.`
+  No stray GPL / Apache / BSD headers in `pkg/` or `internal/`; vendored code
+  keeps its upstream notice plus a modification line.
+- **No CGo.** `CGO_ENABLED=0` at all times. If you think you need it (crypto,
+  SQLite acceleration, Matter SDK), raise an ADR — do not add it silently.
+- **Pure-Go SQLite** (`modernc.org/sqlite`). Switching to `mattn/go-sqlite3`
+  needs an ADR.
+- **Dependency licences**: MIT / Apache-2.0 / BSD are fine. **GPL / LGPL /
+  MPL / AGPL pull in copyleft obligations — stop and discuss.** The embedded
+  openccu-data archives are handled by a separate aggregation path (ADR 0003).
 
-```go
-// SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
-```
+### Domain invariants
 
-No stray GPL / Apache / BSD headers in `pkg/` or `internal/`. Any
-vendored or forked code keeps its upstream notice and adds a short
-modification line.
+- **CUxD speaks BIN-RPC, not JSON-RPC.** We run our own BIN-RPC callback
+  server. Never treat CUxD as "JSON-RPC only". Guard: `TestCuxdUsesBINRPCBackend`.
+- **`CommandPriority.Critical = 0`.** Never use `if priority != 0` as "set" —
+  compare against `hmenum.CommandPriorityCritical`.
+- **Multi-CCU from day one.** Every coordinator, adapter and store is
+  multi-CCU-safe; `CentralRegistry` holds them all and `central_name` is the
+  scoping dimension. Never hard-code "the single CentralUnit". ADR 0002.
+- **Interfaces live in the consumer package** — except protocol interfaces
+  used across `central`, `client` and north-bound adapters, which live in
+  `pkg/interfaces` because several packages declare the same dependency.
+- **Callback ports are re-advertised on every reconnect.** When the listener
+  does not bind a fixed port (only `rpc_callback.port_range`, XML-RPC only),
+  the effective port is known at bind time; every `init()` carries the
+  **effective** port. Neither `rpc_callback.port: 0` nor `bin_port: 0` is a
+  dynamic mode — `applyDefaults` rewrites them to 8120 / 8129. BIN-RPC has no
+  range setting, so two daemons on one host each need an explicit `bin_port`.
 
-### No CGo in the default build
+### Config surface
 
-```
-// go:build !cgo
-```
+- **Never round-trip the `***` secret mask.** `GET /api/v1/config` masks every
+  `cfg:"secret"` value (`maskSecrets` in
+  `internal/north/rest/handlers/admin_config.go`). The SPA section editor
+  skips secret-class fields when serialising a save, and the PUT handler calls
+  `restoreMaskedSecrets` **before** validation + persistence. Breaking either
+  side regresses real bugs: a complex secret (`north.rest.auth.users`, a
+  `map[string]string`) fails strict type-validation as the string `***`, and a
+  string secret saved as `***` overwrites the real credential. When you add a
+  `cfg:"secret"` field, extend the masked-secret tests under
+  `internal/north/rest/handlers/`.
+- **Every `cfg:` field needs a label AND a help text in en + de** —
+  `config.field.<path>` and `config.help.<path>`, in both catalogues of
+  `assets/ui/src/lib/i18n.ts`. A missing label renders untranslated; a missing
+  help silently drops the hint row. Guard:
+  `TestConfigFieldsHaveLabelsAndHelp`.
 
-`CGO_ENABLED=0` at all times. If you ever feel the need for CGo
-(crypto, SQLite acceleration, Matter SDK), raise it in an ADR — do not
-add it silently.
+### Wiring — the four rules that cost this project the most
 
-### Dependency licensing
+A test that constructs the collaboration itself proves only that the
+collaboration *can* happen, never that a running daemon *makes* it happen.
+Call it a **bracketing test** and treat it as a defect. The full case history
+is in
+[`notes/contributor/engineering-rules.md`](./notes/contributor/engineering-rules.md);
+the rules:
 
-The source is MIT. MIT / Apache-2.0 / BSD dependencies are fine.
-**GPL / LGPL / MPL / AGPL pull in copyleft obligations — stop and
-discuss before adding one.** The embedded openccu-data archives are
-non-commercial eQ-3 content and are handled by a separate aggregation
-path (see ADR 0003); they do not constrain the dependency tree.
+1. **Wiring is pinned through the composition root, never at the setter.** A
+   new `Set*` / `Attach*` / `Register*` obliges a pin under
+   `tests/contract/wiring_pins/` that constructs through the real constructor
+   and asserts the *effect*. Reference: `internal/central/hub_notifier_wiring_test.go`.
+   Guard: `TestEveryWiringSetterHasAProductionCaller` (ratchets:
+   `wiringSettersWithoutCaller`, `wiringSeamsUnderInvestigation` — kept
+   separate on purpose).
+2. **Walking the central registry once is walking it at boot.** Do not write
+   the walk; register a `central.Registry.OnRegister` observer, which replays
+   over existing centrals and runs for every later one. The exception is a
+   subsystem whose order relative to south-bound bring-up is load-bearing —
+   those keep a named seam on `centralOrchestrator`. Guard:
+   `TestEveryRegistryWalkerHasAnAdoptSeam`.
+3. **A lifecycle test uses the production order.** Boot the simulated CCU
+   **not ready** (`harness.Options{StartCCUNotReady: true}`), then flip it —
+   otherwise the daemon finishes bring-up first and every subsystem reads a
+   populated model however broken the wiring is. Guard:
+   `tests/e2e/boot_order_test.go`.
+4. **Declared and published must be the same set.** Any plane that declares
+   entities (MQTT discovery above all) needs a round-trip test comparing
+   declared topics against published ones. Guard: one
+   `Test*PlaneTopicsRoundTrip` per plane.
 
-### CUxD uses BIN-RPC, not JSON-RPC
-
-Unlike aiohomematic, we speak BIN-RPC directly to CUxD and run our
-own BIN-RPC callback server. Never treat CUxD as "JSON-RPC only".
-Contract tests enforce this.
-
-### `CommandPriority.Critical = 0`
-
-Mirrors aiohomematic. Never use `if priority != 0` as "set".
-
-```go
-// ✅ Correct
-if priority == hmenum.CommandPriorityCritical { ... }
-
-// ❌ Wrong (zero-value bug waiting to happen)
-if priority != 0 { ... }
-```
-
-### Multi-CCU from day one
-
-Every coordinator, every adapter, every store must be multi-CCU-safe.
-Do not hard-code "the single CentralUnit". `CentralRegistry` holds them
-all; `central_name` is the scoping dimension. See ADR 0002.
-
-### Pure-Go SQLite
-
-Use `modernc.org/sqlite` (no CGo). Do not switch to `mattn/go-sqlite3`
-without an ADR documenting the reason.
-
-### Config secrets: never round-trip the `***` mask
-
-`GET /api/v1/config` masks every `cfg:"secret"` value to the sentinel
-`***` (`maskSecrets` in `internal/north/rest/handlers/admin_config.go`)
-so the response is safe to log. The SPA never receives the cleartext, so
-it must **not** treat that sentinel as data: the section editor skips
-secret-class fields when it validates and serialises a save, and the PUT
-handler calls `restoreMaskedSecrets` to swap every `***` back to the
-operator's current real value **before** validation + persistence.
-Breaking either side regresses real bugs — a *complex* secret (e.g.
-`north.rest.auth.users`, a `map[string]string`) round-tripped as the
-string `***` fails strict type-validation, and a string secret saved as
-`***` overwrites the real credential. A secret the operator genuinely
-changed carries a non-sentinel value and persists normally. When you add
-a `cfg:"secret"` field, keep this round-trip intact and extend the
-masked-secret tests under `internal/north/rest/handlers/`.
-
-### Every config field needs a label AND a help text in en + de
-
-The SPA section editor renders one field per `cfg:`-tagged config leaf (the
-list `config.ClassifyFields` feeds `GET /api/v1/config/schema`). Each field
-**must** have BOTH an explicit label (`config.field.<path>`) and an inline-help
-description (`config.help.<path>`) in **both** locales of
-`assets/ui/src/lib/i18n.ts` (the `EN` and `DE` catalogues). Without the label
-key the editor shows a machine-humanised, untranslated string; without the help
-key the hint row is dropped silently — both read to operators as "field without
-a description". When you add or rename a `cfg:` field, add all four entries.
-This is enforced by `TestConfigFieldsHaveLabelsAndHelp` (in `tests/contract/`),
-which fails the build listing every missing `EN`/`DE` × `field`/`help` entry —
-so `make test` is the safety net, not manual review.
-
-### A test that constructs the collaboration proves nothing about the wiring
-
-This is the failure mode that has cost this project the most, twice, in
-the same quarter: the hub notifiers in 0.52.12, then two critical and
-several high defects across the Security & Safety series. In every case
-the CI was green on every PR.
-
-The shape is always the same. A test constructs collaborator A, hands it
-collaborator B itself, and asserts they work together. That proves the
-collaboration **can** happen. It never proves that anything in a running
-daemon **makes** it happen. `hub_notifier_wiring_test.go` documents the
-canonical instance: the coordinator tests called `SetHubModel`
-themselves, so they stayed green while no production path ever called
-it and every hub push event was silently lost.
-
-Call it a **bracketing test** and treat it as a defect, not a style
-preference.
-
-The four rules below exist because of it. Each names the guard that
-enforces it — a rule without a guard becomes decoration within a
-release.
-
-#### Wiring is pinned through the composition root, never at the setter
-
-Adding a `Set*` / `Attach*` / `Register*` method that production **must**
-call obliges you to add a pin under `tests/contract/wiring_pins/` that
-
-- constructs through the real constructor (`New`, `wireXService`, the
-  daemon's composition root), and
-- asserts the **effect** — the event arrives, the state is populated —
-  never that the setter was called.
-
-`internal/central/hub_notifier_wiring_test.go` is the reference: it goes
-through `New` alone and touches only the surfaces the real daemon
-touches.
-
-Guard: `TestEveryWiringSetterHasAProductionCaller` (`tests/contract/`).
-
-It checks the defect signature rather than the pin, because no test can
-verify that a pin asserts the right thing, while the signature is exact:
-in 0.52.12 `SetHubModel` had **no production caller at all**. The guard
-resolves every `Set*` / `Attach*` / `Register*` that injects a
-collaborator — interface, func value or pointer — and fails on those
-production never calls, through a direct call or an interface it
-dispatches on. Test files are excluded from the load, so a seam only its
-own tests call counts as unwired, which is the point.
-
-The pin half of this rule remains reviewed, not enforced. Both halves
-matter: a seam can have a caller and still be unpinned.
-
-Two ratchets carry the current surface: `wiringSettersWithoutCaller` for
-seams verified as deliberately silent, and `wiringSeamsUnderInvestigation`
-for seams nobody has classified. They are separate on purpose — merging
-them would let "we looked and it is fine" and "we have not looked" wear
-the same face.
-
-#### Walking the central registry once is walking it at boot
-
-A subsystem that subscribes to every central it finds in
-`central.Registry.List()` sees only the CCUs present when it ran. A CCU
-adopted at runtime is silent on that plane until the daemon restarts, and
-nothing anywhere reports it — the boot walk is correct, its tests are green,
-and the gap is invisible. Thirteen instances were found by hand in one audit.
-
-Do not write the walk. Register a `central.Registry.OnRegister` observer
-instead: it replays over every central already registered and runs again for
-every central registered afterwards, and its unwire is run when that central
-leaves the registry. Boot and runtime adopt become one registration, so
-there is no second half to forget — which is what the previous shape
-(a boot walk plus a hook registered on the orchestrator) kept losing.
-
-The exception is a subsystem whose attach order relative to the south-bound
-bring-up is load-bearing. Those keep a named seam on `centralOrchestrator`
-(`setMatterCentralHook`, `setAlarmCentralHook`, …) that runs at a defined
-point in `adoptCentral`, and the composition root calls it with a
-`*central.Unit`.
-
-Guard: `TestEveryRegistryWalkerHasAnAdoptSeam` (`tests/contract/`), with
-`registryWalkersWithoutAdoptSeam` as its ratchet for the walkers that
-deliberately re-run the whole walk instead.
-
-#### A lifecycle test uses the production order
-
-If production starts a service and *then* feeds it asynchronously, the
-test must do the same. Pre-seeding state that production populates later
-inverts the order and hides exactly the bug it should catch — a
-Security & Safety integration test registered a fully loaded central
-*before* `Start`, so an index that is permanently empty in production
-looked correct for months.
-
-Every daemon-level subsystem carries a boot-order assertion: start the
-real daemon, let the model arrive **afterwards**, assert the subsystem
-reports non-empty state.
-
-The middle clause is the whole test. Against a CCU that answers
-instantly the daemon finishes the south-bound bring-up before the domain
-services start, so every subsystem reads a populated model and the test
-passes however broken the wiring is — measured, not assumed: the first
-version of this guard stayed green with the historical fix removed. Boot
-the simulated CCU **not ready** (`harness.Options{StartCCUNotReady:
-true}`), then flip it, and the real order is restored.
-
-Guard: `tests/e2e/boot_order_test.go`
-(`TestE2EDaemonLevelSubsystemsReportNonEmptyStateAfterBoot`) — black-box,
-against the built binary, one table entry per subsystem. It is black-box
-because boot order is a property of the composition root: any test that
-assembles the collaborators itself gets to choose the order, and will
-choose the working one.
-
-#### Declared and published must be the same set
-
-Any north-bound plane that declares entities (MQTT discovery above all)
-needs a round-trip test: collect every topic named in a discovery
-payload, collect every topic the publisher actually writes, assert the
-two sets match.
-
-Declaring `security/class_smoke` while publishing `security/class/smoke`
-produces entities that appear in Home Assistant and stay `unavailable`
-forever. Payload-shape tests and publish-call tests both passed; nothing
-compared them.
-
-Guard: one `Test*PlaneTopicsRoundTrip` per plane, in
-`internal/north/mqtt/`.
-
-#### An event nobody consumes is a dead feature, and it looks identical to a live one
-
-Two shapes of the same defect.
-
-**The switch that drops.** A sink or dispatcher that type-switches over a
-domain's events needs a table test that publishes **every** event type the
-domain defines and asserts each one arrives. The `default:` branch is a
-test failure, not a log line. `internal/alarm/service.go` logged `alarm
-sink dropped unknown event type` for `AlarmDuressEvent` — a duress code
-under coercion produced one hidden journal row and nothing else, on every
-surface, under every configured visibility level.
-
-**The event with no subscriber at all.** The bus has no wildcard
-subscription, so an event nothing subscribes to reaches nothing — and
-every surrounding test still passes, because the producer's test asserts
-it published and the would-be consumer's test publishes onto its own bus.
-This shape reliably leaves a comment behind claiming consumers that do not
-exist: `engine.go` announced `AlarmDuressEvent` "for the MQTT/webhook
-consumers" when only the webhook subscribed, and `device_pipeline.go`
-announced `WeekProfileChangedEvent` "so MQTT/WS subscribers" receive it
-when neither did. **A comment naming a consumer is a hypothesis; write
-the check instead.**
-
-Guards: one `Test*SinkFansOutEveryEventType` per fan-out, driven from the
-domain's `EventType*` constants — and `TestEveryEventTypeHasASubscriber`
-(`tests/contract/`), which resolves every `events.Subscribe` through the
-type checker and fails on any event type that has no consumer and no
-declared reason in `eventsWithoutSubscriber`. Declaring the silence is
-allowed; leaving it undeclared is not.
-
-### Interfaces in the consumer package, except for cross-cutting protocols
-
-Standard Go convention. The one exception: protocol interfaces used
-across `central`, `client`, and north-bound adapters live in
-`pkg/interfaces` because multiple packages need to declare dependencies
-on the same type.
-
-### Callback ports must be re-advertised on every reconnect
-
-When the callback listener does not bind a fixed port — currently only
-`rpc_callback.port_range` for the XML-RPC listener — the effective port
-is only known at bind time. Every `init()` call to the CCU must carry
-that **effective** port, not the configured value. A reconnect after
-restart may change the port; the CCU learns the new one at reconnect
-time.
-
-Neither `rpc_callback.port: 0` nor `bin_port: 0` is the dynamic mode it
-looks like: `applyDefaults` rewrites Port to 8120 and BinPort to 8129
-unconditionally, so a config that means "let the OS choose" has to say
-`port_range` — and only the XML-RPC listener has that escape valve.
-BIN-RPC has no equivalent range setting: two daemons on one host both
-configured with `bin_port: 0` collide on 8129 instead of picking free
-ports. Running two BIN-RPC listeners on the same host today means giving
-each an explicit, distinct `bin_port`.
-
-### matter.js HEAD is the Matter gold standard
-
-Anything under `internal/north/matter/` (and the corresponding wire
-paths in `bridge/`, `endpoint/`, `im/`, `tlv/`, `secure/`) is a
-semantic 1:1 port of [matter.js](https://github.com/project-chip/matter.js)
-HEAD (Apache-2.0). Cluster IDs / revisions / attribute IDs /
-constraints / defaults / wire shape are taken verbatim. Hand-coding
-any of these from the Matter PDF is forbidden — drift creeps in
-within days. Every Matter-side fix or feature reads matter.js
-first, cites the matter.js path + function in the Go comment, and
-adds a parity test. Deliberate divergences land in
-`notes/parity/by_design.md`. See the
-[matter.js as the Matter Gold Standard](#matterjs-as-the-matter-gold-standard)
-section for the full workflow.
+And the twin rule: **an event nobody consumes is a dead feature that looks
+identical to a live one** — both the type-switch that silently `default:`s and
+the event with no subscriber at all. A comment naming a consumer is a
+hypothesis; write the check instead. Guards: one
+`Test*SinkFansOutEveryEventType` per fan-out, plus
+`TestEveryEventTypeHasASubscriber` (declared silence goes in
+`eventsWithoutSubscriber`).
 
 ### Live-CCU writes need explicit user approval — including device selection
 
-The developer's CCU at `172.18.4.29` runs real, in-use devices.
-**Reads are free** (every parameter / paramset / event read, plus all
-OpenCCU-Loom REST `GET` and chip-tool reads / subscribes / event-reads).
-**Writes need explicit user approval AND the user must name the
-specific target device.** Self-chosen test devices are unsafe — what
-looks like "just another HMIP-PSM" can be a `Weinkühlschrank` that
-shouldn't be cycled on/off six times per chip-tool run.
+The developer's CCU at `172.18.4.29` runs real, in-use devices. **Reads are
+free** (every parameter / paramset / event read, all REST `GET`, all chip-tool
+reads / subscribes). **Writes need explicit approval AND the user must name
+the target device** — a self-chosen "just another HMIP-PSM" can be a
+`Weinkühlschrank` that must not be cycled six times per chip-tool run. The
+brief (`notes/contributor/chip-tool-test-brief.md` §T6) authorizes the *test
+type*, never the *device*.
 
-The brief (`notes/contributor/chip-tool-test-brief.md` §T6) directs a real
-on/off/toggle cycle through the bridge → CCU → device chain — that
-authorization covers the test type, NOT the device. The device choice
-is a separate decision the user owns.
+- Confirm address + channel before any write (`onoff on/off/toggle`, REST
+  `PUT .../STATE/value`, paramset writes, anything reaching `Switch.Set`).
+- Current sanctioned slot: `00021BE9957782:4 Bücherregal` (HMIP-PS, bookshelf
+  lamp). Propose an alternative with reasoning if it does not fit.
+- Leave the switch OFF via one final explicit `chip-tool onoff off` before
+  unpair — do not trust toggle parity.
+- For hermetic paths use `godevccu` (`tests/integration/`,
+  `-tags=integration`) — a parallel path, not a substitute for the brief's
+  Apple-independence test.
 
-**How to apply:**
+### matter.js HEAD is the Matter gold standard
 
-- Before any chip-tool sweep or other live-CCU integration test that
-  involves writes (`onoff on/off/toggle`, REST `PUT
-  .../STATE/value`, paramset writes, anything that triggers
-  `Switch.Set` / xml-rpc `setValue` on a real device), confirm the
-  target address + channel with the user.
-- The current sanctioned write-target slot is
-  `00021BE9957782:4 Bücherregal` (HMIP-PS, bookshelf lamp). Use it as
-  default; propose an alternative + reasoning if it doesn't fit.
-- After the sweep, leave the switch in a deterministic OFF state via
-  one final explicit `chip-tool onoff off` before unpair — don't
-  trust toggle parity to land you OFF.
-- For hermetic test paths that don't require real wire-CCU
-  validation, use `godevccu` (in-process simulator,
-  `tests/integration/` with `-tags=integration`) — that's a parallel
-  path, not a substitute for the chip-tool brief's
-  Apple-independence T6.
+Everything under `internal/north/matter/` (and the wire paths in `bridge/`,
+`endpoint/`, `im/`, `tlv/`, `secure/`) is a semantic 1:1 port of
+[matter.js](https://github.com/project-chip/matter.js) HEAD (Apache-2.0).
+Cluster IDs, revisions, attribute IDs, constraints, defaults and wire shape
+are taken verbatim — hand-coding any of them from the Matter PDF is
+forbidden, because drift produces silent Apple/Google pair-aborts. The full
+workflow (which file to read, how to cite it, which parity test to extend)
+is in [`internal/north/matter/CLAUDE.md`](./internal/north/matter/CLAUDE.md);
+deliberate divergences land in `notes/parity/by_design.md`.
 
 ---
 
@@ -461,1246 +225,374 @@ is a separate decision the user owns.
 
 ```
 openccu-loom/
-├── SPECIFICATION.md         — source of truth for 0.1.0 design
-├── README.md
-├── LICENSE                  — MIT
-├── CLAUDE.md                — this file
-├── CHANGELOG.md             — release history
-├── CONTRIBUTING.md
-├── Makefile
-├── go.mod / go.sum
-├── .goreleaser.yaml
-├── Dockerfile
-├── .golangci.yaml
+├── SPECIFICATION.md  CHANGELOG.md  CONTRIBUTING.md  Makefile
 ├── example.config.yaml      — annotated reference config
-├── .github/workflows/       — CI/CD
-├── cmd/
-│   ├── openccu-loom/         — main daemon (daemon.go, ws_adapters.go,
-│   │                          audit_wiring.go)
-│   └── hmcli/               — admin CLI
-├── pkg/                     — public library surface (thin)
-│   ├── hmtypes/             — primitive types, DataPointKey
-│   ├── hmenum/              — all enums (Interface, Parameter, ...)
-│   ├── hmerr/               — error types + sentinels
-│   ├── hmevent/             — domain event types
-│   ├── hmlog/               — contextual slog helpers + request filters
-│   ├── hmapi/               — REST/WS DTOs shared with external clients
-│   ├── hmreliability/       — reliability primitives (CB, retry, throttle)
-│   ├── hmui/               — shared UI-facing DTO/enum surface
-│   ├── interfaces/          — DI contracts (Protocol interfaces)
-│   └── hmproto/             — Homematic wire shapes + normalization
-├── internal/                — daemon-internal, non-reusable
-│   ├── audit/               — change-log append, persistence
-│   ├── auth/                — Basic / Session / OIDC / API Token
-│   ├── build/               — version metadata
-│   ├── ccudata/             — embedded openccu-data extracts
-│   │                          (translations, easymodes, profiles)
-│   ├── central/             — CentralUnit, coordinators, registries;
-│   │                          subpackages: adapter, events, registry,
-│   │                          statemachine, cachereset, rpcserver
-│   │                          (XML-RPC + BIN-RPC callback servers)
-│   ├── client/              — InterfaceClient, backends, transports,
-│   │                          ReGa runner, reliability (CB, retry, throttle)
-│   ├── clock/               — wall-clock abstraction for test seams
-│   ├── config/              — config loading (YAML + curated env overlay;
-│   │                          two-tier bootstrap vs DB-tier sections)
-│   ├── configstore/         — DB-tier config section facade
-│   ├── configui/            — form schema, grouping, labels, sessions
-│   │                          (port of aiohomematic-config)
-│   ├── diagnostics/         — operator runtime diagnostic artefacts
-│   ├── health/              — unified health tracker
-│   ├── history/             — time-series measurement history
-│   ├── i18n/                — translation catalogues (de, en)
-│   ├── metrics/             — Prometheus collectors
-│   ├── model/               — domain model (devices, data points,
-│   │                          custom profiles, calculated, combined,
-│   │                          optimistic, schedule, week_profile, hub)
-│   ├── netutil/             — network helpers (interface/IP selection)
-│   ├── north/               — northbound adapters: rest (incl. ws
-│   │                          subpackage), ui (Svelte SPA + no-JS
-│   │                          /health,/about), mqtt, matter, mcp,
-│   │                          webhook, bridge, discovery, filter
-│   ├── observability/       — instrumentation + tracing helpers
-│   ├── orderedjson/         — order-preserving JSON encoding
-│   ├── parameter/           — validation, coercion, diff
-│   ├── payload/             — north-bound payload assembly + topology
-│   ├── reqctx/              — request-scoped context (locale, user, …)
-│   ├── restapi/             — REST DI ports
-│   ├── routingkey/          — routing-key derivation
-│   ├── scheduler/           — periodic jobs
-│   ├── secret/              — at-rest secret encryption (ADR 0027)
-│   ├── store/               — SQLite persistence (migrations, sessions,
-│   │                          paramsets, devices, incidents, audit)
-│   │                          + in-memory caches (visibility, patches,
-│   │                          master/link profile, devicedetails)
-│   └── syncx/               — concurrency helpers (typed sync primitives)
-├── assets/
-│   ├── ui/                  — Svelte 5 SPA source (Tailwind 4, Vite)
-│   │   ├── src/lib/components/ui/ — shared design-system primitives
-│   │   │                            (Button, Card, Badge, Input, Select,
-│   │   │                            Switch, ConfirmDialog, Toaster,
-│   │   │                            LoadingState, EmptyState, ErrorState)
-│   │   └── tests/e2e/       — Playwright browser-e2e + visual regression
-│   │                          (mocked API; light/dark screenshot baselines)
-│   ├── openapi.yaml         — REST spec
-│   └── wsapi.json           — WebSocket command schema
+├── cmd/openccu-loom/        — main daemon (composition root)
+├── cmd/hmcli/               — admin CLI
+├── pkg/                     — public surface: hmtypes, hmenum, hmerr,
+│                              hmevent, hmlog, hmapi, hmreliability, hmui,
+│                              interfaces, hmproto
+├── internal/
+│   ├── central/             — CentralUnit, coordinators, registries,
+│   │                          rpcserver (XML-RPC + BIN-RPC callbacks)
+│   ├── client/              — InterfaceClient, backends, transports, ReGa
+│   ├── model/               — devices, data points, custom profiles,
+│   │                          calculated, combined, schedule, hub
+│   ├── store/               — SQLite (goose migrations) + in-memory caches
+│   ├── north/               — rest (+ws), ui (SPA + no-JS /health,/about),
+│   │                          mqtt, matter, mcp, webhook, bridge, discovery
+│   ├── config/ configstore/ configui/ auth/ secret/ audit/ i18n/
+│   └── health/ history/ metrics/ scheduler/ diagnostics/ …
+├── assets/  ui/ (Svelte 5 SPA)  openapi.yaml  wsapi.json
 ├── docs/                    — PUBLISHED site only (mkdocs docs_dir)
-│   ├── adr/                 — architecture decisions (published)
-│   ├── user/ admin/         — end-user + administrator guides
-│   ├── integrations/ external-clients/ developer/
-│   ├── caching.md           — every cache layer + boot-time radio cost
-│   ├── mqtt-topic-schema.md — MQTT topic reference
-│   ├── user-guide.md
-│   └── SECURITY.md
 ├── notes/                   — engineering working docs, NEVER published
-│   ├── README.md            — which tree a document belongs in
-│   ├── audits/              — deep-audit backlog, architecture analyses
-│   ├── concepts/            — alarm, security & safety, SPA tile concepts
-│   ├── contributor/         — debugging, matter smoke, chip-tool briefs
-│   ├── parity/              — by_design, snapshot schemas, matter.js fixtures
-│   ├── plans/               — roadmap.md + per-item implementation plans
-│   ├── reference/           — CCU jpages contract, CONTROL inventory, …
-│   └── testplans/           — e2e-testplan, testplan
-├── script/
-│   ├── aiohomematic_snapshot.py
-│   ├── homematicip_local_snapshot.py
-│   ├── model_snapshot_diff.py
-│   ├── datasource_diff.py
-│   └── ...
-└── tests/
-    ├── contract/            — protocol / capability invariants
-    ├── golden/              — session replay
-    ├── integration/         — godevccu-based (in-process)
-    ├── e2e/                 — black-box tests against the built binary
-    ├── chiptool/            — real chip-tool commissioner (//go:build chiptool)
-    ├── harness/             — shared daemon+godevccu test harness
-    ├── loadtest/            — load / soak scenarios
-    └── bench/
+├── script/                  — snapshot + diff tooling
+└── tests/                   — contract, golden, integration, e2e, chiptool,
+                               harness, loadtest, bench
 ```
 
-The `internal/north/ui/spa_dist/` directory is populated by `vite build`
-out of `assets/ui/` and embedded into the binary at compile time (it is
-gitignored — regenerated in CI, not committed).
+`internal/north/ui/spa_dist/` is produced by `vite build` and embedded at
+compile time (gitignored — regenerated in CI, never committed).
 
 **`docs/` vs `notes/` is a hard boundary.** Everything under `docs/` is
 published to <https://sukramj.github.io/openccu-loom/> and needs a nav entry
-in `mkdocs.yml`; nothing under `notes/` ever is. Before adding a document,
-read [`notes/README.md`](./notes/README.md) — it states the rule, the four
-guards that enforce it, and how a published page cites a working document
-(an absolute repo URL, never a relative link out of `docs_dir`). Published
-documents are English-only.
+in `mkdocs.yml`; nothing under `notes/` ever is. Read
+[`notes/README.md`](./notes/README.md) before adding a document — it names the
+four guards and how a published page cites a working document (an absolute
+repo URL, never a relative link out of `docs_dir`). Published documents are
+English-only.
 
 ---
 
 ## Development Environment
 
-### Prerequisites
-
-- Go 1.26 or newer
-- Python 3.14+ (only for the cross-stack snapshot scripts under
-  `script/`; the build, the tests and the integration simulator are
-  pure Go and need no Python toolchain)
-- `golangci-lint` v2 (the repo's `.golangci.yaml` is v2-format; CI
-  installs `golangci-lint/v2` from source — a v1 binary rejects the config)
-- `gofumpt`
-- `goreleaser`
-- Docker + buildx (for multi-arch images)
-- `goose` (SQLite migrations; `go install github.com/pressly/goose/v3/cmd/goose@latest`)
-
-### Everyday commands
-
-The `Makefile` drives every everyday task (the list below is a subset —
-`make generate-matter-schema`, `make coverage`, `make chiptool-test`, the
-snapshot targets, etc. also exist):
+Go 1.26+, `golangci-lint` **v2** (a v1 binary rejects this repo's config),
+`gofumpt`, `goreleaser`, Docker + buildx, `goose`. Python 3.14+ is needed only
+for the cross-stack snapshot scripts under `script/` — build, tests and the
+integration simulator are pure Go.
 
 ```sh
-make build           # build ./bin/openccu-loom
+make build           # ./bin/openccu-loom
 make test            # unit + contract
-make integration     # tests against godevccu (in-process; Mosquitto needs Docker)
-make contract        # contract tests only
-make bench           # run benchmarks
-make lint            # golangci-lint
-make fmt             # gofumpt + goimports
-make generate        # go generate ./... + profile generator
-make docker          # multi-arch Docker images
-make release         # goreleaser snapshot (for testing)
+make integration     # against godevccu (in-process; Mosquitto needs Docker)
+make contract lint fmt generate bench docker release
 ```
 
-No `prek` / `pre-commit` in this project — we use `golangci-lint`
-+ `gofumpt` via a simple pre-commit hook installed by `make setup`.
+No `prek` / `pre-commit`; `make setup` installs a `golangci-lint` + `gofumpt`
+hook.
 
 ---
 
 ## Code Quality & Standards
 
-### Linting
+- **Linting**: `.golangci.yaml` enables `errcheck`, `govet`, `staticcheck`,
+  `revive`, `gocritic`, `gosec`, `bodyclose`, `errorlint`, `exhaustive`,
+  `nilerr`, `goimports`, `unconvert`, `unparam`, `wastedassign`, `prealloc`.
+- **Formatting**: `gofumpt`; `goimports` grouping stdlib → third-party →
+  internal → pkg.
+- **Context**: `ctx context.Context` first on every I/O method; never ignore
+  `ctx.Done()`; do not stash it in structs except in scheduler workers.
+- **Errors**: sentinels in `pkg/hmerr`; wrap with `fmt.Errorf("…: %w", err)`;
+  match with `errors.Is` / `errors.As`; every transport error carries
+  `hmerr.Context{Protocol, Method, Host, Interface}`. No bare `panic` from
+  library code.
+- **Concurrency**: `sync.RWMutex` for read-heavy caches, channels for
+  pipelines, `errgroup` for bounded fan-out. Every goroutine has a documented
+  lifecycle and a way to stop. No package-level mutable state.
+- **Generics** are expected (`events.Subscribe[T Event]`). **`any` needs a
+  justifying comment** (usually "wire-decoded JSON before type-dispatch").
+- **Naming**: short lowercase packages; `MethodNamer` for single-method
+  interfaces; protocol interfaces in `pkg/interfaces` carry no `I` prefix.
 
-`.golangci.yaml` enables: `errcheck`, `govet`, `staticcheck`, `revive`,
-`gocritic`, `gosec`, `bodyclose`, `errorlint`, `exhaustive`, `nilerr`,
-`goimports`, `unconvert`, `unparam`, `wastedassign`, `prealloc`.
+### Comments and markdown
 
-### Formatting
+Comments must offer **durable value to a future reader** — the *why* of the
+code, not the audit row that requested the change. `make test` blocks on
+`TestDocPurity`, which bans wave/phase tags, audit item and drift IDs,
+audit-run references and date stamps, German function-words, and
+legacy-project provenance tokens (`aiohomematic`, `pydevccu`, …) in `//`
+comments. Markdown references in comments must point at durable documents
+(`TestDocPurity_MarkdownRefsExist`): permanent docs, ADRs,
+`notes/parity/by_design.md`, matter.js / chip `path:line` — never a
+transient audit report. Preserve the rationale, drop the tracking tag.
 
-`gofumpt` (stricter than `gofmt`). `goimports` for import grouping
-(stdlib → third-party → internal → pkg).
+Markdown itself is held to a **looser** standard — it is where audit metadata
+belongs. The one rule that transfers is link integrity
+(`TestMarkdownLinksValid`).
 
-### Context & cancellation
-
-Every I/O method takes `ctx context.Context` as the first argument.
-Never ignore cancellation (`ctx.Done()`). Pass `ctx` down; do not
-stash it in struct fields except in a few well-defined places
-(scheduler workers).
-
-### Errors
-
-- Sentinel errors: `var ErrAuthFailure = errors.New("auth failure")` in
-  `pkg/hmerr`.
-- Wrapping: `fmt.Errorf("init proxy: %w", err)`.
-- Type assertions: `errors.Is` / `errors.As`. No type-asserting
-  switches across the error graph.
-- Each transport error carries `hmerr.Context{Protocol, Method, Host,
-  Interface}` for log enrichment.
-- No bare `panic` from library code.
-
-### Concurrency
-
-- `sync.Mutex` / `sync.RWMutex` for shared mutable state.
-- Channels for pipelines and fan-out cancellation.
-- `golang.org/x/sync/errgroup` for bounded parallel fan-out.
-- Every goroutine has a documented lifecycle and a way to stop.
-- Shared state at package-level scope is forbidden except for
-  compile-time constants and `log/slog` default handler.
-
-### Generics
-
-Fine and expected. Example: `events.Subscribe[T Event](bus, handler)`.
-
-### No `interface{}` / `any` without justification
-
-A comment must justify any use of `any` (usually: "wire decoded
-JSON before type-dispatch").
-
-### Naming
-
-- Package names: short, lowercase, no underscores.
-- Exported identifiers: start with a capital letter; document them.
-- Interfaces that carry a single method: `MethodNamer` pattern (e.g.
-  `Dialer`, `Stringer`).
-- Protocol interfaces (DI contracts) in `pkg/interfaces`: no `I` prefix,
-  no `Iface` suffix — just the noun.
-
-### Comments in code
-
-Comments must offer **durable value to a future reader** — explain the
-*why* of the code, not the audit-row or wave that requested the change.
-Internal tracking codes are illegible to anyone who joins the project
-later, and the documents they point at decay fast. `make test` blocks
-on `TestDocPurity` (under `tests/contract/`) which enforces these
-rules mechanically.
-
-**Forbidden in `//` comments (TestDocPurity):**
-
-- Wave / Welle / phase tags: `Wave-3`, `W6-A`, `Welle 4`, `Phase-3`,
-  `Phase 4`, `migration step N`.
-- Audit item IDs: `A3-L05`, `L7.4`, `M1234`, `G-24`, `V8-N29`, `Q-23`,
-  `QW-23`.
-- Drift IDs in every observed shape:
-  - `Drift L0-D01`, `drift L1-NEW-2` (with the literal `Drift` prefix)
-  - `L9-D8`, `L2-D06`, `L10-D02` (bare layer-drift IDs)
-  - `L9-NEW-5`, `L5-NEW-D03` (NEW-suffix forms)
-  - `L3-D6-FUTURE`, `L0x-D_FUTURE_OBSERVER` (skip-placeholder suffixes)
-  - `L0-OC-01` (sub-system-specific IDs)
-- Audit-run references: `audit run #02`, `parity audit`,
-  `parity sweep`, `parity_audit.md`, `parity_request.md`.
-- Audit date stamps: `\b2026-0[456]-\d{2}\b` and any peer pattern.
-- German/English audit hybrids: `MANDATORY-FEHLT`.
-- Legacy-project provenance tokens in code comments: `aiohomematic`,
-  `homematicip_local`, `pydevccu`, `openccu-data`, etc. — these belong
-  in the markdown documentation, not in production code.
-- Short German function-words: `darf`, `soll`, `muss`, `nicht`, `über`,
-  `dürfen`, `müssen`, `während`, `damit`, `dafür`, `daher`, `liefert`,
-  `enthält`, `erlaubt`, `ergänzt`, `bzw.`, `z.B.` — code comments stay
-  in English.
-
-**Markdown references must point at durable documents.**
-`TestDocPurity_MarkdownRefsExist` walks every `.md` reference in a
-`//` comment and fails when the cited file is missing on disk. Cite:
-
-- ✅ Permanent docs: `CLAUDE.md`, `SPECIFICATION.md`,
-  `docs/adr/*.md` (ADRs are immutable once landed),
-  `notes/parity/by_design.md`, `notes/reference/matter-conformance.md`,
-  `notes/concepts/matter-ui-concept.md`, and the matter.js / chip source-file
-  references (`packages/.../X.ts:line`, `src/.../Y.cpp:line`).
-
-Do NOT cite transient audit-trail files in code comments: audit-run
-reports, hand-off memories, todo files, ad-hoc parity sweeps. The
-audit-trail lives in Git history + `notes/parity/by_design.md` (the
-living catalogue of intentional divergences); code comments should
-reference neither.
-
-**Rewrite pattern** when removing audit-tracking from an existing
-comment — preserve the rationale, drop the tracking tag:
-
-```go
-// Before:
-// Drift L8-D01 (parity audit 2026-05-12): FeatureMap (0xFFFC) and
-// ClusterRevision (0xFFFD) must be enumerated so the initial
-// Subscribe pre-populates Apple's HAP-mapper cache.
-
-// After:
-// FeatureMap (0xFFFC) and ClusterRevision (0xFFFD) must be enumerated
-// so the initial Subscribe pre-populates Apple's HAP-mapper cache.
-// Mirrors chip AdministratorCommissioningCluster.cpp:53-56.
-```
-
-What *stays* in the comment: the invariant, the matter.js / chip
-provenance with `path:line`, the spec section (`Matter §11.18.6.4`),
-the observable symptom when broken. What *goes*: the audit row, the
-date, the wave number, the FUTURE-skip placeholder ID.
-
-**Exceptions:**
-
-- `ha_`-prefixed files (legacy HA-compat zone) — out of scope.
-- `tests/integration/testdata/` — golden wire data, untouched.
-- `tests/contract/doc_purity_test.go` itself — it enumerates the
-  forbidden patterns in its own doc-comment.
-
-If you need to discuss audit provenance, write it into the commit
-message body or a Markdown doc — both survive code churn far better
-than a comment that names a row in a deleted spreadsheet.
-
-### Documents in markdown
-
-Markdown docs (`*.md` under the repo) are deliberately held to a
-**looser** standard than production code comments — they are the
-home of audit metadata, drift catalogues, and timestamped tracking.
-The one rule that *does* transfer cleanly is **link integrity**.
-
-**`TestMarkdownLinksValid`** (in `tests/contract/`) walks every
-`.md` file and fails when a Markdown-style link (square brackets
-followed by a parenthesised target) points at a file that does
-not exist on disk. Anchor fragments (`#section`) are tolerated
-against the file but anchor existence is NOT verified (would
-require a Markdown parser).
-
-What is checked:
-- Relative-link targets (e.g. `./sibling.md`, `../parent.md`)
-  resolved against the linking file's directory.
-- Absolute targets (leading `/`) resolved against the repo root.
-- Directory targets (trailing `/`) count as satisfied if the
-  directory exists.
-
-What is NOT checked:
-- Bare path tokens in prose (`see by_design.md`) — would
-  false-positive on every mention.
-- External URLs, `mailto:`, `tel:`, `ftp:` — ignored.
-- Reference-style Markdown links (`[text][ref]` + `[ref]: url`) — rare in
-  this repo; ignored.
-
-Exclusions:
-- `node_modules/`, `spa_dist/`, `.git/` — vendored or out of scope.
-
-What is *not* a markdown-purity rule (and why):
-- **Drift-IDs, audit dates, "parity sweep" mentions** — `by_design.md`
-  is the audit-trail itself; banning these tokens would break the
-  document it exists to populate.
-- **Legacy-project names (`aiohomematic`, `pydevccu`, …)** —
-  `CLAUDE.md`, `SPECIFICATION.md`, ADRs need to name these projects.
-- **German words** — beispielhafte deutschsprachige Zitate sind in
-  Doku ok, even though they would trip `TestDocPurity` in code.
-- **Audit date stamps** — "Last update: 2026-05-12" headers are
-  normal markdown metadata.
-
-The asymmetry is deliberate: code is the durable artefact, markdown
-is the conversation about that artefact.
+The full ban list, the rewrite pattern and the exceptions are in
+[`notes/contributor/engineering-rules.md`](./notes/contributor/engineering-rules.md).
 
 ---
 
 ## Architecture Quick Reference
 
-### Layers
-
 ```
-Outside world
-   ↓
-Northbound adapters     (north/mqtt, north/rest, north/ui)
-   ↓
-Domain core             (central + model + client + store + health)
-   ↓
-Southbound adapter      (client/transport/{xmlrpc,binrpc,jsonrpc})
-   ↓
-CCU
+Outside world → northbound adapters (north/mqtt, north/rest, north/ui)
+              → domain core (central + model + client + store + health)
+              → southbound adapter (client/transport/{xmlrpc,binrpc,jsonrpc})
+              → CCU
 ```
 
-### Key packages
-
-- `internal/central`: `CentralUnit`, coordinators, callback servers,
-  scheduler, registry. Multi-CCU: one `CentralUnit` per configured CCU;
-  all held by a `CentralRegistry` shared with north-bound adapters.
-- `internal/central/adapter`: per-central southbound bring-up is
-  **readiness-gated** — `ccu_readiness.go` polls the CCU's own boot
-  marker (`GET /ise/checkrega.cgi` returning `OK`) before loading names
-  then devices, so a co-booting CCU never yields devices-without-names.
-  The northbound surface (REST/SPA/health) comes up immediately and
-  shows a per-central "waiting for CCU" state that never trips `/health`
-  to 503. The same gate guards mid-life reconnects after a CCU reboot.
-- `internal/client`: `InterfaceClient`, circuit breaker, retry,
-  throttle, coalescer, ping/pong. One `InterfaceClient` per
-  `(central, interface)` pair.
-- `internal/client/backends`: `CcuBackend` (XML-RPC + JSON-RPC),
-  `CuxdBackend` (BIN-RPC), `HomegearBackend` (XML-RPC; depth-parity with
-  CCU is a post-0.1.0 milestone — see `SPECIFICATION.md` §2.2 Non-Goals).
-  (CCU-Jack / JSON-RPC-only mode is a dropped non-goal — every interface
-  supports push callbacks; see `SPECIFICATION.md` §2.2.)
-- `internal/model/custom`: device profile registry + custom data point
-  types. Profiles are generated from aiohomematic via the Python
-  helper; hand-written Go wrappers per device type.
-- `internal/store/sqlite`: persistent stores. Schema in
-  `internal/store/sqlite/migrations/` via goose.
-- `internal/central/events`: the internal `EventBus` — generic,
-  typed, priority-aware, no re-entrancy.
-
-### Callback servers
-
-Two listeners, one each protocol, both shared across all centrals:
-
-- XML-RPC over HTTP on `rpc_callback.port` (default `:8120`). Routes
-  by URL path `/RPC2/<central_name>`.
-- BIN-RPC over raw TCP on `rpc_callback.bin_port` (default `:8129`).
-  Routes by `interface_id` inside the envelope.
-
-The XML-RPC listener accepts a fixed port or a range
-(`port_range: "<lo>-<hi>"`, bound to the first free port in it); its
-`port: 0` means the 8120 default, not an OS-assigned port. The BIN-RPC
-listener has no range equivalent: `bin_port: 0` also means the 8129
-default, not an OS-assigned port. The *effective* port is re-advertised
-to the CCU in every `init()` call and every reconnect.
-
-### Event bus usage
+- `internal/central` — `CentralUnit`, coordinators, callback servers,
+  scheduler, registry. One `CentralUnit` per configured CCU, all held by a
+  `CentralRegistry` shared with north-bound adapters.
+- `internal/central/adapter` — per-central bring-up is **readiness-gated**:
+  `ccu_readiness.go` polls the CCU's boot marker (`GET /ise/checkrega.cgi`
+  → `OK`) before loading names then devices, so a co-booting CCU never yields
+  devices-without-names. The northbound surface comes up immediately with a
+  per-central "waiting for CCU" state that never trips `/health` to 503. The
+  same gate guards mid-life reconnects.
+- `internal/client` — `InterfaceClient` (one per `(central, interface)`),
+  circuit breaker, retry, throttle, coalescer, ping/pong. Backends:
+  `CcuBackend` (XML-RPC + JSON-RPC), `CuxdBackend` (BIN-RPC),
+  `HomegearBackend` (XML-RPC; depth-parity is post-0.1.0).
+- `internal/model/custom` — device profile registry, hand-maintained
+  (ADR 0063). See [`internal/model/custom/CLAUDE.md`](./internal/model/custom/CLAUDE.md).
+- `internal/central/events` — the typed, priority-aware `EventBus`, no
+  re-entrancy:
 
 ```go
 unsubscribe := events.Subscribe(bus, func(e hmevent.DataPointValueChanged) {
     // handle
 }, events.WithPriority(events.PriorityHigh))
 defer unsubscribe()
-
 events.Publish(bus, hmevent.DataPointValueChanged{ /* ... */ })
 ```
 
-### SPA operating concept (Config UI)
+**Callback servers** — two listeners, both shared across all centrals:
+XML-RPC over HTTP on `rpc_callback.port` (default `:8120`, routed by URL path
+`/RPC2/<central_name>`, accepts a `port_range`), and BIN-RPC over raw TCP on
+`rpc_callback.bin_port` (default `:8129`, routed by `interface_id` in the
+envelope, no range equivalent).
 
-The Svelte SPA has one consistent operating concept; match it when you
-touch any view. Source the recurring surfaces from the shared
-design-system in `assets/ui/src/lib/components/ui/` instead of
-hand-rolling them:
-
-- **Loading / empty / error** → the shared `LoadingState` /
-  `EmptyState` / `ErrorState` components (never a bare `<p>`). The error
-  surface always renders a localized `Error: …` with an optional retry.
-- **Action results** (save / delete / create / run / restore) →
-  `toastStore.success` / `toastStore.error`, never an inline header
-  banner. A failure must surface — silent aborts are a bug.
-- **Destructive actions** → the shared `confirmStore.ask({ …,
-  destructive: true })` dialog; no hand-rolled modals, no unconfirmed
-  deletes.
-- **Primitives** → `Button` / `Input` / `Select` / `Card` / `Badge`
-  over raw elements; every colour utility carries a `dark:` variant (or
-  uses the theme-aware `--ha-*` CSS tokens, which already invert).
-- Strings stay localized via `t(...)` (de + en in `lib/i18n.ts`).
-
-**Full i18n and full theme support are mandatory for every SPA change
-— no exceptions for new feature areas.**
-
-- **i18n**: every user-visible string goes through `t(...)` with BOTH
-  locales (`DE` + `EN`) filled in `assets/ui/src/lib/i18n.ts` — that
-  includes button labels, toasts, confirm dialogs, empty/error states,
-  badges, tooltips, `aria-label`s, document titles, and placeholder
-  text. No hard-coded literals in markup or scripts. Config-schema
-  fields additionally follow the `config.field.*`/`config.help.*` rule
-  (see Critical Rules); everything else is reviewed, not guard-enforced
-  — treat a missing locale entry like a failing test.
-- **Themes**: every view must render correctly in **all four**
-  combinations — skin `loom` and `ha` (`data-skin`) × light and dark
-  mode. Use the theme-aware CSS tokens (which invert per mode and
-  restyle per skin) or Tailwind `dark:` variants; never a raw colour
-  that only works in one combination. New views add Playwright visual
-  baselines for at least light + dark (see Testing Guidelines); skin
-  parity is part of review.
-
-UI patterns (session-based MASTER editing, undo/redo, dirty tracking,
-preset selection) mirror `homematicip-local-frontend`; the operating
-concept above is locked in by the Playwright e2e + visual suite
-(see [Testing Guidelines](#testing-guidelines)).
+For caching, boot-time data flow and CCU radio cost, read
+[`docs/caching.md`](./docs/caching.md).
 
 ---
 
-## Testing Guidelines
+## Testing
 
-### Test file & test naming (do not create tracking-named tests)
+Details, the pillar-by-pillar catalogue and the snapshot-parity pipeline live
+in [`tests/CLAUDE.md`](./tests/CLAUDE.md). The rules that apply everywhere:
 
-Test file names and test-function names must describe **what is tested**,
-not how or when the test was produced. Do **not** name a test file (or a
-`TestXxx` function) after a coverage push, an audit row, a migration wave,
-or a sequence number. The same tracking tokens banned from code comments by
-`TestDocPurity` are banned from test names:
-
-- ❌ `coverage_boost37_test.go`, `central_batch10_test.go`,
-  `daemon_coverage4_test.go`, `gap_g_test.go`, `a3_hub_update_test.go`,
-  `coverage_sweep_test.go`, `misc_nil_guards_test.go`, and any
-  `_p1_/_g34_/_m3_/_v12_/_w6_/_a5_` style suffix or prefix.
-- ✅ `backup_adapter_test.go`, `hub_wiring_refresh_test.go`,
-  `lock_command_test.go` — named after the production unit or behaviour
-  under test.
-
-Write each test into the file named for the production unit it exercises
-(`foo.go` → `foo_test.go`, or a behaviour-themed `foo_<aspect>_test.go`).
-When you would otherwise create a `*_coverage`/`*_boostN`/`*_batchN` file,
-add the cases to the existing unit's test file instead. `parity` /
-`golden` / `contract` remain acceptable **only** when the file genuinely
-implements that test kind (e.g. a real matter.js parity check), never as a
-catch-all label.
-
-Three mandatory test pillars:
-
-### Behaviour-governing config needs one end-to-end test per value
-
-A config field that changes what the daemon *does* — not merely a
-timeout or a size — needs one end-to-end test per value it accepts,
-driven through the real path the value governs.
-
-`alarm.duress_visibility` shipped with three levels, a validator, a
-localized help text and a documented threat model. None of the three was
-ever exercised through the sink that carries the event, and the sink
-dropped it. Everything around the feature was tested; the feature was
-not.
-
-### Never cite your own unverified wiring
-
-When work builds on a previous change's wiring, cross the dependency
-with a test. A comment asserting it — *"the alarm domain's own webhook
-path still carries it"* — is a hypothesis, and that particular one was
-false: the webhook hung off the same dead sink.
-
-This is the code-level twin of the rule that doc claims are verified
-against source. Your own earlier commit is a doc claim.
-
-Two habits follow from it:
-
-- When a slice depends on an earlier slice's seam, the first test of the
-  new slice crosses that seam.
-- A feature area that spans several PRs is audited **before** it is
-  called done. Seven green PRs let 72 verified defects through, two of
-  them critical; the audit that found them ran afterwards, when the
-  cost of every fix had already multiplied.
-
-### Contract tests (`tests/contract/`)
-
-Protocol / capability invariants. Every test states a hard rule and
-blows up if violated. The catalogue lives in `tests/contract/` —
-representative: `TestAllMVPInterfacesHavePingPong`,
-`TestCuxdUsesBINRPCBackend`, `TestDeviceProfileRegistryParity`,
-`TestRecordedReliabilityDefaults` (cross-stack drift detector).
-
-**If you touch a protocol / capability boundary, you must add or
-update a contract test.**
-
-### Golden-file / session replay (`tests/golden/`)
-
-Recorded CCU sessions played back against the daemon. Assertions
-compare emitted events or output JSON against golden files. Run with
-`-update` to refresh.
-
-### Integration tests (`tests/integration/`)
-
-Run the daemon against an in-process `godevccu` simulator (a pure-Go
-port of pydevccu — no Python toolchain required) and assert
-end-to-end behavior. Slow; gated behind `-tags=integration`.
-
-### SPA browser-e2e + visual regression (`assets/ui/tests/e2e/`)
-
-Playwright drives the real SPA in a headless Chromium and locks in the
-homogeneous operating concept (navigation + document titles + skip-link,
-the shared loading/empty/error states, toast feedback, the confirm
-dialog) plus visual baselines of representative views in **both light
-and dark mode**. The suite is hermetic: it serves the SPA via the Vite
-dev server and **mocks every `/api/v1/*` call** (`tests/e2e/helpers/
-mock-api.ts`), so no daemon or CCU is needed and screenshots are
-deterministic. Run with `cd assets/ui && npm run e2e`; refresh baselines
-with `npm run e2e:update`. CI (`.github/workflows/spa-e2e.yml`) runs it
-inside the official `mcr.microsoft.com/playwright` container so
-rendering matches — screenshot baselines are committed **per platform**
-(`*-chromium-linux.png` for CI; macOS `-darwin` baselines coexist for
-local runs). The component-level Svelte tests are the separate `vitest`
-suite (`*.test.ts` under `assets/ui/src/`); keep both green.
-
-### Unit tests
-
-Regular Go tests per package. Target ≥ 80 % coverage in core packages
-(`client`, `central`, `model/custom`, `store`). Lower is OK for
-adapter shims.
-
-### Benchmarks
-
-Live in `tests/bench/`. Run weekly in CI. Regressions > 20 % block release.
-
-### Fuzz tests
-
-XML-RPC parser, BIN-RPC codec, JSON-RPC parser, paramset normalization.
-Short runs on every PR; longer nightly.
-
-### Cross-stack model-snapshot verification
-
-End-to-end regression check: OpenCCU-Loom's domain model (Devices →
-Channels → DataPoints) is compared against aiohomematic's model as a
-reference when both stacks load the same wire data. This catches
-unintended model regressions — it runs as a scoped parity guard, not
-as a measure that output must match aiohomematic (parity is no longer
-the project's primary goal). The four-script pipeline below is the
-snapshot regression run.
-
-Four scripts, run in this order:
-
-```sh
-# 1. Wire-data identity (399 devices × 12 attributes per parameter
-#    between pydevccu and godevccu). Must be 0 drift.
-python3 script/datasource_diff.py
-
-# 2. Dump OpenCCU-Loom's model against godevccu (~80k DPs, 60+ MB JSON).
-go test -tags=integration -timeout=300s \
-    -run TestModelSnapshotDumpAgainstGodevccu ./tests/integration/...
-
-# 3. Dump aiohomematic's model against pydevccu (~8k DPs, ~8 MB JSON).
-#    The script auto-re-execs in the aiohomematic venv if openccu_data
-#    is not on the active sys.path — without that the python snapshot
-#    silently emits empty parameter labels and masks real drift.
-python3 script/aiohomematic_snapshot.py
-
-# 4. Per-field diff with documented tolerated fields (`profile`,
-#    `wrapped_dps`) and a paramsets-channel-field exclusion. Exit 0
-#    means full intersection parity.
-python3 script/model_snapshot_diff.py
-```
-
-Common-schema definition: `notes/parity/model_snapshot_schema.md`.
-
-The two snapshot JSON files (`tests/integration/testdata/model_snapshot_*.json`,
-total ~70 MB) are gitignored — they are produced on demand and live
-only locally. Set `OPENCCU_LOOM_SNAPSHOT_DEVICES=A,B,C` to scope both
-sides to a smoke subset for fast iteration; default loads the entire
-embedded fleet.
-
-When you change model code (DataPoint creation, visibility marks,
-custom-DP composition, channel methods), rerun (2) and (4) and verify
-the drift score has not regressed in your area. The current baseline
-sits at ~270 architecturally-accepted drifts; growth beyond that
-without a corresponding entry in `notes/parity/by_design.md` is a regression.
+- **Test names describe what is tested**, never a coverage push, audit row or
+  wave (`backup_adapter_test.go`, not `coverage_boost37_test.go`).
+- **Touching a protocol or capability boundary means adding or updating a
+  contract test** in `tests/contract/`.
+- **Behaviour-governing config needs one end-to-end test per value**, driven
+  through the real path the value governs. `alarm.duress_visibility` shipped
+  with three levels, a validator, a localized help text and a documented
+  threat model — and a sink that dropped the event.
+- **Never cite your own unverified wiring.** When a slice depends on an
+  earlier slice's seam, its first test crosses that seam. A feature area
+  spanning several PRs is audited **before** it is called done: seven green
+  PRs let 72 defects through, two of them critical.
+- Unit-test coverage target ≥ 80 % in `client`, `central`, `model/custom`,
+  `store`; lower is fine for adapter shims.
 
 ---
 
 ## Common Tasks
 
-### Regenerate Matter schema from matter.js HEAD
-
-When matter.js HEAD ships cluster-revision or device-type-revision bumps,
-update the codegen pipeline in one shot:
-
-```sh
-make generate-matter-schema
-```
-
-This runs four steps:
-1. Extract the schema from the built matter.js checkout by running the
-   TypeScript extractor `notes/parity/matter/extract-from-matter-js.ts`
-   with `node` inside `../matter.js` (it is copied in so the
-   `@matter/model` import resolves), writing
-   `notes/parity/matter/matter-schema-snapshot.json`. (matter.js's
-   `packages/model` must be built first — `npm run build`.)
-2. Copy the snapshot to the parity embed at
-   `internal/north/matter/parity/schema.json` (kept in sync with the
-   snapshot; see `internal/north/matter/parity/parity.go`).
-3. `go run ./script/generate_matter_schema.go` — reads the snapshot and
-   regenerates `internal/north/matter/schema/clusters.go` and
-   `internal/north/matter/schema/devicetypes.go`.
-4. `gofumpt -w internal/north/matter/schema/` — formats the output.
-
-After regeneration, run `go test ./internal/north/matter/schema/...` — the
-`TestParityCodeMatchesGeneratedSchema` test will flag any cluster where the
-hand-coded revision constant in the cluster source files has drifted from the
-new schema. Update those constants to match, then re-run `make test`.
-
-Callers that need a device-type revision at runtime should use
-`schema.DeviceTypeRevision(id)` (from `internal/north/matter/schema`) rather
-than hard-coding a switch — that way the next `make generate-matter-schema`
-automatically propagates the update without requiring a second manual edit.
-
-### Add a new device type
-
-The device-profile catalogue is **hand-maintained** — there is no
-generator (ADR 0063). Adding a device is four edits and one measurement:
-
-1. Read the CCU's own device description for the model (the embedded
-   `godevccu` fixtures under
-   `../godevccu/internal/embed/data/paramset_descriptions/` carry it for
-   the simulated fleet). Note which channel holds which parameter — that
-   is the fact the rest of the work rests on, and guessing it produces a
-   profile that binds nothing.
-2. Add the registration to `internal/model/custom/profiles.go`
-   (device type, category, base channels, the schema pointer).
-3. Add or reuse a channel-group schema in
-   `internal/model/custom/profile_configs.go`. Reuse only when the
-   parameter *and* the channel offsets match — a schema shared by two
-   devices that place a field differently cannot serve both, and that is
-   what the per-registration `Config` pointer is for.
-4. A new `DeviceProfile` value needs a hand-written Go wrapper and a
-   registered constructor under `internal/model/custom/<cat>/`;
-   `TestEveryRegisteredProfileHasConstructor` fails without it.
-5. Where the catalogue deviates from the reference implementation,
-   record it in `notes/parity/by_design.md` with the wire fact behind
-   it.
-
 ### Add a REST endpoint
 
 1. Update `assets/openapi.yaml` first (spec-driven).
-2. Implement the handler in `internal/north/rest/handlers/`.
-3. Route it in `internal/north/rest/router.go`.
-4. Add request/response DTOs in `pkg/hmapi` (shared external types) or
-   alongside the handler in `internal/north/rest/handlers/`.
-5. Unit tests + integration test.
-6. Regenerate OpenAPI client if we publish one.
-7. Walk the two surfaces below — a new capability that only exists on
-   REST is half-delivered.
+2. Handler in `internal/north/rest/handlers/`, routed in
+   `internal/north/rest/router.go`.
+3. DTOs in `pkg/hmapi` (shared) or alongside the handler.
+4. Unit + integration tests; regenerate the OpenAPI client if published.
+5. Walk the two surfaces below.
 
 ### A new capability has more surfaces than the one you are editing
 
-A feature is not done when its own bridge works. Two surfaces are
-consistently forgotten because nothing fails when they are skipped —
-the build stays green, the tests stay green, and the gap only shows up
-as "the assistant cannot do X" or "the view is not in the menu" weeks
-later.
+Both are reviewed, not guard-enforced — which is exactly why they get
+forgotten: nothing fails when they are skipped.
 
-**MCP (`internal/north/mcp/`).** The MCP server is how an AI assistant
-drives the daemon. When you add, rename, or change the semantics of a
-verb, a resource, or a payload field, ask whether the MCP surface has
-to follow — and either extend it in the same change or record why not.
-A capability that exists on REST/WS/MQTT but not on MCP is invisible to
-every assistant-driven workflow.
-
-**Navigation & views (`internal/north/ui/surface/`, Settings → Navigation
-& views).** Every view the SPA can show is registered as a surface and
-is switchable per operating mode. A new view that is not registered
-cannot be hidden, cannot be shown in the right profiles, and does not
-appear in the operator's own navigation editor. A view that moved or
-was folded needs its registry entry updated too.
-
-Both are reviewed, not guard-enforced: no test fails when an MCP tool
-or a surface entry is missing, which is exactly why they belong on the
-checklist.
+- **MCP (`internal/north/mcp/`)** is how an assistant drives the daemon. A new
+  or renamed verb, resource or payload field either extends the MCP surface in
+  the same change, or the change records why not.
+- **Navigation & views (`internal/north/ui/surface/`)** — every SPA view is a
+  registered surface, switchable per operating mode. An unregistered view
+  cannot be hidden, cannot be profiled, and is missing from the operator's own
+  navigation editor. A moved or folded view updates its entry.
 
 ### Add a translation key
 
-1. Add the key + English value to
-   `internal/i18n/catalogs/en.json`.
-2. Add the German value to `internal/i18n/catalogs/de.json`.
-3. Reference from templates via `{{ t "key" }}` or from Go code via
-   `i18n.T(locale, "key")`.
+English value in `internal/i18n/catalogs/en.json`, German in `de.json`;
+reference via `{{ t "key" }}` or `i18n.T(locale, "key")`. SPA strings go
+through `assets/ui/src/lib/i18n.ts` instead — see
+[`assets/ui/CLAUDE.md`](./assets/ui/CLAUDE.md).
 
-### Add a new database table
+### Add a database table
 
-1. Create the migration file under
-   `internal/store/sqlite/migrations/` (goose naming convention
-   `<nnnn>_<name>.sql` with `-- +goose Up` / `-- +goose Down`).
-2. Add the access struct under `internal/store/sqlite/`.
+Migration under `internal/store/sqlite/migrations/` (goose
+`<nnnn>_<name>.sql` with `-- +goose Up` / `-- +goose Down`), access struct
+under `internal/store/sqlite/`.
 
 ---
 
 ## Git Workflow
 
-- Main branch: `main` (protected).
-- Feature branches: `feature/<desc>`, fixes: `fix/<desc>`, AI sessions:
+- `main` is protected. Branches: `feature/<desc>`, `fix/<desc>`,
   `claude/<desc>`.
-- Conventional-commit style: `<type>(<scope>): <subject>`. Scopes
-  align with the package boundaries (`client`, `central`, `model`,
-  `north`, `store`, `rest`, `mqtt`, `ui`, `docs`, `ci`, ...).
-- Every PR must pass `make test`, `make contract`, `make lint`.
-- Integration tests (`make integration`) must pass on main at least
-  every 24 h; feature branches trigger them on `needs-integration`
-  label.
-- Commits are signed off (`git commit -s`) — DCO applies so the
-  authorship chain stays traceable.
-- Releases tagged `vX.Y.Z`. Pre-releases `vX.Y.Z-rc.N`. Each release updates
-  both changelogs (root `CHANGELOG.md` + `packaging/ha-addon/openccu-loom/CHANGELOG.md`,
-  the operator-facing HA add-on changelog) — see the completion checklist.
+- Conventional commits, scopes along package boundaries (`client`, `central`,
+  `model`, `north`, `store`, `rest`, `mqtt`, `ui`, `docs`, `ci`, …).
+- Every PR passes `make test`, `make contract`, `make lint`; integration is a
+  required check.
+- Commits are signed off (`git commit -s`) — DCO applies.
+- Releases tagged `vX.Y.Z`, pre-releases `vX.Y.Z-rc.N`.
 - Never push `--force` to `main`.
 
 ---
 
-## aiohomematic as a Reference
+## References
 
-> **Shorthand convention:** when the user says "aiohomematic", they
-> mean the whole Python reference family, not just the single repo.
-> Expand the term to include **all** of the sibling projects that
-> live on the developer's machine and treat them as a single pool of
-> prior art when cross-referencing:
->
-> | Repo                                                            | Local path                                                     | Purpose                                                            |
-> | --------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
-> | [`aiohomematic`](https://github.com/SukramJ/aiohomematic)       | `../aiohomematic/`                 | Core async HomeMatic library — transports, devices, paramsets.    |
-> | [`aiohomematic-config`](https://github.com/SukramJ/aiohomematic-config) | `../aiohomematic-config/`  | Configuration-panel logic: form schemas, grouping, labels, profiles. |
-> | [`homematicip_local`](https://github.com/SukramJ/homematicip_local)     | `../homematicip_local/`    | Home-Assistant integration — config flow, WebSocket API, tests.   |
-> | [`homematicip-local-frontend`](https://github.com/SukramJ/homematicip-local-frontend) | `../homematicip-local-frontend/` | Lit web-components for cards + HA config panel; the SPA reference for UI patterns. |
-> | [`openccu-data`](https://github.com/SukramJ/openccu-data)       | `../openccu-data/`                 | Single source of truth for OCCU metadata extracts (translations, easymodes, profiles). |
->
-> When any of these projects contains the answer to a semantic
-> question ("how does aiohomematic do X?"), quote the specific file
-> + function so the provenance stays traceable.
+**aiohomematic** is shorthand for the whole Python reference family. They are
+reference implementations, not dependencies — the gold standard for the **CCU
+side**:
 
-They are the **reference implementations** — not dependencies.
+| Repo | Local path | Purpose |
+|---|---|---|
+| [`aiohomematic`](https://github.com/SukramJ/aiohomematic) | `../aiohomematic/` | transports, devices, paramsets |
+| [`aiohomematic-config`](https://github.com/SukramJ/aiohomematic-config) | `../aiohomematic-config/` | form schemas, grouping, labels, profiles |
+| [`homematicip_local`](https://github.com/SukramJ/homematicip_local) | `../homematicip_local/` | HA integration: config flow, WebSocket API |
+| [`homematicip-local-frontend`](https://github.com/SukramJ/homematicip-local-frontend) | `../homematicip-local-frontend/` | Lit components; the SPA's UI-pattern reference |
+| [`openccu-data`](https://github.com/SukramJ/openccu-data) | `../openccu-data/` | OCCU metadata extracts |
 
-When in doubt about the semantics of a coordinator, a backend, a
-parameter, a device profile, or a UI pattern, look there first.
-Examples:
+Quote the specific file + function when you use one, so provenance stays
+traceable. Ported 1:1: enumerations and their string values, interface
+classification sets (divergences in SPECIFICATION.md §5.1), paramset
+normalization and patches, profile registration shape, visibility filters and
+label-resolution chains, UI interaction patterns. **Not** ported: asyncio
+idioms, Pydantic validation, HA-specific shims, the MQTT workaround for CUxD
+(we have BIN-RPC), Lit components.
 
-```
-# Schedule cache policy
-Read ../aiohomematic/aiohomematic/model/week_profile.py
-
-# Paramset patches
-Read ../aiohomematic/aiohomematic/store/patches/
-
-# Form schema + parameter grouping for MASTER paramsets
-Read ../aiohomematic-config/aiohomematic_config/form_schema.py
-Read ../aiohomematic-config/aiohomematic_config/grouping.py
-
-# Channel-config UX: session handling, undo/redo, dirty tracking
-Read ../homematicip-local-frontend/packages/config-panel/src/views/channel-config.ts
-
-# WebSocket API shapes, session lifecycle
-Read ../homematicip_local/custom_components/homematicip_local/websocket_api.py
-
-# OCCU metadata archives + extractor scripts
-ls ../openccu-data/openccu_data/data/
-Read ../openccu-data/openccu_data/translations/extractor.py
-```
-
-Things that are directly ported (1:1):
-- Enumerations and their string values.
-- Interface classification sets (with the divergences documented
-  in `SPECIFICATION.md` §5.1).
-- Paramset normalization rules.
-- Paramset patches.
-- Device profile registration shape.
-- Visibility filters, grouping rules, label-resolution chains from
-  `aiohomematic-config`.
-- UI interaction patterns (session-based MASTER editing, undo/redo,
-  dirty tracking, preset selection) from `homematicip-local-frontend`.
-- Contract test invariants that make sense cross-language.
-
-Things that are **not** ported (different world):
-- Python / asyncio idioms → Go idioms.
-- Pydantic validation → Go `validator`-style checks on deserialization
-  boundaries.
-- HA-specific shims.
-- MQTT workaround for CUxD (we have BIN-RPC).
-- Lit web components → Svelte 5 runes.
-
----
-
-## matter.js as the Matter Gold Standard
-
-> **Hard rule for everything under `internal/north/matter/`,
-> `internal/north/matter/cluster/`, `internal/north/matter/bridge/`,
-> `internal/north/matter/endpoint/`, `internal/north/matter/im/`,
-> `internal/north/matter/tlv/`, `internal/north/matter/secure/` and
-> any other Matter-side code:** the gold standard is
-> [`matter.js`](https://github.com/project-chip/matter.js) HEAD.
-> Apache-2.0 — MIT-compatible — and the certified, production-tested
-> reference Matter stack. The platform-specific exceptions Apple
-> Home / Google Home / Alexa apply have already been encoded into
-> matter.js's behavior + protocol layers through real interop
-> testing; we do not re-derive them, we mirror them.
-
-| Repo | Local path | Role |
-| --- | --- | --- |
-| matter.js | `../matter.js/` | Matter Core implementation: schema (`packages/model`), wire codec (`packages/types`), behavior layer (`packages/node/src/behaviors`), device types (`packages/node/src/devices`), protocol engine (`packages/protocol`). The single Matter-side gold standard. |
-
+**matter.js** (`../matter.js/`) is the gold standard for the **Matter side**.
+The two reference layers do not overlap; where a feature spans both, the
+boundary is `internal/model/custom/<dp>/matter.go`.
 [`home-assistant-matter-bridge`](https://github.com/Nabu-Casa/home-assistant-matter-bridge)
-(Apache-2.0, local at `../home-assistant-matter-bridge/`) is one
-specific consumer of matter.js. Useful as an occasional helper
-reference for "how does a real bridge wire its Aggregator + bridged
-devices end-to-end?", but **not** a gold standard — it carries
-Home-Assistant-specific shims (Entity-Domain → Cluster mapping, HA
-Device Registry as data source) that do not translate to
-OpenCCU-Loom. When in doubt, pull the pattern from matter.js itself,
-not from ha-bridge.
-
-**Goal:** OpenCCU-Loom's Matter side is a 100 % port of matter.js —
-**semantically**, not syntactically. TypeScript idioms
-(decorators, `Behavior.with(...)` mixins, `Promise<T>`) translate to
-Go idioms (struct-with-methods, `context.Context`, goroutines). The
-same defaults, the same constraints, the same wire shape, the same
-order of attributes / commands / events. Where the Go translation
-forces a different surface, the Go code calls out the matter.js
-function it mirrors in a comment + the contract it enforces.
-
-### Workflow
-
-1. **Before writing any Matter-side fix or feature, read the
-   corresponding matter.js source.** Likely paths:
-   - schema constant / cluster revision / attribute id →
-     `../matter.js/packages/model/src/standard/elements/<name>.element.ts`
-   - cluster behavior (defaults, mandatory attributes, conformance
-     checks) → `../matter.js/packages/node/src/behaviors/<name>/`
-   - device type (DeviceTypeList revision, mandatory cluster set) →
-     `../matter.js/packages/node/src/devices/<name>.ts`
-   - bridge composition pattern → `../matter.js/packages/node/src/devices/aggregator.ts`
-     and `../matter.js/packages/node/src/devices/bridged-device.ts`
-     (ha-bridge's `packages/backend/src/matter/` is a useful
-     supplementary read but is not the gold standard)
-   - wire codec, IM messages, sigma → `../matter.js/packages/types/src/tlv/`
-     and `../matter.js/packages/protocol/src/`
-2. **Cite the matter.js path + function in the Go code**
-   (`// Mirrors matter.js packages/node/src/behaviors/.../FooBehavior.ts:bar`)
-   so the provenance survives drift. PR descriptions quote it too.
-3. **Every Matter-side change updates the parity tests** under
-   `internal/north/matter/.../parity_matterjs_test.go`. The
-   schema snapshot at
-   `notes/parity/matter/matter-schema-snapshot.json` is the
-   matter.js HEAD pin (regen via
-   `notes/parity/matter/extract-from-matter-js.ts`); the wire-byte
-   fixtures at `notes/parity/matter/tlv-wire-fixtures.json` lock the
-   TlvCodec wire shape. New cluster-server tests add a parity case;
-   PRs without parity coverage are rejected.
-4. **Deliberate divergences are documented in
-   `notes/parity/by_design.md` (matter.js section)** — and the same
-   divergence on a non-trivial scale gets an ADR. Examples of valid
-   divergences: a TypeScript-only optimisation that would fight Go's
-   GC, a Decorator pattern that has no Go equivalent. Examples of
-   invalid divergences: hand-coding cluster revisions, attribute IDs,
-   constraint defaults, Apple-Home-required tag patterns — those go
-   verbatim from matter.js.
-5. **Behavioral-parity contract + standing guards.** Ongoing Matter
-   parity is held by the build- and test-time guards catalogued in
-   [`docs/matter-parity-contract.md`](./docs/matter-parity-contract.md)
-   — schema parity tests, the behavioural negative-write parity table,
-   wire-codec fixtures, wiring-capability pins, and the `by_design.md`
-   divergence catalogue — not by periodically regenerated audit reports.
-   Every Matter change reads matter.js / chip first, mirrors behaviour
-   (not just schema), cites the source, and extends the relevant guard.
-
-### Lockstep with aiohomematic
-
-aiohomematic remains the gold standard for the **CCU side** —
-transports, devices, paramsets, custom-DP composition. matter.js is
-the gold standard for the **Matter side**. The two reference layers
-do not overlap; CCU wire knowledge stays in aiohomematic, Matter wire
-knowledge stays in matter.js. When a single bridge feature spans
-both (e.g. a HmIP DataPoint surface that has to map onto a Matter
-cluster) the boundary is the `internal/model/custom/<dp>/matter.go`
-file — left side mirrors aiohomematic, right side mirrors matter.js.
+(`../home-assistant-matter-bridge/`) is a supplementary read for end-to-end
+bridge composition, never a gold standard.
 
 ---
 
 ## Implementation Policy
 
-The current release is in `internal/build/version.go`; the release
-history is in `CHANGELOG.md` (the single source of truth for the
-version — this line no longer pins a number).
-
-### Completion checklist (per change)
+Completion checklist per change:
 
 - [ ] Fully typed, passes `golangci-lint`.
 - [ ] Tests updated (unit + contract where applicable).
 - [ ] `CHANGELOG.md` entry for user-visible changes.
-- [ ] On a version bump / release: update the root `CHANGELOG.md` **and**
-      the HA add-on changelogs of **both** add-ons
-      (`packaging/ha-addon/openccu-loom/CHANGELOG.md`,
-      `packaging/ha-addon/openccu-loom-remote/CHANGELOG.md`) — Home Assistant
-      shows these to users in the add-on store / Update view, so they must not
-      lag the release. Bump them alongside `internal/build/version.go` and
-      the `config.yaml` of **both** add-ons (release.yml guards both versions
-      against the tag).
-- [ ] Before a release: run the **comment-claims sweep** — fan out
-      read-only agents that verify comment claims against the code:
-      comments naming consumers ("subscribers listen", "consumed by",
-      "so MQTT / HA / the SPA"), "stub" / "not wired yet" notes,
-      file-header inventories, and ratchet justifications in
-      `tests/contract/`. Fix or reword every refuted claim before
-      tagging. The mechanical guards
-      (`TestDeclaredSilentEventDocsClaimNoConsumers`,
-      `TestRatchetReasonsAreNotDeferrals`) cover only declared-silent
-      events and ratchet texts — prose everywhere else is caught by
-      this sweep alone. The 0.54.4 sweep found one live delivery bug
-      and a dozen refuted claims that seven green PRs had let through.
-- [ ] `SPECIFICATION.md` updated if the change touches a goal,
-      non-goal, hard constraint, or resolved decision; ADR written
-      for any architectural shift that future readers will need to
-      understand.
-- [ ] No CGo added.
-- [ ] No GPL/AGPL/LGPL/MPL-licensed code inadvertently introduced.
-- [ ] License header present on every new `.go` file.
+- [ ] On a version bump: root `CHANGELOG.md` **and** both add-on changelogs
+      (`packaging/ha-addon/openccu-loom/`,
+      `packaging/ha-addon/openccu-loom-remote/`) **and** both `config.yaml`
+      versions, alongside `internal/build/version.go`. Home Assistant shows
+      these in the add-on store; release.yml guards both against the tag.
+- [ ] Before a release: run the **comment-claims sweep** — fan out read-only
+      agents that verify comment claims against the code (comments naming
+      consumers, "stub"/"not wired yet" notes, file-header inventories,
+      ratchet justifications). The mechanical guards cover only declared-silent
+      events and ratchet texts; prose elsewhere is caught by this sweep alone.
+      The 0.54.4 sweep found one live delivery bug and a dozen refuted claims
+      that seven green PRs had let through.
+- [ ] `SPECIFICATION.md` updated if a goal, non-goal, hard constraint or
+      resolved decision moved; ADR written for any architectural shift.
+- [ ] No CGo, no copyleft dependency, license header on every new `.go` file.
 
 ---
 
 ## Sub-Agent Delegation
 
-Delegation is decided by two questions, not one. *Who is responsible*
-(the main conversation, always) is the easy half. *What may be handed
-away* is the half that decides whether quality survives.
+The main conversation owns planning, contract and wire decisions, guard
+specifications, sub-agent steering, and final verification. It does not own
+typing.
 
-The main conversation owns planning, contract and wire decisions, the
-specification of every guard, sub-agent steering, and final
-verification. It does not own typing.
-
-### What may be delegated: the verifiability test
-
-Hand a task to a sub-agent when the result has a **machine acceptance
-criterion** — a test, a lint run, a guard that bites. Keep it when the
-acceptance criterion is judgement, because a report cannot carry
-judgement back.
-
-Delegate freely (a gate proves the result):
-
-- table cases, fakes, race / parallel scaffolding, vitest cases
-- `config.field.*` / `config.help.*` catalogue work
-  (`TestConfigFieldsHaveLabelsAndHelp` bites)
-- doc-purity and markdown-link cleanups
-- a version bump across `internal/build/version.go`, the root
-  `CHANGELOG.md`, and both add-on `CHANGELOG.md` / `config.yaml` pairs
-- inventories, grep sweeps, cross-file consistency checks
-
-Never delegate (only a reader can accept the result):
-
-- the daemon composition root and any new wiring seam
-- `assets/openapi.yaml` / `assets/wsapi.json` semantics and `pkg/hmapi` DTOs
-- Matter cluster IDs, revisions, attribute IDs, constraints, defaults —
-  these are mirrored from matter.js by hand, with the citation
-- auth, session, and secret handling
-- *which* guard gets built, and what its bite line is
-
-Locating is delegable; reading is not. Hand out "which files touch Y",
-then read the three to five files the decision actually hangs on
-yourself. An architecture call made from a sub-agent's summary is the
-same defect as a doc claim made without checking the source.
-
-### The four agents
-
-Defined in `.claude/agents/`, so the model follows from the agent rather
-than from a per-call decision:
+**Delegate what a gate can prove; keep what only a reader can accept.**
+Delegate freely: table cases, fakes, scaffolding, vitest cases,
+`config.field.*` catalogue work, doc-purity and link cleanups, version bumps
+across the changelog set, inventories and grep sweeps. Never delegate: the
+composition root and any new wiring seam, `assets/openapi.yaml` /
+`assets/wsapi.json` semantics and `pkg/hmapi` DTOs, Matter constants, auth /
+session / secret handling, and *which* guard gets built. Locating is
+delegable; reading is not.
 
 | Agent | Model | Use for |
 |---|---|---|
 | `impl` | Sonnet | scoped implementation with a stated acceptance command |
 | `guard` | Sonnet | tests from a caller-written guard spec, plus the bite proof |
 | `sweep` | Haiku | read-only inventories and grep sweeps, high fan-out |
-| `hunt` | Fable | adversarial read-only defect hunt, returns ranked candidates |
+| `hunt` | Fable | adversarial read-only defect hunt, ranked candidates |
 
-### Parallelism is bounded by the machine, and the machine is measured
-
-The target is throughput, not agent count. A fan-out that pushes the
-host past saturation finishes *later* than a smaller one, and it drags
-every other build in the session down with it — including the main
-conversation's. So the numbers below are derived at fan-out time and
-never hard-coded: this project is worked on from a 4-core box and a
-14-core box, and the same constant cannot be right on both.
-
-**Read-only agents** (`sweep`, `hunt`, any search that never builds)
-cost no core worth counting. Their real limit is how many reports you
-can read and reconcile; 6–8 is a practical ceiling.
-
-**CPU-bound agents** (anything running `go build`, `go test`,
-`golangci-lint`, `vite`, `playwright`) each try to take the *whole*
-machine by default — Go derives `-p` and `GOMAXPROCS` from the core
-count, golangci-lint and vitest size their worker pools the same way.
-Three unconstrained agents are a threefold oversubscription, not
-threefold throughput. Derive the budget instead:
+**Size CPU-bound fan-out from the host, never from a constant** — this project
+is worked on from a 4-core box and a 14-core box:
 
 ```sh
-cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu)
-# share  = cores one CPU-bound agent may use (1 minimum; 2-3 keeps its
-#          own latency sane on a big host)
-# agents = concurrent CPU-bound agents, leaving one core for the main
-#          conversation
-agents=$(( (cores - 1) / share ))
+cores=$(nproc); agents=$(( (cores - 1) / share ))   # share = cores per agent
 ```
 
-Then give every CPU-bound agent its share **and** require it to pin the
-share in the command it runs: `GOMAXPROCS=<share> go test -p <share>
-./internal/x/...`, `golangci-lint run --concurrency=<share>`,
-`vitest --maxWorkers=<share>`. Handing out a number without pinning it
-changes nothing — the tools ignore the intent and read the core count.
+Check the 1-minute load first; if it is at or above the core count, run one
+CPU-bound agent and queue the rest. Eight concurrent agents is a practical
+ceiling whatever the core count. Every CPU-bound agent must **pin** its share
+in the command it runs (`GOMAXPROCS=<share> go test -p <share> …`,
+`golangci-lint run --concurrency=<share>`, `vitest --maxWorkers=<share>`) —
+handing out a number without pinning it changes nothing. Read-only agents cost
+no core worth counting; 6–8 is a practical ceiling there.
 
-| cores | share | concurrent CPU-bound agents |
-|---|---|---|
-| 4 | 1 | 3 |
-| 14 | 2 | 6 |
-| 14 | 3 | 4 |
+Two hard rules: **no sub-agent runs `make test` or a repo-wide lint** (the
+full gate runs once, in the main conversation, at the end of the slice), and
+**no two writing agents in the same package** (disjoint file sets, or
+`isolation: "worktree"`).
 
-Two adjustments on top:
+Every brief carries five things: the files and public surface plus one style
+reference; the acceptance command the agent runs itself; the invariants it
+touches; **stop conditions** (new dependency, DTO or API change, Matter
+constant, composition-root wiring, ADR-shaped decision — a stop is a
+successful outcome); and a report format ≤ 250 words, large artefacts to the
+scratchpad as a path.
 
-- **Look at the load before fanning out, not only at the core count.**
-  A 14-core host already running a Docker build has no free capacity.
-  If the 1-minute load average is at or above the core count, drop to a
-  single CPU-bound agent and queue the rest.
-- **Eight concurrent agents is a practical ceiling** whatever the core
-  count — a chosen bound, not a measured one: past it, briefing and
-  reading reports cost more than the parallelism returns.
+**A report is a claim.** Read the diff, run the gate yourself. For `guard`,
+the acceptance artefact is not a green test but the **bite proof**: the named
+production line removed, the test observed red with its message, the line
+restored, green again.
 
-Two rules follow:
-
-1. **No sub-agent runs `make test` or a repo-wide lint.** Each gets one
-   narrow command (`go test ./internal/central/...`). The full gate runs
-   **once**, in the main conversation, at the end of the slice.
-2. **No two writing agents in the same package.** Give each a disjoint
-   file set, or run them with `isolation: "worktree"`. Overlapping
-   writers overwrite each other silently.
-
-### The briefing contract
-
-A delegated task carries five things. Without them the result is a
-lottery:
-
-1. the files and the public surface, plus one existing file as the style
-   reference
-2. the acceptance command the agent runs itself, reporting its output
-3. the invariants from this document that the task touches — the
-   relevant ones, not all of them
-4. **stop conditions**: new dependency, DTO or API change, Matter
-   constant, composition-root wiring, ADR-shaped decision. The agent
-   reports these; it does not decide them. A stop is a successful
-   outcome.
-5. a report format, ≤ 250 words. Large artefacts go to the scratchpad
-   directory and come back as a path.
-
-### Verification: read the diff, not the report
-
-A sub-agent report is a claim. Accept it the way any other claim in this
-project is accepted — against the source. The main conversation reads
-the diff and runs the gate once itself.
-
-For `guard`, the acceptance artefact is not a green test; it is the
-**bite proof**: the named production line removed, the test observed
-red with its failure message, the line restored, green again. A test
-delivered without that proof is not delivered. Sonnet reliably writes
-bracketing tests when asked for "tests for X" — the guard specification
-and the bite proof exist to make that failure mode visible instead of
-green. See §[A test that constructs the collaboration proves nothing
-about the wiring](#a-test-that-constructs-the-collaboration-proves-nothing-about-the-wiring).
+The reasoning behind all of this is in
+[`notes/contributor/subagent-delegation.md`](./notes/contributor/subagent-delegation.md).
 
 ---
 
 ## Interaction Protocol
 
-Non-negotiable rules for how the assistant works with the user:
-
-1. **Describe approach before coding** — explain files, approach and
-   trade-offs; wait for approval. Trivial edits (typo fixes,
-   single-line fixes) may proceed directly.
+1. **Describe approach before coding** — files, approach, trade-offs; wait for
+   approval. Trivial edits may proceed directly.
 2. **Clarify ambiguous requirements** — ask before guessing.
-3. **Suggest edge cases and tests after implementation** — list what
-   the change covers and what is worth testing next.
-4. **Bug fixing is test-first** — write a failing reproducer, then
-   fix, then verify nothing else broke.
-5. **Learn from corrections** — identify the root cause and update
-   memory when a pattern recurs.
+3. **Suggest edge cases and tests after implementation.**
+4. **Bug fixing is test-first** — failing reproducer, then fix, then verify.
+5. **Learn from corrections** — find the root cause, update memory when a
+   pattern recurs.
 
 ---
 
 ## Tips for AI Assistants
 
-### Do's
+**Do**: read `SPECIFICATION.md` for intent · full type annotations ·
+`context.Context` first · `make lint && make test` before committing · add a
+contract test when touching protocols, capabilities or state machines · pin
+every new wiring through the composition root and assert the *effect* · update
+`docs/` when public APIs change, open an ADR for major decisions · name the
+`central` explicitly in every cross-cutting call · read matter.js first for
+Matter-side code and cite it.
 
-- ✅ Read `SPECIFICATION.md` for design intent (~10 min read).
-  Implementation detail lives in code, ADRs, and the artefacts
-  listed in the spec preamble.
-- ✅ Full type annotations. Go is strict; don't fight it.
-- ✅ `context.Context` as first param on every I/O method.
-- ✅ Run `make lint && make test` before committing.
-- ✅ Add or update a contract test when touching protocols,
-  capabilities, or state machines.
-- ✅ Pin every new wiring through the composition root, and assert the
-  effect rather than the call. A test that hands a collaborator to a
-  collaborator proves only that they *can* work together — see
-  §[A test that constructs the collaboration proves nothing about the
-  wiring](#a-test-that-constructs-the-collaboration-proves-nothing-about-the-wiring).
-- ✅ Update `docs/` when public APIs change; open an ADR for major
-  decisions.
-- ✅ Use `sync.RWMutex` for read-heavy caches; benchmark before
-  assuming `Mutex` is enough.
-- ✅ For multi-CCU correctness, name the `central` explicitly in every
-  cross-cutting call.
-- ✅ For Matter-side code: read the matter.js source for the
-  cluster / behavior / device-type **first**; cite the matter.js
-  path + function in your Go comment; add the parity-test case.
-  The pattern is enforced under `internal/north/matter/` and the
-  related `bridge/` / `endpoint/` / `im/` / `tlv/` / `secure/`
-  trees; see [matter.js as the Matter Gold
-  Standard](#matterjs-as-the-matter-gold-standard).
-- ✅ **Delegate what a gate can prove; keep what only a reader can
-  accept.** Mechanical work — table cases, fakes, race / parallel
-  scaffolding, catalogue entries, inventories — goes to the `impl` /
-  `guard` / `sweep` / `hunt` agents in `.claude/agents/`, so that code
-  never lands in the main context. Architecture, wire and contract
-  decisions, guard specifications, and final verification stay in the
-  main conversation. Size CPU-bound fan-out from the host's cores and
-  current load, give each agent one narrow acceptance command with a
-  pinned core share, and run the full gate once yourself. See
-  §[Sub-Agent Delegation](#sub-agent-delegation).
+**Don't**: `any` without justification · `panic()` outside `main()` or test
+helpers (exception: `Must*` constructors and documented `// invariant:`
+panics) · non-MIT headers · CGo · direct commits to `main` · assume a single
+`CentralUnit` · treat CUxD as JSON-RPC · hard-code callback ports ·
+backwards-compatibility shims for aiohomematic data (this is greenfield) ·
+hand-code Matter constants · audit-tracking codes in code comments.
 
-### Don'ts
-
-- ❌ No `interface{}` / `any` without a justifying comment.
-- ❌ No `panic()` outside `main()` or test helpers. Exception:
-  conventional `Must*` constructors and documented `// invariant:`
-  panics for programmer-error invariants that are not reachable via
-  input (analogous to `regexp.MustCompile`).
-- ❌ No MIT / Apache / BSD headers.
-- ❌ No CGo dependencies.
-- ❌ No direct commits to `main`.
-- ❌ No assuming a single `CentralUnit` — always multi-CCU safe.
-- ❌ No treating CUxD as JSON-RPC only (that is aiohomematic's
-  workaround, not ours).
-- ❌ No hard-coding callback ports — honor the dynamic-port mode.
-- ❌ No backwards-compatibility shims for aiohomematic data / caches;
-  this is greenfield.
-- ❌ No hand-coding Matter cluster IDs / revisions / attribute IDs /
-  constraints / defaults from the spec PDF or memory. Mirror
-  matter.js HEAD verbatim. Drift produces silent Apple Home /
-  Google Home pair-aborts that take days to attribute back.
-- ❌ No audit-tracking codes (`Drift L0-D01`, `Wave 4`, `Phase-3`,
-  audit dates `2026-05-12`, `parity audit`, …) in code comments.
-  No markdown references to transient audit files (audit-run reports,
-  hand-off memories, todo lists). Comments must offer durable value —
-  TestDocPurity blocks the build otherwise. See
-  §[Code Quality & Standards → Comments in code](#comments-in-code).
-
-### When in doubt
-
-1. **Intent**: read `SPECIFICATION.md`.
-2. **Architecture**: check the relevant ADR under `docs/adr/`.
-3. **Contract**: read `assets/openapi.yaml` (REST),
-   `assets/wsapi.json` (WS), or the relevant contract test under
-   `tests/contract/`.
-4. **Implementation**: read the code; structure is hexagonal
-   (north → domain core → south).
-5. **Caching, boot-time data flow, CCU radio cost**: read
-   [`docs/caching.md`](./docs/caching.md) — covers every cache
-   layer (embedded / in-memory / SQLite / filesystem / CCU-side),
-   the four boot scenarios (warm/cold CCU × with/without cache),
-   and the steady-state radio paths.
-6. **Semantic question on the CCU side** (e.g. "how does
-   aiohomematic do X?"): cross-reference the Python sibling repo.
-7. **Semantic question on the Matter side** (e.g. "what does
-   matter.js advertise for `BasicInformation.ProductAppearance`?",
-   "how does matter.js wire its Aggregator?"):
-   cross-reference `../matter.js/packages/{node,protocol,types,model}/`.
-   home-assistant-matter-bridge under `../home-assistant-matter-bridge/`
-   is a supplementary read for end-to-end bridge composition, but
-   matter.js itself is the gold standard.
-8. Run the contract / parity tests; they lock invariants.
-9. Ask the user.
-
----
-
-*This file points at `SPECIFICATION.md` and `docs/` for anything that
-would go stale. When in doubt, prefer the linked document over this
-summary.*
+**When in doubt**: intent → `SPECIFICATION.md` · architecture → `docs/adr/` ·
+contract → `assets/openapi.yaml`, `assets/wsapi.json`, `tests/contract/` ·
+implementation → the code (north → domain core → south) · caching and boot
+data flow → [`docs/caching.md`](./docs/caching.md) · CCU semantics → the
+Python siblings · Matter semantics → `../matter.js/packages/{node,protocol,types,model}/`
+· then run the contract / parity tests · then ask the user.

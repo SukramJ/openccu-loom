@@ -55,7 +55,7 @@ Two clarifications, because both have been got wrong before:
 |---|---|
 | [`audits/`](./audits/) | Subsystem deep-audit findings and the architecture analyses that back ADRs 0029–0039. |
 | [`concepts/`](./concepts/) | Feature design records — alarm, Security & Safety, Matter UI, the SPA tile/widget concepts under `concepts/ui/`. |
-| [`contributor/`](./contributor/) | Procedures a contributor runs: debugging setup, Matter smoke and chip-tool briefs, the SPA-E2E-against-godevccu harness. |
+| [`contributor/`](./contributor/) | Procedures a contributor runs: debugging setup, Matter smoke and chip-tool briefs, the SPA-E2E-against-godevccu harness — plus the long-form reasoning behind the compressed rules in `CLAUDE.md` ([`engineering-rules.md`](./contributor/engineering-rules.md), [`subagent-delegation.md`](./contributor/subagent-delegation.md)). |
 | [`parity/`](./parity/) | The divergence catalogue `by_design.md`, the cross-stack snapshot schemas, the reachability baselines, and the matter.js parity fixtures + generators under `parity/matter/`. |
 | [`plans/`](./plans/) | [`roadmap.md`](./plans/roadmap.md) — the canonical forward-looking plan — plus per-item implementation plans. |
 | [`reference/`](./reference/) | Durable lookup material that is not a plan and not a concept: the CCU jpages wire contract, the CONTROL inventory, researched alarm assumptions. |
