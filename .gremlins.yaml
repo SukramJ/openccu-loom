@@ -1,7 +1,15 @@
 # Mutation testing — github.com/go-gremlins/gremlins
-# Run via `make mutation`. Mutation score is an informational quality
-# signal (does the suite actually catch regressions?), NOT a hard gate:
-# the efficacy/coverage thresholds are 0 so a run never fails the build.
+# Run via `make mutation` (cheap packages) and `make mutation-heavy` (the
+# defect-prone ones, measured separately because their suites are slow).
+#
+# Mutation is the mechanical form of the bite proof: it answers "does the
+# suite actually catch a regression?" without anyone reverting a line by hand.
+# The thresholds below are still 0, so a run never fails the build — that is a
+# deliberate placeholder, not the destination. Setting a floor requires a
+# measured score, and guessing one would be the exact failure the rule in
+# notes/contributor/engineering-rules.md warns against. The nightly job now
+# lifts the per-package score into the run summary; once it has reported real
+# numbers, replace these zeros with the measured values minus a small margin.
 unleash:
   # Allow each mutant up to 4× the package's baseline test time before
   # declaring TIMED OUT — reduces inconclusive timeouts on slower packages

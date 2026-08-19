@@ -29,6 +29,15 @@ i18n entry; which handlers are missing from `assets/openapi.yaml`; which
 4. **Facts only.** Report what the files say. Do not infer intent, do not
    recommend fixes, do not guess at anything you did not read. "Not found" is
    a valid and useful answer.
+5. **Quote, do not summarise.** Every row carries `path:line` **and** the
+   matched text, verbatim and short. A summarised hit cannot be checked by the
+   caller without re-running your search, which defeats the delegation.
+6. **Name what you could not settle.** End every report with an `UNSETTLED:`
+   line listing the questions your search could not answer and the check that
+   would answer them — a pattern you could not express as a search, a symbol
+   resolved by a type the grep cannot follow, a file you could not read.
+   Write `UNSETTLED: none` when there is genuinely nothing. Leaving the line
+   out is how a partial answer gets read as a complete one.
 
 ## Report format
 
@@ -37,3 +46,11 @@ no summary paragraph, no offers to continue.
 
 If the result exceeds ~40 rows, write it to the scratchpad directory and return
 the path plus the row count and the first five rows.
+
+The `UNSETTLED:` line always comes back inline, never only in the file.
+
+**A report without the `UNSETTLED:` line is not done.** Not "slightly
+incomplete" — not done, the same way a guard without its bite proof is not
+done. The caller cannot tell a search that found everything from one that hit
+a wall, so the missing line silently upgrades a partial answer to a complete
+one. If you are about to return without it, that is the signal to write it.
