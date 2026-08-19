@@ -56,14 +56,15 @@ func specInterfaceSnippet(t *testing.T, specPath string) []string {
 	}
 
 	const provenance = "// pkg/hmenum/interface.go"
-	idx := strings.Index(string(raw), provenance)
+	content := string(raw)
+	idx := strings.Index(content, provenance)
 	if idx < 0 {
 		t.Fatalf("%s no longer contains a snippet claiming provenance %q — "+
 			"if the snippet moved, point this guard at its new location; "+
 			"do not delete the guard", specPath, provenance)
 	}
 
-	rest := string(raw)[idx:]
+	rest := content[idx:]
 	end := strings.Index(rest, "```")
 	if end < 0 {
 		t.Fatalf("%s: unterminated code fence after %q", specPath, provenance)
