@@ -79,4 +79,56 @@ jobs:
       - name: mutation testing
         run: |
           go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
-          make mutation
+          make mutation 2>&1 | tee mutation.log
+
+      # A report-only signal nobody reads is not a signal. Lift the per-package
+      # scores into the run summary so a drop is visible without opening logs.
+      - name: summarise mutation score
+        if: always()
+        run: |
+          {
+            echo "### Mutation score (cheap packages)"
+            echo
+            echo '| Package | Score |'
+            echo '|---|---|'
+            pkg=""
+            while IFS= read -r line; do
+              case "$line" in
+                *"gremlins unleash"*) pkg="${line##*unleash }" ;;
+                *"Mutation testing completed"*|*"Test efficacy"*|*"Mutator coverage"*)
+                  echo "| ${pkg:-?} | ${line} |" ;;
+              esac
+            done < mutation.log
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  mutation-heavy:
+    name: mutation (gremlins, defect-prone pkgs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Separate job so an unbounded run here cannot crowd out the cheap set.
+    # Its purpose right now is measurement: these packages have ~8s baseline
+    # suites, so the total is unknown until a nightly has actually reported it.
+    # Once it has, give them a floor in .gremlins.yaml instead of threshold 0.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: mutation testing (slow packages)
+        run: |
+          go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+          start=$(date +%s)
+          make mutation-heavy 2>&1 | tee mutation-heavy.log
+          echo "ELAPSED_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+      - name: summarise run time and score
+        if: always()
+        run: |
+          {
+            echo "### Mutation, defect-prone packages"
+            echo
+            echo "Wall clock: ${ELAPSED_SECONDS:-unknown}s"
+            echo
+            grep -E 'Test efficacy|Mutator coverage|unleash' mutation-heavy.log || true
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -44,11 +44,26 @@ Stop and return immediately when the work would require any of:
 
 A stop is a successful outcome. A guessed answer is not.
 
+## A green command is half a result
+
+A test that passes after your change proves nothing on its own — it may have
+passed before it, too. When the task is a **bug fix**, run the reproducer
+*before* the fix and capture it failing; that failure message is the evidence
+the fix addresses the reported defect rather than something adjacent. When the
+task adds a **test**, the same applies to the behaviour it covers.
+
+If you cannot make the check fail without your change, say so — it means
+either the change is not load-bearing or the check is untethered from it.
+Both are findings the caller needs, and both are better reported than papered
+over with a green run.
+
 ## Report format (≤ 250 words)
 
 ```
 FILES:    <paths changed, one per line>
 COMMAND:  <the acceptance command>
+BEFORE:   <for a fix or a new test: the failure observed without the change,
+          one line — or "n/a" with the reason>
 RESULT:   <PASS|FAIL> — last ~10 lines of output
 STOPS:    <stop conditions hit, or "none">
 NOTES:    <anything the caller must decide; omit if nothing>

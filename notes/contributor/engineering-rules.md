@@ -292,3 +292,46 @@ is the conversation about that artefact.
 
 ---
 
+## A verification without a negative control measures nothing
+
+The wiring rules above are all one defect wearing different clothes: a check
+whose outcome does not depend on the thing it claims to check. The bracketing
+test passes whether or not production wires the seam. The boot-order test
+passes whether or not the fix is present, when the CCU answers instantly. The
+payload-shape test passes whether or not the published topic matches the
+declared one.
+
+The same defect governs verification itself, and it is the one that turns an
+honest agent into a confabulating one — because the untethered check reliably
+returns the answer that was expected.
+
+A worked example from the session that produced this document. The question
+was whether a `disabledMcpServers` entry actually suppresses a user-scope MCP
+server in one project. The check: start a headless session and ask whether the
+server's tools are reachable. Answer: no. That looks like confirmation.
+
+The negative control — the same question with the entry removed — also
+answered no. Headless sessions do not load those tools at all, so the check
+was measuring the harness, not the setting. Both runs were consistent with
+"the setting works" and equally consistent with "the setting does nothing".
+The correct report was *unverified*, and that is what was written.
+
+The rule:
+
+> Before reporting something as verified, name the result the check would have
+> produced had the claim been false. If you cannot name it, or the check cannot
+> produce it, the finding is unverified.
+
+Three practical consequences:
+
+- **A passing check is half an experiment.** The other half is the control.
+  For a config switch: flip it back. For a guard: remove the production line.
+  For a log line: make the code path not run.
+- **Watch for shared confounders.** A control run inside the same process, the
+  same daemon, or the same warm cache as the test run may share the very thing
+  that decides the outcome. The MCP probe above had exactly this problem twice
+  — the second attempt counted processes that the *asking* session was itself
+  keeping alive.
+- **"Unverified" is a finding, not a failure.** It tells the reader precisely
+  what they still have to check. A false "verified" removes that information
+  and cannot be distinguished from a true one afterwards.

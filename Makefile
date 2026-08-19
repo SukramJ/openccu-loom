@@ -323,11 +323,30 @@ bench: ## run benchmarks (requires -tags=bench)
 		echo "benchmarks not implemented yet (Phase 10)"; \
 	fi
 
-MUTATION_PKGS ?= ./internal/parameter/ ./internal/payload/ ./internal/routingkey/ ./pkg/hmtypes/ ./pkg/hmenum/
+# Packages whose own test suite is fast enough that mutating them is cheap:
+# gremlins re-runs the package's tests once per mutant, so the cost is
+# (mutants x baseline test time). internal/central belongs here despite its
+# weight — its suite runs in ~0.1s — and it is where the most expensive defect
+# this project shipped lived (a collaborator seam no production path called).
+MUTATION_PKGS ?= ./internal/parameter/ ./internal/payload/ ./internal/routingkey/ ./internal/central/ ./pkg/hmtypes/ ./pkg/hmenum/
+
+# Packages where the defect classes are, but whose suites are slow enough
+# (~8s baseline each) that the run time is unknown until measured. They run as
+# their own nightly job so a long run cannot crowd out the cheap set above.
+# Once a nightly has reported an actual score for these, set a floor for them
+# in .gremlins.yaml rather than leaving the threshold at 0.
+MUTATION_PKGS_HEAVY ?= ./internal/alarm/ ./internal/north/mqtt/
 
 .PHONY: mutation
-mutation: ## run mutation testing (gremlins) on core packages — slow; report-only
+mutation: ## run mutation testing (gremlins) on the cheap core packages — report-only
 	@for p in $(MUTATION_PKGS); do \
+		echo "-> gremlins unleash $$p"; \
+		$(GREMLINS) unleash "$$p" || true; \
+	done
+
+.PHONY: mutation-heavy
+mutation-heavy: ## run mutation testing on the slow defect-prone packages — report-only, measures run time
+	@for p in $(MUTATION_PKGS_HEAVY); do \
 		echo "-> gremlins unleash $$p"; \
 		$(GREMLINS) unleash "$$p" || true; \
 	done

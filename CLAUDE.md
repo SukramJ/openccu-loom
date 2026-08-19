@@ -179,6 +179,23 @@ the rules:
    declared topics against published ones. Guard: one
    `Test*PlaneTopicsRoundTrip` per plane.
 
+### A verification without a negative control measures nothing
+
+The same defect one level up. A check meant to *confirm* something is only
+sound once it produces a **different** result when the cause is absent. Same
+result in both directions means the check is untethered from what it claims to
+measure — the claim is unverified, not confirmed.
+
+It is the bite proof, generalised from guards to every act of verification:
+running a script, reading a log, asking a sub-agent, probing a config switch.
+The failure is seductive because the untethered check usually returns the
+answer you expected.
+
+So: before reporting something as verified, state what result the check would
+have produced had the claim been false. If you cannot name that result, or the
+check cannot produce it, the finding is **unverified** — say so in those words.
+It is a legitimate outcome; a false "verified" is not.
+
 And the twin rule: **an event nobody consumes is a dead feature that looks
 identical to a live one** — both the type-switch that silently `default:`s and
 the event with no subscriber at all. A comment naming a consumer is a

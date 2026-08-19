@@ -515,7 +515,6 @@ const (
     InterfaceHmIPRF         Interface = "HmIP-RF"
     InterfaceVirtualDevices Interface = "VirtualDevices"
     InterfaceCUxD           Interface = "CUxD"
-    InterfaceGroups         Interface = "Groups"
 )
 ```
 
