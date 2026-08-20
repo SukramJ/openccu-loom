@@ -39,7 +39,7 @@ type EventRecord struct {
 	Payload any
 }
 
-// BufferConfig sizes the event buffer. Ported from matter.js HEAD
+// bufferConfig sizes the event buffer. Ported from matter.js HEAD
 // packages/protocol/src/events/OccurrenceManager.ts (BufferConfig): one
 // buffer across all priorities, harvested down to MinEventAllowance when it
 // grows past MaxEventAllowance, with a floor under the non-critical classes
@@ -49,7 +49,7 @@ type EventRecord struct {
 // because it needs none: the harvest drops Critical last, so it keeps
 // whatever the other two classes leave — which is what Matter §10.6.6 asks
 // for when it requires Critical events to survive.
-type BufferConfig struct {
+type bufferConfig struct {
 	// MinEventAllowance is the size the buffer is harvested down to.
 	MinEventAllowance int
 	// MaxEventAllowance is the size at which harvesting starts.
@@ -79,9 +79,9 @@ const (
 	defaultMinDebugAllowance = 200
 )
 
-// DefaultBufferConfig returns the sizing [NewEventLog] uses.
-func DefaultBufferConfig() BufferConfig {
-	return BufferConfig{
+// defaultBufferConfig returns the sizing [NewEventLog] uses.
+func defaultBufferConfig() bufferConfig {
+	return bufferConfig{
 		MinEventAllowance: defaultMinEventAllowance,
 		MaxEventAllowance: defaultMaxEventAllowance,
 		MinInfoAllowance:  defaultMinInfoAllowance,
@@ -92,7 +92,7 @@ func DefaultBufferConfig() BufferConfig {
 // normalized returns cfg with any unset or contradictory field replaced by a
 // usable value, so a caller cannot construct a buffer that harvests to a size
 // above the one that triggers harvesting (which would loop) or to zero.
-func (c BufferConfig) normalized() BufferConfig {
+func (c bufferConfig) normalized() bufferConfig {
 	if c.MinEventAllowance <= 0 {
 		c.MinEventAllowance = defaultMinEventAllowance
 	}
@@ -128,7 +128,7 @@ type EventLog struct {
 	// the least valuable records wherever they sit. Mirrors matter.js
 	// OccurrenceManager.ts #occurrences.
 	occurrences []EventRecord
-	buf         BufferConfig
+	buf         bufferConfig
 
 	// persistCeiling / persistEpoch / persistFn implement the
 	// crash-safe monotonic EventNumber (Matter §7.14.2.1: event
@@ -148,15 +148,15 @@ type EventLog struct {
 	persistFn      func(ceiling uint64)
 }
 
-// NewEventLog constructs an EventLog with [DefaultBufferConfig].
+// NewEventLog constructs an EventLog with [defaultBufferConfig].
 func NewEventLog() *EventLog {
-	return NewEventLogWithBuffer(DefaultBufferConfig())
+	return newEventLogWithBuffer(defaultBufferConfig())
 }
 
-// NewEventLogWithBuffer constructs an EventLog with custom buffer sizing.
+// newEventLogWithBuffer constructs an EventLog with custom buffer sizing.
 // Unset or contradictory fields fall back to the defaults; see
-// [BufferConfig.normalized].
-func NewEventLogWithBuffer(cfg BufferConfig) *EventLog {
+// [bufferConfig.normalized].
+func newEventLogWithBuffer(cfg bufferConfig) *EventLog {
 	return &EventLog{buf: cfg.normalized()}
 }
 

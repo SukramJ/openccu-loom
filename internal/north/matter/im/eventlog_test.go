@@ -109,7 +109,7 @@ func TestEventLog_QueryWildcard(t *testing.T) {
 // production sizes are in the thousands; forcing a harvest at those numbers
 // would say the same thing far more slowly.
 func harvestLog(minAllowance, maxAllowance, minInfo, minDebug int) *EventLog {
-	return NewEventLogWithBuffer(BufferConfig{
+	return newEventLogWithBuffer(bufferConfig{
 		MinEventAllowance: minAllowance,
 		MaxEventAllowance: maxAllowance,
 		MinInfoAllowance:  minInfo,
