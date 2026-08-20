@@ -221,7 +221,8 @@ func validateHAIngressRole(role string) error {
 		return nil
 	default:
 		return fmt.Errorf(
-			"config: north.rest.auth.ha_ingress.role must be one of admin|operator|viewer (empty selects \"admin\"), got %q", role)
+			"config: north.rest.auth.ha_ingress.role must be one of admin|operator|viewer (empty selects \"admin\"), got %q", role,
+		)
 	}
 }
 

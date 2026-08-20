@@ -17,6 +17,18 @@ env:
   CGO_ENABLED: "0"
   GO_VERSION: "1.26.6"
   NODE_VERSION: "24"
+  # The lint tools are pinned, unlike govulncheck and go-licenses further
+  # down. A new vulnerability database SHOULD turn the build red without a
+  # commit — that is what the security job is for. A new lint release should
+  # not: its added checks are style decisions, and floating on @latest made
+  # this gate report on the calendar rather than on the diff. main went from
+  # green to red overnight on an unchanged tree when golangci-lint 2.13.0
+  # landed with staticcheck's Go 1.26 deprecation checks.
+  #
+  # Bump deliberately: raise the version here, run `make lint`, and fix or
+  # justify whatever the new release finds in the same change.
+  GOFUMPT_VERSION: "v0.10.0"
+  GOLANGCI_LINT_VERSION: "v2.12.2"
 
 jobs:
   lint:
@@ -30,7 +42,7 @@ jobs:
           cache: true
       - name: gofumpt
         run: |
-          go install mvdan.cc/gofumpt@latest
+          go install mvdan.cc/gofumpt@${{ env.GOFUMPT_VERSION }}
           diff=$(gofumpt -l .)
           if [ -n "$diff" ]; then
             echo "::error::gofumpt found unformatted files:"
@@ -46,7 +58,7 @@ jobs:
       # avoids both problems.
       - name: golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
           golangci-lint config verify
           golangci-lint run --timeout=5m ./...
       # Fail if go.mod/go.sum drift from `go mod tidy` or checksums mismatch.

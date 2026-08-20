@@ -55,6 +55,15 @@ should never have run.
   receive dispatcher uses for a controller's `ReadRequest`. Their only previous
   coverage was the nightly chip-tool job, which is why the regression stood for
   four days.
+- The lint gate no longer floats on `@latest`. `gofumpt` and `golangci-lint`
+  are pinned in `ci.yml`, so the job reports on the diff rather than on the
+  calendar: `main` went from green to red overnight on an unchanged tree when
+  golangci-lint 2.13.0 landed with staticcheck's Go 1.26 deprecation checks.
+  `govulncheck` and `go-licenses` keep floating on purpose — a new
+  vulnerability database *should* turn the build red without a commit. Three
+  files are reformatted in the same change: local `make fmt` and CI had drifted
+  apart on a rule gofumpt relaxed in v0.11.0, and they now satisfy both
+  versions.
 
 ## [0.63.0]
 

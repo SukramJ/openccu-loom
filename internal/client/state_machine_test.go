@@ -351,7 +351,8 @@ func TestTransitionPathPublishesOneEventForTheWholeWalk(t *testing.T) {
 	var obs pathObserver
 	obs.attach(sm)
 
-	end := sm.TransitionPath("bring-up", hmenum.FailureReasonNone, nil,
+	end := sm.TransitionPath(
+		"bring-up", hmenum.FailureReasonNone, nil,
 		hmenum.ClientStateInitializing,
 		hmenum.ClientStateInitialized,
 		hmenum.ClientStateConnecting,
@@ -389,7 +390,8 @@ func TestTransitionPathReportsSkippedStepsAndKeepsWalking(t *testing.T) {
 	obs.attach(sm)
 
 	var skipped []hmenum.ClientState
-	end := sm.TransitionPath("bring-up", hmenum.FailureReasonNone,
+	end := sm.TransitionPath(
+		"bring-up", hmenum.FailureReasonNone,
 		func(target hmenum.ClientState, err error) {
 			if err == nil {
 				t.Errorf("onSkip called with a nil error for %s", target)
