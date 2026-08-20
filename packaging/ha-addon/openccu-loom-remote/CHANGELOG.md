@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.63.1
+
+- Version alignment with OpenCCU-Loom 0.63.1. The proxy itself is unchanged; the
+  release stops the daemon from reconnecting an interface it is still bringing
+  up — which announced the whole fleet going offline and back on every start —
+  and restores the start-up events a Matter controller reads after pairing.
+
 # 0.63.0
 
 - Version alignment with OpenCCU-Loom 0.63.0. The proxy itself is unchanged; the

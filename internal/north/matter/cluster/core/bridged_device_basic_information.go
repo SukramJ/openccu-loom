@@ -511,10 +511,17 @@ func (b *BridgedDeviceBasicInformation) SetReachable(reachable bool) (changed bo
 		// changed. Must happen after the state mutation succeeds.
 		b.dataVersion.Bump()
 		if emitter != nil {
+			// Priority INFO per matter.js HEAD
+			// packages/model/src/standard/elements/bridged-device-basic-information.element.ts:55
+			// (`Event({ name: "ReachableChanged", id: 0x3, priority: "info" })`).
+			// Critical here also starved the event log: a CCU interface
+			// flap flips every bridged device at once, and the buffer's
+			// critical class is where the boot-once StartUp / BootReason
+			// events live.
 			emitter.MatterEmitEvent(endpoint, bridgedBasicInfoClusterID,
 				bridgedBasicInfoEventReachableChanged,
 				ReachableChangedEvent{ReachableNewValue: reachable},
-				interfaces.MatterEventPriorityCritical)
+				interfaces.MatterEventPriorityInfo)
 		}
 	}
 	return changed

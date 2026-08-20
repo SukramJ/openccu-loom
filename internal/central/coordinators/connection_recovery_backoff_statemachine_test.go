@@ -289,6 +289,7 @@ func TestParityCBStateChangedOpenTriggers(t *testing.T) {
 		Stage: hmenum.RecoveryStageDetecting,
 		Run:   func(_ context.Context) error { count.Add(1); return nil },
 	}})
+	armInterfaces(c, "HmIP-RF")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -318,6 +319,7 @@ func TestParityConnectionLostSubscriptionWiring(t *testing.T) {
 		Stage: hmenum.RecoveryStageDetecting,
 		Run:   func(_ context.Context) error { count.Add(1); return nil },
 	}})
+	armInterfaces(c, "BidCos-RF")
 	c.Subscribe()
 
 	events.Publish(bus, hmevent.ConnectionLostEvent{
@@ -370,6 +372,7 @@ func TestParityHeartbeatTimerFiresPerInterfaceRecovery(t *testing.T) {
 		Stage: hmenum.RecoveryStageDetecting,
 		Run:   func(_ context.Context) error { return nil },
 	}})
+	armInterfaces(c, "HmIP-RF", "BidCos-RF", "BidCos-Wired")
 	c.Subscribe()
 	defer c.Stop()
 

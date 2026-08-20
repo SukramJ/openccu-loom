@@ -512,11 +512,13 @@ func (b *Bridge) NotifyDeviceReachable(centralName, deviceAddress string, reacha
 		if ep.SourceKey.CentralName != centralName || ep.SourceKey.DeviceAddress != deviceAddress {
 			continue
 		}
+		// Priority INFO, matching the cluster-side emitter and matter.js
+		// HEAD bridged-device-basic-information.element.ts:55.
 		b.MatterEmitEvent(ep.ID,
 			core.BridgedDeviceBasicInformationClusterID,
 			core.EventReachableChanged,
 			core.ReachableChangedEvent{ReachableNewValue: reachable},
-			interfaces.MatterEventPriorityCritical)
+			interfaces.MatterEventPriorityInfo)
 		// Advance the endpoint-hosted BDBI DataVersion — the reachability
 		// flip is a cluster state change, so DataVersionFilters must miss
 		// afterwards (matter.js Datasource.ts:949).

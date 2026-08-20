@@ -103,45 +103,121 @@ func TestEventLog_QueryWildcard(t *testing.T) {
 	})
 }
 
-// ---- TestEventLog_PriorityCapEviction ------------------------------------
+// ---- Buffer harvesting ---------------------------------------------------
 
-// TestEventLog_PriorityCapEviction verifies that appending more Critical
-// events than the cap causes the oldest to be evicted in FIFO order.
-func TestEventLog_PriorityCapEviction(t *testing.T) {
+// harvestLog builds a small-buffer EventLog for the harvesting tests. The
+// production sizes are in the thousands; forcing a harvest at those numbers
+// would say the same thing far more slowly.
+func harvestLog(minAllowance, maxAllowance, minInfo, minDebug int) *EventLog {
+	return NewEventLogWithBuffer(BufferConfig{
+		MinEventAllowance: minAllowance,
+		MaxEventAllowance: maxAllowance,
+		MinInfoAllowance:  minInfo,
+		MinDebugAllowance: minDebug,
+	})
+}
+
+func appendN(log *EventLog, n int, priority EventPriority, cluster, event uint32) {
+	for range n {
+		log.Append(EventRecord{Priority: priority, Endpoint: 0, Cluster: cluster, EventID: event})
+	}
+}
+
+// TestEventLog_HarvestKeepsCriticalUnderInfoFlood is the regression this
+// buffer exists for. The boot-once BasicInformation StartUp (0x0028/0x00) and
+// GeneralDiagnostics BootReason (0x0033/0x03) events are Critical and are
+// never re-emitted; a controller reads them out-of-band at Subscribe-Initial.
+// Ordinary Info traffic — a CCU interface flap flips Reachable on every
+// bridged device at once — must not be able to push them out.
+//
+// The predecessor buffer held a fixed 64 Critical records with no regard for
+// the other classes, and a 36-device central flapping once produced enough
+// Critical events (Reachable was miscategorised too) to evict both.
+func TestEventLog_HarvestKeepsCriticalUnderInfoFlood(t *testing.T) {
 	t.Parallel()
-	// Use a small cap (8) to force eviction without appending 100 records.
-	log := newEventLogWithCaps(8, 32, 16)
+	log := harvestLog(20, 24, 4, 2)
 
-	for i := range 100 {
-		log.Append(EventRecord{
-			Priority: EventPriorityCritical,
-			Endpoint: 0,
-			Cluster:  0x0028,
-			EventID:  0x00,
-			Payload:  i,
-		})
-	}
+	log.Append(EventRecord{Priority: EventPriorityCritical, Cluster: 0x0028, EventID: 0x00})
+	log.Append(EventRecord{Priority: EventPriorityCritical, Cluster: 0x0033, EventID: 0x03})
+	appendN(log, 500, EventPriorityInfo, 0x0039, 0x03)
 
-	records := log.Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
-	// Should have exactly 8 records (cap).
-	if len(records) != 8 {
-		t.Fatalf("after eviction: got %d records, want 8 (cap)", len(records))
+	if got := log.Query(0xFFFF, 0x0028, 0x00, 0); len(got) != 1 {
+		t.Errorf("StartUp records after the flood: got %d, want 1", len(got))
 	}
-	// The retained records must be the most recent ones (Numbers 93..100).
-	wantFirst := uint64(93)
-	if records[0].Number != wantFirst {
-		t.Errorf("oldest retained Number=%d, want %d (cap eviction)", records[0].Number, wantFirst)
+	if got := log.Query(0xFFFF, 0x0033, 0x03, 0); len(got) != 1 {
+		t.Errorf("BootReason records after the flood: got %d, want 1", len(got))
 	}
-	wantLast := uint64(100)
-	if records[7].Number != wantLast {
-		t.Errorf("newest retained Number=%d, want %d", records[7].Number, wantLast)
+}
+
+// TestEventLog_HarvestBoundsTheBuffer pins that harvesting actually bounds
+// the buffer rather than merely reordering it: an unbounded log would answer
+// a wildcard read with every record ever appended.
+func TestEventLog_HarvestBoundsTheBuffer(t *testing.T) {
+	t.Parallel()
+	log := harvestLog(20, 24, 4, 2)
+	appendN(log, 500, EventPriorityInfo, 0x0039, 0x03)
+
+	got := log.Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
+	if len(got) > 24 {
+		t.Errorf("buffered records: got %d, want <= 24 (MaxEventAllowance)", len(got))
 	}
-	// Payloads must be ordered 92..99 (0-indexed loop values for events 93..100).
-	for i, r := range records {
-		wantPayload := 100 - 8 + i // 92, 93, ..., 99
-		if r.Payload != wantPayload {
-			t.Errorf("records[%d].Payload=%v, want %d", i, r.Payload, wantPayload)
+	if len(got) < 20 {
+		t.Errorf("buffered records: got %d, want >= 20 (MinEventAllowance)", len(got))
+	}
+}
+
+// TestEventLog_HarvestDropsOldestWithinAClass pins FIFO order inside one
+// priority class: the records that survive are the most recent ones, and
+// their Numbers stay ascending — a controller tracking the last EventNumber
+// it saw must never observe a descending step.
+func TestEventLog_HarvestDropsOldestWithinAClass(t *testing.T) {
+	t.Parallel()
+	log := harvestLog(20, 24, 0, 0)
+	appendN(log, 100, EventPriorityInfo, 0x0039, 0x03)
+
+	got := log.Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
+	if len(got) == 0 {
+		t.Fatal("no records retained")
+	}
+	if last := got[len(got)-1].Number; last != 100 {
+		t.Errorf("newest retained Number=%d, want 100", last)
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i].Number <= got[i-1].Number {
+			t.Fatalf("Numbers not ascending at %d: %d after %d", i, got[i].Number, got[i-1].Number)
 		}
+	}
+}
+
+// TestEventLog_HarvestFloorProtectsInfoFromDebugFlood pins the per-class
+// floor: Debug is harvested first, so a Debug flood must not carry the most
+// recent Info records out with it.
+func TestEventLog_HarvestFloorProtectsInfoFromDebugFlood(t *testing.T) {
+	t.Parallel()
+	log := harvestLog(20, 24, 5, 0)
+
+	appendN(log, 5, EventPriorityInfo, 0x0039, 0x03)
+	appendN(log, 500, EventPriorityDebug, 0x0006, 0x00)
+
+	if got := log.Query(0xFFFF, 0x0039, 0x03, 0); len(got) != 5 {
+		t.Errorf("Info records under a Debug flood: got %d, want 5 (MinInfoAllowance)", len(got))
+	}
+}
+
+// TestEventLog_HarvestDropsCriticalOnlyWhenNothingElseRemains pins the other
+// half of the ordering: Critical is not immortal. A buffer holding nothing
+// but Critical records still harvests, and drops its oldest.
+func TestEventLog_HarvestDropsCriticalOnlyWhenNothingElseRemains(t *testing.T) {
+	t.Parallel()
+	log := harvestLog(20, 24, 4, 2)
+	appendN(log, 100, EventPriorityCritical, 0x0028, 0x00)
+
+	got := log.Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
+	if len(got) > 24 {
+		t.Fatalf("buffered records: got %d, want <= 24", len(got))
+	}
+	if last := got[len(got)-1].Number; last != 100 {
+		t.Errorf("newest retained Number=%d, want 100", last)
 	}
 }
 

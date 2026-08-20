@@ -267,8 +267,8 @@ func TestGenericSwitch_FireInitialPress_WithEmitter_CorrectEvent(t *testing.T) {
 	if ev.event != switchEventInitialPress {
 		t.Errorf("event = 0x%02X, want 0x%02X (InitialPress)", ev.event, switchEventInitialPress)
 	}
-	if ev.priority != interfaces.MatterEventPriorityCritical {
-		t.Errorf("priority = %v, want Critical", ev.priority)
+	if ev.priority != interfaces.MatterEventPriorityInfo {
+		t.Errorf("priority = %v, want Info (matter.js switch.element.ts:48)", ev.priority)
 	}
 }
 
@@ -306,7 +306,7 @@ func TestGenericSwitch_FireLongPress_NoLongPressSupport_NoOp(t *testing.T) {
 	}
 }
 
-func TestGenericSwitch_FireLongPress_WithLongPressSupport_EmitsCritical(t *testing.T) {
+func TestGenericSwitch_FireLongPress_WithLongPressSupport_EmitsInfo(t *testing.T) {
 	t.Parallel()
 	const endpoint uint16 = 5
 	gs := newSwitch(endpoint, 2, true)
@@ -322,8 +322,8 @@ func TestGenericSwitch_FireLongPress_WithLongPressSupport_EmitsCritical(t *testi
 	if ev.event != switchEventLongPress {
 		t.Errorf("event = 0x%02X, want 0x%02X (LongPress)", ev.event, switchEventLongPress)
 	}
-	if ev.priority != interfaces.MatterEventPriorityCritical {
-		t.Errorf("priority = %v, want Critical", ev.priority)
+	if ev.priority != interfaces.MatterEventPriorityInfo {
+		t.Errorf("priority = %v, want Info (matter.js switch.element.ts:52)", ev.priority)
 	}
 }
 

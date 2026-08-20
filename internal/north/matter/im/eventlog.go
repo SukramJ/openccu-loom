@@ -39,16 +39,74 @@ type EventRecord struct {
 	Payload any
 }
 
-// capCritical / capInfo / capDebug are the default per-priority bucket
-// capacities. Matter §10.6.6.6 EventList sizing: Critical events SHALL
-// be persisted across reboots; this buffer holds the most recent N per
-// priority class. Oldest entries are evicted in FIFO order when a
-// bucket is full.
+// BufferConfig sizes the event buffer. Ported from matter.js HEAD
+// packages/protocol/src/events/OccurrenceManager.ts (BufferConfig): one
+// buffer across all priorities, harvested down to MinEventAllowance when it
+// grows past MaxEventAllowance, with a floor under the non-critical classes
+// so a burst of Debug traffic cannot starve Info entirely.
+//
+// The floors deliberately cover only Info and Debug. Critical has none
+// because it needs none: the harvest drops Critical last, so it keeps
+// whatever the other two classes leave — which is what Matter §10.6.6 asks
+// for when it requires Critical events to survive.
+type BufferConfig struct {
+	// MinEventAllowance is the size the buffer is harvested down to.
+	MinEventAllowance int
+	// MaxEventAllowance is the size at which harvesting starts.
+	MaxEventAllowance int
+	// MinInfoAllowance is the number of most-recent Info records the
+	// harvest will not touch while any droppable record of a lower class
+	// remains.
+	MinInfoAllowance int
+	// MinDebugAllowance is the same floor for Debug records.
+	MinDebugAllowance int
+}
+
+// Default buffer sizing. The shape is matter.js's; the numbers are scaled
+// down from its 10 000 / 11 000 / 2 000 / 2 000, which target a generic node
+// rather than a daemon that also holds a full CCU device model. The
+// divergence is recorded in notes/parity/by_design.md.
+//
+// The predecessor of this buffer was three fixed FIFOs (critical 64, info 32,
+// debug 16). A per-class cap drops a Critical record while the Info class
+// sits empty: one CCU interface flap flips every bridged device's Reachable
+// at once, and 64 of those were enough to evict the StartUp and BootReason
+// events a controller reads at Subscribe-Initial.
 const (
-	capCritical = 64
-	capInfo     = 32
-	capDebug    = 16
+	defaultMinEventAllowance = 2000
+	defaultMaxEventAllowance = 2200
+	defaultMinInfoAllowance  = 400
+	defaultMinDebugAllowance = 200
 )
+
+// DefaultBufferConfig returns the sizing [NewEventLog] uses.
+func DefaultBufferConfig() BufferConfig {
+	return BufferConfig{
+		MinEventAllowance: defaultMinEventAllowance,
+		MaxEventAllowance: defaultMaxEventAllowance,
+		MinInfoAllowance:  defaultMinInfoAllowance,
+		MinDebugAllowance: defaultMinDebugAllowance,
+	}
+}
+
+// normalized returns cfg with any unset or contradictory field replaced by a
+// usable value, so a caller cannot construct a buffer that harvests to a size
+// above the one that triggers harvesting (which would loop) or to zero.
+func (c BufferConfig) normalized() BufferConfig {
+	if c.MinEventAllowance <= 0 {
+		c.MinEventAllowance = defaultMinEventAllowance
+	}
+	if c.MaxEventAllowance <= c.MinEventAllowance {
+		c.MaxEventAllowance = c.MinEventAllowance + max(1, c.MinEventAllowance/10)
+	}
+	if c.MinInfoAllowance < 0 {
+		c.MinInfoAllowance = 0
+	}
+	if c.MinDebugAllowance < 0 {
+		c.MinDebugAllowance = 0
+	}
+	return c
+}
 
 // EventLog buffers emitted events for retrospective Read-Event queries.
 // Bounded: keeps the most recent N entries per priority bucket.
@@ -62,14 +120,15 @@ const (
 //
 // Mirrors matter.js packages/protocol/src/interaction/EventHandler.ts.
 type EventLog struct {
-	mu       sync.RWMutex
-	next     uint64        // next event number; incremented before use so first event is 1
-	critical []EventRecord // bounded FIFO, cap = capCrit
-	info     []EventRecord // bounded FIFO, cap = capInfo
-	debug    []EventRecord // bounded FIFO, cap = capDebug
-	capCrit  int
-	capInfo  int
-	capDebug int
+	mu   sync.RWMutex
+	next uint64 // next event number; incremented before use so first event is 1
+	// occurrences holds every buffered record across all priorities, in
+	// append order and therefore ascending by Number. One list rather than
+	// one per class is what lets the harvest spend a full-buffer budget on
+	// the least valuable records wherever they sit. Mirrors matter.js
+	// OccurrenceManager.ts #occurrences.
+	occurrences []EventRecord
+	buf         BufferConfig
 
 	// persistCeiling / persistEpoch / persistFn implement the
 	// crash-safe monotonic EventNumber (Matter §7.14.2.1: event
@@ -89,24 +148,16 @@ type EventLog struct {
 	persistFn      func(ceiling uint64)
 }
 
-// NewEventLog constructs an EventLog with the default priority-bucket
-// capacities (Critical=64, Info=32, Debug=16).
+// NewEventLog constructs an EventLog with [DefaultBufferConfig].
 func NewEventLog() *EventLog {
-	return &EventLog{
-		capCrit:  capCritical,
-		capInfo:  capInfo,
-		capDebug: capDebug,
-	}
+	return NewEventLogWithBuffer(DefaultBufferConfig())
 }
 
-// newEventLogWithCaps constructs an EventLog with custom capacities.
-// Used by tests to force eviction with small caps.
-func newEventLogWithCaps(critical, info, debug int) *EventLog {
-	return &EventLog{
-		capCrit:  critical,
-		capInfo:  info,
-		capDebug: debug,
-	}
+// NewEventLogWithBuffer constructs an EventLog with custom buffer sizing.
+// Unset or contradictory fields fall back to the defaults; see
+// [BufferConfig.normalized].
+func NewEventLogWithBuffer(cfg BufferConfig) *EventLog {
+	return &EventLog{buf: cfg.normalized()}
 }
 
 // Append records an event with a freshly-allocated monotonic Number and
@@ -128,15 +179,87 @@ func (l *EventLog) Append(rec EventRecord) uint64 {
 	if rec.EpochMS == 0 {
 		rec.EpochMS = uint64(time.Now().UnixMilli()) //nolint:gosec // time.Now() is non-negative; see #20
 	}
-	switch rec.Priority {
-	case EventPriorityCritical:
-		l.critical = appendEvict(l.critical, rec, l.capCrit)
-	case EventPriorityInfo:
-		l.info = appendEvict(l.info, rec, l.capInfo)
-	default: // Debug
-		l.debug = appendEvict(l.debug, rec, l.capDebug)
-	}
+	l.occurrences = append(l.occurrences, rec)
+	l.harvestLocked()
 	return rec.Number
+}
+
+// harvestLocked drops the least valuable records once the buffer has grown
+// past MaxEventAllowance, bringing it back to MinEventAllowance. A no-op
+// below that threshold, so the cost is paid once per MaxEventAllowance -
+// MinEventAllowance appends rather than on every one.
+//
+// Ported from matter.js HEAD
+// packages/protocol/src/events/OccurrenceManager.ts #dropOldOccurrences.
+// Two rules carry the behaviour:
+//
+//   - Classes are harvested in the order Debug, Info, Critical, so a
+//     Critical record is dropped only once nothing else can be. This is what
+//     keeps the boot-once StartUp / BootReason events readable while
+//     ordinary traffic churns through the buffer.
+//   - Within Debug and Info the most recent MinInfoAllowance /
+//     MinDebugAllowance records are off limits while any older droppable
+//     record remains, so a Debug flood cannot take the whole Info class with
+//     it. Critical has no such floor and needs none — it is harvested last.
+//
+// Within one class the oldest record goes first.
+func (l *EventLog) harvestLocked() {
+	if len(l.occurrences) <= l.buf.MaxEventAllowance {
+		return
+	}
+	toDrop := len(l.occurrences) - l.buf.MinEventAllowance
+	if toDrop <= 0 {
+		return
+	}
+
+	// Walk backwards to find, per protected class, the index at which its
+	// floor begins: everything from there on is the most-recent run the
+	// harvest must leave alone.
+	floors := map[EventPriority]int{
+		EventPriorityInfo:  l.buf.MinInfoAllowance,
+		EventPriorityDebug: l.buf.MinDebugAllowance,
+	}
+	protectedFrom := map[EventPriority]int{
+		EventPriorityInfo:  len(l.occurrences),
+		EventPriorityDebug: len(l.occurrences),
+	}
+	counted := map[EventPriority]int{}
+	for i := len(l.occurrences) - 1; i >= 0; i-- {
+		p := l.occurrences[i].Priority
+		floor, guarded := floors[p]
+		if !guarded || counted[p] >= floor {
+			continue
+		}
+		counted[p]++
+		protectedFrom[p] = i
+	}
+
+	drop := make([]bool, len(l.occurrences))
+	dropped := 0
+	for _, p := range []EventPriority{EventPriorityDebug, EventPriorityInfo, EventPriorityCritical} {
+		limit, guarded := protectedFrom[p]
+		if !guarded {
+			// Critical: the whole buffer is in reach, floors do not apply.
+			limit = len(l.occurrences)
+		}
+		for i := 0; i < limit && dropped < toDrop; i++ {
+			if l.occurrences[i].Priority == p && !drop[i] {
+				drop[i] = true
+				dropped++
+			}
+		}
+		if dropped >= toDrop {
+			break
+		}
+	}
+
+	kept := l.occurrences[:0]
+	for i, rec := range l.occurrences {
+		if !drop[i] {
+			kept = append(kept, rec)
+		}
+	}
+	l.occurrences = kept
 }
 
 // SeedNumber raises the event-number counter to at least base. Called
@@ -170,18 +293,6 @@ func (l *EventLog) SetCounterPersistence(persist func(ceiling uint64), epoch uin
 	l.persistCeiling = l.next
 }
 
-// appendEvict appends rec to buf; if len(buf) > limit after append, the
-// oldest entry (index 0) is evicted (FIFO). Returns the updated slice.
-func appendEvict(buf []EventRecord, rec EventRecord, limit int) []EventRecord {
-	buf = append(buf, rec)
-	if len(buf) > limit {
-		// Shift left — drop the oldest entry.
-		copy(buf, buf[1:])
-		buf = buf[:limit]
-	}
-	return buf
-}
-
 // Query returns all EventRecords whose Number >= minNumber and that
 // match the supplied (endpoint, cluster, eventID) filter.
 //
@@ -205,27 +316,14 @@ func (l *EventLog) Query(endpoint uint16, cluster, eventID uint32, minNumber uin
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	// Collect from all three buckets then sort by Number.
+	// One buffer in append order, so the result is already ascending by
+	// Number — the order the wire requires (see [BuildEventReports]).
 	var out []EventRecord
-	for _, rec := range l.critical {
+	for _, rec := range l.occurrences {
 		if matchRecord(rec, endpoint, cluster, eventID, minNumber) {
 			out = append(out, rec)
 		}
 	}
-	for _, rec := range l.info {
-		if matchRecord(rec, endpoint, cluster, eventID, minNumber) {
-			out = append(out, rec)
-		}
-	}
-	for _, rec := range l.debug {
-		if matchRecord(rec, endpoint, cluster, eventID, minNumber) {
-			out = append(out, rec)
-		}
-	}
-	// Sort by Number ascending. Records within each bucket are already
-	// monotonic; merging three sorted slices with a simple sort here is
-	// correct (bucket sizes are bounded and small).
-	sortByNumber(out)
 	return out
 }
 
@@ -246,19 +344,4 @@ func matchRecord(rec EventRecord, endpoint uint16, cluster, eventID uint32, minN
 		return false
 	}
 	return true
-}
-
-// sortByNumber sorts recs in-place by EventRecord.Number ascending.
-// Uses insertion sort — bucket sizes are bounded (≤ 64+32+16=112)
-// so insertion sort is faster than sort.Slice's overhead for small n.
-func sortByNumber(recs []EventRecord) {
-	for i := 1; i < len(recs); i++ {
-		key := recs[i]
-		j := i - 1
-		for j >= 0 && recs[j].Number > key.Number {
-			recs[j+1] = recs[j]
-			j--
-		}
-		recs[j+1] = key
-	}
 }

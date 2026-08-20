@@ -158,8 +158,8 @@ func TestParityMatterJS_BridgedServer_ReachableChangedEventFired(t *testing.T) {
 	if ev.event != 0x0003 {
 		t.Errorf("event = 0x%04X, want 0x0003 (ReachableChanged)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityCritical {
-		t.Errorf("priority = %v, want Critical (bridged-device-basic-information.element.ts:55)", ev.priority)
+	if ev.priority != interfaces.MatterEventPriorityInfo {
+		t.Errorf("priority = %v, want Info (bridged-device-basic-information.element.ts:55)", ev.priority)
 	}
 	if ev.endpoint != 3 {
 		t.Errorf("endpoint = %d, want 3", ev.endpoint)

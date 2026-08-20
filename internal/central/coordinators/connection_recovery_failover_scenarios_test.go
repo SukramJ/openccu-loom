@@ -505,6 +505,7 @@ func TestSubscribeTwoInterfacesFailConcurrentlyViaEvents(t *testing.T) {
 			},
 		}})
 	}
+	armInterfaces(c, "HmIP-RF", "BidCos-RF")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -568,6 +569,7 @@ func TestSubscribeCentralStateFailed_TriggersAllInterfaces(t *testing.T) {
 			},
 		}})
 	}
+	armInterfaces(c, "HmIP-RF", "BidCos-RF", "CUxD")
 	c.Subscribe()
 	defer c.Stop()
 

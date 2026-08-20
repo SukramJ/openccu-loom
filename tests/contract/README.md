@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 350.
+Guards without a doc comment: 7 of 352.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -147,6 +147,7 @@ Guards without a doc comment: 7 of 350.
 | TestLogStreamResume_SinceReturnsOnlyNewerRecords | log_stream_resume_contract_test.go | TestLogStreamResume_SinceReturnsOnlyNewerRecords verifies that Since(seq) returns only records with Seq > seq for several cursor values. |
 | TestMarkdownLinksValid | markdown_links_test.go | TestMarkdownLinksValid walks every Markdown file in the repository and fails when a Markdown-syntax link `[text] (path.md)` resolves to a non-existent file. |
 | TestMatterEndpointSourcesAreChangeNotifiers | matter_change_notifier_test.go | TestMatterEndpointSourcesAreChangeNotifiers guarantees that every type asserted as an interfaces.MatterEndpointSource also asserts interfaces.MatterChangeNotifier in the same file. |
+| TestMatterEventPrioritiesMatchMatterJS | matter_event_priority_parity_test.go | TestMatterEventPrioritiesMatchMatterJS walks every MatterEmitEvent call in the Matter tree and checks the priority it passes against [matterEventPriority]. |
 | TestScenarioCoverage | matter_scenario_gate_test.go | TestScenarioCoverage enforces that every custom-DP type with a Matter-side integration (a `<type>/matter.go` under internal/model/custom/) has at least one scenario tagged with its type name in notes/parity/matter/scenarios. |
 | TestMatterSchemaSnapshotInSync | matter_schema_sync_test.go | TestMatterSchemaSnapshotInSync asserts the two copies of the matter.js HEAD schema snapshot are byte-identical: the master at notes/parity/matter/matter-schema-snapshot.json (re-extracted by `make generate-matter-schema`) and the embedded copy at internal/north/matter/parity/schema.json that every matter parity test runs against. |
 | TestMCPCatalogueCoversEveryRESTDomain | mcp_rest_parity_test.go | TestMCPCatalogueCoversEveryRESTDomain is the parity guard ADR 0025 requires: "the tool catalogue must track the REST/WS surface". |
@@ -355,6 +356,7 @@ Guards without a doc comment: 7 of 350.
 | TestPin_ThermostatServer_MinSetpointDeadBand_Default | wiring_pins/matter_min_setpoint_deadband_test.go | TestPin_ThermostatServer_MinSetpointDeadBand_Default pins that a freshly constructed HEAT+COOL+AUTO ThermostatServer reports MinSetpointDeadBand (attribute 0x0019) as 20 (= 2.0°C), matching the matter.js HEAD default in packages/model/src/standard/elements/thermostat-cluster.element.ts. |
 | TestMatterDiagnosticsSurfacesAreWired | wiring_pins/matter_session_diagnostics_test.go | TestMatterDiagnosticsSurfacesAreWired pins the other three diagnostic surfaces the same way, for the same reason: each answers 503 "Matter bridge not enabled" on a running bridge when its port is unset, which reads as a configuration problem rather than a wiring one. |
 | TestMatterSessionListerIsWiredFromBothManagers | wiring_pins/matter_session_diagnostics_test.go | TestMatterSessionListerIsWiredFromBothManagers pins the composition root's half of the session-diagnostics surface. |
+| TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
 | TestCSRFDefaultEnabled | wiring_pins/security_csrf_origin_test.go | TestCSRFDefaultEnabled pins that the config default has CSRFEnabled set to true. |
 | TestCSRFExplicitFalseOptOut | wiring_pins/security_csrf_origin_test.go | TestCSRFExplicitFalseOptOut pins that setting CSRFEnabled to false in the config (opt-out path for API-token deployments) is honoured by CSRFIsEnabled. |
 | TestWSHandlerAcceptsAllowedOrigins | wiring_pins/security_csrf_origin_test.go | TestWSHandlerAcceptsAllowedOrigins pins that ws.Handler takes an allowedOrigins parameter (the third argument). |

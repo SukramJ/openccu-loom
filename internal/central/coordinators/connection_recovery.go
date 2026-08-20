@@ -151,6 +151,18 @@ type ConnectionRecoveryCoordinator struct {
 	attempts map[string]int
 	state    map[string]*InterfaceRecoveryState
 	history  map[string][]HistoryEntry
+	// armed holds the interfaces whose south-bound bring-up has reported a
+	// result and which the coordinator may therefore recover. An interface
+	// is added by [ConnectionRecoveryCoordinator.ArmInterface], which the
+	// wiring calls once the bring-up has either reached the CCU or given up
+	// on it.
+	//
+	// Recovery restores a connection the bring-up established. While the
+	// bring-up is still walking, no interface reports connected yet, so the
+	// central evaluates to FAILED — an ordinary step, not an outage, and
+	// every trigger lane would otherwise read it as one and start a
+	// reconnect pipeline against a CCU that was never gone. Guarded by mu.
+	armed map[string]struct{}
 
 	// --- optional wiring (all nil-safe) ---------------------------------
 	// defaultPipeline is used by Subscribe-triggered recoveries when no
@@ -381,6 +393,31 @@ func (c *ConnectionRecoveryCoordinator) WithPipelineFor(interfaceID string, p []
 	return c
 }
 
+// ArmInterface hands interfaceID over to the coordinator: from here on a
+// trigger for it starts a recovery run. The south-bound wiring calls it once
+// the interface's bring-up has reported a result — whether it reached the CCU
+// or ended in DISCONNECTED, because an interface whose first init() failed is
+// exactly what the recovery pipeline is meant to pick up.
+//
+// Before that call every trigger for the interface is dropped. Without the
+// gate the central-state evaluation's mid-bring-up FAILED — no interface
+// reports connected until the walk ends — starts a full reconnect pipeline
+// against a CCU that was never gone, and the reconnect cycles every device's
+// availability across MQTT, REST, the WebSocket and the Matter bridge.
+//
+// Idempotent; safe to call on every bring-up generation.
+func (c *ConnectionRecoveryCoordinator) ArmInterface(interfaceID string) {
+	if c == nil || interfaceID == "" {
+		return
+	}
+	c.mu.Lock()
+	if c.armed == nil {
+		c.armed = make(map[string]struct{})
+	}
+	c.armed[interfaceID] = struct{}{}
+	c.mu.Unlock()
+}
+
 // PipelineFor returns the recovery pipeline registered for interfaceID,
 // or the default pipeline when the interface has none. The second result
 // is false when neither exists — a caller that would otherwise run an
@@ -461,7 +498,19 @@ func (c *ConnectionRecoveryCoordinator) triggerRecovery(interfaceID string) {
 		pipeline = c.defaultPipeline
 	}
 	_, alreadyActive := c.active[interfaceID]
+	_, armed := c.armed[interfaceID]
 	c.mu.Unlock()
+
+	if !armed {
+		// The bring-up owns this interface until it reports a result; it
+		// carries its own retry. Recovering underneath it re-issues init()
+		// against a wire the bring-up is still establishing.
+		c.log().Debug("recovery.skip",
+			slog.String("central", c.centralName),
+			slog.String("interface", interfaceID),
+			slog.String("reason", "bringup_pending"))
+		return
+	}
 
 	if len(pipeline) == 0 {
 		c.log().Debug("recovery.skip",

@@ -314,3 +314,121 @@ func TestClientStateMachineStoppingReachableFromEveryLiveState(t *testing.T) {
 		t.Error("STOPPED must stay terminal")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// TransitionPath: one bus event per bring-up walk
+// ---------------------------------------------------------------------------
+
+// pathObserver records what a TransitionPath walk told the bus and the
+// client's own listeners.
+type pathObserver struct {
+	published [][2]hmenum.ClientState
+	seen      [][2]hmenum.ClientState
+}
+
+func (o *pathObserver) attach(sm *ClientStateMachine) {
+	sm.AddOnStateChange(func(from, to hmenum.ClientState) {
+		o.seen = append(o.seen, [2]hmenum.ClientState{from, to})
+	})
+	sm.SetStateChangedPublisher(func(from, to hmenum.ClientState, _ string, _ hmenum.FailureReason) {
+		o.published = append(o.published, [2]hmenum.ClientState{from, to})
+	})
+}
+
+// TestTransitionPathPublishesOneEventForTheWholeWalk is the regression guard
+// for the boot-time false outage. The bring-up drives the client from CREATED
+// to CONNECTED, and the table has no direct edge, so it walks three
+// intermediate states. Publishing each one announces an interface that is not
+// connected, and the central-state evaluation reads "no interface connected"
+// as an outage: the central was demoted to FAILED mid-bring-up, the recovery
+// coordinator's CentralStateChanged lane started a reconnect pipeline against
+// a CCU that was never gone, and the reconnect flipped every bridged device's
+// availability twice on every north-bound plane.
+func TestTransitionPathPublishesOneEventForTheWholeWalk(t *testing.T) {
+	t.Parallel()
+
+	sm := NewClientStateMachine()
+	var obs pathObserver
+	obs.attach(sm)
+
+	end := sm.TransitionPath("bring-up", hmenum.FailureReasonNone, nil,
+		hmenum.ClientStateInitializing,
+		hmenum.ClientStateInitialized,
+		hmenum.ClientStateConnecting,
+		hmenum.ClientStateConnected,
+	)
+
+	if end != hmenum.ClientStateConnected {
+		t.Errorf("end state = %s, want %s", end, hmenum.ClientStateConnected)
+	}
+	if len(obs.published) != 1 {
+		t.Fatalf("published %d bus events, want 1: %v", len(obs.published), obs.published)
+	}
+	if got := obs.published[0]; got[0] != hmenum.ClientStateCreated || got[1] != hmenum.ClientStateConnected {
+		t.Errorf("published %s → %s, want %s → %s",
+			got[0], got[1], hmenum.ClientStateCreated, hmenum.ClientStateConnected)
+	}
+	// The client's own listeners are a different audience: they wake
+	// WaitForState waiters and clear the connectivity streak, so a step
+	// hidden from them is a step the client itself missed.
+	if len(obs.seen) != 4 {
+		t.Errorf("listeners saw %d steps, want 4: %v", len(obs.seen), obs.seen)
+	}
+}
+
+// TestTransitionPathReportsSkippedStepsAndKeepsWalking pins that a target the
+// table rejects neither aborts the walk nor passes silently: the caller is
+// told, and the remaining targets still apply. That is what lets the bring-up
+// hand in a full path and leave it to the table to decide which parts of it
+// are still reachable from the client's current state.
+func TestTransitionPathReportsSkippedStepsAndKeepsWalking(t *testing.T) {
+	t.Parallel()
+
+	sm := NewClientStateMachine()
+	var obs pathObserver
+	obs.attach(sm)
+
+	var skipped []hmenum.ClientState
+	end := sm.TransitionPath("bring-up", hmenum.FailureReasonNone,
+		func(target hmenum.ClientState, err error) {
+			if err == nil {
+				t.Errorf("onSkip called with a nil error for %s", target)
+			}
+			skipped = append(skipped, target)
+		},
+		hmenum.ClientStateConnected, // illegal from CREATED — skipped
+		hmenum.ClientStateInitializing,
+		hmenum.ClientStateInitialized,
+	)
+
+	if len(skipped) != 1 || skipped[0] != hmenum.ClientStateConnected {
+		t.Errorf("skipped = %v, want [%s]", skipped, hmenum.ClientStateConnected)
+	}
+	if end != hmenum.ClientStateInitialized {
+		t.Errorf("end state = %s, want %s", end, hmenum.ClientStateInitialized)
+	}
+	if len(obs.published) != 1 {
+		t.Fatalf("published %d bus events, want 1: %v", len(obs.published), obs.published)
+	}
+}
+
+// TestTransitionPathPublishesNothingWhenTheWalkMovesNowhere pins the empty
+// case: a path whose every step the table rejects leaves the machine where it
+// was, and a bus event announcing a state change that did not happen would be
+// a lie to every north-bound consumer.
+func TestTransitionPathPublishesNothingWhenTheWalkMovesNowhere(t *testing.T) {
+	t.Parallel()
+
+	sm := NewClientStateMachine()
+	var obs pathObserver
+	obs.attach(sm)
+
+	end := sm.TransitionPath("bring-up", hmenum.FailureReasonNone, nil, hmenum.ClientStateConnected)
+
+	if end != hmenum.ClientStateCreated {
+		t.Errorf("end state = %s, want %s", end, hmenum.ClientStateCreated)
+	}
+	if len(obs.published) != 0 {
+		t.Errorf("published %d bus events, want 0: %v", len(obs.published), obs.published)
+	}
+}

@@ -65,6 +65,7 @@ func TestSubscribeReactsToConnectionLostEvent(t *testing.T) {
 
 	var count atomic.Int32
 	c.WithDefaultPipeline(atomicPipeline(&count))
+	armInterfaces(c, "HmIP-RF")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -89,6 +90,7 @@ func TestSubscribeReactsToCBStateChangedOpen(t *testing.T) {
 
 	var count atomic.Int32
 	c.WithDefaultPipeline(atomicPipeline(&count))
+	armInterfaces(c, "CUxD")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -119,6 +121,7 @@ func TestSubscribeReactsToCBStateChangedHalfOpenToClosed(t *testing.T) {
 
 	var count atomic.Int32
 	c.WithDefaultPipeline(atomicPipeline(&count))
+	armInterfaces(c, "CUxD")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -214,6 +217,7 @@ func TestSubscribeSkipsDuplicateRecovery(t *testing.T) {
 		},
 	}}
 	c.WithDefaultPipeline(pipeline)
+	armInterfaces(c, "HmIP-RF")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -280,6 +284,7 @@ func TestSubscribeHeartbeatFiresRecoveryPerInterface(t *testing.T) {
 		Stage: hmenum.RecoveryStageReconnecting,
 		Run:   func(_ context.Context) error { return nil },
 	}})
+	armInterfaces(c, "HmIP-RF", "BidCos-RF")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -402,3 +407,107 @@ func TestSubscribeAfterStopStaysStopped(t *testing.T) {
 		}
 	}
 }
+
+// armInterfaces marks interfaceIDs as brought up so the coordinator's
+// bring-up gate lets a trigger through. Production wiring calls
+// [ConnectionRecoveryCoordinator.ArmInterface] once an interface's
+// south-bound bring-up has reported a result; a test that means "an
+// interface in service loses its connection" has to say so too, because an
+// interface that never came up belongs to the bring-up and not to recovery.
+func armInterfaces(c *ConnectionRecoveryCoordinator, interfaceIDs ...string) {
+	for _, id := range interfaceIDs {
+		c.ArmInterface(id)
+	}
+}
+
+// ---- bring-up gate --------------------------------------------------------
+
+// TestTriggerBeforeArmIsDropped is the regression guard for the boot-time
+// reconnect. While an interface's south-bound bring-up walks its client from
+// CREATED to CONNECTED, no interface of the central reports connected, so the
+// central-state evaluation lands on FAILED — an ordinary bring-up step, not
+// an outage. The CentralStateChanged lane read it as one and started a full
+// reconnect pipeline against a CCU that was never gone; the reconnect then
+// flipped every bridged device's availability twice, which on the Matter side
+// pushed the boot-once StartUp and BootReason events out of the event buffer.
+//
+// Recovery restores a connection the bring-up established. Until the bring-up
+// reports a result the interface is not the coordinator's to recover.
+func TestTriggerBeforeArmIsDropped(t *testing.T) {
+	t.Parallel()
+
+	bus := events.NewBus()
+	c := NewConnectionRecoveryCoordinatorWithLimit("c-gate", bus, 0)
+
+	var count atomic.Int32
+	c.WithDefaultPipeline(atomicPipeline(&count))
+	c.Subscribe()
+	defer c.Stop()
+
+	events.Publish(bus, hmevent.ConnectionLostEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "c-gate",
+		InterfaceID: "HmIP-RF",
+	})
+
+	// Negative control for the assertion below: the same event on an armed
+	// interface must start a run, so "count stayed 0" measures the gate and
+	// not a coordinator that never runs anything.
+	if waitFor(t, func() bool { return count.Load() > 0 }, shortNegativeWait) {
+		t.Fatalf("recovery ran for an interface whose bring-up has not reported (count=%d)", count.Load())
+	}
+
+	c.ArmInterface("HmIP-RF")
+	events.Publish(bus, hmevent.ConnectionLostEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "c-gate",
+		InterfaceID: "HmIP-RF",
+	})
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
+		t.Fatalf("recovery did not start after ArmInterface (count=%d)", count.Load())
+	}
+}
+
+// TestTriggerBeforeArmIsDroppedOnEveryLane pins the gate at triggerRecovery
+// rather than on the one lane that was observed to fire during bring-up: the
+// connection probe publishes ConnectionLost from the same conditions, and a
+// tripped breaker or a heartbeat tick can land in the same window.
+func TestTriggerBeforeArmIsDroppedOnEveryLane(t *testing.T) {
+	t.Parallel()
+
+	bus := events.NewBus()
+	c := NewConnectionRecoveryCoordinatorWithLimit("c-lanes", bus, 0)
+
+	var count atomic.Int32
+	c.WithDefaultPipeline(atomicPipeline(&count))
+	c.Subscribe()
+	defer c.Stop()
+
+	events.Publish(bus, hmevent.CircuitBreakerStateChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "c-lanes",
+		InterfaceID: "HmIP-RF",
+		From:        hmenum.CircuitStateClosed,
+		To:          hmenum.CircuitStateOpen,
+	})
+	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+		Base:         hmevent.NewBase(),
+		CentralName:  "c-lanes",
+		InterfaceIDs: []string{"HmIP-RF"},
+	})
+	events.Publish(bus, hmevent.CentralStateChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "c-lanes",
+		To:          hmenum.CentralStateFailed,
+	})
+
+	if waitFor(t, func() bool { return count.Load() > 0 }, shortNegativeWait) {
+		t.Fatalf("a lane started recovery before the bring-up reported (count=%d)", count.Load())
+	}
+}
+
+// shortNegativeWait is how long the gate tests wait for something that must
+// not happen. Long enough that an ungated trigger — which starts its run in a
+// goroutine the publish returns from immediately — is observed, short enough
+// that the suite does not pay a full eventWaitTimeout per negative case.
+const shortNegativeWait = 750 * time.Millisecond

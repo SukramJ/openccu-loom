@@ -1201,6 +1201,19 @@ func (c *InterfaceClient) TransitionTo(
 	return c.sm.TransitionTo(target, reason, force, failureReason)
 }
 
+// TransitionPath walks the client's state machine along targets and publishes
+// one ClientStateChangedEvent for the whole walk. Delegates to
+// [ClientStateMachine.TransitionPath]; see there for why a bring-up walk must
+// not announce its intermediate steps.
+func (c *InterfaceClient) TransitionPath(
+	reason string,
+	failureReason hmenum.FailureReason,
+	onSkip func(target hmenum.ClientState, err error),
+	targets ...hmenum.ClientState,
+) hmenum.ClientState {
+	return c.sm.TransitionPath(reason, failureReason, onSkip, targets...)
+}
+
 // CanTransitionTo reports whether the state machine allows moving from its
 // current state to target. Delegates to [ClientStateMachine.CanTransitionTo].
 func (c *InterfaceClient) CanTransitionTo(target hmenum.ClientState) bool {
