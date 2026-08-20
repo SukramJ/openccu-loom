@@ -4,6 +4,67 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.1]
+
+Two defects behind one symptom: the nightly chip-tool suite has been red since
+0.61.0 because a controller reading the bridge's `StartUp` and `BootReason`
+events got an empty answer. The events were emitted; they were gone by the
+time anything read them, and the reason they were gone was a reconnect that
+should never have run.
+
+### Fixed
+
+- The daemon no longer runs a connection recovery against a CCU that was never
+  gone. Bringing an interface up walks its client from `CREATED` to
+  `CONNECTED`, and each intermediate step was announced on the event bus. While
+  the walk runs no interface reports connected, so the central-state evaluation
+  read an ordinary bring-up step as an outage, demoted the central to `FAILED`,
+  and the recovery coordinator reconnected the interface it was still
+  establishing. The visible cost was on every daemon start: the reconnect
+  forced all devices unavailable and back, so MQTT, REST, the WebSocket and the
+  Matter bridge each announced the whole fleet dropping offline and returning a
+  second later — Home Assistant entities went unavailable on every restart. The
+  bring-up walk now publishes a single event for its outcome, and the recovery
+  coordinator only accepts an interface once its bring-up has reported a
+  result; before that the interface belongs to the bring-up, which carries its
+  own retry.
+- Matter controllers can read the `BasicInformation.StartUp` and
+  `GeneralDiagnostics.BootReason` events again. Both are emitted once at boot
+  and both are Critical, but the event buffer capped each priority class
+  separately — 64 Critical records, evicted oldest-first, regardless of how
+  empty the other classes were. The reconnect above flipped every bridged
+  device's `Reachable` twice, and on a 36-device central those 72 events were
+  enough to push the two boot events out. Apple Home waits for them as part of
+  its Subscribe-Initial state machine. The buffer now follows matter.js'
+  harvesting model: one buffer across all priorities, non-critical classes
+  floored so neither can starve the other, and Critical records dropped last.
+- Four Matter events carried the wrong priority against matter.js HEAD:
+  `BridgedDeviceBasicInformation.ReachableChanged` (both emit paths) and
+  `Switch.InitialPress` / `Switch.LongPress` were Critical where the gold
+  standard declares them `info` — which is also what their own sibling
+  emitters, `ShortRelease` and `LongRelease`, already used. Two of the unit
+  tests asserting the wrong value cited the matter.js line that says the
+  opposite. Every emitted event's priority is now checked against a table read
+  from matter.js, and an emitter whose event is not in that table fails the
+  build rather than picking a priority unreviewed.
+
+### Internal
+
+- The boot-lifecycle events are pinned through the composition root: a test
+  wires the Matter runtime and reads both events back over the same path the
+  receive dispatcher uses for a controller's `ReadRequest`. Their only previous
+  coverage was the nightly chip-tool job, which is why the regression stood for
+  four days.
+- The lint gate no longer floats on `@latest`. `gofumpt` and `golangci-lint`
+  are pinned in `ci.yml`, so the job reports on the diff rather than on the
+  calendar: `main` went from green to red overnight on an unchanged tree when
+  golangci-lint 2.13.0 landed with staticcheck's Go 1.26 deprecation checks.
+  `govulncheck` and `go-licenses` keep floating on purpose — a new
+  vulnerability database *should* turn the build red without a commit. Three
+  files are reformatted in the same change: local `make fmt` and CI had drifted
+  apart on a rule gofumpt relaxed in v0.11.0, and they now satisfy both
+  versions.
+
 ## [0.63.0]
 
 The medium and low findings of the round-4 full-codebase audit — the tail

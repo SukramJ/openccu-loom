@@ -346,7 +346,8 @@ func TestRunListsJoinsElementsWithNewlineSeparators(t *testing.T) {
 	defer srv.Close()
 
 	r := newRunner(t, srv.URL)
-	_, err := r.RunLists(context.Background(), hmenum.RegaScriptSetDeviceRooms,
+	_, err := r.RunLists(
+		context.Background(), hmenum.RegaScriptSetDeviceRooms,
 		map[string]string{"address": "ABC123:1"},
 		map[string][]string{"rooms": {"Kitchen", "Living Room"}},
 	)
@@ -369,7 +370,8 @@ func TestRunListsRejectsControlCharInAnElement(t *testing.T) {
 	r := newRunner(t, srv.URL)
 	// An element carrying its own newline would forge an extra entry and, before
 	// the comment interpolation was removed, could break out of the script.
-	_, err := r.RunLists(context.Background(), hmenum.RegaScriptSetDeviceRooms,
+	_, err := r.RunLists(
+		context.Background(), hmenum.RegaScriptSetDeviceRooms,
 		map[string]string{"address": "ABC123:1"},
 		map[string][]string{"rooms": {"Kitchen", "evil\ndom.GetObject(1).State(1)"}},
 	)

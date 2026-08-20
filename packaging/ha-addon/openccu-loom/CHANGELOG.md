@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.63.1
+
+Two fixes that only show up when the daemon starts or when a Matter controller
+pairs:
+
+- **Devices no longer go unavailable for a moment on every restart.** Bringing
+  an interface up was misread as the CCU dropping out, so the daemon
+  reconnected it — and reported the whole fleet offline and back again while it
+  did. Home Assistant entities went unavailable on each restart.
+- **Apple Home and Google Home get the start-up events they wait for.** The two
+  events a controller reads right after pairing were being pushed out of the
+  bridge's event buffer by the very reconnect above, which could leave the
+  bridge showing as added but not supported.
+
 ## 0.63.0
 
 The smaller findings behind the 0.62.0 audit fixes. What you will notice:

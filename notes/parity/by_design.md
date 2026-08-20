@@ -3781,6 +3781,32 @@ avoids a transient null that a legacy controller might mishandle. The modern
 100ths attribute carries the correct nullability. (Re-audit 2026-05-31, finding
 M2-10.)
 
+### BD-Matter-EventBufferSizing — the event buffer follows matter.js' harvesting model at a tenth of its size
+
+matter.js `packages/protocol/src/events/OccurrenceManager.ts:433` sizes the
+event store at `minEventAllowance: 10_000` / `maxEventAllowance: 11_000` with
+`minPriorityEventAllowance: { info: 2_000, debug: 2_000 }`. OpenCCU-Loom
+(`internal/north/matter/im/eventlog.go`) ports the model verbatim — one buffer
+across all priorities, harvested down to the minimum once it passes the
+maximum, non-critical classes floored so a lower class cannot starve a higher
+one, and Critical dropped last — but sizes it at 2 000 / 2 200 with floors of
+400 (info) and 200 (debug).
+
+By design. matter.js targets a node whose event store is its own dataset;
+OpenCCU-Loom holds a full CCU device model alongside it, and the buffer exists
+to answer out-of-band read-event requests rather than to be an event history.
+The scaled numbers keep the retention property the model is there for — a
+boot-once Critical event stays readable through any realistic volume of
+ordinary traffic — at roughly a tenth of the memory. The behaviour under
+harvesting is identical; only the point at which harvesting starts differs.
+
+What this replaced is the reason the model was ported at all: three fixed
+per-class FIFOs (critical 64, info 32, debug 16). A per-class cap drops a
+Critical record while the other classes sit empty, and one CCU interface flap
+on a 36-device central produced enough events to evict the BasicInformation
+StartUp and GeneralDiagnostics BootReason events that a controller reads
+out-of-band right after CASE.
+
 ### BD-Matter-FailSafeDisarmOwnership — ArmFailSafe(0) disarm is not gated on the arming fabric
 
 chip `GeneralCommissioningCluster.cpp:420` gates the whole ArmFailSafe body —

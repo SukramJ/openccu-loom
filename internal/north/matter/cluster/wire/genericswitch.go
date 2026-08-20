@@ -255,15 +255,17 @@ func (s *GenericSwitch) featureMap() uint32 {
 
 // FireInitialPress emits the Matter §1.13.6.1 InitialPress event.
 // Called by the model layer when the source DP fires PRESS_SHORT or
-// the equivalent first-press signal. Priority Critical so controllers
-// pick it up immediately even if subscriptions are paced.
+// the equivalent first-press signal. Priority INFO per matter.js HEAD
+// packages/model/src/standard/elements/switch.element.ts:48 — every
+// event of the Switch cluster carries "info" there, which is also what
+// the sibling ShortRelease / LongRelease emitters below already use.
 func (s *GenericSwitch) FireInitialPress(newPosition uint8) {
 	if s.emitter == nil {
 		return
 	}
 	s.emitter.MatterEmitEvent(s.endpoint, matterClusterGenericSwitch, MatterEventInitialPress,
 		switchInitialPressEvent{NewPosition: newPosition},
-		interfaces.MatterEventPriorityCritical)
+		interfaces.MatterEventPriorityInfo)
 }
 
 // FireShortRelease emits the §1.13.6.3 ShortRelease event.
@@ -282,9 +284,10 @@ func (s *GenericSwitch) FireLongPress(newPosition uint8) {
 	if s.emitter == nil || !s.src.MatterSwitchSupportsLongPress() {
 		return
 	}
+	// Priority INFO per matter.js HEAD switch.element.ts:52.
 	s.emitter.MatterEmitEvent(s.endpoint, matterClusterGenericSwitch, MatterEventLongPress,
 		switchLongPressEvent{NewPosition: newPosition},
-		interfaces.MatterEventPriorityCritical)
+		interfaces.MatterEventPriorityInfo)
 }
 
 // FireLongRelease emits the §1.13.6.4 LongRelease event.

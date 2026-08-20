@@ -194,6 +194,22 @@ func (sm *ClientStateMachine) TransitionTo(
 	force bool,
 	failureReason hmenum.FailureReason,
 ) error {
+	return sm.transition(target, reason, force, failureReason, true)
+}
+
+// transition is the single-step core of [ClientStateMachine.TransitionTo] and
+// [ClientStateMachine.TransitionPath]. publish decides whether the step
+// reaches the event bus; registered listeners always see it, because they are
+// the client's own internal wiring (waking WaitForState waiters, clearing the
+// connectivity streak) and a step hidden from them is a step the client
+// itself missed.
+func (sm *ClientStateMachine) transition(
+	target hmenum.ClientState,
+	reason string,
+	force bool,
+	failureReason hmenum.FailureReason,
+	publish bool,
+) error {
 	sm.mu.Lock()
 	from := sm.state
 	if from == target {
@@ -221,10 +237,56 @@ func (sm *ClientStateMachine) TransitionTo(
 		cb(from, target)
 	}
 	// emit ClientStateChangedEvent on every successful transition.
-	if publisher != nil {
+	if publish && publisher != nil {
 		publisher(from, target, reason, failureReason)
 	}
 	return nil
+}
+
+// TransitionPath walks the machine through targets in order and publishes a
+// single ClientStateChangedEvent for the whole walk: from the state held
+// before the first step to the state held after the last. A step the
+// transition table rejects is skipped and reported through onSkip (nil to
+// ignore); the walk continues with the next target either way, which is what
+// lets a caller hand in a full path and leave it to the table to decide which
+// parts of it still apply.
+//
+// The intermediate steps exist because the table has no direct edge from
+// CREATED to CONNECTED, not because the client visited a state a consumer
+// could act on. Publishing each one announces an interface that is briefly
+// not connected, and every consumer that reads "no interface is connected" as
+// an outage then acts on a bring-up step as if it were a failure: the
+// central-state evaluation demotes the central to FAILED, the recovery
+// coordinator's CentralStateChanged lane triggers a reconnect pipeline
+// against a CCU that was never gone, and that reconnect cycles every device's
+// availability on every north-bound plane.
+//
+// Returns the state the machine holds when the walk ends.
+func (sm *ClientStateMachine) TransitionPath(
+	reason string,
+	failureReason hmenum.FailureReason,
+	onSkip func(target hmenum.ClientState, err error),
+	targets ...hmenum.ClientState,
+) hmenum.ClientState {
+	sm.mu.Lock()
+	start := sm.state
+	sm.mu.Unlock()
+
+	for _, target := range targets {
+		if err := sm.transition(target, reason, false, failureReason, false); err != nil && onSkip != nil {
+			onSkip(target, err)
+		}
+	}
+
+	sm.mu.Lock()
+	end := sm.state
+	publisher := sm.publisher
+	sm.mu.Unlock()
+
+	if end != start && publisher != nil {
+		publisher(start, end, reason, failureReason)
+	}
+	return end
 }
 
 // Reset moves the machine back to [hmenum.ClientStateCreated] and clears

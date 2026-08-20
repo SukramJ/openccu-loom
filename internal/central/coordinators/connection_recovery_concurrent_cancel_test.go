@@ -314,6 +314,7 @@ func TestHeartbeatTriggerIsIdempotentWhileActiveRecovery(t *testing.T) {
 			return nil
 		},
 	}})
+	armInterfaces(c, "HmIP-RF")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -374,6 +375,7 @@ func TestHeartbeatTriggerStartsRecoveryAfterPreviousCompleted(t *testing.T) {
 			return nil
 		},
 	}})
+	armInterfaces(c, "CUxD")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -472,6 +474,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 			return errors.New("simulated")
 		},
 	}})
+	armInterfaces(c, "HmIP-RF")
 	c.Subscribe()
 	defer c.Stop()
 
@@ -534,6 +537,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 			return errors.New("simulated")
 		},
 	}})
+	armInterfaces(c, "HmIP-RF")
 	c.Subscribe()
 	defer c.Stop()
 

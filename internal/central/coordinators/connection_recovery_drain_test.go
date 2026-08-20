@@ -47,6 +47,7 @@ func TestConnectionRecoveryStopDrainsInFlightRecovery(t *testing.T) {
 	}}
 
 	c.WithDefaultPipeline(pipeline)
+	armInterfaces(c, "HmIP-RF")
 	c.Subscribe()
 
 	// triggerRecovery is exported for in-package callers; use it directly so

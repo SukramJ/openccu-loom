@@ -1334,6 +1334,15 @@ func wireInterface(
 	}
 	ingested = runXMLRPCActivation(ctx, ingestBackoff, activate, ic, cc.Name, wireID, logger)
 
+	// The bring-up has reported its result for this interface, so hand it to
+	// the recovery coordinator. Before this point every trigger for it is
+	// dropped: no interface reports connected while the bring-up walks, the
+	// central evaluates to FAILED, and the coordinator's CentralStateChanged
+	// lane would otherwise reconnect a CCU that was never gone.
+	if unit.Recovery != nil {
+		unit.Recovery.ArmInterface(wireID)
+	}
+
 	// Closer deregisters the callback + unregisters the backend writer
 	// on daemon shutdown. The XML-RPC client itself is stateless.
 	centralName := cc.Name
@@ -1433,21 +1442,21 @@ func ensureDisconnectedClientState(ic *client.InterfaceClient, cause error, logg
 	if reason == hmenum.FailureReasonUnknown || reason == hmenum.FailureReasonNone {
 		reason = hmenum.FailureReasonNetwork
 	}
-	transitions := []struct {
-		target hmenum.ClientState
-		reason string
-	}{
-		{hmenum.ClientStateInitializing, "wire.init.failed: created→initializing"},
-		{hmenum.ClientStateFailed, "wire.init.failed: initializing→failed"},
-		{hmenum.ClientStateDisconnected, "wire.init.failed: failed→disconnected (ready for reconnect)"},
-	}
-	for _, t := range transitions {
-		if err := ic.TransitionTo(t.target, t.reason, false, reason); err != nil {
+	// One walk, one event: the intermediate INITIALIZING / FAILED steps are
+	// how the table reaches DISCONNECTED, not states a consumer should act
+	// on. See [client.ClientStateMachine.TransitionPath].
+	ic.TransitionPath(
+		"wire.init.failed: bring-up ended without a connection (ready for reconnect)",
+		reason,
+		func(target hmenum.ClientState, err error) {
 			logger.Debug("wire.init.state_transition_skipped",
-				slog.String("target", string(t.target)),
+				slog.String("target", string(target)),
 				slog.String("err", err.Error()))
-		}
-	}
+		},
+		hmenum.ClientStateInitializing,
+		hmenum.ClientStateFailed,
+		hmenum.ClientStateDisconnected,
+	)
 }
 
 // ensureConnectedClientState walks the InterfaceClient's state machine
@@ -1460,22 +1469,25 @@ func ensureConnectedClientState(ic *client.InterfaceClient, logger *slog.Logger)
 	if ic == nil {
 		return
 	}
-	transitions := []struct {
-		target hmenum.ClientState
-		reason string
-	}{
-		{hmenum.ClientStateInitializing, "wire.init.ok: created→initializing"},
-		{hmenum.ClientStateInitialized, "wire.init.ok: initializing→initialized"},
-		{hmenum.ClientStateConnecting, "wire.init.ok: initialized→connecting"},
-		{hmenum.ClientStateConnected, "wire.init.ok: connecting→connected"},
-	}
-	for _, t := range transitions {
-		if err := ic.TransitionTo(t.target, t.reason, false, hmenum.FailureReasonNone); err != nil {
+	// One walk, one event. Publishing the three intermediate steps announced
+	// an interface that is not connected while it is coming up, and the
+	// central-state evaluation reads "no interface connected" as an outage:
+	// the central was demoted to FAILED mid-bring-up, which triggered a full
+	// recovery pipeline against a CCU that was never gone. See
+	// [client.ClientStateMachine.TransitionPath].
+	ic.TransitionPath(
+		"wire.init.ok: bring-up reached the CCU",
+		hmenum.FailureReasonNone,
+		func(target hmenum.ClientState, err error) {
 			logger.Debug("wire.init.state_transition_skipped",
-				slog.String("target", string(t.target)),
+				slog.String("target", string(target)),
 				slog.String("err", err.Error()))
-		}
-	}
+		},
+		hmenum.ClientStateInitializing,
+		hmenum.ClientStateInitialized,
+		hmenum.ClientStateConnecting,
+		hmenum.ClientStateConnected,
+	)
 }
 
 // interfacePortOverride resolves an operator-configured port override for

@@ -276,6 +276,15 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 
 	ingested = runCUxDActivation(ctx, cuxdIngestBackoff, activate, ic, cc.Name, wireID, logger)
 
+	// The bring-up has reported its result for this interface, so hand it to
+	// the recovery coordinator. Before this point every trigger for it is
+	// dropped: no interface reports connected while the bring-up walks, the
+	// central evaluates to FAILED, and the coordinator's CentralStateChanged
+	// lane would otherwise reconnect a CCU that was never gone.
+	if unit.Recovery != nil {
+		unit.Recovery.ArmInterface(wireID)
+	}
+
 	// The closer is returned unconditionally — every registration above
 	// (writer backend, client entry, metrics client, BIN-RPC callback
 	// routes) happens before the ingest, so an ingest that never succeeds
