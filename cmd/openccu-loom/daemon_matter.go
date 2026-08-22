@@ -1613,11 +1613,12 @@ func privKeyFromScalar(scalar []byte) (*ecdsa.PrivateKey, error) {
 	if len(scalar) != 32 {
 		return nil, fmt.Errorf("matter case identity: private key length %d, want 32", len(scalar))
 	}
-	curve := elliptic.P256()
-	x, y := curve.ScalarBaseMult(scalar) //nolint:staticcheck // SA1019: curve API matches storage shape
-	priv := &ecdsa.PrivateKey{
-		PublicKey: ecdsa.PublicKey{Curve: curve, X: x, Y: y},
-		D:         new(big.Int).SetBytes(scalar),
+	// ParseRawPrivateKey derives the public half and rejects a scalar
+	// outside [1, n-1]. The hand-rolled predecessor accepted zero and
+	// n itself, both of which yield the identity as the public point.
+	priv, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), scalar)
+	if err != nil {
+		return nil, fmt.Errorf("matter case identity: %w", err)
 	}
 	return priv, nil
 }

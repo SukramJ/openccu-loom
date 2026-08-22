@@ -8,6 +8,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -19,11 +20,11 @@ import (
 type testVerifier struct{}
 
 func (testVerifier) VerifyAndExtractPubKey(noc, _ []byte) (*ecdsa.PublicKey, error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), noc) //nolint:staticcheck // SA1019: test fixture
-	if x == nil {
-		return nil, errors.New("test verifier: invalid noc fixture")
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), noc)
+	if err != nil {
+		return nil, fmt.Errorf("test verifier: invalid noc fixture: %w", err)
 	}
-	return &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, nil
+	return pub, nil
 }
 
 // newTestIdentity returns a fresh Identity whose NOC is just the

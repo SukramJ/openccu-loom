@@ -23,10 +23,10 @@
 package attestation
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
-	"math/big"
 )
 
 // PAA: Matter Test PAA — VID 0xFFF1.
@@ -160,31 +160,33 @@ func mustHex(s string) []byte {
 // the commissioner silently rejects. Pass `""` to skip the check
 // (useful when only the private scalar is documented).
 func mustECDSAKey(privHex, pubHex string) *ecdsa.PrivateKey {
-	d := new(big.Int).SetBytes(mustHex(privHex))
-	curve := elliptic.P256()
-	//nolint:staticcheck // SA1019: ScalarBaseMult kept — CSA Test PAA fixtures are constructed from documented hex scalars and the result must be the literal X/Y components hashed by SHA-1(uncompressed-EC-point) for the SKID check below. crypto/ecdh hides the components.
-	gx, gy := curve.ScalarBaseMult(d.Bytes())
+	// ParseRawPrivateKey derives the public half and rejects a scalar
+	// outside [1, n-1]; PublicKey.Bytes returns the uncompressed
+	// (0x04 || X || Y) encoding, which is both the shape pubHex is
+	// documented in and the one SHA-1'd for the SKID below.
+	priv, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), mustHex(privHex))
+	if err != nil {
+		// invariant: privHex is a checked-in CSA Test PAA fixture literal
+		// (see callers below), never remote input — a scalar this rejects
+		// is a transcription error in this file, caught at init on every
+		// boot.
+		panic("attestation: invalid P-256 private scalar: " + err.Error())
+	}
 	if pubHex != "" {
-		pub := mustHex(pubHex)
-		if len(pub) != 65 || pub[0] != 0x04 {
-			// invariant: pubHex is a checked-in CSA Test PAA fixture
-			// literal (see callers below), never remote input — a
-			// malformed point here is a transcription error in this
-			// file, caught at init on every boot.
+		want := mustHex(pubHex)
+		if len(want) != 65 || want[0] != 0x04 {
 			panic("attestation: malformed uncompressed P-256 point")
 		}
-		wantX := new(big.Int).SetBytes(pub[1:33])
-		wantY := new(big.Int).SetBytes(pub[33:])
-		if gx.Cmp(wantX) != 0 || gy.Cmp(wantY) != 0 {
-			// invariant: both operands derive from checked-in literals
-			// (privHex → gx/gy via ScalarBaseMult, pubHex → wantX/wantY)
-			// — a mismatch is a copy-paste error between the two
-			// documented fixture values, not a runtime/remote condition.
+		got, err := priv.PublicKey.Bytes()
+		if err != nil {
+			panic("attestation: cannot encode derived public key: " + err.Error())
+		}
+		if !bytes.Equal(got, want) {
+			// invariant: both operands derive from checked-in literals —
+			// a mismatch is a copy-paste error between the two documented
+			// fixture values, not a runtime/remote condition.
 			panic("attestation: P-256 public key does not match private scalar")
 		}
 	}
-	return &ecdsa.PrivateKey{
-		PublicKey: ecdsa.PublicKey{Curve: curve, X: gx, Y: gy},
-		D:         d,
-	}
+	return priv
 }

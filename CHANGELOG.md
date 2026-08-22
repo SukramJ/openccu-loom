@@ -55,6 +55,17 @@ should never have run.
   receive dispatcher uses for a controller's `ReadRequest`. Their only previous
   coverage was the nightly chip-tool job, which is why the regression stood for
   four days.
+- Ten of the sixteen `crypto/ecdsa` deprecations Go 1.26 introduced are
+  migrated to `ParseUncompressedPublicKey` / `ParseRawPrivateKey` /
+  `PublicKey.Bytes`: Matter certificate decoding and root-key parsing, the CASE
+  identity reconstruction, the CSA Test PAA fixtures, and five test helpers.
+  Parsing is what validates, so this closed a real hole rather than only
+  silencing a warning — the CASE identity was rebuilt from a stored scalar with
+  a length check and nothing else, and a zero scalar (an empty or truncated
+  column) produced a key whose public point is the identity. The daemon would
+  have run the whole handshake and signed with it. The remaining six all sit in
+  SPAKE2+, where the replacement is not a serialisation call but the curve
+  arithmetic itself; they stay for their own change.
 - The lint gate no longer floats on `@latest`. `gofumpt` and `golangci-lint`
   are pinned in `ci.yml`, so the job reports on the diff rather than on the
   calendar: `main` went from green to red overnight on an unchanged tree when

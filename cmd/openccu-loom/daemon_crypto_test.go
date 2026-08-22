@@ -6,8 +6,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/elliptic"
 	"log/slog"
-	"math/big"
 	"sync"
 	"testing"
 
@@ -89,11 +89,22 @@ func TestPrivKeyFromScalar_ValidInput(t *testing.T) {
 	if priv == nil {
 		t.Fatal("expected non-nil private key")
 	}
-	if priv.D == nil || priv.D.Cmp(new(big.Int).SetBytes(scalar)) != 0 { //nolint:staticcheck // priv.D deprecated in Go 1.26; test-only direct scalar verification until we migrate to crypto/ecdh
-		t.Error("priv.D does not match input scalar")
+	gotScalar, err := priv.Bytes()
+	if err != nil {
+		t.Fatalf("priv.Bytes: %v", err)
 	}
-	if priv.PublicKey.X == nil || priv.PublicKey.Y == nil { //nolint:staticcheck // priv.PublicKey.X/Y deprecated in Go 1.26; test-only coordinate check until we migrate to crypto/ecdh
-		t.Error("expected non-nil public key coordinates")
+	if !bytes.Equal(gotScalar, scalar) {
+		t.Errorf("private scalar = %x, want %x", gotScalar, scalar)
+	}
+	// The public half is derived, so the only thing to assert about it is
+	// that it exists in the canonical uncompressed shape the CASE paths
+	// put on the wire.
+	pub, err := priv.PublicKey.Bytes()
+	if err != nil {
+		t.Fatalf("pub.Bytes: %v", err)
+	}
+	if len(pub) != 65 || pub[0] != 0x04 {
+		t.Errorf("public key = %d bytes prefixed %#x, want 65 bytes prefixed 0x04", len(pub), pub[0])
 	}
 }
 
@@ -105,18 +116,38 @@ func TestPrivKeyFromScalar_WrongLength_Errors(t *testing.T) {
 	}
 }
 
-func TestPrivKeyFromScalar_ZeroScalar_IsAccepted(t *testing.T) {
+// TestPrivKeyFromScalar_OutOfRangeScalar_IsRejected pins that a stored
+// scalar outside [1, n-1] is refused rather than turned into a key.
+//
+// The predecessor checked the length and nothing else, so a zero scalar —
+// an empty or truncated column in the matter store — produced a
+// "private key" whose public point is the identity. CASE would then run
+// its whole handshake and sign with it, and every signature it produced
+// would be worthless while the daemon reported a healthy fabric. The
+// scalar is now parsed, and parsing is what validates it.
+func TestPrivKeyFromScalar_OutOfRangeScalar_IsRejected(t *testing.T) {
 	t.Parallel()
-	// P-256 accepts scalar=0 (maps to point at infinity — not a valid
-	// cryptographic key, but privKeyFromScalar only checks length, not
-	// validity).
-	priv, err := privKeyFromScalar(make([]byte, 32))
-	if err != nil {
-		t.Fatalf("zero scalar: unexpected error: %v", err)
+	for _, tc := range []struct {
+		name   string
+		scalar []byte
+	}{
+		{"zero", make([]byte, 32)},
+		{"curve order", p256Order()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := privKeyFromScalar(tc.scalar); err == nil {
+				t.Fatalf("%s scalar was accepted as a CASE identity", tc.name)
+			}
+		})
 	}
-	if priv == nil {
-		t.Fatal("expected non-nil private key from zero scalar")
-	}
+}
+
+// p256Order returns n, the order of the P-256 base point, as the 32-byte
+// scalar the matter store would hold. n itself is the first value above
+// the valid range.
+func p256Order() []byte {
+	return elliptic.P256().Params().N.Bytes()
 }
 
 // ── pickFabric ────────────────────────────────────────────────────────────────
