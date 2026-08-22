@@ -26,6 +26,7 @@ import (
 // on DOOR_STATE but accepts CLOSE / OPEN / PARTIAL_OPEN on DOOR_COMMAND,
 // and only one of the three pairs shares a name. Declaring the pair in
 // one place is what keeps the read and write halves from drifting.
+// loom:reachable:reason="constructed as a slice literal inside cover.Garage.attachDoorMode, which NewGarage calls for every vent-capable drive; the analyzer does not resolve a composite literal built inside another package's constructor"
 type EnumSelectMode struct {
 	// State is the VALUE_LIST token the read parameter reports.
 	State string
@@ -35,6 +36,8 @@ type EnumSelectMode struct {
 }
 
 // EnumSelectConfig is the constructor record for [EnumSelect].
+//
+// loom:reachable:reason="constructed in cover.Garage.attachDoorMode and passed to NewEnumSelect; reached only as a composite literal at that call site"
 type EnumSelectConfig struct {
 	// Address is the channel address both parameters live on.
 	Address string

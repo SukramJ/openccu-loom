@@ -38,6 +38,8 @@ const (
 // shares — unique_id, availability, device, origin — because those
 // derive from the (central, interface, device, channel) tuple the model
 // layer deliberately does not know.
+//
+// loom:reachable:reason="asserted against in EventBridge.publishCombinedDPSnapshot and MQTTCommandSink.SetCombinedValue, which every combined data point reaches through; a type used only behind an interface assertion, which the analyzer's callgraph does not resolve"
 type CombinedProjection interface {
 	// CombinedKind is the stable topic segment and object_id suffix
 	// identifying this projection ("duration", "hs_color",
@@ -73,6 +75,8 @@ type CombinedProjection interface {
 // raw is the MQTT payload verbatim. The implementation parses and
 // validates it — a malformed payload is the implementation's error to
 // report, not the transport's to guess at.
+//
+// loom:reachable:reason="asserted against in MQTTCommandSink.SetCombinedValue before it dispatches an MQTT write, and satisfied by combined.Timer and combined.EnumSelect; reached only through that interface assertion"
 type CombinedWritable interface {
 	WriteCombined(ctx context.Context, raw string, priority hmenum.CommandPriority) error
 }
@@ -81,6 +85,8 @@ type CombinedWritable interface {
 // lookups a projection needs, mirroring [HADiscoveryContext] for custom
 // data points. The bridge builds one per call so the model layer never
 // handles the central name, interface, address or channel number.
+//
+// loom:reachable:reason="implemented by adapter.combinedDiscoveryContext and passed into every CombinedProjection.HACombinedDiscovery call the event bridge makes; the analyzer resolves neither the implementation nor the interface parameter"
 type CombinedDiscoveryContext interface {
 	// CombinedStateTopic is the retained topic carrying
 	// [CombinedProjection.CombinedStatePayload].

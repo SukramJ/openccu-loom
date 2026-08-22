@@ -20,6 +20,7 @@ import (
 // other's half. Before the projection seam existed there was one event
 // type and one builder per combined kind, so a new kind that nobody
 // remembered to add a builder for published nothing at all.
+// loom:reachable:reason="constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site"
 type CombinedEvent struct {
 	// Central is the CCU identifier (required for topic scoping).
 	Central string

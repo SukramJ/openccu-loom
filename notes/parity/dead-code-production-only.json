@@ -1,6 +1,6 @@
 {
-  "generated": "3439c9f3",
-  "head": "3439c9f3",
+  "generated": "65c6a5e3",
+  "head": "65c6a5e3",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29582,
-    "reachable": 4939,
-    "whitelisted": 21458,
-    "unreachable": 3185
+    "total_exported": 29745,
+    "reachable": 4957,
+    "whitelisted": 21607,
+    "unreachable": 3181
   },
   "by_package": [
     {
@@ -577,7 +577,7 @@
     {
       "package": "internal/north/mqtt",
       "unreachable_funcs": 0,
-      "unreachable_types": 88,
+      "unreachable_types": 84,
       "unreachable_other": 4
     },
     {
@@ -3391,7 +3391,7 @@
       "package": "internal/central/adapter",
       "identifier": "EventBridge",
       "file": "internal/central/adapter/eventbridge.go",
-      "line": 55,
+      "line": 54,
       "kind": "type"
     },
     {
@@ -3587,7 +3587,7 @@
       "package": "internal/central/adapter",
       "identifier": "MQTTCommandSink",
       "file": "internal/central/adapter/mqtt_sink.go",
-      "line": 33,
+      "line": 31,
       "kind": "type"
     },
     {
@@ -8305,28 +8305,28 @@
       "package": "internal/model/custom/cover",
       "identifier": "DoorCommand",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 33,
+      "line": 34,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "DoorCommand",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 33,
+      "line": 34,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "DoorState",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 22,
+      "line": 23,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "DoorState",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 22,
+      "line": 23,
       "kind": "type"
     },
     {
@@ -8361,14 +8361,14 @@
       "package": "internal/model/custom/cover",
       "identifier": "GarageConfig",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 99,
+      "line": 112,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "GarageConfig",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 99,
+      "line": 112,
       "kind": "type"
     },
     {
@@ -11287,42 +11287,42 @@
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncode",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 29,
+      "line": 30,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncode",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 29,
+      "line": 30,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncrypt",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 32,
+      "line": 33,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncrypt",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 32,
+      "line": 33,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplySend",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 34,
+      "line": 35,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplySend",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 34,
+      "line": 35,
       "kind": "var"
     },
     {
@@ -13751,56 +13751,56 @@
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrConfirmationFailed",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 54,
+      "line": 56,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrConfirmationFailed",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 54,
+      "line": 56,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrInvalidPasscode",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 57,
+      "line": 59,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrInvalidPasscode",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 57,
+      "line": 59,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrInvalidPoint",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 48,
+      "line": 50,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrInvalidPoint",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 48,
+      "line": 50,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrSessionState",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 60,
+      "line": 62,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "ErrSessionState",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 60,
+      "line": 62,
       "kind": "var"
     },
     {
@@ -13870,49 +13870,49 @@
       "package": "internal/north/matter/secure/spake2",
       "identifier": "Pake2Output",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 321,
+      "line": 325,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "Pake2Output",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 321,
+      "line": 325,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "Prover",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 413,
+      "line": 436,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "Prover",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 413,
+      "line": 436,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "Verifier",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 280,
+      "line": 284,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "VerifierContext",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 186,
+      "line": 190,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "VerifierContext",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 186,
+      "line": 190,
       "kind": "type"
     },
     {
@@ -15081,14 +15081,14 @@
       "package": "internal/north/mqtt",
       "identifier": "AddonUpdateSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 154,
+      "line": 156,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "AddonUpdateSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 154,
+      "line": 156,
       "kind": "type"
     },
     {
@@ -15102,14 +15102,14 @@
       "package": "internal/north/mqtt",
       "identifier": "AlarmSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 125,
+      "line": 127,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "AlarmSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 125,
+      "line": 127,
       "kind": "type"
     },
     {
@@ -15144,28 +15144,28 @@
       "package": "internal/north/mqtt",
       "identifier": "CDPInvocationSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 168,
+      "line": 170,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CDPInvocationSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 168,
+      "line": 170,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CDPInvokePayload",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 193,
+      "line": 195,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CDPInvokePayload",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 193,
+      "line": 195,
       "kind": "type"
     },
     {
@@ -15214,42 +15214,14 @@
       "package": "internal/north/mqtt",
       "identifier": "CombinedDPSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 96,
+      "line": 98,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CombinedDPSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 96,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "CombinedSensorEvent",
-      "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 187,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "CombinedSensorEvent",
-      "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 187,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "CombinedTimerEvent",
-      "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 16,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "CombinedTimerEvent",
-      "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 16,
+      "line": 98,
       "kind": "type"
     },
     {
@@ -15270,7 +15242,7 @@
       "package": "internal/north/mqtt",
       "identifier": "CommandSubscriber",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 223,
+      "line": 225,
       "kind": "type"
     },
     {
@@ -15473,14 +15445,14 @@
       "package": "internal/north/mqtt",
       "identifier": "InstallModeSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 112,
+      "line": 114,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "InstallModeSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 112,
+      "line": 114,
       "kind": "type"
     },
     {
@@ -24139,6 +24111,20 @@
     },
     {
       "package": "cmd/hmcli",
+      "identifier": "TestRunCacheClearOffline_HonoursTimeoutFlag",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/hmcli/cache_test.go",
+      "line": 654
+    },
+    {
+      "package": "cmd/hmcli",
+      "identifier": "TestRunCacheClearOffline_ZeroTimeoutMeansNoDeadline",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/hmcli/cache_test.go",
+      "line": 676
+    },
+    {
+      "package": "cmd/hmcli",
       "identifier": "TestSanitizeDispositionFilenameNeverProducesAnUnsafeSegment",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/export_def_test.go",
@@ -25535,63 +25521,63 @@
       "identifier": "TestCaseDestinationResolver_EmptyFabrics_ReturnsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 243
+      "line": 274
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_MatchingDestination_ReturnsTrue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 281
+      "line": 312
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_NilEntryInMap_Skipped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 260
+      "line": 291
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_NilFabrics_ReturnsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 227
+      "line": 258
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_NoMatchingDestination_LogsUnresolved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 347
+      "line": 378
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_ResolveFabricIndex_Hit_ReturnsIdentityAndVerifier",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 441
+      "line": 472
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_ResolveFabricIndex_NilEntry_ReturnsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 424
+      "line": 455
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_ResolveFabricIndex_NilFabrics_ReturnsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 393
+      "line": 424
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCaseDestinationResolver_ResolveFabricIndex_UnknownIndex_ReturnsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 407
+      "line": 438
     },
     {
       "package": "cmd/openccu-loom",
@@ -26452,7 +26438,7 @@
       "identifier": "TestLoadAdditionalFabricsForCase_EmptyStore_ReturnsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 210
+      "line": 241
     },
     {
       "package": "cmd/openccu-loom",
@@ -26480,7 +26466,7 @@
       "identifier": "TestLoadAdditionalFabricsForCase_NilStore_ReturnsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 198
+      "line": 229
     },
     {
       "package": "cmd/openccu-loom",
@@ -26557,7 +26543,7 @@
       "identifier": "TestLoadFabricRootPublicKey_LiveStore_UnknownFabric_Errors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 185
+      "line": 216
     },
     {
       "package": "cmd/openccu-loom",
@@ -26571,7 +26557,7 @@
       "identifier": "TestLoadFabricRootPublicKey_NilStore_Errors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 177
+      "line": 208
     },
     {
       "package": "cmd/openccu-loom",
@@ -27635,28 +27621,28 @@
       "identifier": "TestPickFabric_SingleEntry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 164
+      "line": 195
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestPickFabric_WantFabricIDMatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 124
+      "line": 155
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestPickFabric_WantFabricIDNoMatch_FallsBackToLowest",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 137
+      "line": 168
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestPickFabric_WantFabricIDZero_FallsBackToLowest",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 151
+      "line": 182
     },
     {
       "package": "cmd/openccu-loom",
@@ -27681,6 +27667,13 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestPrivKeyFromScalar_OutOfRangeScalar_IsRejected",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_crypto_test.go",
+      "line": 128
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestPrivKeyFromScalar_ValidInput",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
@@ -27691,14 +27684,7 @@
       "identifier": "TestPrivKeyFromScalar_WrongLength_Errors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 100
-    },
-    {
-      "package": "cmd/openccu-loom",
-      "identifier": "TestPrivKeyFromScalar_ZeroScalar_IsAccepted",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "cmd/openccu-loom/daemon_crypto_test.go",
-      "line": 108
+      "line": 111
     },
     {
       "package": "cmd/openccu-loom",
@@ -46700,10 +46686,10 @@
     },
     {
       "package": "internal/central/adapter",
-      "identifier": "TestMQTTCommandSinkSetCombinedTimerSecondsUnknownKindIsNoOp",
+      "identifier": "TestMQTTCommandSinkSetCombinedValueUnresolvableTargetErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/mqtt_sink_paths_test.go",
-      "line": 456
+      "line": 467
     },
     {
       "package": "internal/central/adapter",
@@ -61613,7 +61599,7 @@
       "identifier": "TestTransitionPathPublishesNothingWhenTheWalkMovesNowhere",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/state_machine_test.go",
-      "line": 419
+      "line": 421
     },
     {
       "package": "internal/client",
@@ -61627,7 +61613,7 @@
       "identifier": "TestTransitionPathReportsSkippedStepsAndKeepsWalking",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/state_machine_test.go",
-      "line": 384
+      "line": 385
     },
     {
       "package": "internal/client",
@@ -65036,49 +65022,49 @@
       "identifier": "TestAcknowledgeAllAlarmMessagesCCUError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1225
+      "line": 1227
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestAcknowledgeAllAlarmMessagesParsesCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1185
+      "line": 1187
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestAcknowledgeAllMessagesZeroCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1242
+      "line": 1244
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestAcknowledgeAllServiceMessagesCCUError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1209
+      "line": 1211
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestAcknowledgeAllServiceMessagesParsesCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1159
+      "line": 1161
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestAcknowledgeMessageCCUSideErrorReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1119
+      "line": 1121
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestAcknowledgeMessageEmptyIDReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1138
+      "line": 1140
     },
     {
       "package": "internal/client/rega",
@@ -65141,21 +65127,21 @@
       "identifier": "TestEscapeStringBackslashOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 990
+      "line": 992
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestEscapeStringDoubleQuoteOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 998
+      "line": 1000
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestEscapeStringEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 982
+      "line": 984
     },
     {
       "package": "internal/client/rega",
@@ -65169,7 +65155,7 @@
       "identifier": "TestEscapeStringPlainASCIIUnchanged",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1007
+      "line": 1009
     },
     {
       "package": "internal/client/rega",
@@ -65197,21 +65183,21 @@
       "identifier": "TestExecuteProgramConditionalConditionNotMet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 534
+      "line": 536
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestExecuteProgramConditionalPassesID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 512
+      "line": 514
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestExecuteProgramConditionalPropagatesCCUError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 554
+      "line": 556
     },
     {
       "package": "internal/client/rega",
@@ -65232,70 +65218,70 @@
       "identifier": "TestGetInboxDevices",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 623
+      "line": 625
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetInboxDevicesEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 654
+      "line": 656
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetProgramDescriptionsHandlesMissingSummaries",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 812
+      "line": 814
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetProgramDescriptionsParsesRuleSummaries",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 724
+      "line": 726
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetProgramDescriptionsPropagatesCCUError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 837
+      "line": 839
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetSerialKeepsShortSerialVerbatim",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1430
+      "line": 1432
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetSerialTruncatesLongSerialToLastTenChars",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1414
+      "line": 1416
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetServiceMessagesParsesMultiFunctionChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 677
+      "line": 679
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetSystemUpdateInfo",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 577
+      "line": 579
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestGetSystemUpdateInfoNoUpdate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 603
+      "line": 605
     },
     {
       "package": "internal/client/rega",
@@ -65323,14 +65309,14 @@
       "identifier": "TestRunConcurrentCallsAreSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1385
+      "line": 1387
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestRunEscapesQuotesInParams",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 402
+      "line": 404
     },
     {
       "package": "internal/client/rega",
@@ -65344,28 +65330,28 @@
       "identifier": "TestRunJSONEmptyStringReplyReturnsParseError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1347
+      "line": 1349
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestRunJSONMultiLineJSONIsAccepted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1365
+      "line": 1367
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestRunJSONParsesSanitisedOutput",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 426
+      "line": 428
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestRunJSONPropagatesParseError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 445
+      "line": 447
     },
     {
       "package": "internal/client/rega",
@@ -65379,14 +65365,14 @@
       "identifier": "TestRunListsRejectsControlCharInAnElement",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 364
+      "line": 365
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestRunMissingParamErrorsBeforeDispatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 384
+      "line": 386
     },
     {
       "package": "internal/client/rega",
@@ -65400,42 +65386,42 @@
       "identifier": "TestRunReturnsContextErrorOnCancellation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1272
+      "line": 1274
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestRunReturnsSubstituteErrorMentioningPlaceholder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1092
+      "line": 1094
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestRunUnknownScriptErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 461
+      "line": 463
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSanitizeJSONControlsAllControlCharsInsideString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1023
+      "line": 1025
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSanitizeJSONControlsEmptyStringIsIdentity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1051
+      "line": 1053
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSanitizeJSONControlsEscapedBackslashNotDoubleCounted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1075
+      "line": 1077
     },
     {
       "package": "internal/client/rega",
@@ -65456,7 +65442,7 @@
       "identifier": "TestSanitizeJSONControlsOutsideStringPreserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1062
+      "line": 1064
     },
     {
       "package": "internal/client/rega",
@@ -65491,63 +65477,63 @@
       "identifier": "TestSetPositionAcceptsBoundaryValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1503
+      "line": 1505
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetPositionAcceptsReadBackWithinEpsilon",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1616
+      "line": 1618
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetPositionFormatsSixDecimalPlaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1541
+      "line": 1543
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetPositionReadBackMismatchIsClientException",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1593
+      "line": 1595
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetPositionRejectsInvalidInputWithoutCallingCCU",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1458
+      "line": 1460
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetProgramStateFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 494
+      "line": 496
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetProgramStateTrue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 473
+      "line": 475
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetSystemVariableStringEscapesSpecialChars",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 879
+      "line": 881
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSetSystemVariableStringForwardsNameAndValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 858
+      "line": 860
     },
     {
       "package": "internal/client/rega",
@@ -65568,14 +65554,14 @@
       "identifier": "TestSubstituteEscapesReplacementValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 963
+      "line": 965
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSubstituteHandlesTabAndNewlineInValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 1306
+      "line": 1308
     },
     {
       "package": "internal/client/rega",
@@ -65596,21 +65582,21 @@
       "identifier": "TestSubstituteNilParamsWithNoPlaceholders",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 920
+      "line": 922
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSubstituteNilParamsWithPlaceholderErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 934
+      "line": 936
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSubstituteNoPlaceholdersIsIdentity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 906
+      "line": 908
     },
     {
       "package": "internal/client/rega",
@@ -65624,7 +65610,7 @@
       "identifier": "TestSubstituteReportsAllMissingKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 947
+      "line": 949
     },
     {
       "package": "internal/client/rega",
@@ -65638,14 +65624,14 @@
       "identifier": "TestSysvarUsagePrograms",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 765
+      "line": 767
     },
     {
       "package": "internal/client/rega",
       "identifier": "TestSysvarUsageProgramsPropagatesError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
-      "line": 797
+      "line": 799
     },
     {
       "package": "internal/client/reliability",
@@ -78564,6 +78550,34 @@
     },
     {
       "package": "internal/model/combined",
+      "identifier": "EnumSelectConfig",
+      "reason": "constructed in cover.Garage.attachDoorMode and passed to NewEnumSelect; reached only as a composite literal at that call site",
+      "file": "internal/model/combined/enum_select.go",
+      "line": 41
+    },
+    {
+      "package": "internal/model/combined",
+      "identifier": "EnumSelectConfig",
+      "reason": "constructed in cover.Garage.attachDoorMode and passed to NewEnumSelect; reached only as a composite literal at that call site",
+      "file": "internal/model/combined/enum_select.go",
+      "line": 41
+    },
+    {
+      "package": "internal/model/combined",
+      "identifier": "EnumSelectMode",
+      "reason": "constructed as a slice literal inside cover.Garage.attachDoorMode, which NewGarage calls for every vent-capable drive; the analyzer does not resolve a composite literal built inside another package's constructor",
+      "file": "internal/model/combined/enum_select.go",
+      "line": 30
+    },
+    {
+      "package": "internal/model/combined",
+      "identifier": "EnumSelectMode",
+      "reason": "constructed as a slice literal inside cover.Garage.attachDoorMode, which NewGarage calls for every vent-capable drive; the analyzer does not resolve a composite literal built inside another package's constructor",
+      "file": "internal/model/combined/enum_select.go",
+      "line": 30
+    },
+    {
+      "package": "internal/model/combined",
       "identifier": "NewCombinedWeekProfile",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/combined/weekprofile.go",
@@ -78575,6 +78589,20 @@
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/combined/weekprofile.go",
       "line": 103
+    },
+    {
+      "package": "internal/model/combined",
+      "identifier": "NewEnumSelect",
+      "reason": "auto-whitelist:pattern=custom-mixin-factory",
+      "file": "internal/model/combined/enum_select.go",
+      "line": 118
+    },
+    {
+      "package": "internal/model/combined",
+      "identifier": "NewEnumSelect",
+      "reason": "auto-whitelist:pattern=custom-mixin-factory",
+      "file": "internal/model/combined/enum_select.go",
+      "line": 118
     },
     {
       "package": "internal/model/combined",
@@ -83047,28 +83075,21 @@
       "identifier": "NewGarage",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 106
+      "line": 119
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "NewGarage",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 106
+      "line": 119
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestApplyGroupLevelNilHandling",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1293
-    },
-    {
-      "package": "internal/model/custom/cover",
-      "identifier": "TestBlindAndGarageMatterWriteAcceptValidMode",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_configstatus_mode_test.go",
-      "line": 114
+      "line": 1307
     },
     {
       "package": "internal/model/custom/cover",
@@ -83096,7 +83117,7 @@
       "identifier": "TestBlindConfigPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 723
+      "line": 725
     },
     {
       "package": "internal/model/custom/cover",
@@ -83110,7 +83131,7 @@
       "identifier": "TestBlindCurrentChannelTiltPosition",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 390
+      "line": 392
     },
     {
       "package": "internal/model/custom/cover",
@@ -83124,7 +83145,7 @@
       "identifier": "TestBlindFeatureMapIncludesTilt",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 59
+      "line": 73
     },
     {
       "package": "internal/model/custom/cover",
@@ -83138,56 +83159,56 @@
       "identifier": "TestBlindGoToTiltPercentage",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 181
+      "line": 195
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_CommandTopicUsesBlindOverrides",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 247
+      "line": 248
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 203
+      "line": 204
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 194
+      "line": 195
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_StateParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 377
+      "line": 378
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_TiltKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 215
+      "line": 216
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_TiltOpenedClosedValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 414
+      "line": 415
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_VariantDeviceClass",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 604
+      "line": 596
     },
     {
       "package": "internal/model/custom/cover",
@@ -83236,70 +83257,77 @@
       "identifier": "TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 879
+      "line": 708
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindInfoPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 708
+      "line": 710
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindIsStateChange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 353
+      "line": 355
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindMatterAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1081
+      "line": 1083
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindMatterClusterID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1064
+      "line": 1066
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindMatterInvokeAllCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1124
+      "line": 1126
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindMatterReadAllAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1094
+      "line": 1096
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindMatterWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1072
+      "line": 1074
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "identifier": "TestBlindMatterWriteAcceptsValidMode",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/matter_configstatus_mode_test.go",
+      "line": 102
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindNamePostfix",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 324
+      "line": 326
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindOnMatterValueChangedFiresOnTiltUpdate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 983
+      "line": 774
     },
     {
       "package": "internal/model/custom/cover",
@@ -83355,7 +83383,7 @@
       "identifier": "TestBlindSetTiltNoLevel2",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 431
+      "line": 433
     },
     {
       "package": "internal/model/custom/cover",
@@ -83369,28 +83397,28 @@
       "identifier": "TestBlindStatePayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 738
+      "line": 740
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindStatePayload_StateString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 721
+      "line": 713
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindStop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 331
+      "line": 333
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindStopTilt",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 342
+      "line": 344
     },
     {
       "package": "internal/model/custom/cover",
@@ -83404,28 +83432,28 @@
       "identifier": "TestBlindSubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 448
+      "line": 450
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindTargetPosition_GoToLiftAndTilt_TrackAxesIndependently",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 408
+      "line": 369
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindTargetPosition_StopMotionClearsBothAxes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 476
+      "line": 437
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindTargetPosition_UpOrOpenAndDownOrClose_SetBothAxes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 447
+      "line": 408
     },
     {
       "package": "internal/model/custom/cover",
@@ -83439,7 +83467,7 @@
       "identifier": "TestBlindTiltPositionInverted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 417
+      "line": 419
     },
     {
       "package": "internal/model/custom/cover",
@@ -83481,7 +83509,7 @@
       "identifier": "TestCoverConfigPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 618
+      "line": 620
     },
     {
       "package": "internal/model/custom/cover",
@@ -83509,7 +83537,7 @@
       "identifier": "TestCoverCurrentChannelPosition",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 78
+      "line": 80
     },
     {
       "package": "internal/model/custom/cover",
@@ -83530,140 +83558,140 @@
       "identifier": "TestCoverEndProductTypeFor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 939
+      "line": 941
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverFeatureMapLiftOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 36
+      "line": 50
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_CommandTopicDrivesOpenCloseStop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 122
+      "line": 123
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 47
+      "line": 48
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_DefaultVariantIsShutter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 588
+      "line": 580
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 38
+      "line": 39
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_NoPositionWithoutCapability",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 96
+      "line": 97
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_NoTiltFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 362
+      "line": 363
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 59
+      "line": 60
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_StateParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 325
+      "line": 326
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_TopicValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 77
+      "line": 78
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_VariantDeviceClass",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 560
+      "line": 552
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInferredTarget_CommandedTargetAheadPreserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 745
+      "line": 574
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInferredTarget_ExternalMovementOverridesStaleTarget",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 707
+      "line": 536
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInferredTarget_ExternalMovementWithoutCommandTargetsLimit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 782
+      "line": 611
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInferredTarget_InvertedControlFollowsDomainMotion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 854
+      "line": 683
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInferredTarget_MotionStopSnapsTargetToCurrent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 803
+      "line": 632
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInferredTarget_UnobservedPositionReportsDirectionLimit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 831
+      "line": 660
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInfoPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 598
+      "line": 600
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverInvoke_UnknownCommandTokenRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 176
+      "line": 177
     },
     {
       "package": "internal/model/custom/cover",
@@ -83677,7 +83705,7 @@
       "identifier": "TestCoverIsRefreshed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 60
+      "line": 62
     },
     {
       "package": "internal/model/custom/cover",
@@ -83691,56 +83719,56 @@
       "identifier": "TestCoverMatterAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1000
+      "line": 1002
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverMatterClusterID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 983
+      "line": 985
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverMatterReadAllAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1013
+      "line": 1015
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverMatterWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 991
+      "line": 993
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverMatterWriteAcceptsValidMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_configstatus_mode_test.go",
-      "line": 76
+      "line": 61
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverMatterWriteOtherAttributesStillRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_configstatus_mode_test.go",
-      "line": 102
+      "line": 87
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverMatterWriteRejectsOutOfRangeMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_configstatus_mode_test.go",
-      "line": 90
+      "line": 75
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverNamePostfix",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 30
+      "line": 32
     },
     {
       "package": "internal/model/custom/cover",
@@ -83761,7 +83789,7 @@
       "identifier": "TestCoverOnMatterValueChangedFiresOnMotionOnlyUpdate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 954
+      "line": 745
     },
     {
       "package": "internal/model/custom/cover",
@@ -83796,7 +83824,7 @@
       "identifier": "TestCoverSetGroupLevelAndObservedLevel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 110
+      "line": 112
     },
     {
       "package": "internal/model/custom/cover",
@@ -83845,28 +83873,28 @@
       "identifier": "TestCoverStatePayloadRoundsPositionToPercent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 663
+      "line": 665
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverStatePayloadWithDirection",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 683
+      "line": 685
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverStatePayloadWithPosition",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 636
+      "line": 638
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverStatePayload_StateString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 688
+      "line": 680
     },
     {
       "package": "internal/model/custom/cover",
@@ -83887,7 +83915,7 @@
       "identifier": "TestCoverStopNilWriterError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1307
+      "line": 1321
     },
     {
       "package": "internal/model/custom/cover",
@@ -83901,140 +83929,154 @@
       "identifier": "TestCoverSubDataPointKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 37
+      "line": 39
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverSubscribeDirectionAndLevel2",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 214
+      "line": 216
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverSubscribeNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 206
+      "line": 208
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverTargetPosition_DeferredWriteFailureKeepsCommandedTarget",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 380
+      "line": 341
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverTargetPosition_GoToLiftPercentage_TracksIndependentlyOfCurrent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 249
+      "line": 210
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverTargetPosition_StopMotionClearsTarget",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 322
+      "line": 283
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverTargetPosition_UpOrOpenAndDownOrClose_SetExtremes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 294
+      "line": 255
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverToCoverDirection",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 156
+      "line": 158
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverToFloat",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 181
+      "line": 183
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverTypeFor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 913
+      "line": 915
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverVariantFromModel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1275
+      "line": 1289
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverVariantFromModelDefault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 665
+      "line": 657
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverVariantFromModelHmSecWin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 653
+      "line": 645
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverVariantFromModelNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 679
+      "line": 671
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverWindowDrivePositionMapping",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 259
+      "line": 261
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverWindowDriveSetPosition",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 290
+      "line": 292
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestDirectionString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 829
+      "line": 831
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestDownOrCloseCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 135
+      "line": 149
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestExtractGoToPercentageMap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1042
+      "line": 1044
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "identifier": "TestGarageAdvertisesVentilationFeature",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/matter_test.go",
+      "line": 286
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "identifier": "TestGarageAttachesADoorModeSelectWhenVentCapable",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/garage_door_mode_test.go",
+      "line": 55
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageAvailabilityGatesOnDoorState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 565
+      "line": 567
     },
     {
       "package": "internal/model/custom/cover",
@@ -84048,21 +84090,21 @@
       "identifier": "TestGarageConfigPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 781
+      "line": 783
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageConfigPayload_SupportsVent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 514
+      "line": 506
     },
     {
       "package": "internal/model/custom/cover",
-      "identifier": "TestGarageConfigStatusAdvertisesLiftPositionAware",
+      "identifier": "TestGarageCoverOperationsUpdateTheDoorModeSelect",
       "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_configstatus_mode_test.go",
-      "line": 59
+      "file": "internal/model/custom/cover/garage_door_mode_test.go",
+      "line": 114
     },
     {
       "package": "internal/model/custom/cover",
@@ -84073,150 +84115,150 @@
     },
     {
       "package": "internal/model/custom/cover",
-      "identifier": "TestGarageDownOrCloseDispatchesDoorCommand",
+      "identifier": "TestGarageDoorModeWriteReachesTheDevice",
       "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_test.go",
-      "line": 249
+      "file": "internal/model/custom/cover/garage_door_mode_test.go",
+      "line": 216
     },
     {
       "package": "internal/model/custom/cover",
-      "identifier": "TestGarageEndProductTypeIsRollerShade",
+      "identifier": "TestGarageHADiscoveryPayloadCarriesNoVentKey",
       "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_test.go",
-      "line": 235
+      "file": "internal/model/custom/cover/payload_discovery_test.go",
+      "line": 483
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 287
+      "line": 288
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 278
+      "line": 279
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 299
+      "line": 300
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_StateParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 429
-    },
-    {
-      "package": "internal/model/custom/cover",
-      "identifier": "TestGarageHADiscoveryPayload_VentCommandTopic",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 477
-    },
-    {
-      "package": "internal/model/custom/cover",
-      "identifier": "TestGarageInferredTarget_SectionMovementAndStop",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 909
+      "line": 430
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageInfoPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 766
+      "line": 768
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageIsStateChange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 487
+      "line": 489
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageMatterAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1168
+      "line": 1178
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageMatterClusterID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1151
+      "line": 1159
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "identifier": "TestGarageMatterDeviceTypeIsClosure",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/matter_test.go",
+      "line": 41
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageMatterInvokeAllCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1209
+      "line": 1217
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageMatterReadAllAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1181
+      "line": 1191
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageMatterWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1159
+      "line": 1168
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "identifier": "TestGarageMoveToDispatchesDoorCommand",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/matter_test.go",
+      "line": 307
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageNamePostfix",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 502
+      "line": 504
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageOnMatterValueChangedFansSection",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 392
+      "line": 467
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageOnMatterValueChangedFiresOnConfirmedDoorStateChange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 364
+      "line": 439
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageOnMatterValueChangedNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 404
+      "line": 479
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageOnMatterValueChangedUnsubscribeStopsCallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 378
+      "line": 453
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageOpenCommandWritesDoorCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_deep_test.go",
-      "line": 367
+      "line": 364
     },
     {
       "package": "internal/model/custom/cover",
@@ -84237,84 +84279,70 @@
       "identifier": "TestGaragePositionDerivesFromDoorState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_deep_test.go",
-      "line": 330
+      "line": 327
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageSetPositionMapsToCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_deep_test.go",
-      "line": 383
+      "line": 380
     },
     {
       "package": "internal/model/custom/cover",
-      "identifier": "TestGarageStateMapsToDiscretePositions",
+      "identifier": "TestGarageStateMapsToNamedStops",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 206
+      "line": 226
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageStatePayloadWithState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 793
+      "line": 795
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageStatePayload_StateString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 740
+      "line": 732
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageStop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 476
+      "line": 478
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "identifier": "TestGarageStopClearsTheHeldDoorMode",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/garage_door_mode_test.go",
+      "line": 183
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageSubscribeNilChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 509
+      "line": 511
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageSubscribeWiresDoorStateAndSection",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 518
+      "line": 520
     },
     {
       "package": "internal/model/custom/cover",
-      "identifier": "TestGarageTargetPosition_DeferredWriteFailureKeepsCommandedTarget",
+      "identifier": "TestGarageTravellingReportsNullPosition",
       "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 616
-    },
-    {
-      "package": "internal/model/custom/cover",
-      "identifier": "TestGarageTargetPosition_GoToLiftPercentageStoresRawPercent",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 564
-    },
-    {
-      "package": "internal/model/custom/cover",
-      "identifier": "TestGarageTargetPosition_StopMotionClearsTarget",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 590
-    },
-    {
-      "package": "internal/model/custom/cover",
-      "identifier": "TestGarageTargetPosition_UpOrOpenAndDownOrClose_SetExtremes",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 518
+      "file": "internal/model/custom/cover/matter_test.go",
+      "line": 263
     },
     {
       "package": "internal/model/custom/cover",
@@ -84332,52 +84360,59 @@
     },
     {
       "package": "internal/model/custom/cover",
+      "identifier": "TestGarageWithoutVentHasNoDoorModeSelect",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/garage_door_mode_test.go",
+      "line": 86
+    },
+    {
+      "package": "internal/model/custom/cover",
       "identifier": "TestGoToDebounce_ActiveDragReplacesPendingWithShortDelay",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 150
+      "line": 149
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGoToDebounce_BlindAxesDebounceIndependently",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 307
+      "line": 286
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGoToDebounce_GestureStartUsesLongDelay",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 125
+      "line": 124
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGoToDebounce_RealTimerFiresPendingWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 329
+      "line": 308
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGoToDebounce_StopMotionCancelsPendingWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 240
+      "line": 239
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGoToDebounce_UnsubscribeCancelsPendingWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 263
+      "line": 262
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGoToLiftPercentageInversion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 165
+      "line": 179
     },
     {
       "package": "internal/model/custom/cover",
@@ -84391,28 +84426,28 @@
       "identifier": "TestGoToLiftPercentage_AtTargetAcknowledgedWithoutWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 188
+      "line": 187
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGoToLiftWrongType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 301
+      "line": 374
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestHAComponent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 851
+      "line": 853
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestHmLevelToMatterPct100thsEdgeCases",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 961
+      "line": 963
     },
     {
       "package": "internal/model/custom/cover",
@@ -84454,21 +84489,21 @@
       "identifier": "TestIsHmSecWinDetection",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1257
+      "line": 1271
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestMatterDeviceTypeIsWindowCovering",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 19
+      "line": 23
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestMatterPct100thsToHMLevelEdge",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 972
+      "line": 974
     },
     {
       "package": "internal/model/custom/cover",
@@ -84482,7 +84517,7 @@
       "identifier": "TestOperationalStatusReflectsDirection",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 263
+      "line": 336
     },
     {
       "package": "internal/model/custom/cover",
@@ -84580,21 +84615,21 @@
       "identifier": "TestParityCover_TargetPositionLiftPresent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 26
+      "line": 27
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestParityCover_TargetPositionMirrors_Current",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 86
+      "line": 77
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestParityCover_TargetPosition_NullWhenUnavailable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_target_position_test.go",
-      "line": 170
+      "line": 142
     },
     {
       "package": "internal/model/custom/cover",
@@ -84671,14 +84706,14 @@
       "identifier": "TestParityMatterJS_GoToPercentageStoresTargetBeforeDeviceWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_debounce_test.go",
-      "line": 349
+      "line": 328
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestParityMatterJS_WindowCoveringCommandLists",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/parity_matterjs_test.go",
-      "line": 203
+      "line": 188
     },
     {
       "package": "internal/model/custom/cover",
@@ -84699,35 +84734,35 @@
       "identifier": "TestPositionInversionConvention",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 78
+      "line": 92
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestPositionInversionMidpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 98
+      "line": 112
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestPositionUnobservedReturnsStale",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 112
+      "line": 126
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestReportableAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 316
+      "line": 389
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestRfCoverConstructorProducesBlindWhenLevel2Present",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 1241
+      "line": 1255
     },
     {
       "package": "internal/model/custom/cover",
@@ -84741,49 +84776,49 @@
       "identifier": "TestStopMotionCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 149
+      "line": 163
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestSubDPKeysAsStrings",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 812
+      "line": 814
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestTopicSlot",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 866
+      "line": 868
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestTopicSlotInvalidAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/cover_functions_test.go",
-      "line": 889
+      "line": 891
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestUnknownCommandRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 291
+      "line": 364
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestUpOrOpenCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_test.go",
-      "line": 122
+      "line": 136
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestVariantString_AllVariants",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 534
+      "line": 526
     },
     {
       "package": "internal/model/custom/cover",
@@ -107694,14 +107729,14 @@
       "identifier": "TestCaseAdapter_FreshSigma1_AfterPriorEstablishResetsGuard",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 542
+      "line": 543
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_FullHandshake_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 178
+      "line": 179
     },
     {
       "package": "internal/north/matter/bridge",
@@ -107729,70 +107764,70 @@
       "identifier": "TestCaseAdapter_ProcessSigma1_MalformedPayload_Errors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 116
+      "line": 117
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma1_NilResponder_Errors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 92
+      "line": 93
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma1_ResumeFastPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 459
+      "line": 460
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma1_ResumeFastPath_CallbackErrorBubbles",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 510
+      "line": 511
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma1_ResumeInfoReadableInsideOnEstablished",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 605
+      "line": 606
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma2Resume_AlwaysErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 162
+      "line": 163
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma3_CallbackErrorBubbles",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 316
+      "line": 317
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma3_MalformedPayload_Errors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 135
+      "line": 136
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma3_NilResponder_Errors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 104
+      "line": 105
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaseAdapter_ProcessSigma3_OnEstablishedFiresExactlyOnce",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/case_handshake_test.go",
-      "line": 265
+      "line": 266
     },
     {
       "package": "internal/north/matter/bridge",
@@ -108647,6 +108682,41 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_test.go",
       "line": 74
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDefaultAttrWriter_ClosureErrorListEncodesAsAnArray",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/reply_closurecontrol_test.go",
+      "line": 144
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDefaultAttrWriter_ClosureNilStructEncodesAsNull",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/reply_closurecontrol_test.go",
+      "line": 184
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDefaultAttrWriter_ClosureOverallCurrentState",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/reply_closurecontrol_test.go",
+      "line": 60
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDefaultAttrWriter_ClosureOverallCurrentStateNullFields",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/reply_closurecontrol_test.go",
+      "line": 99
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDefaultAttrWriter_ClosureOverallTargetState",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/reply_closurecontrol_test.go",
+      "line": 121
     },
     {
       "package": "internal/north/matter/bridge",
@@ -111279,6 +111349,55 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/cluster/coerce_test.go",
       "line": 8
+    },
+    {
+      "package": "internal/north/matter/cluster/closure",
+      "identifier": "ClusterRevision",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
+      "line": 32
+    },
+    {
+      "package": "internal/north/matter/cluster/closure",
+      "identifier": "Config",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
+      "line": 55
+    },
+    {
+      "package": "internal/north/matter/cluster/closure",
+      "identifier": "ControlServer",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
+      "line": 73
+    },
+    {
+      "package": "internal/north/matter/cluster/closure",
+      "identifier": "MoveHandler",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
+      "line": 48
+    },
+    {
+      "package": "internal/north/matter/cluster/closure",
+      "identifier": "NewControlServer",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
+      "line": 92
+    },
+    {
+      "package": "internal/north/matter/cluster/closure",
+      "identifier": "PositioningVentilationFeatureMap",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
+      "line": 39
+    },
+    {
+      "package": "internal/north/matter/cluster/closure",
+      "identifier": "StopHandler",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
+      "line": 51
     },
     {
       "package": "internal/north/matter/cluster/core",
@@ -114642,6 +114761,832 @@
     },
     {
       "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrCountdownTime",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 23
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrCountdownTime",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 23
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrCurrentErrorList",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 25
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrCurrentErrorList",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 25
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrLatchControlModes",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 28
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrLatchControlModes",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 28
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrMainState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrMainState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrOverallCurrentState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 26
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrOverallCurrentState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 26
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrOverallTargetState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 27
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlAttrOverallTargetState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 27
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlClusterID",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 17
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlClusterID",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 17
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlCmdCalibrate",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 37
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlCmdCalibrate",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 37
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlCmdMoveTo",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 36
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlCmdMoveTo",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 36
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlCmdStop",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 35
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlCmdStop",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 35
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventEngageStateChanged",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 46
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventEngageStateChanged",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 46
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventMovementCompleted",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 45
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventMovementCompleted",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 45
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventOperationalError",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 44
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventOperationalError",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 44
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventSecureStateChanged",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 47
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlEventSecureStateChanged",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 47
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureCalibration",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 63
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureCalibration",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 63
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureInstantaneous",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 59
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureInstantaneous",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 59
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureManuallyOperable",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 65
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureManuallyOperable",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 65
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureMotionLatching",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 58
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureMotionLatching",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 58
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeaturePedestrian",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeaturePedestrian",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeaturePositioning",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 57
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeaturePositioning",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 57
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureProtection",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 64
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureProtection",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 64
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureSpeed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 60
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureSpeed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 60
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureVentilation",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 61
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureControlFeatureVentilation",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 61
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 74
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 74
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionFullyClosed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 78
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionFullyClosed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 78
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionFullyOpened",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 79
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionFullyOpened",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 79
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionOpenedAtSignature",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 83
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionOpenedAtSignature",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 83
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionOpenedForPedestrian",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 81
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionOpenedForPedestrian",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 81
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionOpenedForVentilation",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 82
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionOpenedForVentilation",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 82
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionPartiallyOpened",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 80
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureCurrentPositionPartiallyOpened",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 80
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureError",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 122
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureError",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 122
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorBlockedBySensor",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 127
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorBlockedBySensor",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 127
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorInternalInterference",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 130
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorInternalInterference",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 130
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorList",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 141
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorList",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 141
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorListMax",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 146
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorListMax",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 146
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorMaintenanceRequired",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 129
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorMaintenanceRequired",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 129
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorPhysicallyBlocked",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 126
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorPhysicallyBlocked",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 126
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorTemperatureLimited",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 128
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureErrorTemperatureLimited",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 128
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 104
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 104
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateCalibrating",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 112
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateCalibrating",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 112
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateDisengaged",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 114
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateDisengaged",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 114
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateError",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 111
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateError",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 111
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateMoving",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 109
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateMoving",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 109
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateProtected",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 113
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateProtected",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 113
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateSetupRequired",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 115
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateSetupRequired",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 115
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateStopped",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 108
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateStopped",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 108
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateWaitingForMotion",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 110
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureMainStateWaitingForMotion",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 110
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallCurrentState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 159
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallCurrentState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 159
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldLatch",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 180
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldLatch",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 180
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 179
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 179
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldSecureState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 182
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldSecureState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 182
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldSpeed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 181
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallStateFieldSpeed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 181
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallTargetState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 170
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureOverallTargetState",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 170
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 90
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 90
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToFullyClosed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 94
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToFullyClosed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 94
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToFullyOpen",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 95
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToFullyOpen",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 95
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToPedestrianPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 96
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToPedestrianPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 96
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToSignaturePosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 98
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToSignaturePosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 98
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToVentilationPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 97
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ClosureTargetPositionMoveToVentilationPosition",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 97
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
       "identifier": "ColorControlClusterID",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/wire/colorcontrol.go",
@@ -115160,6 +116105,20 @@
     },
     {
       "package": "internal/north/matter/cluster/wire",
+      "identifier": "DecodeClosureMoveTo",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 217
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "DecodeClosureMoveTo",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 217
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
       "identifier": "DecodeDoorLockRequest",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/wire/doorlock.go",
@@ -115661,6 +116620,20 @@
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/wire/admincommissioning.go",
       "line": 526
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ErrClosureControlMalformed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 187
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "ErrClosureControlMalformed",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 187
     },
     {
       "package": "internal/north/matter/cluster/wire",
@@ -116263,6 +117236,20 @@
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/wire/levelcontrol.go",
       "line": 43
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "MoveToRequest",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 195
+    },
+    {
+      "package": "internal/north/matter/cluster/wire",
+      "identifier": "MoveToRequest",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/wire/closurecontrol.go",
+      "line": 195
     },
     {
       "package": "internal/north/matter/cluster/wire",
@@ -121239,7 +122226,7 @@
       "identifier": "TestComputeDestinationID_Deterministic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 444
+      "line": 445
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121323,21 +122310,21 @@
       "identifier": "TestProcessSigma1ConcurrentReplayDeterministic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 359
+      "line": 360
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestProcessSigma2BeforeSigma1Fails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 272
+      "line": 273
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestProcessSigma3BeforeSigma1Fails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 282
+      "line": 283
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121407,14 +122394,14 @@
       "identifier": "TestResponder_MultiFabric_NoMatchFallsBack",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 556
+      "line": 557
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestResponder_MultiFabric_PicksByDestinationID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 493
+      "line": 494
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121477,14 +122464,14 @@
       "identifier": "TestRoundTripDerivesMatchingKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 69
+      "line": 70
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestSessionKeysHiddenBeforeFinish",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 294
+      "line": 295
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121540,14 +122527,14 @@
       "identifier": "TestSigma1RejectsBadEphPoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 178
+      "line": 179
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestSigma3WithTamperedEncryptedRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 155
+      "line": 156
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121673,28 +122660,28 @@
       "identifier": "TestSignatureRoundTripsBitExact",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 309
+      "line": 310
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestStateMachineGuards",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 259
+      "line": 260
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestTamperedResponderEphPubKeyRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 133
+      "line": 134
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "TestTamperedSigma2EncryptedRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 115
+      "line": 116
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121764,7 +122751,7 @@
       "identifier": "TestUnmarshalSigma1_ResumptionTagsAllOrNothing",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 203
+      "line": 204
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121869,7 +122856,7 @@
       "identifier": "TestVerifyTranscriptRejectsBadLength",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/sigma_test.go",
-      "line": 337
+      "line": 338
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -121974,56 +122961,56 @@
       "identifier": "NewProver",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 436
+      "line": 459
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "NewProver",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 436
+      "line": 459
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "NewVerifier",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 307
+      "line": 311
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "NewVerifier",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 307
+      "line": 311
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "NewVerifierContext",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 203
+      "line": 207
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "NewVerifierContext",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 203
+      "line": 207
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "NewVerifierFromValue",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 243
+      "line": 251
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "NewVerifierFromValue",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 243
+      "line": 251
     },
     {
       "package": "internal/north/matter/secure/spake2",
@@ -122037,7 +123024,7 @@
       "identifier": "TestGolden_DeterministicPake1Pake2",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/golden_test.go",
-      "line": 91
+      "line": 97
     },
     {
       "package": "internal/north/matter/secure/spake2",
@@ -122114,28 +123101,28 @@
       "identifier": "TestNewVerifierFromValue_RejectsDegenerateW0",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/verifier_from_value_test.go",
-      "line": 147
+      "line": 145
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "TestNewVerifierFromValue_RejectsMalformedInput",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/verifier_from_value_test.go",
-      "line": 114
+      "line": 113
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "TestNewVerifierFromValue_RoundTripDerivesSameKe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/verifier_from_value_test.go",
-      "line": 31
+      "line": 30
     },
     {
       "package": "internal/north/matter/secure/spake2",
       "identifier": "TestNewVerifierFromValue_WrongPasscodeFails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/verifier_from_value_test.go",
-      "line": 84
+      "line": 83
     },
     {
       "package": "internal/north/matter/secure/spake2",
@@ -122163,7 +123150,7 @@
       "identifier": "TestParityMatterJS_Spake2_Vectors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/parity_matterjs_test.go",
-      "line": 73
+      "line": 112
     },
     {
       "package": "internal/north/matter/secure/spake2",
@@ -122177,7 +123164,7 @@
       "identifier": "TestProcessPake1_RejectsIdentityDifference",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/verifier_from_value_test.go",
-      "line": 172
+      "line": 170
     },
     {
       "package": "internal/north/matter/secure/spake2",
@@ -122191,7 +123178,7 @@
       "identifier": "TestProcessPake2_RejectsIdentityDifference",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/spake2/verifier_from_value_test.go",
-      "line": 196
+      "line": 193
     },
     {
       "package": "internal/north/matter/secure/spake2",
@@ -123899,6 +124886,20 @@
       "identifier": "Client",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "CombinedEvent",
+      "reason": "constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site",
+      "file": "internal/north/mqtt/discovery_combined.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "CombinedEvent",
+      "reason": "constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site",
+      "file": "internal/north/mqtt/discovery_combined.go",
       "line": 24
     },
     {
@@ -125625,17 +126626,10 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestBuildCombinedSensorDiscovery",
+      "identifier": "TestBuildCombinedDiscovery",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_combined_test.go",
-      "line": 271
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestBuildCombinedTimerDiscovery",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/discovery_combined_test.go",
-      "line": 18
+      "line": 17
     },
     {
       "package": "internal/north/mqtt",
@@ -126934,13 +127928,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestFormatSeconds",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/discovery_combined_test.go",
-      "line": 248
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "TestHandleAlarmCommand_ArmWithCode_ParsesJSONEnvelope",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/alarm_command_subscriber_test.go",
@@ -127823,31 +128810,17 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestPublishCombinedSensorDiscovery",
+      "identifier": "TestPublishCombinedDiscovery",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_combined_test.go",
-      "line": 360
+      "line": 140
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestPublishCombinedSensorState",
+      "identifier": "TestPublishCombinedState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_combined_test.go",
-      "line": 411
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestPublishCombinedTimerDiscovery",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/discovery_combined_test.go",
-      "line": 139
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestPublishCombinedTimerState",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/discovery_combined_test.go",
-      "line": 205
+      "line": 191
     },
     {
       "package": "internal/north/mqtt",
@@ -157836,6 +158809,48 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/parameter/validate.go",
       "line": 28
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "CombinedDiscoveryContext",
+      "reason": "implemented by adapter.combinedDiscoveryContext and passed into every CombinedProjection.HACombinedDiscovery call the event bridge makes; the analyzer resolves neither the implementation nor the interface parameter",
+      "file": "internal/payload/combined.go",
+      "line": 90
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "CombinedDiscoveryContext",
+      "reason": "implemented by adapter.combinedDiscoveryContext and passed into every CombinedProjection.HACombinedDiscovery call the event bridge makes; the analyzer resolves neither the implementation nor the interface parameter",
+      "file": "internal/payload/combined.go",
+      "line": 90
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "CombinedProjection",
+      "reason": "asserted against in EventBridge.publishCombinedDPSnapshot and MQTTCommandSink.SetCombinedValue, which every combined data point reaches through; a type used only behind an interface assertion, which the analyzer's callgraph does not resolve",
+      "file": "internal/payload/combined.go",
+      "line": 43
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "CombinedProjection",
+      "reason": "asserted against in EventBridge.publishCombinedDPSnapshot and MQTTCommandSink.SetCombinedValue, which every combined data point reaches through; a type used only behind an interface assertion, which the analyzer's callgraph does not resolve",
+      "file": "internal/payload/combined.go",
+      "line": 43
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "CombinedWritable",
+      "reason": "asserted against in MQTTCommandSink.SetCombinedValue before it dispatches an MQTT write, and satisfied by combined.Timer and combined.EnumSelect; reached only through that interface assertion",
+      "file": "internal/payload/combined.go",
+      "line": 80
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "CombinedWritable",
+      "reason": "asserted against in MQTTCommandSink.SetCombinedValue before it dispatches an MQTT write, and satisfied by combined.Timer and combined.EnumSelect; reached only through that interface assertion",
+      "file": "internal/payload/combined.go",
+      "line": 80
     },
     {
       "package": "internal/payload",
