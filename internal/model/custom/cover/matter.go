@@ -38,7 +38,6 @@ var (
 	// list without it, which reads to a controller as "nothing to invoke".
 	_ interfaces.MatterClusterCommandLister = coverWCServer{}
 	_ interfaces.MatterClusterCommandLister = blindWCServer{}
-	_ interfaces.MatterClusterCommandLister = garageWCServer{}
 )
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
@@ -431,13 +430,20 @@ func (b *Blind) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{blindWCServer{b: b}}
 }
 
-// MatterDeviceType for Garage.
-func (g *Garage) MatterDeviceType() uint16 { return matterDeviceTypeWindowCovering }
+// MatterDeviceType for Garage is Closure (0x0230), not WindowCovering.
+//
+// A garage drive's travel has named stops, and WindowCovering has only a
+// lift percentage: the ventilation stop had to be expressed as a position
+// near the middle, which no controller can label and no read can tell
+// apart from a door that happens to be halfway. The Closure device type
+// requires ClosureControl and forbids WindowCovering outright (matter.js
+// closure-device.element.ts:20, conformance "X"), so the drive projects
+// one cluster, not two.
+func (g *Garage) MatterDeviceType() uint16 { return matterDeviceTypeClosure }
 
-// MatterClusterServers for Garage returns the discrete-state lift
-// projection.
+// MatterClusterServers for Garage returns the ClosureControl projection.
 func (g *Garage) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{garageWCServer{g: g}}
+	return []interfaces.MatterClusterServer{g.closure.get(g)}
 }
 
 // coverWCServer projects a [Cover] (lift only, no tilt) onto the
@@ -806,164 +812,6 @@ func (s blindWCServer) MatterAcceptedCommands() []uint32 {
 
 // MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
 func (s blindWCServer) MatterGeneratedCommands() []uint32 { return nil }
-
-// garageWCServer projects a [Garage] onto the WindowCovering cluster.
-// Position is derived from the discrete door state — Open=1.0,
-// Ventilation=0.5, Closed=0.0 — which the [Garage.Position] method
-// already exposes.
-type garageWCServer struct{ g *Garage }
-
-func (s garageWCServer) MatterClusterID() uint32 { return matterClusterWindowCovering }
-
-func (s garageWCServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case matterAttrType:
-		// Rollershade (0) — TypeEnum has no garage value
-		// (window-covering-cluster.element.ts:152-162).
-		return matterWCTypeRollerShade, true
-	case matterAttrEndProductType:
-		// EndProductTypeEnum has no garage value either
-		// (window-covering-cluster.element.ts:166-192). RollerShade (0)
-		// is the neutral default; Unknown (255) is deliberately avoided
-		// because at least one ecosystem's routine picker drops devices
-		// that report EndProductType=Unknown.
-		return matterWCEndProductRollerShade, true
-	case matterAttrConfigStatus:
-		// Operational | LiftPositionAware — this projection always
-		// advertises PA_LF in FeatureMap. See matterWCConfigStatusLift.
-		return matterWCConfigStatusLift, true
-	case matterAttrOperationalStatus:
-		motion := motionForOpeningClosing(s.g.IsOpening(), s.g.IsClosing())
-		return motion | (motion << 2), true
-	case matterAttrCurrentPositionLiftPercent100ths:
-		// Value temporarily unavailable — return (nil, true); see coverWCServer.MatterRead.
-		pos, ok := s.g.Position()
-		if !ok {
-			return nil, true
-		}
-		return hmLevelToMatterPct100ths(pos.Level()), true
-	case matterAttrTargetPositionLiftPercent100ths:
-		// Last commanded destination; mirrors CurrentPosition when no
-		// command is in effect, and external movement (SECTION-derived)
-		// overrides a stale commanded target. See
-		// coverWCServer.MatterRead and [liftTargetRead].
-		return liftTargetRead(&s.g.matterTarget, s.g.Position, s.g.IsOpening(), s.g.IsClosing())
-	case matterAttrMode:
-		return matterWCModeDefault, true
-	case matterAttrFeatureMap:
-		return matterWCFeatureLift | matterWCFeaturePositionAwLft, true
-	case matterAttrClusterRevision:
-		return matterWindowCoveringClusterRevision, true
-	default:
-		return nil, false
-	}
-}
-
-// MatterWrite implements [interfaces.MatterClusterServer]. See
-// [coverWCServer.MatterWrite] — the Mode attribute has the same
-// accept-valid-writes contract on every WindowCovering variant.
-func (s garageWCServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
-	if attrID != matterAttrMode {
-		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-	}
-	return validateWindowCoveringMode(value)
-}
-
-// MinWritePrivilege implements
-// [interfaces.MatterClusterAttributeWritePrivilege]: Mode is RW VM
-// (Manage) per window-covering-cluster.element.ts:76-79.
-func (s garageWCServer) MinWritePrivilege(_ uint32) uint8 { return 4 }
-
-func (s garageWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
-	var err error
-	switch cmdID {
-	case matterCmdUpOrOpen:
-		// A pending debounced GoTo write is stale intent once a
-		// full-open command lands — drop it before the immediate write.
-		s.g.matterGoTo.cancel(goToAxisLift)
-		// Target lift = fully open (0). WindowCoveringServer.ts:522.
-		err = s.g.Open(ctx, priority)
-		if err == nil {
-			s.g.matterTarget.setLift(0)
-		}
-	case matterCmdDownOrClose:
-		s.g.matterGoTo.cancel(goToAxisLift)
-		// Target lift = fully closed (10000). WindowCoveringServer.ts:546.
-		err = s.g.Close(ctx, priority)
-		if err == nil {
-			s.g.matterTarget.setLift(matterCoverPctMax)
-		}
-	case matterCmdStopMotion:
-		// Stop pre-empts queued motion — see coverWCServer.MatterInvoke.
-		s.g.matterGoTo.cancelAll()
-		// Snap the target back to the current position.
-		// WindowCoveringServer.ts:490 handleStopMovement.
-		err = s.g.Stop(ctx, priority)
-		if err == nil {
-			s.g.matterTarget.clear()
-		}
-	case matterCmdGoToLiftPercentage:
-		pct, e := extractGoToPercentage(fields)
-		if e != nil {
-			return nil, e
-		}
-		// Target stored immediately (WindowCoveringServer.ts:578); the
-		// DOOR_COMMAND write is debounced — see [dispatchGoToPercentage].
-		dispatchGoToPercentage(ctx, &s.g.matterGoTo, goToAxisLift, s.g.Address, pct,
-			s.g.Position, s.g.matterTarget.setLift,
-			func(ctx context.Context, hmLevel float64) error {
-				return s.g.SetPosition(ctx, hmLevel, priority)
-			})
-	default:
-		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-	}
-	if err != nil {
-		return nil, err
-	}
-	s.g.dataVersion.Bump()
-	return nil, nil
-}
-
-// MatterReportable — see [coverWCServer.MatterReportable] for the
-// TargetPositionLift rationale.
-func (s garageWCServer) MatterReportable() []uint32 {
-	return []uint32{
-		matterAttrOperationalStatus,
-		matterAttrTargetPositionLiftPercent100ths,
-		matterAttrCurrentPositionLiftPercent100ths,
-	}
-}
-
-// MatterAttributes lists every WindowCovering (0x0102) attribute the
-// garage server implements via MatterRead. Apple Home's HAP service
-// rebuild reads the full attribute set; without this the dispatcher
-// falls back to MatterReportable's two-attribute surface.
-func (s garageWCServer) MatterAttributes() []uint32 {
-	return []uint32{
-		matterAttrType,
-		matterAttrConfigStatus,
-		matterAttrOperationalStatus,
-		matterAttrEndProductType,
-		matterAttrTargetPositionLiftPercent100ths,
-		matterAttrCurrentPositionLiftPercent100ths,
-		matterAttrMode,
-	}
-}
-
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
-// Same lift-only surface as [coverWCServer.MatterAcceptedCommands]; the
-// garage door has no tilt axis.
-func (s garageWCServer) MatterAcceptedCommands() []uint32 {
-	return []uint32{
-		matterCmdUpOrOpen,
-		matterCmdDownOrClose,
-		matterCmdStopMotion,
-		matterCmdGoToLiftPercentage,
-	}
-}
-
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
-func (s garageWCServer) MatterGeneratedCommands() []uint32 { return nil }
 
 // extractGoToPercentage pulls the LiftPercent100thsValue /
 // TiltPercent100thsValue (context tag 0) out of a GoToLiftPercentage /

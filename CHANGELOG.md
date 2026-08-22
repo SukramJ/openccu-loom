@@ -24,6 +24,14 @@ anything it did not recognise.
 
 ### Changed
 
+- **Breaking for paired garage doors:** a garage drive now bridges to Matter as
+  a Closure (device type 0x0230) carrying the ClosureControl cluster, not as a
+  WindowCovering. WindowCovering has only a lift percentage, so the ventilation
+  stop had to be encoded as a position near the middle — a slider region no
+  controller can label, and one a read cannot tell apart from a door resting
+  halfway. ClosureControl names the stop. Because an endpoint's device type
+  changing reads to every ecosystem as a different accessory, a drive already
+  paired as a window covering has to be re-added. See ADR 0064.
 - Combined data points now describe their own north-bound projection instead of
   being dispatched by concrete type. Adding one used to mean remembering to
   extend a type switch in the event bridge, a discovery builder, and the command

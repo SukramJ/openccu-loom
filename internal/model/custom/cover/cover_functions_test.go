@@ -14,6 +14,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	mattercluster "github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -1148,20 +1150,28 @@ func TestBlindMatterInvokeAllCommands(t *testing.T) {
 	}
 }
 
+// TestGarageMatterClusterID pins the garage onto ClosureControl.
+//
+// It projected as WindowCovering until the ventilation position needed a
+// name: that cluster has only a lift percentage, so "vent" had to be a
+// position near the middle — indistinguishable on a read from a door that
+// happens to be halfway.
 func TestGarageMatterClusterID(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	srv := g.MatterClusterServers()[0]
-	if srv.MatterClusterID() != matterClusterWindowCovering {
-		t.Errorf("Garage MatterClusterID = 0x%04X, want 0x%04X", srv.MatterClusterID(), matterClusterWindowCovering)
+	if srv.MatterClusterID() != clusterwire.ClosureControlClusterID {
+		t.Errorf("Garage MatterClusterID = 0x%04X, want 0x%04X (ClosureControl)",
+			srv.MatterClusterID(), clusterwire.ClosureControlClusterID)
 	}
 }
 
 func TestGarageMatterWrite(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	srv := g.MatterClusterServers()[0]
-	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), clusterwire.ClosureControlAttrMainState,
+		uint8(0), hmenum.CommandPriorityHigh)
 	if err == nil {
-		t.Error("Garage MatterWrite must return error")
+		t.Error("Garage MatterWrite must return error: every ClosureControl attribute is R V")
 	}
 }
 
@@ -1185,14 +1195,12 @@ func TestGarageMatterReadAllAttributes(t *testing.T) {
 	srv := g.MatterClusterServers()[0]
 
 	readableAttrs := []uint32{
-		matterAttrType,
-		matterAttrEndProductType,
-		matterAttrConfigStatus,
-		matterAttrOperationalStatus,
-		matterAttrCurrentPositionLiftPercent100ths,
-		matterAttrMode,
-		matterAttrFeatureMap,
-		matterAttrClusterRevision,
+		clusterwire.ClosureControlAttrMainState,
+		clusterwire.ClosureControlAttrCurrentErrorList,
+		clusterwire.ClosureControlAttrOverallCurrentState,
+		clusterwire.ClosureControlAttrOverallTargetState,
+		mattercluster.AttrGlobalFeatureMap,
+		mattercluster.AttrGlobalClusterRevision,
 	}
 	for _, id := range readableAttrs {
 		_, ok := srv.MatterRead(id)
@@ -1211,21 +1219,27 @@ func TestGarageMatterInvokeAllCommands(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
 	srv := g.MatterClusterServers()[0]
 
-	// UpOrOpen.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil, hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("Garage UpOrOpen: %v", err)
+	for _, target := range []clusterwire.ClosureTargetPosition{
+		clusterwire.ClosureTargetPositionMoveToFullyOpen,
+		clusterwire.ClosureTargetPositionMoveToFullyClosed,
+		clusterwire.ClosureTargetPositionMoveToVentilationPosition,
+	} {
+		req := clusterwire.MoveToRequest{Position: &target}
+		if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
+			req, hmenum.CommandPriorityHigh); err != nil {
+			t.Errorf("Garage MoveTo(%d): %v", target, err)
+		}
 	}
-	// DownOrClose.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil, hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("Garage DownOrClose: %v", err)
+	// Stop.
+	if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdStop,
+		nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Errorf("Garage Stop: %v", err)
 	}
-	// StopMotion.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil, hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("Garage StopMotion: %v", err)
-	}
-	// GoToLiftPercentage.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000), hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("Garage GoToLift: %v", err)
+	// Calibrate belongs to the Calibration feature, which this profile
+	// does not advertise.
+	if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdCalibrate,
+		nil, hmenum.CommandPriorityHigh); err == nil {
+		t.Error("Garage Calibrate must be refused without the Calibration feature")
 	}
 	// Unknown.
 	if _, err := srv.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {

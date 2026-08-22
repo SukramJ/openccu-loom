@@ -53,21 +53,6 @@ func TestBlindConfigStatusAdvertisesLiftAndTiltPositionAware(t *testing.T) {
 	}
 }
 
-// TestGarageConfigStatusAdvertisesLiftPositionAware mirrors
-// TestCoverConfigStatusAdvertisesLiftPositionAware for the Garage
-// projection (also lift-only, PA_LF).
-func TestGarageConfigStatusAdvertisesLiftPositionAware(t *testing.T) {
-	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	srv := g.MatterClusterServers()[0]
-	v, ok := srv.MatterRead(matterAttrConfigStatus)
-	if !ok {
-		t.Fatal("ConfigStatus not readable")
-	}
-	if got := v.(uint8); got != 0x09 {
-		t.Fatalf("Garage ConfigStatus = 0x%02X, want 0x09 (Operational|LiftPositionAware)", got)
-	}
-}
-
 // TestCoverMatterWriteAcceptsValidMode confirms Mode (0x0017) writes
 // succeed for constraint-valid values (max 15) — window-covering-
 // cluster.element.ts:76-79 declares Mode "RW VM". Every prior
@@ -108,16 +93,15 @@ func TestCoverMatterWriteOtherAttributesStillRejected(t *testing.T) {
 	}
 }
 
-// TestBlindAndGarageMatterWriteAcceptValidMode confirms the Mode
-// accept-path is wired identically on the other two WindowCovering
-// projections.
-func TestBlindAndGarageMatterWriteAcceptValidMode(t *testing.T) {
+// TestBlindMatterWriteAcceptsValidMode confirms the Mode accept-path is
+// wired identically on the other WindowCovering projection.
+//
+// The garage is absent: it projects as ClosureControl, which has no Mode
+// attribute and no writable attribute at all — see
+// TestGarageMatterWrite.
+func TestBlindMatterWriteAcceptsValidMode(t *testing.T) {
 	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	if err := b.MatterClusterServers()[0].MatterWrite(context.Background(), matterAttrMode, uint8(0x03), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("Blind MatterWrite(Mode, 0x03) = %v, want nil", err)
-	}
-	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	if err := g.MatterClusterServers()[0].MatterWrite(context.Background(), matterAttrMode, uint8(0x03), hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("Garage MatterWrite(Mode, 0x03) = %v, want nil", err)
 	}
 }

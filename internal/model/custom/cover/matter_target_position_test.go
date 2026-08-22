@@ -19,7 +19,8 @@ import (
 )
 
 // TestParityCover_TargetPositionLiftPresent verifies that TargetPositionLift
-// (0x000B) is listed in MatterAttributes for Cover, Blind, and Garage.
+// (0x000B) is listed in MatterAttributes for Cover and Blind. The
+// garage projects as ClosureControl, which has no lift axis.
 // For Blind, TargetPositionTilt (0x000C) must also be present.
 // Conformance LF & PA_LF / TL & PA_TL requires these given the advertised
 // FeatureMaps.
@@ -66,21 +67,11 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 				matterAttrTargetPositionTiltPercent100ths, attrs)
 		}
 	})
-
-	t.Run("Garage", func(t *testing.T) {
-		t.Parallel()
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-		attrs := matterAttrs(t, g.MatterClusterServers()[0])
-		if !slices.Contains(attrs, matterAttrTargetPositionLiftPercent100ths) {
-			t.Errorf("Garage MatterAttributes missing 0x%04X (TargetPositionLiftPercent100ths); got %v",
-				matterAttrTargetPositionLiftPercent100ths, attrs)
-		}
-	})
 }
 
 // TestParityCover_TargetPositionMirrors_Current verifies that
 // TargetPositionLiftPercent100ths (0x000B) returns the same encoded value as
-// CurrentPositionLiftPercent100ths (0x000E) for Cover, Blind, and Garage.
+// CurrentPositionLiftPercent100ths (0x000E) for Cover and Blind.
 // HM devices converge target == current at rest; this is the spec-compliant
 // degenerate case.
 func TestParityCover_TargetPositionMirrors_Current(t *testing.T) {
@@ -142,25 +133,6 @@ func TestParityCover_TargetPositionMirrors_Current(t *testing.T) {
 			t.Errorf("Blind tilt: target=%d != current=%d; expected mirror", target.(uint16), current.(uint16))
 		}
 	})
-
-	t.Run("Garage", func(t *testing.T) {
-		t.Parallel()
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-		g.OnState(DoorStateOpen)
-		srv := g.MatterClusterServers()[0]
-
-		current, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-		if !ok || current == nil {
-			t.Fatalf("Garage CurrentPositionLift read = (%v, %v)", current, ok)
-		}
-		target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-		if !ok || target == nil {
-			t.Fatalf("Garage TargetPositionLift read = (%v, %v)", target, ok)
-		}
-		if current.(uint16) != target.(uint16) {
-			t.Errorf("Garage: target=%d != current=%d; expected mirror", target.(uint16), current.(uint16))
-		}
-	})
 }
 
 // TestParityCover_TargetPosition_NullWhenUnavailable verifies that when
@@ -200,17 +172,6 @@ func TestParityCover_TargetPosition_NullWhenUnavailable(t *testing.T) {
 		v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths)
 		if !ok || v != nil {
 			t.Errorf("Blind unobserved TargetPositionTilt = (%v, %v), want (nil, true)", v, ok)
-		}
-	})
-
-	t.Run("Garage", func(t *testing.T) {
-		t.Parallel()
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-		// No OnState called — position unobserved.
-		srv := g.MatterClusterServers()[0]
-		v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-		if !ok || v != nil {
-			t.Errorf("Garage unobserved TargetPositionLift = (%v, %v), want (nil, true)", v, ok)
 		}
 	})
 }
@@ -502,138 +463,6 @@ func TestBlindTargetPosition_StopMotionClearsBothAxes(t *testing.T) {
 	}
 }
 
-// TestGarageTargetPosition_UpOrOpenAndDownOrClose_SetExtremes uses a fresh
-// (state-unobserved) Garage rig per command. [Garage.Position] derives
-// solely from DOOR_STATE, which a DOOR_COMMAND write never updates on its
-// own — so [Garage.Open] / [Garage.Close] gate on
-// Cover.IsStateChangeArgs's "not yet observed" branch (always true) to
-// guarantee a real wire write. Reusing one rig across both commands would
-// hit a different gotcha: after Open() the door state is still
-// "unobserved" (no OnState follow-up), so a subsequent Close() also sees
-// "not observed" and writes again — harmless here, but a rig seeded with
-// OnState(DoorStateClosed) before an Open then a same-state Close would
-// silently no-op the second command (IsStateChangeArgs sees the door
-// already satisfies the requested axis) while still clearing/setting the
-// Matter target, since the server only checks for a nil error.
-func TestGarageTargetPosition_UpOrOpenAndDownOrClose_SetExtremes(t *testing.T) {
-	t.Parallel()
-
-	t.Run("UpOrOpen", func(t *testing.T) {
-		t.Parallel()
-		w := &stubWriter{}
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
-		srv := g.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil, hmenum.CommandPriorityHigh); err != nil {
-			t.Fatalf("UpOrOpen: %v", err)
-		}
-		if w.last != string(DoorCommandOpen) {
-			t.Fatalf("DOOR_COMMAND=%v, want OPEN", w.last)
-		}
-		current, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-		if !ok || current != nil {
-			t.Fatalf("CurrentPositionLift = (%v, %v), want (nil, true) — DOOR_STATE never observed", current, ok)
-		}
-		target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-		if !ok || target.(uint16) != 0 {
-			t.Fatalf("TargetPositionLift = (%v, %v), want (0, true) — stored independently of Position()", target, ok)
-		}
-	})
-
-	t.Run("DownOrClose", func(t *testing.T) {
-		t.Parallel()
-		w := &stubWriter{}
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
-		srv := g.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil, hmenum.CommandPriorityHigh); err != nil {
-			t.Fatalf("DownOrClose: %v", err)
-		}
-		if w.last != string(DoorCommandClose) {
-			t.Fatalf("DOOR_COMMAND=%v, want CLOSE", w.last)
-		}
-		target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-		if !ok || target.(uint16) != 10000 {
-			t.Fatalf("TargetPositionLift = (%v, %v), want (10000, true)", target, ok)
-		}
-	})
-}
-
-// TestGarageTargetPosition_GoToLiftPercentageStoresRawPercent verifies the
-// stored target is the raw requested Percent100ths value
-// (WindowCoveringServer.ts:578), not the coarse OPEN/VENT/CLOSE bucket
-// [Garage.SetPosition] maps it onto on the wire.
-func TestGarageTargetPosition_GoToLiftPercentageStoresRawPercent(t *testing.T) {
-	t.Parallel()
-	w := &stubWriter{}
-	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
-	g.OnState(DoorStateClosed)
-	srv := g.MatterClusterServers()[0]
-
-	// HM level 0.7 (> 0.50 threshold) maps onto DoorCommandOpen, but the
-	// stored Matter target must stay the exact requested 3000.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("GoToLiftPercentage: %v", err)
-	}
-	flushGoToWrites(&g.matterGoTo)
-	if w.last != string(DoorCommandOpen) {
-		t.Fatalf("DOOR_COMMAND=%v, want OPEN", w.last)
-	}
-	target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if !ok || target.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift = (%v, %v), want (3000, true) — raw requested percent", target, ok)
-	}
-}
-
-// TestGarageTargetPosition_StopMotionClearsTarget verifies StopMotion
-// clears the stored target so it mirrors CurrentPosition again. Unlike
-// Cover/Blind, [Garage.Stop] is unconditional — it always writes
-// DOOR_COMMAND=STOP regardless of Capabilities.SupportsStop.
-func TestGarageTargetPosition_StopMotionClearsTarget(t *testing.T) {
-	t.Parallel()
-	w := &stubWriter{}
-	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
-	g.OnState(DoorStateClosed)
-	srv := g.MatterClusterServers()[0]
-
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("GoToLiftPercentage: %v", err)
-	}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil, hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("StopMotion: %v", err)
-	}
-	if w.last != string(DoorCommandStop) {
-		t.Fatalf("DOOR_COMMAND=%v, want STOP", w.last)
-	}
-	current, _ := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-	target, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if current.(uint16) != target.(uint16) {
-		t.Fatalf("after Stop: current=%v target=%v, want equal (mirror)", current, target)
-	}
-}
-
-// TestGarageTargetPosition_DeferredWriteFailureKeepsCommandedTarget
-// mirrors [TestCoverTargetPosition_DeferredWriteFailureKeepsCommandedTarget]
-// for Garage's own [matterTargetState] and debouncer instances.
-func TestGarageTargetPosition_DeferredWriteFailureKeepsCommandedTarget(t *testing.T) {
-	t.Parallel()
-	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", failingWriter{})
-	g.OnState(DoorStateClosed)
-	srv := g.MatterClusterServers()[0]
-
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("MatterInvoke err=%v, want acceptance before the deferred write", err)
-	}
-	flushGoToWrites(&g.matterGoTo) // deferred write fails and is logged
-
-	current, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-	if !ok || current.(uint16) != 10000 {
-		t.Fatalf("CurrentPositionLift after failed deferred write = (%v, %v), want (10000, true) — unchanged", current, ok)
-	}
-	target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if !ok || target.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift after failed deferred write = (%v, %v), want (3000, true) — commanded value kept", target, ok)
-	}
-}
-
 // --- Inferred target on externally initiated movement ---
 
 // readTargetLift is a small assertion helper for the inferred-target
@@ -902,44 +731,6 @@ func TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop(t *testing.T) {
 	if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 4000 {
 		t.Fatalf("TargetPositionTilt after stop = (%v, %v), want 4000 (mirror current)", v, ok)
 	}
-}
-
-// TestGarageInferredTarget_SectionMovementAndStop mirrors the Cover
-// inference for the SECTION-derived motion signal on garage drives.
-func TestGarageInferredTarget_SectionMovementAndStop(t *testing.T) {
-	t.Parallel()
-
-	t.Run("CommandedAheadPreservedThenStopSnaps", func(t *testing.T) {
-		t.Parallel()
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-		g.OnState(DoorStateClosed) // Matter 10000.
-		srv := g.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
-			t.Fatalf("GoToLiftPercentage: %v", err)
-		}
-		g.OnSection(sectionOpening)
-		if v := readTargetLift(t, srv); v.(uint16) != 3000 {
-			t.Fatalf("TargetPositionLift while opening = %v, want commanded 3000 (ahead of 10000)", v)
-		}
-		g.OnSection(0) // motion phase left the opening section — stopped
-		if v := readTargetLift(t, srv); v.(uint16) != 10000 {
-			t.Fatalf("TargetPositionLift after stop = %v, want 10000 (mirror DOOR_STATE current)", v)
-		}
-	})
-
-	t.Run("StaleCloseTargetOverriddenByExternalOpening", func(t *testing.T) {
-		t.Parallel()
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-		g.OnState(DoorStateOpen) // Matter 0.
-		srv := g.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil, hmenum.CommandPriorityHigh); err != nil {
-			t.Fatalf("DownOrClose: %v", err)
-		}
-		g.OnSection(sectionOpening) // user reversed at the wall button
-		if v := readTargetLift(t, srv); v.(uint16) != 0 {
-			t.Fatalf("TargetPositionLift while externally opening = %v, want 0 (stale close target overridden)", v)
-		}
-	})
 }
 
 // --- Change notifier: motion parameter wired ---

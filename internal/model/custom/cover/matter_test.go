@@ -10,12 +10,16 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	mattercluster "github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestMatterDeviceTypeIsWindowCovering covers all three projections —
+// TestMatterDeviceTypeIsWindowCovering covers the two lift projections —
 // the device type ID is uniform; the per-type distinction lives in the
-// cluster's Type / EndProductType attributes (Matter spec design).
+// cluster's Type / EndProductType attributes (Matter spec design). The
+// garage projects as a Closure instead; see
+// TestGarageMatterDeviceTypeIsClosure.
 func TestMatterDeviceTypeIsWindowCovering(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	if c.MatterDeviceType() != 0x0202 {
@@ -25,9 +29,19 @@ func TestMatterDeviceTypeIsWindowCovering(t *testing.T) {
 	if b.MatterDeviceType() != 0x0202 {
 		t.Fatalf("Blind.MatterDeviceType = 0x%04X, want 0x0202", b.MatterDeviceType())
 	}
+}
+
+// TestGarageMatterDeviceTypeIsClosure pins the garage onto the Closure
+// device type (0x0230) rather than WindowCovering.
+//
+// The Closure device type requires ClosureControl and forbids
+// WindowCovering outright (matter.js closure-device.element.ts:20,
+// conformance "X"), which is what lets a garage drive name its
+// ventilation stop instead of encoding it as a lift percentage.
+func TestGarageMatterDeviceTypeIsClosure(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	if g.MatterDeviceType() != 0x0202 {
-		t.Fatalf("Garage.MatterDeviceType = 0x%04X, want 0x0202", g.MatterDeviceType())
+	if g.MatterDeviceType() != 0x0230 {
+		t.Fatalf("Garage.MatterDeviceType = 0x%04X, want 0x0230 (Closure)", g.MatterDeviceType())
 	}
 }
 
@@ -201,60 +215,119 @@ func TestBlindGoToTiltPercentage(t *testing.T) {
 	}
 }
 
-// TestGarageStateMapsToDiscretePositions confirms the door-state →
-// percent mapping: Open → 0, Vent → 5000, Closed → 10000.
-func TestGarageStateMapsToDiscretePositions(t *testing.T) {
+// TestGarageStateMapsToNamedStops pins the door-state to
+// CurrentPositionEnum mapping.
+//
+// The three states map onto named stops rather than onto percentages.
+// The ventilation stop is the one that could not survive the old
+// projection: as a lift percentage it was a value near the middle, which
+// a controller cannot label and a read cannot tell apart from a door
+// resting halfway.
+func TestGarageStateMapsToNamedStops(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	srv := g.MatterClusterServers()[0]
 
 	cases := []struct {
 		state DoorState
-		want  uint16
+		want  clusterwire.ClosureCurrentPosition
 	}{
-		{DoorStateOpen, 0},
-		{DoorStateVentilation, 5000},
-		{DoorStateClosed, 10000},
+		{DoorStateOpen, clusterwire.ClosureCurrentPositionFullyOpened},
+		{DoorStateVentilation, clusterwire.ClosureCurrentPositionOpenedForVentilation},
+		{DoorStateClosed, clusterwire.ClosureCurrentPositionFullyClosed},
 	}
 	for _, tc := range cases {
 		g.OnState(tc.state)
-		v, ok := srv.MatterRead(0x000E)
+		v, ok := srv.MatterRead(clusterwire.ClosureControlAttrOverallCurrentState)
 		if !ok {
-			t.Fatalf("state=%s: position not observed", tc.state)
+			t.Fatalf("state=%s: OverallCurrentState not readable", tc.state)
 		}
-		if v.(uint16) != tc.want {
-			t.Errorf("state=%s → Matter %d, want %d", tc.state, v.(uint16), tc.want)
+		st, ok := v.(*clusterwire.ClosureOverallCurrentState)
+		if !ok {
+			t.Fatalf("state=%s: OverallCurrentState = %T", tc.state, v)
+		}
+		if st.Position == nil {
+			t.Fatalf("state=%s: Position is null, want %d", tc.state, tc.want)
+		}
+		if *st.Position != tc.want {
+			t.Errorf("state=%s → Position %d, want %d", tc.state, *st.Position, tc.want)
 		}
 	}
 }
 
-// TestGarageEndProductTypeIsRollerShade confirms the garage projection
-// reports the neutral RollerShade (0) EndProductType — the matter.js
-// EndProductTypeEnum (window-covering-cluster.element.ts:166-192) has
-// no garage value, and Unknown (255) is avoided because some
-// ecosystems' routine pickers drop devices that report it.
-func TestGarageEndProductTypeIsRollerShade(t *testing.T) {
+// TestGarageTravellingReportsNullPosition pins the mid-travel shape: a
+// door between named stops has no position to report.
+//
+// This is the case the percentage projection could not express at all —
+// every lift value is some position, so a travelling door had to claim
+// one.
+func TestGarageTravellingReportsNullPosition(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	srv := g.MatterClusterServers()[0]
-	v, ok := srv.MatterRead(0x000D) // EndProductType
+
+	g.OnState(DoorStateOpen)
+	g.OnState(DoorStateUnknown)
+
+	v, ok := srv.MatterRead(clusterwire.ClosureControlAttrOverallCurrentState)
 	if !ok {
-		t.Fatalf("EndProductType not readable")
+		t.Fatal("OverallCurrentState not readable")
 	}
-	if v.(uint8) != matterWCEndProductRollerShade {
-		t.Fatalf("Garage EndProductType=%d, want %d (RollerShade)", v.(uint8), matterWCEndProductRollerShade)
+	st, _ := v.(*clusterwire.ClosureOverallCurrentState)
+	if st.Position != nil {
+		t.Errorf("Position = %d while travelling, want null", *st.Position)
 	}
 }
 
-// TestGarageDownOrCloseDispatchesDoorCommand wires the Matter
-// DownOrClose into the Garage's DOOR_COMMAND parameter.
-func TestGarageDownOrCloseDispatchesDoorCommand(t *testing.T) {
-	w := &stubWriter{}
-	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
+// TestGarageAdvertisesVentilationFeature pins that the FeatureMap carries
+// Ventilation, with Positioning alongside it as its "[PS]" conformance
+// requires.
+//
+// Without the feature bit a controller has no reason to offer the
+// ventilation stop, whatever the position enum says.
+func TestGarageAdvertisesVentilationFeature(t *testing.T) {
+	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	srv := g.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("DownOrClose err: %v", err)
+	v, ok := srv.MatterRead(mattercluster.AttrGlobalFeatureMap)
+	if !ok {
+		t.Fatal("FeatureMap not readable")
 	}
-	if w.last != "CLOSE" {
-		t.Fatalf("Garage DownOrClose wrote %v, want \"CLOSE\"", w.last)
+	fm, ok := v.(uint32)
+	if !ok {
+		t.Fatalf("FeatureMap = %T, want uint32", v)
+	}
+	if fm&clusterwire.ClosureControlFeatureVentilation == 0 {
+		t.Error("FeatureMap does not advertise Ventilation")
+	}
+	if fm&clusterwire.ClosureControlFeaturePositioning == 0 {
+		t.Error("FeatureMap advertises Ventilation without Positioning, which its \"[PS]\" conformance forbids")
+	}
+}
+
+// TestGarageMoveToDispatchesDoorCommand wires each Matter MoveTo target
+// onto the DOOR_COMMAND it means.
+func TestGarageMoveToDispatchesDoorCommand(t *testing.T) {
+	cases := []struct {
+		name   string
+		target clusterwire.ClosureTargetPosition
+		want   string
+	}{
+		{"close", clusterwire.ClosureTargetPositionMoveToFullyClosed, "CLOSE"},
+		{"open", clusterwire.ClosureTargetPositionMoveToFullyOpen, "OPEN"},
+		{"ventilate", clusterwire.ClosureTargetPositionMoveToVentilationPosition, "PARTIAL_OPEN"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &stubWriter{}
+			g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
+			srv := g.MatterClusterServers()[0]
+			target := tc.target
+			if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
+				clusterwire.MoveToRequest{Position: &target}, hmenum.CommandPriorityHigh); err != nil {
+				t.Fatalf("MoveTo: %v", err)
+			}
+			if w.last != tc.want {
+				t.Fatalf("MoveTo(%s) wrote %v, want %q", tc.name, w.last, tc.want)
+			}
+		})
 	}
 }
 
@@ -341,11 +414,13 @@ func TestReportableAttributes(t *testing.T) {
 		matterAttrCurrentPositionLiftPercent100ths,
 		matterAttrCurrentPositionTiltPercent100ths,
 	})
+	// The garage reports the ClosureControl carriers instead: what the
+	// drive is doing, where it is, and where it is heading.
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	requireAttrs(t, "Garage", g.MatterClusterServers()[0].MatterReportable(), []uint32{
-		matterAttrOperationalStatus,
-		matterAttrTargetPositionLiftPercent100ths,
-		matterAttrCurrentPositionLiftPercent100ths,
+		clusterwire.ClosureControlAttrMainState,
+		clusterwire.ClosureControlAttrOverallCurrentState,
+		clusterwire.ClosureControlAttrOverallTargetState,
 	})
 }
 

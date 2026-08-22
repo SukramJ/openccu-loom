@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -275,26 +274,6 @@ func TestGoToDebounce_UnsubscribeCancelsPendingWrite(t *testing.T) {
 		invokeGoToLift(t, c, 3000) // pending
 		unsub()
 		flushGoToWrites(&c.matterGoTo)
-		if got := w.recorded(); len(got) != 0 {
-			t.Fatalf("CCU writes after detach = %v, want none", got)
-		}
-	})
-
-	t.Run("Garage", func(t *testing.T) {
-		t.Parallel()
-		w := &countingWriter{}
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", w)
-		d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0002"})
-		ch := d.AddChannel("HmIP-MOD-HO:1", 1, "GARAGE_DOOR", hmenum.ParamsetKeyValues)
-		unsub := g.Subscribe(ch)
-
-		g.OnState(DoorStateClosed)
-		srv := g.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
-			t.Fatalf("GoToLiftPercentage: %v", err)
-		}
-		unsub()
-		flushGoToWrites(&g.matterGoTo)
 		if got := w.recorded(); len(got) != 0 {
 			t.Fatalf("CCU writes after detach = %v, want none", got)
 		}

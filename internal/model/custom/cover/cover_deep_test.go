@@ -319,9 +319,6 @@ func newGarageRig(t *testing.T, address string, w Writer) (*Garage, *generic.Sen
 	ch.Put(section)
 
 	g := NewGarage(GarageConfig{Channel: ch, Writer: w, Capabilities: custom.CoverCapabilities{}})
-	// Deferred GoTo*Percentage writes fire only via flushGoToWrites so
-	// tests stay deterministic.
-	neuterGoToTimers(&g.matterGoTo)
 	return g, doorState, section
 }
 

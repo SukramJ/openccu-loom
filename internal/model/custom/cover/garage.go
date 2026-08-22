@@ -77,17 +77,6 @@ type Garage struct {
 	// DataVersionFilter evaluation correctly detects cluster changes.
 	dataVersion hmtypes.DataVersionTracker
 
-	// matterTarget stores the last commanded WindowCovering target
-	// position for the Matter projection (lift axis only). Owned here
-	// so the value survives cluster-server reconstruction.
-	matterTarget matterTargetState
-
-	// matterGoTo debounces GoToLiftPercentage slider gestures into a
-	// single deferred DOOR_COMMAND write. Owned here so pending writes
-	// survive cluster-server reconstruction and stop on
-	// [Garage.Subscribe] detach.
-	matterGoTo goToDebouncer
-
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. Keyed on DOOR_COMMAND
 	// (the primary write parameter for garage doors).
@@ -105,6 +94,12 @@ type Garage struct {
 	// doorMode is the selectable closed/ventilation/open control, present
 	// only on vent-capable drives. Nil elsewhere — every use is guarded.
 	doorMode *combined.EnumSelect
+
+	// closure is the ClosureControl projection. Built on first Matter
+	// read and kept: the cluster server owns the attribute state a
+	// controller subscribes to, so rebuilding it would reset the reported
+	// position to "nothing observed" mid-session.
+	closure closureProjection
 
 	mu       sync.RWMutex
 	state    DoorState
@@ -385,10 +380,6 @@ func (g *Garage) Subscribe(ch *device.Channel) func() {
 		custom.ReplayCurrentValue(dp, applySection)
 	}
 	return func() {
-		// Detach also stops any pending debounced Matter position
-		// write — teardown must not leave a timer that writes to the
-		// CCU after the data point is unbound.
-		g.matterGoTo.cancelAll()
 		for _, u := range unsubs {
 			if u != nil {
 				u()
@@ -403,6 +394,11 @@ func (g *Garage) OnState(s DoorState) {
 	g.state = s
 	g.hasSt = true
 	g.mu.Unlock()
+	// Feed the Matter projection. Only when it already exists: building
+	// it here would create a cluster server for a drive no controller has
+	// asked about, and the projection seeds itself from DoorState on
+	// first read anyway.
+	g.closure.publishIfBuilt()
 }
 
 // OnSection records a CCU-emitted SECTION update.
@@ -411,18 +407,16 @@ func (g *Garage) OnState(s DoorState) {
 // mirroring the current position — the matter.js handleStopMovement
 // semantics (WindowCoveringServer.ts:485-493) applied to a stop the
 // drive reports on its own (wall button, end position reached) rather
-// than a Matter StopMotion command. See [Cover.OnDirection] for the
-// DIRECTION-based counterpart.
+// than a Matter StopMotion command.
+//
+// The Matter side needs no target bookkeeping here: ClosureControl drops
+// its target when the drive reports a named stop, which arrives on
+// DOOR_STATE rather than on SECTION. See [Garage.OnState].
 func (g *Garage) OnSection(v int32) {
 	g.mu.Lock()
-	wasMoving := g.hasSec && (g.sectionV == sectionOpening || g.sectionV == sectionClosing)
 	g.sectionV = v
 	g.hasSec = true
-	nowMoving := v == sectionOpening || v == sectionClosing
 	g.mu.Unlock()
-	if wasMoving && !nowMoving {
-		g.matterTarget.clear()
-	}
 }
 
 func toInt32(v any) (int32, bool) {
