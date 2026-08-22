@@ -92,6 +92,11 @@ type Config struct {
 	Channel      *device.Channel
 	Writer       Writer
 	Capabilities custom.SirenCapabilities
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this data point. Every composed field resolves through
+	// it — see [custom.ResolveSlotOr]. The zero value is valid: each
+	// binding falls back to the parameter named at the call site.
+	Group custom.RebasedChannelGroupConfig
 }
 
 // New constructs a Siren.
@@ -114,10 +119,10 @@ func New(cfg Config) *Siren {
 		Capabilities:   cfg.Capabilities,
 		key:            key,
 		writer:         cfg.Writer,
-		acousticActive: custom.BinarySensorField(cfg.Channel, hmenum.ParameterAcousticAlarmActive),
-		acousticIdx:    custom.ActionSelectField(cfg.Channel, hmenum.ParameterAcousticAlarmSelection),
-		opticalActive:  custom.BinarySensorField(cfg.Channel, hmenum.ParameterOpticalAlarmActive),
-		opticalIdx:     custom.ActionSelectField(cfg.Channel, hmenum.ParameterOpticalAlarmSelection),
+		acousticActive: custom.BinarySensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldAcousticAlarmActive, hmenum.ParameterAcousticAlarmActive)),
+		acousticIdx:    custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldAcousticAlarmSelection, hmenum.ParameterAcousticAlarmSelection)),
+		opticalActive:  custom.BinarySensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldOpticalAlarmActive, hmenum.ParameterOpticalAlarmActive)),
+		opticalIdx:     custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldOpticalAlarmSelection, hmenum.ParameterOpticalAlarmSelection)),
 	}
 	if cfg.Channel != nil {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterAcousticAlarmSelection); dp != nil {

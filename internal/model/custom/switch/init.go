@@ -68,24 +68,24 @@ func init() {
 // switch on an ACCESS_RECEIVER channel (HmIP-DLD / HmIP-FWI). Returns nil
 // when the channel carries neither the read-only STATE nor the un-ignored
 // write-only ACCESS_AUTHORIZATION control, so the materializer skips it.
-func ipAccessPermissionConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-	ap := NewAccessPermission(ch)
+func ipAccessPermissionConstructor(ch *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	ap := NewAccessPermission(ch, group)
 	if ap == nil {
 		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
 	}
 	return ap, nil
 }
 
-func ipSwitchConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-	sw := New(ch)
+func ipSwitchConstructor(ch *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	sw := New(ch, group)
 	if sw == nil {
 		return nil, nil
 	}
 	return sw, nil
 }
 
-func rfSwitchConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-	sw := New(ch)
+func rfSwitchConstructor(ch *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	sw := New(ch, group)
 	if sw == nil {
 		return nil, nil
 	}

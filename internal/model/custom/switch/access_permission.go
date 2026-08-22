@@ -76,8 +76,8 @@ type AccessPermission struct {
 // Returns nil when the channel carries neither a STATE binary sensor nor
 // the un-ignored ACCESS_AUTHORIZATION control — the materializer treats
 // nil as "skip custom-DP registration on this channel".
-func NewAccessPermission(ch *device.Channel) *AccessPermission {
-	stateDp := custom.BinarySensorField(ch, hmenum.ParameterState)
+func NewAccessPermission(ch *device.Channel, group custom.RebasedChannelGroupConfig) *AccessPermission {
+	stateDp := custom.BinarySensorField(custom.ResolveSlotOr(ch, group, hmenum.FieldState, hmenum.ParameterState))
 	authDp := custom.ActionSelectField(ch, hmenum.ParameterAccessAuthorization)
 	if stateDp == nil || authDp == nil {
 		return nil

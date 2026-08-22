@@ -97,6 +97,11 @@ func (s *SmokeSiren) Subscribe(ch *device.Channel) func() {
 type SmokeSirenConfig struct {
 	Channel *device.Channel
 	Writer  custom.Writer
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this data point. Every composed field resolves through
+	// it — see [custom.ResolveSlotOr]. The zero value is valid: each
+	// binding falls back to the parameter named at the call site.
+	Group custom.RebasedChannelGroupConfig
 }
 
 // NewSmokeSiren constructs a SmokeSiren.
@@ -118,8 +123,8 @@ func NewSmokeSiren(cfg SmokeSirenConfig) *SmokeSiren {
 		Address: addr,
 		key:     key,
 		writer:  cfg.Writer,
-		status:  custom.EnumSensorField(cfg.Channel, hmenum.ParameterSmokeDetectorAlarmStatus),
-		command: custom.ActionSelectField(cfg.Channel, hmenum.ParameterSmokeDetectorCommand),
+		status:  custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSmokeDetectorAlarmStatus, hmenum.ParameterSmokeDetectorAlarmStatus)),
+		command: custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSmokeDetectorCommand, hmenum.ParameterSmokeDetectorCommand)),
 	}
 	s.registerSmokeSirenServices()
 	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.

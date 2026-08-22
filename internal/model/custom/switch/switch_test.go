@@ -20,7 +20,7 @@ import (
 
 // newTestSwitch builds a minimal channel, registers a STATE *generic.Switch
 // wire-DP on it (carrying w as Writer and centralName as CentralName), and
-// calls New(ch). It is the canonical test-fixture factory that replaces the
+// calls New(ch, custom.RebasedChannelGroupConfig{}). It is the canonical test-fixture factory that replaces the
 // old New(addr, centralName, w) three-argument form.
 func newTestSwitch(t *testing.T, addr, centralName string, w custom.Writer) *Switch {
 	t.Helper()
@@ -40,7 +40,7 @@ func newTestSwitch(t *testing.T, addr, centralName string, w custom.Writer) *Swi
 		Writer:      w,
 	})
 	ch.Put(dp)
-	return New(ch)
+	return New(ch, custom.RebasedChannelGroupConfig{})
 }
 
 type stubWriter struct {

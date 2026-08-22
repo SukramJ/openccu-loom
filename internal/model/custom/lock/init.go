@@ -112,13 +112,18 @@ func rfLockConstructor(channel *device.Channel, group custom.RebasedChannelGroup
 // CustomDpButtonLock declares BUTTON_LOCK as a required field, so a device whose
 // model matches the button-lock profile but whose channel lacks the parameter
 // (e.g. HmIP-eTRV-C-2) materialises no lock entity.
-func hasButtonLockField(ch *device.Channel) bool {
-	return custom.SwitchField(ch, hmenum.ParameterGlobalButtonLock) != nil ||
-		custom.SwitchField(ch, hmenum.ParameterButtonLock) != nil
+func hasButtonLockField(ch *device.Channel, group custom.RebasedChannelGroupConfig) bool {
+	if custom.SwitchField(custom.ResolveSlotOr(
+		ch, group, hmenum.FieldButtonLock, hmenum.ParameterGlobalButtonLock)) != nil {
+		return true
+	}
+	// BUTTON_LOCK is the older spelling and no profile names it, so it stays
+	// a literal second try rather than a schema lookup.
+	return custom.SwitchField(ch, hmenum.ParameterButtonLock) != nil
 }
 
 func ipButtonLockConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-	if !hasButtonLockField(channel) {
+	if !hasButtonLockField(channel, group) {
 		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
 	}
 	return New(Config{
@@ -131,7 +136,7 @@ func ipButtonLockConstructor(channel *device.Channel, group custom.RebasedChanne
 }
 
 func rfButtonLockConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-	if !hasButtonLockField(channel) {
+	if !hasButtonLockField(channel, group) {
 		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
 	}
 	return New(Config{

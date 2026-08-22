@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -56,7 +57,7 @@ func newPayloadSwitch(t *testing.T) *Switch {
 		Writer: &stubWriter{},
 	})
 	ch.Put(dp)
-	return New(ch)
+	return New(ch, custom.RebasedChannelGroupConfig{})
 }
 
 // ---------------------------------------------------------------------------

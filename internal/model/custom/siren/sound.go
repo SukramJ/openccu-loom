@@ -113,6 +113,11 @@ func (sp *SoundPlayer) Category() hmenum.DataPointCategory { return hmenum.DataP
 type SoundPlayerConfig struct {
 	Channel *device.Channel
 	Writer  custom.Writer
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this data point. Every composed field resolves through
+	// it — see [custom.ResolveSlotOr]. The zero value is valid: each
+	// binding falls back to the parameter named at the call site.
+	Group custom.RebasedChannelGroupConfig
 }
 
 // NewSoundPlayer constructs a SoundPlayer.
@@ -137,10 +142,10 @@ func NewSoundPlayer(cfg SoundPlayerConfig) *SoundPlayer {
 		},
 		key:         key,
 		writer:      cfg.Writer,
-		level:       custom.FloatField(cfg.Channel, hmenum.ParameterLevel),
-		soundfile:   custom.SelectField(cfg.Channel, hmenum.ParameterSoundfile),
-		repetitions: custom.ActionSelectField(cfg.Channel, hmenum.ParameterRepetitions),
-		direction:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection),
+		level:       custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel)),
+		soundfile:   custom.SelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSoundfile, hmenum.ParameterSoundfile)),
+		repetitions: custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldRepetitions, hmenum.ParameterRepetitions)),
+		direction:   custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection)),
 	}
 	if cfg.Channel != nil {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterSoundfile); dp != nil {

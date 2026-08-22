@@ -64,8 +64,8 @@ func NewColorLight(cfg Config) *ColorLight {
 func newColorLightOn(cfg Config, colorChannel *device.Channel) *ColorLight {
 	cl := &ColorLight{
 		Light:      New(cfg),
-		hue:        custom.IntegerField(cfg.Channel, hmenum.ParameterHue),
-		saturation: custom.FloatField(cfg.Channel, hmenum.ParameterSaturation),
+		hue:        custom.IntegerField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldHue, hmenum.ParameterHue)),
+		saturation: custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSaturation, hmenum.ParameterSaturation)),
 	}
 	if cl.hue == nil || cl.saturation == nil {
 		cl.colorIndex = custom.IntegerField(colorChannel, hmenum.ParameterColor)
@@ -300,7 +300,7 @@ func newColorTempLightOn(cfg Config, minK, maxK int32, whitePoint *device.Channe
 		Light:     New(cfg),
 		MinKelvin: minK,
 		MaxKelvin: maxK,
-		kelvin:    custom.IntegerField(cfg.Channel, hmenum.ParameterColorTemperature),
+		kelvin:    custom.IntegerField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldColorTemperature, hmenum.ParameterColorTemperature)),
 	}
 	if ct.kelvin == nil && whitePoint != nil {
 		ct.colorLevel = custom.FloatField(whitePoint, hmenum.ParameterLevel)
@@ -480,8 +480,8 @@ type FixedColorLight struct {
 func NewFixedColorLight(cfg Config) *FixedColorLight {
 	fc := &FixedColorLight{
 		Light:          New(cfg),
-		color:          custom.SelectField(cfg.Channel, hmenum.ParameterColor),
-		colorBehaviour: custom.SelectField(cfg.Channel, hmenum.ParameterColorBehaviour),
+		color:          custom.SelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldColor, hmenum.ParameterColor)),
+		colorBehaviour: custom.SelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldColorBehaviour, hmenum.ParameterColorBehaviour)),
 	}
 	// Signal lights reset the device-side ON_TIME duration on every plain
 	// turn_on; RGBW/DALI must not (see Light.resetsOnTimeOnTurnOn).

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchdev "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -164,7 +165,7 @@ func TestCustomDataPointStateChangedFansOutToWSHub(t *testing.T) {
 		},
 	})
 	ch.Put(stateDP)
-	cdp := switchdev.New(ch)
+	cdp := switchdev.New(ch, custom.RebasedChannelGroupConfig{})
 	if cdp == nil {
 		t.Fatalf("switch.New returned nil for %s", chAddr)
 	}

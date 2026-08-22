@@ -132,8 +132,10 @@ func writerFromChannel(ch *device.Channel) Writer {
 func newIPCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	w := writerFromChannel(ch)
 	// IP Cover profile includes LEVEL_2 for blinds. Promote to Blind when
-	// the channel actually carries that parameter.
-	if custom.FloatField(ch, hmenum.ParameterLevel2) != nil {
+	// the channel actually carries the tilt parameter its profile names —
+	// the same question the RF path asks, asked the same way.
+	if tiltChannel, tiltParam := custom.ResolveSlotOr(
+		ch, rebased, hmenum.FieldLevel2, hmenum.ParameterLevel2); custom.FloatField(tiltChannel, tiltParam) != nil {
 		blind := NewBlind(BlindConfig{
 			Channel: ch,
 			Writer:  w,
@@ -150,6 +152,7 @@ func newIPCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 	}
 	cov := New(Config{
 		Channel: ch,
+		Group:   rebased,
 		Writer:  w,
 		Capabilities: custom.CoverCapabilities{
 			SupportsPosition: true,
@@ -236,6 +239,7 @@ func newRfCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 	}
 	cov := New(Config{
 		Channel: ch,
+		Group:   rebased,
 		Writer:  w,
 		Capabilities: custom.CoverCapabilities{
 			SupportsPosition: true,
@@ -315,7 +319,7 @@ func newIPHdmConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupC
 // only expose write-only ENUMs that the materializer doesn't promote to
 // readable DPs), the channel-level writer installed by the
 // DevicePipeline is the last-resort fallback.
-func newIPGarageConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func newIPGarageConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	var w Writer
 	if ch != nil {
 		// Prefer a string-sensor-backed writer; fall back to LEVEL if present.
@@ -342,6 +346,7 @@ func newIPGarageConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConf
 	return NewGarage(GarageConfig{
 		Channel: ch,
 		Writer:  w,
+		Group:   rebased,
 		Capabilities: custom.CoverCapabilities{
 			SupportsStop: true,
 			// SupportsVent advertises the garage drive's intermediate "vent" position.

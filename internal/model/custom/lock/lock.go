@@ -216,17 +216,17 @@ func New(cfg Config) *Lock {
 	switch cfg.Kind {
 	case KindIP:
 		// HmIP locks: LOCK_STATE (read-only ENUM).
-		l.stateDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterLockState)
+		l.stateDp = custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLockState, hmenum.ParameterLockState))
 	case KindRF:
 		// RF locks: bool STATE only — the CCU exposes no LOCK_STATE here.
-		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterState)
+		l.boolStateDp = custom.SwitchField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldState, hmenum.ParameterState))
 	case KindButton:
 		// Button locks: the wire parameter is GLOBAL_BUTTON_LOCK (a
 		// MASTER-paramset bool on ch0 that both the IP and RF button-lock
 		// profiles resolve their BUTTON_LOCK field to). BUTTON_LOCK is
 		// kept as a fallback for paramsets that carry it literally.
 		l.buttonParam = hmenum.ParameterGlobalButtonLock
-		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterGlobalButtonLock)
+		l.boolStateDp = custom.SwitchField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldButtonLock, hmenum.ParameterGlobalButtonLock))
 		if l.boolStateDp == nil {
 			l.buttonParam = hmenum.ParameterButtonLock
 			l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterButtonLock)

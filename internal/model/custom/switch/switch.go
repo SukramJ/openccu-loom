@@ -90,8 +90,8 @@ type Switch struct {
 // the wire-DP was registered with a different concrete type. The
 // caller (ipSwitchConstructor / rfSwitchConstructor) treats nil as
 // "skip custom-DP registration on this channel".
-func New(ch *device.Channel) *Switch {
-	sw := custom.SwitchField(ch, hmenum.ParameterState)
+func New(ch *device.Channel, group custom.RebasedChannelGroupConfig) *Switch {
+	sw := custom.SwitchField(custom.ResolveSlotOr(ch, group, hmenum.FieldState, hmenum.ParameterState))
 	if sw == nil {
 		return nil
 	}

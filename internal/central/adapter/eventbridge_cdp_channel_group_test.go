@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchdev "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -37,7 +38,7 @@ func addSwitchChannel(t *testing.T, d *device.Device, channelNo int) (*device.Ch
 		},
 	})
 	ch.Put(dp)
-	cdp := switchdev.New(ch)
+	cdp := switchdev.New(ch, custom.RebasedChannelGroupConfig{})
 	if cdp == nil {
 		t.Fatalf("switch.New returned nil for %s", addr)
 	}

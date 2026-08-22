@@ -103,6 +103,12 @@ type Config struct {
 	// Defaults to VariantShutter when zero.
 	Variant CoverVariant
 
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this cover. Every composed field resolves through it —
+	// see [custom.ResolveSlotOr]. The zero value is valid: each binding
+	// falls back to the parameter named at the call site.
+	Group custom.RebasedChannelGroupConfig
+
 	// WindowDrive activates the HM-Sec-Win level remap.
 	//
 	// - The fully-closed wire level is `-0.005` (not `0.0`). - SetPosition(0.0)
@@ -195,8 +201,8 @@ func New(cfg Config) *Cover {
 		address = cfg.Channel.Address
 	}
 	c := &Cover{
-		Float:        custom.FloatField(cfg.Channel, hmenum.ParameterLevel),
-		directionDp:  resolveDirectionDP(cfg.Channel),
+		Float:        custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel)),
+		directionDp:  resolveDirectionDP(cfg.Channel, cfg.Group),
 		address:      address,
 		writer:       cfg.Writer,
 		Capabilities: cfg.Capabilities,
@@ -219,11 +225,17 @@ func New(cfg Config) *Cover {
 }
 
 // resolveDirectionDP returns the channel's motion parameter as an
-// index-valued sensor: DIRECTION where present, otherwise the HmIP
-// equivalent ACTIVITY_STATE. Both are read-only ENUMs whose UP/DOWN
-// indices coincide (DIRECTION: NONE;UP;DOWN;UNDEFINED — ACTIVITY_STATE:
-// UNKNOWN;UP;DOWN;STABLE), so [toCoverDirection] handles either.
-func resolveDirectionDP(ch *device.Channel) *generic.Sensor[int32] {
+// index-valued sensor. The profile names it — DIRECTION for the classic RF
+// families, ACTIVITY_STATE for HmIP — and the other name is tried after it,
+// which keeps a cover whose profile maps neither (or none at all) bound.
+// Both are read-only ENUMs whose UP/DOWN indices coincide (DIRECTION:
+// NONE;UP;DOWN;UNDEFINED — ACTIVITY_STATE: UNKNOWN;UP;DOWN;STABLE), so
+// [toCoverDirection] handles either.
+func resolveDirectionDP(ch *device.Channel, group custom.RebasedChannelGroupConfig) *generic.Sensor[int32] {
+	if dp := custom.EnumSensorField(
+		custom.ResolveSlotOnCarryingChannel(ch, group, hmenum.FieldDirection, hmenum.ParameterDirection)); dp != nil {
+		return dp
+	}
 	if dp := custom.EnumSensorField(ch, hmenum.ParameterDirection); dp != nil {
 		return dp
 	}

@@ -108,6 +108,7 @@ func NewBlind(cfg BlindConfig) *Blind {
 		Writer:       cfg.Writer,
 		Capabilities: cfg.Capabilities,
 		Variant:      cfg.Variant,
+		Group:        cfg.Group,
 	})
 	tiltChannel, tiltParam := custom.ResolveSlotOr(
 		cfg.Channel, cfg.Group, hmenum.FieldLevel2, hmenum.ParameterLevel2)

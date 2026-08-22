@@ -136,8 +136,8 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterRepetitions); dp != nil {
 			led.availableRepetitions = append([]string(nil), dp.ParameterData().ValueList...)
 		}
-		led.onTimeList = custom.ActionSelectField(cfg.Channel, hmenum.ParameterOnTimeList1)
-		led.repetitions = custom.ActionSelectField(cfg.Channel, hmenum.ParameterRepetitions)
+		led.onTimeList = custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldOnTimeList, hmenum.ParameterOnTimeList1))
+		led.repetitions = custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldRepetitions, hmenum.ParameterRepetitions))
 	}
 	if led.onTimeList != nil {
 		_ = led.onTimeList.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })

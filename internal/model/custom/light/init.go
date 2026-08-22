@@ -163,12 +163,14 @@ func writerFromChannel(ch *device.Channel) Writer {
 }
 
 // configFromChannel builds the shared Config that every light constructor
-// needs. Capabilities are set at the profile level by the caller.
-func configFromChannel(ch *device.Channel, caps custom.LightCapabilities) Config {
+// needs. Capabilities are set at the profile level by the caller; the schema
+// travels with the config so each composed field can resolve through it.
+func configFromChannel(ch *device.Channel, caps custom.LightCapabilities, rebased custom.RebasedChannelGroupConfig) Config {
 	return Config{
 		Channel:      ch,
 		Writer:       writerFromChannel(ch),
 		Capabilities: caps,
+		Group:        rebased,
 	}
 }
 
@@ -229,14 +231,14 @@ func siblingChannel(ch *device.Channel, no int) *device.Channel {
 
 // newDimmerConstructor builds a plain dimmable Light.
 func newDimmerConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-	l := New(configFromChannel(ch, custom.LightCapabilities{Dimmable: true}))
+	l := New(configFromChannel(ch, custom.LightCapabilities{Dimmable: true}, rebased))
 	applyGroupLevel(l, ch, rebased)
 	return l, nil
 }
 
 // newDaliConstructor builds a DRGDaliLight for the HmIP-DRG-DALI.
 // Kelvin bounds match
-func newDaliConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func newDaliConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	// The reference CustomDpIpDrgDaliLight declares HUE+SATURATION, COLOR_TEMPERATURE
 	// and EFFECT fields, so it supports hs colour, colour temperature AND effects
 	// (has_hs_color / has_color_temperature / has_effects all resolve true).
@@ -246,7 +248,7 @@ func newDaliConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) 
 			SupportsColor:     true,
 			SupportsColorTemp: true,
 			SupportsEffects:   true,
-		}),
+		}, rebased),
 		2000, 6500,
 	), nil
 }
@@ -259,7 +261,7 @@ func newFixedColorConstructor(ch *device.Channel, rebased custom.RebasedChannelG
 	// field, so its has_effects resolves true (the effect list is the
 	// COLOR_BEHAVIOUR value list).
 	fcl := NewFixedColorLight(
-		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
+		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}, rebased),
 	)
 	applyGroupLevel(fcl.Light, ch, rebased)
 	fcl.bindChannelColor(ch, rebased)
@@ -269,14 +271,14 @@ func newFixedColorConstructor(ch *device.Channel, rebased custom.RebasedChannelG
 // newRGBWConstructor builds an RGBWLight for multi-mode HmIP-RGBW / LSC
 // DRDI3 devices. The operating mode is read from DEVICE_OPERATION_MODE at
 // runtime, so the capability flags cover all possible modes.
-func newRGBWConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func newRGBWConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return NewRGBWLight(
 		configFromChannel(ch, custom.LightCapabilities{
 			Dimmable:          true,
 			SupportsColor:     true,
 			SupportsColorTemp: true,
 			SupportsEffects:   true,
-		}),
+		}, rebased),
 	), nil
 }
 
@@ -288,7 +290,7 @@ func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannel
 	// The reference CustomDpColorDimmerEffect carries a PROGRAM effect field, so
 	// its has_effects resolves true (the effect list is the PROGRAM value list).
 	el := newEffectLightOn(
-		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
+		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}, rebased),
 		programChannel(ch, rebased),
 		colorChannel(ch, rebased),
 	)
@@ -303,7 +305,7 @@ func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannel
 func newColorTempConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	minK, maxK := kelvinBoundsFromChannel(ch)
 	ctl := newColorTempLightOn(
-		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true}),
+		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true}, rebased),
 		minK, maxK,
 		whitePointChannel(ch, rebased),
 	)
@@ -335,12 +337,12 @@ func kelvinBoundsFromChannel(ch *device.Channel) (minK, maxK int32) {
 
 // newSoundPlayerLEDConstructor builds a [SoundPlayerLED] for the
 // HmIP-MP3P channel-6 RGB LED strip. Categorised as light
-func newSoundPlayerLEDConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func newSoundPlayerLEDConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return NewSoundPlayerLED(configFromChannel(ch, custom.LightCapabilities{
 		Dimmable:      true,
 		Transition:    true,
 		SupportsColor: true,
-	})), nil
+	}, rebased)), nil
 }
 
 // programChannel resolves the channel the profile maps PROGRAM onto. The

@@ -19,7 +19,7 @@ import (
 // newTestAccessPermission builds an ACCESS_RECEIVER channel carrying a
 // read-only STATE binary sensor and a write-only ACCESS_AUTHORIZATION
 // action-select (VALUE_LIST DISABLE/ENABLE, backed by w), then calls
-// NewAccessPermission(ch). It returns the custom DP together with the
+// NewAccessPermission(ch, custom.RebasedChannelGroupConfig{}). It returns the custom DP together with the
 // resolved STATE and ACCESS_AUTHORIZATION wire DPs for assertions.
 func newTestAccessPermission(t *testing.T, addr string, w custom.Writer) (*AccessPermission, *generic.BinarySensor, *generic.ActionSelect) {
 	t.Helper()
@@ -52,7 +52,7 @@ func newTestAccessPermission(t *testing.T, addr string, w custom.Writer) (*Acces
 	})
 	ch.Put(state)
 	ch.Put(auth)
-	return NewAccessPermission(ch), state, auth
+	return NewAccessPermission(ch, custom.RebasedChannelGroupConfig{}), state, auth
 }
 
 func TestAccessPermissionValueReflectsState(t *testing.T) {
@@ -184,7 +184,7 @@ func TestNewAccessPermissionNilWhenFieldsAbsent(t *testing.T) {
 		},
 		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeBool, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
 	}))
-	if ap := NewAccessPermission(ch); ap != nil {
+	if ap := NewAccessPermission(ch, custom.RebasedChannelGroupConfig{}); ap != nil {
 		t.Fatal("NewAccessPermission returned non-nil with ACCESS_AUTHORIZATION absent")
 	}
 }

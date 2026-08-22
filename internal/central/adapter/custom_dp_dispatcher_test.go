@@ -406,7 +406,7 @@ func buildIrrigationDP(addr string, w *dispatchWriter) *valve.Irrigation {
 		Writer: w,
 	})
 	ch.Put(dp)
-	return valve.NewIrrigation(ch)
+	return valve.NewIrrigation(ch, custom.RebasedChannelGroupConfig{})
 }
 
 func buildModulatingValveDP(addr string, w *dispatchWriter) *valve.Modulating {
@@ -426,7 +426,7 @@ func buildModulatingValveDP(addr string, w *dispatchWriter) *valve.Modulating {
 		Writer: w,
 	})
 	ch.Put(dp)
-	return valve.NewModulating(ch)
+	return valve.NewModulating(ch, custom.RebasedChannelGroupConfig{})
 }
 
 func buildSwitchDP(addr string, w *dispatchWriter) *switchdev.Switch {
@@ -446,7 +446,7 @@ func buildSwitchDP(addr string, w *dispatchWriter) *switchdev.Switch {
 		Writer: w,
 	})
 	ch.Put(dp)
-	return switchdev.New(ch)
+	return switchdev.New(ch, custom.RebasedChannelGroupConfig{})
 }
 
 // ============================================================
