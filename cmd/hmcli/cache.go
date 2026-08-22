@@ -74,6 +74,8 @@ func cmdCacheClear(args []string, stdout, stderr io.Writer) error {
 	insecure := fs.Bool("insecure", false, "skip TLS certificate verification (online mode; dangerous, off by default)")
 	cfgPath := fs.String("config", "", "config file path (offline mode; required for scope=global/central)")
 	dbPath := fs.String("db", "", "override DB path (offline mode; skips the config DataDir lookup)")
+	timeout := fs.Duration("timeout", 60*time.Second,
+		"deadline for the whole operation (0 = no deadline)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -115,10 +117,17 @@ func cmdCacheClear(args []string, stdout, stderr io.Writer) error {
 		// no qualifiers required
 	}
 
+	// One deadline for the command, not one per step. The offline path used
+	// to cap sqlite.Open — where the migrations run — at five seconds while
+	// the deletes that follow had no deadline at all, so the cap fired on the
+	// cheap half and the expensive half was unbounded.
+	ctx, cancel := deadlineContext(*timeout)
+	defer cancel()
+
 	if *offline {
-		return runCacheClearOffline(kind, *central, *iface, *device, *cfgPath, *dbPath, stdout)
+		return runCacheClearOffline(ctx, kind, *central, *iface, *device, *cfgPath, *dbPath, stdout)
 	}
-	return runCacheClearOnline(kind, *central, *iface, *device, cacheClearConn{
+	return runCacheClearOnline(ctx, kind, *central, *iface, *device, cacheClearConn{
 		baseURL:  target,
 		token:    *token,
 		user:     *user,
@@ -159,6 +168,7 @@ type clearSummary struct {
 // prints the report it returns. A non-2xx status writes the error body to
 // stderr and returns a non-nil error so the process exits non-zero.
 func runCacheClearOnline(
+	ctx context.Context,
 	kind cachereset.ScopeKind,
 	central, iface, device string,
 	conn cacheClearConn,
@@ -188,9 +198,6 @@ func runCacheClearOnline(
 	if err != nil {
 		return fmt.Errorf("cache clear: marshal request: %w", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	// Strip any userinfo before the URL can reach an error message: the
 	// endpoint string is embedded verbatim in every failure below, and a
@@ -255,6 +262,7 @@ func runCacheClearOnline(
 // [cachereset.Service.clearUnit]). Because it cannot re-pull itself, it
 // prints a restart notice.
 func runCacheClearOffline(
+	ctx context.Context,
 	kind cachereset.ScopeKind,
 	central, iface, device, cfgPath, dbOverride string,
 	stdout io.Writer,
@@ -273,10 +281,7 @@ func runCacheClearOffline(
 			"(offline mode never creates one — check --db / data_dir and the working directory)", dbFile, statErr)
 	}
 
-	openCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	db, err := sqlite.Open(openCtx, dsn)
+	db, err := sqlite.Open(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("cache clear: open DB: %w", err)
 	}
@@ -288,7 +293,6 @@ func runCacheClearOffline(
 	paramsetStore := sqlite.NewParamsetStore(db)
 	sum := clearSummary{scope: string(kind)}
 
-	ctx := context.Background()
 	if kind == cachereset.ScopeDevice {
 		// The cached rows are keyed by the canonical `<central>-<interface>`
 		// id, not by the bare interface the operator types.

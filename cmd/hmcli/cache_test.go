@@ -639,3 +639,54 @@ func TestRunCacheClearOfflineEmptiesDeviceAndParamsetRows(t *testing.T) {
 		t.Errorf("paramset row survived offline clear: err=%v, want ErrParamsetNotFound", err)
 	}
 }
+
+// ---- cache clear -timeout -------------------------------------------------
+
+// TestRunCacheClearOffline_HonoursTimeoutFlag pins that the offline clear
+// takes its deadline from the operator rather than from a constant.
+//
+// It used to cap sqlite.Open at a fixed five seconds — and Open is where the
+// goose migrations run. That is the cheap half of the command: the deletes
+// that follow ran on context.Background(), with no deadline at all. On slow
+// CCU hardware, or under a loaded CI runner, opening the database is exactly
+// what exceeds five seconds, so the cap fired on the one step whose duration
+// the operator cannot influence while the unbounded half kept running.
+func TestRunCacheClearOffline_HonoursTimeoutFlag(t *testing.T) {
+	t.Parallel()
+	dbPath := newOfflineCacheDB(t, false)
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"cache", "clear", "--offline",
+		"--scope", "interface", "--central", "ccu1", "--interface", "HmIP-RF",
+		"--db", dbPath,
+		"--timeout", "1ns",
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("a 1ns timeout completed the clear; the flag reaches nothing")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want it to wrap context.DeadlineExceeded", err)
+	}
+}
+
+// TestRunCacheClearOffline_ZeroTimeoutMeansNoDeadline pins the other end of
+// the flag, matching what -timeout 0 already means everywhere else in the CLI
+// (connFlags.requestContext, events tail).
+func TestRunCacheClearOffline_ZeroTimeoutMeansNoDeadline(t *testing.T) {
+	t.Parallel()
+	dbPath := newOfflineCacheDB(t, false)
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{
+		"cache", "clear", "--offline",
+		"--scope", "interface", "--central", "ccu1", "--interface", "HmIP-RF",
+		"--db", dbPath,
+		"--timeout", "0",
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("clear with -timeout 0: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Cache cleared: scope=interface") {
+		t.Errorf("summary missing from stdout: %q", stdout.String())
+	}
+}

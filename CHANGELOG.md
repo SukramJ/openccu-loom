@@ -75,6 +75,15 @@ should never have run.
   convention. They are now `Negate()` and `IsInfinity()`. The wire output is
   unchanged, pinned by the matter.js parity vectors and the golden handshake,
   which pass byte for byte.
+- `hmcli cache clear` takes a `--timeout` and applies it to the whole
+  operation, defaulting to 60 s with `0` meaning no deadline — the same
+  spelling every other command group uses. Both paths carried a fixed number
+  before, and the offline one had them the wrong way round: `sqlite.Open` was
+  capped at five seconds while the deletes that follow ran with no deadline at
+  all. Opening the database is where any pending schema migrations run, so on
+  slow storage the cap fired on the step the operator cannot influence, and an
+  offline clear reported `open DB: context deadline exceeded` while nothing
+  was wrong.
 - The lint gate no longer floats on `@latest`. `gofumpt` and `golangci-lint`
   are pinned in `ci.yml`, so the job reports on the diff rather than on the
   calendar: `main` went from green to red overnight on an unchanged tree when
