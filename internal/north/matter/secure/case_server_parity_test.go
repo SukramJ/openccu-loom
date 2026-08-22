@@ -18,6 +18,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
@@ -38,11 +39,11 @@ func mustDecodeHex(t *testing.T, s string) []byte {
 type caseTestVerifier struct{}
 
 func (caseTestVerifier) VerifyAndExtractPubKey(noc, _ []byte) (*ecdsa.PublicKey, error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), noc) //nolint:staticcheck // SA1019: test fixture
-	if x == nil {
-		return nil, errors.New("caseTestVerifier: invalid noc fixture")
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), noc)
+	if err != nil {
+		return nil, fmt.Errorf("caseTestVerifier: invalid noc fixture: %w", err)
 	}
-	return &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, nil
+	return pub, nil
 }
 
 func newCaseIdentity(t *testing.T, nodeID, fabricID uint64, ipk [16]byte) *sigma.Identity {

@@ -18,12 +18,13 @@ package spake2
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
 	"testing"
+
+	"filippo.io/nistec"
 )
 
 //go:embed testdata/matterjs-vectors.json
@@ -66,7 +67,45 @@ func mustBigInt(t *testing.T, s string) *big.Int {
 // marshalUncompressed encodes a P-256 point to the 0x04 || X || Y form.
 func marshalUncompressed(t *testing.T, pt *ecdsa.PublicKey) []byte {
 	t.Helper()
-	return elliptic.Marshal(elliptic.P256(), pt.X, pt.Y) //nolint:staticcheck // SA1019: raw point encoding matches spec
+	b, err := pt.Bytes()
+	if err != nil {
+		t.Fatalf("encode point: %v", err)
+	}
+	return b
+}
+
+// scalarMultBase returns scalar·G, and mustScalarMult returns scalar·pt.
+// Both take the scalar as a *big.Int and hand nistec the fixed-width
+// encoding it requires — the reason this indirection exists at all is that
+// big.Int.Bytes() drops leading zero bytes, which would shorten the scalar
+// and silently compute a different point.
+func scalarMultBase(t *testing.T, scalar *big.Int) *nistec.P256Point {
+	t.Helper()
+	pt, err := nistec.NewP256Point().ScalarBaseMult(scalarTo32Bytes(scalar))
+	if err != nil {
+		t.Fatalf("scalar·G: %v", err)
+	}
+	return pt
+}
+
+func mustScalarMult(t *testing.T, pt *nistec.P256Point, scalar *big.Int) *nistec.P256Point {
+	t.Helper()
+	out, err := nistec.NewP256Point().ScalarMult(pt, scalarTo32Bytes(scalar))
+	if err != nil {
+		t.Fatalf("scalar·point: %v", err)
+	}
+	return out
+}
+
+// mustSetBytes decodes an uncompressed point, failing the test when the
+// bytes are not a valid curve point.
+func mustSetBytes(t *testing.T, b []byte) *nistec.P256Point {
+	t.Helper()
+	pt, err := nistec.NewP256Point().SetBytes(b)
+	if err != nil {
+		t.Fatalf("decode point: %v", err)
+	}
+	return pt
 }
 
 // TestParityMatterJS_Spake2_Vectors runs all matter.js SPAKE2+ parity cases.
@@ -106,10 +145,7 @@ func testComputeX(t *testing.T, v matterJSVector) {
 	wantX := mustHex(t, v.Expected["X"])
 
 	// X = x·G + w0·M — same formula as Prover.GeneratePake1.
-	xGx, xGy := curve().ScalarBaseMult(x.Bytes())                    //nolint:staticcheck // SA1019: see curve()
-	w0Mx, w0My := curve().ScalarMult(mPoint.X, mPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	XX, XY := curve().Add(xGx, xGy, w0Mx, w0My)                      //nolint:staticcheck // SA1019: see curve()
-	got := elliptic.Marshal(curve(), XX, XY)                         //nolint:staticcheck // SA1019: see curve()
+	got := nistec.NewP256Point().Add(scalarMultBase(t, x), mustScalarMult(t, mPoint, w0)).Bytes()
 
 	if hex.EncodeToString(got) != hex.EncodeToString(wantX) {
 		t.Errorf("X mismatch\n got=%x\nwant=%x", got, wantX)
@@ -125,10 +161,7 @@ func testComputeY(t *testing.T, v matterJSVector) {
 	wantY := mustHex(t, v.Expected["Y"])
 
 	// Y = y·G + w0·N — same formula as Verifier.ProcessPake1.
-	yGx, yGy := curve().ScalarBaseMult(y.Bytes())                    //nolint:staticcheck // SA1019: see curve()
-	w0Nx, w0Ny := curve().ScalarMult(nPoint.X, nPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	YX, YY := curve().Add(yGx, yGy, w0Nx, w0Ny)                      //nolint:staticcheck // SA1019: see curve()
-	got := elliptic.Marshal(curve(), YX, YY)                         //nolint:staticcheck // SA1019: see curve()
+	got := nistec.NewP256Point().Add(scalarMultBase(t, y), mustScalarMult(t, nPoint, w0)).Bytes()
 
 	if hex.EncodeToString(got) != hex.EncodeToString(wantY) {
 		t.Errorf("Y mismatch\n got=%x\nwant=%x", got, wantY)
@@ -158,38 +191,27 @@ func testSharedSecretAndVerifiers(t *testing.T, v matterJSVector) {
 	wantHBX := mustHex(t, v.Expected["hBX"])
 
 	// Decode L (w1·G).
-	lx, ly := elliptic.Unmarshal(curve(), Lbytes) //nolint:staticcheck // SA1019: see curve()
-	if lx == nil {
-		t.Fatal("invalid L point")
-	}
-	Lpt := &ecdsa.PublicKey{Curve: curve(), X: lx, Y: ly}
+	lPt := mustSetBytes(t, Lbytes)
 
 	// --- Verifier side: Z = y·(X - w0·M), V = y·L ---
 	xPt, err := unmarshalAndValidate(X)
 	if err != nil {
 		t.Fatalf("unmarshal X: %v", err)
 	}
-	w0MNegX, w0MNegY := curve().ScalarMult(mPoint.X, mPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	w0MNegY = new(big.Int).Sub(curve().Params().P, w0MNegY)                // negate
-	xMw0Mx, xMw0My := curve().Add(xPt.X, xPt.Y, w0MNegX, w0MNegY)          //nolint:staticcheck // SA1019: see curve()
-	zX, zY := curve().ScalarMult(xMw0Mx, xMw0My, y.Bytes())                //nolint:staticcheck // SA1019: see curve()
-	zMarshal := elliptic.Marshal(curve(), zX, zY)                          //nolint:staticcheck // SA1019: see curve()
-
-	vX, vY := curve().ScalarMult(Lpt.X, Lpt.Y, y.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	vMarshal := elliptic.Marshal(curve(), vX, vY)         //nolint:staticcheck // SA1019: see curve()
+	negW0M := nistec.NewP256Point().Negate(mustScalarMult(t, mPoint, w0))
+	xMinusW0M := nistec.NewP256Point().Add(xPt, negW0M)
+	zMarshal := mustScalarMult(t, xMinusW0M, y).Bytes()
+	vMarshal := mustScalarMult(t, lPt, y).Bytes()
 
 	// --- Initiator side: Z = x·(Y - w0·N), V = x·w1·G = w1·(Y - w0·N) ---
 	yPt, err := unmarshalAndValidate(Y)
 	if err != nil {
 		t.Fatalf("unmarshal Y: %v", err)
 	}
-	w0NNegX, w0NNegY := curve().ScalarMult(nPoint.X, nPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	w0NNegY = new(big.Int).Sub(curve().Params().P, w0NNegY)                // negate
-	yMw0Nx, yMw0Ny := curve().Add(yPt.X, yPt.Y, w0NNegX, w0NNegY)          //nolint:staticcheck // SA1019: see curve()
-	izX, izY := curve().ScalarMult(yMw0Nx, yMw0Ny, x.Bytes())              //nolint:staticcheck // SA1019: see curve()
-	izMarshal := elliptic.Marshal(curve(), izX, izY)                       //nolint:staticcheck // SA1019: see curve()
-	ivX, ivY := curve().ScalarMult(yMw0Nx, yMw0Ny, w1.Bytes())             //nolint:staticcheck // SA1019: see curve()
-	ivMarshal := elliptic.Marshal(curve(), ivX, ivY)                       //nolint:staticcheck // SA1019: see curve()
+	negW0N := nistec.NewP256Point().Negate(mustScalarMult(t, nPoint, w0))
+	yMinusW0N := nistec.NewP256Point().Add(yPt, negW0N)
+	izMarshal := mustScalarMult(t, yMinusW0N, x).Bytes()
+	ivMarshal := mustScalarMult(t, yMinusW0N, w1).Bytes()
 
 	// Both sides must agree on Z and V.
 	if hex.EncodeToString(zMarshal) != hex.EncodeToString(izMarshal) {
@@ -276,17 +298,10 @@ func testComputeYAndVerifier(t *testing.T, v matterJSVector) {
 	wantHBX := mustHex(t, v.Expected["hBX"])
 
 	// Decode L.
-	lx, ly := elliptic.Unmarshal(curve(), Lbytes) //nolint:staticcheck // SA1019: see curve()
-	if lx == nil {
-		t.Fatal("invalid L point")
-	}
-	Lpt := &ecdsa.PublicKey{Curve: curve(), X: lx, Y: ly}
+	lPt := mustSetBytes(t, Lbytes)
 
 	// Y = y·G + w0·N.
-	yGx, yGy := curve().ScalarBaseMult(y.Bytes())                    //nolint:staticcheck // SA1019: see curve()
-	w0Nx, w0Ny := curve().ScalarMult(nPoint.X, nPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	YX, YY := curve().Add(yGx, yGy, w0Nx, w0Ny)                      //nolint:staticcheck // SA1019: see curve()
-	gotY := elliptic.Marshal(curve(), YX, YY)                        //nolint:staticcheck // SA1019: see curve()
+	gotY := nistec.NewP256Point().Add(scalarMultBase(t, y), mustScalarMult(t, nPoint, w0)).Bytes()
 
 	if hex.EncodeToString(gotY) != hex.EncodeToString(wantY) {
 		t.Errorf("Y mismatch\n got=%x\nwant=%x", gotY, wantY)
@@ -297,14 +312,10 @@ func testComputeYAndVerifier(t *testing.T, v matterJSVector) {
 	if err != nil {
 		t.Fatalf("unmarshal X: %v", err)
 	}
-	w0MNegX, w0MNegY := curve().ScalarMult(mPoint.X, mPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	w0MNegY = new(big.Int).Sub(curve().Params().P, w0MNegY)
-	xMw0Mx, xMw0My := curve().Add(xPt.X, xPt.Y, w0MNegX, w0MNegY) //nolint:staticcheck // SA1019: see curve()
-	zX, zY := curve().ScalarMult(xMw0Mx, xMw0My, y.Bytes())       //nolint:staticcheck // SA1019: see curve()
-	zMarshal := elliptic.Marshal(curve(), zX, zY)                 //nolint:staticcheck // SA1019: see curve()
-
-	vX, vY := curve().ScalarMult(Lpt.X, Lpt.Y, y.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	vMarshal := elliptic.Marshal(curve(), vX, vY)         //nolint:staticcheck // SA1019: see curve()
+	negW0M := nistec.NewP256Point().Negate(mustScalarMult(t, mPoint, w0))
+	xMinusW0M := nistec.NewP256Point().Add(xPt, negW0M)
+	zMarshal := mustScalarMult(t, xMinusW0M, y).Bytes()
+	vMarshal := mustScalarMult(t, lPt, y).Bytes()
 
 	// hBX uses Matter context (CHIP PAKE V1 Commissioning) — the
 	// matter.js test hashes [SPAKE_CONTEXT, requestPayload, responsePayload]

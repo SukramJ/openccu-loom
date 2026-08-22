@@ -17,6 +17,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	"filippo.io/nistec"
 )
 
 // MatterContext is the SPAKE2+ context string Matter mandates for
@@ -62,20 +64,21 @@ var (
 
 // curve returns the P-256 curve instance shared across the package.
 //
-// raw scalar multiplication needed by SPAKE2+; the deprecated label
-// targets ECDSA users that should switch to crypto/ecdsa.
-//
-//nolint:staticcheck // SA1019: crypto/elliptic is the supported path for
+// Its remaining use is the group order n, which the scalar arithmetic
+// reduces against. The point arithmetic runs on [nistec.P256Point]:
+// crypto/elliptic's ScalarMult / Add / Marshal are deprecated, and the
+// standard library offers no replacement for the operations SPAKE2+ needs
+// (addition of arbitrary points, negation, an identity test), which is why
+// the deprecation notice itself points at filippo.io/nistec.
 func curve() elliptic.Curve { return elliptic.P256() }
 
 // Matter-mandated SPAKE2+ generator points M and N. Bytes are taken
 // from Matter Core Specification §3.10.1, which references the
 // SPAKE2+ test-vector points from RFC 9383.
 //
-// Encoded as uncompressed (0x04 || X || Y) — the form
-// crypto/elliptic.UnmarshalCompressed expects with a 0x02/0x03
-// prefix is harder to verify against the spec, so we use the
-// uncompressed serialisation throughout.
+// Encoded as uncompressed (0x04 || X || Y): the compressed form with its
+// 0x02/0x03 prefix is harder to verify against the spec by eye, so the
+// uncompressed serialisation is used throughout.
 var (
 	// matterMHex is the M point per Matter §3.10.1 (uncompressed).
 	matterMHex = "" +
@@ -93,8 +96,8 @@ var (
 // pointMN holds the unmarshalled M and N points. Computed once in
 // init().
 var (
-	mPoint *ecdsa.PublicKey
-	nPoint *ecdsa.PublicKey
+	mPoint *nistec.P256Point
+	nPoint *nistec.P256Point
 )
 
 func init() {
@@ -147,17 +150,18 @@ func hexNibble(b byte) (byte, error) {
 }
 
 // unmarshalUncompressed decodes a hex-encoded uncompressed P-256
-// point (0x04 || X || Y) into an ecdsa.PublicKey.
-func unmarshalUncompressed(hexStr string) (*ecdsa.PublicKey, error) {
+// point (0x04 || X || Y) into a curve point. SetBytes rejects anything
+// that is not on the curve.
+func unmarshalUncompressed(hexStr string) (*nistec.P256Point, error) {
 	raw, err := hexToBytes(hexStr)
 	if err != nil {
 		return nil, err
 	}
-	x, y := elliptic.Unmarshal(curve(), raw) //nolint:staticcheck // SA1019: see curve()
-	if x == nil {
-		return nil, ErrInvalidPoint
+	pt, err := nistec.NewP256Point().SetBytes(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidPoint, err)
 	}
-	return &ecdsa.PublicKey{Curve: curve(), X: x, Y: y}, nil
+	return pt, nil
 }
 
 // PBKDF derives (w0, w1) from a passcode + salt + iterations. Matter
@@ -185,7 +189,7 @@ func PBKDF(passcode uint32, salt []byte, iterations int) (w0, w1 *big.Int, err e
 // directly — only w0 and L = w1·G.
 type VerifierContext struct {
 	W0 *big.Int
-	L  *ecdsa.PublicKey // w1·G in compressed/uncompressed point form
+	L  *ecdsa.PublicKey // w1·G
 }
 
 // Matter Core Spec §3.10.1 PBKDF iteration bounds.
@@ -208,11 +212,15 @@ func NewVerifierContext(passcode uint32, salt []byte, iterations int) (*Verifier
 	if err != nil {
 		return nil, err
 	}
-	lx, ly := curve().ScalarBaseMult(w1.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	return &VerifierContext{
-		W0: w0,
-		L:  &ecdsa.PublicKey{Curve: curve(), X: lx, Y: ly},
-	}, nil
+	lPt, err := nistec.NewP256Point().ScalarBaseMult(scalarTo32Bytes(w1))
+	if err != nil {
+		return nil, fmt.Errorf("spake2: derive L: %w", err)
+	}
+	l, err := ecdsa.ParseUncompressedPublicKey(curve(), lPt.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("spake2: encode L: %w", err)
+	}
+	return &VerifierContext{W0: w0, L: l}, nil
 }
 
 // VerifierW0Size is the byte length of the w0 scalar as it appears in a
@@ -235,9 +243,9 @@ const VerifierLSize = 65
 // (packages/protocol/src/session/pase/PaseServer.ts:52-61 —
 // `w0 = asBigInt(slice(0,32)); L = slice(32, 32+65)`).
 //
-// L is validated on the curve: elliptic.Unmarshal rejects off-curve and
-// malformed encodings (and the point at infinity, which has no
-// uncompressed encoding), guarding against invalid-curve attacks; a bad
+// L is validated on the curve: ParseUncompressedPublicKey rejects
+// off-curve and malformed encodings (and the point at infinity, which has
+// no uncompressed encoding), guarding against invalid-curve attacks; a bad
 // L returns [ErrInvalidPoint]. w0 is taken verbatim as the wire scalar,
 // matching matter.js.
 func NewVerifierFromValue(w0Bytes, lBytes []byte) (*VerifierContext, error) {
@@ -247,16 +255,15 @@ func NewVerifierFromValue(w0Bytes, lBytes []byte) (*VerifierContext, error) {
 	if len(lBytes) != VerifierLSize {
 		return nil, fmt.Errorf("%w: L length=%d, want %d", ErrInvalidPoint, len(lBytes), VerifierLSize)
 	}
-	x, y := elliptic.Unmarshal(curve(), lBytes) //nolint:staticcheck // SA1019: see curve()
-	if x == nil {
-		return nil, ErrInvalidPoint
+	l, err := ecdsa.ParseUncompressedPublicKey(curve(), lBytes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidPoint, err)
 	}
 	w0 := new(big.Int).SetBytes(w0Bytes)
 	// A w0 that is zero modulo the group order makes w0·M and w0·N the
-	// point at infinity, which crypto/elliptic represents as (0, 0).
-	// Negating it for the subtraction yields (0, P) — an encoding that is
-	// neither on the curve nor the conventional infinity, and Add panics
-	// on it ("crypto/elliptic: Add was called on an invalid point"). The verifier is
+	// identity, so X = x·G + w0·M collapses to x·G and the passcode drops
+	// out of the transcript entirely — the handshake would still complete,
+	// against a verifier that proves nothing. The verifier is
 	// commissioner-supplied (OpenCommissioningWindow carries the
 	// PAKEPasscodeVerifier verbatim), so the degenerate value has to be
 	// rejected here rather than reaching the Pake1 arithmetic. Every
@@ -266,10 +273,7 @@ func NewVerifierFromValue(w0Bytes, lBytes []byte) (*VerifierContext, error) {
 	if new(big.Int).Mod(w0, curve().Params().N).Sign() == 0 {
 		return nil, fmt.Errorf("%w: w0 is zero modulo the group order", ErrInvalidPasscode)
 	}
-	return &VerifierContext{
-		W0: w0,
-		L:  &ecdsa.PublicKey{Curve: curve(), X: x, Y: y},
-	}, nil
+	return &VerifierContext{W0: w0, L: l}, nil
 }
 
 // Verifier drives the device-side of PASE. Construct with
@@ -341,35 +345,54 @@ func (v *Verifier) ProcessPake1(pA []byte) (*Pake2Output, error) {
 	}
 	v.y = y
 
+	yScalar := scalarTo32Bytes(y)
+	w0Scalar := scalarTo32Bytes(v.ctx.W0)
+
 	// Y = y·G + w0·N.
-	yGx, yGy := curve().ScalarBaseMult(y.Bytes())                          //nolint:staticcheck // SA1019: see curve()
-	w0Nx, w0Ny := curve().ScalarMult(nPoint.X, nPoint.Y, v.ctx.W0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	yX, yY := curve().Add(yGx, yGy, w0Nx, w0Ny)                            //nolint:staticcheck // SA1019: see curve()
-	v.yMarshal = elliptic.Marshal(curve(), yX, yY)                         //nolint:staticcheck // SA1019: see curve()
+	yG, err := nistec.NewP256Point().ScalarBaseMult(yScalar)
+	if err != nil {
+		return nil, fmt.Errorf("%w: y·G: %w", ErrInvalidPoint, err)
+	}
+	w0N, err := nistec.NewP256Point().ScalarMult(nPoint, w0Scalar)
+	if err != nil {
+		return nil, fmt.Errorf("%w: w0·N: %w", ErrInvalidPoint, err)
+	}
+	v.yMarshal = nistec.NewP256Point().Add(yG, w0N).Bytes()
 
 	// Z = y·(X - w0·M).
-	w0MNegX, w0MNegY := curve().ScalarMult(mPoint.X, mPoint.Y, v.ctx.W0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	w0MNegY = new(big.Int).Sub(curve().Params().P, w0MNegY)                      // negate
-	xMinusW0Mx, xMinusW0My := curve().Add(xPoint.X, xPoint.Y, w0MNegX, w0MNegY)  //nolint:staticcheck // SA1019: see curve()
-	// X - w0·M is the point at infinity when the prover sends exactly
-	// X = w0·M. crypto/elliptic encodes infinity as (0, 0) and tolerates
-	// it: ScalarMult((0,0), y) returns (0, 0) and Marshal((0,0)) emits an
-	// all-zero uncompressed point rather than panicking. That is the
-	// hazard — the handshake continues quietly with Z and V fixed to a
-	// value the peer chose, so the transcript no longer binds the
-	// passcode. RFC 9383 §3.3 requires the protocol to abort when the
-	// computed group element is the identity; chip validates the peer
-	// point on the same step (CHIPCryptoPAL.cpp:424 PointIsValid inside
-	// ComputeRoundTwo).
-	if xMinusW0Mx.Sign() == 0 && xMinusW0My.Sign() == 0 {
+	w0M, err := nistec.NewP256Point().ScalarMult(mPoint, w0Scalar)
+	if err != nil {
+		return nil, fmt.Errorf("%w: w0·M: %w", ErrInvalidPoint, err)
+	}
+	xMinusW0M := nistec.NewP256Point().Add(xPoint, nistec.NewP256Point().Negate(w0M))
+	// X - w0·M is the identity when the prover sends exactly X = w0·M.
+	// Carrying on would fix Z and V to a value the peer chose, so the
+	// transcript would no longer bind the passcode. RFC 9383 §3.3 requires
+	// the abort; chip validates the peer point on the same step
+	// (CHIPCryptoPAL.cpp:424 PointIsValid inside ComputeRoundTwo).
+	if xMinusW0M.IsInfinity() == 1 {
 		return nil, fmt.Errorf("%w: X equals w0*M (X - w0*M is the identity)", ErrInvalidPoint)
 	}
-	zX, zY := curve().ScalarMult(xMinusW0Mx, xMinusW0My, y.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	v.zMarshal = elliptic.Marshal(curve(), zX, zY)                  //nolint:staticcheck // SA1019: see curve()
+	z, err := nistec.NewP256Point().ScalarMult(xMinusW0M, yScalar)
+	if err != nil {
+		return nil, fmt.Errorf("%w: y·(X-w0·M): %w", ErrInvalidPoint, err)
+	}
+	v.zMarshal = z.Bytes()
 
 	// V = y·L.
-	vX, vY := curve().ScalarMult(v.ctx.L.X, v.ctx.L.Y, y.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	v.vMarshal = elliptic.Marshal(curve(), vX, vY)                //nolint:staticcheck // SA1019: see curve()
+	lBytes, err := v.ctx.L.Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("%w: encode L: %w", ErrInvalidPoint, err)
+	}
+	lPt, err := nistec.NewP256Point().SetBytes(lBytes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: L: %w", ErrInvalidPoint, err)
+	}
+	vPt, err := nistec.NewP256Point().ScalarMult(lPt, yScalar)
+	if err != nil {
+		return nil, fmt.Errorf("%w: y·L: %w", ErrInvalidPoint, err)
+	}
+	v.vMarshal = vPt.Bytes()
 
 	v.xMarshal = pA
 	v.deriveKeys()
@@ -458,10 +481,16 @@ func (p *Prover) GeneratePake1() ([]byte, error) {
 		return nil, err
 	}
 	p.x = x
-	xGx, xGy := curve().ScalarBaseMult(x.Bytes())                      //nolint:staticcheck // SA1019: see curve()
-	w0Mx, w0My := curve().ScalarMult(mPoint.X, mPoint.Y, p.w0.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	xX, xY := curve().Add(xGx, xGy, w0Mx, w0My)                        //nolint:staticcheck // SA1019: see curve()
-	p.xMarshal = elliptic.Marshal(curve(), xX, xY)                     //nolint:staticcheck // SA1019: see curve()
+	// X = x·G + w0·M.
+	xG, err := nistec.NewP256Point().ScalarBaseMult(scalarTo32Bytes(x))
+	if err != nil {
+		return nil, fmt.Errorf("%w: x·G: %w", ErrInvalidPoint, err)
+	}
+	w0M, err := nistec.NewP256Point().ScalarMult(mPoint, scalarTo32Bytes(p.w0))
+	if err != nil {
+		return nil, fmt.Errorf("%w: w0·M: %w", ErrInvalidPoint, err)
+	}
+	p.xMarshal = nistec.NewP256Point().Add(xG, w0M).Bytes()
 	p.state = proverStatePake1Generated
 	return p.xMarshal, nil
 }
@@ -479,26 +508,33 @@ func (p *Prover) ProcessPake2(yBytes, cB []byte) (cA []byte, err error) {
 	}
 
 	// Z = x·(Y - w0·N).
-	w0NNegX, w0NNegY := curve().ScalarMult(nPoint.X, nPoint.Y, p.w0.Bytes())    //nolint:staticcheck // SA1019: see curve()
-	w0NNegY = new(big.Int).Sub(curve().Params().P, w0NNegY)                     // negate
-	yMinusW0Nx, yMinusW0Ny := curve().Add(yPoint.X, yPoint.Y, w0NNegX, w0NNegY) //nolint:staticcheck // SA1019: see curve()
-	// Mirror image of the identity guard in [Verifier.ProcessPake1]: a
-	// peer that answers with exactly Y = w0*N makes Y - w0*N the point at
-	// infinity, which crypto/elliptic carries through as (0, 0) without
-	// complaint — Z and V then collapse to a value the peer chose and the
-	// transcript stops binding the passcode. RFC 9383 §3.3 requires the
-	// abort for both roles; chip runs the same peer-point validation on
-	// the prover side (CHIPCryptoPAL.cpp:424 PointIsValid inside
-	// ComputeRoundTwo, which serves PROVER and VERIFIER alike).
-	if yMinusW0Nx.Sign() == 0 && yMinusW0Ny.Sign() == 0 {
+	w0N, err := nistec.NewP256Point().ScalarMult(nPoint, scalarTo32Bytes(p.w0))
+	if err != nil {
+		return nil, fmt.Errorf("%w: w0·N: %w", ErrInvalidPoint, err)
+	}
+	yMinusW0N := nistec.NewP256Point().Add(yPoint, nistec.NewP256Point().Negate(w0N))
+	// Mirror image of the identity guard in [Verifier.ProcessPake1]: a peer
+	// that answers with exactly Y = w0·N makes Y - w0·N the identity, and Z
+	// and V would collapse to a value the peer chose, so the transcript
+	// would stop binding the passcode. RFC 9383 §3.3 requires the abort for
+	// both roles; chip runs the same peer-point validation on the prover
+	// side (CHIPCryptoPAL.cpp:424 PointIsValid inside ComputeRoundTwo,
+	// which serves PROVER and VERIFIER alike).
+	if yMinusW0N.IsInfinity() == 1 {
 		return nil, fmt.Errorf("%w: Y equals w0*N (Y - w0*N is the identity)", ErrInvalidPoint)
 	}
-	zX, zY := curve().ScalarMult(yMinusW0Nx, yMinusW0Ny, p.x.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	p.zMarshal = elliptic.Marshal(curve(), zX, zY)                    //nolint:staticcheck // SA1019: see curve()
+	z, err := nistec.NewP256Point().ScalarMult(yMinusW0N, scalarTo32Bytes(p.x))
+	if err != nil {
+		return nil, fmt.Errorf("%w: x·(Y-w0·N): %w", ErrInvalidPoint, err)
+	}
+	p.zMarshal = z.Bytes()
 
 	// V = w1·(Y - w0·N).
-	vX, vY := curve().ScalarMult(yMinusW0Nx, yMinusW0Ny, p.w1.Bytes()) //nolint:staticcheck // SA1019: see curve()
-	p.vMarshal = elliptic.Marshal(curve(), vX, vY)                     //nolint:staticcheck // SA1019: see curve()
+	vPt, err := nistec.NewP256Point().ScalarMult(yMinusW0N, scalarTo32Bytes(p.w1))
+	if err != nil {
+		return nil, fmt.Errorf("%w: w1·(Y-w0·N): %w", ErrInvalidPoint, err)
+	}
+	p.vMarshal = vPt.Bytes()
 
 	p.yMarshal = yBytes
 	p.deriveKeys()
@@ -607,8 +643,8 @@ func deriveKeys(context, idA, idB, x, y, z, v []byte, w0 *big.Int) (kcA, kcB, ke
 // only to the pre-reduction PBKDF2 output, not to the post-mod-n
 // scalar that participates in the transcript hash.
 func buildTranscript(context, idA, idB, x, y, z, v []byte, w0 *big.Int) []byte {
-	mBytes := elliptic.Marshal(curve(), mPoint.X, mPoint.Y) //nolint:staticcheck // SA1019: see curve()
-	nBytes := elliptic.Marshal(curve(), nPoint.X, nPoint.Y) //nolint:staticcheck // SA1019: see curve()
+	mBytes := mPoint.Bytes()
+	nBytes := nPoint.Bytes()
 
 	w0Bytes := scalarTo32Bytes(w0)
 
@@ -666,18 +702,21 @@ func defaultRandomScalar() (*big.Int, error) {
 // rejects the identity element / off-curve points. SPAKE2+ requires
 // the peer's contribution to be a valid non-identity point or the
 // session is trivially attackable.
-func unmarshalAndValidate(b []byte) (*ecdsa.PublicKey, error) {
+func unmarshalAndValidate(b []byte) (*nistec.P256Point, error) {
+	// The length/prefix check stays ahead of SetBytes so the identity —
+	// whose encoding is the single byte 0x00 — is rejected as a bad
+	// encoding rather than decoded and then caught below.
 	if len(b) != PointSize || b[0] != 0x04 {
 		return nil, fmt.Errorf("%w: bad encoding", ErrInvalidPoint)
 	}
-	x, y := elliptic.Unmarshal(curve(), b) //nolint:staticcheck // SA1019: see curve()
-	if x == nil || y == nil {
-		return nil, fmt.Errorf("%w: not on curve", ErrInvalidPoint)
+	pt, err := nistec.NewP256Point().SetBytes(b)
+	if err != nil {
+		return nil, fmt.Errorf("%w: not on curve: %w", ErrInvalidPoint, err)
 	}
-	if x.Sign() == 0 && y.Sign() == 0 {
+	if pt.IsInfinity() == 1 {
 		return nil, fmt.Errorf("%w: identity element", ErrInvalidPoint)
 	}
-	return &ecdsa.PublicKey{Curve: curve(), X: x, Y: y}, nil
+	return pt, nil
 }
 
 // hmacSHA256 returns the full 32-byte HMAC-SHA-256 over data. Callers

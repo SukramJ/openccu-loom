@@ -199,11 +199,11 @@ func (c *Certificate) PublicKeyECDSA() (*ecdsa.PublicKey, error) {
 	if len(c.PublicKey) != 65 || c.PublicKey[0] != 0x04 {
 		return nil, fmt.Errorf("%w: malformed P-256 point", ErrMalformed)
 	}
-	x, y := elliptic.Unmarshal(elliptic.P256(), c.PublicKey) //nolint:staticcheck // SA1019: required for raw point decode
-	if x == nil {
-		return nil, fmt.Errorf("%w: point not on curve", ErrMalformed)
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), c.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("%w: point not on curve: %w", ErrMalformed, err)
 	}
-	return &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, nil
+	return pub, nil
 }
 
 // Decode parses raw TLV bytes into a [Certificate]. The supplied

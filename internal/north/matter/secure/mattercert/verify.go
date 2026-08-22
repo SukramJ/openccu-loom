@@ -167,15 +167,15 @@ func NewVerifier(rootPubKey []byte, clock TimeSource) (*Verifier, error) {
 	if len(rootPubKey) != 65 || rootPubKey[0] != 0x04 {
 		return nil, fmt.Errorf("%w: root pub key length=%d prefix=%#x", ErrMalformed, len(rootPubKey), rootPubKey[0])
 	}
-	x, y := elliptic.Unmarshal(elliptic.P256(), rootPubKey) //nolint:staticcheck // SA1019: required for raw point decode
-	if x == nil {
-		return nil, fmt.Errorf("%w: root pub key off-curve", ErrMalformed)
+	root, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), rootPubKey)
+	if err != nil {
+		return nil, fmt.Errorf("%w: root pub key off-curve: %w", ErrMalformed, err)
 	}
 	if clock == nil {
 		clock = SystemTime{}
 	}
 	return &Verifier{
-		root: &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y},
+		root: root,
 		now:  clock,
 	}, nil
 }

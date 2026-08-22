@@ -34,6 +34,8 @@ require github.com/SukramJ/go-openccu-data v0.1.3
 
 require golang.org/x/term v0.45.0
 
+require filippo.io/nistec v0.0.4
+
 require (
 	github.com/SukramJ/go-mqtt v1.3.0
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect

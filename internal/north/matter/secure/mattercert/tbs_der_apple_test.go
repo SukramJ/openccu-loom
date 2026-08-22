@@ -51,11 +51,10 @@ func TestTBSToDER_AppleHomePairing(t *testing.T) {
 	t.Logf("TBS-DER len=%d sha256=%x", len(tbs), hash[:])
 	t.Logf("TBS-DER hex=%x", tbs)
 
-	x, y := elliptic.Unmarshal(elliptic.P256(), rootPub) //nolint:staticcheck // SA1019: required for raw point decode
-	if x == nil {
-		t.Fatalf("root pubkey off-curve")
+	rootKey, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), rootPub)
+	if err != nil {
+		t.Fatalf("root pubkey off-curve: %v", err)
 	}
-	rootKey := &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 	r := new(big.Int).SetBytes(c.Signature[:32])
 	s := new(big.Int).SetBytes(c.Signature[32:])
 

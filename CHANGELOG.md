@@ -55,6 +55,26 @@ should never have run.
   receive dispatcher uses for a controller's `ReadRequest`. Their only previous
   coverage was the nightly chip-tool job, which is why the regression stood for
   four days.
+- Ten of the sixteen `crypto/ecdsa` deprecations Go 1.26 introduced are
+  migrated to `ParseUncompressedPublicKey` / `ParseRawPrivateKey` /
+  `PublicKey.Bytes`: Matter certificate decoding and root-key parsing, the CASE
+  identity reconstruction, the CSA Test PAA fixtures, and five test helpers.
+  Parsing is what validates, so this closed a real hole rather than only
+  silencing a warning — the CASE identity was rebuilt from a stored scalar with
+  a length check and nothing else, and a zero scalar (an empty or truncated
+  column) produced a key whose public point is the identity. The daemon would
+  have run the whole handshake and signed with it.
+- SPAKE2+ moves its point arithmetic to `filippo.io/nistec` (BSD-3-Clause), the
+  module Go's own deprecation notice names for low-level curve operations. The
+  standard library has no replacement for what PASE needs — addition of
+  arbitrary points, negation, an identity test — so `crypto/elliptic`'s
+  deprecated methods were carrying it with a justification that claimed they
+  were "the supported path". Two hand-rolled pieces disappear with the move:
+  the negation, done by subtracting the Y coordinate from the field prime, and
+  the RFC 9383 identity abort, which read `crypto/elliptic`'s `(0, 0)`
+  convention. They are now `Negate()` and `IsInfinity()`. The wire output is
+  unchanged, pinned by the matter.js parity vectors and the golden handshake,
+  which pass byte for byte.
 - The lint gate no longer floats on `@latest`. `gofumpt` and `golangci-lint`
   are pinned in `ci.yml`, so the job reports on the diff rather than on the
   calendar: `main` went from green to red overnight on an unchanged tree when

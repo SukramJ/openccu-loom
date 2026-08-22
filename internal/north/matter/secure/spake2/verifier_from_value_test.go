@@ -5,7 +5,6 @@ package spake2
 
 import (
 	"bytes"
-	"crypto/elliptic"
 	"errors"
 	"testing"
 )
@@ -17,7 +16,7 @@ import (
 // the device in OpenCommissioningWindow.
 func verifierBytesFor(vc *VerifierContext) (w0Bytes, lBytes []byte) {
 	w0Bytes = vc.W0.FillBytes(make([]byte, VerifierW0Size))
-	lBytes = elliptic.Marshal(curve(), vc.L.X, vc.L.Y) //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
+	lBytes, _ = vc.L.Bytes()
 	return w0Bytes, lBytes
 }
 
@@ -139,11 +138,10 @@ func TestNewVerifierFromValue_RejectsMalformedInput(t *testing.T) {
 }
 
 // TestNewVerifierFromValue_RejectsDegenerateW0 pins the guard against a
-// commissioner-supplied verifier whose w0 is zero modulo the group
-// order. Accepting it makes w0*M the point at infinity — (0, 0) in
-// crypto/elliptic's encoding — and its negation (0, P) is an encoding
-// Add rejects with a panic, so a single malformed OpenCommissioningWindow
-// would kill every inbound Pake1 for the life of the window.
+// commissioner-supplied verifier whose w0 is zero modulo the group order.
+// Accepting it makes w0*M the identity, so X = x·G + w0·M collapses to
+// x·G: the passcode drops out of the transcript and the handshake
+// completes against a verifier that proves nothing.
 func TestNewVerifierFromValue_RejectsDegenerateW0(t *testing.T) {
 	t.Parallel()
 	salt := testSalt()
@@ -165,10 +163,10 @@ func TestNewVerifierFromValue_RejectsDegenerateW0(t *testing.T) {
 
 // TestProcessPake1_RejectsIdentityDifference pins the second half of the
 // same guard: a prover that sends exactly X = w0*M makes X - w0*M the
-// identity. crypto/elliptic does not object to that — ScalarMult and
-// Marshal both accept (0, 0) — so without the abort the handshake would
-// continue with Z and V pinned to a value the peer picked, and the
-// transcript would no longer bind the passcode (RFC 9383 §3.3).
+// identity. Nothing in the arithmetic objects to that on its own, so
+// without the abort the handshake would continue with Z and V pinned to a
+// value the peer picked, and the transcript would no longer bind the
+// passcode (RFC 9383 §3.3).
 func TestProcessPake1_RejectsIdentityDifference(t *testing.T) {
 	t.Parallel()
 	salt := testSalt()
@@ -179,8 +177,7 @@ func TestProcessPake1_RejectsIdentityDifference(t *testing.T) {
 	v := NewVerifier(vc, nil, nil, nil)
 
 	// X = w0*M — a valid curve point, so unmarshalAndValidate accepts it.
-	mx, my := curve().ScalarMult(mPoint.X, mPoint.Y, vc.W0.Bytes()) //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
-	pA := elliptic.Marshal(curve(), mx, my)                         //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
+	pA := mustScalarMult(t, mPoint, vc.W0).Bytes()
 
 	if _, err := v.ProcessPake1(pA); !errors.Is(err, ErrInvalidPoint) {
 		t.Fatalf("ProcessPake1(w0*M): err = %v, want ErrInvalidPoint", err)
@@ -209,8 +206,7 @@ func TestProcessPake2_RejectsIdentityDifference(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PBKDF: %v", err)
 	}
-	nx, ny := curve().ScalarMult(nPoint.X, nPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
-	yBytes := elliptic.Marshal(curve(), nx, ny)                  //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
+	yBytes := mustScalarMult(t, nPoint, w0).Bytes()
 
 	if _, err := p.ProcessPake2(yBytes, make([]byte, ConfirmTagSize)); !errors.Is(err, ErrInvalidPoint) {
 		t.Fatalf("ProcessPake2(w0*N): err = %v, want ErrInvalidPoint", err)
