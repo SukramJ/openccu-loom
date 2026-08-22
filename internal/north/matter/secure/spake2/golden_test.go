@@ -74,10 +74,16 @@ func TestGolden_VerifierContextDerivesL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewVerifierContext: %v", err)
 	}
-	// vc.L.X/Y access uses the deprecated coordinate API, but the
-	// golden test deliberately wants the raw uncompressed encoding
-	// for byte-stable comparison.
-	got := hex.EncodeToString(append([]byte{0x04}, append(vc.L.X.Bytes(), vc.L.Y.Bytes()...)...)) //nolint:staticcheck // SA1019: raw coordinate encoding is the contract here
+	// PublicKey.Bytes is the uncompressed encoding this golden value is
+	// recorded in. The predecessor concatenated X.Bytes() and Y.Bytes(),
+	// which drops leading zero bytes: a coordinate starting with 0x00
+	// would have produced a short encoding and compared against the
+	// golden value as if the derivation had changed.
+	lBytes, err := vc.L.Bytes()
+	if err != nil {
+		t.Fatalf("encode L: %v", err)
+	}
+	got := hex.EncodeToString(lBytes)
 	if got != goldenLHex {
 		t.Errorf("L\n got=%s\nwant=%s", got, goldenLHex)
 	}

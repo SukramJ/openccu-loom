@@ -370,8 +370,8 @@ func TestUnmarshalUncompressed_InvalidHex(t *testing.T) {
 // TestUnmarshalUncompressed_NotAPoint returns ErrInvalidPoint when the
 // decoded bytes are all zeros (not a valid point).
 func TestUnmarshalUncompressed_NotAPoint(t *testing.T) {
-	// 66 zero bytes — 0x04 prefix is missing, so elliptic.Unmarshal
-	// returns nil, nil which maps to ErrInvalidPoint.
+	// 66 zero bytes — the 0x04 prefix is missing, so SetBytes refuses the
+	// encoding and the error maps to ErrInvalidPoint.
 	zeros := make([]byte, 66)
 	hexStr := hex.EncodeToString(zeros)
 	_, err := unmarshalUncompressed(hexStr)
