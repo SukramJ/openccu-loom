@@ -450,10 +450,21 @@ func containsString(s, sub string) bool {
 }
 
 // ============================================================
-// Fix 2 — SetCombinedTimerSeconds unknown kind → quiet no-op
+// SetCombinedValue — an unresolvable target is an error
 // ============================================================
 
-func TestMQTTCommandSinkSetCombinedTimerSecondsUnknownKindIsNoOp(t *testing.T) {
+// TestMQTTCommandSinkSetCombinedValueUnresolvableTargetErrors pins that a
+// combined write the sink cannot route reports an error rather than
+// returning nil.
+//
+// The sink used to swallow any kind it did not implement, back when it
+// understood exactly one ("duration") and HA could plausibly publish
+// others. Dispatch now runs through payload.CombinedProjection, so the
+// only kinds with a command topic are the ones a projection advertises —
+// and a write arriving for anything else means something published to a
+// topic nobody offered. Swallowing that leaves an operator watching a
+// control that reports success and does nothing.
+func TestMQTTCommandSinkSetCombinedValueUnresolvableTargetErrors(t *testing.T) {
 	t.Parallel()
 	c, err := central.New(central.Config{Name: "ccu-cdt"})
 	if err != nil {
@@ -462,14 +473,28 @@ func TestMQTTCommandSinkSetCombinedTimerSecondsUnknownKindIsNoOp(t *testing.T) {
 	reg := central.NewRegistry()
 	_ = reg.Register(c)
 	s := NewMQTTCommandSink(reg, nil)
-	// "HSColor" is an unimplemented kind — must return nil, not an error.
-	err = s.SetCombinedTimerSeconds(
-		context.Background(),
-		"ccu-cdt", "HmIP-RF", "SOMEDEV", 1,
-		"HSColor", 0.0,
-		hmenum.CommandPriorityLow,
-	)
-	if err != nil {
-		t.Errorf("SetCombinedTimerSeconds with unsupported kind must be a no-op, got: %v", err)
+
+	cases := []struct {
+		name          string
+		kind, raw     string
+		deviceAddress string
+	}{
+		{name: "empty kind", kind: "", raw: "30", deviceAddress: "SOMEDEV"},
+		{name: "unknown device", kind: "duration", raw: "30", deviceAddress: "SOMEDEV"},
+		{name: "unknown kind on unknown device", kind: "hs_color", raw: "x", deviceAddress: "SOMEDEV"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := s.SetCombinedValue(
+				context.Background(),
+				"ccu-cdt", "HmIP-RF", tc.deviceAddress, 1,
+				tc.kind, tc.raw,
+				hmenum.CommandPriorityLow,
+			)
+			if err == nil {
+				t.Error("SetCombinedValue must report an unroutable write, got nil")
+			}
+		})
 	}
 }

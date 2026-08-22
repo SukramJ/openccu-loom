@@ -7,13 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	paramcoerce "github.com/SukramJ/openccu-loom/internal/parameter"
@@ -425,28 +423,26 @@ func (s *MQTTCommandSink) SetScheduleSwitch(
 	return wp.SetScheduleEnabled(ctx, key, enabled, priority)
 }
 
-// SetCombinedTimerSeconds implements [mqtt.CombinedDPSink]. It resolves
-// the channel's attached combined Timer DP on the target central and
-// calls Timer.SetDuration(seconds * time.Second). Only the "duration"
-// kind is wired today — other combined-DP kinds (e.g. HSColor,
-// LevelCombined) are silently dropped with a debug log so that
-// unsupported MQTT commands from HA produce no error-log noise.
-func (s *MQTTCommandSink) SetCombinedTimerSeconds(
+// SetCombinedValue implements [mqtt.CombinedDPSink]. It resolves the
+// combined data point whose projection claims `kind` on the target
+// channel and hands it the raw payload to parse.
+//
+// Dispatch runs through [payload.CombinedProjection] /
+// [payload.CombinedWritable] rather than a per-type branch, so a new
+// writable combined DP is reachable from MQTT the moment it declares its
+// projection. A kind that resolves to a read-only projection is an
+// error, not a silent drop: its command topic is never advertised, so a
+// write arriving there means something published to a topic nobody
+// offered.
+func (s *MQTTCommandSink) SetCombinedValue(
 	ctx context.Context,
 	centralName, interfaceID, deviceAddress string, channel int,
-	kind string, seconds float64,
+	kind, raw string,
 	priority hmenum.CommandPriority,
 ) error {
 	_ = interfaceID
-	if kind != "duration" {
-		slog.Default().DebugContext(
-			ctx, "mqtt_sink: combined-DP kind not yet implemented, skipping",
-			slog.String("kind", kind),
-			slog.String("central", centralName),
-			slog.String("device", deviceAddress),
-			slog.Int("channel", channel),
-		)
-		return nil
+	if kind == "" {
+		return errors.New("mqtt_sink: combined write without a kind")
 	}
 	c, ok := s.registry.Get(centralName)
 	if !ok {
@@ -463,14 +459,17 @@ func (s *MQTTCommandSink) SetCombinedTimerSeconds(
 		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", chAddr, centralName)
 	}
 	for _, cdp := range ch.CombinedDataPoints() {
-		timer, ok := cdp.(*combined.Timer)
-		if !ok {
+		proj, ok := cdp.(payload.CombinedProjection)
+		if !ok || proj.CombinedKind() != kind {
 			continue
 		}
-		dur := time.Duration(seconds * float64(time.Second))
-		return timer.SetDuration(ctx, dur, priority)
+		writable, ok := proj.(payload.CombinedWritable)
+		if !ok {
+			return fmt.Errorf("mqtt_sink: combined %q on channel %s is read-only", kind, chAddr)
+		}
+		return writable.WriteCombined(ctx, raw, priority)
 	}
-	return fmt.Errorf("mqtt_sink: no combined Timer on channel %s", chAddr)
+	return fmt.Errorf("mqtt_sink: no combined %q on channel %s", kind, chAddr)
 }
 
 // ActivateInstallMode implements [mqtt.InstallModeSink]. It activates

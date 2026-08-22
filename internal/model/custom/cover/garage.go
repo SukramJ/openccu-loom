@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -46,6 +47,19 @@ const (
 	sectionOpening = 2
 	sectionClosing = 5
 )
+
+// GarageDoorModeKind is the combined-DP kind for the selectable door
+// mode. It is a retained MQTT topic segment, so it is part of the wire
+// contract and must stay stable.
+const GarageDoorModeKind = "door_mode"
+
+// parameterDoorMode is the synthetic parameter naming the door-mode
+// combined data point. DOOR_MODE is not a CCU parameter: the mode is
+// read from DOOR_STATE and written to DOOR_COMMAND. Naming it after
+// either source would mislabel the control — "Door State" on something
+// writable — and collide with that parameter's own identity on the
+// channel.
+const parameterDoorMode hmenum.Parameter = "DOOR_MODE"
 
 // Garage is a garage-door drive (HmIP-MOD-HO, HmIP-MOD-TM, …).
 type Garage struct {
@@ -87,6 +101,10 @@ type Garage struct {
 	// the door position comes from DOOR_STATE.
 	doorCommandDp *generic.ActionSelect
 	sectionDp     *generic.Sensor[int32]
+
+	// doorMode is the selectable closed/ventilation/open control, present
+	// only on vent-capable drives. Nil elsewhere — every use is guarded.
+	doorMode *combined.EnumSelect
 
 	mu       sync.RWMutex
 	state    DoorState
@@ -132,7 +150,47 @@ func NewGarage(cfg GarageConfig) *Garage {
 	if g.sectionDp != nil {
 		_ = g.sectionDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })
 	}
+	g.attachDoorMode(cfg.Channel)
 	return g
+}
+
+// attachDoorMode gives a vent-capable drive a selectable door mode.
+//
+// The ventilation position is a real physical state of the drive, but it
+// is not on any axis a cover exposes: Home Assistant's cover platform has
+// no ventilation state, and Matter's WindowCovering has no ventilation
+// position. Before this data point existed the only way to reach it was
+// to write a cover position that happens to land between the closed and
+// open thresholds — an interaction nothing can discover, label, or read
+// back. As a combined select it is a first-class three-way control.
+//
+// Only vent-capable drives get it. On a drive without the intermediate
+// position the third option would be a control that renders and does
+// nothing.
+func (g *Garage) attachDoorMode(ch *device.Channel) {
+	if ch == nil || !g.Capabilities.SupportsVent {
+		return
+	}
+	g.doorMode = combined.NewEnumSelect(combined.EnumSelectConfig{
+		Address:           ch.Address,
+		CentralName:       ch.CentralName(),
+		Writer:            g.writer,
+		Kind:              GarageDoorModeKind,
+		LabelKey:          "discovery.garage_door_mode",
+		CombinedParameter: parameterDoorMode,
+		StateParameter:    hmenum.ParameterDoorState,
+		CommandParameter:  hmenum.ParameterDoorCommand,
+		// Presentation order follows the door's travel, closed to open,
+		// so the list reads the way the door moves.
+		Modes: []combined.EnumSelectMode{
+			{State: string(DoorStateClosed), Command: string(DoorCommandClose)},
+			{State: string(DoorStateVentilation), Command: string(DoorCommandPartialOpen)},
+			{State: string(DoorStateOpen), Command: string(DoorCommandOpen)},
+		},
+	})
+	if g.doorMode != nil {
+		ch.AttachCalculatedDataPoint(g.doorMode)
+	}
 }
 
 // DataPointKey returns the composite identifier used by the materializer
@@ -240,6 +298,14 @@ func (g *Garage) command(ctx context.Context, c DoorCommand, priority hmenum.Com
 	}
 	if err := g.writer.SetValue(custom.EnsureContext(ctx), g.Address, hmenum.ParameterDoorCommand, string(c), priority); err != nil {
 		return fmt.Errorf("garage: DOOR_COMMAND=%s: %w", c, err)
+	}
+	// Tell the mode select what was just commanded. Every cover operation
+	// funnels through here, so this is the one place that sees them all.
+	// Without it the select keeps showing the mode of the last command it
+	// issued itself — indefinitely after a STOP, which leaves DOOR_STATE
+	// at a non-mode token with no further event to correct it.
+	if g.doorMode != nil {
+		g.doorMode.NoteCommand(string(c))
 	}
 	return nil
 }

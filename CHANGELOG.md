@@ -4,6 +4,38 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+A garage door's ventilation position had no control anywhere Home Assistant
+could see it, and the reason it was easy to miss also hid a second problem:
+combined data points reached MQTT through a type switch that silently ignored
+anything it did not recognise.
+
+### Added
+
+- A vent-capable garage drive (HmIP-MOD-HO, HmIP-MOD-TM) now exposes its door
+  mode as a select entity offering closed, ventilation and open. Home
+  Assistant's cover platform has no ventilation state, so the position was
+  previously reachable only by setting a cover position that happens to land
+  between the closed and open thresholds — an interaction nothing can discover,
+  label, or read back. The select reads `DOOR_STATE` and writes `DOOR_COMMAND`,
+  and holds the mode just commanded while the door travels rather than dropping
+  to unknown for the whole movement.
+
+### Changed
+
+- Combined data points now describe their own north-bound projection instead of
+  being dispatched by concrete type. Adding one used to mean remembering to
+  extend a type switch in the event bridge, a discovery builder, and the command
+  sink; a combined data point that missed any of them attached to its channel,
+  published nothing, and was indistinguishable from a working one. A new guard
+  fails when a combined type declares no projection. Existing entities — the
+  timer number, the level and colour sensors — are unchanged.
+- The garage cover's discovery body no longer declares `vent_command_topic`.
+  Home Assistant validates the cover body against a closed key schema and has no
+  field for a vent command, so the key never reached an entity. The select above
+  replaces it.
+
 ## [0.63.1]
 
 Two defects behind one symptom: the nightly chip-tool suite has been red since

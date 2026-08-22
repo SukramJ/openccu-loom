@@ -18,7 +18,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
-	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -3322,12 +3321,50 @@ func (b *EventBridge) publishScheduleEntityPayload(
 	notePublish(ctx, bridge.PublishScheduleEntityState(ctx, centralName, iface, address, channelNo, count))
 }
 
-// Currently only [combined.Timer] is wired (HSColor / LevelCombined
-// remain attachable scaffolding without an MQTT discovery surface).
+// combinedDiscoveryContext implements [payload.CombinedDiscoveryContext]
+// for one (central, interface, device, channel, kind) tuple. It is the
+// bridge's half of the projection seam: topics come from the MQTT topic
+// builder, labels from the daemon catalogue and the CCU's own
+// translations, and the model layer sees neither.
+type combinedDiscoveryContext struct {
+	stateTopic   string
+	commandTopic string
+	bridge       *EventBridge
+	channelType  string
+}
+
+func (c combinedDiscoveryContext) CombinedStateTopic() string   { return c.stateTopic }
+func (c combinedDiscoveryContext) CombinedCommandTopic() string { return c.commandTopic }
+
+func (c combinedDiscoveryContext) Translate(key string) string {
+	if c.bridge == nil {
+		return key
+	}
+	return c.bridge.tr(key)
+}
+
+func (c combinedDiscoveryContext) ParameterLabel(parameter hmenum.Parameter) (string, bool) {
+	if c.bridge == nil || c.bridge.labels == nil || c.channelType == "" {
+		return "", false
+	}
+	return c.bridge.labels.ParameterLabelOk(c.channelType, string(parameter))
+}
+
+// publishCombinedDPSnapshot publishes discovery and state for every
+// combined data point on the channel that carries a
+// [payload.CombinedProjection], and wires a live subscription so later
+// CCU-driven changes re-publish the state topic — once per combined
+// data-point object, via [EventBridge.subscribeOnce], which Stop() tears
+// down.
 //
-// Wires a live OnUpdate subscription so subsequent CCU-driven seconds
-// changes re-publish the state topic — once per combined data-point
-// object, via [EventBridge.subscribeOnce], which Stop() tears down.
+// It dispatches through the projection interface rather than switching
+// on concrete types. The switch it replaced had no default branch, so a
+// combined type nobody remembered to add a case for attached to its
+// channel, published nothing, and was indistinguishable from a working
+// one. TestCombinedProjectionCoversEveryCombinedType now fails instead.
+//
+// A data point without a projection is skipped deliberately: that is how
+// a combined DP declares itself internal to its parent custom DP.
 func (b *EventBridge) publishCombinedDPSnapshot(
 	ctx context.Context,
 	centralName, iface string,
@@ -3343,29 +3380,38 @@ func (b *EventBridge) publishCombinedDPSnapshot(
 	}
 	_, channelNo := parseChannel(ch.Address)
 	for _, cdp := range ch.CombinedDataPoints() {
-		switch dp := cdp.(type) {
-		case *combined.Timer:
-			b.publishCombinedTimer(ctx, bridge, centralName, iface, d, ch, channelNo, dp)
-		case *combined.LevelCombined:
-			b.publishCombinedLevelSensor(ctx, bridge, centralName, iface, d, channelNo, dp)
-		case *combined.HSColor:
-			b.publishCombinedHSColorSensor(ctx, bridge, centralName, iface, d, channelNo, dp)
+		proj, ok := cdp.(payload.CombinedProjection)
+		if !ok {
+			continue
 		}
+		b.publishCombinedProjection(ctx, bridge, centralName, iface, d, ch, channelNo, proj)
 	}
 }
 
-// publishCombinedTimer wires the HA number entity and live state for one Timer.
-func (b *EventBridge) publishCombinedTimer(
+// publishCombinedProjection publishes one projection's discovery entity
+// and current state, then keeps the state topic live.
+func (b *EventBridge) publishCombinedProjection(
 	ctx context.Context,
 	bridge *mqtt.Bridge,
 	centralName, iface string,
 	d *device.Device,
 	ch *device.Channel,
 	channelNo int,
-	timer *combined.Timer,
+	proj payload.CombinedProjection,
 ) {
-	label := b.combinedTimerLabel(ch, timer)
-	ev := mqtt.CombinedTimerEvent{
+	kind := proj.CombinedKind()
+	topics := bridge.Topics()
+	if kind == "" || topics == nil {
+		return
+	}
+	dctx := combinedDiscoveryContext{
+		stateTopic:   topics.CombinedState(centralName, iface, d.Address, channelNo, kind),
+		commandTopic: topics.CombinedCommand(centralName, iface, d.Address, channelNo, kind),
+		bridge:       b,
+		channelType:  ch.Type,
+	}
+	component, body := proj.HACombinedDiscovery(dctx)
+	notePublish(ctx, bridge.PublishCombinedDiscovery(ctx, centralName, mqtt.CombinedEvent{
 		Central:       centralName,
 		Interface:     iface,
 		DeviceAddress: d.Address,
@@ -3373,171 +3419,39 @@ func (b *EventBridge) publishCombinedTimer(
 		DeviceName:    d.Name,
 		Model:         d.Model,
 		Device:        d,
-		Kind:          "duration",
-		Label:         label,
-		Unit:          "s",
-		MinSeconds:    0,
-		// Upper bound: the wire's INTEGER max (16343) reinterpreted
-		// at the hours unit (16343 h ≈ 678 days) is far more than HA
-		// users need; clamp to a 24h window so the UI stays usable.
-		// The Timer's SetDuration auto-promotes the unit when needed,
-		// so a user-entered 100 s still writes 100/UnitSeconds rather
-		// than overflowing.
-		MaxSeconds: 24 * 60 * 60,
-		Step:       1,
-	}
-	notePublish(ctx, bridge.PublishCombinedTimerDiscovery(ctx, centralName, ev))
-	if seconds, observed := timer.ValueSeconds(); observed {
-		notePublish(ctx, bridge.PublishCombinedTimerState(ctx, centralName, iface, d.Address, channelNo, "duration", seconds))
+		Kind:          kind,
+		Component:     component,
+		Body:          body,
+	}))
+	if state, observed := proj.CombinedStatePayload(); observed {
+		notePublish(ctx, bridge.PublishCombinedState(ctx, centralName, iface, d.Address, channelNo, kind, state))
 	}
 	capturedCentral := centralName
 	capturedIface := iface
 	capturedAddr := d.Address
 	capturedChannel := channelNo
-	// A channel can carry more than one Timer; the wire parameter each one
-	// wraps keeps their subscriptions apart.
+	// Keyed on the kind rather than on the wrapped wire parameter: the
+	// kind is also the retained topic segment, so two projections sharing
+	// a kind on one channel already write to the same topic. Keying the
+	// subscriptions apart would only hide that collision behind two
+	// publishers fighting over one topic.
 	b.subscribeOnce(liveSubKey{
 		central: centralName, iface: iface, device: d.Address,
-		channel: channelNo, kind: liveSubCombinedTimer,
-		variant: string(timer.ValueParameter),
-	}, timer, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
-		return timer.OnUpdate(func(_, next float64) {
-			_ = bridge.PublishCombinedTimerState(
-				context.Background(),
-				capturedCentral, capturedIface, capturedAddr, capturedChannel,
-				"duration", next,
-			)
-		})
-	})
-}
-
-// publishCombinedLevelSensor wires the HA sensor entity and live state for a
-// LevelCombined (blind level + slats). State is published as JSON
-// {"level": 0.5, "slats": 0.25} to the combined/level_combined topic.
-func (b *EventBridge) publishCombinedLevelSensor(
-	ctx context.Context,
-	bridge *mqtt.Bridge,
-	centralName, iface string,
-	d *device.Device,
-	channelNo int,
-	lc *combined.LevelCombined,
-) {
-	ev := mqtt.CombinedSensorEvent{
-		Central:       centralName,
-		Interface:     iface,
-		DeviceAddress: d.Address,
-		ChannelNo:     channelNo,
-		DeviceName:    d.Name,
-		Model:         d.Model,
-		Device:        d,
-		Kind:          "level_combined",
-		Label:         b.tr("discovery.level_combined"),
-		ValueTemplate: "{{ value_json.level }}",
-	}
-	notePublish(ctx, bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev))
-	if composite, observed := lc.Value(); observed {
-		stateJSON := encodeLevelCompositeJSON(composite)
-		notePublish(ctx, bridge.PublishCombinedSensorState(ctx, centralName, iface, d.Address, channelNo, "level_combined", stateJSON))
-	}
-	capturedCentral := centralName
-	capturedIface := iface
-	capturedAddr := d.Address
-	capturedChannel := channelNo
-	b.subscribeOnce(liveSubKey{
-		central: centralName, iface: iface, device: d.Address,
-		channel: channelNo, kind: liveSubCombinedLevel,
-	}, lc, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
-		return lc.OnUpdate(func(_, next combined.LevelComposite) {
-			body := encodeLevelCompositeJSON(next)
-			_ = bridge.PublishCombinedSensorState(
-				context.Background(),
-				capturedCentral, capturedIface, capturedAddr, capturedChannel,
-				"level_combined", body,
-			)
-		})
-	})
-}
-
-// publishCombinedHSColorSensor wires the HA sensor entity and live state for
-// an HSColor (hue + saturation). State is published as JSON
-// {"hue": 120, "saturation": 100.0} to the combined/hs_color topic.
-func (b *EventBridge) publishCombinedHSColorSensor(
-	ctx context.Context,
-	bridge *mqtt.Bridge,
-	centralName, iface string,
-	d *device.Device,
-	channelNo int,
-	hs *combined.HSColor,
-) {
-	ev := mqtt.CombinedSensorEvent{
-		Central:       centralName,
-		Interface:     iface,
-		DeviceAddress: d.Address,
-		ChannelNo:     channelNo,
-		DeviceName:    d.Name,
-		Model:         d.Model,
-		Device:        d,
-		Kind:          "hs_color",
-		Label:         b.tr("discovery.hs_color"),
-		ValueTemplate: "{{ value_json.hue }}",
-	}
-	notePublish(ctx, bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev))
-	if hsVal, observed := hs.Value(); observed {
-		stateJSON := encodeHSJSON(hsVal)
-		notePublish(ctx, bridge.PublishCombinedSensorState(ctx, centralName, iface, d.Address, channelNo, "hs_color", stateJSON))
-	}
-	capturedCentral := centralName
-	capturedIface := iface
-	capturedAddr := d.Address
-	capturedChannel := channelNo
-	b.subscribeOnce(liveSubKey{
-		central: centralName, iface: iface, device: d.Address,
-		channel: channelNo, kind: liveSubCombinedHSColor,
-	}, hs, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
-		return hs.OnUpdate(func(_, next combined.HS) {
-			body := encodeHSJSON(next)
-			_ = bridge.PublishCombinedSensorState(
-				context.Background(),
-				capturedCentral, capturedIface, capturedAddr, capturedChannel,
-				"hs_color", body,
-			)
-		})
-	})
-}
-
-// combinedTimerLabel resolves the user-facing label for a combined Timer
-// entity. The OCCU catalogue carries a translation for DURATION_VALUE
-// ("Wert Zeitdauer" / "Duration Value") on the channel type the timer
-// lives on; fall back to "Zeitdauer" / "Duration" when the catalogue has
-// no entry. The "Wert " prefix is dropped so HA's entity_id derivation
-// (device.name + label) produces e.g. "alarmsirene_fl_zeitdauer" rather
-// than the stutter "...wert_zeitdauer".
-func (b *EventBridge) combinedTimerLabel(ch *device.Channel, timer *combined.Timer) string {
-	if b.labels != nil && ch != nil {
-		if t, ok := b.labels.ParameterLabelOk(ch.Type, string(timer.ValueParameter)); ok && t != "" {
-			// Strip a leading "Wert " (German OCCU translation for the
-			// raw DURATION_VALUE wire parameter) so the combined-DP
-			// label reads cleanly.
-			label := strings.TrimSpace(strings.TrimPrefix(t, "Wert "))
-			label = strings.TrimSpace(strings.TrimPrefix(label, "Value "))
-			if label != "" {
-				return label
+		channel: channelNo, kind: liveSubCombined,
+		variant: kind,
+	}, proj, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return proj.OnCombinedChange(func() {
+			state, observed := proj.CombinedStatePayload()
+			if !observed {
+				return
 			}
-		}
-	}
-	return b.tr("discovery.duration")
-}
-
-// encodeLevelCompositeJSON renders a LevelComposite as the JSON string that
-// publishCombinedLevelSensor and OnAnyUpdate publish to the MQTT state topic.
-func encodeLevelCompositeJSON(c combined.LevelComposite) string {
-	return fmt.Sprintf(`{"level":%g,"slats":%g}`, c.Level.Level(), c.SlatsLevel.Level())
-}
-
-// encodeHSJSON renders an HS pair as the JSON string that
-// publishCombinedHSColorSensor and OnAnyUpdate publish to the MQTT state topic.
-func encodeHSJSON(hs combined.HS) string {
-	return fmt.Sprintf(`{"hue":%d,"saturation":%g}`, hs.Hue, hs.Saturation)
+			_ = bridge.PublishCombinedState(
+				context.Background(),
+				capturedCentral, capturedIface, capturedAddr, capturedChannel,
+				kind, state,
+			)
+		})
+	})
 }
 
 // stampHubSerial registers the central's CCU serial with the MQTT

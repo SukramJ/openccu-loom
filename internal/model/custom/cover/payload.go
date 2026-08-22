@@ -518,17 +518,11 @@ func (g *Garage) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component s
 		"state_closing":  "closing",
 		"state_stopped":  "stopped",
 	}
-	// SupportsVent (PARTIAL_OPEN) exposes the garage drive's intermediate "vent"
-	// position. HA's MQTT Cover platform validates entity_document against a
-	// closed key schema (extra=vol.REMOVE_EXTRA in homeassistant/components/
-	// mqtt/cover.py) and has no vent_command_topic field, so this key is
-	// silently dropped on the HA side — no button or other entity currently
-	// reads it. The ventilate service itself stays reachable through REST,
-	// WebSocket, MCP and the SPA cover tile; only the HA surface lacks a
-	// dedicated control for it. Kept as documentation of the intended wire
-	// shape for a future HA `button` discovery entity.
-	if g.Capabilities.SupportsVent {
-		body["vent_command_topic"] = ctx.ServiceMethodCommandTopic("ventilate")
-	}
+	// The ventilation position deliberately does not appear here. HA's MQTT
+	// Cover platform validates the discovery body against a closed key
+	// schema and has no field for a vent command, so a key invented for it
+	// is dropped before any entity sees it. A vent-capable drive gets a
+	// separate `select` entity instead — see Garage.attachDoorMode — which
+	// HA renders as a real control and can read back.
 	return "cover", body
 }
