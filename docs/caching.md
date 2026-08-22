@@ -154,7 +154,10 @@ Surfaces (all drive the same operation):
   daemon start performs the readiness-gated bring-up. Offline mode never
   creates a database: a `--db` path (or a `data_dir` resolved against the
   wrong working directory) that does not exist is an error, not an empty
-  success.
+  success. `--timeout` bounds the whole operation and defaults to 60 s; `0`
+  means no deadline. Raise it when an offline clear on slow storage runs long
+  — opening the database applies any pending schema migrations first, and on
+  a large database that is the slowest step.
 
 ## Where this data lives
 

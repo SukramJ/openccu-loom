@@ -49,10 +49,17 @@ func (f *connFlags) bind(fs *flag.FlagSet) {
 // context.WithTimeout would instead produce a context whose deadline is
 // already past, failing every request before a socket is opened.
 func (f *connFlags) requestContext() (context.Context, context.CancelFunc) {
-	if f.timeout <= 0 {
+	return deadlineContext(f.timeout)
+}
+
+// deadlineContext is the one place that turns a configured timeout into a
+// context, so every command group means the same thing by it — including the
+// groups that define their own flag set rather than binding [connFlags].
+func deadlineContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
 		return context.WithCancel(context.Background())
 	}
-	return context.WithTimeout(context.Background(), f.timeout)
+	return context.WithTimeout(context.Background(), timeout)
 }
 
 // client resolves off-argv credentials, warns if they would cross a plaintext
