@@ -108,3 +108,69 @@ func siblingChannel(ch *device.Channel, chNo int) *device.Channel {
 	}
 	return nil
 }
+
+// ResolveSlotOr resolves one composed field through the profile schema and
+// falls back to `fallback` on the caller's own channel when the schema does
+// not map it.
+//
+// This is the binding every custom DP should use for a field the profile
+// declares. Reaching for a fixed parameter name on the DP's own channel
+// instead is the defect this exists to prevent: the schema states both the
+// parameter and the channel per device family, and where the two disagree the
+// lookup returns nil, the accessor reports the feature as unsupported, and
+// nothing fails — no log line, no failing test. The value is simply absent
+// forever.
+//
+// The fallback is not a courtesy. A profile is shared across device types
+// that expose different channel counts, and a custom DP can be constructed
+// without a schema at all (unit tests, the group variants); for the families
+// whose schema names exactly the parameter the fallback does, the two agree
+// and the fallback is what keeps those paths working.
+func ResolveSlotOr(
+	ch *device.Channel,
+	group RebasedChannelGroupConfig,
+	field hmenum.Field,
+	fallback hmenum.Parameter,
+) (target *device.Channel, parameter hmenum.Parameter) {
+	if t, p, ok := ResolveFieldSlot(ch, group, field); ok {
+		return t, p
+	}
+	return ch, fallback
+}
+
+// ResolveSlotOnCarryingChannel resolves a field through the schema like
+// [ResolveSlotOr], and then makes one further check the schema cannot make:
+// whether the resolved channel actually carries the parameter. When it does
+// not, the custom DP's own channel is used instead.
+//
+// The schema states where a field lives per profile, and a profile is shared
+// by device families that place the same parameter differently. IPLock maps
+// FieldError to ERROR_JAMMED at offset -1, which is where the HmIP-DLD
+// reports it — the lock sits on channel 1, the fault on channel 0. The
+// HmIP-DLP carries the same parameter on the lock's own channel, so the
+// offset is right for one model and wrong for the other. Binding on the
+// offset alone fixes the DLD and breaks the DLP.
+//
+// Kept separate from [ResolveFieldSlot] on purpose. That function answers a
+// question about the profile — "where does the schema say this field lives?"
+// — and its answer must not depend on which device is in front of it.
+// Whether a concrete channel carries a parameter is a question about the
+// device, and it belongs to the binding rather than to the schema lookup.
+//
+// This is a deliberate divergence from the reference stack, which resolves
+// the mapped channel or nothing; see notes/parity/by_design.md.
+func ResolveSlotOnCarryingChannel(
+	ch *device.Channel,
+	group RebasedChannelGroupConfig,
+	field hmenum.Field,
+	fallback hmenum.Parameter,
+) (target *device.Channel, parameter hmenum.Parameter) {
+	t, p := ResolveSlotOr(ch, group, field, fallback)
+	if t != nil && t.Parameter(p) != nil {
+		return t, p
+	}
+	if ch != nil && ch.Parameter(p) != nil {
+		return ch, p
+	}
+	return t, p
+}

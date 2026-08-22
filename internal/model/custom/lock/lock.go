@@ -157,6 +157,12 @@ type Config struct {
 	Writer       Writer
 	Capabilities custom.LockCapabilities
 	Kind         Kind
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this lock. It states which parameter each composed field
+	// binds to and on which channel — see [custom.ResolveSlotOr]. The zero
+	// value is valid: every binding falls back to the parameter the caller
+	// names, which is what a Lock constructed without a profile relies on.
+	Group custom.RebasedChannelGroupConfig
 }
 
 // New constructs a Lock.
@@ -187,19 +193,26 @@ func New(cfg Config) *Lock {
 		Kind:         cfg.Kind,
 		key:          key,
 		writer:       cfg.Writer,
-		jammedDp:     custom.BinarySensorField(cfg.Channel, hmenum.ParameterErrorJammed),
+		// ERROR_JAMMED does not always sit on the lock's own channel: the
+		// HmIP-DLD reports it one channel below, which is what the profile's
+		// -1 offset states, while the HmIP-DLP carries it on the lock
+		// channel itself.
+		jammedDp: custom.BinarySensorField(
+			custom.ResolveSlotOnCarryingChannel(cfg.Channel, cfg.Group, hmenum.FieldError, hmenum.ParameterErrorJammed)),
 	}
 	// RF locks (HM-Sec-Key family) carry a string ERROR parameter instead of
 	// the binary ERROR_JAMMED that IP/Button locks use.
 	if cfg.Kind == KindRF {
-		l.rfErrorDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterError)
+		l.rfErrorDp = custom.EnumSensorField(
+			custom.ResolveSlotOnCarryingChannel(cfg.Channel, cfg.Group, hmenum.FieldError, hmenum.ParameterError))
 	}
-	// DIRECTION is a read-only ENUM reporting which way the motor last
-	// turned. The CCU exposes it on the HM key-matic family (channel 1),
-	// not on the HmIP door locks — the opposite of what the branches
-	// below assumed, which left the field nil on every device. Resolving
-	// it for every kind lets the accessor decide from the wire.
-	l.directionDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection)
+	// Which way the motor last turned is a read-only ENUM that the two
+	// families report under different names: the HM key-matic devices call
+	// it DIRECTION, the HmIP door locks ACTIVITY_STATE and carry no
+	// DIRECTION at all. The profile states which one applies, so binding
+	// through it reaches both instead of leaving the IP families empty.
+	l.directionDp = custom.EnumSensorField(
+		custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection))
 	switch cfg.Kind {
 	case KindIP:
 		// HmIP locks: LOCK_STATE (read-only ENUM).

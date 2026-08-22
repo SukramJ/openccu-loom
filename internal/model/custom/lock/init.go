@@ -87,21 +87,23 @@ var buttonLockCapabilities = custom.LockCapabilities{
 	SupportsOpen: false,
 }
 
-func ipLockConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func ipLockConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),
 		Capabilities: ipLockCapabilities,
 		Kind:         KindIP,
+		Group:        group,
 	}), nil
 }
 
-func rfLockConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func rfLockConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),
 		Capabilities: rfLockCapabilities,
 		Kind:         KindRF,
+		Group:        group,
 	}), nil
 }
 
@@ -115,7 +117,7 @@ func hasButtonLockField(ch *device.Channel) bool {
 		custom.SwitchField(ch, hmenum.ParameterButtonLock) != nil
 }
 
-func ipButtonLockConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func ipButtonLockConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	if !hasButtonLockField(channel) {
 		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
 	}
@@ -124,10 +126,11 @@ func ipButtonLockConstructor(channel *device.Channel, _ custom.RebasedChannelGro
 		Writer:       channel.Writer(),
 		Capabilities: buttonLockCapabilities,
 		Kind:         KindButton,
+		Group:        group,
 	}), nil
 }
 
-func rfButtonLockConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func rfButtonLockConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	if !hasButtonLockField(channel) {
 		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
 	}
@@ -136,6 +139,7 @@ func rfButtonLockConstructor(channel *device.Channel, _ custom.RebasedChannelGro
 		Writer:       channel.Writer(),
 		Capabilities: buttonLockCapabilities,
 		Kind:         KindButton,
+		Group:        group,
 	}), nil
 }
 

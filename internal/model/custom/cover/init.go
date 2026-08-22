@@ -142,7 +142,8 @@ func newIPCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 				SupportsTilt:     true,
 				SupportsStop:     true,
 			},
-			Kind: BlindKindIP,
+			Kind:  BlindKindIP,
+			Group: rebased,
 		})
 		applyGroupLevel(blind.Cover, ch, rebased)
 		return blind, nil
@@ -211,8 +212,14 @@ func applyGroupLevel(cov *Cover, ch *device.Channel, rebased custom.RebasedChann
 // WindowDrive remap path.
 func newRfCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	w := writerFromChannel(ch)
-	// RF Blind: promote when LEVEL_2 is present.
-	if custom.FloatField(ch, hmenum.ParameterLevel2) != nil {
+	// RF Blind: promote when the device carries the tilt parameter its
+	// profile names. That is LEVEL_SLATS for the jalousie actuators, not the
+	// LEVEL_2 the HmIP families use — checking for LEVEL_2 alone left every
+	// classic RF jalousie a plain cover with no tilt axis at all. The check
+	// stays conditional: the RF actuators that carry neither parameter are
+	// plain covers and must remain so.
+	tiltChannel, tiltParam := custom.ResolveSlotOr(ch, rebased, hmenum.FieldLevel2, hmenum.ParameterLevel2)
+	if custom.FloatField(tiltChannel, tiltParam) != nil {
 		blind := NewBlind(BlindConfig{
 			Channel: ch,
 			Writer:  w,
@@ -221,7 +228,8 @@ func newRfCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 				SupportsTilt:     true,
 				SupportsStop:     true,
 			},
-			Kind: BlindKindHM,
+			Kind:  BlindKindHM,
+			Group: rebased,
 		})
 		applyGroupLevel(blind.Cover, ch, rebased)
 		return blind, nil
@@ -280,7 +288,7 @@ func coverVariantFromModel(ch *device.Channel) CoverVariant {
 // door driver. HDM always exposes both LEVEL and LEVEL_2. The device_class
 // Is "shade" — mirrors py:29-36 which maps
 // HmIP-HDM1 → CoverDeviceClass.SHADE.
-func newIPHdmConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func newIPHdmConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	w := writerFromChannel(ch)
 	return NewBlind(BlindConfig{
 		Channel: ch,
@@ -295,6 +303,7 @@ func newIPHdmConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig)
 			SupportsStop:     true,
 		},
 		Kind:    BlindKindIP,
+		Group:   rebased,
 		Variant: VariantShade,
 	}), nil
 }

@@ -290,9 +290,9 @@ func New(cfg Config) *Climate {
 	// Resolve the three composed wire fields through the profile
 	// schema, each with the per-kind parameter name on the own channel
 	// as the fallback for a Climate built without one.
-	setpointCh, setpointParam := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldSetpoint, paramForSetpoint(cfg.Kind))
-	temperatureCh, temperatureParam := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldTemperature, hmenum.ParameterActualTemperature)
-	humidityCh, humidityParam := resolveSlot(cfg.Channel, cfg.Group, hmenum.FieldHumidity, hmenum.ParameterHumidity)
+	setpointCh, setpointParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSetpoint, paramForSetpoint(cfg.Kind))
+	temperatureCh, temperatureParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldTemperature, hmenum.ParameterActualTemperature)
+	humidityCh, humidityParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldHumidity, hmenum.ParameterHumidity)
 	setpointDP := custom.FloatField(setpointCh, setpointParam)
 
 	var key hmtypes.DataPointKey
@@ -363,24 +363,6 @@ func New(cfg Config) *Climate {
 		_ = c.temperatureMaximum.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
 	}
 	return c
-}
-
-// resolveSlot resolves one composed field through the profile schema,
-// falling back to `fallback` on the constructor's own channel when the
-// schema does not map it. The fallback is what every Climate built
-// without a schema relies on, and it is also the correct answer for the
-// HmIP and classic-RF families whose schema names the same parameter the
-// fallback does.
-func resolveSlot(
-	ch *device.Channel,
-	group custom.RebasedChannelGroupConfig,
-	field hmenum.Field,
-	fallback hmenum.Parameter,
-) (target *device.Channel, parameter hmenum.Parameter) {
-	if t, p, ok := custom.ResolveFieldSlot(ch, group, field); ok {
-		return t, p
-	}
-	return ch, fallback
 }
 
 // slotRefOf flattens a resolved slot into the address + parameter pair

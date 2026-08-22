@@ -91,6 +91,13 @@ type BlindConfig struct {
 	// (VariantShutter), [Blind.HADiscoveryPayload] substitutes
 	// VariantBlind. Set to VariantShade for HmIP-HDM.
 	Variant CoverVariant
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this blind. It names the tilt parameter, which is not
+	// the same on every family: the HmIP covers drive LEVEL_2, the classic
+	// RF jalousie actuators LEVEL_SLATS. The zero value falls back to
+	// LEVEL_2, which is what a Blind constructed without a profile relies
+	// on.
+	Group custom.RebasedChannelGroupConfig
 }
 
 // NewBlind constructs a Blind. The cover-side LEVEL/Direction
@@ -102,10 +109,12 @@ func NewBlind(cfg BlindConfig) *Blind {
 		Capabilities: cfg.Capabilities,
 		Variant:      cfg.Variant,
 	})
+	tiltChannel, tiltParam := custom.ResolveSlotOr(
+		cfg.Channel, cfg.Group, hmenum.FieldLevel2, hmenum.ParameterLevel2)
 	b := &Blind{
 		Cover:  cov,
 		Kind:   cfg.Kind,
-		level2: custom.FloatField(cfg.Channel, hmenum.ParameterLevel2),
+		level2: custom.FloatField(tiltChannel, tiltParam),
 	}
 	if cov != nil && cov.Float != nil {
 		b.registerBlindServices()
@@ -116,13 +125,18 @@ func NewBlind(cfg BlindConfig) *Blind {
 	// Attach a LevelCombined combined DP so the aggregate (level + slats)
 	// is surfaced on the event bus and visible via Channel.CombinedDataPoints.
 	// The write path remains sendCombined; LevelCombined is read-side only.
-	if cfg.Channel != nil && cov != nil && cov.Float != nil && b.level2 != nil {
+	// The aggregate names the tilt parameter this family actually drives.
+	// It is a per-channel calculation, so it only applies when the schema
+	// put the tilt slot on the blind's own channel — no profile maps it
+	// elsewhere today, and a silent cross-channel aggregate would report a
+	// value under an address that does not carry it.
+	if cfg.Channel != nil && cov != nil && cov.Float != nil && b.level2 != nil && tiltChannel == cfg.Channel {
 		lc := combined.NewLevelCombinedWithCentral(
 			cfg.Channel.CentralName(),
 			cfg.Channel.Address,
 			cfg.Writer,
 			hmenum.ParameterLevel,
-			hmenum.ParameterLevel2,
+			tiltParam,
 			hmenum.ParameterLevelCombined,
 		)
 		cfg.Channel.AttachCalculatedDataPoint(lc)
