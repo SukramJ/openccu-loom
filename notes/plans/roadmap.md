@@ -48,7 +48,7 @@ replace it, and the metrics that say whether it worked.
   900-line function.
 
   Ordering by defect density still applies, and `wiringSettersWithoutCaller`
-  (21 entries) should shrink toward deletion as each seam becomes exactly
+  (20 entries) should shrink toward deletion as each seam becomes exactly
   checkable.
 
 ### Matter

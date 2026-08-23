@@ -277,7 +277,8 @@ Without a number, "drastically fewer" is not a claim. Four metrics, per round:
 2. **Findings/kLOC per package** — must fall in `cmd/`.
 3. **Defect-injection rate of the fix wave** — currently ~14 %. Target: zero.
 4. **Ratchet entry count** — must shrink, not freeze. 82 at the start of
-   round 5, 77 after M2.
+   round 5, 77 after M2, 71 once the deferrals were resolved by deleting the
+   seams rather than re-wording their reasons.
 
 ### Where round 5 left the numbers
 
@@ -285,7 +286,7 @@ Without a number, "drastically fewer" is not a claim. Four metrics, per round:
 |---|---:|---:|
 | contract guards | 359 | 371 |
 | decorative guards (mutation-tested) | 17 of 359 | 0 — ten repaired, seven deleted |
-| ratchet entries | 82 | 72 |
+| ratchet entries | 82 | 71 |
 | dead exported identifiers | 3023 | 3021 |
 | production defects found by the new guards | — | 4 (multi-CCU identifiers) |
 | contract drift found by the new guards | — | 7 (SPA fixtures) |

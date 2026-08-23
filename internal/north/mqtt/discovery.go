@@ -236,13 +236,6 @@ func (d *DefaultDiscoveryBuilder) trIface(key, iface string) string {
 	return strings.Replace(d.tr(key), "{iface}", iface, 1)
 }
 
-// WithTranslations overrides the auto-loaded i18n catalogues (tests). Returns
-// the receiver for fluent wiring.
-func (d *DefaultDiscoveryBuilder) WithTranslations(cat *i18n.Catalogs) *DefaultDiscoveryBuilder {
-	d.Translations = cat
-	return d
-}
-
 // WithHubInfo stores CCU metadata in the builder. Subsequent hub
 // Discovery payloads (sysvars, programs, alarm/service messages,
 // install-mode) will carry the populated device block. Returns the

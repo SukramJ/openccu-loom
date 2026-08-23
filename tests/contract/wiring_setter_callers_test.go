@@ -53,8 +53,6 @@ var wiringSettersWithoutCaller = map[string]string{
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core.DiagnosticLogs.AttachProvider": "the DiagnosticLogs cluster is deliberately not mounted on the root endpoint; the dead-code inventory already exempts the file",
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/light.ColorControlServer.SetWriter": "colour-temperature lights are served by internal/model/custom/light, not by this standalone reference server, which nothing constructs",
 
-	"github.com/SukramJ/openccu-loom/internal/north/mqtt.DefaultDiscoveryBuilder.WithTranslations": "documented as a test override; NewDefaultDiscoveryBuilder auto-loads the embedded catalogues in production, and nothing — not even a test — calls this setter",
-
 	// Verified: fluent With* setters (isWiringVerb now covers them too),
 	// each with its own doc comment naming the reason the daemon leaves
 	// it nil and the alternate path that already does the job.
