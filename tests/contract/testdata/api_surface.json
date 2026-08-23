@@ -1,5 +1,5 @@
 {
- "api_version": "7.6.0",
+ "api_version": "7.7.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -895,6 +895,7 @@
    "channel:integer",
    "data_point_type:string",
    "device_address:string",
+   "display_value:number",
    "interface:string",
    "modified_at:string",
    "parameter:string",

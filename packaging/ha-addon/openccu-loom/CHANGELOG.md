@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.64.1
+
+A correction to the published API description, for the benefit of programs
+that talk to the daemon rather than of the add-on itself. Nothing changes in
+Home Assistant, the Config UI or on your devices.
+
+- A value the daemon was already sending on its live event stream — a
+  reading converted into the unit it is displayed in — is now part of the
+  documented interface, so other software can actually read it. Without
+  that, a client had to keep showing the value it read when it started up.
+
 ## 0.64.0
 
 Three things you asked for, and the two fix rounds that never shipped on their
