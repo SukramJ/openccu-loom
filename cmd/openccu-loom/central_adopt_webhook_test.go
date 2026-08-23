@@ -19,50 +19,102 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// recordingTransport counts the webhook deliveries and remembers the central
-// each one named, so the assertion is about what left the daemon rather than
-// about which method was called.
-type recordingTransport struct {
-	mu       sync.Mutex
-	centrals []string
+// delivered is one webhook POST, reduced to the two fields the assertions
+// key on.
+type delivered struct {
+	central string
+	event   string
 }
 
+// recordingTransport records the webhook deliveries with the central *and*
+// the event each one carried.
+//
+// The event matters: adopting a central produces `system.status_changed`
+// deliveries of its own (the fixtures are deliberately unreachable CCUs), so
+// a count keyed on the central alone mixes them in with whatever the test
+// published. That is what made this suite flaky — see
+// [TestAdoptCentralWiresTheOutboundWebhook].
+type recordingTransport struct {
+	mu   sync.Mutex
+	seen []delivered
+}
+
+// deliveryLatency is charged to every delivery so the assertions below run
+// against a delivery path that is genuinely slower than the publishing that
+// feeds it.
+//
+// Without it this suite could only fail by luck. Delivery is fast on a
+// developer machine, so a mis-measured assertion — reading a count while
+// more deliveries for the same central are still queued — sees a settled
+// state and passes, then fails on a loaded CI runner where it does not.
+// That is how this test failed: it counted every delivery naming the
+// central, adopting one emits `system.status_changed` deliveries of its
+// own, and the two arriving late read as an incident leaking past removal.
+//
+// Sized above the 100ms sleep the assertions used to rely on, so
+// reintroducing that pattern fails here rather than in CI.
+const deliveryLatency = 50 * time.Millisecond
+
 func (rt *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	time.Sleep(deliveryLatency)
 	body, _ := io.ReadAll(req.Body)
 	var env struct {
 		Central string `json:"central"`
+		Event   string `json:"event"`
 	}
 	_ = json.Unmarshal(body, &env)
 	rt.mu.Lock()
-	rt.centrals = append(rt.centrals, env.Central)
+	rt.seen = append(rt.seen, delivered{central: env.Central, event: env.Event})
 	rt.mu.Unlock()
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Header: make(http.Header)}, nil
 }
 
-// deliveriesFor counts the deliveries that named central.
+// deliveriesFor counts every delivery that named central, whatever it
+// carried. Used where the assertion really is "nothing at all left the
+// daemon for this CCU".
 func (rt *recordingTransport) deliveriesFor(name string) int {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	n := 0
-	for _, c := range rt.centrals {
-		if c == name {
+	for _, d := range rt.seen {
+		if d.central == name {
 			n++
 		}
 	}
 	return n
 }
 
-// awaitDeliveries waits until at least n deliveries named central, or fails.
-func awaitDeliveries(t *testing.T, rt *recordingTransport, name string, n int) {
+// incidentsFor counts the incident deliveries that named central — the
+// event [publishIncidentOn] produces, and the only one a test controls the
+// number of.
+func (rt *recordingTransport) incidentsFor(name string) int {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	n := 0
+	for _, d := range rt.seen {
+		if d.central == name && d.event == webhookIncidentEvent {
+			n++
+		}
+	}
+	return n
+}
+
+// webhookIncidentEvent is the `event` field an IncidentRecordedEvent is
+// delivered under (internal/north/webhook/outbound.go).
+const webhookIncidentEvent = "incident.recorded"
+
+// awaitIncidents waits until at least n incident deliveries named central,
+// or fails.
+func awaitIncidents(t *testing.T, rt *recordingTransport, name string, n int) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if rt.deliveriesFor(name) >= n {
+		if rt.incidentsFor(name) >= n {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("webhook deliveries for %q = %d, want at least %d", name, rt.deliveriesFor(name), n)
+	t.Fatalf("webhook incident deliveries for %q = %d, want at least %d", name, rt.incidentsFor(name), n)
 }
 
 // publishIncidentOn fires one incident on the central's own bus, the way the
@@ -113,8 +165,16 @@ func TestAdoptCentralWiresTheOutboundWebhook(t *testing.T) {
 	if !ok {
 		t.Fatal("adopted central 'hooked' not present in the registry")
 	}
+	// A second central that stays registered for the removal check below.
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("witness")); err != nil {
+		t.Fatalf("adoptCentral(witness): %v", err)
+	}
+	witness, ok := reg.Get("witness")
+	if !ok {
+		t.Fatal("adopted central 'witness' not present in the registry")
+	}
 	publishIncidentOn(hooked)
-	awaitDeliveries(t, rt, "hooked", 1)
+	awaitIncidents(t, rt, "hooked", 1)
 
 	// Removal must detach again: a central torn down at runtime keeps its bus
 	// alive long enough for an in-flight event to land, and after a re-adopt
@@ -122,11 +182,21 @@ func TestAdoptCentralWiresTheOutboundWebhook(t *testing.T) {
 	if err := orch.removeCentral(ctx, "hooked"); err != nil {
 		t.Fatalf("removeCentral(hooked): %v", err)
 	}
-	before := rt.deliveriesFor("hooked")
+	before := rt.incidentsFor("hooked")
 	publishIncidentOn(hooked)
-	time.Sleep(100 * time.Millisecond)
-	if after := rt.deliveriesFor("hooked"); after != before {
-		t.Errorf("deliveries after removeCentral = %d, want %d (the subscription leaked past removal)", after, before)
+
+	// The witness is the bound on "nothing arrived", and it is a real bound
+	// rather than a duration: events.Publish dispatches in the caller's
+	// frame, so both incidents are in the delivery queue by the time this
+	// line returns, and the queue is drained by a single worker in order. A
+	// leaked "hooked" delivery is therefore already recorded once the
+	// witness's own delivery shows up. A sleep here proved nothing on a
+	// loaded runner — which is exactly how this test failed in CI while
+	// passing on every developer machine.
+	publishIncidentOn(witness)
+	awaitIncidents(t, rt, "witness", 1)
+	if after := rt.incidentsFor("hooked"); after != before {
+		t.Errorf("incident deliveries after removeCentral = %d, want %d (the subscription leaked past removal)", after, before)
 	}
 
 	// Negative control: with the bridge stopped, a central adopted afterwards
@@ -139,13 +209,20 @@ func TestAdoptCentralWiresTheOutboundWebhook(t *testing.T) {
 	if !ok {
 		t.Fatal("adopted central 'unhooked' not present in the registry")
 	}
+	// No witness is possible here — the bridge is stopped, so nothing can
+	// deliver at all. Stop() unsubscribed every handler, closed the delivery
+	// queue and waited for the worker before returning, and Publish runs its
+	// handlers synchronously, so by the time this call returns there is
+	// nothing left in flight to wait for.
 	publishIncidentOn(unhooked)
-	time.Sleep(100 * time.Millisecond)
 	if got := rt.deliveriesFor("unhooked"); got != 0 {
 		t.Fatalf("deliveries for a central adopted after the bridge stopped = %d, want 0", got)
 	}
 
 	if err := orch.removeCentral(ctx, "unhooked"); err != nil {
 		t.Fatalf("removeCentral(unhooked): %v", err)
+	}
+	if err := orch.removeCentral(ctx, "witness"); err != nil {
+		t.Fatalf("removeCentral(witness): %v", err)
 	}
 }
