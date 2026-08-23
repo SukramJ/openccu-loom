@@ -16,6 +16,11 @@ cover a different scope and are not alternatives to this one:
 the findings of the subsystem deep-audit passes. When in doubt about what is
 still open, trust this file plus `CHANGELOG.md`.
 
+**Round 5 of the full-codebase audit has its own strategy document.**
+[`round-5-audit-strategy.md`](./round-5-audit-strategy.md) records why a fifth
+instance sweep is not the plan — the density data, the six measures that
+replace it, and the metrics that say whether it worked.
+
 ## Open development items
 
 ### Matter
