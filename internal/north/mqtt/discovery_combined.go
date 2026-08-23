@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // CombinedEvent carries the per-channel context needed to emit one HA
@@ -61,8 +60,8 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 		return DiscoveryItem{}
 	}
 	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
-	objectID := fmt.Sprintf("openccu-loom_%s_%d_%s",
-		strings.ToLower(ev.DeviceAddress), ev.ChannelNo, ev.Kind)
+	objectID := fmt.Sprintf("%s_%d_%s",
+		physicalDeviceIdentifier(centralName, ev.DeviceAddress), ev.ChannelNo, ev.Kind)
 
 	mockEv := Event{
 		Central:       centralName,
