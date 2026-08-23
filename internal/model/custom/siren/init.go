@@ -82,25 +82,28 @@ var ipSirenCapabilities = custom.SirenCapabilities{
 	SupportsDuration: true,
 }
 
-func ipSirenConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func ipSirenConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),
 		Capabilities: ipSirenCapabilities,
+		Group:        group,
 	}), nil
 }
 
-func ipSirenSmokeConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func ipSirenSmokeConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return NewSmokeSiren(SmokeSirenConfig{
 		Channel: channel,
 		Writer:  channel.Writer(),
+		Group:   group,
 	}), nil
 }
 
-func ipSoundPlayerConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func ipSoundPlayerConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return NewSoundPlayer(SoundPlayerConfig{
 		Channel: channel,
 		Writer:  channel.Writer(),
+		Group:   group,
 	}), nil
 }
 

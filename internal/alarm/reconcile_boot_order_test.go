@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchcdp "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -218,7 +219,7 @@ func addSoundingSwitch(
 	if !sw.OnWireValue(true) {
 		t.Fatal("the wire value was rejected; the data point would read as unobserved")
 	}
-	cdp := switchcdp.New(ch)
+	cdp := switchcdp.New(ch, custom.RebasedChannelGroupConfig{})
 	if cdp == nil {
 		t.Fatal("switch custom data point was not constructed")
 	}

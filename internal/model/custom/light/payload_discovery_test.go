@@ -28,6 +28,10 @@ func (discoveryCtx) WireParameterStateTopic(parameter string) string {
 	return "test/" + parameter
 }
 
+func (discoveryCtx) WireParameterStateTopicOn(_, parameter string) string {
+	return discoveryCtx{}.WireParameterStateTopic(parameter)
+}
+
 var _ payload.HADiscoveryContext = discoveryCtx{}
 
 // --- Light ---

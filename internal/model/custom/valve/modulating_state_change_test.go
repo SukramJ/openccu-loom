@@ -36,7 +36,7 @@ func makeModulating(t *testing.T) *valve.Modulating {
 	if v == nil {
 		t.Fatal("FloatField returned nil — channel missing LEVEL DP")
 	}
-	return valve.NewModulating(ch)
+	return valve.NewModulating(ch, custom.RebasedChannelGroupConfig{})
 }
 
 // TestModulatingIsStateChangeReturnsTrueWhenUnobserved verifies that

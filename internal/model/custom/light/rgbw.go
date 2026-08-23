@@ -105,9 +105,9 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 	}
 	r := &RGBWLight{
 		ColorLight: cl,
-		kelvin:     custom.IntegerField(cfg.Channel, hmenum.ParameterColorTemperature),
+		kelvin:     custom.IntegerField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldColorTemperature, hmenum.ParameterColorTemperature)),
 		mode:       deviceOperationModeDP(cfg.Channel),
-		effect:     custom.ActionSelectField(cfg.Channel, hmenum.ParameterEffect),
+		effect:     custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldEffect, hmenum.ParameterEffect)),
 		MinKelvin:  2000,
 		MaxKelvin:  6500,
 		channelNo:  chNo,

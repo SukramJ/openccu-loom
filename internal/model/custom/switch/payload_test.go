@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -34,6 +35,10 @@ func (s *stubDiscoveryCtx) WireParameterCommandTopic(param string) string { retu
 
 func (s *stubDiscoveryCtx) WireParameterStateTopic(param string) string { return "wire/state/" + param }
 
+func (s *stubDiscoveryCtx) WireParameterStateTopicOn(_, param string) string {
+	return s.WireParameterStateTopic(param)
+}
+
 func newPayloadSwitch(t *testing.T) *Switch {
 	t.Helper()
 	addr := "VCU2128127:4"
@@ -52,7 +57,7 @@ func newPayloadSwitch(t *testing.T) *Switch {
 		Writer: &stubWriter{},
 	})
 	ch.Put(dp)
-	return New(ch)
+	return New(ch, custom.RebasedChannelGroupConfig{})
 }
 
 // ---------------------------------------------------------------------------

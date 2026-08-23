@@ -49,7 +49,10 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 	if c == nil || ctx == nil {
 		return "", nil
 	}
-	setpointParam := string(paramForSetpoint(c.Kind))
+	// Every wire-backed field names the channel + parameter it actually
+	// resolved to (see [Config.Group]); on the HmIP and classic-RF
+	// families that is the custom DP's own channel, on HM-CC-TC it is
+	// not.
 	// HA's temperature_unit field expects "C" or "F" — not the unit-with-degree-sign.
 	// c.TemperatureUnit() returns "°C" / "°F" by default; strip the leading "°".
 	haTempUnit := strings.TrimPrefix(c.TemperatureUnit(), "°")
@@ -68,9 +71,9 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 		// issues would mislead the user.
 		"optimistic": false,
 		// Direct wire values → per-DP topics with `value_json.value`.
-		"current_temperature_topic":    ctx.WireParameterStateTopic("ACTUAL_TEMPERATURE"),
+		"current_temperature_topic":    ctx.WireParameterStateTopicOn(c.temperatureSlot.ChannelAddress, string(c.temperatureSlot.Parameter)),
 		"current_temperature_template": "{{ value_json.value }}",
-		"temperature_state_topic":      ctx.WireParameterStateTopic(setpointParam),
+		"temperature_state_topic":      ctx.WireParameterStateTopicOn(c.setpointSlot.ChannelAddress, string(c.setpointSlot.Parameter)),
 		"temperature_state_template":   "{{ value_json.value }}",
 		"temperature_command_topic":    ctx.ServiceMethodCommandTopic("set_temperature"),
 		// Derived fields → custom-DP aggregate (curated, derived-only).
@@ -106,7 +109,7 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 		}
 	}
 	if c.HasHumidity() {
-		body["current_humidity_topic"] = ctx.WireParameterStateTopic("HUMIDITY")
+		body["current_humidity_topic"] = ctx.WireParameterStateTopicOn(c.humiditySlot.ChannelAddress, string(c.humiditySlot.Parameter))
 		body["current_humidity_template"] = "{{ value_json.value }}"
 	}
 	// The action surface is only advertised when the thermostat has an

@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchdev "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -46,7 +47,7 @@ func buildAccessPermissionDP(addr string, w *dispatchWriter) *switchdev.AccessPe
 		},
 		Writer: w,
 	}))
-	return switchdev.NewAccessPermission(ch)
+	return switchdev.NewAccessPermission(ch, custom.RebasedChannelGroupConfig{})
 }
 
 // TestDispatchAccessPermission verifies the switch operations reach the

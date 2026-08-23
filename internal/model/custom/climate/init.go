@@ -189,6 +189,7 @@ func ipThermostatConstructor(channel *device.Channel, group custom.RebasedChanne
 		Capabilities:          ipCapabilities,
 		Kind:                  KindIP,
 		ActivityStateChannels: activityStateChannels(group),
+		Group:                 group,
 	}), nil
 }
 
@@ -199,33 +200,37 @@ func ipThermostatGroupConstructor(channel *device.Channel, group custom.RebasedC
 		Capabilities:          ipCapabilities,
 		Kind:                  KindIP,
 		ActivityStateChannels: activityStateChannels(group),
+		Group:                 group,
 	}), nil
 }
 
-func rfThermostatConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func rfThermostatConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),
 		Capabilities: rfCapabilities,
 		Kind:         KindRF,
+		Group:        group,
 	}), nil
 }
 
-func rfThermostatGroupConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func rfThermostatGroupConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),
 		Capabilities: rfCapabilities,
 		Kind:         KindRF,
+		Group:        group,
 	}), nil
 }
 
-func simpleRfThermostatConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func simpleRfThermostatConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),
 		Capabilities: simpleRfCapabilities,
 		Kind:         KindSimpleRF,
+		Group:        group,
 	}), nil
 }
 

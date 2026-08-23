@@ -20,7 +20,7 @@ import (
 )
 
 // newTestIrrigation builds a channel with a STATE *generic.Switch wire-DP
-// and calls NewIrrigation(ch). It replaces the old NewIrrigation(addr, centralName, w)
+// and calls NewIrrigation(ch, custom.RebasedChannelGroupConfig{}). It replaces the old NewIrrigation(addr, centralName, w)
 // three-argument form in test fixtures.
 func newTestIrrigation(t *testing.T, addr string, w custom.Writer) *Irrigation {
 	t.Helper()
@@ -39,11 +39,11 @@ func newTestIrrigation(t *testing.T, addr string, w custom.Writer) *Irrigation {
 		Writer: w,
 	})
 	ch.Put(dp)
-	return NewIrrigation(ch)
+	return NewIrrigation(ch, custom.RebasedChannelGroupConfig{})
 }
 
 // newTestModulating builds a channel with a LEVEL *generic.Float wire-DP
-// and calls NewModulating(ch). It replaces the old NewModulating(addr, centralName, w)
+// and calls NewModulating(ch, custom.RebasedChannelGroupConfig{}). It replaces the old NewModulating(addr, centralName, w)
 // three-argument form in test fixtures.
 func newTestModulating(t *testing.T, addr string, w custom.Writer) *Modulating {
 	t.Helper()
@@ -62,7 +62,7 @@ func newTestModulating(t *testing.T, addr string, w custom.Writer) *Modulating {
 		Writer: w,
 	})
 	ch.Put(dp)
-	return NewModulating(ch)
+	return NewModulating(ch, custom.RebasedChannelGroupConfig{})
 }
 
 type stubWriter struct {

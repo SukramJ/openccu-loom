@@ -138,6 +138,31 @@ type Config struct {
 	// IP profile constructors from the rebased channel-group schema;
 	// empty for devices whose profile maps no STATE field.
 	ActivityStateChannels []int
+
+	// Group is the device profile's rebased channel-group schema. It
+	// states which parameter on which channel each composed field maps
+	// to, and [New] binds setpoint / temperature / humidity through it
+	// rather than through fixed parameter names on the constructor's
+	// own channel. HM-CC-TC is the device that makes the difference
+	// visible: its setpoint is SETPOINT on the CLIMATECONTROL_REGULATOR
+	// channel while the custom DP sits on the WEATHER channel, and its
+	// current temperature is TEMPERATURE rather than ACTUAL_TEMPERATURE.
+	//
+	// The zero value is honoured: a Climate built without a schema (a
+	// unit test, a hand-wired fixture) keeps the per-kind parameter
+	// names on its own channel.
+	Group custom.RebasedChannelGroupConfig
+}
+
+// slotRef records the wire target a composed field resolved to. It is
+// kept alongside the typed data-point pointer because the north-bound
+// discovery payload has to name the topic the value is published on —
+// which is the *resolving* channel, not necessarily the custom DP's own
+// channel — and because the setpoint write path needs an address even
+// when the data point itself is absent from the model.
+type slotRef struct {
+	ChannelAddress string
+	Parameter      hmenum.Parameter
 }
 
 // Climate is a thermostat custom data point.
@@ -177,6 +202,11 @@ type Climate struct {
 	humidityInt        *generic.Sensor[int32]
 	temperatureMinimum *generic.Float // TEMPERATURE_MINIMUM operator override
 	temperatureMaximum *generic.Float // TEMPERATURE_MAXIMUM operator override
+	// setpointSlot / temperatureSlot / humiditySlot record where the
+	// three composed wire fields resolved to. Immutable after [New].
+	setpointSlot    slotRef
+	temperatureSlot slotRef
+	humiditySlot    slotRef
 	// activityStateChannels carries [Config.ActivityStateChannels];
 	// consulted by [Climate.activityStateDPs] to resolve the heating-
 	// relay STATE data points on sibling channels at call time.
@@ -257,16 +287,31 @@ const (
 // thermostats (e.g. RF without humidity).
 func New(cfg Config) *Climate {
 	address := ""
+	// Resolve the three composed wire fields through the profile
+	// schema, each with the per-kind parameter name on the own channel
+	// as the fallback for a Climate built without one.
+	setpointCh, setpointParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSetpoint, paramForSetpoint(cfg.Kind))
+	temperatureCh, temperatureParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldTemperature, hmenum.ParameterActualTemperature)
+	humidityCh, humidityParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldHumidity, hmenum.ParameterHumidity)
+	setpointDP := custom.FloatField(setpointCh, setpointParam)
+
 	var key hmtypes.DataPointKey
 	if cfg.Channel != nil {
 		address = cfg.Channel.Address
-		// Build the DataPointKey from the setpoint DP when available;
-		// fall back to a minimal key (ChannelAddress + parameter name)
-		// so the materializer can attach us even on channels without a
-		// wired setpoint. The key satisfies [device.AttachableDataPoint].
-		setpointParam := paramForSetpoint(cfg.Kind)
-		if sp := custom.FloatField(cfg.Channel, setpointParam); sp != nil {
-			key = sp.DataPointKey()
+		// Build the DataPointKey from the setpoint DP when it sits on
+		// this channel; fall back to a minimal key (ChannelAddress +
+		// parameter name) so the materializer can attach us even on
+		// channels without a wired setpoint. The key satisfies
+		// [device.AttachableDataPoint].
+		//
+		// A setpoint on a *sibling* channel deliberately keeps the
+		// synthesised shape: the key is the custom DP's identity — the
+		// REST/WS `cdps` surface, the MQTT unique_id and the wire name
+		// all derive from it — and that identity is the channel the DP
+		// is attached to, never the channel one of its slots happens to
+		// live on.
+		if setpointDP != nil && setpointCh == cfg.Channel {
+			key = setpointDP.DataPointKey()
 		} else {
 			key = hmtypes.DataPointKey{
 				ChannelAddress: address,
@@ -280,12 +325,15 @@ func New(cfg Config) *Climate {
 		Kind:               cfg.Kind,
 		key:                key,
 		writer:             cfg.Writer,
-		setpoint:           custom.FloatField(cfg.Channel, paramForSetpoint(cfg.Kind)),
-		actualTemperature:  custom.FloatSensorField(cfg.Channel, hmenum.ParameterActualTemperature),
-		humidity:           custom.FloatSensorField(cfg.Channel, hmenum.ParameterHumidity),
-		humidityInt:        custom.IntegerSensorField(cfg.Channel, hmenum.ParameterHumidity),
-		temperatureMinimum: custom.FloatField(cfg.Channel, hmenum.ParameterTemperatureMinimum),
-		temperatureMaximum: custom.FloatField(cfg.Channel, hmenum.ParameterTemperatureMaximum),
+		setpoint:           setpointDP,
+		actualTemperature:  custom.FloatSensorField(temperatureCh, temperatureParam),
+		humidity:           custom.FloatSensorField(humidityCh, humidityParam),
+		humidityInt:        custom.IntegerSensorField(humidityCh, humidityParam),
+		temperatureMinimum: custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldTemperatureMinimum, hmenum.ParameterTemperatureMinimum)),
+		temperatureMaximum: custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldTemperatureMaximum, hmenum.ParameterTemperatureMaximum)),
+		setpointSlot:       slotRefOf(setpointCh, setpointParam, address),
+		temperatureSlot:    slotRefOf(temperatureCh, temperatureParam, address),
+		humiditySlot:       slotRefOf(humidityCh, humidityParam, address),
 		// channelRef carries the climate channel so the lazy week-
 		// program-pointer lookup in `numWeekPrograms` can walk to the
 		// device root at call time. Construction-time resolution
@@ -315,6 +363,17 @@ func New(cfg Config) *Climate {
 		_ = c.temperatureMaximum.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
 	}
 	return c
+}
+
+// slotRefOf flattens a resolved slot into the address + parameter pair
+// Climate keeps. `ownAddress` covers the slot whose channel is nil (a
+// Climate constructed without a channel at all).
+func slotRefOf(ch *device.Channel, parameter hmenum.Parameter, ownAddress string) slotRef {
+	addr := ownAddress
+	if ch != nil {
+		addr = ch.Address
+	}
+	return slotRef{ChannelAddress: addr, Parameter: parameter}
 }
 
 // DataPointKey returns the composite identifier used by the materializer
@@ -970,7 +1029,7 @@ func (c *Climate) SetTemperature(ctx context.Context, v float64, priority hmenum
 	if c.writer == nil {
 		return errors.New("climate: set temperature: no setpoint data point and no writer")
 	}
-	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, paramForSetpoint(c.Kind), v, priority); err != nil {
+	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.setpointSlot.ChannelAddress, c.setpointSlot.Parameter, v, priority); err != nil {
 		return fmt.Errorf("climate: set temperature: %w", err)
 	}
 	return nil
@@ -993,7 +1052,7 @@ func (c *Climate) SetTemperatureRaw(ctx context.Context, v float64, priority hme
 	if c.writer == nil {
 		return errors.New("climate: set temperature raw: no setpoint data point and no writer")
 	}
-	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, paramForSetpoint(c.Kind), v, priority); err != nil {
+	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.setpointSlot.ChannelAddress, c.setpointSlot.Parameter, v, priority); err != nil {
 		return fmt.Errorf("climate: set temperature raw: %w", err)
 	}
 	return nil

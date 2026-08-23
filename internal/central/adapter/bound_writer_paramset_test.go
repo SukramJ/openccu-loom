@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchcdp "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -155,7 +156,7 @@ func TestCollectorBundlesTheBoundedSwitchOn(t *testing.T) {
 	t.Parallel()
 
 	rec := &recordingValueWriter{}
-	dev := switchcdp.New(switchChannelFor(t, newBoundWriter("ccu", "HmIP-RF", rec)))
+	dev := switchcdp.New(switchChannelFor(t, newBoundWriter("ccu", "HmIP-RF", rec)), custom.RebasedChannelGroupConfig{})
 	if dev == nil {
 		t.Fatal("switch custom data point was not constructed")
 	}

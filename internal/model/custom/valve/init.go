@@ -24,8 +24,8 @@ import (
 func init() {
 	custom.DefaultRegistry().MustRegisterConstructor(
 		hmenum.DeviceProfileIPIrrigationValve,
-		func(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-			v := NewIrrigation(ch)
+		func(ch *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+			v := NewIrrigation(ch, group)
 			if v == nil {
 				return nil, nil
 			}

@@ -36,7 +36,7 @@ type DRGDaliLight struct {
 func NewDRGDaliLight(cfg Config, minK, maxK int32) *DRGDaliLight {
 	l := &DRGDaliLight{
 		ColorTempLight: NewColorTempLight(cfg, minK, maxK),
-		effect:         custom.ActionSelectField(cfg.Channel, hmenum.ParameterEffect),
+		effect:         custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldEffect, hmenum.ParameterEffect)),
 	}
 	return l
 }

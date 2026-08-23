@@ -93,7 +93,7 @@ func newSwitchChannel(t *testing.T, deviceAddress, channelAddress string, channe
 	if withOnTime {
 		putOnTime(ch)
 	}
-	sw := switchcdp.New(ch)
+	sw := switchcdp.New(ch, custom.RebasedChannelGroupConfig{})
 	if sw == nil {
 		t.Fatal("switchcdp.New returned nil — STATE wire DP not resolved")
 	}
@@ -485,12 +485,12 @@ func TestOutputCandidatesOrderedByCentralThenDeviceThenChannel(t *testing.T) {
 	putSwitchState(chB)
 	ch2 := devB.AddChannel("ZZZ0001:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
 	putSwitchState(ch2)
-	ch2.SetCustomDataPoint(switchcdp.New(ch2))
-	chB.SetCustomDataPoint(switchcdp.New(chB))
+	ch2.SetCustomDataPoint(switchcdp.New(ch2, custom.RebasedChannelGroupConfig{}))
+	chB.SetCustomDataPoint(switchcdp.New(chB, custom.RebasedChannelGroupConfig{}))
 
 	devA, chA := newTestChannel(t, "AAA0001", "AAA0001:1", 1, "SWITCH")
 	putSwitchState(chA)
-	chA.SetCustomDataPoint(switchcdp.New(chA))
+	chA.SetCustomDataPoint(switchcdp.New(chA, custom.RebasedChannelGroupConfig{}))
 
 	reg := central.NewRegistry()
 	unitB, err := central.New(central.Config{Name: "zz-central"})
@@ -598,7 +598,7 @@ func TestOutputCandidatesSkipsNonCandidateChannels(t *testing.T) {
 	_ = plainCh // no custom DP attached — not a candidate
 	swCh := dev.AddChannel("MIX0001:4", 4, "SWITCH", hmenum.ParamsetKeyValues)
 	putSwitchState(swCh)
-	swCh.SetCustomDataPoint(switchcdp.New(swCh))
+	swCh.SetCustomDataPoint(switchcdp.New(swCh, custom.RebasedChannelGroupConfig{}))
 
 	reg := newCandidatesRegistry(t, "mix-ccu", dev)
 	s := &Service{reg: reg}
@@ -620,7 +620,7 @@ func TestOutputCandidatesClassFilter(t *testing.T) {
 
 	dev, swCh := newTestChannel(t, "FLT0001", "FLT0001:4", 4, "SWITCH")
 	putSwitchState(swCh)
-	swCh.SetCustomDataPoint(switchcdp.New(swCh))
+	swCh.SetCustomDataPoint(switchcdp.New(swCh, custom.RebasedChannelGroupConfig{}))
 	smokeCh := dev.AddChannel("FLT0001:1", 1, "SMOKE_DETECTOR", hmenum.ParamsetKeyValues)
 	smokeCh.SetCustomDataPoint(sirencdp.NewSmokeSiren(sirencdp.SmokeSirenConfig{Channel: smokeCh}))
 

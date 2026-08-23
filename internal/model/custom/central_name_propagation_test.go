@@ -48,7 +48,7 @@ func makeChannelWithCentralName(t *testing.T, addr, centralName string) *device.
 // makeChannelWithStateDPAndCentralName builds a channel, stamps centralName on
 // it, and registers a STATE *generic.Switch wire-DP carrying both centralName
 // and the given writer. Used by tests that verify CentralName propagation
-// through switchdev.New(ch) / valve.NewIrrigation(ch).
+// through switchdev.New(ch, custom.RebasedChannelGroupConfig{}) / valve.NewIrrigation(ch, custom.RebasedChannelGroupConfig{}).
 func makeChannelWithStateDPAndCentralName(t *testing.T, addr, centralName string, w custom.Writer) *device.Channel {
 	t.Helper()
 	ch := makeChannelWithCentralName(t, addr, centralName)
@@ -72,7 +72,7 @@ func makeChannelWithStateDPAndCentralName(t *testing.T, addr, centralName string
 // makeChannelWithLevelDPAndCentralName builds a channel, stamps centralName on
 // it, and registers a LEVEL *generic.Float wire-DP carrying both centralName
 // and the given writer. Used by tests that verify CentralName propagation
-// through valve.NewModulating(ch).
+// through valve.NewModulating(ch, custom.RebasedChannelGroupConfig{}).
 func makeChannelWithLevelDPAndCentralName(t *testing.T, addr, centralName string, w custom.Writer) *device.Channel {
 	t.Helper()
 	ch := makeChannelWithCentralName(t, addr, centralName)
@@ -166,7 +166,7 @@ func TestSwitchDevNewPropagatesCentralName(t *testing.T) {
 	)
 
 	ch := makeChannelWithStateDPAndCentralName(t, addr, centralName, nopWriter{})
-	sw := switchdev.New(ch)
+	sw := switchdev.New(ch, custom.RebasedChannelGroupConfig{})
 	if sw == nil {
 		t.Fatal("switchdev.New returned nil")
 	}
@@ -192,7 +192,7 @@ func TestIrrigationValveNewPropagatesCentralName(t *testing.T) {
 	)
 
 	ch := makeChannelWithStateDPAndCentralName(t, addr, centralName, nopWriter{})
-	v := valve.NewIrrigation(ch)
+	v := valve.NewIrrigation(ch, custom.RebasedChannelGroupConfig{})
 	if v == nil {
 		t.Fatal("valve.NewIrrigation returned nil")
 	}
@@ -218,7 +218,7 @@ func TestModulatingValveNewPropagatesCentralName(t *testing.T) {
 	)
 
 	ch := makeChannelWithLevelDPAndCentralName(t, addr, centralName, nopWriter{})
-	v := valve.NewModulating(ch)
+	v := valve.NewModulating(ch, custom.RebasedChannelGroupConfig{})
 	if v == nil {
 		t.Fatal("valve.NewModulating returned nil")
 	}
@@ -248,7 +248,7 @@ func TestCustomMaterializerPropagatesCentralName(t *testing.T) {
 	)
 
 	// The STATE wire-DP must be present on the channel before the constructor
-	// runs because switchdev.New(ch) retrieves it via SwitchField rather than
+	// runs because switchdev.New(ch, custom.RebasedChannelGroupConfig{}) retrieves it via SwitchField rather than
 	// allocating a fresh one.
 	ch := makeChannelWithStateDPAndCentralName(t, addr, centralName, nopWriter{})
 
@@ -274,12 +274,12 @@ func TestCustomMaterializerPropagatesCentralName(t *testing.T) {
 	}
 
 	// Use the real IPSwitch constructor from the switch sub-package.
-	// switchdev.New(ch) retrieves the channel's existing STATE wire-DP, so
+	// switchdev.New(ch, custom.RebasedChannelGroupConfig{}) retrieves the channel's existing STATE wire-DP, so
 	// CentralName propagates through the DP's Config.CentralName field (set
 	// above in makeChannelWithStateDPAndCentralName) rather than via a fresh
 	// allocation.
 	ctor := func(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
-		return switchdev.New(ch), nil
+		return switchdev.New(ch, custom.RebasedChannelGroupConfig{}), nil
 	}
 	if err := reg.RegisterConstructor(hmenum.DeviceProfileIPSwitch, ctor); err != nil {
 		t.Fatalf("RegisterConstructor: %v", err)

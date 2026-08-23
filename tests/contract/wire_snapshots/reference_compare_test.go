@@ -113,7 +113,7 @@ func newSwitchFixtureRef(t *testing.T, w *fakeWriter) *switchdev.Switch {
 		Writer: w,
 	})
 	ch.Put(dp)
-	return switchdev.New(ch)
+	return switchdev.New(ch, custom.RebasedChannelGroupConfig{})
 }
 
 func newBlindFixtureRef(t *testing.T, w *fakeWriter) *cover.Blind {
@@ -572,7 +572,7 @@ func newIrrigationFixtureRef(t *testing.T, w *fakeWriter) *valve.Irrigation {
 		Writer:     w,
 	})
 	ch.Put(dp)
-	return valve.NewIrrigation(ch)
+	return valve.NewIrrigation(ch, custom.RebasedChannelGroupConfig{})
 }
 
 func newModulatingFixtureRef(t *testing.T, w *fakeWriter) *valve.Modulating {
@@ -585,7 +585,7 @@ func newModulatingFixtureRef(t *testing.T, w *fakeWriter) *valve.Modulating {
 		Writer:     w,
 	})
 	ch.Put(dp)
-	return valve.NewModulating(ch)
+	return valve.NewModulating(ch, custom.RebasedChannelGroupConfig{})
 }
 
 func newClimateIPFixtureRef(t *testing.T, w *fakeWriter) *climate.Climate {

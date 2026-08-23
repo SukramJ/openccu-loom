@@ -46,6 +46,11 @@ type Config struct {
 	Channel      *device.Channel
 	Writer       Writer
 	Capabilities custom.LightCapabilities
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this light. Every composed field resolves through it —
+	// see [custom.ResolveSlotOr]. The zero value is valid: each binding
+	// falls back to the parameter named at the call site.
+	Group custom.RebasedChannelGroupConfig
 }
 
 // Light is a single dimmable light. The LEVEL value is the channel's
@@ -135,7 +140,7 @@ type Light struct {
 // subscription is cleaned up by [Close] when the custom DP is
 // replaced on the channel.
 func New(cfg Config) *Light {
-	level := custom.FloatField(cfg.Channel, hmenum.ParameterLevel)
+	level := custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel))
 	hasOnTimeUnit := cfg.Channel != nil && cfg.Channel.Parameter(hmenum.ParameterOnTimeUnit) != nil
 	onTimeValueParam, onTimeUnitParam := resolveOnTimeParams(cfg.Channel)
 	l := &Light{

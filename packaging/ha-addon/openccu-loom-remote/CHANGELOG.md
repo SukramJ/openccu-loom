@@ -10,6 +10,8 @@ top-level CHANGELOG.md. Newest version first.
   release stops the daemon from reconnecting an interface it is still bringing
   up — which announced the whole fleet going offline and back on every start —
   and restores the start-up events a Matter controller reads after pairing.
+  release fixes the classic BidCos thermostats — HM-CC-TC showing no temperature
+  at all, and the RF wall thermostats showing no humidity.
 
 # 0.63.0
 

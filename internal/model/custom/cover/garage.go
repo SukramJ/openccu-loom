@@ -113,6 +113,10 @@ type GarageConfig struct {
 	Channel      *device.Channel
 	Writer       Writer
 	Capabilities custom.CoverCapabilities
+	// Group is the rebased channel-group schema of the profile that
+	// materialised this door. Every composed field resolves through it —
+	// see [custom.ResolveSlotOr].
+	Group custom.RebasedChannelGroupConfig
 }
 
 // NewGarage constructs a Garage.
@@ -131,9 +135,9 @@ func NewGarage(cfg GarageConfig) *Garage {
 		Capabilities:  cfg.Capabilities,
 		key:           key,
 		writer:        cfg.Writer,
-		doorStateDp:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterDoorState),
-		doorCommandDp: custom.ActionSelectField(cfg.Channel, hmenum.ParameterDoorCommand),
-		sectionDp:     custom.IntegerSensorField(cfg.Channel, hmenum.ParameterSection),
+		doorStateDp:   custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDoorState, hmenum.ParameterDoorState)),
+		doorCommandDp: custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDoorCommand, hmenum.ParameterDoorCommand)),
+		sectionDp:     custom.IntegerSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSection, hmenum.ParameterSection)),
 	}
 	g.registerGarageServices()
 	if g.doorStateDp != nil {

@@ -131,6 +131,10 @@ func (roundtripDiscoveryCtx) ServiceMethodCommandTopic(m string) string {
 func (roundtripDiscoveryCtx) WireParameterCommandTopic(p string) string { return "rt/" + p + "/set" }
 func (roundtripDiscoveryCtx) WireParameterStateTopic(p string) string   { return "rt/" + p }
 
+func (roundtripDiscoveryCtx) WireParameterStateTopicOn(addr, p string) string {
+	return "rt/" + addr + "/" + p
+}
+
 var _ pload.HADiscoveryContext = roundtripDiscoveryCtx{}
 
 // rtPutFloat registers a writable FLOAT wire DP on ch under parameter.
@@ -609,7 +613,7 @@ func buildIrrigationBody(t *testing.T) map[string]any {
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "VALVE0001"})
 	ch := d.AddChannel(addr, 1, "IRRIGATION_VALVE", hmenum.ParamsetKeyValues)
 	rtPutSwitch(ch, addr, hmenum.ParameterState, w)
-	v := valve.NewIrrigation(ch)
+	v := valve.NewIrrigation(ch, custom.RebasedChannelGroupConfig{})
 	if v == nil {
 		t.Fatal("valve.NewIrrigation returned nil (STATE switch not resolved)")
 	}
@@ -629,7 +633,7 @@ func buildModulatingBody(t *testing.T) map[string]any {
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "VALVE0002"})
 	ch := d.AddChannel(addr, 1, "MODULATING_VALVE", hmenum.ParamsetKeyValues)
 	rtPutFloat(ch, addr, hmenum.ParameterLevel, w)
-	v := valve.NewModulating(ch)
+	v := valve.NewModulating(ch, custom.RebasedChannelGroupConfig{})
 	if v == nil {
 		t.Fatal("valve.NewModulating returned nil (LEVEL float not resolved)")
 	}

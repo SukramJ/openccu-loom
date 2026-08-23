@@ -47,8 +47,8 @@ type Irrigation struct {
 // custom-wrapper's listeners.
 //
 // Returns nil when ch carries no *generic.Switch for STATE.
-func NewIrrigation(ch *device.Channel) *Irrigation {
-	sw := custom.SwitchField(ch, hmenum.ParameterState)
+func NewIrrigation(ch *device.Channel, group custom.RebasedChannelGroupConfig) *Irrigation {
+	sw := custom.SwitchField(custom.ResolveSlotOr(ch, group, hmenum.FieldState, hmenum.ParameterState))
 	if sw == nil {
 		return nil
 	}
@@ -157,8 +157,8 @@ func (v *Modulating) Category() hmenum.DataPointCategory { return hmenum.DataPoi
 // device pipeline via [device.Channel.Put]).
 //
 // Returns nil when ch carries no *generic.Float for LEVEL.
-func NewModulating(ch *device.Channel) *Modulating {
-	lf := custom.FloatField(ch, hmenum.ParameterLevel)
+func NewModulating(ch *device.Channel, group custom.RebasedChannelGroupConfig) *Modulating {
+	lf := custom.FloatField(custom.ResolveSlotOr(ch, group, hmenum.FieldLevel, hmenum.ParameterLevel))
 	if lf == nil {
 		return nil
 	}

@@ -161,8 +161,9 @@ type stubDiscoveryCtx struct {
 	installTopic string
 }
 
-func (s stubDiscoveryCtx) AggregatedStateTopic() string              { return s.stateTopic }
-func (s stubDiscoveryCtx) CustomDPStateTopic() string                { return s.stateTopic }
-func (s stubDiscoveryCtx) ServiceMethodCommandTopic(_ string) string { return s.installTopic }
-func (s stubDiscoveryCtx) WireParameterCommandTopic(_ string) string { return "" }
-func (s stubDiscoveryCtx) WireParameterStateTopic(_ string) string   { return "" }
+func (s stubDiscoveryCtx) AggregatedStateTopic() string                 { return s.stateTopic }
+func (s stubDiscoveryCtx) CustomDPStateTopic() string                   { return s.stateTopic }
+func (s stubDiscoveryCtx) ServiceMethodCommandTopic(_ string) string    { return s.installTopic }
+func (s stubDiscoveryCtx) WireParameterCommandTopic(_ string) string    { return "" }
+func (s stubDiscoveryCtx) WireParameterStateTopic(_ string) string      { return "" }
+func (s stubDiscoveryCtx) WireParameterStateTopicOn(_, _ string) string { return "" }
