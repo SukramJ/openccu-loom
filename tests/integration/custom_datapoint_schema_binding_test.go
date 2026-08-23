@@ -22,212 +22,66 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// unboundSchemaFields declares a "<model>/<profile>.<field>" the fleet
-// materialises without the composing custom data point holding a pointer to
-// the resolved parameter.
+// unboundSchemaFields declares a schema-resolved slot the composing custom
+// data point does not hold a pointer to, together with how the value reaches
+// its consumer instead.
 //
-// An entry is not an exemption from the rule — it is a statement that this
-// particular field reaches its consumer some other way, with the way named.
-// The common case is a field consumed through Subscribe or through an
-// embedded struct rather than held as a data-point pointer, which the
-// reflection walk below cannot see.
+// Two key forms are accepted. "<model>/<profile>.<field>" pins one device
+// family; "<profile>.<field>" covers every model the profile serves. The
+// broad form exists because a field consumed through Subscribe is consumed
+// that way for all of them, and writing the same sentence once per model
+// would bury the one entry that means something else.
 //
-// Anything not listed here and not bound is the defect this guard exists to
-// catch: the schema says the device carries the parameter, the device does
-// carry it, and the custom data point looked somewhere else.
-// candidateNotYetMeasured marks a slot this guard found unbound and nobody
-// has decided yet.
-//
-// It is not a clean bill of health. Each one is either a field consumed
-// through Subscribe or through an embedded struct — which this reflection
-// walk cannot see — or the very defect the guard exists to catch, of the same
-// shape as the three that shipped broken: HM-CC-TC with no temperature,
-// HmIP-DLD with no jam report, the RF jalousies with no tilt. Deciding one
-// means feeding the parameter on the resolved channel and reading the
-// accessor back, the way notes/plans/custom-dp-profile-schema-binding.md
-// describes; the answer then either names the other consumer here or removes
-// the entry along with a fix.
-//
-// What the list does buy, unfinished: no *new* unbound slot can appear
-// without failing this test.
-const candidateNotYetMeasured = "candidate — not yet measured against the wire"
+// An entry is not an exemption from the rule. It is a measured statement:
+// each was decided by feeding the parameter on the channel the schema
+// resolves it to and reading the accessor back, never by reading the code.
+// Anything not listed and not bound is the defect this guard exists to
+// catch — the schema says the device carries the parameter, the device does
+// carry it, and the custom data point looked somewhere else. Five defects of
+// exactly that shape were found and fixed while this list was being
+// measured.
+
+// The reasons a schema-resolved slot is legitimately not held as a pointer.
+const (
+	// consumedThroughSubscribe: the value arrives through an OnAnyUpdate
+	// subscription and lands in a plain field, so there is no data-point
+	// pointer for the reflection walk to find. Proven per field in
+	// internal/model/custom/climate/schema_field_binding_test.go.
+	consumedThroughSubscribe = "consumed through Subscribe, not held as a data-point pointer"
+
+	// reachedThroughActivityStateChannels: the profile names relay-state
+	// channels at offsets the custom DP resolves separately, outside the
+	// composed-field path.
+	reachedThroughActivityStateChannels = "bound via Config.ActivityStateChannels, outside the composed-field path"
+
+	// promotedAsAStandaloneDataPoint: not composed at all — the profile
+	// marks the standalone sensor visible and it reaches consumers as its
+	// own data point. Matches the reference stack, whose climate model has
+	// no concentration field either.
+	promotedAsAStandaloneDataPoint = "not composed: the profile marks the standalone sensor visible"
+)
 
 var unboundSchemaFields = map[string]string{
-	// IPCover.group_level_2 — 3 device(s)
-	"HmIP-DRBLI4/IPCover.group_level_2": candidateNotYetMeasured,
-	"HmIP-FBL/IPCover.group_level_2":    candidateNotYetMeasured,
-	"HmIPW-DRBL4/IPCover.group_level_2": candidateNotYetMeasured,
-	// IPDRGDALI.hue — 1 device(s)
-	"HmIP-DRG-DALI/IPDRGDALI.hue": candidateNotYetMeasured,
-	// IPDRGDALI.saturation — 1 device(s)
-	"HmIP-DRG-DALI/IPDRGDALI.saturation": candidateNotYetMeasured,
-	// IPIrrigationValve.group_state — 1 device(s)
-	"ELV-SH-WSM/IPIrrigationValve.group_state": candidateNotYetMeasured,
-	// IPRGBW.direction — 2 device(s)
-	"HmIP-LSC/IPRGBW.direction":  candidateNotYetMeasured,
-	"HmIP-RGBW/IPRGBW.direction": candidateNotYetMeasured,
-	// IPSoundPlayer.direction — 1 device(s)
-	"HmIP-MP3P/IPSoundPlayer.direction": candidateNotYetMeasured,
-	// IPSoundPlayerLed.direction — 1 device(s)
-	"HmIP-MP3P/IPSoundPlayerLed.direction": candidateNotYetMeasured,
-	// IPSwitch.group_state — 23 device(s)
-	"ELV-SH-BS2/IPSwitch.group_state":     candidateNotYetMeasured,
-	"ELV-SH-SW1-BAT/IPSwitch.group_state": candidateNotYetMeasured,
-	"HMIP-PS/IPSwitch.group_state":        candidateNotYetMeasured,
-	"HMIP-PSM/IPSwitch.group_state":       candidateNotYetMeasured,
-	"HmIP-BSL/IPSwitch.group_state":       candidateNotYetMeasured,
-	"HmIP-BSM/IPSwitch.group_state":       candidateNotYetMeasured,
-	"HmIP-DRSI1/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIP-DRSI4/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIP-FSI16/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIP-FSM16/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIP-MOD-OC8/IPSwitch.group_state":   candidateNotYetMeasured,
-	"HmIP-PCBS-BAT/IPSwitch.group_state":  candidateNotYetMeasured,
-	"HmIP-PCBS/IPSwitch.group_state":      candidateNotYetMeasured,
-	"HmIP-PCBS2/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIP-PSMCO/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIP-SCTH230/IPSwitch.group_state":   candidateNotYetMeasured,
-	"HmIP-SMO230-A/IPSwitch.group_state":  candidateNotYetMeasured,
-	"HmIP-USBSM/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIP-WGC/IPSwitch.group_state":       candidateNotYetMeasured,
-	"HmIP-WGTC/IPSwitch.group_state":      candidateNotYetMeasured,
-	"HmIP-WHS2/IPSwitch.group_state":      candidateNotYetMeasured,
-	"HmIPW-DRS8/IPSwitch.group_state":     candidateNotYetMeasured,
-	"HmIPW-FIO6/IPSwitch.group_state":     candidateNotYetMeasured,
-	// IPSwitch.state — 1 device(s)
-	"HmIP-WGTC/IPSwitch.state": candidateNotYetMeasured,
-	// IPThermostat.active_profile — 19 device(s)
-	"ALPHA-IP-RBG/IPThermostat.active_profile":      candidateNotYetMeasured,
-	"HmIP-BWTH/IPThermostat.active_profile":         candidateNotYetMeasured,
-	"HmIP-STH/IPThermostat.active_profile":          candidateNotYetMeasured,
-	"HmIP-STHD/IPThermostat.active_profile":         candidateNotYetMeasured,
-	"HmIP-WGTC/IPThermostat.active_profile":         candidateNotYetMeasured,
-	"HmIP-WTH-1/IPThermostat.active_profile":        candidateNotYetMeasured,
-	"HmIP-WTH-2/IPThermostat.active_profile":        candidateNotYetMeasured,
-	"HmIP-eTRV-2 I9F/IPThermostat.active_profile":   candidateNotYetMeasured,
-	"HmIP-eTRV-2/IPThermostat.active_profile":       candidateNotYetMeasured,
-	"HmIP-eTRV-B-2 R4M/IPThermostat.active_profile": candidateNotYetMeasured,
-	"HmIP-eTRV-B/IPThermostat.active_profile":       candidateNotYetMeasured,
-	"HmIP-eTRV-B1/IPThermostat.active_profile":      candidateNotYetMeasured,
-	"HmIP-eTRV-C-2/IPThermostat.active_profile":     candidateNotYetMeasured,
-	"HmIP-eTRV-E/IPThermostat.active_profile":       candidateNotYetMeasured,
-	"HmIP-eTRV-F/IPThermostat.active_profile":       candidateNotYetMeasured,
-	"HmIPW-SCTHD/IPThermostat.active_profile":       candidateNotYetMeasured,
-	"HmIPW-STH/IPThermostat.active_profile":         candidateNotYetMeasured,
-	"HmIPW-STHD/IPThermostat.active_profile":        candidateNotYetMeasured,
-	"HmIPW-WTH/IPThermostat.active_profile":         candidateNotYetMeasured,
-	// IPThermostat.boost_mode — 19 device(s)
-	"ALPHA-IP-RBG/IPThermostat.boost_mode":      candidateNotYetMeasured,
-	"HmIP-BWTH/IPThermostat.boost_mode":         candidateNotYetMeasured,
-	"HmIP-STH/IPThermostat.boost_mode":          candidateNotYetMeasured,
-	"HmIP-STHD/IPThermostat.boost_mode":         candidateNotYetMeasured,
-	"HmIP-WGTC/IPThermostat.boost_mode":         candidateNotYetMeasured,
-	"HmIP-WTH-1/IPThermostat.boost_mode":        candidateNotYetMeasured,
-	"HmIP-WTH-2/IPThermostat.boost_mode":        candidateNotYetMeasured,
-	"HmIP-eTRV-2 I9F/IPThermostat.boost_mode":   candidateNotYetMeasured,
-	"HmIP-eTRV-2/IPThermostat.boost_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-B-2 R4M/IPThermostat.boost_mode": candidateNotYetMeasured,
-	"HmIP-eTRV-B/IPThermostat.boost_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-B1/IPThermostat.boost_mode":      candidateNotYetMeasured,
-	"HmIP-eTRV-C-2/IPThermostat.boost_mode":     candidateNotYetMeasured,
-	"HmIP-eTRV-E/IPThermostat.boost_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-F/IPThermostat.boost_mode":       candidateNotYetMeasured,
-	"HmIPW-SCTHD/IPThermostat.boost_mode":       candidateNotYetMeasured,
-	"HmIPW-STH/IPThermostat.boost_mode":         candidateNotYetMeasured,
-	"HmIPW-STHD/IPThermostat.boost_mode":        candidateNotYetMeasured,
-	"HmIPW-WTH/IPThermostat.boost_mode":         candidateNotYetMeasured,
-	// IPThermostat.concentration — 2 device(s)
-	"HmIP-WGTC/IPThermostat.concentration":   candidateNotYetMeasured,
-	"HmIPW-SCTHD/IPThermostat.concentration": candidateNotYetMeasured,
-	// IPThermostat.heating_cooling — 12 device(s)
-	"ALPHA-IP-RBG/IPThermostat.heating_cooling": candidateNotYetMeasured,
-	"HmIP-BWTH/IPThermostat.heating_cooling":    candidateNotYetMeasured,
-	"HmIP-STH/IPThermostat.heating_cooling":     candidateNotYetMeasured,
-	"HmIP-STHD/IPThermostat.heating_cooling":    candidateNotYetMeasured,
-	"HmIP-WGTC/IPThermostat.heating_cooling":    candidateNotYetMeasured,
-	"HmIP-WTH-1/IPThermostat.heating_cooling":   candidateNotYetMeasured,
-	"HmIP-WTH-2/IPThermostat.heating_cooling":   candidateNotYetMeasured,
-	"HmIP-eTRV-F/IPThermostat.heating_cooling":  candidateNotYetMeasured,
-	"HmIPW-SCTHD/IPThermostat.heating_cooling":  candidateNotYetMeasured,
-	"HmIPW-STH/IPThermostat.heating_cooling":    candidateNotYetMeasured,
-	"HmIPW-STHD/IPThermostat.heating_cooling":   candidateNotYetMeasured,
-	"HmIPW-WTH/IPThermostat.heating_cooling":    candidateNotYetMeasured,
-	// IPThermostat.level — 9 device(s)
-	"HmIP-WGTC/IPThermostat.level":         candidateNotYetMeasured,
-	"HmIP-eTRV-2 I9F/IPThermostat.level":   candidateNotYetMeasured,
-	"HmIP-eTRV-2/IPThermostat.level":       candidateNotYetMeasured,
-	"HmIP-eTRV-B-2 R4M/IPThermostat.level": candidateNotYetMeasured,
-	"HmIP-eTRV-B/IPThermostat.level":       candidateNotYetMeasured,
-	"HmIP-eTRV-B1/IPThermostat.level":      candidateNotYetMeasured,
-	"HmIP-eTRV-C-2/IPThermostat.level":     candidateNotYetMeasured,
-	"HmIP-eTRV-E/IPThermostat.level":       candidateNotYetMeasured,
-	"HmIP-eTRV-F/IPThermostat.level":       candidateNotYetMeasured,
-	// IPThermostat.party_mode — 19 device(s)
-	"ALPHA-IP-RBG/IPThermostat.party_mode":      candidateNotYetMeasured,
-	"HmIP-BWTH/IPThermostat.party_mode":         candidateNotYetMeasured,
-	"HmIP-STH/IPThermostat.party_mode":          candidateNotYetMeasured,
-	"HmIP-STHD/IPThermostat.party_mode":         candidateNotYetMeasured,
-	"HmIP-WGTC/IPThermostat.party_mode":         candidateNotYetMeasured,
-	"HmIP-WTH-1/IPThermostat.party_mode":        candidateNotYetMeasured,
-	"HmIP-WTH-2/IPThermostat.party_mode":        candidateNotYetMeasured,
-	"HmIP-eTRV-2 I9F/IPThermostat.party_mode":   candidateNotYetMeasured,
-	"HmIP-eTRV-2/IPThermostat.party_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-B-2 R4M/IPThermostat.party_mode": candidateNotYetMeasured,
-	"HmIP-eTRV-B/IPThermostat.party_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-B1/IPThermostat.party_mode":      candidateNotYetMeasured,
-	"HmIP-eTRV-C-2/IPThermostat.party_mode":     candidateNotYetMeasured,
-	"HmIP-eTRV-E/IPThermostat.party_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-F/IPThermostat.party_mode":       candidateNotYetMeasured,
-	"HmIPW-SCTHD/IPThermostat.party_mode":       candidateNotYetMeasured,
-	"HmIPW-STH/IPThermostat.party_mode":         candidateNotYetMeasured,
-	"HmIPW-STHD/IPThermostat.party_mode":        candidateNotYetMeasured,
-	"HmIPW-WTH/IPThermostat.party_mode":         candidateNotYetMeasured,
-	// IPThermostat.set_point_mode — 19 device(s)
-	"ALPHA-IP-RBG/IPThermostat.set_point_mode":      candidateNotYetMeasured,
-	"HmIP-BWTH/IPThermostat.set_point_mode":         candidateNotYetMeasured,
-	"HmIP-STH/IPThermostat.set_point_mode":          candidateNotYetMeasured,
-	"HmIP-STHD/IPThermostat.set_point_mode":         candidateNotYetMeasured,
-	"HmIP-WGTC/IPThermostat.set_point_mode":         candidateNotYetMeasured,
-	"HmIP-WTH-1/IPThermostat.set_point_mode":        candidateNotYetMeasured,
-	"HmIP-WTH-2/IPThermostat.set_point_mode":        candidateNotYetMeasured,
-	"HmIP-eTRV-2 I9F/IPThermostat.set_point_mode":   candidateNotYetMeasured,
-	"HmIP-eTRV-2/IPThermostat.set_point_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-B-2 R4M/IPThermostat.set_point_mode": candidateNotYetMeasured,
-	"HmIP-eTRV-B/IPThermostat.set_point_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-B1/IPThermostat.set_point_mode":      candidateNotYetMeasured,
-	"HmIP-eTRV-C-2/IPThermostat.set_point_mode":     candidateNotYetMeasured,
-	"HmIP-eTRV-E/IPThermostat.set_point_mode":       candidateNotYetMeasured,
-	"HmIP-eTRV-F/IPThermostat.set_point_mode":       candidateNotYetMeasured,
-	"HmIPW-SCTHD/IPThermostat.set_point_mode":       candidateNotYetMeasured,
-	"HmIPW-STH/IPThermostat.set_point_mode":         candidateNotYetMeasured,
-	"HmIPW-STHD/IPThermostat.set_point_mode":        candidateNotYetMeasured,
-	"HmIPW-WTH/IPThermostat.set_point_mode":         candidateNotYetMeasured,
-	// IPThermostat.state — 2 device(s)
-	"HmIP-BWTH/IPThermostat.state": candidateNotYetMeasured,
-	"HmIP-WGTC/IPThermostat.state": candidateNotYetMeasured,
-	// IPThermostatGroup.active_profile — 1 device(s)
-	"HmIP-HEATING/IPThermostatGroup.active_profile": candidateNotYetMeasured,
-	// IPThermostatGroup.boost_mode — 1 device(s)
-	"HmIP-HEATING/IPThermostatGroup.boost_mode": candidateNotYetMeasured,
-	// IPThermostatGroup.heating_cooling — 1 device(s)
-	"HmIP-HEATING/IPThermostatGroup.heating_cooling": candidateNotYetMeasured,
-	// IPThermostatGroup.level — 1 device(s)
-	"HmIP-HEATING/IPThermostatGroup.level": candidateNotYetMeasured,
-	// IPThermostatGroup.party_mode — 1 device(s)
-	"HmIP-HEATING/IPThermostatGroup.party_mode": candidateNotYetMeasured,
-	// IPThermostatGroup.set_point_mode — 1 device(s)
-	"HmIP-HEATING/IPThermostatGroup.set_point_mode": candidateNotYetMeasured,
-	// IPThermostatGroup.state — 1 device(s)
-	"HmIP-HEATING/IPThermostatGroup.state": candidateNotYetMeasured,
-	// RfThermostat.control_mode — 3 device(s)
-	"HM-CC-RT-DN-BoM/RfThermostat.control_mode":  candidateNotYetMeasured,
-	"HM-CC-RT-DN/RfThermostat.control_mode":      candidateNotYetMeasured,
-	"HM-TC-IT-WM-W-EU/RfThermostat.control_mode": candidateNotYetMeasured,
-	// RfThermostat.valve_state — 2 device(s)
-	"HM-CC-RT-DN-BoM/RfThermostat.valve_state": candidateNotYetMeasured,
-	"HM-CC-RT-DN/RfThermostat.valve_state":     candidateNotYetMeasured,
-	// RfThermostatGroup.control_mode — 1 device(s)
-	"HM-CC-VG-1/RfThermostatGroup.control_mode": candidateNotYetMeasured,
+	"IPThermostat.set_point_mode":       consumedThroughSubscribe,
+	"IPThermostat.party_mode":           consumedThroughSubscribe,
+	"IPThermostat.boost_mode":           consumedThroughSubscribe,
+	"IPThermostat.active_profile":       consumedThroughSubscribe,
+	"IPThermostat.heating_cooling":      consumedThroughSubscribe,
+	"IPThermostat.level":                consumedThroughSubscribe,
+	"IPThermostatGroup.set_point_mode":  consumedThroughSubscribe,
+	"IPThermostatGroup.party_mode":      consumedThroughSubscribe,
+	"IPThermostatGroup.boost_mode":      consumedThroughSubscribe,
+	"IPThermostatGroup.active_profile":  consumedThroughSubscribe,
+	"IPThermostatGroup.heating_cooling": consumedThroughSubscribe,
+	"IPThermostatGroup.level":           consumedThroughSubscribe,
+	"RfThermostat.control_mode":         consumedThroughSubscribe,
+	"RfThermostat.valve_state":          consumedThroughSubscribe,
+	"RfThermostatGroup.control_mode":    consumedThroughSubscribe,
+
+	"IPThermostat.state":      reachedThroughActivityStateChannels,
+	"IPThermostatGroup.state": reachedThroughActivityStateChannels,
+
+	"IPThermostat.concentration": promotedAsAStandaloneDataPoint,
 }
 
 // TestEverySchemaFieldTheDeviceCarriesIsBound is the per-family companion to
@@ -280,7 +134,8 @@ func TestEverySchemaFieldTheDeviceCarriesIsBound(t *testing.T) {
 	}
 
 	registry := custom.DefaultRegistry()
-	unbound := map[string]string{} // key -> a concrete channel to look at
+	unbound := map[string]string{}        // key -> a concrete channel to look at
+	usedDeclarations := map[string]bool{} // which entries the walk reached
 	checked := 0
 	customDPs := 0
 
@@ -294,6 +149,15 @@ func TestEverySchemaFieldTheDeviceCarriesIsBound(t *testing.T) {
 			bound := boundDataPoints(cdp)
 			for _, profile := range registry.GetConfigs(dev.Model) {
 				if profile.Config == nil {
+					continue
+				}
+				// A device can register several profiles covering different
+				// channels — an HmIP-WGTC carries IPSwitch and IPDimmer at
+				// once. Applying every profile to every custom-DP channel
+				// asks a switch to bind a slot that belongs to a light and
+				// reports the miss as a defect. Scope each profile to the
+				// channels it claims, the way the materializer does.
+				if !profileClaimsChannel(profile, ch.Number) {
 					continue
 				}
 				group := profile.Rebase(ch.GroupNumber())
@@ -323,9 +187,18 @@ func TestEverySchemaFieldTheDeviceCarriesIsBound(t *testing.T) {
 					if bound[id] {
 						continue
 					}
-					key := dev.Model + "/" + string(profile.Name) + "." + string(field)
-					if _, seen := unbound[key]; !seen {
-						unbound[key] = target.Address + " " + string(param)
+					broad := string(profile.Name) + "." + string(field)
+					narrow := dev.Model + "/" + broad
+					if _, declared := unboundSchemaFields[broad]; declared {
+						usedDeclarations[broad] = true
+						continue
+					}
+					if _, declared := unboundSchemaFields[narrow]; declared {
+						usedDeclarations[narrow] = true
+						continue
+					}
+					if _, seen := unbound[narrow]; !seen {
+						unbound[narrow] = target.Address + " " + string(param)
 					}
 				}
 			}
@@ -350,17 +223,15 @@ func TestEverySchemaFieldTheDeviceCarriesIsBound(t *testing.T) {
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if _, declared := unboundSchemaFields[key]; declared {
-			continue
-		}
 		t.Errorf("%s: the profile resolves this field onto %s, the device carries it, and the custom "+
 			"data point holds no pointer to it — bind it through custom.ResolveSlotOr, or declare in "+
 			"unboundSchemaFields how it reaches its consumer instead", key, unbound[key])
 	}
 	for key, reason := range unboundSchemaFields {
-		if _, still := unbound[key]; !still {
-			t.Errorf("unboundSchemaFields lists %s (%q) but it is bound now — drop the entry so the list "+
-				"keeps meaning what it says", key, reason)
+		if !usedDeclarations[key] {
+			t.Errorf("unboundSchemaFields lists %s (%q) but nothing reached it — the slot is bound now, or "+
+				"the key matches no device any more; drop the entry so the list keeps meaning what it says",
+				key, reason)
 		}
 	}
 }
@@ -450,4 +321,25 @@ func dataPointIdentity(dp any) (uintptr, bool) {
 		return 0, false
 	}
 	return v.Pointer(), true
+}
+
+// profileClaimsChannel reports whether profile covers channel number chNo,
+// mirroring the materializer's relevantChannels: the primary channel of each
+// declared base, plus its secondary offsets.
+func profileClaimsChannel(profile custom.Profile, chNo int) bool {
+	if profile.Config == nil {
+		return false
+	}
+	cg := profile.Config.ChannelGroup
+	for _, base := range profile.Channels {
+		if cg.PrimaryChannelSet && base.Channel+cg.PrimaryChannel == chNo {
+			return true
+		}
+		for _, sec := range cg.SecondaryChannels {
+			if base.Channel+sec == chNo {
+				return true
+			}
+		}
+	}
+	return false
 }

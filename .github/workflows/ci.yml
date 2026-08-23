@@ -26,9 +26,12 @@ env:
   # landed with staticcheck's Go 1.26 deprecation checks.
   #
   # Bump deliberately: raise the version here, run `make lint`, and fix or
-  # justify whatever the new release finds in the same change.
+  # justify whatever the new release finds in the same change. Note that
+  # `make lint` alone is not this job: the gofumpt step below runs the
+  # standalone formatter, which is stricter than the one golangci-lint
+  # bundles, so check `gofumpt -l .` against GOFUMPT_VERSION too.
   GOFUMPT_VERSION: "v0.10.0"
-  GOLANGCI_LINT_VERSION: "v2.12.2"
+  GOLANGCI_LINT_VERSION: "v2.13.0"
 
 jobs:
   lint:

@@ -67,6 +67,14 @@ type Blind struct {
 
 	level2 *generic.Float
 
+	// groupLevel2 is the optional group-channel LEVEL_2 (tilt) slot. It
+	// mirrors [Cover.groupLevel] for the tilt axis: the IPCover schema maps
+	// GROUP_LEVEL_2 alongside GROUP_LEVEL on the same group/state channel,
+	// and the same use_group_channel_for_cover_state toggle governs both —
+	// a blind's position and tilt are read from the same physical group
+	// channel, so there is no separate toggle for the tilt half.
+	groupLevel2 custom.GroupLevelDataPoint
+
 	// commandLock is a channel-of-1 used as a Mutex-with-timeout.
 	// Buffer slot full ⇒ held; empty ⇒ free. We initialise it on
 	// first use via initOnce.
@@ -151,8 +159,18 @@ func NewBlind(cfg BlindConfig) *Blind {
 func (b *Blind) NamePostfix() string { return "" }
 
 // TiltPosition returns the current slat-tilt position (0..1) and whether it
-// has been observed.
+// has been observed. Mirrors [Cover.observedLevel]: when the cover is
+// configured for group-channel state and a group-channel LEVEL_2 is bound,
+// the group channel's tilt takes precedence over the blind's own.
 func (b *Blind) TiltPosition() (custom.Position, bool) {
+	if b.Cover != nil && b.useGroupChannelForState && b.groupLevel2 != nil {
+		if v, ok := b.groupLevel2.Value(); ok {
+			if b.Capabilities.InvertedControl {
+				v = 1 - v
+			}
+			return custom.NewPosition(v), true
+		}
+	}
 	if b.level2 == nil {
 		return custom.Position{}, false
 	}
@@ -164,6 +182,14 @@ func (b *Blind) TiltPosition() (custom.Position, bool) {
 		v = 1 - v
 	}
 	return custom.NewPosition(v), true
+}
+
+// SetGroupLevel2 binds an optional group-channel LEVEL_2 (tilt) data point.
+// Used by the materializer for sub-blind channels whose canonical tilt
+// lives on the group master, mirroring [Cover.SetGroupLevel]. Pass nil to
+// clear.
+func (b *Blind) SetGroupLevel2(dp custom.GroupLevelDataPoint) {
+	b.groupLevel2 = dp
 }
 
 // levelForCommand returns the position axis to hold when the caller

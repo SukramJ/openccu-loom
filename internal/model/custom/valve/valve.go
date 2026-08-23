@@ -28,12 +28,39 @@ type Writer = custom.Writer
 
 // --- Irrigation valve ---
 
+// GroupStateDataPoint is the read side of a group-channel STATE slot.
+//
+// The IPIrrigationValve profile maps [hmenum.FieldGroupState] to STATE
+// on the channel one below the valve's own (ChannelFields[-1]) — a
+// status transmitter that mirrors the valve for HA / MQTT / REST
+// without being the valve's own STATE. That companion parameter's wire
+// shape differs by model: most report it read-only (OPERATIONS lacks
+// WRITE, resolving to a [*generic.BinarySensor]), while a few keep it
+// writable (a [*generic.Switch]). Naming the capability instead of a
+// shape is what keeps both reachable.
+type GroupStateDataPoint interface {
+	Value() (bool, bool)
+	Parameter() hmenum.Parameter
+	ModifiedAt() time.Time
+}
+
+var (
+	_ GroupStateDataPoint = (*generic.Switch)(nil)
+	_ GroupStateDataPoint = (*generic.BinarySensor)(nil)
+)
+
 // Irrigation is an on/off valve with an optional programmable run time.
 type Irrigation struct {
 	*generic.Switch
 	custom.BaseDP
 
 	groupState *custom.GroupState
+
+	// groupStateDP is the optional group-channel STATE indicator bound
+	// by [applyGroupState]. Nil when the profile carries no
+	// FieldGroupState mapping or the device does not expose it on the
+	// resolved channel.
+	groupStateDP GroupStateDataPoint
 }
 
 // NewIrrigation constructs an Irrigation valve that wraps the
@@ -62,6 +89,28 @@ func NewIrrigation(ch *device.Channel, group custom.RebasedChannelGroupConfig) *
 
 // GroupState returns the group-membership tracker.
 func (v *Irrigation) GroupState() *custom.GroupState { return v.groupState }
+
+// SetGroupState binds an optional group-channel STATE data point. Used
+// by the materializer ([applyGroupState]) for irrigation valves whose
+// profile schema names a companion group-level STATE indicator on a
+// sibling channel. Pass nil to clear.
+//
+// The bound value is exposed only through [Irrigation.GroupStateValue];
+// it never overwrites [Irrigation.IsOpen], which always reflects this
+// channel's own valve state — the group indicator and the channel's own
+// STATE are different slots with different meanings.
+func (v *Irrigation) SetGroupState(dp GroupStateDataPoint) { v.groupStateDP = dp }
+
+// GroupStateValue returns the bound group-channel STATE indicator's
+// value and whether it has been observed. Returns (false, false) when
+// the profile carries no FieldGroupState mapping or the device does not
+// expose it on the resolved channel.
+func (v *Irrigation) GroupStateValue() (on, observed bool) {
+	if v.groupStateDP == nil {
+		return false, false
+	}
+	return v.groupStateDP.Value()
+}
 
 // IsStateChange reports whether the next open/close write is materially
 // a state change. Returns true when:

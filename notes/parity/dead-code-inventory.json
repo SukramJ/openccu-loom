@@ -1,6 +1,6 @@
 {
-  "generated": "65c6a5e3",
-  "head": "65c6a5e3",
+  "generated": "aa8ccfe3",
+  "head": "aa8ccfe3",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29745,
-    "reachable": 5120,
-    "whitelisted": 21607,
-    "unreachable": 3018
+    "total_exported": 29767,
+    "reachable": 5126,
+    "whitelisted": 21619,
+    "unreachable": 3022
   },
   "by_package": [
     {
@@ -365,10 +365,22 @@
       "unreachable_other": 18
     },
     {
+      "package": "internal/model/custom/switch",
+      "unreachable_funcs": 0,
+      "unreachable_types": 2,
+      "unreachable_other": 0
+    },
+    {
       "package": "internal/model/custom/textdisplay",
       "unreachable_funcs": 0,
       "unreachable_types": 5,
       "unreachable_other": 18
+    },
+    {
+      "package": "internal/model/custom/valve",
+      "unreachable_funcs": 0,
+      "unreachable_types": 2,
+      "unreachable_other": 0
     },
     {
       "package": "internal/model/datapoint",
@@ -7768,14 +7780,14 @@
       "package": "internal/model/custom/climate",
       "identifier": "Activity",
       "file": "internal/model/custom/climate/climate.go",
-      "line": 241,
+      "line": 282,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "Activity",
       "file": "internal/model/custom/climate/climate.go",
-      "line": 241,
+      "line": 282,
       "kind": "type"
     },
     {
@@ -7838,14 +7850,14 @@
       "package": "internal/model/custom/climate",
       "identifier": "ErrTemperatureOutOfRange",
       "file": "internal/model/custom/climate/climate.go",
-      "line": 934,
+      "line": 1004,
       "kind": "var"
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "ErrTemperatureOutOfRange",
       "file": "internal/model/custom/climate/climate.go",
-      "line": 934,
+      "line": 1004,
       "kind": "var"
     },
     {
@@ -7992,14 +8004,14 @@
       "package": "internal/model/custom/cover",
       "identifier": "BlindConfig",
       "file": "internal/model/custom/cover/blind.go",
-      "line": 85,
+      "line": 93,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "BlindConfig",
       "file": "internal/model/custom/cover/blind.go",
-      "line": 85,
+      "line": 93,
       "kind": "type"
     },
     {
@@ -8188,14 +8200,14 @@
       "package": "internal/model/custom/cover",
       "identifier": "StateChangeArgs",
       "file": "internal/model/custom/cover/cover.go",
-      "line": 540,
+      "line": 553,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "StateChangeArgs",
       "file": "internal/model/custom/cover/cover.go",
-      "line": 540,
+      "line": 553,
       "kind": "type"
     },
     {
@@ -8370,14 +8382,14 @@
       "package": "internal/model/custom/light",
       "identifier": "HSColor",
       "file": "internal/model/custom/light/light.go",
-      "line": 949,
+      "line": 954,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "HSColor",
       "file": "internal/model/custom/light/light.go",
-      "line": 949,
+      "line": 954,
       "kind": "type"
     },
     {
@@ -8398,14 +8410,14 @@
       "package": "internal/model/custom/light",
       "identifier": "OnConfig",
       "file": "internal/model/custom/light/light.go",
-      "line": 646,
+      "line": 651,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "OnConfig",
       "file": "internal/model/custom/light/light.go",
-      "line": 646,
+      "line": 651,
       "kind": "type"
     },
     {
@@ -8482,14 +8494,14 @@
       "package": "internal/model/custom/light",
       "identifier": "StateChangeArgsFull",
       "file": "internal/model/custom/light/light.go",
-      "line": 937,
+      "line": 942,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "StateChangeArgsFull",
       "file": "internal/model/custom/light/light.go",
-      "line": 937,
+      "line": 942,
       "kind": "type"
     },
     {
@@ -8734,14 +8746,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "ErrInvalidTone",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 249,
+      "line": 254,
       "kind": "var"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ErrInvalidTone",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 249,
+      "line": 254,
       "kind": "var"
     },
     {
@@ -8762,28 +8774,28 @@
       "package": "internal/model/custom/siren",
       "identifier": "OnConfig",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 402,
+      "line": 407,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "OnConfig",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 402,
+      "line": 407,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "PlayConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 295,
+      "line": 300,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "PlayConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 295,
+      "line": 300,
       "kind": "type"
     },
     {
@@ -8882,6 +8894,20 @@
       "identifier": "SoundPlayerConfig",
       "file": "internal/model/custom/siren/sound.go",
       "line": 113,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/custom/switch",
+      "identifier": "GroupStateDataPoint",
+      "file": "internal/model/custom/switch/switch.go",
+      "line": 43,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/custom/switch",
+      "identifier": "GroupStateDataPoint",
+      "file": "internal/model/custom/switch/switch.go",
+      "line": 43,
       "kind": "type"
     },
     {
@@ -9043,6 +9069,20 @@
       "identifier": "Writer",
       "file": "internal/model/custom/textdisplay/textdisplay.go",
       "line": 126,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/custom/valve",
+      "identifier": "GroupStateDataPoint",
+      "file": "internal/model/custom/valve/valve.go",
+      "line": 41,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/custom/valve",
+      "identifier": "GroupStateDataPoint",
+      "file": "internal/model/custom/valve/valve.go",
+      "line": 41,
       "kind": "type"
     },
     {
@@ -30073,7 +30113,7 @@
       "identifier": "TestReconcileActsOnASirenThatWasAlreadySoundingWhenTheModelArrived",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/reconcile_boot_order_test.go",
-      "line": 95
+      "line": 96
     },
     {
       "package": "internal/alarm",
@@ -35827,14 +35867,14 @@
       "identifier": "TestBoundWriterCarriesTheParamsetCapability",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/bound_writer_paramset_test.go",
-      "line": 93
+      "line": 94
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestBoundWriterFallsBackWhenTheWriterCannotParamset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/bound_writer_paramset_test.go",
-      "line": 120
+      "line": 121
     },
     {
       "package": "internal/central/adapter",
@@ -37738,7 +37778,7 @@
       "identifier": "TestCollectorBundlesTheBoundedSwitchOn",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/bound_writer_paramset_test.go",
-      "line": 154
+      "line": 155
     },
     {
       "package": "internal/central/adapter",
@@ -38249,7 +38289,7 @@
       "identifier": "TestCustomDPStatePayload_SwitchSource",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/eventbridge_cdp_channel_group_test.go",
-      "line": 145
+      "line": 146
     },
     {
       "package": "internal/central/adapter",
@@ -39572,14 +39612,14 @@
       "identifier": "TestDispatchAccessPermission",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/custom_dp_dispatcher_access_permission_test.go",
-      "line": 57
+      "line": 58
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestDispatchAccessPermissionUnknownOperation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/custom_dp_dispatcher_access_permission_test.go",
-      "line": 96
+      "line": 97
     },
     {
       "package": "internal/central/adapter",
@@ -46558,7 +46598,14 @@
       "identifier": "TestOnValueChanged_ChannelGroupSwitch_PublishesWireNamedState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/eventbridge_cdp_channel_group_test.go",
-      "line": 71
+      "line": 72
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestOnValueChanged_SiblingChannelSlot_PublishesHostingCDPState",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/eventbridge_cross_channel_cdp_test.go",
+      "line": 70
     },
     {
       "package": "internal/central/adapter",
@@ -79374,14 +79421,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/climate/climate.go",
-      "line": 258
+      "line": 299
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/climate/climate.go",
-      "line": 258
+      "line": 299
     },
     {
       "package": "internal/model/custom/climate",
@@ -79500,7 +79547,7 @@
       "identifier": "TestClimateConfigPayload_PresetModesExcludesNone",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 291
+      "line": 299
     },
     {
       "package": "internal/model/custom/climate",
@@ -79549,14 +79596,14 @@
       "identifier": "TestClimateDiscoveryAdvertisesIntegerHumidity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 478
+      "line": 486
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateDiscoveryOmitsHumidityWithoutSlot",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 492
+      "line": 500
     },
     {
       "package": "internal/model/custom/climate",
@@ -79577,56 +79624,56 @@
       "identifier": "TestClimateHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 59
+      "line": 63
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateHADiscoveryPayload_NilContextReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 47
+      "line": 51
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 38
+      "line": 42
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateHADiscoveryPayload_PresetModesExcludesNone",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 237
+      "line": 245
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 74
+      "line": 78
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateHADiscoveryPayload_TempBoundsAndUnit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 378
+      "line": 386
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateHADiscoveryPayload_TopicValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 100
+      "line": 104
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateHumidityIntegerTyped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 435
+      "line": 443
     },
     {
       "package": "internal/model/custom/climate",
@@ -79843,14 +79890,14 @@
       "identifier": "TestClimateOptimisticIsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 340
+      "line": 348
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimatePrecisionAbsent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 316
+      "line": 324
     },
     {
       "package": "internal/model/custom/climate",
@@ -80116,21 +80163,21 @@
       "identifier": "TestClimateStatePayloadActivityOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 181
+      "line": 189
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateStatePayloadAlwaysCarriesHvacModeActionPreset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 140
+      "line": 148
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateStatePayloadCarriesMeasurements",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 405
+      "line": 413
     },
     {
       "package": "internal/model/custom/climate",
@@ -80242,7 +80289,7 @@
       "identifier": "TestClimateTemperatureUnitMappedFromCapabilities",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
-      "line": 363
+      "line": 371
     },
     {
       "package": "internal/model/custom/climate",
@@ -80561,6 +80608,34 @@
     },
     {
       "package": "internal/model/custom/climate",
+      "identifier": "TestIPThermostatBWTHHeatingCoolingAndLevelBindThroughSubscribe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 128
+    },
+    {
+      "package": "internal/model/custom/climate",
+      "identifier": "TestIPThermostatBWTHModeProfileFieldsBindThroughSubscribe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 98
+    },
+    {
+      "package": "internal/model/custom/climate",
+      "identifier": "TestIPThermostatBWTHRelayStateBindsThroughActivityStateChannels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 146
+    },
+    {
+      "package": "internal/model/custom/climate",
+      "identifier": "TestIPThermostatConcentrationReachesIndependentSensorDataPoint",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 168
+    },
+    {
+      "package": "internal/model/custom/climate",
       "identifier": "TestIPThermostatGroupConstructorIsRegistered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
@@ -80575,10 +80650,24 @@
     },
     {
       "package": "internal/model/custom/climate",
+      "identifier": "TestIPThermostatGroupLevelStateAndPartyModeBindThroughSubscribe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 283
+    },
+    {
+      "package": "internal/model/custom/climate",
       "identifier": "TestIPThermostatIgnoresValveStateEnum",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/activity_source_test.go",
       "line": 74
+    },
+    {
+      "package": "internal/model/custom/climate",
+      "identifier": "TestIPThermostatPartyModeBindsThroughSubscribe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 184
     },
     {
       "package": "internal/model/custom/climate",
@@ -81184,10 +81273,24 @@
     },
     {
       "package": "internal/model/custom/climate",
+      "identifier": "TestRfThermostatControlModeAndValveStateBindThroughSubscribe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 222
+    },
+    {
+      "package": "internal/model/custom/climate",
       "identifier": "TestRfThermostatGroupConstructorReturnsDP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
       "line": 1565
+    },
+    {
+      "package": "internal/model/custom/climate",
+      "identifier": "TestRfThermostatGroupControlModeBindsThroughSubscribe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/climate/schema_field_binding_test.go",
+      "line": 242
     },
     {
       "package": "internal/model/custom/climate",
@@ -81894,42 +81997,42 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/cover.go",
-      "line": 192
+      "line": 198
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/cover.go",
-      "line": 192
+      "line": 198
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "NewBlind",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/blind.go",
-      "line": 98
+      "line": 113
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "NewBlind",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/blind.go",
-      "line": 98
+      "line": 113
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "NewGarage",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 119
+      "line": 123
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "NewGarage",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 119
+      "line": 123
     },
     {
       "package": "internal/model/custom/cover",
@@ -82013,49 +82116,49 @@
       "identifier": "TestBlindHADiscoveryPayload_CommandTopicUsesBlindOverrides",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 248
+      "line": 252
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 204
+      "line": 208
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 195
+      "line": 199
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_StateParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 378
+      "line": 382
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_TiltKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 216
+      "line": 220
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_TiltOpenedClosedValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 415
+      "line": 419
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestBlindHADiscoveryPayload_VariantDeviceClass",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 596
+      "line": 600
     },
     {
       "package": "internal/model/custom/cover",
@@ -82251,7 +82354,7 @@
       "identifier": "TestBlindStatePayload_StateString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 713
+      "line": 717
     },
     {
       "package": "internal/model/custom/cover",
@@ -82419,70 +82522,70 @@
       "identifier": "TestCoverHADiscoveryPayload_CommandTopicDrivesOpenCloseStop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 123
+      "line": 127
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 48
+      "line": 52
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_DefaultVariantIsShutter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 580
+      "line": 584
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 39
+      "line": 43
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_NoPositionWithoutCapability",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 97
+      "line": 101
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_NoTiltFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 363
+      "line": 367
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 60
+      "line": 64
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_StateParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 326
+      "line": 330
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_TopicValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 78
+      "line": 82
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverHADiscoveryPayload_VariantDeviceClass",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 552
+      "line": 556
     },
     {
       "package": "internal/model/custom/cover",
@@ -82538,7 +82641,7 @@
       "identifier": "TestCoverInvoke_UnknownCommandTokenRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 177
+      "line": 181
     },
     {
       "package": "internal/model/custom/cover",
@@ -82741,7 +82844,7 @@
       "identifier": "TestCoverStatePayload_StateString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 680
+      "line": 684
     },
     {
       "package": "internal/model/custom/cover",
@@ -82853,21 +82956,21 @@
       "identifier": "TestCoverVariantFromModelDefault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 657
+      "line": 661
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverVariantFromModelHmSecWin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 645
+      "line": 649
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestCoverVariantFromModelNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 671
+      "line": 675
     },
     {
       "package": "internal/model/custom/cover",
@@ -82944,7 +83047,7 @@
       "identifier": "TestGarageConfigPayload_SupportsVent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 506
+      "line": 510
     },
     {
       "package": "internal/model/custom/cover",
@@ -82972,35 +83075,35 @@
       "identifier": "TestGarageHADiscoveryPayloadCarriesNoVentKey",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 483
+      "line": 487
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 288
+      "line": 292
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 279
+      "line": 283
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 300
+      "line": 304
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "TestGarageHADiscoveryPayload_StateParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 430
+      "line": 434
     },
     {
       "package": "internal/model/custom/cover",
@@ -83154,7 +83257,7 @@
       "identifier": "TestGarageStatePayload_StateString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 732
+      "line": 736
     },
     {
       "package": "internal/model/custom/cover",
@@ -83665,7 +83768,7 @@
       "identifier": "TestVariantString_AllVariants",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/payload_discovery_test.go",
-      "line": 526
+      "line": 530
     },
     {
       "package": "internal/model/custom/cover",
@@ -83749,14 +83852,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/light.go",
-      "line": 137
+      "line": 142
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/light.go",
-      "line": 137
+      "line": 142
     },
     {
       "package": "internal/model/custom/light",
@@ -83791,14 +83894,14 @@
       "identifier": "NewDRGDaliLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/dali.go",
-      "line": 36
+      "line": 46
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewDRGDaliLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/dali.go",
-      "line": 36
+      "line": 46
     },
     {
       "package": "internal/model/custom/light",
@@ -83833,28 +83936,28 @@
       "identifier": "NewRGBWLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/rgbw.go",
-      "line": 100
+      "line": 108
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewRGBWLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/rgbw.go",
-      "line": 100
+      "line": 108
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewSoundPlayerLED",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/sound_led.go",
-      "line": 129
+      "line": 135
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewSoundPlayerLED",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/sound_led.go",
-      "line": 129
+      "line": 135
     },
     {
       "package": "internal/model/custom/light",
@@ -83973,14 +84076,14 @@
       "identifier": "TestColorLightHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 156
+      "line": 160
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestColorLightHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 166
+      "line": 170
     },
     {
       "package": "internal/model/custom/light",
@@ -84148,7 +84251,7 @@
       "identifier": "TestColorTempLightHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 211
+      "line": 215
     },
     {
       "package": "internal/model/custom/light",
@@ -84190,14 +84293,14 @@
       "identifier": "TestColorTempLightMinMaxMireds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 253
+      "line": 257
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestColorTempLightMinMaxMireds_FallbackWhenZeroKelvin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 284
+      "line": 288
     },
     {
       "package": "internal/model/custom/light",
@@ -84292,10 +84395,17 @@
     },
     {
       "package": "internal/model/custom/light",
+      "identifier": "TestDRGDaliLightBindsHueAndSaturation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/light/dali_color_binding_test.go",
+      "line": 83
+    },
+    {
+      "package": "internal/model/custom/light",
       "identifier": "TestDRGDaliLightHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 348
+      "line": 352
     },
     {
       "package": "internal/model/custom/light",
@@ -84400,7 +84510,7 @@
       "identifier": "TestEffectLightHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 308
+      "line": 312
     },
     {
       "package": "internal/model/custom/light",
@@ -85205,21 +85315,21 @@
       "identifier": "TestLightDimmableHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 59
+      "line": 63
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestLightDimmableNoTransitionHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 115
+      "line": 119
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestLightDimmableTransitionHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 104
+      "line": 108
     },
     {
       "package": "internal/model/custom/light",
@@ -85240,14 +85350,14 @@
       "identifier": "TestLightHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 44
+      "line": 48
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestLightHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 35
+      "line": 39
     },
     {
       "package": "internal/model/custom/light",
@@ -85338,7 +85448,7 @@
       "identifier": "TestLightNonDimmableHASchemaJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 125
+      "line": 129
     },
     {
       "package": "internal/model/custom/light",
@@ -86049,6 +86159,13 @@
     },
     {
       "package": "internal/model/custom/light",
+      "identifier": "TestRGBWLightBindsDirection",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/light/rgbw_direction_binding_test.go",
+      "line": 89
+    },
+    {
+      "package": "internal/model/custom/light",
       "identifier": "TestRGBWLightCapabilityPredicates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/light_deep_test.go",
@@ -86115,28 +86232,28 @@
       "identifier": "TestRGBWLightHASchemaJSON_PWMMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 455
+      "line": 459
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestRGBWLightHASchemaJSON_RGBMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 380
+      "line": 384
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestRGBWLightHASchemaJSON_RGBWMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 407
+      "line": 411
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "TestRGBWLightHASchemaJSON_TunableWhiteMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/payload_discovery_test.go",
-      "line": 433
+      "line": 437
     },
     {
       "package": "internal/model/custom/light",
@@ -86413,6 +86530,13 @@
     },
     {
       "package": "internal/model/custom/light",
+      "identifier": "TestSoundPlayerLEDBindsDirection",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/light/sound_led_direction_binding_test.go",
+      "line": 50
+    },
+    {
+      "package": "internal/model/custom/light",
       "identifier": "TestSoundPlayerLEDCurrentColorOrWhiteFallbacks",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/light_behavior_test.go",
@@ -86500,14 +86624,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/lock/lock.go",
-      "line": 163
+      "line": 169
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/lock/lock.go",
-      "line": 163
+      "line": 169
     },
     {
       "package": "internal/model/custom/lock",
@@ -86745,63 +86869,63 @@
       "identifier": "TestLockHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 51
+      "line": 55
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_KindButtonUsesServiceMethod",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 123
+      "line": 127
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_KindRFUsesState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 99
+      "line": 103
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_LockUnlockPayloads",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 166
+      "line": 170
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_NilContextReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 42
+      "line": 46
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 33
+      "line": 37
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_PayloadOpenOnlyForIP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 143
+      "line": 147
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 63
+      "line": 67
     },
     {
       "package": "internal/model/custom/lock",
       "identifier": "TestLockHADiscoveryPayload_TopicValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/payload_discovery_test.go",
-      "line": 81
+      "line": 85
     },
     {
       "package": "internal/model/custom/lock",
@@ -87319,14 +87443,14 @@
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 273
+      "line": 278
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 273
+      "line": 278
     },
     {
       "package": "internal/model/custom/siren",
@@ -87361,20 +87485,13 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 98
+      "line": 103
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 98
-    },
-    {
-      "package": "internal/model/custom/siren",
-      "identifier": "NewSmokeSiren",
-      "reason": "auto-whitelist:pattern=custom-mixin-factory",
-      "file": "internal/model/custom/siren/smoke.go",
       "line": 103
     },
     {
@@ -87382,21 +87499,28 @@
       "identifier": "NewSmokeSiren",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 103
+      "line": 108
+    },
+    {
+      "package": "internal/model/custom/siren",
+      "identifier": "NewSmokeSiren",
+      "reason": "auto-whitelist:pattern=custom-mixin-factory",
+      "file": "internal/model/custom/siren/smoke.go",
+      "line": 108
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 119
+      "line": 124
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 119
+      "line": 124
     },
     {
       "package": "internal/model/custom/siren",
@@ -87739,21 +87863,21 @@
       "identifier": "TestSirenHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 44
+      "line": 48
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 35
+      "line": 39
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 60
+      "line": 64
     },
     {
       "package": "internal/model/custom/siren",
@@ -88040,7 +88164,7 @@
       "identifier": "TestSirenSupportVolumeSetReadsCapability",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 99
+      "line": 103
     },
     {
       "package": "internal/model/custom/siren",
@@ -88187,21 +88311,21 @@
       "identifier": "TestSmokeSirenHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 137
+      "line": 141
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 119
+      "line": 123
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 149
+      "line": 153
     },
     {
       "package": "internal/model/custom/siren",
@@ -88467,35 +88591,35 @@
       "identifier": "TestSoundPlayerHADiscoveryPayload_AvailableTonesAbsentWhenNone",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 253
+      "line": 257
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 201
+      "line": 205
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerHADiscoveryPayload_NilContextReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 188
+      "line": 192
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 177
+      "line": 181
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/payload_discovery_test.go",
-      "line": 217
+      "line": 221
     },
     {
       "package": "internal/model/custom/siren",
@@ -88642,14 +88766,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 93
+      "line": 121
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 93
+      "line": 121
     },
     {
       "package": "internal/model/custom/switch",
@@ -88733,7 +88857,7 @@
       "identifier": "TestAttachPowerEnergySourcesNilDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 215
+      "line": 220
     },
     {
       "package": "internal/model/custom/switch",
@@ -88747,21 +88871,21 @@
       "identifier": "TestConfigPayloadCategoryIsSwitch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 140
+      "line": 145
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestConfigPayloadNilSwitchReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 151
+      "line": 156
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestFindSiblingMeasurementSourcesEmptyChannels",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 224
+      "line": 229
     },
     {
       "package": "internal/model/custom/switch",
@@ -88782,35 +88906,35 @@
       "identifier": "TestHAComponentIsSwitch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 235
+      "line": 240
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestHADiscoveryPayloadComponentIsSwitch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 62
+      "line": 67
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestHADiscoveryPayloadNilContextReturnsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 103
+      "line": 108
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestHADiscoveryPayloadNilSwitchReturnsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 95
+      "line": 100
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestHADiscoveryPayloadTopicsPopulated",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 74
+      "line": 79
     },
     {
       "package": "internal/model/custom/switch",
@@ -88831,14 +88955,14 @@
       "identifier": "TestInfoPayloadContainsAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 115
+      "line": 120
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestInfoPayloadNilSwitchReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 129
+      "line": 134
     },
     {
       "package": "internal/model/custom/switch",
@@ -89230,7 +89354,7 @@
       "identifier": "TestRegisterSwitchServicesRegisteredTurnOnFor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 202
+      "line": 207
     },
     {
       "package": "internal/model/custom/switch",
@@ -89244,21 +89368,21 @@
       "identifier": "TestStatePayloadAfterTurnOn",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 174
+      "line": 179
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestStatePayloadEmptyBeforeObservation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 162
+      "line": 167
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestStatePayloadNilSwitchReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 191
+      "line": 196
     },
     {
       "package": "internal/model/custom/switch",
@@ -89489,14 +89613,14 @@
       "identifier": "TestTopicSlotHasCorrectFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 242
+      "line": 247
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestTopicSlotInvalidAddressFallsBack",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 256
+      "line": 261
     },
     {
       "package": "internal/model/custom/switch",
@@ -89706,7 +89830,7 @@
       "identifier": "TestTextDisplayHACommandCarriesRowID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 148
+      "line": 152
     },
     {
       "package": "internal/model/custom/textdisplay",
@@ -89727,49 +89851,49 @@
       "identifier": "TestTextDisplayHADiscoveryPayload_CommandTopic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 82
+      "line": 86
     },
     {
       "package": "internal/model/custom/textdisplay",
       "identifier": "TestTextDisplayHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 54
+      "line": 58
     },
     {
       "package": "internal/model/custom/textdisplay",
       "identifier": "TestTextDisplayHADiscoveryPayload_ModeAndMax",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 94
+      "line": 98
     },
     {
       "package": "internal/model/custom/textdisplay",
       "identifier": "TestTextDisplayHADiscoveryPayload_NilContextReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 45
+      "line": 49
     },
     {
       "package": "internal/model/custom/textdisplay",
       "identifier": "TestTextDisplayHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 36
+      "line": 40
     },
     {
       "package": "internal/model/custom/textdisplay",
       "identifier": "TestTextDisplayHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 66
+      "line": 70
     },
     {
       "package": "internal/model/custom/textdisplay",
       "identifier": "TestTextDisplayHADiscoveryPayload_StateTopicPresent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 129
+      "line": 133
     },
     {
       "package": "internal/model/custom/textdisplay",
@@ -89951,7 +90075,7 @@
       "identifier": "TestTextDisplayWriteAcceptsTemplatedPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/textdisplay/payload_discovery_test.go",
-      "line": 168
+      "line": 172
     },
     {
       "package": "internal/model/custom/textdisplay",
@@ -90112,28 +90236,28 @@
       "identifier": "NewIrrigation",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/valve/valve.go",
-      "line": 50
+      "line": 77
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "NewIrrigation",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/valve/valve.go",
-      "line": 50
+      "line": 77
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "NewModulating",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/valve/valve.go",
-      "line": 160
+      "line": 209
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "NewModulating",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/valve/valve.go",
-      "line": 160
+      "line": 209
     },
     {
       "package": "internal/model/custom/valve",
@@ -90238,28 +90362,28 @@
       "identifier": "TestIrrigationHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 43
+      "line": 47
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "TestIrrigationHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 34
+      "line": 38
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "TestIrrigationHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 55
+      "line": 59
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "TestIrrigationHADiscoveryPayload_TopicValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 71
+      "line": 75
     },
     {
       "package": "internal/model/custom/valve",
@@ -90511,28 +90635,28 @@
       "identifier": "TestModulatingHADiscoveryPayload_Component",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 98
+      "line": 102
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "TestModulatingHADiscoveryPayload_NilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 89
+      "line": 93
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "TestModulatingHADiscoveryPayload_RequiredKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 110
+      "line": 114
     },
     {
       "package": "internal/model/custom/valve",
       "identifier": "TestModulatingHADiscoveryPayload_TopicValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/valve/payload_discovery_test.go",
-      "line": 126
+      "line": 130
     },
     {
       "package": "internal/model/custom/valve",
@@ -170808,126 +170932,126 @@
       "identifier": "TestDiscoveryRoundTrip_BinarySensor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 348
+      "line": 352
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_BoolCapitalisation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 852
+      "line": 856
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Button",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 789
+      "line": 793
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Climate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 544
+      "line": 548
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Cover",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 487
+      "line": 491
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Event_JSONPayloadNotBroken",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 747
+      "line": 751
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Event_MultiPress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 886
+      "line": 890
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Event_NoValueTemplate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 709
+      "line": 713
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_GuardEmptyEnvelope",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 816
+      "line": 820
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Light",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 427
+      "line": 431
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Lock",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 302
+      "line": 306
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Number",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 912
+      "line": 916
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Select",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 941
+      "line": 945
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Sensor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 391
+      "line": 395
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Siren",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 576
+      "line": 580
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Switch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 251
+      "line": 255
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Text",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 977
+      "line": 981
     },
     {
       "package": "tests/contract",
       "identifier": "TestDiscoveryRoundTrip_Valve",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_roundtrip_test.go",
-      "line": 652
+      "line": 656
     },
     {
       "package": "tests/contract",

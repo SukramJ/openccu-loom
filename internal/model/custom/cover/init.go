@@ -149,6 +149,7 @@ func newIPCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 			Group: rebased,
 		})
 		applyGroupLevel(blind.Cover, ch, rebased)
+		applyGroupLevel2(blind, ch, rebased)
 		return blind, nil
 	}
 	cov := New(Config{
@@ -209,6 +210,42 @@ func applyGroupLevel(cov *Cover, ch *device.Channel, rebased custom.RebasedChann
 	}
 }
 
+// applyGroupLevel2 resolves the profile's `FieldGroupLevel2` mapping (when
+// present) to the absolute channel + parameter and binds the corresponding
+// LEVEL_2 DP onto the blind via [Blind.SetGroupLevel2]. Mirrors
+// [applyGroupLevel] for the tilt axis — the IPCover schema maps GROUP_LEVEL_2
+// alongside GROUP_LEVEL on the same group/state channel, and without this the
+// tilt half of that mirror bound to nothing.
+func applyGroupLevel2(b *Blind, ch *device.Channel, rebased custom.RebasedChannelGroupConfig) {
+	if b == nil || ch == nil || ch.Device() == nil {
+		return
+	}
+	for chNo, fields := range rebased.ChannelFields {
+		fv, ok := fields[hmenum.FieldGroupLevel2]
+		if !ok {
+			continue
+		}
+		param, _ := custom.ResolveFieldValue(fv)
+		if param == "" {
+			continue
+		}
+		var groupCh *device.Channel
+		for _, sibling := range ch.Device().Channels() {
+			if sibling.Number == chNo {
+				groupCh = sibling
+				break
+			}
+		}
+		if groupCh == nil {
+			continue
+		}
+		if dp := custom.GroupLevelField(groupCh, param); dp != nil {
+			b.SetGroupLevel2(dp)
+			return
+		}
+	}
+}
+
 // newRfCoverConstructor builds a Cover or Blind (HM kind) from a channel. RF
 // covers use LEVEL_COMBINED for combined position+tilt commands.
 //
@@ -236,6 +273,7 @@ func newRfCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 			Group: rebased,
 		})
 		applyGroupLevel(blind.Cover, ch, rebased)
+		applyGroupLevel2(blind, ch, rebased)
 		return blind, nil
 	}
 	cov := New(Config{

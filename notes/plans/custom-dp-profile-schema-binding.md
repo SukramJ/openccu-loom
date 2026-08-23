@@ -19,14 +19,27 @@ setpoint: custom.FloatField(cfg.Channel, hmenum.ParameterSetTemperature)
 ```
 
 The device profile's channel-group schema
-(`internal/model/custom/generated_profile_configs.go`) states **both** the
+(`internal/model/custom/profile_configs.go`) states **both** the
 parameter *and* the channel, per device family. Where the two disagree, the
 lookup returns nil, the accessor reports the feature as unsupported, and
 nothing fails: no log line, no failing test, no error on any surface. The
 value is simply absent forever.
 
-The schema is authoritative because it is generated, not hand-written. A
-`ChannelFields` entry keyed `n` rebases to `groupNo + n`, so `n = -1` means
+Why the schema wins is worth stating carefully, because the original reason
+expired. This plan first argued that the schema is authoritative "because it
+is generated, not hand-written". Since #593 the catalogue is **hand-maintained
+and there is no generator** (ADR 0063, `internal/model/custom/CLAUDE.md`), so
+that argument no longer holds: the schema can be wrong too.
+
+What survives is narrower and enough. The schema states the parameter *and*
+the channel per device family, and the consuming code states neither — it
+carries one parameter name for every family that shares a profile. So where
+the two disagree, the schema is the only one of the pair that *could* be
+right, and which of them is right is decided against the CCU's own device
+description (step 2 below), never by preferring one source on principle. Every
+finding in this document was decided that way.
+
+A `ChannelFields` entry keyed `n` rebases to `groupNo + n`, so `n = -1` means
 "the channel before the custom DP" and `n = 1` means "the one after";
 `AnyChannelOffset` and the `Fields` block both mean "this channel".
 
@@ -169,11 +182,11 @@ decides them against real device descriptions.
 
 A field mapped to more than one parameter, or onto a channel other than the
 custom DP's own, is a candidate. Run against
-`internal/model/custom/generated_profile_configs.go`:
+`internal/model/custom/profile_configs.go`:
 
 ```python
 import re, collections
-s = open('internal/model/custom/generated_profile_configs.go').read()
+s = open('internal/model/custom/profile_configs.go').read()
 field_params = collections.defaultdict(lambda: collections.defaultdict(set))
 crosschannel = collections.defaultdict(list)
 for b in re.split(r'\n\thmenum\.DeviceProfile\("', s)[1:]:

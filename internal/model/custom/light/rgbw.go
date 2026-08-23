@@ -67,6 +67,14 @@ type RGBWLight struct {
 	*ColorLight
 
 	kelvin *generic.Integer
+
+	// direction is DIRECTION — ACTIVITY_STATE on the IPRGBW schema. A
+	// read-only index-valued ENUM reporting the channel's current motion
+	// (ramping up/down) or steady state; resolved through the schema like
+	// every other composed field rather than assumed on the light's own
+	// channel.
+	direction *generic.Sensor[int32]
+
 	// mode is DEVICE_OPERATION_MODE. It lives on the device's channel 0
 	// in the MASTER paramset and is a read+write ENUM, which the resolver
 	// builds as a Select — not on this channel, and not as text.
@@ -108,6 +116,7 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 		kelvin:     custom.IntegerField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldColorTemperature, hmenum.ParameterColorTemperature)),
 		mode:       deviceOperationModeDP(cfg.Channel),
 		effect:     custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldEffect, hmenum.ParameterEffect)),
+		direction:  custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection)),
 		MinKelvin:  2000,
 		MaxKelvin:  6500,
 		channelNo:  chNo,
@@ -126,6 +135,9 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 	if r.kelvin != nil {
 		_ = r.kelvin.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
 	}
+	if r.direction != nil {
+		_ = r.direction.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
+	}
 	// The HmIP-LSC runs hs colour and colour temperature simultaneously (no
 	// DEVICE_OPERATION_MODE); keyed by model to match the reference registry.
 	if cfg.Channel != nil && cfg.Channel.Device() != nil {
@@ -142,6 +154,14 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 func (r *RGBWLight) colorTempKelvinActive() bool {
 	k, ok := r.Kelvin()
 	return ok && k != 0
+}
+
+// ActivityState returns the channel's current DIRECTION / ACTIVITY_STATE
+// label (e.g. "UP", "DOWN", "STABLE") and whether it has been observed.
+// nil-safe: reports ("", false) when the schema mapped no such parameter
+// onto this channel.
+func (r *RGBWLight) ActivityState() (string, bool) {
+	return custom.EnumLabelValue(r.direction)
 }
 
 // NamePostfix returns the suffix appended in

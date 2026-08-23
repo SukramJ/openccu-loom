@@ -28,6 +28,16 @@ type DRGDaliLight struct {
 	// selection. It is write-only and addressed by String label from the
 	// channel's VALUE_LIST. nil when the channel does not carry EFFECT.
 	effect *generic.ActionSelect
+
+	// hue / saturation are the optional HUE / SATURATION data points. Most
+	// DALI ballasts are colour-temperature only, but the IPDRGDALI schema
+	// maps both fields, and the CCU's UNIVERSAL_LIGHT_RECEIVER channel type
+	// carries them on RGB-capable DALI fixtures — mirrors the reference
+	// CustomDpIpDrgDaliLight, which resolves the same pair (hue_field /
+	// saturation_field on CombinedHsColorField). nil on a channel that
+	// carries neither.
+	hue        *generic.Integer
+	saturation *generic.Float
 }
 
 // NewDRGDaliLight constructs a DALI light with the configured Kelvin bounds.
@@ -37,8 +47,32 @@ func NewDRGDaliLight(cfg Config, minK, maxK int32) *DRGDaliLight {
 	l := &DRGDaliLight{
 		ColorTempLight: NewColorTempLight(cfg, minK, maxK),
 		effect:         custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldEffect, hmenum.ParameterEffect)),
+		hue:            custom.IntegerField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldHue, hmenum.ParameterHue)),
+		saturation:     custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldSaturation, hmenum.ParameterSaturation)),
+	}
+	if l.hue != nil {
+		_ = l.hue.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
+	}
+	if l.saturation != nil {
+		_ = l.saturation.OnConfirmedUpdate(func(_, _ float64) { l.dataVersion.Bump() })
 	}
 	return l
+}
+
+// HSColor returns the hue (0..360) and saturation (0..1) of a DALI fixture
+// that carries both axes, and whether both have been observed. ok is false
+// when the channel carries neither parameter (colour-temperature-only DALI
+// ballasts) or either axis has not yet reported a value.
+func (l *DRGDaliLight) HSColor() (hue int32, saturation float64, ok bool) {
+	if l.hue == nil || l.saturation == nil {
+		return 0, 0, false
+	}
+	h, hOK := l.hue.Value()
+	s, sOK := l.saturation.Value()
+	if !hOK || !sOK {
+		return 0, 0, false
+	}
+	return h, s, true
 }
 
 // NamePostfix reports the entity-name suffix ("color_temp").

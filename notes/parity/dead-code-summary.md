@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 65c6a5e3
-HEAD: 65c6a5e3
+Generated: aa8ccfe3
+HEAD: aa8ccfe3
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29745 |
-| Reachable | 5120 |
-| Whitelisted | 21607 |
-| **Unreachable** | **3018** |
+| Total Exported | 29767 |
+| Reachable | 5126 |
+| Whitelisted | 21619 |
+| **Unreachable** | **3022** |
 
 ## Top-20 Packages by Dead Code
 
@@ -154,7 +154,9 @@ HEAD: 65c6a5e3
 | internal/model/custom/light | 0 | 20 | 22 |
 | internal/model/custom/lock | 0 | 12 | 14 |
 | internal/model/custom/siren | 0 | 12 | 18 |
+| internal/model/custom/switch | 0 | 2 | 0 |
 | internal/model/custom/textdisplay | 0 | 5 | 18 |
+| internal/model/custom/valve | 0 | 2 | 0 |
 | internal/model/datapoint | 0 | 3 | 0 |
 | internal/model/device/definitionexport | 0 | 6 | 2 |
 | internal/model/group | 0 | 14 | 0 |

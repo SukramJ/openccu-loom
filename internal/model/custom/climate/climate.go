@@ -257,6 +257,17 @@ type Climate struct {
 	// MIN_MAX_VALUE_NOT_RELEVANT_FOR_MANU_MODE parameter value. Guarded by mu.
 	minMaxNotRelevantForManu bool
 
+	// partyMode / hasPartyMode hold the last observed PARTY_MODE parameter
+	// value (IP thermostats only) — a read-only status flag reporting
+	// whether away/party mode is currently in effect on the device. It is
+	// redundant with SET_POINT_MODE==2 for the domain Mode/Profile the
+	// thermostat already derives, so it stays a bespoke field rather than
+	// feeding SetMode/SetProfile; the Python reference likewise wraps
+	// it as a plain sensor field (climate.py:668, DpBinarySensor) with no
+	// further logic attached. Guarded by mu.
+	partyMode    bool
+	hasPartyMode bool
+
 	// oldManuSetpoint caches the last setpoint observed while the thermostat
 	// was in MANU (HEAT) mode. When the operator later switches back to HEAT
 	// from AUTO or OFF, temperatureForHeatMode() returns this cached value
@@ -1884,6 +1895,19 @@ func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyc
 		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyMinMaxNotRelevant(next) }))
 		replayCurrentValue(dp, applyMinMaxNotRelevant)
 	}
+	// PARTY_MODE is a read-only status flag on the climate channel's own
+	// VALUES paramset — the profile schema maps it there (Bare, own
+	// channel) for every IP thermostat family, so no cross-channel
+	// resolution is needed.
+	applyPartyMode := func(next any) {
+		if b, ok := next.(bool); ok {
+			c.OnPartyMode(b)
+		}
+	}
+	if dp := ch.Parameter(hmenum.ParameterPartyMode); dp != nil {
+		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyPartyMode(next) }))
+		replayCurrentValue(dp, applyPartyMode)
+	}
 	// Mode / Profile producers — wire CONTROL_MODE (RF) and SET_POINT_MODE (IP).
 	//
 	// **Replay ordering note**: ACTIVE_PROFILE / WEEK_PROGRAM_POINTER is
@@ -2072,6 +2096,26 @@ func (c *Climate) OnOptimumStartStop(v bool) {
 	c.mu.Lock()
 	c.optimumStartStop = v
 	c.hasOptimumStartStop = true
+	c.mu.Unlock()
+}
+
+// PartyMode returns the last observed PARTY_MODE parameter value and
+// whether it has been observed. This is a read-only status flag exclusive
+// to IP thermostats; it is not the away-mode entry point — use
+// [Climate.SetAway] for that.
+func (c *Climate) PartyMode() (value, ok bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.partyMode, c.hasPartyMode
+}
+
+// OnPartyMode records a CCU-emitted PARTY_MODE update. Called from a
+// wire-side subscription when the channel exposes the PARTY_MODE parameter
+// (IP thermostats only).
+func (c *Climate) OnPartyMode(v bool) {
+	c.mu.Lock()
+	c.partyMode = v
+	c.hasPartyMode = true
 	c.mu.Unlock()
 }
 
