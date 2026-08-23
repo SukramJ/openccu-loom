@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { CentralRow } from "$lib/api/client";
-  import type { BackupEntry } from "$lib/api/types";
+  import type { BackupEntry, BackupStorageInfo } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -18,10 +18,16 @@
   import { confirmStore } from "$lib/stores/confirm.svelte";
 
   let backups = $state<BackupEntry[]>([]);
+  // Where the daemon actually writes the archives. On a CCU add-on install
+  // this is resolved at every start from the CCU's own backup target, so it
+  // is neither the config value nor guessable from the client side — and it
+  // is the first thing an operator asks after taking a backup.
+  let storage = $state<BackupStorageInfo | null>(null);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let triggering = $state(false);
   let restoring = $state<string | null>(null);
+  let deleting = $state<string | null>(null);
 
   // Centrals feed the trigger-target picker. With a single registered
   // central the picker is hidden and every trigger uses the
@@ -56,6 +62,13 @@
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
       loading = false;
+    }
+    try {
+      storage = await api.backupStorageInfo();
+    } catch {
+      // Non-fatal: the list is the page, the location is context. A daemon
+      // too old to serve this route simply shows no location row.
+      storage = null;
     }
   }
 
@@ -132,6 +145,41 @@
       );
     } finally {
       restoring = null;
+    }
+  }
+
+  // Deleting an archive. The confirmation names the archive rather than
+  // asking about "this backup": the list can hold several per CCU, and the
+  // one thing an operator must be sure of before an unrecoverable delete is
+  // which one is about to go.
+  async function remove(entry: BackupEntry) {
+    const name = entry.filename || `${entry.id}.sbk`;
+    const ok = await confirmStore.ask({
+      title: t("backup.delete_confirm.title"),
+      body: t("backup.delete_confirm.body", { name }),
+      confirmLabel: t("backup.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
+    deleting = entry.id;
+    try {
+      await api.deleteBackup(entry.id);
+      toastStore.success(t("backup.deleted", { id: entry.id }));
+      await load();
+    } catch (err) {
+      toastStore.error(
+        t("backup.delete_failed", {
+          id: entry.id,
+          error:
+            err instanceof ApiError
+              ? `${err.status}: ${err.message}`
+              : err instanceof Error
+                ? err.message
+                : String(err),
+        }),
+      );
+    } finally {
+      deleting = null;
     }
   }
 
@@ -236,6 +284,29 @@
     <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
+  {#if storage}
+    <div
+      class="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-[var(--ha-secondary-text-color)]"
+      data-testid="backup-storage"
+    >
+      <span class="font-medium">{t("backup.storage.label")}:</span>
+      {#if storage.available}
+        <span class="font-mono break-all text-[var(--ha-primary-text-color)]">
+          {storage.dir || t("backup.storage.unknown")}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          {t("backup.storage.summary", {
+            count: String(storage.count),
+            bytes: formatBytes(storage.bytes),
+          })}
+        </span>
+      {:else}
+        <span class="text-amber-700 dark:text-amber-400">{t("backup.storage.unavailable")}</span>
+      {/if}
+    </div>
+  {/if}
+
   {#if loading}
     <LoadingState />
   {:else}
@@ -277,6 +348,15 @@
                 disabled={restoring === entry.id}
               >
                 {restoring === entry.id ? "…" : t("common.restore")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline-destructive"
+                size="sm"
+                onclick={() => void remove(entry)}
+                disabled={deleting === entry.id}
+              >
+                {deleting === entry.id ? t("backup.deleting") : t("backup.delete")}
               </Button>
             </div>
           {/if}

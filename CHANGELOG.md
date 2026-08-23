@@ -4,15 +4,59 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.64.0]
 
-A garage door's ventilation position had no control anywhere Home Assistant
-could see it, and the reason it was easy to miss also hid a second problem:
-combined data points reached MQTT through a type switch that silently ignored
-anything it did not recognise.
+Three feature requests from the field and the two fix rounds that never
+shipped on their own. The Backups view now says where the archives live and
+lets an operator delete one, MQTT finally exposes the daemon's own liveness
+as an entity, and a garage door's ventilation position gets a control Home
+Assistant can see. Underneath: a bring-up that reconnected a CCU that was
+never gone, Matter boot events that were evicted before a controller could
+read them, and classic BidCos thermostats whose composed values never bound.
 
 ### Added
 
+- The daemon's own liveness is now visible on every north-bound surface, not
+  just as an absence. A daemon that goes away — a CCU reboot, an add-on
+  restart, a killed process — used to leave every Home Assistant entity
+  unavailable with nothing anywhere saying why, and nothing an automation
+  could act on.
+    - **MQTT**: a "Daemon connection" binary sensor per central, reading the
+      retained bridge status the broker also carries the last will on. It
+      deliberately carries no availability block of its own, because pointing
+      it at the topic it reads its state from would make it unavailable in
+      exactly the situation it exists to report.
+    - **WebSocket**: a `daemon_status.changed` broadcast on the daemon-level
+      topic `system.daemon_status`, emitted during a graceful shutdown before
+      the servers stop. A WebSocket client has no broker holding a last will,
+      so a stopping daemon and a dropped network looked identical to it; now
+      the daemon says which it is while it still can. A killed daemon cannot,
+      and that stays the client's own job to detect.
+    - **REST**: `GET /api/v1/hub/data-points` declares a `daemon_connection`
+      singleton, so a client can build the entity — and name it — without
+      hard-coding a name the daemon owns. Its value is true by construction
+      there; the negative state comes from the broadcast above or from the
+      client's own connection.
+    - **Config UI**: the connection badge distinguishes an announced shutdown
+      from the ordinary self-healing reconnect, which read as "wait a moment"
+      when the thing being waited for had gone.
+- Backups can now be deleted from the Backups view, one archive at a time.
+  Until now the only way an archive left the daemon's storage was the
+  scheduled-backup rotation, so an operator who imported the wrong file, or
+  filled a USB stick with manual backups, had to reach for a shell on the
+  host. The confirmation names the archive rather than asking about "this
+  backup" — the list holds several per CCU and the delete is unrecoverable.
+  Every delete is recorded in the audit log. New endpoint
+  `DELETE /api/v1/backups/{id}`.
+- The Backups view now names the directory the archives are kept in, together
+  with how many there are and how much space they take. That path was
+  effectively unknowable from outside the daemon: `backup.dir` is empty in the
+  common case, and on a CCU add-on install the service script resolves it at
+  every start from the CCU's own backup target — so it varies per installation,
+  changes when a USB stick is plugged in, and appeared nowhere but the start-up
+  log. A daemon that could not create its archive directory at all now says so
+  in the same place, instead of showing an empty list that looks like "no
+  backups taken yet". New endpoint `GET /api/v1/backups/storage`.
 - A vent-capable garage drive (HmIP-MOD-HO, HmIP-MOD-TM) now exposes its door
   mode as a select entity offering closed, ventilation and open. Home
   Assistant's cover platform has no ventilation state, so the position was
@@ -44,16 +88,16 @@ anything it did not recognise.
   field for a vent command, so the key never reached an entity. The select above
   replaces it.
 
-## [0.63.1]
-
-Two defects behind one symptom: the nightly chip-tool suite has been red since
-0.61.0 because a controller reading the bridge's `StartUp` and `BootReason`
-events got an empty answer. The events were emitted; they were gone by the
-time anything read them, and the reason they were gone was a reconnect that
-should never have run.
-
 ### Fixed
 
+- A CCU backup triggered through the hub's `backup.trigger` command no longer
+  leaves its archive on the CCU. The command runs the CCU's own backup tool
+  into `/usr/local/tmp/last_backup.sbk`, and that file stayed there until the
+  next backup overwrote it — several megabytes nothing ever read, since the
+  daemon downloads its own copy through a different path. The status poll now
+  records the archive's name and size before removing it, and answers later
+  polls from that record, so a finished backup still reports as finished with
+  the name it was given. Reported in #584.
 - The daemon no longer runs a connection recovery against a CCU that was never
   gone. Bringing an interface up walks its client from `CREATED` to
   `CONNECTED`, and each intermediate step was announced on the event bus. While
@@ -87,6 +131,23 @@ should never have run.
   opposite. Every emitted event's priority is now checked against a table read
   from matter.js, and an emitter whose event is not in that table fails the
   build rather than picking a priority unreviewed.
+
+- Classic HM-CC-TC thermostats (and the ZEL STG RM FWT that shares their
+  profile) now report a temperature and a target temperature. Their setpoint is
+  `SETPOINT` on the regulator channel while the thermostat entity is
+  materialised on the weather channel, and their current temperature is
+  `TEMPERATURE`, not the `ACTUAL_TEMPERATURE` every other thermostat family
+  uses. Neither value bound, so the entity showed no temperatures at all, its HA
+  discovery named state topics nothing publishes to, and `set_temperature` wrote
+  a parameter the device does not have.
+- The classic RF wall thermostats (HM-TC-IT-WM-W-EU, HM-CC-VG-1) now report
+  their humidity on the thermostat entity — they publish it as
+  `ACTUAL_HUMIDITY`, which the fixed `HUMIDITY` lookup never found.
+- A wire value that belongs to a custom data point on *another* channel now
+  updates that data point's aggregate on the WebSocket and MQTT planes. The
+  fan-out keyed on the channel the value arrived on, so an HM-CC-TC setpoint
+  change reached no aggregate surface until an unrelated parameter on the
+  thermostat's own channel happened to change.
 
 ### Internal
 
@@ -133,35 +194,6 @@ should never have run.
   files are reformatted in the same change: local `make fmt` and CI had drifted
   apart on a rule gofumpt relaxed in v0.11.0, and they now satisfy both
   versions.
-## [0.63.1]
-
-Classic BidCos thermostats. A custom data point binds the values it composes by
-parameter name on its own channel, and the profile schema has always said that
-neither is universal: it names both the parameter and the channel per device
-family. Where the two disagreed, the binding silently produced nothing — most
-visibly on the HM-CC-TC, whose thermostat entity carried no temperature at all.
-Every composed field now resolves through the schema.
-
-The north-bound API contract is unchanged.
-
-### Fixed
-
-- Classic HM-CC-TC thermostats (and the ZEL STG RM FWT that shares their
-  profile) now report a temperature and a target temperature. Their setpoint is
-  `SETPOINT` on the regulator channel while the thermostat entity is
-  materialised on the weather channel, and their current temperature is
-  `TEMPERATURE`, not the `ACTUAL_TEMPERATURE` every other thermostat family
-  uses. Neither value bound, so the entity showed no temperatures at all, its HA
-  discovery named state topics nothing publishes to, and `set_temperature` wrote
-  a parameter the device does not have.
-- The classic RF wall thermostats (HM-TC-IT-WM-W-EU, HM-CC-VG-1) now report
-  their humidity on the thermostat entity — they publish it as
-  `ACTUAL_HUMIDITY`, which the fixed `HUMIDITY` lookup never found.
-- A wire value that belongs to a custom data point on *another* channel now
-  updates that data point's aggregate on the WebSocket and MQTT planes. The
-  fan-out keyed on the channel the value arrived on, so an HM-CC-TC setpoint
-  change reached no aggregate surface until an unrelated parameter on the
-  thermostat's own channel happened to change.
 
 ## [0.63.0]
 

@@ -637,7 +637,9 @@ func (b *CcuBackend) GetDeviceDescription(ctx context.Context, address string) (
 //
 // Requires the HTTP download transport (SetDownloadFirmwareTransport). The
 // ReGa scripts stay in the catalogue for the hub's own trigger/status
-// commands, whose product *is* the file on the CCU.
+// commands, which run the CCU's own backup tool and report what it
+// produced; that flow now removes its archive once it has read its name and
+// size, so it no longer leaves one behind either.
 func (b *CcuBackend) CreateBackupAndDownload(ctx context.Context, maxWaitTime, _ float64) ([]byte, error) {
 	if b.baseURL == "" || b.sessionIDFn == nil {
 		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: HTTP download transport not wired: %w", ErrUnsupported)

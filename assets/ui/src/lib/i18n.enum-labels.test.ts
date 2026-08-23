@@ -129,6 +129,7 @@ const AUDIT_ACTIONS = [
   "alarm_silence",
   "alarm_walk_test",
   "area_change",
+  "backup_delete",
   "backup_pre_update",
   "backup_upload",
   "central_create",

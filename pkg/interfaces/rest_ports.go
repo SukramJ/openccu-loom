@@ -28,6 +28,13 @@ type BackupService interface {
 	// Prune deletes a central's oldest backups, keeping the newest keepLast.
 	// keepLast <= 0 is a no-op (keep all).
 	Prune(ctx context.Context, centralName string, keepLast int) error
+	// StorageInfo reports where the archives are stored and how much is
+	// there. The directory is not derivable from the configuration — see
+	// [hmapi.BackupStorageInfo].
+	StorageInfo(ctx context.Context) (hmapi.BackupStorageInfo, error)
+	// Delete removes one stored archive. A missing archive is not an error:
+	// the caller asked for it to be gone, and it is.
+	Delete(ctx context.Context, id string) error
 }
 
 // SysvarRefreshService is the facade `POST /sysvars/fetch` depends on.
