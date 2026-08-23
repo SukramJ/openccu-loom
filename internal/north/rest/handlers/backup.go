@@ -174,6 +174,44 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 	}
 }
 
+// DeleteBackup removes one stored archive.
+//
+// A missing archive answers 204 like a present one: the caller asked for
+// it to be gone, and it is. Reporting 404 here would make the SPA's retry
+// after a lost response look like a failure, and would let an operator
+// deleting the same entry twice believe something is wrong with the
+// storage.
+func DeleteBackup(svc BackupService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Backup service unavailable", ""))
+			return
+		}
+		id := chi.URLParam(r, "id")
+		if err := svc.Delete(r.Context(), id); err != nil {
+			if errors.Is(err, hmerr.ErrUnsupported) {
+				// No storage is a deployment state, not a fault: there is
+				// nothing to delete from, and saying "internal error" would
+				// send the operator hunting for a bug that is not there.
+				problem.Write(w, http.StatusServiceUnavailable,
+					problem.New(problem.TypeServiceUnready, r, "Backup storage unavailable", err.Error()))
+				return
+			}
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup delete failed", err)
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
+				Action: audit.ActionBackupDelete,
+				Note:   id,
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // DownloadBackup streams one backup .sbk file.
 //
 // The 200 is committed by the first payload byte, not before it. Setting

@@ -32,6 +32,9 @@ type BackupService interface {
 	// there. The directory is not derivable from the configuration — see
 	// [hmapi.BackupStorageInfo].
 	StorageInfo(ctx context.Context) (hmapi.BackupStorageInfo, error)
+	// Delete removes one stored archive. A missing archive is not an error:
+	// the caller asked for it to be gone, and it is.
+	Delete(ctx context.Context, id string) error
 }
 
 // SysvarRefreshService is the facade `POST /sysvars/fetch` depends on.

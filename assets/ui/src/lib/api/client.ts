@@ -736,6 +736,10 @@ export const api = {
   backupStorageInfo() {
     return request<BackupStorageInfo>(`/backups/storage`);
   },
+  // Deleting is unrecoverable and the daemon answers 204 with no body.
+  deleteBackup(id: string) {
+    return request<void>(`/backups/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   backupDownloadUrl(id: string): string {
     return `${apiBase()}/backups/${encodeURIComponent(id)}/download`;
   },

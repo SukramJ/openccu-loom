@@ -1752,3 +1752,98 @@ func (*locationlessStorage) Open(context.Context, string) (io.ReadCloser, error)
 }
 func (*locationlessStorage) Save(context.Context, string, string, []byte) error { return nil }
 func (*locationlessStorage) Delete(context.Context, string) error               { return nil }
+
+// TestBackupAdapterDeleteRemovesTheArchiveAndItsName pins the whole delete
+// path down to the filesystem: the archive is gone from the listing, its
+// bytes are gone from disk, and the sidecar carrying its display name goes
+// with it — a name left behind would be inherited by the next id that
+// collides with it.
+func TestBackupAdapterDeleteRemovesTheArchiveAndItsName(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	const id = "ccu-20260818-140257"
+	if err := storage.Save(t.Context(), id, "ccu-3.89.8-2026-08-18-1402.sbk", []byte("payload")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	if err := a.Delete(t.Context(), id); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	entries, err := a.List(t.Context())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("entries after delete = %+v, want none", entries)
+	}
+	if _, err := os.Stat(filepath.Join(dir, id+".sbk")); !os.IsNotExist(err) {
+		t.Fatalf("archive still on disk: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, id+backupNameSuffix)); !os.IsNotExist(err) {
+		t.Fatalf("name sidecar still on disk: %v", err)
+	}
+}
+
+// TestBackupAdapterDeleteIsIdempotent covers the second click and the retry
+// after a lost response: the caller asked for the archive to be gone, and
+// it is. An error here would read as "the storage is broken".
+func TestBackupAdapterDeleteIsIdempotent(t *testing.T) {
+	t.Parallel()
+	storage, err := NewFilesystemBackupStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	if err := a.Delete(t.Context(), "never-existed"); err != nil {
+		t.Fatalf("delete of a missing archive: %v", err)
+	}
+}
+
+// TestBackupAdapterDeleteWithoutStorageIsUnsupported is the negative
+// control: without storage the call must report ErrUnsupported so the
+// handler can answer 503 (a deployment state) instead of 502 (an upstream
+// fault the CCU never caused).
+func TestBackupAdapterDeleteWithoutStorageIsUnsupported(t *testing.T) {
+	t.Parallel()
+	a := NewBackupAdapter(central.NewRegistry())
+
+	err := a.Delete(t.Context(), "b1")
+	if !errors.Is(err, hmerr.ErrUnsupported) {
+		t.Fatalf("err = %v, want ErrUnsupported", err)
+	}
+}
+
+// TestBackupAdapterDeleteLeavesOtherArchivesAlone is the bite the id-based
+// tests cannot give on their own: a delete that removed the directory, or
+// resolved the wrong path, would pass every assertion about the archive
+// that was asked for.
+func TestBackupAdapterDeleteLeavesOtherArchivesAlone(t *testing.T) {
+	t.Parallel()
+	storage, err := NewFilesystemBackupStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	for _, id := range []string{"ccu-20260818-140257", "ccu-20260819-140257"} {
+		if err := storage.Save(t.Context(), id, "", []byte("payload")); err != nil {
+			t.Fatalf("save %s: %v", id, err)
+		}
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	if err := a.Delete(t.Context(), "ccu-20260818-140257"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	entries, err := a.List(t.Context())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(entries) != 1 || entries[0].ID != "ccu-20260819-140257" {
+		t.Fatalf("entries = %+v, want only ccu-20260819-140257", entries)
+	}
+}

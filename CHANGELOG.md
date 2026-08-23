@@ -13,6 +13,14 @@ anything it did not recognise.
 
 ### Added
 
+- Backups can now be deleted from the Backups view, one archive at a time.
+  Until now the only way an archive left the daemon's storage was the
+  scheduled-backup rotation, so an operator who imported the wrong file, or
+  filled a USB stick with manual backups, had to reach for a shell on the
+  host. The confirmation names the archive rather than asking about "this
+  backup" — the list holds several per CCU and the delete is unrecoverable.
+  Every delete is recorded in the audit log. New endpoint
+  `DELETE /api/v1/backups/{id}`.
 - The Backups view now names the directory the archives are kept in, together
   with how many there are and how much space they take. That path was
   effectively unknowable from outside the daemon: `backup.dir` is empty in the

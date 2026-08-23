@@ -27,6 +27,7 @@
   let loadError = $state<string | null>(null);
   let triggering = $state(false);
   let restoring = $state<string | null>(null);
+  let deleting = $state<string | null>(null);
 
   // Centrals feed the trigger-target picker. With a single registered
   // central the picker is hidden and every trigger uses the
@@ -144,6 +145,41 @@
       );
     } finally {
       restoring = null;
+    }
+  }
+
+  // Deleting an archive. The confirmation names the archive rather than
+  // asking about "this backup": the list can hold several per CCU, and the
+  // one thing an operator must be sure of before an unrecoverable delete is
+  // which one is about to go.
+  async function remove(entry: BackupEntry) {
+    const name = entry.filename || `${entry.id}.sbk`;
+    const ok = await confirmStore.ask({
+      title: t("backup.delete_confirm.title"),
+      body: t("backup.delete_confirm.body", { name }),
+      confirmLabel: t("backup.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
+    deleting = entry.id;
+    try {
+      await api.deleteBackup(entry.id);
+      toastStore.success(t("backup.deleted", { id: entry.id }));
+      await load();
+    } catch (err) {
+      toastStore.error(
+        t("backup.delete_failed", {
+          id: entry.id,
+          error:
+            err instanceof ApiError
+              ? `${err.status}: ${err.message}`
+              : err instanceof Error
+                ? err.message
+                : String(err),
+        }),
+      );
+    } finally {
+      deleting = null;
     }
   }
 
@@ -312,6 +348,15 @@
                 disabled={restoring === entry.id}
               >
                 {restoring === entry.id ? "…" : t("common.restore")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline-destructive"
+                size="sm"
+                onclick={() => void remove(entry)}
+                disabled={deleting === entry.id}
+              >
+                {deleting === entry.id ? t("backup.deleting") : t("backup.delete")}
               </Button>
             </div>
           {/if}

@@ -111,6 +111,7 @@ func (f *fakeBackup) Prune(context.Context, string, int) error { return nil }
 func (f *fakeBackup) StorageInfo(context.Context) (hmapi.BackupStorageInfo, error) {
 	return hmapi.BackupStorageInfo{}, nil
 }
+func (f *fakeBackup) Delete(context.Context, string) error { return nil }
 
 // ---------------------------------------------------------------------------
 // Fakes for router branch-coverage tests (dep-guarded routes).

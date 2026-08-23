@@ -550,6 +550,24 @@ func (a *BackupAdapter) StorageInfo(ctx context.Context) (hmapi.BackupStorageInf
 	return info, nil
 }
 
+// Delete implements [interfaces.BackupService]. It removes one stored
+// archive and its recorded display name.
+//
+// It takes the owning central's lock, so a delete never runs while that
+// central's create-and-save or rotation prune is mid-flight: the pruner
+// lists, sorts and deletes under the same lock, and a concurrent delete
+// would otherwise let it act on a listing that no longer describes the
+// storage.
+func (a *BackupAdapter) Delete(ctx context.Context, id string) error {
+	if a.storage == nil {
+		return errStorageNotConfigured
+	}
+	lock := a.centralLock(a.ownerCentralName(id))
+	lock.Lock()
+	defer lock.Unlock()
+	return a.storage.Delete(ctx, id)
+}
+
 // Stream implements handlers.BackupService.
 func (a *BackupAdapter) Stream(ctx context.Context, id string, w io.Writer) error {
 	if a.storage == nil {

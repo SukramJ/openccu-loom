@@ -3881,6 +3881,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one stored CCU backup
+         * @description Removes the archive from the daemon's storage. Unrecoverable: the
+         *     archive may be the only copy of that CCU's configuration the daemon
+         *     holds. Deleting an archive that is not there succeeds — the caller
+         *     asked for it to be gone, and it is.
+         */
+        delete: operations["deleteBackup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backups/{id}/download": {
         parameters: {
             query?: never;
@@ -14152,6 +14175,28 @@ export interface operations {
                 content?: never;
             };
             500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -22,6 +23,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // stubBackupService is an inline stub for BackupService.
@@ -37,6 +39,11 @@ type stubBackupService struct {
 
 	storageInfo    hmapi.BackupStorageInfo
 	storageInfoErr error
+
+	// deleted records the ids Delete was called with, so a test can assert
+	// the handler addressed the archive the route named.
+	deleted   []string
+	deleteErr error
 
 	// unscopedTriggerCalls / forCentralCalls record which trigger method
 	// the handler invoked and, for the scoped call, which central name it
@@ -67,6 +74,11 @@ func (s *stubBackupService) Prune(_ context.Context, _ string, _ int) error { re
 
 func (s *stubBackupService) StorageInfo(_ context.Context) (hmapi.BackupStorageInfo, error) {
 	return s.storageInfo, s.storageInfoErr
+}
+
+func (s *stubBackupService) Delete(_ context.Context, id string) error {
+	s.deleted = append(s.deleted, id)
+	return s.deleteErr
 }
 
 // Stream writes streamData (if any) before evaluating streamErr, so a case
@@ -819,4 +831,78 @@ func TestBackupStorageInfo_ServiceError_Returns502(t *testing.T) {
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
+}
+
+// TestDeleteBackup_RemovesTheAddressedArchive pins that the route deletes
+// the archive its path names and records it: a delete that hit a different
+// id, or none at all, would look identical from the 204.
+func TestDeleteBackup_RemovesTheAddressedArchive(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{}
+	rec := &captureRecorder{}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/ccu-20260818-140257", http.NoBody)
+	req = withBackupID(req, "ccu-20260818-140257")
+	w := httptest.NewRecorder()
+	DeleteBackup(svc, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(svc.deleted) != 1 || svc.deleted[0] != "ccu-20260818-140257" {
+		t.Fatalf("deleted = %v, want [ccu-20260818-140257]", svc.deleted)
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionBackupDelete {
+		t.Fatalf("audit entries = %+v, want one backup_delete", rec.entries)
+	}
+	if rec.entries[0].Note != "ccu-20260818-140257" {
+		t.Fatalf("audit note = %q, want the deleted id", rec.entries[0].Note)
+	}
+}
+
+// TestDeleteBackup_NoStorage_Returns503 covers a daemon running without
+// archive storage. It is a deployment state, not an upstream fault: a 502
+// would blame a CCU that was never asked anything.
+func TestDeleteBackup_NoStorage_Returns503(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{deleteErr: fmt.Errorf("backup: no storage configured: %w", hmerr.ErrUnsupported)}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/b1", http.NoBody)
+	req = withBackupID(req, "b1")
+	w := httptest.NewRecorder()
+	DeleteBackup(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteBackup_StorageError_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{deleteErr: errors.New("disk on fire")}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/b1", http.NoBody)
+	req = withBackupID(req, "b1")
+	w := httptest.NewRecorder()
+	DeleteBackup(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteBackup_ServiceNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/b1", http.NoBody)
+	w := httptest.NewRecorder()
+	DeleteBackup(nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+// withBackupID puts the {id} path parameter into the request the way chi
+// would, so the handler under test resolves the same id the route names.
+func withBackupID(req *http.Request, id string) *http.Request {
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 }

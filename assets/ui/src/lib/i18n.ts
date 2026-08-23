@@ -751,6 +751,7 @@ const EN: Catalog = {
   "audit.action.area_change": "Area changed",
   "audit.action.backup_pre_update": "Pre-update backup",
   "audit.action.backup_upload": "Backup imported",
+  "audit.action.backup_delete": "Backup deleted",
   "audit.action.central_create": "CCU added",
   "audit.action.central_delete": "CCU removed",
   "audit.action.central_update": "CCU changed",
@@ -831,6 +832,13 @@ const EN: Catalog = {
   "backup.storage.unavailable":
     "No storage directory — the daemon could not create it. Backups cannot be kept.",
   "backup.storage.summary": "{count} archives · {bytes}",
+  "backup.delete": "Delete",
+  "backup.deleting": "Deleting…",
+  "backup.delete_confirm.title": "Delete backup?",
+  "backup.delete_confirm.body":
+    "{name} is removed from the daemon's storage for good. If this is the only copy of that CCU's configuration, there is no way back.",
+  "backup.deleted": "Backup {id} deleted.",
+  "backup.delete_failed": "Deleting {id} failed: {error}",
   "backup.restore_started": "Restore of {id} triggered.",
   "common.acknowledge": "Acknowledge",
   "common.add": "Add",
@@ -4852,6 +4860,7 @@ const DE: Catalog = {
   "audit.action.area_change": "Bereich geändert",
   "audit.action.backup_pre_update": "Sicherung vor dem Update",
   "audit.action.backup_upload": "Sicherung importiert",
+  "audit.action.backup_delete": "Sicherung gelöscht",
   "audit.action.central_create": "CCU hinzugefügt",
   "audit.action.central_delete": "CCU entfernt",
   "audit.action.central_update": "CCU geändert",
@@ -4932,6 +4941,13 @@ const DE: Catalog = {
   "backup.storage.unavailable":
     "Kein Speicherverzeichnis — der Daemon konnte es nicht anlegen. Backups können nicht abgelegt werden.",
   "backup.storage.summary": "{count} Archive · {bytes}",
+  "backup.delete": "Löschen",
+  "backup.deleting": "Wird gelöscht…",
+  "backup.delete_confirm.title": "Sicherung löschen?",
+  "backup.delete_confirm.body":
+    "{name} wird endgültig aus dem Speicher des Daemons entfernt. Ist das die einzige Kopie der Konfiguration dieser CCU, gibt es keinen Weg zurück.",
+  "backup.deleted": "Sicherung {id} gelöscht.",
+  "backup.delete_failed": "Löschen von {id} fehlgeschlagen: {error}",
   "backup.restore_started": "Restore von {id} angestoßen.",
   "common.acknowledge": "Quittieren",
   "common.add": "Hinzufügen",

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.3.0
+  version: 7.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4490,6 +4490,29 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /backups/{id}:
+    delete:
+      operationId: deleteBackup
+      summary: Delete one stored CCU backup
+      description: |
+        Removes the archive from the daemon's storage. Unrecoverable: the
+        archive may be the only copy of that CCU's configuration the daemon
+        holds. Deleting an archive that is not there succeeds — the caller
+        asked for it to be gone, and it is.
+      tags: [backup]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /backups/{id}/download:
     get:
       operationId: downloadBackup

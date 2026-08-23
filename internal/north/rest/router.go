@@ -1241,6 +1241,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// CCU's entire configuration.
 				pr.With(admin).Post("/backups/upload", handlers.UploadBackup(d.BackupUpload, d.AuditRecorder))
 				pr.With(admin).Get("/backups/{id}/download", handlers.DownloadBackup(d.Backup))
+				// Deleting a stored archive. Admin-gated and audited: it is
+				// unrecoverable, and the archive may be the only copy of a
+				// CCU's configuration the daemon holds.
+				pr.With(admin).Delete("/backups/{id}", handlers.DeleteBackup(d.Backup, d.AuditRecorder))
 				pr.With(admin).Post("/backups/{id}/restore", handlers.RestoreBackup(d.Backup))
 			}
 			if d.Paramsets != nil {
