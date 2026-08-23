@@ -587,13 +587,13 @@ func TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted(t *testing.T) {
 		ChannelAddress: ch.Address,
 	}))
 
-	if before := collector.PublishErrors.Value(); before != 0 {
+	if before := collector.PublishErrors("ccu-01").Value(); before != 0 {
 		t.Fatalf("publish_errors before call = %d, want 0", before)
 	}
 
 	eb.publishScheduleEntitySnapshot(context.Background(), "ccu-01", "HmIP-RF", dev, ch)
 
-	if after := collector.PublishErrors.Value(); after == 0 {
+	if after := collector.PublishErrors("ccu-01").Value(); after == 0 {
 		t.Fatal("publish_errors counter did not increment after a failing PublishScheduleEntityDiscovery call — the discarded error is unobservable")
 	}
 }
@@ -619,13 +619,13 @@ func TestPublishCombinedDPSnapshotDiscardedErrorIsCounted(t *testing.T) {
 	timer := combined.NewTimer(ch.Address, &noopCombinedWriter{}, "DURATION_VALUE", "DURATION_UNIT")
 	ch.AttachCalculatedDataPoint(timer)
 
-	if before := collector.PublishErrors.Value(); before != 0 {
+	if before := collector.PublishErrors("ccu-01").Value(); before != 0 {
 		t.Fatalf("publish_errors before call = %d, want 0", before)
 	}
 
 	eb.publishCombinedDPSnapshot(context.Background(), "ccu-01", "HmIP-RF", dev, ch)
 
-	if after := collector.PublishErrors.Value(); after == 0 {
+	if after := collector.PublishErrors("ccu-01").Value(); after == 0 {
 		t.Fatal("publish_errors counter did not increment after a failing PublishCombinedTimerDiscovery call — the discarded error is unobservable")
 	}
 }

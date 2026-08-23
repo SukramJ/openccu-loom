@@ -4152,3 +4152,33 @@ populates the hub model. The reference shape is preserved in Git history
 (`internal/central/adapter/homegear_hub_wiring.go` before its removal); the
 per-sysvar writer routed through the XML-RPC `setSystemVariable` method and left
 the create/update/delete mutator nil, which the milestone should restore.
+
+### BD-MQTT-RawGateCoversRawTopicsOnly — `raw_enabled: false` silences the raw plane, not a discovery payload's own state topics
+
+**Decision.** `north.mqtt.raw_enabled` gates the raw topic plane. It does
+**not** gate `PublishAlarmState`, `PublishAlarmAvailability`,
+`RetractAlarmTopic` or the Security & Safety publisher, and that asymmetry is
+deliberate rather than an oversight. Only `PublishAlarmEvent` — a genuinely
+raw-plane emission with no HA entity behind it — takes the gate.
+
+**Why.** Those topics are the `state_topic` and `availability_topic` that the
+alarm and security entities' own HA-Discovery payloads name. Silencing them
+while discovery still declares them leaves every alarm entity in Home
+Assistant present and permanently `unknown` or `unavailable` — the operator
+sees a full set of controls that never report and never respond. That is the
+exact shape the plane round-trip guards exist to catch: **declared and
+published have to be the same set** (CLAUDE.md, wiring rule 4).
+
+A blanket gate across every alarm/security publisher was proposed on the
+grounds that the flag reads as "no raw topics at all". Taking it would have
+traded a naming inconsistency for a broken plane. The honest fix for the
+naming is documentation, not behaviour.
+
+**What an operator should expect.** Turning the raw plane off removes the raw
+mirror of alarm and security state. It does not remove the Home Assistant
+entities, and it does not stop them updating — those ride the discovery
+contract, which has its own switch (`ha_discovery_enabled`).
+
+**Retirement condition.** None. If the two switches are ever merged, the merge
+has to retract the discovery configs in the same step, or it reintroduces the
+declared-but-never-published set this entry exists to prevent.

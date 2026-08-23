@@ -11,27 +11,30 @@
           "address": "SDV0001:1",
           "put_values": {
             "DISPLAY_DATA_ALIGNMENT": "LEFT",
-            "DISPLAY_DATA_ICON": "NONE",
+            "DISPLAY_DATA_ICON": "NO_ICON",
+            "DISPLAY_DATA_ID": 1,
             "DISPLAY_DATA_STRING": "Line one"
           }
         },
         {
           "method": "PutParamset",
           "paramset_key": "VALUES",
-          "address": "SDV0001:2",
+          "address": "SDV0001:1",
           "put_values": {
             "DISPLAY_DATA_ALIGNMENT": "LEFT",
-            "DISPLAY_DATA_ICON": "NONE",
+            "DISPLAY_DATA_ICON": "NO_ICON",
+            "DISPLAY_DATA_ID": 2,
             "DISPLAY_DATA_STRING": "Line two"
           }
         },
         {
           "method": "PutParamset",
           "paramset_key": "VALUES",
-          "address": "SDV0001:3",
+          "address": "SDV0001:1",
           "put_values": {
             "DISPLAY_DATA_ALIGNMENT": "LEFT",
-            "DISPLAY_DATA_ICON": "NONE",
+            "DISPLAY_DATA_ICON": "NO_ICON",
+            "DISPLAY_DATA_ID": 3,
             "DISPLAY_DATA_STRING": "Line three"
           }
         },

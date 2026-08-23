@@ -933,6 +933,24 @@ func (u *Unit) HasDevice(address string) bool {
 //
 // Idempotent: returns false when no device matches the address.
 func (u *Unit) RemoveDevice(address string) bool {
+	return u.removeDevice(address, false)
+}
+
+// RemoveDeviceForTeardown is [Unit.RemoveDevice] for a whole-model teardown:
+// the cache-clear re-init drops every device and immediately re-pulls them.
+// The removal event it publishes carries
+// [hmevent.DeviceRemovedEvent.ModelTeardown], which the persistent
+// VALUES/MASTER cache evictors honour by standing down — the operator's
+// requested clear scope was already applied by cachereset.Service.Clear, and
+// evicting again here would take the whole fleet's cache with it (ADR 0042).
+// Every other consumer still reacts, so a device the CCU has genuinely
+// dropped disappears from the north-bound planes at teardown rather than
+// lingering until the next daemon boot.
+func (u *Unit) RemoveDeviceForTeardown(address string) bool {
+	return u.removeDevice(address, true)
+}
+
+func (u *Unit) removeDevice(address string, teardown bool) bool {
 	if u == nil || u.ModelRegistry == nil || address == "" {
 		return false
 	}
@@ -961,10 +979,11 @@ func (u *Unit) RemoveDevice(address string) bool {
 	removed := u.ModelRegistry.Remove(address)
 	if removed && u.EventBus != nil {
 		events.Publish(u.EventBus, hmevent.DeviceRemovedEvent{
-			Base:        hmevent.NewBase(),
-			CentralName: u.cfg.Name,
-			InterfaceID: interfaceID,
-			Address:     address,
+			Base:          hmevent.NewBase(),
+			CentralName:   u.cfg.Name,
+			InterfaceID:   interfaceID,
+			Address:       address,
+			ModelTeardown: teardown,
 		})
 	}
 	return removed

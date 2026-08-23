@@ -572,14 +572,20 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	return nil
 }
 
-// incReceivedCommands increments the received_commands counter when a collector is wired.
-func (c *CommandSubscriber) incReceivedCommands() {
+// incReceivedCommands increments the received_commands counter for
+// centralName when a collector is wired. Pass "" only for a genuinely
+// daemon-level command topic (no <central> segment) — see the call
+// sites in handleAlarmCommand and handleAddonUpdateCommand.
+func (c *CommandSubscriber) incReceivedCommands(centralName string) {
 	if c.collector != nil {
-		c.collector.ReceivedCommands.Inc()
+		c.collector.ReceivedCommands(centralName).Inc()
 	}
 }
 
-// incSubscribeFailures increments the subscribe_failures counter when a collector is wired.
+// incSubscribeFailures increments the subscribe_failures counter when a
+// collector is wired. Unlabeled: every Subscribe call below registers
+// one wildcard filter that answers for every configured central at
+// once, so a broker-rejected subscribe has no single central to blame.
 func (c *CommandSubscriber) incSubscribeFailures() {
 	if c.collector != nil {
 		c.collector.SubscribeFailures.Inc()
@@ -876,7 +882,7 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	}
 	value := parseCommandPayload(body)
 	channelAddress := fmt.Sprintf("%s:%d", device, channel)
-	c.incReceivedCommands()
+	c.incReceivedCommands(centralName)
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()
@@ -914,7 +920,7 @@ func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained boo
 		return
 	}
 	value := parseCommandPayload(body)
-	c.incReceivedCommands()
+	c.incReceivedCommands(centralName)
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()
@@ -950,7 +956,7 @@ func (c *CommandSubscriber) handleProgram(topic string, body []byte, retained bo
 	if !ok {
 		return
 	}
-	c.incReceivedCommands()
+	c.incReceivedCommands(centralName)
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()
@@ -988,7 +994,7 @@ func (c *CommandSubscriber) handleProgramEnable(topic string, body []byte, retai
 			slog.String("topic", topic), slog.String("payload", string(body)))
 		return
 	}
-	c.incReceivedCommands()
+	c.incReceivedCommands(centralName)
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()
@@ -1048,7 +1054,7 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 			seconds = n
 		}
 	}
-	c.incReceivedCommands()
+	c.incReceivedCommands(centralName)
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()
@@ -1098,7 +1104,9 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 			slog.String("detail", "AlarmSink not wired; ignoring alarm command"))
 		return
 	}
-	c.incReceivedCommands()
+	// The alarm command topic carries no <central> segment (zones are
+	// daemon-level, see [AlarmSink]) — nothing to label this increment with.
+	c.incReceivedCommands("")
 	c.dispatchAlarm(topic, zone, action, code)
 }
 
@@ -1239,7 +1247,10 @@ func (c *CommandSubscriber) handleAddonUpdateCommand(topic string, body []byte, 
 			slog.String("detail", "AddonUpdateSink not wired; ignoring install command"))
 		return
 	}
-	c.incReceivedCommands()
+	// The add-on-update command topic carries no <central> segment
+	// (daemon-level self-updater, see [AddonUpdateSink]) — nothing to
+	// label this increment with.
+	c.incReceivedCommands("")
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()

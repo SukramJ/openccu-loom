@@ -29,8 +29,11 @@ const (
 
 // EnergyBucket is one aggregated point in a device's energy breakdown.
 // ConsumedWh/FeedInWh are the cumulative-counter deltas over the bucket
-// (Wh); AvgPowerW/PeakPowerW summarise the instantaneous POWER samples in
-// the same bucket (W). Reset is set when a cumulative counter went
+// (Wh); AvgPowerW is the time-weighted mean of the instantaneous POWER
+// samples in the same bucket (W) — a value held for 59 minutes counts 59x
+// a value held for 1 minute, not the same, as CCU parameters push on
+// change and sample spacing is irregular by construction; PeakPowerW is
+// the plain maximum sample. Reset is set when a cumulative counter went
 // backwards within the bucket (meter reset on re-pair / firmware event) —
 // see [FoldEnergyRows].
 type EnergyBucket struct {
@@ -171,6 +174,11 @@ func parseEnergyQuery(r *http.Request) (q EnergyQuery, errMsg string) { //nolint
 // response shape. It mirrors sqlite.EnergyRow field-for-field without
 // importing the store package, keeping the handler import graph
 // decoupled (same pattern as HistoryBucket vs. MeasurementBucket).
+//
+// Sum is a time-weighted sum, not a plain sum of sampled values, and Count
+// is the covered span backing it in milliseconds, not a sample count — see
+// [sqlite.EnergyRow] for why the store repurposes Count that way for this
+// row shape specifically.
 type EnergyRawRow struct {
 	ChannelAddress string
 	Parameter      string
@@ -218,11 +226,14 @@ type counterReading struct {
 // package, rather than in the cmd-layer adapter, so it is unit-testable
 // without a live store or central registry:
 //
-//   - POWER (instantaneous, W): avg_power_w = sum/count (mean of the raw
-//     samples folded into the bucket), peak_power_w = max. Multiple
-//     POWER channels on the same device accumulate additively (their
-//     instantaneous loads sum; the running mean of each channel is
-//     summed as an approximation of the device's total average load).
+//   - POWER (instantaneous, W): avg_power_w = sum/count, a time-weighted
+//     mean — row.Sum is a weighted sum of the raw samples folded into the
+//     bucket and row.Count (despite the name) is the span it covers in
+//     milliseconds, not a sample count; see [EnergyRawRow]. peak_power_w
+//     = max. Multiple POWER channels on the same device accumulate
+//     additively (their instantaneous loads sum; the running mean of
+//     each channel is summed as an approximation of the device's total
+//     average load).
 //   - ENERGY_COUNTER (cumulative, Wh): each bucket reports consumed_wh =
 //     last - first for the chart. Counter-reset rule: the meter can reset
 //     to 0 on device re-pair or a firmware event, so last < first is

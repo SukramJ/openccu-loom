@@ -226,22 +226,32 @@ func TestDailyFoldHandlesDSTTransitionDays(t *testing.T) {
 			if got := time.UnixMilli(transition.BucketTS).In(loc); !got.Equal(tc.day) {
 				t.Errorf("bucket start = %s, want %s", got, tc.day)
 			}
-			if transition.Count != tc.wantHrs {
+			// Count is the covered span in ms (see [MeasurementBucket.Count]),
+			// not a sample count: each of the day's hours is fully covered
+			// by its lone sample, so Count is wantHrs*hourBucketMs.
+			wantCount := tc.wantHrs * hourBucketMs
+			if transition.Count != wantCount {
 				t.Errorf("bucket count = %d, want %d — the DST day was not folded as one day",
-					transition.Count, tc.wantHrs)
+					transition.Count, wantCount)
 			}
-			if transition.Sum != float64(tc.wantHrs) {
-				t.Errorf("bucket sum = %v, want %v", transition.Sum, float64(tc.wantHrs))
+			// Sum is time-weighted (see [MeasurementBucket.Avg]): each
+			// sample sits alone in its own complete hourly bucket, so it
+			// is held for the bucket's full width, contributing
+			// value*hourBucketMs rather than the plain value.
+			wantSum := float64(tc.wantHrs) * float64(hourBucketMs)
+			if transition.Sum != wantSum {
+				t.Errorf("bucket sum = %v, want %v", transition.Sum, wantSum)
 			}
 
-			// Nothing lost, nothing double-counted: every sample is in exactly
-			// one bucket.
+			// Nothing lost, nothing double-counted: every sample is alone in
+			// its own complete hour, so the total covered span across all
+			// three days is exactly one hourBucketMs per sample.
 			var total int64
 			for _, r := range daily {
 				total += r.Count
 			}
-			if want := int64(len(samples)); total != want {
-				t.Errorf("total folded samples = %d, want %d", total, want)
+			if want := int64(len(samples)) * hourBucketMs; total != want {
+				t.Errorf("total covered span = %d, want %d", total, want)
 			}
 		})
 	}
@@ -310,8 +320,14 @@ func TestUnfoldedTailUsesTheSameDayBucketAsTheDailyTier(t *testing.T) {
 			if len(buckets) != 1 {
 				t.Fatalf("history buckets = %d (tier %s), want 1: %+v", len(buckets), tier, buckets)
 			}
-			if buckets[0].Count != 1 {
-				t.Errorf("history bucket count = %d, want 1", buckets[0].Count)
+			// Count is the covered span in ms (see [MeasurementBucket.Count]),
+			// not a sample count: the lone sample self-carries across its
+			// own complete hour (the only hour of the day with any data),
+			// so Count is a full hourBucketMs at every rollup stage, not
+			// the nominal day width — the rest of the day genuinely has no
+			// known value to report.
+			if buckets[0].Count != hourBucketMs {
+				t.Errorf("history bucket count = %d, want %d", buckets[0].Count, hourBucketMs)
 			}
 		})
 	}
@@ -580,7 +596,10 @@ func TestDailyFoldTerminatesAcrossAMidnightDSTTransition(t *testing.T) {
 		time.Date(2025, 9, 7, 1, 0, 0, 0, loc), // the transition day begins at 01:00
 		time.Date(2025, 9, 8, 0, 0, 0, 0, loc),
 	}
-	wantCounts := []int64{24, 23, 24}
+	// Count is the covered span in ms (see [MeasurementBucket.Count]), not
+	// a sample count: each hour of each day is fully covered by its lone
+	// sample, so Count is hours*hourBucketMs.
+	wantCounts := []int64{24 * hourBucketMs, 23 * hourBucketMs, 24 * hourBucketMs}
 	var total int64
 	for i, row := range daily {
 		if got := time.UnixMilli(row.BucketTS).In(loc); !got.Equal(wantStarts[i]) {
@@ -591,7 +610,7 @@ func TestDailyFoldTerminatesAcrossAMidnightDSTTransition(t *testing.T) {
 		}
 		total += row.Count
 	}
-	if want := int64(len(samples)); total != want {
-		t.Errorf("total folded samples = %d, want %d", total, want)
+	if want := int64(len(samples)) * hourBucketMs; total != want {
+		t.Errorf("total covered span = %d, want %d", total, want)
 	}
 }

@@ -100,7 +100,7 @@ func TestListPrograms_FilterInternalPrograms(t *testing.T) {
 }
 
 // TestListPrograms_UnknownCentralReturnsError pins the fix for
-// G2-ws-mcp-live-7: a central_name that names no configured central must
+// A central_name that names no configured central must
 // surface as an error, not a well-formed empty result an agent would
 // report as "you have no programs" — indistinguishable from a central
 // that genuinely has none. Mirrors the WS ErrCentralUnknown path.
@@ -1089,5 +1089,31 @@ func TestListFunctions_CentralScoping(t *testing.T) {
 	unmarshalStructured(t, res2, &out2)
 	if len(out2.Functions) != 0 {
 		t.Fatalf("expected 0 functions for alpha (no devices), got %d", len(out2.Functions))
+	}
+}
+
+// TestListRoomsAndFunctions_UnknownCentralReturnsError pins the fix for
+// list_rooms and list_functions reach the model through
+// countGroups rather than centralsToScan, so they had not inherited the
+// unknown-central check the sibling tools got. A central_name that names
+// no configured central must surface as an error, not a well-formed empty
+// list an agent would report as "this CCU has no rooms" — indistinguishable
+// from a central that genuinely has none.
+func TestListRoomsAndFunctions_UnknownCentralReturnsError(t *testing.T) {
+	tools := []string{"list_rooms", "list_functions"}
+	for _, tool := range tools {
+		t.Run(tool, func(t *testing.T) {
+			devs := newFakeDevices()
+			centrals := &fakeCentrals{names: []string{"alpha"}}
+			hubs := newFakeHubs()
+
+			cs := connect(t, hubDeps(centrals, hubs, devs))
+			defer cs.Close()
+
+			res := callTool(t, cs, tool, map[string]any{"central_name": "ghost"})
+			if !res.IsError {
+				t.Fatalf("%s: expected IsError=true for an unknown central_name", tool)
+			}
+		})
 	}
 }

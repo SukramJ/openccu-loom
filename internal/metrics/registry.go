@@ -24,11 +24,16 @@ const (
 
 // Metric is one named measurement with optional labels.
 type Metric struct {
-	Name   string
-	Help   string
-	Kind   Kind
-	Labels []string // ordered label names
-	value  atomic.Uint64
+	Name string
+	Help string
+	Kind Kind
+	// Labels holds the ordered label names shared by every series under
+	// Name (e.g. ["central"]); LabelValues holds this particular
+	// series' values in the same order. Both are nil for an unlabeled
+	// metric.
+	Labels      []string
+	LabelValues []string
+	value       atomic.Uint64
 	// For gauges we additionally track a float representation; we
 	// store it as bit-pattern via atomic.Uint64.
 	floatBits atomic.Uint64
@@ -84,17 +89,65 @@ func (r *Registry) Gauge(name, help string) *Gauge {
 }
 
 func (r *Registry) upsert(name, help string, kind Kind) *Metric {
+	return r.upsertLabeled(name, help, kind, nil, nil)
+}
+
+// upsertLabeled is [Registry.upsert] extended with a label dimension.
+// labelNames and labelValues are parallel and ordered; a metric is keyed
+// by name PLUS labelValues, so distinct label values register distinct
+// series while an identical (name, labelValues) pair shares storage —
+// mirroring upsert's dedup-by-name for the unlabeled case.
+func (r *Registry) upsertLabeled(name, help string, kind Kind, labelNames, labelValues []string) *Metric {
+	key := seriesKey(name, labelValues)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if m, ok := r.metrics[name]; ok {
+	if m, ok := r.metrics[key]; ok {
 		return m
 	}
-	m := &Metric{Name: name, Help: help, Kind: kind}
-	r.metrics[name] = m
+	m := &Metric{Name: name, Help: help, Kind: kind, Labels: labelNames, LabelValues: labelValues}
+	r.metrics[key] = m
 	return m
 }
 
-// Metrics returns every registered metric sorted by name.
+// seriesKey composes the registry's internal storage key for one series:
+// the metric name is not unique on its own once a label dimension is in
+// play, so the label values join it to disambiguate.
+func seriesKey(name string, labelValues []string) string {
+	if len(labelValues) == 0 {
+		return name
+	}
+	return name + "\x00" + strings.Join(labelValues, "\x00")
+}
+
+// LabeledCounter registers (or returns the existing) counter family
+// sharing name, help and a single label named labelName. Use
+// [LabeledCounter.WithLabelValue] to obtain the series for one label
+// value; every series renders under the same Prometheus name with a
+// distinguishing `{<labelName>="<value>"}` suffix.
+func (r *Registry) LabeledCounter(name, help, labelName string) *LabeledCounter {
+	return &LabeledCounter{reg: r, name: name, help: help, labelName: labelName}
+}
+
+// LabeledCounter is a Counter family keyed by one label's value —
+// registered lazily, one series per distinct value seen.
+type LabeledCounter struct {
+	reg       *Registry
+	name      string
+	help      string
+	labelName string
+}
+
+// WithLabelValue returns the Counter for value, registering it on first
+// use. Repeated calls with the same value return the same series.
+func (lc *LabeledCounter) WithLabelValue(value string) *Counter {
+	m := lc.reg.upsertLabeled(lc.name, lc.help, KindCounter, []string{lc.labelName}, []string{value})
+	return &Counter{m: m}
+}
+
+// Metrics returns every registered metric sorted by (name, label
+// values) — every series of one labeled family therefore sorts
+// consecutively, which is what [Registry.Render] relies on to emit one
+// HELP/TYPE block per name.
 func (r *Registry) Metrics() []*Metric {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -102,34 +155,59 @@ func (r *Registry) Metrics() []*Metric {
 	for _, m := range r.metrics {
 		out = append(out, m)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return strings.Join(out[i].LabelValues, "\x00") < strings.Join(out[j].LabelValues, "\x00")
+	})
 	return out
 }
 
 // Render writes the registry to w in Prometheus exposition format
-// (v0.0.4 / OpenMetrics-compatible subset).
+// (v0.0.4 / OpenMetrics-compatible subset). A labeled family emits one
+// HELP/TYPE block (keyed off the first series) followed by every series
+// as its own sample line — the format Prometheus expects for one metric
+// exposed with multiple label combinations.
 func (r *Registry) Render(w io.Writer) error {
-	for _, m := range r.Metrics() {
-		if m.Help != "" {
-			if _, err := fmt.Fprintf(w, "# HELP %s %s\n", m.Name, strings.ReplaceAll(m.Help, "\n", " ")); err != nil {
+	metrics := r.Metrics()
+	for i, m := range metrics {
+		firstOfName := i == 0 || metrics[i-1].Name != m.Name
+		if firstOfName {
+			if m.Help != "" {
+				if _, err := fmt.Fprintf(w, "# HELP %s %s\n", m.Name, strings.ReplaceAll(m.Help, "\n", " ")); err != nil {
+					return err
+				}
+			}
+			if _, err := fmt.Fprintf(w, "# TYPE %s %s\n", m.Name, m.Kind); err != nil {
 				return err
 			}
-		}
-		if _, err := fmt.Fprintf(w, "# TYPE %s %s\n", m.Name, m.Kind); err != nil {
-			return err
 		}
 		var line string
 		switch m.Kind {
 		case KindCounter:
-			line = fmt.Sprintf("%s %d\n", m.Name, m.value.Load())
+			line = fmt.Sprintf("%s%s %d\n", m.Name, labelSuffix(m), m.value.Load())
 		case KindGauge:
-			line = fmt.Sprintf("%s %s\n", m.Name, strconv.FormatFloat(bitsToFloat(m.floatBits.Load()), 'f', -1, 64))
+			line = fmt.Sprintf("%s%s %s\n", m.Name, labelSuffix(m), strconv.FormatFloat(bitsToFloat(m.floatBits.Load()), 'f', -1, 64))
 		}
 		if _, err := io.WriteString(w, line); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// labelSuffix renders a series' `{name="value",...}` label block, or the
+// empty string for an unlabeled metric.
+func labelSuffix(m *Metric) string {
+	if len(m.Labels) == 0 {
+		return ""
+	}
+	parts := make([]string, len(m.Labels))
+	for i, name := range m.Labels {
+		parts[i] = fmt.Sprintf("%s=%q", name, m.LabelValues[i])
+	}
+	return "{" + strings.Join(parts, ",") + "}"
 }
 
 // floatToBits / bitsToFloat round-trip a float64 through a uint64 so

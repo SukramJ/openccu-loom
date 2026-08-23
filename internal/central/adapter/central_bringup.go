@@ -187,16 +187,30 @@ func (b *centralBringUp) reinit(ctx context.Context) {
 	b.logger.Info("central.reinit.repull_started", slog.String("central", b.cc.Name))
 }
 
-// clearModel removes every device from the unit's model registry via the
-// unit's own RemoveDevice path (channel teardown + bus unsubscribe +
-// DeviceRemovedEvent fire for each, so north-bound surfaces drop the entities),
-// and also drops each device's in-memory device-description + paramset entries
+// clearModel removes every device from the unit's model registry — channel
+// teardown (event groups, calculated-DP subscriptions, custom-DP bindings)
+// and EventBus subscription sweep — and
+// also drops each device's in-memory device-description + paramset entries
 // (mirrors the unpair cleanup, DeviceCoordinator.RefreshAfterUnpair).
 //
 // Clearing the descriptions is what lets the re-pull forget a device the CCU no
 // longer reports: the re-pull's ListDevices omits it, but
 // CheckAndCreateDevicesFromCache would otherwise re-materialise it from a stale
 // description still in the registry — resurrecting a device removed on the CCU.
+//
+// Removal goes through [central.Unit.RemoveDeviceForTeardown], whose event
+// carries ModelTeardown. That flag is what separates the two groups of
+// consumers this teardown has: the persistent VALUES/MASTER cache evictors
+// stand down (the operator's requested scope was already deleted by
+// cachereset.Service.Clear, and evicting again would wipe every other device's
+// cache — ADR 0042), while every north-bound plane still reacts.
+//
+// Suppressing the event altogether was the earlier shape, and it was wrong in
+// the one case that matters: a device the CCU has genuinely dropped is not
+// re-created by the re-pull, so nothing ever told MQTT to retract its
+// discovery config, the WebSocket to report the deletion, or the event bridge
+// to release its live subscriptions. The stale entity survived until the next
+// daemon boot's orphan sweep.
 func (b *centralBringUp) clearModel() {
 	if b.unit == nil || b.unit.ModelRegistry == nil {
 		return
@@ -214,7 +228,10 @@ func (b *centralBringUp) clearModel() {
 		if b.unit.DeviceRegistry != nil {
 			b.unit.DeviceRegistry.Remove(iface, d.Address)
 		}
-		b.unit.RemoveDevice(d.Address)
+		// The channel teardown (event groups, calculated-DP subscriptions,
+		// custom-DP bindings) and the EventBus subscription sweep happen
+		// inside the removal itself, in the order it already guarantees.
+		b.unit.RemoveDeviceForTeardown(d.Address)
 	}
 }
 

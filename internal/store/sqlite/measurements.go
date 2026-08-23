@@ -88,19 +88,36 @@ type MeasurementSample struct {
 // [MeasurementStore.QueryBuckets]. TS is the bucket's start time.
 type MeasurementBucket struct {
 	TS time.Time
-	// Avg is the arithmetic mean of the samples in the bucket (SUM/COUNT
-	// over event-driven push samples), NOT a time-weighted average. CCU
-	// parameters push on change, so sample spacing is irregular: a mostly
-	// idle series with one brief high-value spike reports an average
-	// several times its true time-weighted value, because a spike sampled
-	// once counts the same as a steady value sampled many times. No stage
-	// of the pipeline (raw AVG, hourly/daily rollup) applies a duration
-	// weight. Callers presenting this as a power/energy average (the REST
-	// energy handler's avg_power_w) should be aware of the bias for
-	// bursty, non-cumulative parameters.
-	Avg   float64
-	Min   float64
-	Max   float64
+	// Avg is the time-weighted mean of the samples in the bucket: each
+	// sample's value is held constant from its own timestamp until the
+	// next sample arrives, or — for a bucket's last sample — until the
+	// bucket's end, so a value held for 59 minutes counts 59x a value
+	// held for 1 minute rather than counting the same as a plain
+	// SUM/COUNT mean would. CCU parameters push on change, so sample
+	// spacing is irregular by construction; an unweighted mean of a
+	// mostly-idle series with one brief spike over-reports its true
+	// average by a large factor.
+	//
+	// A bucket's first sample additionally carries its value backward to
+	// the bucket's start — using the value of the last sample observed
+	// before the bucket when one exists, or its own value when the
+	// series has no earlier sample at all (there is no better estimate
+	// for what held before the first observation ever made). This is
+	// what lets a bucket holding exactly one sample report that sample's
+	// plain value: held from the bucket's start through its end, the
+	// weighted mean collapses to the value itself.
+	Avg float64
+	Min float64
+	Max float64
+	// Count is the covered span backing Avg, in milliseconds — the
+	// weighting above needs a denominator, and a plain sample count
+	// cannot serve as one: two samples an hour apart and two samples a
+	// second apart are both "count 2". This is deliberately no longer a
+	// sample count (see the OpenAPI HistoryBucket.count description,
+	// which this change updates to match). It is additive across folds
+	// (an hour bucket summing into a day, several source buckets summing
+	// into one chart bucket), which is what keeps Avg exact through every
+	// re-aggregation instead of averaging already-averaged values.
 	Count int64
 }
 
@@ -464,7 +481,25 @@ func (s *MeasurementStore) hourlyFloor(ctx context.Context, key seriesKey) (olde
 }
 
 // queryRawBuckets is the fast path: one grouped scan of the raw table that
-// buckets server-side, unchanged from before the tiering.
+// buckets server-side.
+//
+// Avg is time-weighted, not a plain SUM/COUNT mean (see [MeasurementBucket]):
+// each row's value is held from its own ts until the next row's ts, capped
+// to the row's own bucket end, and a bucket's first row additionally holds
+// its value backward to the bucket's start (using the immediately preceding
+// row's value across the whole queried range — LAG/LEAD are windowed over
+// every row in [fromMs, toMs), not per bucket — or its own value when no
+// earlier row exists at all, i.e. this is the series' first-ever sample).
+// Because that backward carry always reaches the bucket's start and the
+// forward extension always reaches the bucket's end, the covered span of
+// any bucket holding at least one row is exactly that bucket's own width,
+// so the average divides by the deterministic (bucket_end - bucket_start)
+// rather than by a separately accumulated duration — and the same
+// expression is projected as the bucket's Count (see [MeasurementBucket.Count]:
+// the covered span in ms, not a sample count). bucket_end is the nominal
+// `bucket_start + width`, except for the final (clamped) bucket index,
+// which is capped to the range end `to` — the integer-width truncation
+// documented below.
 func (s *MeasurementStore) queryRawBuckets(
 	ctx context.Context, key seriesKey, fromMs, toMs, width int64, buckets int,
 ) ([]MeasurementBucket, error) {
@@ -475,18 +510,41 @@ func (s *MeasurementStore) queryRawBuckets(
 	// instead of overflowing into an extra one.
 	maxBucket := int64(buckets - 1)
 	rows, err := s.db.QueryContext(ctx, `
-        SELECT MIN(CAST((ts - ?) / ? AS INTEGER), ?) AS bucket,
-               AVG(value), MIN(value), MAX(value), COUNT(*)
-          FROM measurements
-         WHERE central_name = ?
-           AND interface_id = ?
-           AND channel_address = ?
-           AND parameter = ?
-           AND ts >= ?
-           AND ts < ?
+        WITH ordered AS (
+            SELECT ts, value,
+                   MIN(CAST((ts - ?) / ? AS INTEGER), ?) AS bucket,
+                   LAG(value) OVER (ORDER BY ts) AS prev_value,
+                   LAG(MIN(CAST((ts - ?) / ? AS INTEGER), ?)) OVER (ORDER BY ts) AS prev_bucket,
+                   LEAD(ts) OVER (ORDER BY ts) AS next_ts
+              FROM measurements
+             WHERE central_name = ?
+               AND interface_id = ?
+               AND channel_address = ?
+               AND parameter = ?
+               AND ts >= ?
+               AND ts < ?
+        ), bounded AS (
+            SELECT bucket, ts, value, prev_value, next_ts,
+                   ? + bucket * ? AS bucket_start,
+                   CASE WHEN bucket >= ? THEN ?
+                        ELSE ? + (bucket + 1) * ? END AS bucket_end,
+                   CASE WHEN prev_bucket IS NULL OR prev_bucket <> bucket
+                        THEN 1 ELSE 0 END AS is_first
+              FROM ordered
+        )
+        SELECT bucket,
+               SUM(
+                   value * (MIN(COALESCE(next_ts, bucket_end), bucket_end) - ts)
+                   + is_first * COALESCE(prev_value, value) * (ts - bucket_start)
+               ) / (MAX(bucket_end) - MAX(bucket_start)),
+               MIN(value), MAX(value), MAX(bucket_end) - MAX(bucket_start)
+          FROM bounded
          GROUP BY bucket
          ORDER BY bucket
-    `, fromMs, width, maxBucket, key.central, key.iface, key.channel, key.parameter, fromMs, toMs)
+    `,
+		fromMs, width, maxBucket, fromMs, width, maxBucket,
+		key.central, key.iface, key.channel, key.parameter, fromMs, toMs,
+		fromMs, width, maxBucket, toMs, fromMs, width)
 	if err != nil {
 		return nil, fmt.Errorf("measurements.QueryBuckets: %w", err)
 	}
@@ -518,14 +576,24 @@ func (s *MeasurementStore) queryRawBuckets(
 
 // tierBucket is one source-tier aggregate, keyed by its own (hour- or
 // day-aligned) bucket start. Unlike the energy rows it carries no
-// first/last: a history chart needs avg/min/max only, so the folds below
-// are plain GROUP BY aggregates instead of window functions.
+// first/last: a history chart needs avg/min/max only.
 type tierBucket struct {
 	bucketTS int64
-	sum      float64
-	minV     float64
-	maxV     float64
-	count    int64
+	// sum is the time-weighted sum backing the reported average (see
+	// [MeasurementBucket.Avg]), not a plain sum of sampled values.
+	sum  float64
+	minV float64
+	maxV float64
+	// count is the covered span backing sum, in milliseconds — not a
+	// sample count (see [MeasurementBucket.Count]). It is additive across
+	// folds the same way a sample count would be, which is what lets the
+	// hourly tier's count sum correctly into the daily tier's, and both
+	// into a chart bucket that straddles several source buckets, without
+	// a separate column: a bucket only "counts" the span it actually
+	// covers, be that a full hour, a full calendar day, or less when the
+	// source data itself does not reach that far (the series' first-ever
+	// sample, or a still-forming tail bucket).
+	count int64
 }
 
 // The three history source reads. Each projects the same five-column shape
@@ -549,13 +617,47 @@ const (
 	// buckets; the width is a bind parameter, but only the hour width is
 	// used — day buckets are calendar buckets and are never expressible as
 	// a modulo (see [MeasurementStore.assembleTierBuckets]).
+	//
+	// The summed column is time-weighted (see [MeasurementBucket.Avg]):
+	// `ordered` computes, for every raw row ordered by ts, the previous
+	// row's value and bucket (LAG, to detect a bucket's first row and to
+	// carry its predecessor's value backward) and the next row's ts (LEAD,
+	// to extend this row's value forward). `bucket_end` caps the forward
+	// extension at the caller's `to` bound — this fold also produces the
+	// still-forming, not-yet-complete tail bucket, whose true end is "now",
+	// not a full bucket width away. `duration` — the fourth projected
+	// column, in [tierBucket.count] — is the same per-row span the
+	// weighted sum uses, summed instead of value-weighted, so it reports
+	// exactly how much of the bucket the source data actually covers.
 	historyRawFoldSQL = `
-        SELECT ts - (ts % ?) AS bucket_ts,
-               SUM(value), MIN(value), MAX(value), COUNT(*)
-          FROM measurements
-         WHERE central_name = ? AND interface_id = ?
-           AND channel_address = ? AND parameter = ?
-           AND ts >= ? AND ts < ?
+        WITH ordered AS (
+            SELECT ts, value,
+                   ts - (ts % ?) AS bucket_ts,
+                   LAG(value) OVER (ORDER BY ts) AS prev_value,
+                   LAG(ts - (ts % ?)) OVER (ORDER BY ts) AS prev_bucket_ts,
+                   LEAD(ts) OVER (ORDER BY ts) AS next_ts
+              FROM measurements
+             WHERE central_name = ? AND interface_id = ?
+               AND channel_address = ? AND parameter = ?
+               AND ts >= ? AND ts < ?
+        ), bounded AS (
+            SELECT bucket_ts, ts, value, prev_value, next_ts,
+                   MIN(bucket_ts + ?, ?) AS bucket_end,
+                   CASE WHEN prev_bucket_ts IS NULL OR prev_bucket_ts <> bucket_ts
+                        THEN 1 ELSE 0 END AS is_first
+              FROM ordered
+        )
+        SELECT bucket_ts,
+               SUM(
+                   value * (MIN(COALESCE(next_ts, bucket_end), bucket_end) - ts)
+                   + is_first * COALESCE(prev_value, value) * (ts - bucket_ts)
+               ),
+               MIN(value), MAX(value),
+               SUM(
+                   (MIN(COALESCE(next_ts, bucket_end), bucket_end) - ts)
+                   + is_first * (ts - bucket_ts)
+               )
+          FROM bounded
          GROUP BY bucket_ts
     `
 )
@@ -631,7 +733,7 @@ func (s *MeasurementStore) foldRawHistory(
 		return nil, nil
 	}
 	rows, err := s.db.QueryContext(ctx, historyRawFoldSQL,
-		widthMs, key.central, key.iface, key.channel, key.parameter, fromMs, toMs)
+		widthMs, widthMs, key.central, key.iface, key.channel, key.parameter, fromMs, toMs, widthMs, toMs)
 	if err != nil {
 		return nil, fmt.Errorf("measurements.foldRawHistory: %w", err)
 	}
@@ -698,7 +800,11 @@ func foldTierBucketsBy(src []tierBucket, bucketStart func(ms int64) int64) []tie
 // output buckets. Accumulating sum and count (rather than averaging the
 // sources' averages) keeps the reported average exact; min/max take the
 // extremes. Source buckets are unordered and may repeat an output index —
-// that is how the day bucket straddling the hourly frontier merges.
+// that is how the day bucket straddling the hourly frontier merges. count
+// here is the time-weighted covered span backing sum (see
+// [tierBucket.count] and [MeasurementBucket.Count]), not a sample count, so
+// summing it across merged source buckets and dividing sum by it is exactly
+// the time-weighted average, the same way it would be for a plain count.
 func foldTierBuckets(src []tierBucket, fromMs, width int64, buckets int) []MeasurementBucket {
 	if len(src) == 0 {
 		return nil
@@ -832,12 +938,19 @@ type EnergyRow struct {
 	ChannelAddress string
 	Parameter      string
 	BucketTS       time.Time
-	Sum            float64
-	Min            float64
-	Max            float64
-	First          float64
-	Last           float64
-	Count          int64
+	// Sum is the time-weighted sum backing the POWER average (see
+	// [MeasurementBucket.Avg] for what the weighting means), not a plain
+	// sum of sampled values.
+	Sum   float64
+	Min   float64
+	Max   float64
+	First float64
+	Last  float64
+	// Count is the covered span backing Sum, in milliseconds — the same
+	// repurposing as [MeasurementBucket.Count] and for the same reason:
+	// a plain sample count cannot serve as the time-weighted average's
+	// denominator.
+	Count int64
 }
 
 // energyTierHourlySelectSQL and energyTierDailySelectSQL each read one
@@ -873,10 +986,18 @@ const energyTierDailySelectSQL = `
 // [MeasurementStore.queryEnergyDay]). Same single-pass window-function shape
 // as the hourly rollup: first/last stay the value observed at the
 // earliest/latest ts inside the bucket.
+//
+// The summed column is time-weighted, the same construction as
+// [historyRawFoldSQL] (see its comment): `bucket_end` is capped at the
+// caller's `to` bound because this fold also produces the still-forming
+// tail bucket, and its true end is "now", not a full bucket width away.
+// `duration` mirrors `contribution` but sums the per-row span instead of
+// the value-weighted span, landing in the query's `count` position (see
+// [EnergyRow.Count]) as the covered span backing the weighted sum.
 const energyRawFoldSQL = `
     SELECT DISTINCT
         channel_address, parameter, bucket_ts,
-        SUM(value) OVER w,
+        SUM(contribution) OVER w,
         MIN(value) OVER w,
         MAX(value) OVER w,
         FIRST_VALUE(value) OVER (
@@ -886,15 +1007,36 @@ const energyRawFoldSQL = `
             PARTITION BY channel_address, parameter, bucket_ts ORDER BY ts
             ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
         ),
-        COUNT(*) OVER w
+        SUM(duration) OVER w
       FROM (
-        SELECT channel_address, parameter, ts, value, ts - (ts % ?) AS bucket_ts
-          FROM measurements
-         WHERE central_name = ?
-           AND parameter IN (?, ?, ?)
-           AND ts >= ?
-           AND ts < ?
-           AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+        SELECT channel_address, parameter, ts, value, bucket_ts,
+               value * (MIN(COALESCE(next_ts, bucket_end), bucket_end) - ts)
+               + is_first * COALESCE(prev_value, value) * (ts - bucket_ts) AS contribution,
+               (MIN(COALESCE(next_ts, bucket_end), bucket_end) - ts)
+               + is_first * (ts - bucket_ts) AS duration
+          FROM (
+            SELECT channel_address, parameter, ts, value, bucket_ts,
+                   prev_value, next_ts,
+                   MIN(bucket_ts + ?, ?) AS bucket_end,
+                   CASE WHEN prev_bucket_ts IS NULL OR prev_bucket_ts <> bucket_ts
+                        THEN 1 ELSE 0 END AS is_first
+              FROM (
+                SELECT channel_address, parameter, ts, value, bucket_ts,
+                       LAG(value) OVER sk AS prev_value,
+                       LAG(bucket_ts) OVER sk AS prev_bucket_ts,
+                       LEAD(ts) OVER sk AS next_ts
+                  FROM (
+                    SELECT channel_address, parameter, ts, value, ts - (ts % ?) AS bucket_ts
+                      FROM measurements
+                     WHERE central_name = ?
+                       AND parameter IN (?, ?, ?)
+                       AND ts >= ?
+                       AND ts < ?
+                       AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+                  )
+                WINDOW sk AS (PARTITION BY channel_address, parameter ORDER BY ts)
+              )
+          )
       )
     WINDOW w AS (PARTITION BY channel_address, parameter, bucket_ts)
 `
@@ -955,7 +1097,7 @@ func (s *MeasurementStore) foldRawEnergy(
 	}
 	prefix := deviceAddr + ":%"
 	rows, err := s.db.QueryContext(ctx, energyRawFoldSQL,
-		widthMs, central, energyParameters[0], energyParameters[1], energyParameters[2],
+		widthMs, toMs, widthMs, central, energyParameters[0], energyParameters[1], energyParameters[2],
 		fromMs, toMs, deviceAddr, deviceAddr, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("measurements.foldRawEnergy: %w", err)
@@ -1073,10 +1215,12 @@ func (s *MeasurementStore) queryEnergyDay(
 
 // foldEnergyRowsBy re-folds rows into the coarser buckets named by
 // bucketStart, which maps a source bucket's start to the start of the bucket
-// that contains it. sum/count are additive; min/max fold; first/last are the
-// value of the time-earliest / time-latest contributing source bucket, which
-// is what keeps the cumulative-counter delta (last-first) exact across the
-// fold.
+// that contains it. sum/count are additive — count here is the covered
+// span in ms (see [EnergyRow.Count]), not a sample count, but a covered
+// span folds the same way a count does; min/max fold; first/last are the
+// value of the time-earliest / time-latest contributing source bucket,
+// which is what keeps the cumulative-counter delta (last-first) exact
+// across the fold.
 //
 // This is the only place day and month buckets are formed on a query, so a
 // calendar boundary is expressed exactly once — SQL arithmetic on the
@@ -1177,13 +1321,27 @@ func (s *MeasurementStore) DeleteOlderThan(ctx context.Context, cutoff time.Time
 // in that half-open, ts-indexed range are read. Buckets below the watermark
 // are already finalized and never re-scanned; the ON CONFLICT DO UPDATE
 // stays only as a safety net against a re-run of the exact same window.
+//
+// The summed column is time-weighted, not a plain sum of sampled values
+// (see [MeasurementBucket.Avg]): the innermost subquery adds, for every raw
+// row ordered by ts within its (data point) partition, the previous row's
+// value and bucket (window `sk`, via LAG — to detect a bucket's first row
+// and carry its predecessor's value backward to the bucket's start) and the
+// next row's ts (LEAD, to extend this row's value forward). Because
+// RollupHourly only ever folds complete hour buckets (cutoff is always
+// hour-aligned), `bucket_end` needs no cap at a query-time "now" the way the
+// still-forming raw tail folds do — it is simply `bucket_ts + 3600000`.
+// `duration` mirrors `contribution` — the same per-row span, summed
+// unweighted instead of value-weighted — so it lands in the persisted
+// `count` column (see [tierBucket.count] / [MeasurementBucket.Count]) as
+// the covered span backing the weighted sum, not a sample count.
 const rollupHourlySelectSQL = `
     SELECT DISTINCT
         central_name, interface_id, channel_address, parameter, bucket_ts,
-        SUM(value) OVER w,
+        SUM(contribution) OVER w,
         MIN(value) OVER w,
         MAX(value) OVER w,
-        COUNT(*) OVER w,
+        SUM(duration) OVER w,
         FIRST_VALUE(value) OVER (
             PARTITION BY central_name, interface_id, channel_address, parameter, bucket_ts
             ORDER BY ts
@@ -1194,10 +1352,31 @@ const rollupHourlySelectSQL = `
             ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
         )
       FROM (
-        SELECT central_name, interface_id, channel_address, parameter, ts, value,
-               ts - (ts % 3600000) AS bucket_ts
-          FROM measurements
-         WHERE ts >= ? AND ts < ?
+        SELECT central_name, interface_id, channel_address, parameter, ts, value, bucket_ts,
+               value * (MIN(COALESCE(next_ts, bucket_end), bucket_end) - ts)
+               + is_first * COALESCE(prev_value, value) * (ts - bucket_ts) AS contribution,
+               (MIN(COALESCE(next_ts, bucket_end), bucket_end) - ts)
+               + is_first * (ts - bucket_ts) AS duration
+          FROM (
+            SELECT central_name, interface_id, channel_address, parameter, ts, value, bucket_ts,
+                   prev_value, next_ts,
+                   bucket_ts + 3600000 AS bucket_end,
+                   CASE WHEN prev_bucket_ts IS NULL OR prev_bucket_ts <> bucket_ts
+                        THEN 1 ELSE 0 END AS is_first
+              FROM (
+                SELECT central_name, interface_id, channel_address, parameter, ts, value,
+                       ts - (ts % 3600000) AS bucket_ts,
+                       LAG(value) OVER sk AS prev_value,
+                       LAG(ts - (ts % 3600000)) OVER sk AS prev_bucket_ts,
+                       LEAD(ts) OVER sk AS next_ts
+                  FROM measurements
+                 WHERE ts >= ? AND ts < ?
+                WINDOW sk AS (
+                    PARTITION BY central_name, interface_id, channel_address, parameter
+                    ORDER BY ts
+                )
+              )
+          )
       )
     WINDOW w AS (PARTITION BY central_name, interface_id, channel_address, parameter, bucket_ts)
 `

@@ -9,10 +9,52 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 var errPublish = errors.New("broker down")
+
+// TestBridgeMessagesSentCarriesCentralLabel is the reproducer for
+// At the Bridge integration level: a shared bridge serving
+// two CCUs must publish into two distinct `central`-labeled
+// mqtt_messages_sent series, not one folded daemon-wide total. Before the
+// fix MqttCollector exposed a single unlabeled Counter field, so this test
+// could not even be expressed — there was no way to ask "how many for
+// ccu-a" versus "how many for ccu-b" from the collector at all.
+func TestBridgeMessagesSentCarriesCentralLabel(t *testing.T) {
+	t.Parallel()
+
+	reg := metrics.NewRegistry()
+	col := metrics.NewMqttCollector(reg)
+	pub := &recordingPublisher{}
+	bridge := NewBridge(BridgeConfig{
+		Base:       "gh",
+		RawEnabled: true,
+		Collector:  col,
+	}, pub)
+
+	ctx := context.Background()
+	slot := pload.TopicSlot{Address: "AABBCC03", Channel: 1, Bucket: pload.BucketValues, Parameter: "STATE"}
+	state := pload.PerDPState{Value: true, Available: true}
+
+	if err := bridge.PublishSlotState(ctx, "ccu-a", "HmIP-RF", slot, state); err != nil {
+		t.Fatalf("PublishSlotState ccu-a (1st): %v", err)
+	}
+	if err := bridge.PublishSlotState(ctx, "ccu-a", "HmIP-RF", slot, state); err != nil {
+		t.Fatalf("PublishSlotState ccu-a (2nd): %v", err)
+	}
+	if err := bridge.PublishSlotState(ctx, "ccu-b", "HmIP-RF", slot, state); err != nil {
+		t.Fatalf("PublishSlotState ccu-b: %v", err)
+	}
+
+	if got := col.MessagesSent("ccu-a").Value(); got != 2 {
+		t.Errorf("ccu-a messages_sent = %d, want 2", got)
+	}
+	if got := col.MessagesSent("ccu-b").Value(); got != 1 {
+		t.Errorf("ccu-b messages_sent = %d, want 1 (independent of ccu-a)", got)
+	}
+}
 
 // TestMqttCollectorCountsMessages verifies that a Bridge wired with an
 // MqttCollector tracks discovery_sent when HA Discovery is enabled.
@@ -54,7 +96,7 @@ func TestMqttCollectorCountsMessages(t *testing.T) {
 	if err := bridge.PublishState(ctx, ev); err != nil {
 		t.Fatalf("PublishState: %v", err)
 	}
-	if got := col.DiscoverySent.Value(); got != 1 {
+	if got := col.DiscoverySent("test_ccu").Value(); got != 1 {
 		t.Errorf("DiscoverySent after 1st publish = %d, want 1", got)
 	}
 
@@ -63,12 +105,12 @@ func TestMqttCollectorCountsMessages(t *testing.T) {
 	if err := bridge.PublishState(ctx, ev); err != nil {
 		t.Fatalf("PublishState (2nd): %v", err)
 	}
-	if got := col.DiscoverySent.Value(); got != 1 {
+	if got := col.DiscoverySent("test_ccu").Value(); got != 1 {
 		t.Errorf("DiscoverySent after 2nd publish (dedup) = %d, want 1", got)
 	}
 
 	// publish_errors should be 0 (all publishes succeeded).
-	if got := col.PublishErrors.Value(); got != 0 {
+	if got := col.PublishErrors("err_ccu").Value(); got != 0 {
 		t.Errorf("PublishErrors = %d, want 0", got)
 	}
 }
@@ -110,7 +152,7 @@ func TestMqttCollectorCountsPublishErrors(t *testing.T) {
 	// publishDiscovery returns that error — resulting in 2 increments
 	// per failed discovery publish. This is a pre-existing counter
 	// double-increment in the production code (noted in migration report).
-	if got := col.PublishErrors.Value(); got < 1 {
+	if got := col.PublishErrors("err_ccu").Value(); got < 1 {
 		t.Errorf("PublishErrors = %d, want >= 1 (at least one error counted)", got)
 	}
 }

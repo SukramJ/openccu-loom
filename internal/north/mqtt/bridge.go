@@ -874,7 +874,11 @@ func (b *Bridge) RepublishDiscovery(ctx context.Context) error {
 			break
 		}
 		if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.Discovery, true); err != nil {
-			b.incPublishErrors()
+			// The replay walks the bridge-wide declared-topics snapshot,
+			// not one central's own set, so no single central can be
+			// named for this failure — the label is left blank rather
+			// than guessing.
+			b.incPublishErrors("")
 			errs = append(errs, fmt.Errorf("republish %s: %w", topic, err))
 		}
 	}
@@ -984,8 +988,8 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 	if b.cfg.HADiscoveryEnabled && b.cfg.DiscoveryBuilder != nil {
 		component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
 		if ok {
-			if err := b.publishDiscovery(ctx, component, nodeID, objectID, cfgPayload); err != nil {
-				b.incPublishErrors()
+			if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, cfgPayload); err != nil {
+				b.incPublishErrors(ev.Central)
 				return err
 			}
 		}
@@ -1018,8 +1022,8 @@ func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 	}
 	component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
 	if ok {
-		if err := b.publishDiscovery(ctx, component, nodeID, objectID, cfgPayload); err != nil {
-			b.incPublishErrors()
+		if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, cfgPayload); err != nil {
+			b.incPublishErrors(ev.Central)
 			return err
 		}
 	}
@@ -1164,11 +1168,11 @@ func (b *Bridge) PublishSlotState(ctx context.Context, centralName, iface string
 	}
 	topic := b.topics.SlotState(centralName, iface, slot)
 	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
-		b.incPublishErrors()
+		b.incPublishErrors(centralName)
 		return err
 	}
 	b.rememberRawTopic(topic)
-	b.incMessagesSent()
+	b.incMessagesSent(centralName)
 	return nil
 }
 
@@ -1663,7 +1667,7 @@ func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) err
 	if !ok {
 		return nil
 	}
-	if err := b.publishDiscovery(ctx, component, nodeID, objectID, payload); err != nil {
+	if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, payload); err != nil {
 		return err
 	}
 	b.publishPressButton(ctx, ev)
@@ -1693,7 +1697,7 @@ func (b *Bridge) PublishCustomDPDiscovery(ctx context.Context, ev Event) error {
 	}
 	component, nodeID, objectID, payload, ok := b.cfg.DiscoveryBuilder.Build(ev)
 	if ok {
-		if err := b.publishDiscovery(ctx, component, nodeID, objectID, payload); err != nil {
+		if err := b.publishDiscovery(ctx, ev.Central, component, nodeID, objectID, payload); err != nil {
 			return err
 		}
 	}
@@ -1722,8 +1726,8 @@ func (b *Bridge) publishPressButton(ctx context.Context, ev Event) {
 	if !item.OK {
 		return
 	}
-	if err := b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
-		b.incPublishErrors()
+	if err := b.publishDiscovery(ctx, ev.Central, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
+		b.incPublishErrors(ev.Central)
 	}
 }
 
@@ -1744,8 +1748,8 @@ func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
 	if !item.OK {
 		return
 	}
-	if err := b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
-		b.incPublishErrors()
+	if err := b.publishDiscovery(ctx, ev.Central, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
+		b.incPublishErrors(ev.Central)
 	}
 }
 
@@ -1806,7 +1810,7 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 			return false
 		}
 	}
-	return b.retractTopicsMatching(ctx, b.declared, match, b.cfg.QoS.Discovery)
+	return b.retractTopicsMatching(ctx, centralName, b.declared, match, b.cfg.QoS.Discovery)
 }
 
 // retractTopicsMatching walks m for every topic match accepts, publishes
@@ -1825,7 +1829,11 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 //
 // Best-effort: a publish error is counted but does not abort the sweep
 // — a boot-time orphan-cleanup pass (where one exists) is the backstop.
-func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte, match func(lowerTopic string) bool, qos QoS) int {
+//
+// centralName labels every counted publish_errors increment; an empty
+// value (the bridge-wide retraction forms) leaves the label blank
+// rather than attributing a multi-central sweep to one CCU.
+func (b *Bridge) retractTopicsMatching(ctx context.Context, centralName string, m map[string][]byte, match func(lowerTopic string) bool, qos QoS) int {
 	b.mu.Lock()
 	topics := make([]string, 0)
 	for topic := range m {
@@ -1841,7 +1849,7 @@ func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte,
 	b.mu.Unlock()
 	for _, topic := range topics {
 		if err := b.client.Publish(ctx, topic, nil, qos, true); err != nil {
-			b.incPublishErrors()
+			b.incPublishErrors(centralName)
 		}
 	}
 	return len(topics)
@@ -1926,22 +1934,22 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 		}
 		return legacyPrefix != "" && strings.HasPrefix(topic, legacyPrefix)
 	}
-	n := b.retractTopicsMatching(ctx, b.rawTopics, match, b.cfg.QoS.State)
-	n += b.retractTopicsMatching(ctx, b.configCache, match, b.cfg.QoS.State)
+	n := b.retractTopicsMatching(ctx, centralName, b.rawTopics, match, b.cfg.QoS.State)
+	n += b.retractTopicsMatching(ctx, centralName, b.configCache, match, b.cfg.QoS.State)
 	for _, topic := range []string{
 		b.topics.DeviceAvailability(centralName, iface, deviceAddress),
 		b.topics.DeviceInfo(centralName, iface, deviceAddress),
 		b.topics.DeviceDiagnostics(centralName, iface, deviceAddress),
 	} {
 		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
-			b.incPublishErrors()
+			b.incPublishErrors(centralName)
 			continue
 		}
 		n++
 	}
 	if b.legacy != nil {
 		if err := b.client.Publish(ctx, b.legacy.DeviceAvailability(deviceAddress), nil, b.cfg.QoS.State, true); err != nil {
-			b.incPublishErrors()
+			b.incPublishErrors(centralName)
 		} else {
 			n++
 		}
@@ -1953,7 +1961,7 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 // shared dedup cache. An empty payload retracts the config: it is published
 // (clearing the retained message) and the topic leaves the `declared` set, so
 // that set keeps naming exactly the entities the bridge currently drives.
-func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {
+func (b *Bridge) publishDiscovery(ctx context.Context, centralName, component, nodeID, objectID string, payload []byte) error {
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
 	b.mu.Lock()
 	previous, declared := b.declared[topic]
@@ -1974,7 +1982,7 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 		b.mu.Unlock()
 	}
 	if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.Discovery, true); err != nil {
-		b.incPublishErrors()
+		b.incPublishErrors(centralName)
 		return err
 	}
 	// Record what the broker accepted, never what was merely attempted.
@@ -1997,28 +2005,31 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 		b.declared[topic] = payload
 	}
 	b.mu.Unlock()
-	b.incDiscoverySent()
+	b.incDiscoverySent(centralName)
 	return nil
 }
 
-// incMessagesSent increments the messages_sent counter when a collector is wired.
-func (b *Bridge) incMessagesSent() {
+// incMessagesSent increments the messages_sent counter for centralName
+// when a collector is wired.
+func (b *Bridge) incMessagesSent(centralName string) {
 	if b.collector != nil {
-		b.collector.MessagesSent.Inc()
+		b.collector.MessagesSent(centralName).Inc()
 	}
 }
 
-// incDiscoverySent increments the discovery_sent counter when a collector is wired.
-func (b *Bridge) incDiscoverySent() {
+// incDiscoverySent increments the discovery_sent counter for centralName
+// when a collector is wired.
+func (b *Bridge) incDiscoverySent(centralName string) {
 	if b.collector != nil {
-		b.collector.DiscoverySent.Inc()
+		b.collector.DiscoverySent(centralName).Inc()
 	}
 }
 
-// incPublishErrors increments the publish_errors counter when a collector is wired.
-func (b *Bridge) incPublishErrors() {
+// incPublishErrors increments the publish_errors counter for centralName
+// when a collector is wired.
+func (b *Bridge) incPublishErrors(centralName string) {
 	if b.collector != nil {
-		b.collector.PublishErrors.Inc()
+		b.collector.PublishErrors(centralName).Inc()
 	}
 }
 

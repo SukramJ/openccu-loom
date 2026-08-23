@@ -156,12 +156,33 @@ for that entry, so newly-created entities already see the migrated keys.
 - **Per-entry scope.** `async_migrate_entries` is scoped to one
   `entry_id`, so only that CCU's entities are touched. Multi-CCU setups
   migrate each entry with its own `serial_suffix`.
-- **Target collisions.** If two legacy keys map to the same new key
-  (e.g. two sysvars whose names slug identically — already a property of
-  the shared `hub_slug` rule), HA's registry refuses the second rename
-  because the target `unique_id` already exists; the entity keeps its old
-  key. Log these; they indicate a pre-existing slug collision on the CCU
-  side, not a migration bug.
+- **Target collisions.** If two legacy keys map to the same new key, HA's
+  registry refuses the second rename because the target `unique_id`
+  already exists; the entity keeps its old key. Log these.
+- **System variables are keyed on the CCU's numeric variable id.** A
+  sysvar's `unique_id` is `loom_<serial10>_sysvar_<ise_id>`, not
+  `loom_<serial10>_sysvar_<slug>`. The name was never an identity:
+  `hub_slug` collapses punctuation and case, so `Alarm: Küche` and
+  `Alarm Küche` both slug to `alarm-kuche` and produced byte-identical
+  keys — HA registered whichever discovery config arrived first and
+  dropped the other variable's entity outright, permanently, because the
+  payload is retained on the broker.
+
+    Two consequences for a client:
+
+    1. **Every sysvar entity re-keys once** on the upgrade to this
+       release. Rewrite `loom_<serial10>_sysvar_<slug>` to
+       `loom_<serial10>_sysvar_<ise_id>` in a second registry pass; the
+       discovery payload carries the new key, and the state topic is
+       unchanged, so a client that consumes `unique_id` from the payload
+       needs no mapping table of its own.
+    2. **A rename in the CCU WebUI no longer re-keys the entity.** Under
+       the old rule it did, orphaning the entity's history and every
+       automation built on it. That is the reason the change is worth one
+       re-key now.
+
+    A sysvar whose id the daemon has not resolved yet still falls back to
+    the slug, so a client must accept both shapes during bring-up.
 - **CUxD needs the rule in the rebuild path too.** Rewriting the registry
   is only half of it: a client that rebuilds the key from `address` +
   `parameter` must also put the serial suffix in front for `CUX*`

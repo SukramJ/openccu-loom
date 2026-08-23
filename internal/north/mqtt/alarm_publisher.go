@@ -661,7 +661,10 @@ func (b *Bridge) PublishAlarmDiscovery(ctx context.Context, item DiscoveryItem) 
 	if !item.OK || !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
-	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	// The alarm plane is daemon-level, not per-central — areas span
+	// centrals rather than the other way around (notes/concepts/alarm-concept.md
+	// §14) — so there is no central to label a publish_errors increment with.
+	return b.publishDiscovery(ctx, "", item.Component, item.NodeID, item.ObjectID, item.Payload)
 }
 
 // RetractAlarmDiscovery clears a retained alarm discovery config (empty

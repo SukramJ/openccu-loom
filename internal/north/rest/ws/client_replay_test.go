@@ -120,7 +120,7 @@ func TestClientReplayFromCurrentCursorSignalsDone(t *testing.T) {
 }
 
 // TestWritePumpOrdersReplayDoneAfterReplayedEvents is the regression
-// guard for G2-ws-mcp-live-3: replay_done must reach the wire after
+// replay_done must reach the wire after
 // every replayed event it acknowledges, never interleaved ahead of
 // them. Runs replayFrom against a real client + writePump (not the raw
 // channel inspection the tests above use) so the assertion covers the

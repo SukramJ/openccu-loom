@@ -603,21 +603,18 @@ func (t *TextDisplay) Clear(ctx context.Context, id int32, priority hmenum.Comma
 	return t.Write(ctx, Row{ID: id, Text: ""}, priority)
 }
 
-// writeRowsDefaultIcon is the DISPLAY_DATA_ICON value sent by WriteRows when
-// no icon is requested. Clears any previously-set icon.
-const writeRowsDefaultIcon = "NONE"
-
-// WriteRows writes a sequence of rows as one atomic put_paramset per row
-// followed by a single DISPLAY_DATA_COMMIT write. Each row is sent to its
-// own channel address (row 1 → base address, row N → base device + :N).
-// This matches the reference pattern where send_text is called once per row
-// and each call emits one put_paramset to the row-specific channel.
+// WriteRows writes a sequence of rows as one atomic put_paramset per row,
+// each addressed to the display's own channel, followed by a single
+// DISPLAY_DATA_COMMIT write. There is exactly one physical display channel
+// per device — HmIP-WRCD, the only text-display model, carries every
+// DISPLAY_DATA_* parameter on channel :3 alone and nowhere else
+// (../godevccu/internal/embed/data/paramset_descriptions/HmIP-WRCD.json).
+// DISPLAY_DATA_ID selects which row a write applies to, so every row in the
+// sequence is written to t.Address with its own ID rather than to a
+// per-row channel — the id is what addresses the row, not the channel.
 //
-// Each per-row paramset always includes STRING, ICON and ALIGNMENT so
+// Each per-row paramset always includes ID, STRING, ICON and ALIGNMENT so
 // previously-set values are explicitly cleared rather than left as-is.
-// There is no DISPLAY_DATA_SCROLLING field on any real CCU text-display
-// channel — it does not exist on the Python reference's TextDisplay data
-// point (text_display.py) nor on HmIP-WRCD, the only text-display model.
 func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum.CommandPriority) error {
 	if len(rows) == 0 {
 		return nil
@@ -628,10 +625,13 @@ func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum
 		if r.ID < 1 || r.ID > maxDisplayID {
 			return fmt.Errorf("%w: id=%d (must be 1..%d)", ErrInvalidRow, r.ID, maxDisplayID)
 		}
-		rowAddr := t.rowAddress(r.ID)
 		iconVal := r.Icon
 		if iconVal == "" {
-			iconVal = writeRowsDefaultIcon
+			if len(t.availableIcons) > 0 {
+				iconVal = t.availableIcons[0]
+			} else {
+				iconVal = noIcon
+			}
 		}
 		alignVal := AlignLeft
 		if r.Alignment != nil && *r.Alignment != "" {
@@ -639,6 +639,7 @@ func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum
 		}
 		if hasPW {
 			values := map[string]any{
+				string(hmenum.ParameterDisplayDataID):        r.ID,
 				string(hmenum.ParameterDisplayDataString):    r.Text,
 				string(hmenum.ParameterDisplayDataIcon):      iconVal,
 				string(hmenum.ParameterDisplayDataAlignment): alignVal,
@@ -649,11 +650,11 @@ func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum
 			if r.BackgroundColor != nil && *r.BackgroundColor != "" {
 				values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
 			}
-			if err := pw.PutParamset(ctx, rowAddr, hmenum.ParamsetKeyValues, values, priority); err != nil {
+			if err := pw.PutParamset(ctx, t.Address, hmenum.ParamsetKeyValues, values, priority); err != nil {
 				return fmt.Errorf("textdisplay: WriteRows row %d: %w", r.ID, err)
 			}
 		} else {
-			if err := t.writeRowFieldsToAddr(ctx, r, rowAddr, iconVal, priority); err != nil {
+			if err := t.writeRowFieldsToAddr(ctx, r, iconVal, priority); err != nil {
 				return err
 			}
 		}
@@ -661,30 +662,21 @@ func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum
 	return t.Commit(ctx, priority)
 }
 
-// rowAddress builds the channel address for the given 1-based row ID.
-// Row 1 maps to the TextDisplay's own address; row N maps to the base
-// device address with channel index N (e.g. "SDV0001:1" → "SDV0001:2").
-func (t *TextDisplay) rowAddress(rowID int32) string {
-	// Find the last colon to split base-device from channel index.
-	for i := len(t.Address) - 1; i >= 0; i-- {
-		if t.Address[i] == ':' {
-			return fmt.Sprintf("%s:%d", t.Address[:i], rowID)
-		}
-	}
-	return fmt.Sprintf("%s:%d", t.Address, rowID)
-}
-
 // writeRowFieldsToAddr is the SetValue fallback path when no ParamsetWriter is
-// available; writes each display field individually to rowAddr.
-func (t *TextDisplay) writeRowFieldsToAddr(ctx context.Context, r Row, rowAddr, iconVal string, priority hmenum.CommandPriority) error {
-	if err := t.Writer.SetValue(ctx, rowAddr, hmenum.ParameterDisplayDataString, r.Text, priority); err != nil {
+// available; writes ID and every populated display field for one row to the
+// device's single display channel.
+func (t *TextDisplay) writeRowFieldsToAddr(ctx context.Context, r Row, iconVal string, priority hmenum.CommandPriority) error {
+	if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataID, r.ID, priority); err != nil {
+		return fmt.Errorf("textdisplay: ID row %d: %w", r.ID, err)
+	}
+	if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataString, r.Text, priority); err != nil {
 		return fmt.Errorf("textdisplay: STRING row %d: %w", r.ID, err)
 	}
-	if err := t.Writer.SetValue(ctx, rowAddr, hmenum.ParameterDisplayDataIcon, iconVal, priority); err != nil {
+	if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataIcon, iconVal, priority); err != nil {
 		return fmt.Errorf("textdisplay: ICON row %d: %w", r.ID, err)
 	}
 	if r.Alignment != nil && *r.Alignment != "" {
-		if err := t.Writer.SetValue(ctx, rowAddr, hmenum.ParameterDisplayDataAlignment, *r.Alignment, priority); err != nil {
+		if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataAlignment, *r.Alignment, priority); err != nil {
 			return fmt.Errorf("textdisplay: ALIGNMENT row %d: %w", r.ID, err)
 		}
 	}

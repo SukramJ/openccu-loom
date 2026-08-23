@@ -850,7 +850,10 @@ func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
 		// The name is mutable — a CCU-side rename rewrites it under the data
 		// point's own lock — so it is read through the accessor, never off
 		// the field.
-		Name:        sv.LegacyName(),
+		Name: sv.LegacyName(),
+		// The unique_id is keyed on this, not on the name — see
+		// [mqtt.sysvarUniqueID].
+		Vid:         m.Vid,
 		Description: m.Description,
 		Unit:        m.Unit,
 		ValueList:   m.ValueList,

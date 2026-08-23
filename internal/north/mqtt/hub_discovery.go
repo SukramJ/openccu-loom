@@ -6,6 +6,7 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -41,7 +42,19 @@ type DiscoveryItem struct {
 // regardless of where it lives in the model layer — the bridge stays
 // free of the `internal/model/hub` import.
 type HubSysvarSpec struct {
-	Name        string
+	Name string
+	// Vid is the CCU-internal numeric variable id (ReGa ise_id). It is the
+	// sysvar's identity for the HA `unique_id`, because the display name is
+	// not one: [routingkey.HubSlug] collapses punctuation, so "Alarm: Küche"
+	// and "Alarm Küche" — two different variables an operator may well have —
+	// slug to the same string and produce byte-identical unique_ids. Home
+	// Assistant keeps whichever config arrived first and silently drops the
+	// other, and because the discovery payload is retained the loss outlives
+	// the daemon that caused it.
+	//
+	// Zero means the id was not resolved; the builder then falls back to the
+	// slug rather than emitting an entity keyed on 0.
+	Vid         int
 	Description string
 	Unit        string
 	ValueList   []string
@@ -198,10 +211,10 @@ func (d *DefaultDiscoveryBuilder) hubSerial(centralName string) (serial10 string
 // falls back to the read-only shape so HA never renders a control
 // whose commands would fail.
 //
-// The stable HA `unique_id` is `loom_<serial10>_sysvar_<slug>`,
-// independent of the friendly description so renames in the CCU don't
-// orphan HA history. Skipped (OK=false) until the central's serial is
-// known — see [DefaultDiscoveryBuilder.hubSerial].
+// The stable HA `unique_id` is `loom_<serial10>_sysvar_<ise_id>` — see
+// [sysvarUniqueID] for why it is keyed on the numeric id rather than the
+// name. Skipped (OK=false) until the central's serial is known — see
+// [DefaultDiscoveryBuilder.hubSerial].
 func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem { //nolint:funlen,gocognit // single-purpose sysvar discovery builder with many type branches
 	if sv.Name == "" {
 		return DiscoveryItem{}
@@ -213,7 +226,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	var component string
 	stateTopic := naming.MQTTHubSysvarState(d.BridgeBase, centralName, sv.Name)
 	commandTopic := naming.MQTTHubSysvarCommand(d.BridgeBase, centralName, sv.Name)
-	uniqueID := routingkey.CanonicalUniqueID(serial10, "sysvar", routingkey.HubSlug(sv.Name), "")
+	uniqueID := sysvarUniqueID(serial10, sv)
 
 	body := map[string]any{
 		"name":               displaySysvarName(sv),
@@ -1035,5 +1048,32 @@ func (b *Bridge) PublishHubDiscovery(ctx context.Context, item DiscoveryItem) er
 	if !item.OK || !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
-	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	// DiscoveryItem carries no central — most hub builders fold it into
+	// NodeID already, and the one daemon-level caller (the add-on
+	// self-update entity) has none at all — so a publish_errors
+	// increment from here goes unlabeled rather than guessing.
+	return b.publishDiscovery(ctx, "", item.Component, item.NodeID, item.ObjectID, item.Payload)
+}
+
+// sysvarUniqueID builds the HA `unique_id` for one system variable.
+//
+// It is keyed on the CCU's own numeric variable id, not on the display name.
+// The name is not an identity: [routingkey.HubSlug] collapses punctuation and
+// case, so two variables whose names differ only there — "Alarm: Küche" and
+// "Alarm Küche" — produced byte-identical unique_ids. Home Assistant keeps the
+// config that arrived first and drops the second variable's entity entirely,
+// and since the discovery payload is retained on the broker, the loss survives
+// a restart of the daemon that caused it. Nothing in the daemon noticed,
+// because both variables published happily to their own distinct state topics;
+// only the entity registry on the far side had one fewer row than it should.
+//
+// A sysvar whose id has not been resolved yet (Vid == 0, e.g. a spec built
+// before the first hub scan) falls back to the slug. That is the pre-existing
+// behaviour and can still collide, but an entity keyed on the literal 0 would
+// collide with *every* other unresolved sysvar, which is worse.
+func sysvarUniqueID(serial10 string, sv HubSysvarSpec) string {
+	if sv.Vid > 0 {
+		return routingkey.CanonicalUniqueID(serial10, "sysvar", strconv.Itoa(sv.Vid), "")
+	}
+	return routingkey.CanonicalUniqueID(serial10, "sysvar", routingkey.HubSlug(sv.Name), "")
 }
