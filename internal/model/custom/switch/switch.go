@@ -29,6 +29,28 @@ const startUpOnOffNull uint32 = 0xFFFFFFFF
 // switchdev.Writer keep compiling.
 type Writer = custom.Writer
 
+// GroupStateDataPoint is the read side of a group-channel STATE slot.
+//
+// The IPSwitch profile maps [hmenum.FieldGroupState] to STATE on the
+// channel one below the relay's own (ChannelFields[-1]) — a status
+// transmitter that mirrors the relay for HA / MQTT / REST without being
+// the relay's own STATE. That companion parameter's wire shape differs
+// by model: most report it read-only (OPERATIONS lacks WRITE, resolving
+// to a [*generic.BinarySensor]), while a few keep it writable
+// (a [*generic.Switch]). Naming the capability instead of a shape is
+// what keeps both reachable — casting to either concrete type alone
+// left the slot nil for every device of the other kind.
+type GroupStateDataPoint interface {
+	Value() (bool, bool)
+	Parameter() hmenum.Parameter
+	ModifiedAt() time.Time
+}
+
+var (
+	_ GroupStateDataPoint = (*generic.Switch)(nil)
+	_ GroupStateDataPoint = (*generic.BinarySensor)(nil)
+)
+
 // Switch is a single on/off data point composed on top of
 // [*generic.Switch].
 type Switch struct {
@@ -36,6 +58,12 @@ type Switch struct {
 	custom.BaseDP
 
 	groupState *custom.GroupState
+
+	// groupStateDP is the optional group-channel STATE indicator bound
+	// by [applyGroupState]. Nil when the profile carries no
+	// FieldGroupState mapping or the device does not expose it on the
+	// resolved channel.
+	groupStateDP GroupStateDataPoint
 
 	// dataVersion tracks the per-cluster monotonic counter (Matter
 	// §10.6.5). Bumped on every successful MatterWrite / MatterInvoke
@@ -140,6 +168,28 @@ func (s *Switch) OnState(on bool) { s.OnEvent(on) }
 // GroupState returns the group-membership tracker. Returns the same instance
 // across calls.
 func (s *Switch) GroupState() *custom.GroupState { return s.groupState }
+
+// SetGroupState binds an optional group-channel STATE data point. Used
+// by the materializer ([applyGroupState]) for switch outputs whose
+// profile schema names a companion group-level STATE indicator on a
+// sibling channel. Pass nil to clear.
+//
+// The bound value is exposed only through [Switch.GroupStateValue]; it
+// never overwrites [Switch.IsOn], which always reflects this channel's
+// own relay state — the group indicator and the channel's own STATE are
+// different slots with different meanings.
+func (s *Switch) SetGroupState(dp GroupStateDataPoint) { s.groupStateDP = dp }
+
+// GroupStateValue returns the bound group-channel STATE indicator's
+// value and whether it has been observed. Returns (false, false) when
+// the profile carries no FieldGroupState mapping or the device does not
+// expose it on the resolved channel.
+func (s *Switch) GroupStateValue() (on, observed bool) {
+	if s.groupStateDP == nil {
+		return false, false
+	}
+	return s.groupStateDP.Value()
+}
 
 // IsStateChange reports whether the next on/off write is materially a
 // state change. Returns true when:

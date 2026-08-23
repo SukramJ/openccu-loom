@@ -121,6 +121,12 @@ type SoundPlayerLED struct {
 	onTimeList  *generic.ActionSelect
 	repetitions *generic.ActionSelect
 
+	// direction is DIRECTION — ACTIVITY_STATE on the IPSoundPlayerLed
+	// schema. The sibling IPSoundPlayer profile on channel 2 resolves the
+	// same parameter into siren.SoundPlayer.direction; the LED channel
+	// carries it too and is bound the same way.
+	direction *generic.Sensor[int32]
+
 	availableOnTimes     []string
 	availableRepetitions []string
 }
@@ -138,6 +144,7 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 		}
 		led.onTimeList = custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldOnTimeList, hmenum.ParameterOnTimeList1))
 		led.repetitions = custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldRepetitions, hmenum.ParameterRepetitions))
+		led.direction = custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection))
 	}
 	if led.onTimeList != nil {
 		_ = led.onTimeList.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
@@ -145,7 +152,17 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 	if led.repetitions != nil {
 		_ = led.repetitions.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
 	}
+	if led.direction != nil {
+		_ = led.direction.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
+	}
 	return led
+}
+
+// ActivityState returns the LED channel's current DIRECTION /
+// ACTIVITY_STATE label and whether it has been observed. nil-safe: reports
+// ("", false) when the schema mapped no such parameter onto this channel.
+func (l *SoundPlayerLED) ActivityState() (string, bool) {
+	return custom.EnumLabelValue(l.direction)
 }
 
 // AvailableOnTimes returns the labels of accepted ON_TIME_LIST_1

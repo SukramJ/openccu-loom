@@ -6,6 +6,7 @@ package valve
 import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -29,9 +30,52 @@ func init() {
 			if v == nil {
 				return nil, nil
 			}
+			applyGroupState(v, ch, group)
 			return v, nil
 		},
 	)
 
 	payload.RegisterGlobalScalarArgKey("set_level", "level")
+}
+
+// applyGroupState resolves the profile's [hmenum.FieldGroupState] mapping
+// (when present) to the absolute channel + parameter and binds the
+// corresponding STATE data point onto the valve via
+// [Irrigation.SetGroupState].
+//
+// The companion parameter's wire shape differs by model — read-only
+// ([*generic.BinarySensor]) on most, writable ([*generic.Switch]) on a
+// few — so both are tried before giving up on that channel.
+func applyGroupState(v *Irrigation, ch *device.Channel, rebased custom.RebasedChannelGroupConfig) {
+	if v == nil || ch == nil || ch.Device() == nil {
+		return
+	}
+	for chNo, fields := range rebased.ChannelFields {
+		fv, ok := fields[hmenum.FieldGroupState]
+		if !ok {
+			continue
+		}
+		param, _ := custom.ResolveFieldValue(fv)
+		if param == "" {
+			continue
+		}
+		var groupCh *device.Channel
+		for _, sibling := range ch.Device().Channels() {
+			if sibling.Number == chNo {
+				groupCh = sibling
+				break
+			}
+		}
+		if groupCh == nil {
+			continue
+		}
+		switch dp := groupCh.Parameter(param).(type) {
+		case *generic.Switch:
+			v.SetGroupState(dp)
+			return
+		case *generic.BinarySensor:
+			v.SetGroupState(dp)
+			return
+		}
+	}
 }
