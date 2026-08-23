@@ -166,21 +166,6 @@ func TestParityMatterJS_WindowCoveringTypeAndEndProductType(t *testing.T) {
 			t.Errorf("Blind EndProductType = %d, want %d (InteriorBlind)", got, jsEndInteriorBlind)
 		}
 	})
-
-	t.Run("garage", func(t *testing.T) {
-		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-		srv := g.MatterClusterServers()[0]
-
-		// Neither enum carries a garage value; RollerShade (0) is the
-		// neutral default on both attributes (Unknown=255 is avoided —
-		// some ecosystems' routine pickers drop Unknown devices).
-		if got := readAttrU8(t, srv, attrType, "Type"); got != jsTypeRollershade {
-			t.Errorf("Garage Type = %d, want %d (Rollershade)", got, jsTypeRollershade)
-		}
-		if got := readAttrU8(t, srv, attrEndProductType, "EndProductType"); got != jsEndRollerShade {
-			t.Errorf("Garage EndProductType = %d, want %d (RollerShade)", got, jsEndRollerShade)
-		}
-	})
 }
 
 // TestParityMatterJS_WindowCoveringCommandLists pins the command lists
@@ -243,16 +228,6 @@ func TestParityMatterJS_WindowCoveringCommandLists(t *testing.T) {
 				return b.MatterClusterServers()[0]
 			},
 			want: clusterCommands,
-		},
-		{
-			name: "garage",
-			server: func(t *testing.T) interfaces.MatterClusterServer {
-				t.Helper()
-				g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-
-				return g.MatterClusterServers()[0]
-			},
-			want: liftOnly,
 		},
 	}
 	for _, tc := range cases {

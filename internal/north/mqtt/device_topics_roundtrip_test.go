@@ -38,8 +38,8 @@ import (
 //   - discovery_schedule.go's schedule entity + schedule-switch
 //     builders.
 //   - discovery_week_profile.go's week-profile select builder.
-//   - discovery_combined.go's combined-timer and combined-sensor
-//     builders.
+//   - discovery_combined.go's projection-driven combined builder
+//     (number / sensor / select).
 //   - discovery_update.go's per-device update entity, driven through
 //     a minimal fake mirroring [internal/model/device.Update.HADiscoveryPayload]'s
 //     shape (state/latest-version/json-attributes share one topic; no
@@ -153,13 +153,27 @@ func TestDevicePlaneTopicsRoundTrip(t *testing.T) {
 		WP: newFakeWP([]string{"P1", "P2"}, "P1"),
 	}))
 
-	// --- Combined timer + combined sensor ---
-	collectDeviceDeclaredItem(t, declared, d.BuildCombinedTimerDiscovery(central, CombinedTimerEvent{
-		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "duration", Label: "Zeitdauer",
+	// --- Combined data points ---
+	// One per projected shape: the number the timer maps onto, the sensor
+	// the level/colour pairs map onto, and the select a mode maps onto.
+	collectDeviceDeclaredItem(t, declared, d.BuildCombinedDiscovery(central, CombinedEvent{
+		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "duration",
+		Component: "number",
+		Body:      map[string]any{"name": "Zeitdauer", "command_topic": topics.CombinedCommand(central, iface, addr, 3, "duration")},
 	}))
-	collectDeviceDeclaredItem(t, declared, d.BuildCombinedSensorDiscovery(central, CombinedSensorEvent{
-		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "hs_color", Label: "Farbe",
-		ValueTemplate: "{{ value_json.hue }}",
+	collectDeviceDeclaredItem(t, declared, d.BuildCombinedDiscovery(central, CombinedEvent{
+		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "hs_color",
+		Component: "sensor",
+		Body:      map[string]any{"name": "Farbe", "value_template": "{{ value_json.hue }}"},
+	}))
+	collectDeviceDeclaredItem(t, declared, d.BuildCombinedDiscovery(central, CombinedEvent{
+		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "door_mode",
+		Component: "select",
+		Body: map[string]any{
+			"name":          "Tormodus",
+			"command_topic": topics.CombinedCommand(central, iface, addr, 3, "door_mode"),
+			"options":       []string{"CLOSED", "VENTILATION_POSITION", "OPEN"},
+		},
 	}))
 
 	// --- Firmware update entity ---
@@ -245,12 +259,15 @@ func runDevicePlane(t *testing.T, base, central, iface, addr string) *observedPl
 		t.Fatalf("publish week profile state: %v", err)
 	}
 
-	// --- Combined timer + combined sensor ---
-	if err := bridge.PublishCombinedTimerState(ctx, central, iface, addr, 3, "duration", 30); err != nil {
+	// --- Combined data points ---
+	if err := bridge.PublishCombinedState(ctx, central, iface, addr, 3, "duration", "30"); err != nil {
 		t.Fatalf("publish combined timer state: %v", err)
 	}
-	if err := bridge.PublishCombinedSensorState(ctx, central, iface, addr, 3, "hs_color", `{"hue":120}`); err != nil {
+	if err := bridge.PublishCombinedState(ctx, central, iface, addr, 3, "hs_color", `{"hue":120}`); err != nil {
 		t.Fatalf("publish combined sensor state: %v", err)
+	}
+	if err := bridge.PublishCombinedState(ctx, central, iface, addr, 3, "door_mode", "VENTILATION_POSITION"); err != nil {
+		t.Fatalf("publish combined door-mode state: %v", err)
 	}
 
 	// --- Firmware update entity ---

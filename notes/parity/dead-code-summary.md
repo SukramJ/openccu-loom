@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 3439c9f3
-HEAD: 3439c9f3
+Generated: 65c6a5e3
+HEAD: 65c6a5e3
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29582 |
-| Reachable | 5102 |
-| Whitelisted | 21458 |
-| **Unreachable** | **3022** |
+| Total Exported | 29745 |
+| Reachable | 5120 |
+| Whitelisted | 21607 |
+| **Unreachable** | **3018** |
 
 ## Top-20 Packages by Dead Code
 
@@ -186,7 +186,7 @@ HEAD: 3439c9f3
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 24 | 0 |
-| internal/north/mqtt | 0 | 88 | 4 |
+| internal/north/mqtt | 0 | 84 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |

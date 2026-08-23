@@ -39,6 +39,7 @@
   "discovery.energy_counter_total": "Energy Counter Total",
   "discovery.entity_name.button_lock": "Button lock",
   "discovery.firmware": "Firmware",
+  "discovery.garage_door_mode": "Door Mode",
   "discovery.hs_color": "HS Color",
   "discovery.inbox": "Inbox",
   "discovery.install_mode_activate": "Activate Install Mode {iface}",

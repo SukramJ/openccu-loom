@@ -85,18 +85,20 @@ type ScheduleSwitchSink interface {
 }
 
 // CombinedDPSink is the optional domain-facing contract for combined-DP
-// writes (Timer SetDuration, HSColor SetHSColor, …). The composition
-// root wires this to the central registry; when nil, the subscriber
-// drops combined-DP commands with a debug breadcrumb.
+// writes. The composition root wires this to the central registry; when
+// nil, the subscriber drops combined-DP commands with a debug breadcrumb.
 //
 // `kind` matches the topic segment in the discovery payload's
-// command_topic (e.g. "duration"). The implementation resolves the
-// combined DP on the (central, iface, deviceAddr, channel) tuple and
-// dispatches the typed write.
+// command_topic (e.g. "duration", "door_mode"). The implementation
+// resolves the combined DP on the (central, iface, deviceAddr, channel)
+// tuple and hands it the raw payload; the data point parses its own
+// value. The subscriber deliberately does not parse — it used to coerce
+// every combined payload to a float64 before dispatch, which made the
+// transport the gatekeeper for value types it cannot know.
 type CombinedDPSink interface {
-	SetCombinedTimerSeconds(ctx context.Context,
+	SetCombinedValue(ctx context.Context,
 		centralName, interfaceID, deviceAddress string, channel int,
-		kind string, seconds float64,
+		kind, raw string,
 		priority hmenum.CommandPriority) error
 }
 
@@ -690,11 +692,12 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 
 // handleCombinedDP dispatches a payload from
 // `<base>/<central>/<iface>/<addr>/<chan>/combined/<kind>/set` into the
-// combined-DP sink. Only the Timer kind ("duration") is wired today;
-// HSColor / LevelCombined remain attachable scaffolding.
+// combined-DP sink.
 //
-// Payload is the seconds value as a plain decimal string (HA's MQTT
-// number entity publishes "30" for 30 seconds, not a JSON envelope).
+// The payload is forwarded verbatim. HA publishes a bare scalar for both
+// shapes this carries today — "30" from a number entity, "OPEN" from a
+// select — and which of them a kind expects is the data point's to know,
+// not the transport's.
 func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained bool) {
 	if retained {
 		c.logger.Debug("mqtt.command.combined.retained_drop", slog.String("topic", topic))
@@ -715,11 +718,11 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 		c.logger.Warn("mqtt.command.combined.bad_channel", slog.String("topic", topic))
 		return
 	}
-	seconds, err := strconv.ParseFloat(strings.TrimSpace(string(body)), 64)
-	if err != nil {
+	raw := strings.TrimSpace(string(body))
+	if raw == "" {
 		c.logger.Warn("mqtt.command.combined.bad_payload",
 			slog.String("topic", topic),
-			slog.String("err", err.Error()))
+			slog.String("detail", "empty payload"))
 		return
 	}
 	if c.cmbSink == nil {
@@ -731,11 +734,11 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()
-		if err := c.cmbSink.SetCombinedTimerSeconds(ctx, centralName, iface, deviceAddr, channel, kind, seconds, hmenum.CommandPriorityHigh); err != nil {
+		if err := c.cmbSink.SetCombinedValue(ctx, centralName, iface, deviceAddr, channel, kind, raw, hmenum.CommandPriorityHigh); err != nil {
 			c.logger.Warn("mqtt.command.combined.set",
 				slog.String("topic", topic),
 				slog.String("kind", kind),
-				slog.Float64("seconds", seconds),
+				slog.String("value", raw),
 				slog.String("err", err.Error()))
 		}
 	})

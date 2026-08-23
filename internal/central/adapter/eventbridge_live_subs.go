@@ -42,9 +42,11 @@ const (
 	liveSubScheduleEntity     liveSubKind = "schedule_entity"
 	liveSubScheduleSwitch     liveSubKind = "schedule_switch"
 	liveSubFirmware           liveSubKind = "firmware"
-	liveSubCombinedTimer      liveSubKind = "combined_timer"
-	liveSubCombinedLevel      liveSubKind = "combined_level"
-	liveSubCombinedHSColor    liveSubKind = "combined_hs_color"
+	// liveSubCombined covers every combined data point; the projection's
+	// kind ("duration", "hs_color", …) goes in the key's variant field,
+	// so one constant serves all of them and a new combined type needs no
+	// constant of its own.
+	liveSubCombined liveSubKind = "combined"
 )
 
 // liveSubKey identifies the model slot one live subscription belongs to.

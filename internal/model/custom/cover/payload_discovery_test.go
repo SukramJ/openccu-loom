@@ -5,6 +5,7 @@ package cover
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -469,43 +470,34 @@ func TestGarageHADiscoveryPayload_StateParity(t *testing.T) {
 	}
 }
 
-// TestGarageHADiscoveryPayload_VentCommandTopic pins
-// parity rule (capabilities/cover.py:16): when SupportsVent is true,
-// the discovery payload must include a vent_command_topic exposing the
-// ventilate service method (PARTIAL_OPEN on the wire). When SupportsVent
-// is false the field must be absent.
-func TestGarageHADiscoveryPayload_VentCommandTopic(t *testing.T) {
+// TestGarageHADiscoveryPayloadCarriesNoVentKey pins that the cover body
+// declares nothing for the ventilation position, whatever the drive
+// supports.
+//
+// It used to carry a vent_command_topic. HA's MQTT cover platform
+// validates the discovery body against a closed key schema and has no
+// field for a vent command, so the key was dropped before any entity saw
+// it — a control that looked declared and did nothing. A vent-capable
+// drive now gets a separate select entity, which HA renders as a real
+// control and can read back.
+func TestGarageHADiscoveryPayloadCarriesNoVentKey(t *testing.T) {
 	t.Parallel()
 
-	t.Run("SupportsVent=true → vent_command_topic present", func(t *testing.T) {
-		t.Parallel()
-		g := NewGarage(GarageConfig{
-			Writer:       &stubWriter{},
-			Capabilities: custom.CoverCapabilities{SupportsVent: true},
+	for _, supportsVent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("SupportsVent=%v", supportsVent), func(t *testing.T) {
+			t.Parallel()
+			g := NewGarage(GarageConfig{
+				Writer:       &stubWriter{},
+				Capabilities: custom.CoverCapabilities{SupportsVent: supportsVent},
+			})
+			_, body := g.HADiscoveryPayload(discoveryCtx{})
+			if _, ok := body["vent_command_topic"]; ok {
+				t.Error("the cover body must carry no vent key: HA's cover schema has no field " +
+					"for one, so it is dropped before any entity sees it. The ventilation " +
+					"position is a separate select entity (Garage.attachDoorMode)")
+			}
 		})
-		ctx := discoveryCtx{}
-		_, body := g.HADiscoveryPayload(ctx)
-		v, ok := body["vent_command_topic"]
-		if !ok {
-			t.Fatal("vent_command_topic missing when SupportsVent=true")
-		}
-		want := ctx.ServiceMethodCommandTopic("ventilate")
-		if s, _ := v.(string); s != want {
-			t.Errorf("vent_command_topic = %q, want %q", s, want)
-		}
-	})
-
-	t.Run("SupportsVent=false → vent_command_topic absent", func(t *testing.T) {
-		t.Parallel()
-		g := NewGarage(GarageConfig{
-			Writer:       &stubWriter{},
-			Capabilities: custom.CoverCapabilities{SupportsVent: false},
-		})
-		_, body := g.HADiscoveryPayload(discoveryCtx{})
-		if _, ok := body["vent_command_topic"]; ok {
-			t.Error("vent_command_topic must be absent when SupportsVent=false")
-		}
-	})
+	}
 }
 
 // TestGarageConfigPayload_SupportsVent pins that ConfigPayload exposes

@@ -22,15 +22,15 @@ type fakeCombinedDPSink struct {
 type fakeCombinedCall struct {
 	central, iface, addr, kind string
 	channel                    int
-	seconds                    float64
+	raw                        string
 }
 
-func (f *fakeCombinedDPSink) SetCombinedTimerSeconds(_ context.Context,
+func (f *fakeCombinedDPSink) SetCombinedValue(_ context.Context,
 	centralName, interfaceID, deviceAddress string, channel int,
-	kind string, seconds float64, _ hmenum.CommandPriority,
+	kind, raw string, _ hmenum.CommandPriority,
 ) error {
 	f.mu.Lock()
-	f.calls = append(f.calls, fakeCombinedCall{centralName, interfaceID, deviceAddress, kind, channel, seconds})
+	f.calls = append(f.calls, fakeCombinedCall{centralName, interfaceID, deviceAddress, kind, channel, raw})
 	f.mu.Unlock()
 	return nil
 }
@@ -346,7 +346,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 				if n := s.cmb.count(); n != 1 {
 					t.Fatalf("SetCombinedTimerSeconds calls=%d, want 1", n)
 				}
-				if got := s.cmb.calls[0]; got.kind != "duration" || got.seconds != 30 {
+				if got := s.cmb.calls[0]; got.kind != "duration" || got.raw != "30" {
 					t.Fatalf("call=%+v", got)
 				}
 			},

@@ -1070,6 +1070,54 @@ scheduler-event wrapper that duplicated the job instrumentation in
 
 ## Matter / matter.js Divergences
 
+### BD-Matter-ClosureWithoutTagList — the Closure endpoint omits the TAGLIST feature its device type marks mandatory
+
+A garage drive projects as the Closure device type (0x0230) carrying
+ClosureControl (0x0104). matter.js's `closure-device.element.ts:16-17`
+marks the Descriptor's `TAGLIST` feature conformance `M` for that device
+type; our Descriptor advertises `FeatureMap=0` and reports TagList as
+unsupported (`internal/north/matter/cluster/core/descriptor.go:141-151`).
+
+**Rationale.** The Descriptor is shared by every endpoint, and TagList is
+already disabled there for a controller-interop reason that predates this
+work: Apple's iOS Matter SDK does not ship a `semtag` struct schema, so an
+endpoint that reports TagList makes Apple reject the whole Descriptor
+cluster and abort the HAP service build with `HAPErrorDomain Code=14`.
+Turning the feature on to satisfy the Closure device type would trade a
+conformance gap no controller currently checks for a pairing abort that
+was observed in practice.
+
+The gap is narrow: TagList carries semantic tags that describe an
+endpoint's role within a composed device, and the garage projects as a
+single endpoint with nothing to disambiguate. Revisit together with the
+Descriptor-wide TagList decision — the two are the same switch, and this
+entry exists so that switch is not flipped for the Closure device type
+alone.
+
+### BD-Matter-GarageIsClosureNotWindowCovering — the garage drive left the WindowCovering projection
+
+A garage drive used to project as WindowCovering (0x0102) with its door
+state encoded as a lift percentage: open = 0, ventilation = 5000,
+closed = 10000. That is a faithful reading of the only axis
+WindowCovering has, and it loses the thing that matters — the ventilation
+stop is a named physical position, not a point on a continuum. As a
+percentage it could not be labelled by a controller, could not be
+selected other than by dragging a slider to the right region, and could
+not be told apart on a read from a door resting halfway.
+
+ClosureControl carries `OpenedForVentilation` as a first-class
+`CurrentPositionEnum` value and `MoveToVentilationPosition` as a
+`TargetPositionEnum` value, gated behind the `VT` feature. The garage now
+projects as the Closure device type with `FeatureMap = PS | VT`.
+
+**Consequence.** The two projections cannot coexist: the Closure device
+type lists WindowCovering with conformance `X` — disallowed
+(`closure-device.element.ts:20`). A controller that had the drive paired
+as a window covering sees the endpoint change device type, which
+ecosystems treat as a new accessory. This is a deliberate one-way
+migration, taken because the previous projection could not express the
+device.
+
 ### BD-Matter-TLVPermissive — responder TLV decode is more permissive than chip
 
 connectedhomeip enforces container/tag strictness on every element via the

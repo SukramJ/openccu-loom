@@ -39,6 +39,7 @@
   "discovery.energy_counter_total": "Energiezähler Gesamt",
   "discovery.entity_name.button_lock": "Bediensperre",
   "discovery.firmware": "Firmware",
+  "discovery.garage_door_mode": "Tormodus",
   "discovery.hs_color": "HS-Farbe",
   "discovery.inbox": "Posteingang",
   "discovery.install_mode_activate": "Anlernmodus {iface} aktivieren",

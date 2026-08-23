@@ -108,8 +108,8 @@ func TestRetractRawStateForDeviceClearsEveryDeviceScopedPublisher(t *testing.T) 
 			name: "combined_timer",
 			publish: func(t *testing.T, b *Bridge) string {
 				t.Helper()
-				if err := b.PublishCombinedTimerState(ctx, central, iface, addr, 1, "duration", 30); err != nil {
-					t.Fatalf("PublishCombinedTimerState: %v", err)
+				if err := b.PublishCombinedState(ctx, central, iface, addr, 1, "duration", "30"); err != nil {
+					t.Fatalf("PublishCombinedState(duration): %v", err)
 				}
 				return b.topics.CombinedState(central, iface, addr, 1, "duration")
 			},
@@ -118,8 +118,8 @@ func TestRetractRawStateForDeviceClearsEveryDeviceScopedPublisher(t *testing.T) 
 			name: "combined_sensor",
 			publish: func(t *testing.T, b *Bridge) string {
 				t.Helper()
-				if err := b.PublishCombinedSensorState(ctx, central, iface, addr, 1, "hs_color", `{"h":1}`); err != nil {
-					t.Fatalf("PublishCombinedSensorState: %v", err)
+				if err := b.PublishCombinedState(ctx, central, iface, addr, 1, "hs_color", `{"h":1}`); err != nil {
+					t.Fatalf("PublishCombinedState(hs_color): %v", err)
 				}
 				return b.topics.CombinedState(central, iface, addr, 1, "hs_color")
 			},

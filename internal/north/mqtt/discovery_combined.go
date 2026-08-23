@@ -7,13 +7,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
-// CombinedTimerEvent carries the per-channel context the discovery builder
-// needs to emit an HA `number` entity for a combined Timer DP.
-type CombinedTimerEvent struct {
+// CombinedEvent carries the per-channel context needed to emit one HA
+// entity for a combined data point.
+//
+// Component and Body come from the data point's own
+// [payload.CombinedProjection]; everything else identifies the channel.
+// The split is deliberate: the model layer knows what the entity *is*
+// and the bridge knows *where* it lives, and neither has to learn the
+// other's half. Before the projection seam existed there was one event
+// type and one builder per combined kind, so a new kind that nobody
+// remembered to add a builder for published nothing at all.
+// loom:reachable:reason="constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site"
+type CombinedEvent struct {
 	// Central is the CCU identifier (required for topic scoping).
 	Central string
 	// Interface is the CCU interface identifier (e.g. "HmIP-RF").
@@ -29,35 +37,29 @@ type CombinedTimerEvent struct {
 	// Device, when non-nil, is consulted by deviceDescriptor for the
 	// `payload:"info"` map — same as Event.Device.
 	Device any
-	// Kind is the combined-DP kind (e.g. "duration"). Used both as the
-	// topic-segment and the suffix on object_id / unique_id.
+	// Kind is the combined-DP kind ("duration", "hs_color", …). Used both
+	// as the topic segment and as the suffix on object_id / unique_id.
 	Kind string
-	// Label is the operator-facing entity name (e.g. "Zeitdauer"). HA
-	// derives entity_id from `device.name` + this label.
-	Label string
-	// Unit is the engineering unit shown in HA (e.g. "s" for seconds).
-	// Optional.
-	Unit string
-	// Min / Max bound the input range. MaxSeconds=0 falls back to no
-	// constraint.
-	MinSeconds float64
-	MaxSeconds float64
-	// Step is the HA `step` value — 1 for integer seconds.
-	Step float64
+	// Component is the HA component the projection maps onto ("number",
+	// "sensor", "select", …). An empty Component declines discovery.
+	Component string
+	// Body carries the data-point-specific discovery keys. The builder
+	// merges the shared frame around it and never overwrites a key the
+	// projection set.
+	Body map[string]any
 }
 
-// BuildCombinedTimerDiscovery builds the HA Discovery `number` payload
-// for a combined Timer DP (DURATION_VALUE + DURATION_UNIT → seconds).
+// BuildCombinedDiscovery builds the HA Discovery payload for one combined
+// data point by wrapping the projection's Body in the frame every
+// combined entity shares.
 //
-// Returns DiscoveryItem{OK: false} when required fields are missing or
-// JSON marshalling fails.
-func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(centralName string, ev CombinedTimerEvent) DiscoveryItem {
-	if ev.Kind == "" || ev.DeviceAddress == "" {
+// Returns DiscoveryItem{OK: false} when required fields are missing, the
+// projection declined (empty Component or Body), or JSON marshalling
+// fails.
+func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev CombinedEvent) DiscoveryItem {
+	if ev.Kind == "" || ev.DeviceAddress == "" || ev.Component == "" || len(ev.Body) == 0 {
 		return DiscoveryItem{}
 	}
-	stateTopic := d.TopicBuilder.CombinedState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
-	commandTopic := d.TopicBuilder.CombinedCommand(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
-
 	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 	objectID := fmt.Sprintf("openccu-loom_%s_%d_%s",
 		strings.ToLower(ev.DeviceAddress), ev.ChannelNo, ev.Kind)
@@ -85,30 +87,20 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(centralName string
 		},
 	}
 
-	step := ev.Step
-	if step <= 0 {
-		step = 1
-	}
+	// The frame first, the projection's keys second: a projection that
+	// needs a different state_topic (or none) must be able to say so,
+	// and silently discarding that would be the same class of bug the
+	// seam exists to prevent.
 	body := map[string]any{
-		"name":              ev.Label,
 		"unique_id":         objectID,
-		"state_topic":       stateTopic,
-		"command_topic":     commandTopic,
-		"min":               ev.MinSeconds,
-		"step":              step,
+		"state_topic":       d.TopicBuilder.CombinedState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind),
 		"availability":      availability,
 		"availability_mode": "all",
 		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
-		"entity_category":   EntityCategoryConfig,
-		"mode":              "box",
-		"optimistic":        false,
 	}
-	if ev.MaxSeconds > 0 {
-		body["max"] = ev.MaxSeconds
-	}
-	if ev.Unit != "" {
-		body["unit_of_measurement"] = ev.Unit
+	for k, v := range ev.Body {
+		body[k] = v
 	}
 
 	buf, err := json.Marshal(body)
@@ -116,7 +108,7 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(centralName string
 		return DiscoveryItem{}
 	}
 	return DiscoveryItem{
-		Component: string(HAComponentNumber),
+		Component: ev.Component,
 		NodeID:    nodeID,
 		ObjectID:  objectID,
 		Payload:   buf,
@@ -124,12 +116,12 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(centralName string
 	}
 }
 
-// PublishCombinedTimerDiscovery publishes the HA Discovery payload for a
-// combined Timer `number` entity. Retained and deduplicated through the
-// shared discovery cache.
+// PublishCombinedDiscovery publishes the HA Discovery payload for one
+// combined data point. Retained and deduplicated through the shared
+// discovery cache.
 //
 // No-ops when HA discovery is disabled or the builder declines the event.
-func (b *Bridge) PublishCombinedTimerDiscovery(ctx context.Context, centralName string, ev CombinedTimerEvent) error {
+func (b *Bridge) PublishCombinedDiscovery(ctx context.Context, centralName string, ev CombinedEvent) error {
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
@@ -140,169 +132,22 @@ func (b *Bridge) PublishCombinedTimerDiscovery(ctx context.Context, centralName 
 	if !ok {
 		return nil
 	}
-	item := builder.BuildCombinedTimerDiscovery(centralName, ev)
+	item := builder.BuildCombinedDiscovery(centralName, ev)
 	if !item.OK {
 		return nil
 	}
 	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
 }
 
-// PublishCombinedTimerState publishes the current seconds value to the
-// combined Timer's retained state topic. seconds < 0 is clamped to 0.
+// PublishCombinedState publishes a combined data point's rendered state
+// to its retained state topic.
 //
 // No-ops when the raw plane is disabled.
-func (b *Bridge) PublishCombinedTimerState(
+func (b *Bridge) PublishCombinedState(
 	ctx context.Context,
 	centralName, iface, address string,
 	channel int,
-	kind string,
-	seconds float64,
-) error {
-	if !b.cfg.RawEnabled {
-		return nil
-	}
-	if centralName == "" {
-		centralName = b.cfg.CentralName
-	}
-	if seconds < 0 {
-		seconds = 0
-	}
-	topic := b.topics.CombinedState(centralName, iface, address, channel, kind)
-	return b.publishRawRetained(ctx, topic, []byte(formatSeconds(seconds)))
-}
-
-// formatSeconds renders a seconds value as a decimal string with no
-// trailing ".0" when the value is integral.
-func formatSeconds(s float64) string {
-	if s == float64(int64(s)) {
-		return strconv.FormatInt(int64(s), 10)
-	}
-	return fmt.Sprintf("%g", s)
-}
-
-// CombinedSensorEvent carries the per-channel context the discovery builder
-// needs to emit an HA `sensor` entity for a combined DP (LevelCombined or
-// HSColor). The state payload is a JSON object; ValueTemplate extracts the
-// primary scalar from it.
-type CombinedSensorEvent struct {
-	// Central is the CCU identifier (required for topic scoping).
-	Central string
-	// Interface is the CCU interface identifier.
-	Interface string
-	// DeviceAddress is the base device address.
-	DeviceAddress string
-	// ChannelNo is the channel number within the device.
-	ChannelNo int
-	// DeviceName is the human-readable device name.
-	DeviceName string
-	// Model is the CCU device model string.
-	Model string
-	// Device, when non-nil, is used by deviceDescriptor for the HA device block.
-	Device any
-	// Kind is the combined-DP kind ("level_combined", "hs_color"). Used as the
-	// topic-segment and suffix on object_id / unique_id.
-	Kind string
-	// Label is the operator-facing entity name.
-	Label string
-	// ValueTemplate is the HA Jinja2 template that extracts the primary value
-	// from the JSON state payload (e.g. "{{ value_json.level }}").
-	ValueTemplate string
-	// Unit is the engineering unit shown in HA. Optional.
-	Unit string
-}
-
-// BuildCombinedSensorDiscovery builds the HA Discovery `sensor` payload for a
-// combined DP that publishes a JSON object as its state.
-func (d *DefaultDiscoveryBuilder) BuildCombinedSensorDiscovery(centralName string, ev CombinedSensorEvent) DiscoveryItem {
-	if ev.Kind == "" || ev.DeviceAddress == "" {
-		return DiscoveryItem{}
-	}
-	stateTopic := d.TopicBuilder.CombinedState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
-
-	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
-	objectID := fmt.Sprintf("openccu-loom_%s_%d_%s",
-		strings.ToLower(ev.DeviceAddress), ev.ChannelNo, ev.Kind)
-
-	mockEv := Event{
-		Central:       centralName,
-		Interface:     ev.Interface,
-		DeviceAddress: ev.DeviceAddress,
-		DeviceName:    ev.DeviceName,
-		Model:         ev.Model,
-		ChannelNo:     ev.ChannelNo,
-		Device:        ev.Device,
-	}
-
-	availability := []map[string]string{
-		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
-		},
-		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
-		},
-	}
-
-	body := map[string]any{
-		"name":              ev.Label,
-		"unique_id":         objectID,
-		"state_topic":       stateTopic,
-		"availability":      availability,
-		"availability_mode": "all",
-		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
-		"origin":            BuildOriginInfo(),
-		"entity_category":   EntityCategoryDiagnostic,
-	}
-	if ev.ValueTemplate != "" {
-		body["value_template"] = ev.ValueTemplate
-	}
-	if ev.Unit != "" {
-		body["unit_of_measurement"] = ev.Unit
-	}
-
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(HAComponentSensor),
-		NodeID:    nodeID,
-		ObjectID:  objectID,
-		Payload:   buf,
-		OK:        true,
-	}
-}
-
-// PublishCombinedSensorDiscovery publishes the HA Discovery payload for a
-// combined-DP sensor entity. No-ops when HA discovery is disabled.
-func (b *Bridge) PublishCombinedSensorDiscovery(ctx context.Context, centralName string, ev CombinedSensorEvent) error {
-	if !b.cfg.HADiscoveryEnabled {
-		return nil
-	}
-	if b.cfg.DiscoveryBuilder == nil {
-		return nil
-	}
-	builder, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
-	if !ok {
-		return nil
-	}
-	item := builder.BuildCombinedSensorDiscovery(centralName, ev)
-	if !item.OK {
-		return nil
-	}
-	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
-}
-
-// PublishCombinedSensorState publishes the current JSON state to the combined
-// sensor's retained state topic.
-func (b *Bridge) PublishCombinedSensorState(
-	ctx context.Context,
-	centralName, iface, address string,
-	channel int,
-	kind, jsonState string,
+	kind, state string,
 ) error {
 	if !b.cfg.RawEnabled {
 		return nil
@@ -311,5 +156,5 @@ func (b *Bridge) PublishCombinedSensorState(
 		centralName = b.cfg.CentralName
 	}
 	topic := b.topics.CombinedState(centralName, iface, address, channel, kind)
-	return b.publishRawRetained(ctx, topic, []byte(jsonState))
+	return b.publishRawRetained(ctx, topic, []byte(state))
 }
