@@ -55,11 +55,14 @@ var httpClientOwnershipRoots = []string{"internal", "cmd", "pkg"}
 // httpClientOwnershipExempt lists files allowed to build an http.Client
 // without an explicit Transport, with the reason. Keep it empty unless
 // there is a genuine case; an entry here is a claim someone verified.
-var httpClientOwnershipExempt = map[string]string{
-	// internal/httpx is the helper that supplies the transport; the
-	// client it returns carries one by construction.
-	"internal/httpx/transport.go": "constructs the owned transport itself",
-}
+//
+// It is empty, and that is the interesting part. Its one entry exempted
+// internal/httpx/transport.go on the grounds that the helper "constructs the
+// owned transport itself" — which is true, and is exactly why the exemption
+// was unnecessary: NewClient sets Transport explicitly, so the file satisfies
+// the guard on its own terms. Exempting it only removed the guard from the
+// one file that defines the pattern everything else is measured against.
+var httpClientOwnershipExempt = map[string]string{}
 
 // TestEveryHTTPClientOwnsItsTransport fails on any composite literal of
 // type http.Client that omits the Transport field, on any reference to

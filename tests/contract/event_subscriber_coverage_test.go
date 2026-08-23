@@ -39,7 +39,16 @@ var eventsWithoutSubscriber = map[string]string{
 	"DataRefreshTriggeredEvent": "diagnostic trace of a refresh start; the completion event carries the result",
 	"DataRefreshCompletedEvent": "diagnostic trace of a refresh end; callers read the resulting model, not the event",
 	"DriftCorrectedEvent":       "diagnostic trace of a clock-drift correction; corrective action already happened",
-	"RPCParameterReceivedEvent": "per-parameter wire trace; the value change is carried by DataPointValueChangedEvent",
+	// Not merely unconsumed: never published either. Its one publisher,
+	// EventCoordinator.PublishBackendParameterEvent
+	// (internal/central/coordinators/event.go:248), has no production caller —
+	// only two tests reach it — so this event does not exist in a running
+	// daemon at all. The entry is kept so this guard stays green while that is
+	// decided; the decision is delete the publisher and the type, or wire the
+	// trace. Leaving it as written ("the value change is carried by
+	// DataPointValueChangedEvent") read as a live-but-redundant event, which is
+	// not what it is.
+	"RPCParameterReceivedEvent": "neither published nor consumed in production; publisher has no caller",
 
 	// Connection-recovery telemetry. The recovery coordinator drives the
 	// reconnect itself; this event announces what it did, and the health
