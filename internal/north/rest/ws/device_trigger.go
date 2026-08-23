@@ -9,6 +9,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -67,7 +68,12 @@ func (s *DeviceTriggerSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	s.remove = s.reg.OnRegister(s.StartCentral)
+	s.remove = s.reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "ws.device_trigger",
+		Collaborator: "*ws.DeviceTriggerSubscriber",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "a button press or motion trigger never reaches a WebSocket client, and a trigger has no state to poll for afterwards",
+	}, s.StartCentral)
 }
 
 // StartCentral attaches this subscriber to a single central's event bus and

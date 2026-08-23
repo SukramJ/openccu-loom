@@ -509,6 +509,10 @@ type Deps struct {
 	// (`GET /diagnostics/reliability`, `GET /diagnostics/eventbus/tap`).
 	// Read-only; nil disables them.
 	Introspect handlers.DiagnosticsIntrospectService
+	// WiringManifest backs `GET /diagnostics/wiring` — the seams the
+	// running daemon declared as it wired them (ADR 0065).
+	// *central.Registry satisfies it through Manifest().
+	WiringManifest handlers.WiringManifestReader
 	// RSSIInfo backs `GET /diagnostics/rssi` — the CCU's pairwise RF
 	// reception matrix. Read-only; nil disables the endpoint.
 	RSSIInfo handlers.RSSIMatrixService
@@ -1156,6 +1160,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.RSSIInfo != nil {
 				pr.With(admin).Get("/diagnostics/rssi", handlers.DiagnosticsRSSI(d.RSSIInfo))
 			}
+			// Mounted unconditionally: an empty list is the answer this
+			// endpoint exists to be able to give (ADR 0065), so a nil
+			// reader must not turn into a 404 that reads as "this daemon
+			// does not have the feature".
+			pr.With(admin).Get("/diagnostics/wiring", handlers.DiagnosticsWiring(d.WiringManifest))
 			// Composite diagnostics dump — single artefact for support /
 			// agent escalation. Anonymises by default; pass
 			// ?anonymize=0 explicitly for raw output.

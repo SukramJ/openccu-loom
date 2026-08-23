@@ -652,8 +652,18 @@ func identsIn(n ast.Node) []string {
 
 // MustFindStructLiteralField asserts that callerFile contains a composite
 // literal whose type ends with structName and that sets fieldName.
+//
+// The suffix match is deliberate for a bare type name, but it is also
+// its trap: two packages routinely name their wiring struct the same
+// thing, and `rest.Deps` and `mcp.Deps` both end in `Deps` and share
+// most of their field names. Pass the qualified type
+// ("mcp.Deps") whenever the file constructs more than one — an exact
+// match then applies, because a qualified name identifies the type.
 func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName string) {
 	t.Helper()
+	// A qualified name is matched exactly; a bare one by suffix, so a
+	// caller that writes "Deps" still matches "rest.Deps".
+	qualified := strings.Contains(structName, ".")
 	found := false
 	for _, f := range parseFiles(t, callerFile) {
 		ast.Inspect(f, func(n ast.Node) bool {
@@ -665,7 +675,11 @@ func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName 
 				return true
 			}
 			typeName := exprString(cl.Type)
-			if !strings.HasSuffix(typeName, structName) {
+			if qualified {
+				if typeName != structName {
+					return true
+				}
+			} else if !strings.HasSuffix(typeName, structName) {
 				return true
 			}
 			for _, elt := range cl.Elts {

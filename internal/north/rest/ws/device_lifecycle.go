@@ -6,6 +6,7 @@ package ws
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -85,7 +86,12 @@ func (s *DeviceLifecycleSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	s.remove = s.reg.OnRegister(s.StartCentral)
+	s.remove = s.reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "ws.device_lifecycle",
+		Collaborator: "*ws.DeviceLifecycleSubscriber",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "no device add, removal or availability change reaches a WebSocket client, so an open SPA never learns a device appeared or went offline",
+	}, s.StartCentral)
 }
 
 // StartCentral attaches this subscriber to a single central's event bus and

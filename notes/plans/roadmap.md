@@ -25,22 +25,31 @@ replace it, and the metrics that say whether it worked.
 
 ### Composition root
 
-- **Adopt the wiring manifest** ([ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md),
-  accepted 2026-08-23). Each `wire*` function in `cmd/openccu-loom` registers
-  what it wires — the seam, the collaborator and its ordering constraint
-  relative to south-bound bring-up — so "is X wired, and does it run before Y"
-  becomes exactly decidable instead of approximated by name matching.
+- **Widen the wiring manifest to setter and struct-field seams**
+  ([ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md),
+  accepted 2026-08-23).
 
-  Additive and incremental: nothing is rewritten, and each of the 38 `wire*`
-  functions makes its own seam checkable the moment it adopts. Order by defect
-  density, highest first.
+  The first adoption is done and covers one seam class: every per-central
+  registry observer attaches through `Registry.OnRegisterDeclared`, eighteen
+  call sites across `cmd/` and five `internal/` packages. It carries the guard
+  the manifest needed to be a check rather than documentation — three of them,
+  in fact: a raw `OnRegister` fails statically, a duplicated seam name fails
+  statically, and `GET /diagnostics/wiring` lets an end-to-end test ask a
+  running daemon what it wired, so deleting one wiring line from the
+  composition root turns it red.
 
-  Two things unblock as it lands: `wiringSettersWithoutCaller` (26 entries) can
-  shrink toward deletion rather than staying frozen, and the manifest is the
-  artefact a `/diagnostics` surface can serve so an operator sees what a running
-  daemon actually wired. The first adoption should carry the guard that makes an
-  unregistered seam fail, otherwise the manifest is documentation rather than a
-  check.
+  What is left is the class the audits actually keep hitting: a setter or
+  struct field whose caller exists but runs at the wrong moment. `Seam` already
+  declares `before-southbound` and `after-southbound`; nothing uses them,
+  because the observer class is ordering-free by construction. The next
+  adoption should be a `wire*` function whose order relative to south-bound
+  bring-up is load-bearing, and it should make that ordering a declared
+  constraint a test can check rather than a property of line order in a
+  900-line function.
+
+  Ordering by defect density still applies, and `wiringSettersWithoutCaller`
+  (21 entries) should shrink toward deletion as each seam becomes exactly
+  checkable.
 
 ### Matter
 

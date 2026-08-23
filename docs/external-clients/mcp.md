@@ -21,7 +21,7 @@ the caller's role itself, so both surfaces draw the same boundary.
 
 - Design rationale: [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
 - Dev-mode surface: [ADR 0026 — MCP dev mode](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0026-mcp-dev-mode.md)
-- Implementation: `internal/north/mcp/` (`server.go`, `tools.go`, `tools_hub.go`, `tools_alarm.go`, `tools_ops.go`)
+- Implementation: `internal/north/mcp/` (`server.go`, `tools.go`, `tools_hub.go`, `tools_alarm.go`, `tools_ops.go`, `tools_fleet.go`)
 
 ---
 
@@ -106,7 +106,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://host:8119/info \
 
 ## 2. The tool surface
 
-Thirty-one tools, in two tiers: 23 read tools + 8 write tools. **Read
+Thirty-nine tools, in two tiers: 31 read tools + 8 write tools. **Read
 tools** are always registered (each gated on its backing subsystem
 being wired). **Write tools** are registered only when
 `allow_writes: true` — and that flag includes arming and disarming the
@@ -150,6 +150,14 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `get_matter_status` | — | The Matter bridge's runtime state: enabled/listening, paired-controller (fabric) and bridged-endpoint counts, and whether a commissioning window is open. Registered only when the Matter bridge dependency is wired. |
 | `list_backups` | `central_name?` | Locally-stored CCU backup archives (id, owning central, size, creation time, download filename). Registered only when the backup store is wired. |
 | `get_addon_update_status` | — | The CCU add-on self-updater's status: current/available version, whether an update is available, and whether a download or install is currently running. Registered only when the add-on self-updater is wired. |
+| `list_groups` | `central_name?` | CCU heating groups (roster and members) per central. Registered only when the groups reader is wired. |
+| `list_areas` | `central_name?` | Operator-defined areas (room groupings one level above the CCU's flat room list) with their assigned rooms; `central_name` scopes which rooms show. Registered only when the area store is wired. |
+| `list_interfaces` | — | Configured CCU interfaces with connectivity state (connected, duty cycle, carrier sense). Read-only: reconnecting an interface actuates the radio link and is deliberately not exposed, the same argument that keeps `install-mode` off the surface. Registered only when the interface index is wired. |
+| `get_measurements` | `central`, `interface_id`, `channel`, `parameter`, `from`, `to` (all required), `buckets?` (default 200, max 2000) | A data point's recorded measurement history, server-bucketed into evenly spaced points over the given window. There is no default window — a caller must name one. Registered only when the history service is wired. |
+| `list_hidden_parameters` | `central_name?` | The persisted un-ignore patterns that promote otherwise-hidden parameters into the visible data-point surface. Registered only when the visibility store is wired. |
+| `get_energy` | `central` (required), `from`, `to` (required), `group?` (`hour`/`day`/`month`, default `day`), `device?` | Per-device power/energy aggregation over the given window; omit `device` for every energy device on the central. Registered only when the energy service is wired. |
+| `list_links` | `central_name?` | Direct device-to-device links across every configured central. Registered only when the links service is wired. |
+| `list_schedules` | — | Every device across the fleet that carries a week schedule, with its schedule kind (`week_profile` or `climate`). Registered only when the schedule service is wired. |
 
 The central-spanning read tools (`central_name?`) span every configured
 central when `central_name` is omitted, or scope to the named one when

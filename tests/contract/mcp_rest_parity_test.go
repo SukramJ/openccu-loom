@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -133,7 +134,15 @@ var restDomainsWithoutMCPTools = map[string]string{
 	// aggregates devices, hub AND interfaces, and interfaces has no read tool
 	// at all — it sits in restDomainsAwaitingMCPTools below. This entry is
 	// therefore only fully true once that backlog item lands.
-	"snapshot": "bulk state dump; the per-domain tools cover devices and hub, and interfaces once its tool lands",
+	"snapshot": "bulk state dump; the per-domain tools cover devices, hub and interfaces individually",
+	// A single-fetch convenience aggregate, so a client can build its hub
+	// singleton entities without orchestrating six requests. Every part of
+	// it is projected on its own — list_alarm_messages, list_service_messages,
+	// list_inbox, get_health — except install-mode, which is deliberately
+	// off the surface (see the `install-mode` entry). An assistant makes
+	// one call per thing it wants; the saving this endpoint exists for is
+	// a client's, not an assistant's.
+	"hub":      "single-fetch aggregate for clients building hub singleton entities; every part of it is already projected individually",
 	"diagrams": "SPA-side floor-plan editor state, not a fleet capability",
 	"install-mode": "pairing window control actuates the radio; deliberately kept off the assistant surface " +
 		"until the write posture for physical pairing is designed",
@@ -167,17 +176,7 @@ var restDomainsWithoutMCPTools = map[string]string{
 // Entries here are expected to disappear. A new domain that lands in
 // neither map fails the test, so the backlog can shrink but never grow
 // unnoticed.
-var restDomainsAwaitingMCPTools = map[string]string{
-	"groups":     "6 routes: heating-group roster and administration",
-	"areas":      "5 routes: operator-defined room groupings",
-	"interfaces": "3 routes: per-interface state and reconnect",
-	"history":    "3 routes: recorded measurement series",
-	"visibility": "3 routes: the hidden-parameter picker",
-	"energy":     "1 route: energy aggregation",
-	"hub":        "1 route: hub-level aggregate",
-	"links":      "1 route: direct device-to-device links",
-	"schedules":  "1 route: the fleet-wide schedule overview",
-}
+var restDomainsAwaitingMCPTools = map[string]string{}
 
 // restDomain is one path prefix of the REST router and how many routes
 // it carries.
@@ -243,7 +242,7 @@ func domainHasTool(d restDomain, tools []string) bool {
 var mcpDomainAliases = map[string][]string{
 	"devices":          {"device", "channel", "paramset", "datapoint"},
 	"security":         {"security_status", "fault", "hazard"},
-	"history":          {"measurement"},
+	"history":          {"measurement", "measurements"},
 	"energy":           {"measurement", "power"},
 	"system":           {"system_info", "health"},
 	"info":             {"system_info"},
@@ -255,7 +254,7 @@ var mcpDomainAliases = map[string][]string{
 	"functions":        {"function"},
 	"areas":            {"area"},
 	"centrals":         {"central"},
-	"visibility":       {"hidden_parameter", "unignore"},
+	"visibility":       {"hidden_parameter", "hidden_parameters", "unignore"},
 	"alarm":            {"alarm_zone", "alarm_zones", "alarm_state", "triggered_motion"},
 	"programs":         {"program"},
 	"sysvars":          {"sysvar"},
@@ -301,8 +300,58 @@ func fullyWiredMCPDeps() mcp.Deps {
 		Matter:       mcpParityMatterStatus{},
 		Backups:      mcpParityBackups{},
 		AddonUpdate:  mcpParityAddonUpdate{},
+		Groups:       mcpParityFleet{},
+		Areas:        mcpParityFleet{},
+		Interfaces:   mcpParityFleet{},
+		History:      mcpParityFleet{},
+		Visibility:   mcpParityVisibility{},
+		Energy:       mcpParityFleet{},
+		Links:        mcpParityFleet{},
+		Schedules:    mcpParityFleet{},
 		AllowWrites:  true,
 	}
+}
+
+// mcpParityFleet satisfies the eight fleet read seams at once. They were
+// the declared MCP/REST parity backlog until the tools landed; one type
+// serves all of them because this builder only needs each seam to be
+// non-nil, not to answer anything.
+type mcpParityFleet struct{}
+
+func (mcpParityFleet) List(context.Context, string) ([]handlers.GroupCentralEntry, error) {
+	return nil, nil
+}
+
+func (mcpParityFleet) GetAll(context.Context) ([]sqlitestore.AreaRow, error) { return nil, nil }
+
+func (mcpParityFleet) ListAssignments(context.Context) ([]sqlitestore.RoomAreaRow, error) {
+	return nil, nil
+}
+
+func (mcpParityFleet) Interfaces() []hmapi.InterfaceState { return nil }
+
+func (mcpParityFleet) Query(context.Context, handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error) {
+	return nil, "", nil
+}
+
+func (mcpParityFleet) Energy(context.Context, handlers.EnergyQuery) (handlers.EnergyResponse, error) {
+	return handlers.EnergyResponse{}, nil
+}
+
+func (mcpParityFleet) ListAllLinks(context.Context, string, string) ([]hmapi.Link, error) {
+	return nil, nil
+}
+
+func (mcpParityFleet) ListScheduleDevices(context.Context) ([]hmapi.ScheduleDeviceSummary, error) {
+	return nil, nil
+}
+
+// mcpParityVisibility is separate from [mcpParityFleet] only because its
+// List collides with the groups reader's List on the same receiver.
+type mcpParityVisibility struct{}
+
+func (mcpParityVisibility) List(context.Context, string) ([]sqlitestore.UnIgnoreEntry, error) {
+	return nil, nil
 }
 
 // The three read-only status seams. Present here for the same reason every

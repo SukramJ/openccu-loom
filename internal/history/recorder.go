@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -197,7 +198,12 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 		return func() {}
 	}
 
-	removeObserver := reg.OnRegister(r.WireCentral)
+	removeObserver := reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "history.recorder",
+		Collaborator: "*history.Recorder",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "no value change is ever recorded, so every measurement series stays empty and GET /history answers with nothing",
+	}, r.WireCentral)
 
 	stopLoop := r.startLoop()
 

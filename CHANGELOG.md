@@ -4,6 +4,69 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The round-5 measures, finished. The composition root now states its wiring as
+data a test can read, the MCP/REST parity backlog is empty, and the seventeen
+contract guards that stayed green when what they protect was removed either
+bite or are gone. The north-bound API contract moves to **7.7.0** — additive
+only: one admin-only diagnostics endpoint.
+
+### Added
+
+- **`GET /api/v1/diagnostics/wiring`** (admin-only) — the seams the running
+  daemon declared as it wired them (ADR 0065). Each entry names the seam, the
+  collaborator, its ordering constraint relative to south-bound bring-up, and
+  what stops working when it is absent.
+
+  Absence is what the endpoint is for. A wiring line that is deleted, skipped
+  by a nil guard or never reached leaves nothing else behind: the daemon
+  starts, reports healthy and serves every endpoint. Two full-codebase audits
+  found that class of defect repeatedly in `cmd/`, which carries roughly twice
+  the repository's average defect density, and the reason it kept surviving is
+  that "is X wired" was only ever answerable by reading. It also distinguishes
+  a seam this build never wires from one this operator has not switched on —
+  `history.recorder` and `webhook.outbound` are config-gated and simply absent
+  from a default deployment.
+
+- **Eight MCP tools** — `list_groups`, `list_areas`, `list_interfaces`,
+  `get_measurements`, `list_hidden_parameters`, `get_energy`, `list_links`,
+  `list_schedules`. Each closes a REST domain an assistant could not read at
+  all; every one is read-only, and the write halves of those facades
+  (interface reconnect, un-ignore edits, schedule writes) are deliberately not
+  projected. The declared backlog they were tracked in is now empty.
+
+### Changed
+
+- Every per-central registry observer now attaches through
+  `Registry.OnRegisterDeclared`, which records the seam before wiring it.
+  Three guards keep it honest: a raw `OnRegister` anywhere in production
+  fails, so does a duplicated seam name, and an end-to-end test boots a daemon
+  against a not-yet-ready CCU and compares what it declares against what the
+  composition root is supposed to attach.
+
+- The `hub` REST domain is now recorded as a deliberate MCP exemption rather
+  than a backlog item: it is a single-fetch aggregate for clients building hub
+  singleton entities, and every part of it is already projected individually.
+
+### Fixed
+
+- Four service hooks on `central.Unit` that nothing ever wired are gone:
+  `SaveFiles`, `ValidateConfigAndGetSystemInformation`, the hub-logout hook,
+  and the `QueryFacade` state-path surface behind
+  `SetHubStatePathProvider`. Descriptor persistence moved to a write-through
+  sink long ago, so the shutdown flush step in `Stop()` sat behind a nil check
+  that was always true; the JSON-RPC logout runs from the closer `WireHub`
+  returns. As a result `ServiceWiringComplete` was permanently false in a
+  running daemon — it demanded six hooks of which production wires three, and
+  its unit test wired all six itself and so never saw it.
+
+- Seventeen contract guards stayed green when the production line each one
+  names was removed. Ten now bite — among them the Home Assistant discovery
+  templates, which were checked by substring and are now rendered, exposing a
+  test-side Jinja evaluator that skipped the `is not none` clause it was meant
+  to be checking. The rest pinned behaviour nothing wires and were deleted.
+
 ## [0.64.1]
 
 A contract correction and the guard that would have caught it. The

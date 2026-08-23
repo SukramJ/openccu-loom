@@ -57,6 +57,47 @@ collaborator, and its ordering constraint relative to south-bound bring-up —
 into a manifest the daemon builds at start-up and a test can read. The wiring
 still happens in Go; what changes is that it also becomes inspectable.
 
+### What the first adoption covers
+
+The first adoption takes a **seam class** rather than one `wire*` function:
+every per-central registry observer. `internal/wiring` holds `Manifest` and
+`Seam`; `central.Registry` carries the manifest and gains
+`OnRegisterDeclared`, which declares the seam and then attaches the observer.
+All eighteen production `OnRegister` call sites — six in `cmd/`, twelve across
+`internal/central/adapter`, `internal/history` and four north-bound packages —
+now go through it.
+
+The class was chosen over a single wiring function because it is the one
+CLAUDE.md's second wiring rule names: walking the registry once is walking it
+at boot, so every cross-central collaborator arrives through this single door.
+Every call site has the same shape, which is what lets "declared" and
+"attached" be compared exactly rather than approximately.
+
+Three checks come with it, and each fails for a different reason:
+
+- `TestEveryRegistryObserverDeclaresItsSeam` — a raw `OnRegister` outside the
+  registry's own file. Without it one undeclared call would make "absent from
+  the manifest" mean "either unwired, or wired the old way", which is no
+  answer.
+- `TestDeclaredSeamNamesAreDistinctAndScoped` — a duplicated or unscoped seam
+  name, so the ledger can always say *which* seam is missing.
+- `TestE2EDaemonDeclaresEverySeamItWires` — the effect. It boots a daemon
+  against a not-yet-ready CCU and reads `GET /diagnostics/wiring`. A wiring
+  line that compiles, satisfies every name-matching guard, and sits behind a
+  condition that is false in production is invisible to everything except
+  this.
+
+The endpoint that makes the third one possible is `GET /diagnostics/wiring`
+(admin-only, API 7.7.0). It answers with an empty list rather than a 503 when
+nothing is wired: "the daemon wired none of these" and "the daemon cannot tell
+you" must not be the same status, because only one of them is checkable.
+
+The first run of that test found something immediately. Two seams —
+`history.recorder` and `webhook.outbound` — are config-gated and absent from a
+default deployment. That distinction, between a seam a build never wires and
+one this operator has not switched on, previously required reading the
+composition root with the config open beside it.
+
 That buys three things no current guard can express:
 
 - **a seam with no entry is unwired**, exactly, with no name matching;
@@ -92,6 +133,13 @@ that new wiring registers itself — enforceable by a guard, unlike the reading 
 replaces. `TestEveryWiringSetterHasAProductionCaller` and its ratchet can then
 shrink toward deletion rather than being frozen, which is what the round-5 M2
 audit found they currently are.
+
+**What is not covered yet.** Setter and struct-field seams, and the two
+ordering phases `Seam` declares but no adoption uses. `PhaseBeforeSouthbound`
+and `PhaseAfterSouthbound` exist because the ordering class is the one the
+audits keep hitting; the observer class is ordering-free by construction, so
+the first adoption cannot exercise them. They are the shape the next adoption
+is expected to fill, not a claim that ordering is checked today.
 
 **The alternative that was rejected by accepting this.** Leaving the composition
 root as it is would have kept it at roughly twice the average defect density,

@@ -4274,6 +4274,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/diagnostics/wiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Seams the running daemon declared as it wired them (admin-only)
+         * @description The composition root's own account of what it attached (ADR 0065). Each entry names the seam, the collaborator, the ordering constraint relative to south-bound bring-up, and what stops working when the seam is absent.
+         *
+         *     Absence is the informative case: a seam that is not listed was not wired by this process — whether the call was removed, skipped by a nil guard, or never reached. An empty list is a valid answer and means the daemon wired none of them, which is why this endpoint never reports "unavailable" instead.
+         */
+        get: operations["getDiagnosticsWiring"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/diagnostics/rssi": {
         parameters: {
             query?: never;
@@ -14931,6 +14953,46 @@ export interface operations {
             };
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDiagnosticsWiring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declared wiring seams, in name order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Stable identifier, `<subsystem>.<what>`.
+                         * @example history.recorder
+                         */
+                        name: string;
+                        /**
+                         * @description The thing that was attached.
+                         * @example *history.Recorder
+                         */
+                        collaborator: string;
+                        /**
+                         * @description Ordering constraint relative to south-bound bring-up.
+                         * @enum {string}
+                         */
+                        phase: "per-central" | "before-southbound" | "after-southbound";
+                        /** @description What stops working when the seam is absent. */
+                        why: string;
+                    }[];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getDiagnosticsRSSI: {

@@ -105,6 +105,7 @@
   "GET /diagnostics/rpc-recording": "listRpcRecordings",
   "GET /diagnostics/rpc-recording/{central}/download": "downloadRpcRecording",
   "GET /diagnostics/rssi": "getDiagnosticsRSSI",
+  "GET /diagnostics/wiring": "getDiagnosticsWiring",
   "GET /diagrams": "listDiagrams",
   "GET /diagrams/{id}": "getDiagram",
   "GET /energy": "getEnergy",

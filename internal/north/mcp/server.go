@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -139,6 +140,64 @@ type MatterStatusReader = handlers.MatterStatusReader
 // (Check/InstallAsync) is intentionally not reached from MCP.
 type AddonUpdateService = handlers.AddonUpdateService
 
+// GroupsReader is an alias for the narrow facade GET /api/v1/groups
+// reads through (internal/north/rest/handlers). It is already scoped
+// to one method, so MCP reuses it directly rather than declaring a
+// second copy — a daemon that wires REST's groups reader lights up
+// list_groups for free.
+type GroupsReader = handlers.GroupsReader
+
+// AreaLister is the read half of [handlers.AreaAdmin] — list_areas
+// needs the area roster and its room assignments, nothing else, so it
+// depends on this narrower seam rather than the full CRUD facade.
+// *sqlite.AreaStore satisfies it directly.
+type AreaLister interface {
+	GetAll(ctx context.Context) ([]sqlite.AreaRow, error)
+	ListAssignments(ctx context.Context) ([]sqlite.RoomAreaRow, error)
+}
+
+// InterfaceLister is the read half of [restapi.InterfaceIndex] —
+// list_interfaces only ever calls Interfaces(). Reconnect is
+// deliberately not projected here: it actuates the radio link, the
+// same argument that keeps install-mode off the MCP surface.
+type InterfaceLister interface {
+	Interfaces() []hmapi.InterfaceState
+}
+
+// HistoryReader is the read seam get_measurements calls through. It
+// mirrors [handlers.HistoryService] field-for-field without importing
+// it as an alias, since the handler's query/bucket types are reused
+// directly as the tool's input/output shapes.
+type HistoryReader interface {
+	Query(ctx context.Context, q handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error)
+}
+
+// VisibilityLister is the read half of the un-ignore visibility store —
+// list_hidden_parameters needs only the per-central pattern listing,
+// not the write/candidate machinery the REST facade also carries.
+// *sqlite.VisibilityUnIgnoreStore satisfies it directly.
+type VisibilityLister interface {
+	List(ctx context.Context, centralName string) ([]sqlite.UnIgnoreEntry, error)
+}
+
+// EnergyReader is an alias for the narrow facade GET /api/v1/energy
+// reads through (internal/north/rest/handlers). Already scoped to one
+// method, so get_energy reuses it directly.
+type EnergyReader = handlers.EnergyService
+
+// LinkLister is the read seam list_links calls through — the same
+// method the REST global links overview (GET /api/v1/links) uses.
+type LinkLister interface {
+	ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error)
+}
+
+// ScheduleLister is the read seam list_schedules calls through — the
+// fleet-wide schedule overview, the same method GET /api/v1/schedules
+// uses.
+type ScheduleLister interface {
+	ListScheduleDevices(ctx context.Context) ([]hmapi.ScheduleDeviceSummary, error)
+}
+
 // BackupLister is the read half of [interfaces.BackupService] —
 // list_backups needs nothing else, so it depends on this narrower seam
 // rather than the full read/write facade. Any concrete backup service
@@ -192,6 +251,36 @@ type Deps struct {
 	// registered as "unsupported", which would be indistinguishable
 	// from a real answer.
 	AddonUpdate AddonUpdateService
+	// Groups backs list_groups: the heating-group roster, the same read
+	// the REST GET /groups handler serves. Nil leaves the tool
+	// unregistered.
+	Groups GroupsReader
+	// Areas backs list_areas: operator-defined room groupings with
+	// their assigned rooms. Nil leaves the tool unregistered.
+	Areas AreaLister
+	// Interfaces backs list_interfaces: per-interface connectivity and
+	// radio-quality state (read-only; reconnect is not projected). Nil
+	// leaves the tool unregistered.
+	Interfaces InterfaceLister
+	// History backs get_measurements: server-bucketed data-point
+	// history, the same aggregation GET /history serves. Nil leaves
+	// the tool unregistered.
+	History HistoryReader
+	// Visibility backs list_hidden_parameters: the persisted un-ignore
+	// patterns that promote otherwise-hidden parameters into the
+	// visible surface. Nil leaves the tool unregistered.
+	Visibility VisibilityLister
+	// Energy backs get_energy: per-device power/energy aggregation,
+	// the same read GET /energy serves. Nil leaves the tool
+	// unregistered.
+	Energy EnergyReader
+	// Links backs list_links: the global direct-link overview across
+	// every configured central. Nil leaves the tool unregistered.
+	Links LinkLister
+	// Schedules backs list_schedules: the fleet-wide week-schedule
+	// overview, the same read GET /schedules serves. Nil leaves the
+	// tool unregistered.
+	Schedules   ScheduleLister
 	AllowWrites bool
 	Version     string
 }

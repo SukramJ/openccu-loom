@@ -5214,6 +5214,55 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /diagnostics/wiring:
+    get:
+      operationId: getDiagnosticsWiring
+      summary: Seams the running daemon declared as it wired them (admin-only)
+      description: >
+        The composition root's own account of what it attached (ADR 0065).
+        Each entry names the seam, the collaborator, the ordering constraint
+        relative to south-bound bring-up, and what stops working when the seam
+        is absent.
+
+
+        Absence is the informative case: a seam that is not listed was not
+        wired by this process — whether the call was removed, skipped by a nil
+        guard, or never reached. An empty list is a valid answer and means the
+        daemon wired none of them, which is why this endpoint never reports
+        "unavailable" instead.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Declared wiring seams, in name order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [name, collaborator, phase, why]
+                  properties:
+                    name:
+                      type: string
+                      description: Stable identifier, `<subsystem>.<what>`.
+                      example: history.recorder
+                    collaborator:
+                      type: string
+                      description: The thing that was attached.
+                      example: "*history.Recorder"
+                    phase:
+                      type: string
+                      description: Ordering constraint relative to south-bound bring-up.
+                      enum: [per-central, before-southbound, after-southbound]
+                    why:
+                      type: string
+                      description: What stops working when the seam is absent.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /diagnostics/rssi:
     get:
       operationId: getDiagnosticsRSSI

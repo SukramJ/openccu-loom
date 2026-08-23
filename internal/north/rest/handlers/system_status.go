@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -93,7 +94,12 @@ func (b *SystemStatusBuffer) Subscribe(reg *central.Registry) (stop func()) {
 	if reg == nil {
 		return func() {}
 	}
-	return reg.OnRegister(b.SubscribeCentral)
+	return reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "rest.system_status_buffer",
+		Collaborator: "*handlers.SystemStatusBuffer",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "the buffer never fills, so GET /system/status reports an empty history however long the daemon has been running",
+	}, b.SubscribeCentral)
 }
 
 // SubscribeCentral attaches the buffer to a single central's event bus and

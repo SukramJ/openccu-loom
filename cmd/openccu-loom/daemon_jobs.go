@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -226,7 +227,12 @@ func registerScheduledBackupJobs(reg *central.Registry, cfg *config.Config, back
 	if reg == nil {
 		return func() {}
 	}
-	return reg.OnRegister(func(u *central.Unit) func() {
+	return reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "jobs.scheduled_backup",
+		Collaborator: "registerScheduledBackupJobFor",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "`backup.schedule` never runs for the central, and a CCU that silently produces no backup is only discoverable by noticing its backup list never fills",
+	}, func(u *central.Unit) func() {
 		registerScheduledBackupJobFor(u, cfg, backupAdapter, logger)
 		return nil
 	})

@@ -1,7 +1,7 @@
 # Round 5 — audit the detectors, not the code
 
-- **Status**: accepted; M1–M6 done. ADR 0065 accepted; its incremental
-  adoption is tracked in [`roadmap.md`](./roadmap.md).
+- **Status**: complete. M1–M6 done, all follow-ups closed, and ADR 0065's
+  first adoption shipped with the guard that makes it a check.
 - **Scope**: what replaces a fifth full-codebase instance sweep
 - **Related**: [`../audits/2026-08-17-round4-audit-findings.json`](../audits/2026-08-17-round4-audit-findings.json)
   (carries a per-finding `status` since PR #606),
@@ -283,17 +283,68 @@ Without a number, "drastically fewer" is not a claim. Four metrics, per round:
 
 | metric | before | after |
 |---|---:|---:|
-| contract guards | 359 | 364 |
-| decorative guards (mutation-tested) | 17 of 359 | 17 identified, repair ongoing |
-| ratchet entries | 82 | 77 |
+| contract guards | 359 | 371 |
+| decorative guards (mutation-tested) | 17 of 359 | 0 — ten repaired, seven deleted |
+| ratchet entries | 82 | 72 |
 | dead exported identifiers | 3023 | 3021 |
 | production defects found by the new guards | — | 4 (multi-CCU identifiers) |
 | contract drift found by the new guards | — | 7 (SPA fixtures) |
+| MCP/REST domains with no tool | 9 | 0 |
+| per-central seams checkable exactly | 0 | 18 |
 
 The number that matters most is not in the table: **every one of the six
 measures found something the four preceding instance sweeps had not.** Not
 because the sweeps were careless, but because they were looking at the code and
 the defects were in what looks at the code.
+
+### The follow-ups, and what closing them cost
+
+Everything M1–M6 left open is now closed. Three of them were worth more than
+their size suggested:
+
+- **The seventeen decorative guards.** Ten were repaired and seven deleted.
+  Each repair carries a bite proof against a violation *different* from the one
+  M1 used, and each was then re-attacked by an independent reviewer using a
+  third violation — which is how the residual holes were found. The
+  discovery-template repair is the one to remember: the guards compared
+  substrings of the Jinja template, and when they were changed to render it,
+  the test-side evaluator turned out to skip the very clause
+  (`value_json.value is not none`) that the production constant's own comment
+  named as load-bearing. The guard, the thing the guard measured with, and the
+  clause were three separate failures stacked on each other.
+
+- **The thirteen deferrals.** Four service hooks on `central.Unit` had accurate
+  ratchet reasons and no implementation anywhere in the repository; deleting
+  them revealed that `ServiceWiringComplete` had been permanently false in a
+  running daemon, because it demanded six hooks of which production wires
+  three. Its unit test wired all six itself. A bracketing test, exactly the
+  shape CLAUDE.md names.
+
+  The other nine were the MCP/REST parity backlog — a map whose every entry
+  stayed accurate for months and none of which was ever retired. Eight are now
+  tools; the ninth (`hub`) turned out to be a decision, not a backlog item, and
+  is recorded as an exemption with the reason.
+
+- **`maxDiffPixels: 0`** was not an open question. It is already justified in
+  `assets/ui/playwright.config.ts` by measurement — two consecutive runs
+  produce zero differing pixels, a renamed header costs about ninety — and
+  pinned by `TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift`.
+
+### ADR 0065, adopted
+
+The first adoption took a **seam class** rather than one `wire*` function:
+every per-central registry observer, eighteen call sites across `cmd/` and five
+`internal/` packages, now attaches through `Registry.OnRegisterDeclared`. The
+ADR carries the reasoning; what matters for this plan is that the check is real
+in all three directions — a raw `OnRegister` fails statically, a duplicated
+seam name fails statically, and `GET /diagnostics/wiring` lets an end-to-end
+test ask a *running* daemon what it wired. Deleting one wiring line from the
+composition root turns that test red; nothing else about the daemon changes.
+
+Two ordering phases are declared and unused. The observer class is
+ordering-free by construction, so the first adoption cannot exercise
+`before-southbound` / `after-southbound` — they are the shape the next
+adoption fills, not a claim that ordering is checked today.
 
 ## What this plan deliberately does not do
 

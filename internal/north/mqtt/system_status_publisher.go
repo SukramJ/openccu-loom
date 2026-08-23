@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -33,11 +34,11 @@ type SystemStatusPublisher struct {
 
 // NewSystemStatusPublisher returns a publisher bound to reg and wiring.
 // Start/Stop manage the subscription lifetime.
-func NewSystemStatusPublisher(reg *central.Registry, wiring *Wiring, logger *slog.Logger) *SystemStatusPublisher {
+func NewSystemStatusPublisher(reg *central.Registry, w *Wiring, logger *slog.Logger) *SystemStatusPublisher {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &SystemStatusPublisher{reg: reg, wiring: wiring, logger: logger}
+	return &SystemStatusPublisher{reg: reg, wiring: w, logger: logger}
 }
 
 // systemStatusPayload is the JSON shape published to
@@ -60,7 +61,12 @@ func (p *SystemStatusPublisher) Start() {
 	if p.reg == nil || p.wiring == nil {
 		return
 	}
-	p.remove = p.reg.OnRegister(p.StartCentral)
+	p.remove = p.reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "mqtt.system_status",
+		Collaborator: "*mqtt.SystemStatusPublisher",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "the daemon publishes no system-status topic for the central, so a subscriber sees the last retained value forever",
+	}, p.StartCentral)
 }
 
 // StartCentral attaches this publisher to a single central's event bus and

@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 362.
+Guards without a doc comment: 7 of 365.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -175,7 +175,7 @@ Guards without a doc comment: 7 of 362.
 | TestTheMultiChannelPostfixHasOneImplementation | naming_authority_test.go | TestTheMultiChannelPostfixHasOneImplementation asserts that no file outside the naming authority formats the `" chN"` parameter postfix. |
 | TestNaming_ChannelClassification_Table | naming_contract_test.go | TestNaming_ChannelClassification_Table is the table-driven regression that exercises Primary/Secondary/SinglePrimary classification for the documented device scenarios. |
 | TestNaming_HmIPBWTH_SingleClimatePrimary | naming_contract_test.go | TestNaming_HmIPBWTH_SingleClimatePrimary verifies the wall-thermostat single-primary rule: HmIP-BWTH has exactly one climate primary on ch1. |
-| TestNaming_HmIPPS_SecondaryChannels_VchSuffix | naming_contract_test.go | TestNaming_HmIPPS_SecondaryChannels_VchSuffix verifies that the secondary channels of HmIP-PS (ch4 and ch5, which mirror the primary for group membership) are correctly classified as secondary (not primary) and would therefore receive "vch<N>" suffixes in the discovery name builder. |
+| TestNaming_HmIPPS_SecondaryChannels_VchSuffix | naming_contract_test.go | TestNaming_HmIPPS_SecondaryChannels_VchSuffix verifies that the secondary channels of HmIP-PS (ch4 and ch5, which mirror the primary for group membership) are classified as secondary rather than primary, AND that the name builder actually renders them as "vch<N>". |
 | TestNaming_HmIPPS_SingleSwitchPrimary_NoSuffix | naming_contract_test.go | TestNaming_HmIPPS_SingleSwitchPrimary_NoSuffix is the regression test for the HmIP-PSM smoke-test bug: the sole SWITCH primary on ch3 must satisfy HasSinglePrimaryCustomDP=true, producing an empty display name in HA Discovery (HA falls back to device.name alone, e.g. |
 | TestNaming_MultiSwitchPrimary_HasSingleReturnsFalse | naming_contract_test.go | TestNaming_MultiSwitchPrimary_HasSingleReturnsFalse pins the multi-primary case: when a device has two channels that are each a PRIMARY for the same HA component, HasSinglePrimaryCustomDP must return false for both, so the discovery builder assigns "ch<N>" suffixes to prevent name collisions. |
 | TestNaming_PressEvent_FallsBackToChN_WhenNoChannelName | naming_contract_test.go | TestNaming_PressEvent_FallsBackToChN_WhenNoChannelName tests the fallback: when the channel has no operator-assigned name, BuildChannelEvent falls back to "ch<N>". |
@@ -288,6 +288,8 @@ Guards without a doc comment: 7 of 362.
 | TestReferenceCompare | wire_snapshots/reference_compare_test.go | TestReferenceCompare runs every Go Custom-DP setter covered by a reference wire snapshot and fails when the wire calls differ. |
 | TestWireSnapshots | wire_snapshots/snapshot_pin_test.go | TestWireSnapshots loads every golden snapshot and verifies that re-running the same setter with the same inputs produces identical wire calls. |
 | TestEveryWireFunctionHasAProductionCaller | wiring_free_functions_test.go | TestEveryWireFunctionHasAProductionCaller closes the hole its sibling TestEveryWiringSetterHasAProductionCaller cannot reach. |
+| TestDeclaredSeamNamesAreDistinctAndScoped | wiring_manifest_test.go | TestDeclaredSeamNamesAreDistinctAndScoped pins the shape of the seam names the manifest reports, because they are the identifiers guards and the diagnostics surface address a seam by — they outlive the Go function that declares them, so a rename must not silently become a new seam. |
+| TestEveryRegistryObserverDeclaresItsSeam | wiring_manifest_test.go | TestEveryRegistryObserverDeclaresItsSeam is the guard that makes ADR 0065's wiring manifest a check rather than documentation. |
 | TestPin_AlarmCentralHook_Installed | wiring_pins/alarm_wiring_test.go | TestPin_AlarmCentralHook_Installed pins that runtime-adopted centrals are subscribed onto the alarm service — otherwise sensors on a live-adopted CCU silently never reach the engine. |
 | TestPin_AlarmMotionReset_Wired | wiring_pins/alarm_wiring_test.go | TestPin_AlarmMotionReset_Wired pins that the alarm service passes a motion-reset port into the engine. |
 | TestPin_AlarmService_ConstructedInDaemon | wiring_pins/alarm_wiring_test.go | TestPin_AlarmService_ConstructedInDaemon pins that the daemon composition root actually constructs the alarm service. |
@@ -305,7 +307,7 @@ Guards without a doc comment: 7 of 362.
 | TestPin_FactoryInput_JSONRPCField_SetInCCUWiring | wiring_pins/ccu_wiring_test.go | TestPin_FactoryInput_JSONRPCField_SetInCCUWiring pins that ccu_wiring.go sets the JSONRPC field of backends.FactoryInput. |
 | TestPin_SetInstallModeHMIP_InCcuBackend | wiring_pins/ccu_wiring_test.go | TestPin_SetInstallModeHMIP_InCcuBackend pins that ccu_extended.go passes the JSON-RPC method name "Interface.setInstallModeHMIP" for HmIP-RF install-mode requests. |
 | TestPin_wireCUxDInterface_CalledInCCUWiring | wiring_pins/ccu_wiring_test.go | TestPin_wireCUxDInterface_CalledInCCUWiring pins that ccu_wiring.go calls wireCUxDInterface for CUxD interfaces. |
-| TestPin_OptionPresetVal_LabelKey_InEasymodeDecoder | wiring_pins/ccudata_wiring_test.go | TestPin_OptionPresetVal_LabelKey_InEasymodeDecoder pins that the OptionPresetVal struct in ccudata/easymode.go declares the LabelKey field. |
+| TestPin_OptionPresetVal_LabelKey_InEasymodeDecoder | wiring_pins/ccudata_wiring_test.go | TestPin_OptionPresetVal_LabelKey_InEasymodeDecoder pins that OptionPresetVal in ccudata/easymode.go declares LabelKey AND binds it to the `label_key` JSON field. |
 | TestPin_BootCentralRemovalMirrorsEveryAdoptHook | wiring_pins/central_boot_removal_test.go | TestPin_BootCentralRemovalMirrorsEveryAdoptHook pins the shape that keeps the two removal paths from drifting apart. |
 | TestCentralMetricsReachTheDiagnosticsDump | wiring_pins/central_metrics_diagnostics_test.go | TestCentralMetricsReachTheDiagnosticsDump pins the last link of the per-central metrics chain: the composition root must hand the REST router the provider that reads every central's aggregator. |
 | TestPin_EvaluateCentralState_CalledInCentralStart | wiring_pins/central_wiring_test.go | TestPin_EvaluateCentralState_CalledInCentralStart pins that central.go calls EvaluateCentralState during the Start sequence. |
@@ -365,6 +367,7 @@ Guards without a doc comment: 7 of 362.
 | TestPin_ThermostatServer_MinSetpointDeadBand_Default | wiring_pins/matter_min_setpoint_deadband_test.go | TestPin_ThermostatServer_MinSetpointDeadBand_Default pins that a freshly constructed HEAT+COOL+AUTO ThermostatServer reports MinSetpointDeadBand (attribute 0x0019) as 20 (= 2.0°C), matching the matter.js HEAD default in packages/model/src/standard/elements/thermostat-cluster.element.ts. |
 | TestMatterDiagnosticsSurfacesAreWired | wiring_pins/matter_session_diagnostics_test.go | TestMatterDiagnosticsSurfacesAreWired pins the other three diagnostic surfaces the same way, for the same reason: each answers 503 "Matter bridge not enabled" on a running bridge when its port is unset, which reads as a configuration problem rather than a wiring one. |
 | TestMatterSessionListerIsWiredFromBothManagers | wiring_pins/matter_session_diagnostics_test.go | TestMatterSessionListerIsWiredFromBothManagers pins the composition root's half of the session-diagnostics surface. |
+| TestPin_MCPFleetSeams_WiredInDaemon | wiring_pins/mcp_fleet_seams_test.go | TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every fleet read seam to the MCP server. |
 | TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
 | TestCSRFDefaultEnabled | wiring_pins/security_csrf_origin_test.go | TestCSRFDefaultEnabled pins that the config default has CSRFEnabled set to true. |
 | TestCSRFExplicitFalseOptOut | wiring_pins/security_csrf_origin_test.go | TestCSRFExplicitFalseOptOut pins that setting CSRFEnabled to false in the config (opt-out path for API-token deployments) is honoured by CSRFIsEnabled. |
