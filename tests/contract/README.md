@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 352.
+Guards without a doc comment: 7 of 353.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -207,6 +207,7 @@ Guards without a doc comment: 7 of 352.
 | TestXMLRPCFaultCodeValues | reliability_constants_test.go | TestXMLRPCFaultCodeValues pins the wire-level CCU fault codes the retry layer treats as retryable. |
 | TestReliabilityInstrumentCoverage | reliability_observability_test.go | TestReliabilityInstrumentCoverage verifies that every core reliability component (Coalescer, Throttle, Retrier, CircuitBreaker, PingPong tracker) exposes an observability interface. |
 | TestReloadDepsFieldsAreOnlyTouchedByItsAccessors | reload_deps_nil_safety_test.go | TestReloadDepsFieldsAreOnlyTouchedByItsAccessors asserts that no code outside reload_deps.go reads or writes a field of the daemon's late-bound dependency bag directly. |
+| TestRESTRouteTiersMatchOpenAPIScopes | rest_authz_scope_test.go | TestRESTRouteTiersMatchOpenAPIScopes pins the two halves of the authorization contract to each other: the scope assets/openapi.yaml publishes for an operation, and the gate the chi router actually wraps that route in. |
 | TestRESTHandlersDoNotDecodePathParamsTwice | rest_path_decode_test.go | TestRESTHandlersDoNotDecodePathParamsTwice fails when a REST source file feeds a chi.URLParam value into url.PathUnescape or url.QueryUnescape. |
 | TestRESTRouterMatchesOpenAPISpec | rest_router_openapi_walk_test.go | TestRESTRouterMatchesOpenAPISpec walks the real chi router NewRouter assembles (every optional facade wired, so every conditionally-mounted route is present) and cross-checks it against assets/openapi.yaml in both directions: 1. |
 | TestRoutingKeyCUxDScopingGolden | routing_key_contract_test.go | TestRoutingKeyCUxDScopingGolden locks the one address family whose key deliberately differs from the shared cross-backend contract: CUxD hands out the same synthetic addresses on every CCU it runs on (the first "(28) System" device is `CUX2801001` on every install), so the parameter-level key carries the central discriminator here while the reference implementation leaves it bare. |

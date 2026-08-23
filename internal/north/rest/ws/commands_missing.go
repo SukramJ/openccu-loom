@@ -206,7 +206,7 @@ func ccuGetSignalQualityHandler(p SignalQualityProvider) CommandHandler {
 			info := d.AvailabilityInfo()
 			entry := map[string]any{
 				"address":      d.Address,
-				"name":         d.Name,
+				"name":         d.Name(),
 				"model":        d.Model,
 				"interface_id": d.InterfaceID,
 				"is_reachable": info.IsReachable,
@@ -260,7 +260,7 @@ func schedulesListDevicesHandler(p ScheduleDevicesProvider) CommandHandler {
 			}
 			out = append(out, map[string]any{
 				"address":      d.Address,
-				"name":         d.Name,
+				"name":         d.Name(),
 				"model":        d.Model,
 				"interface_id": d.InterfaceID,
 				"interface":    string(d.Interface),

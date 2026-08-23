@@ -43,7 +43,31 @@ func tierName(t int) string {
 // from the scope the specification declares, with the reason. An entry here
 // is a decision, not a deferral: it says the divergence was looked at and
 // kept. Key is "METHOD /path" with the /api/v1 prefix stripped.
-var authzScopeExemptions = map[string]string{}
+//
+// What this test can and cannot see: it measures the three gates [rest.Deps]
+// injects — AuthRequire, RequireOperator, RequireAdmin. A route that carries
+// its own middleware constructed inside NewRouter reads as "public" here even
+// when it is fully gated. Those routes are exempt, and each entry says which
+// middleware actually guards it, so a future reader can check that the gate is
+// still there rather than trusting the word "exempt".
+var authzScopeExemptions = map[string]string{
+	// The handler is the gate: /auth/me answers 401 when no session
+	// resolves, which is exactly the probe the SPA issues on startup to
+	// decide whether to render the login page. Mounting it behind
+	// AuthRequire would make the probe indistinguishable from a network
+	// failure.
+	"GET /auth/me": "handler answers 401 itself; it is the SPA's pre-login session probe",
+	// Logging out of an already-invalid session must succeed, not 401 —
+	// otherwise a client holding a stale cookie can never clear it.
+	"POST /auth/logout": "must work with an expired or absent session so a stale cookie can be cleared",
+	// Gated by handlers.InboundWebhookAuth, mounted at the route rather
+	// than injected through rest.Deps: it admits an operator identity from
+	// the normal chain OR the configured inbound bearer token, compared in
+	// constant time. The token path is the point — a doorbell posts a
+	// header, not a session.
+	"POST /webhook/value":   "gated by handlers.InboundWebhookAuth (operator identity or inbound bearer token)",
+	"POST /webhook/program": "gated by handlers.InboundWebhookAuth (operator identity or inbound bearer token)",
+}
 
 // TestRESTRouteTiersMatchOpenAPIScopes pins the two halves of the
 // authorization contract to each other: the scope assets/openapi.yaml

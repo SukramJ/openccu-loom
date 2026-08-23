@@ -940,3 +940,25 @@ func (d *Device) UseGroupChannelForCoverState() bool {
 	defer d.behaviorMu.RUnlock()
 	return d.useGroupChannelForCoverState
 }
+
+// PayloadExtra publishes the accessor-backed properties that
+// [payload.ForWith]'s field reflection cannot reach.
+//
+// name lives behind assignmentMu because the device-admin rename path
+// writes it from a request goroutine while the north-bound readers are
+// serving. That makes it correct and, as a side effect, unreflectable —
+// so it is contributed here instead. Without this the HA-Discovery device
+// block loses its `name` and every device falls back to its raw address.
+func (d *Device) PayloadExtra(k payload.Kind, opts payload.Options) map[string]any {
+	if k != payload.KindInfo {
+		return nil
+	}
+	name := d.Name()
+	if name == "" && !opts.IncludeZero {
+		return nil
+	}
+	// The key follows the same rule [payload.ForWith] applies to a
+	// reflected field: the Go name lower-cased, with no alt override
+	// declared for this one.
+	return map[string]any{"name": name}
+}
