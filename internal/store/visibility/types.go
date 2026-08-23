@@ -12,8 +12,13 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // eliminates separator-ambiguity (model names that contain '|') and avoids
 // a heap allocation per lookup after warm-up.
 //
+// central carries the querying central's name so a verdict computed for one
+// CCU's un-ignore rules is never served back to a different CCU sharing the
+// same decider instance (multi-CCU is first class, ADR 0002).
+//
 // Mirrors the Python reference implementation's IgnoreCacheKey.
 type ignoreCacheKey struct {
+	central     string
 	model       string
 	channelType string
 	channelNo   int
@@ -29,6 +34,7 @@ type ignoreCacheKey struct {
 //
 // Mirrors the Python reference implementation's UnIgnoreCacheKey.
 type unIgnoreCacheKey struct {
+	central     string
 	model       string
 	channelType string
 	paramsetKey hmenum.ParamsetKey
@@ -40,6 +46,7 @@ type unIgnoreCacheKey struct {
 // that need to inspect or replicate memoisation key contents (e.g. diagnostic
 // endpoints).
 type IgnoreCacheKey struct {
+	Central     string
 	Model       string
 	ChannelType string
 	ChannelNo   int
@@ -49,6 +56,7 @@ type IgnoreCacheKey struct {
 
 // UnIgnoreCacheKey is the exported variant of [unIgnoreCacheKey].
 type UnIgnoreCacheKey struct {
+	Central     string
 	Model       string
 	ChannelType string
 	ParamsetKey hmenum.ParamsetKey

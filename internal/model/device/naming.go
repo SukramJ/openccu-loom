@@ -74,7 +74,7 @@ func (c *Channel) DataPointName(parameter string) string {
 	}
 	deviceName := ""
 	if c.device != nil {
-		deviceName = c.device.Name
+		deviceName = c.device.Name()
 	}
 	channelName := normaliseChannelName(deviceName, c.Name())
 	if channelName != "" && parameter != "" {
@@ -95,7 +95,7 @@ func (c *Channel) DataPointFullName(parameter string) string {
 	}
 	deviceName := ""
 	if c.device != nil {
-		deviceName = c.device.Name
+		deviceName = c.device.Name()
 	}
 	dpName := c.DataPointName(parameter)
 	if deviceName == "" {

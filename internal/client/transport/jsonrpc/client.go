@@ -171,7 +171,13 @@ type Client struct {
 
 	// Login rate-limiting fields.
 	failedLoginAttempts int           // consecutive auth failures
-	currentBackoff      time.Duration // next sleep before retrying login
+	currentBackoff      time.Duration // backoff applied after the next failure
+
+	// nextLoginAttempt is the earliest time a new Session.login round-trip
+	// may run, per the accumulated backoff. Zero means no backoff is
+	// pending. Checked without sessionLoginMu held so a caller arriving
+	// during an active backoff fails fast instead of queueing behind it.
+	nextLoginAttempt time.Time
 }
 
 // New constructs a Client. Returns an error only on invalid config.
@@ -387,16 +393,44 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 // Login obtains a session ID via Session.login and stores it. Cheap to call
 // repeatedly; callers usually do so only after 401/403.
 //
-// Rate-limiting: every failed login is followed by an exponential backoff
-// before the next attempt, starting at [loginBaseBackoff] = 1 s and
-// doubling each consecutive failure up to [loginMaxBackoff] = 60 s — from
-// the first rejection, not after [loginMaxFailedAttempts] accumulate, or
-// a misconfigured or exhausted-session-pool CCU gets hammered with
+// Rate-limiting: every failed login sets a deadline using an exponential
+// backoff, starting at [loginBaseBackoff] = 1 s and doubling each
+// consecutive failure up to [loginMaxBackoff] = 60 s — from the first
+// rejection, not after [loginMaxFailedAttempts] accumulate, or a
+// misconfigured or exhausted-session-pool CCU gets hammered with
 // back-to-back Session.login attempts before the throttle ever engages.
+// A call arriving while that deadline is still in the future returns
+// [hmerr.ErrAuthFailure] immediately instead of waiting it out — see the
+// comment inside the function for why the wait must never block here.
 // The backoff and counter are reset on the first successful login.
 func (c *Client) Login(ctx context.Context) error {
 	if c.cfg.Username == "" {
 		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Enforce backoff from the first failure, not from the tenth — a
+	// caller gating this on loginMaxFailedAttempts would let the first
+	// ten rejected logins fire back-to-back with no delay at all, which
+	// is exactly what keeps an exhausted CCU session pool exhausted
+	// (every immediate retry claims the slot a concurrent WebUI session
+	// just freed).
+	//
+	// The wait itself never runs here: Login is reached through
+	// loginOrRenew and reloginLocked, both of which hold sessionLoginMu
+	// across the call, and every other in-flight Call() blocks on that
+	// same lock before its own request. Sleeping here would therefore
+	// serialize the whole central behind one caller's backoff instead of
+	// just delaying the next actual login attempt. Fail fast instead —
+	// the deadline naturally elapses between calls, and whichever caller
+	// arrives after it makes the next real attempt.
+	c.mu.Lock()
+	wait := time.Until(c.nextLoginAttempt)
+	c.mu.Unlock()
+	if wait > 0 {
+		return c.wrap("Session.login", fmt.Errorf("%w: login backoff active, retry in %s", hmerr.ErrAuthFailure, wait.Round(time.Millisecond)))
 	}
 
 	// A login that displaces a live session must hand the old slot back: the
@@ -408,28 +442,6 @@ func (c *Client) Login(ctx context.Context) error {
 	displaced := c.sessionID
 	c.mu.Unlock()
 	c.logoutStale(ctx, displaced)
-
-	// Enforce backoff from the first failure, not from the tenth: the
-	// doc comment above promises "starting at 1 s, doubling each time"
-	// and a caller gating this on loginMaxFailedAttempts first defeats
-	// that — the first ten rejected logins would fire back-to-back with
-	// no delay at all, which is exactly what keeps an exhausted CCU
-	// session pool exhausted (every immediate retry claims the slot a
-	// concurrent WebUI session just freed).
-	c.mu.Lock()
-	backoff := c.currentBackoff
-	c.mu.Unlock()
-
-	if backoff > 0 {
-		// Apply the accumulated backoff before trying again.
-		timer := time.NewTimer(backoff)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
-		}
-	}
 
 	params := map[string]any{
 		"username": c.cfg.Username,
@@ -471,6 +483,7 @@ func (c *Client) Login(ctx context.Context) error {
 	c.lastSessionRefresh = time.Now()
 	c.failedLoginAttempts = 0
 	c.currentBackoff = 0
+	c.nextLoginAttempt = time.Time{}
 	c.mu.Unlock()
 	c.logger.Debug("jsonrpc session established", slog.String("host", c.host))
 	return nil
@@ -488,6 +501,7 @@ func (c *Client) noteLoginFailure() int {
 	} else {
 		c.currentBackoff = min(time.Duration(float64(c.currentBackoff)*loginBackoffMultiplier), loginMaxBackoff)
 	}
+	c.nextLoginAttempt = time.Now().Add(c.currentBackoff)
 	return c.failedLoginAttempts
 }
 

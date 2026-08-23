@@ -113,6 +113,42 @@ func SystemCCU(reader SystemCCUReader) http.HandlerFunc {
 		if entries == nil {
 			entries = []SystemCCUEntry{}
 		}
+		if hideCCUCoordinates(r.Context()) {
+			entries = withoutCCUCoordinates(entries)
+		}
 		JSON(w, http.StatusOK, map[string]any{"entries": entries})
 	}
+}
+
+// withoutCCUCoordinates returns a copy of entries with every network
+// coordinate blanked, leaving the parts a viewer legitimately needs on a
+// status page: the daemon-local name, availability, readiness, the CCU
+// model and firmware version, and the astro position the SPA renders.
+//
+// The reader hands back its own snapshot, so this copies before blanking —
+// mutating in place would strip the coordinates for every later admin read
+// as well.
+func withoutCCUCoordinates(entries []SystemCCUEntry) []SystemCCUEntry {
+	out := make([]SystemCCUEntry, len(entries))
+	copy(out, entries)
+	for i := range out {
+		out[i].Host = ""
+		out[i].Hostname = ""
+		out[i].Serial = ""
+		out[i].URL = ""
+		// The adapter list itself is not sensitive — which radio the CCU
+		// carries is already implied by ConfiguredInterfaces — but the port
+		// and endpoint URL are the reachable coordinates.
+		if len(out[i].CCUInterfaces) > 0 {
+			ifaces := make([]SystemCCUInterface, len(out[i].CCUInterfaces))
+			copy(ifaces, out[i].CCUInterfaces)
+			for j := range ifaces {
+				ifaces[j].Port = 0
+				ifaces[j].URL = ""
+				ifaces[j].Address = ""
+			}
+			out[i].CCUInterfaces = ifaces
+		}
+	}
+	return out
 }

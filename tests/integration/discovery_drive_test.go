@@ -51,7 +51,7 @@ func driveChannelDPs(ctx context.Context, bridge *mqtt.Bridge, centralName strin
 		Central:        centralName,
 		Interface:      iface,
 		DeviceAddress:  addr,
-		DeviceName:     d.Name,
+		DeviceName:     d.Name(),
 		Model:          model,
 		ChannelNo:      ch.Number,
 		ChannelAddress: ch.Address,

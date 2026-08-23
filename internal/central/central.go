@@ -900,8 +900,8 @@ func (u *Unit) ResolveDeviceName(address string) string {
 	if !ok || dev == nil {
 		return address
 	}
-	if dev.Name != "" {
-		return dev.Name
+	if name := dev.Name(); name != "" {
+		return name
 	}
 	if dev.Model != "" {
 		return dev.Model
@@ -1062,7 +1062,7 @@ func (u *Unit) RenameDevice(ctx context.Context, address, name string) error {
 	// even when no persistent backend is wired (e.g. tests).
 	if u.ModelRegistry != nil {
 		if dev, ok := u.ModelRegistry.Get(address); ok && dev != nil {
-			dev.Name = name
+			dev.SetName(name)
 			u.PublishDeviceMetadataChanged(dev)
 		}
 	}

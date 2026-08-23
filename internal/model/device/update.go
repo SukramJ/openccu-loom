@@ -220,10 +220,11 @@ func (u *Update) FullName() string {
 	if u == nil || u.device == nil {
 		return "Update"
 	}
-	if u.device.Name == "" {
+	name := u.device.Name()
+	if name == "" {
 		return "Update"
 	}
-	return u.device.Name + " Update"
+	return name + " Update"
 }
 
 // ─── Register / Unregister ───────────────────────────────────────────

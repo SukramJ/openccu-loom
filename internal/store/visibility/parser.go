@@ -58,6 +58,14 @@ type UnIgnoreEntry struct {
 	ParamsetKey hmenum.ParamsetKey
 	// Comment carries any inline `# …` text from the source line.
 	Comment string
+	// Central scopes the entry to one CCU (central.Unit.Name). Empty means
+	// the entry is global and matches every central — the default for
+	// entries built by [ParseUnIgnore], which has no central context of its
+	// own. A caller that persists un-ignore rules per central (multi-CCU is
+	// first class, ADR 0002) stamps this field before calling
+	// [ParameterDecider.LoadUnIgnore] so the entry cannot decide visibility
+	// for a central it was never registered against.
+	Central string
 }
 
 // ParsedUnIgnoreLine is the result of parsing one un-ignore line. It wraps

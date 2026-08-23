@@ -37,7 +37,7 @@ func isNotFound(err error) bool {
 func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix, channelLabel string) string {
 	var devName, chName string
 	if dev != nil {
-		devName = dev.Name
+		devName = dev.Name()
 		if devName == "" {
 			devName = dev.Address
 		}

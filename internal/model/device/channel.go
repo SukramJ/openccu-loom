@@ -895,7 +895,7 @@ func (c *Channel) SubDeviceName() string {
 	}
 	deviceName := ""
 	if c.device != nil {
-		deviceName = c.device.Name
+		deviceName = c.device.Name()
 	}
 	masterName := master.Name()
 	if isNumericString(masterName) {

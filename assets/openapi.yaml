@@ -84,6 +84,10 @@ paths:
         feature flags (`features`), per-central wiring (`centrals`),
         callback ports, and static behaviour policies (`policies`).
 
+        Each central's `host` is admin-only and reads as an empty
+        string for a viewer or operator — the same narrowing
+        `GET /centrals` and `GET /system/ccu` apply.
+
         The `policies` object documents daemon-side defaults that
         external clients ask about — currently always-on values:
 
@@ -253,9 +257,13 @@ paths:
       description: >
         Returns the device's model-icon PNG, proxied from the owning
         CCU's web server (`/config/img/devices/250/<file>`).
-        Unauthenticated, like /health — it exposes only non-sensitive
-        device model artwork and must resolve from an <img> tag
-        regardless of auth scheme. Responds 404 when the device, its
+        Authenticated like every other device route: the artwork itself
+        is not sensitive, but the route answers differently for a known
+        and an unknown address, so serving it openly made it an
+        existence oracle for the device inventory. The SPA renders it
+        from an <img> tag, which carries the same-origin session cookie;
+        a bearer-only client must fetch the image itself rather than
+        hand the URL to the browser. Responds 404 when the device, its
         central, or the upstream image is unavailable; the SPA then
         falls back to a generic glyph.
       parameters:
@@ -1735,6 +1743,13 @@ paths:
         and the configured-interface list HA's Repair-Flows need to
         validate that the daemon manages the same CCU the user
         expects.
+
+        The CCU's network coordinates — `host`, `hostname`, `serial`,
+        `url` and the per-adapter `port` / `address` / `url` — are
+        admin-only. A viewer or operator reads them as empty strings /
+        zero, the same narrowing `GET /centrals` has always applied;
+        everything else on the entry stays visible so a status page
+        still renders.
 
         Centrals that have not yet completed their first connect
         round have empty `model` / `version` / `serial` / `hostname`
@@ -6789,6 +6804,10 @@ paths:
         ones the operator ignored. Each entry is flagged whether it is already
         configured (matched by host). Empty when discovery is disabled.
       tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: Discovered CCUs
@@ -6820,6 +6839,10 @@ paths:
       operationId: listIgnoredCentrals
       summary: List the discovered CCUs the operator has ignored
       tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: Ignored CCUs

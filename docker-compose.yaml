@@ -68,7 +68,7 @@ services:
       # (centrals, MQTT, users, …) — it must survive restarts.
       - loom-data:/app/var
       # --- optional: pin bootstrap settings via a tiny read-only config ---
-      # ONLY the bootstrap tier belongs here (data_dir, listen.rest/ui,
+      # ONLY the bootstrap tier belongs here (data_dir, listen.rest,
       # logging, bootstrap.allow_first_run_setup, env_file). Do NOT put
       # centrals / MQTT / auth here — those are UI-managed. The daemon
       # AUTO-DISCOVERS a config at /app/config.yaml (the WORKDIR) or

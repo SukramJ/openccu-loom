@@ -156,7 +156,14 @@ func customDPSetHandler(idx CustomDPIndex, invoker CustomDPInvoker) CommandHandl
 		prio := wsParsePriority(p.Priority)
 		if err := invoker.InvokeCustomDP(ctx, p.Device, p.Name, p.Operation, p.Params, prio, "ws:cdp.invoke"); err != nil {
 			if errors.Is(err, handlers.ErrUnknownOperation) {
-				return nil, errors.New("ws: unknown operation: " + p.Operation)
+				// A bad operation name, not a daemon fault — classified the
+				// same way REST's equivalent path does
+				// (handlers/custom_data_points.go), so a client can tell a
+				// typo apart from a genuine internal error instead of
+				// retrying or alerting on both alike. classifyDomainErrorCode
+				// would not catch this: the message has no "not found"
+				// phrasing, so it needs the explicit CommandError here.
+				return nil, NewCommandError(CommandErrorBadRequest, "unknown operation: "+p.Operation)
 			}
 			return nil, err
 		}

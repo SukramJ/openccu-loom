@@ -19,17 +19,30 @@ import (
 // path — never by calling back into the engine from the sink (the
 // sink runs under the engine lock).
 type panelRegistry struct {
-	mu         sync.Mutex
-	byZone     map[string]*alarmpanel.Panel
-	health     bool
-	masterName string
+	mu     sync.Mutex
+	byZone map[string]*alarmpanel.Panel
+	// health is the fleet-wide baseline: it only moves on a genuinely
+	// global signal (the alarm service itself failing to start), never
+	// on one output's failure — see zoneUnhealthy.
+	health bool
+	// zoneUnhealthy holds the zone IDs currently degraded by their own
+	// enrolled output(s) failing (present == degraded; absent ==
+	// healthy). A zone panel's Available is health && !zoneUnhealthy;
+	// the master aggregate is health alone, so one zone's broken siren
+	// never removes Home Assistant's disarm control from the other
+	// zones or the whole-house panel during an active alarm (K1).
+	zoneUnhealthy map[string]bool
+	masterName    string
 }
 
 func newPanelRegistry(masterName string) *panelRegistry {
 	if masterName == "" {
 		masterName = "Alarm system"
 	}
-	return &panelRegistry{byZone: map[string]*alarmpanel.Panel{}, health: true, masterName: masterName}
+	return &panelRegistry{
+		byZone: map[string]*alarmpanel.Panel{}, health: true,
+		zoneUnhealthy: map[string]bool{}, masterName: masterName,
+	}
 }
 
 // Panels returns the entity snapshots, zones sorted by ID, the master
@@ -72,7 +85,7 @@ func (s *Service) seedPanels(ctx context.Context) {
 			Name:               snap.Name,
 			Modes:              modes,
 			State:              alarmpanel.StateToken(snap.State, snap.Mode),
-			Available:          r.health,
+			Available:          r.health && !r.zoneUnhealthy[snap.ID],
 			CodeArmRequired:    armReq,
 			CodeDisarmRequired: disarmReq,
 		}
@@ -138,7 +151,7 @@ func (s *Service) onPanelStateEvent(e hmevent.AlarmStateChangedEvent) {
 		p.Name = e.ZoneName
 	}
 	p.State = alarmpanel.StateToken(e.To, e.Mode)
-	p.Available = r.health
+	p.Available = r.health && !r.zoneUnhealthy[e.ZoneID]
 	snapshot := *p
 	master, hasMaster := r.masterLocked()
 	r.mu.Unlock()
@@ -149,7 +162,12 @@ func (s *Service) onPanelStateEvent(e hmevent.AlarmStateChangedEvent) {
 	}
 }
 
-// onPanelHealthEvent flips availability on every panel.
+// onPanelHealthEvent flips the fleet-wide baseline on every panel. It
+// only ever fires for a genuinely global condition — the alarm service
+// itself failing to start — never for one output's failure: those are
+// scoped through onOutputZoneHealth instead, so a siren stuck in one
+// zone does not remove Home Assistant's disarm control from the
+// others while an alarm is active (K1).
 func (s *Service) onPanelHealthEvent(e hmevent.AlarmHealthChangedEvent) {
 	r := s.panels
 	r.mu.Lock()
@@ -159,8 +177,8 @@ func (s *Service) onPanelHealthEvent(e hmevent.AlarmHealthChangedEvent) {
 	}
 	r.health = e.Healthy
 	panels := make([]alarmpanel.Panel, 0, len(r.byZone))
-	for _, p := range r.byZone {
-		p.Available = e.Healthy
+	for id, p := range r.byZone {
+		p.Available = r.health && !r.zoneUnhealthy[id]
 		panels = append(panels, *p)
 	}
 	master, hasMaster := r.masterLocked()
@@ -172,6 +190,40 @@ func (s *Service) onPanelHealthEvent(e hmevent.AlarmHealthChangedEvent) {
 	if hasMaster {
 		s.publishPanel(master, false)
 	}
+}
+
+// onOutputZoneHealth applies the output manager's zone-scoped health
+// signal to exactly the zone panel the failing (or recovered) output
+// belongs to. It never touches another zone's panel or the master
+// aggregate: an output enrolled in one zone must not take away the
+// ability to disarm the other zones, or the whole house, at the exact
+// moment an alarm needs that control (K1).
+func (s *Service) onOutputZoneHealth(zoneID string, healthy bool) {
+	r := s.panels
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	wasHealthy := !r.zoneUnhealthy[zoneID]
+	if healthy {
+		delete(r.zoneUnhealthy, zoneID)
+	} else {
+		r.zoneUnhealthy[zoneID] = true
+	}
+	if wasHealthy == healthy {
+		r.mu.Unlock()
+		return
+	}
+	p, ok := r.byZone[zoneID]
+	if !ok {
+		r.mu.Unlock()
+		return
+	}
+	p.Available = r.health && healthy
+	snapshot := *p
+	r.mu.Unlock()
+
+	s.publishPanel(snapshot, false)
 }
 
 // masterLocked aggregates the master panel; present with ≥2 zones.

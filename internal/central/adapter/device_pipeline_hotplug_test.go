@@ -307,8 +307,8 @@ func TestIngestNewDevicesUsesDeviceDetailsNameFallback(t *testing.T) {
 	if !ok {
 		t.Fatal("device not materialised in ModelRegistry")
 	}
-	if dev.Name != wantName {
-		t.Errorf("device.Name = %q, want %q (DeviceDetails fallback)", dev.Name, wantName)
+	if dev.Name() != wantName {
+		t.Errorf("device.Name = %q, want %q (DeviceDetails fallback)", dev.Name(), wantName)
 	}
 }
 

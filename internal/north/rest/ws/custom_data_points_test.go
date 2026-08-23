@@ -298,6 +298,11 @@ func TestCustomDPSet_HappyPath(t *testing.T) {
 	}
 }
 
+// TestCustomDPSet_UnknownOperation_ReturnsError asserts that an unknown
+// operation name is classified as CommandErrorBadRequest — the same class
+// REST's equivalent path uses (handlers/custom_data_points.go) — rather
+// than CommandErrorInternal, so a client can tell a typo'd operation from
+// a genuine daemon fault instead of retrying or alerting on both alike.
 func TestCustomDPSet_UnknownOperation_ReturnsError(t *testing.T) {
 	t.Parallel()
 	d := newWSTestDevice("DEV0024", "HmIP-BSM")
@@ -311,6 +316,9 @@ func TestCustomDPSet_UnknownOperation_ReturnsError(t *testing.T) {
 		jsonParam(`{"device":"DEV0024","name":"STATE","operation":"fly"}`))
 	if res.Error == nil {
 		t.Fatal("expected error for unknown operation")
+	}
+	if res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("error code=%q, want %q", res.Error.Code, CommandErrorBadRequest)
 	}
 }
 

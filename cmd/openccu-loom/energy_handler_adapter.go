@@ -98,6 +98,6 @@ func (a *energyHandlerAdapter) deviceNamer(centralName string) handlers.DeviceNa
 		if !found || dev == nil {
 			return "", false
 		}
-		return dev.Name, true
+		return dev.Name(), true
 	}
 }

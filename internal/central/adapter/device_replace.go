@@ -63,7 +63,7 @@ func (a *DeviceAdminDomain) ReplaceCandidates(ctx context.Context, centralName, 
 			}
 			out = append(out, hmapi.ReplaceCandidate{
 				Address:      d.Address,
-				Name:         dev.Name,
+				Name:         dev.Name(),
 				Model:        d.Type,
 				Interface:    string(entry.Client.Interface()),
 				Central:      unit.Name(),

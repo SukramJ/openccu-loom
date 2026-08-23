@@ -13,9 +13,13 @@ import (
 )
 
 // newRGBWLightRigWithOnTimeUnit builds a RGBWLight on a channel that carries
-// ON_TIME_UNIT — the same setup that previously triggered the regression where
-// plain TurnOn would emit a put_paramset with DURATION_VALUE/DURATION_UNIT
-// instead of a bare LEVEL SetValue.
+// DURATION_VALUE/DURATION_UNIT — the real HmIP-BSL wire shape for a timed
+// on-time (godevccu paramset_descriptions/HmIP-BSL.json, channel :8: LEVEL,
+// COLOR, DURATION_VALUE, DURATION_UNIT, RAMP_TIME_VALUE, RAMP_TIME_UNIT; no
+// device in the fleet carries ON_TIME_UNIT). This is the same setup that
+// previously triggered the regression where plain TurnOn would emit a
+// put_paramset with DURATION_VALUE/DURATION_UNIT instead of a bare LEVEL
+// SetValue.
 func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *RGBWLight {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "RGBW0002"})
@@ -24,8 +28,11 @@ func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *
 	putWritableInteger(ch, address, hmenum.ParameterHue, w)
 	putWritableFloat(ch, address, hmenum.ParameterSaturation, w)
 	putWritableInteger(ch, address, hmenum.ParameterColorTemperature, w)
-	// ON_TIME_UNIT is present on the channel so hasOnTimeUnit=true inside New().
-	putWritableInteger(ch, address, hmenum.ParameterOnTimeUnit, w)
+	// DURATION_VALUE/DURATION_UNIT are present on the channel so
+	// resolveOnTimeParams (and hasOnTimeUnit, derived from it) resolve
+	// true inside New().
+	putWritableFloat(ch, address, hmenum.ParameterDurationValue, w)
+	putWritableInteger(ch, address, hmenum.ParameterDurationUnit, w)
 	r := NewRGBWLight(Config{
 		Channel:      ch,
 		Writer:       w,
@@ -35,8 +42,10 @@ func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *
 }
 
 // newFixedColorLightRigWithOnTimeUnit builds a FixedColorLight on a channel
-// that carries ON_TIME_UNIT. FixedColorLight sets resetsOnTimeOnTurnOn=true,
-// so plain TurnOn on this rig must emit the NotUsed sentinel via put_paramset.
+// that carries DURATION_VALUE/DURATION_UNIT, matching the real HmIP-BSL
+// signal-light channel (godevccu paramset_descriptions/HmIP-BSL.json,
+// channel :8). FixedColorLight sets resetsOnTimeOnTurnOn=true, so plain
+// TurnOn on this rig must emit the NotUsed sentinel via put_paramset.
 func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *FixedColorLight {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "SIG0001"})
@@ -45,8 +54,10 @@ func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWri
 	putWritableSelect(ch, address, hmenum.ParameterColor, w, []string{
 		"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE",
 	})
-	// ON_TIME_UNIT presence makes hasOnTimeUnit=true.
-	putWritableInteger(ch, address, hmenum.ParameterOnTimeUnit, w)
+	// DURATION_VALUE/DURATION_UNIT presence makes hasOnTimeUnit=true via
+	// resolveOnTimeParams, exactly as it does on a real HmIP-BSL channel.
+	putWritableFloat(ch, address, hmenum.ParameterDurationValue, w)
+	putWritableInteger(ch, address, hmenum.ParameterDurationUnit, w)
 	fc := NewFixedColorLight(Config{
 		Channel:      ch,
 		Writer:       w,

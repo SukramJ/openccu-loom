@@ -3289,8 +3289,8 @@ func TestDevicePipelineIngest_WithNamesRoomsFunctions(t *testing.T) {
 	if !ok {
 		t.Fatal("device not in registry")
 	}
-	if dev.Name != "My Device" {
-		t.Errorf("device name = %q, want %q", dev.Name, "My Device")
+	if dev.Name() != "My Device" {
+		t.Errorf("device name = %q, want %q", dev.Name(), "My Device")
 	}
 	ch := dev.Channel("NRF001:1")
 	if ch == nil {
@@ -14162,7 +14162,7 @@ func TestDeviceAdminDomain_AcceptInboxDevice_AppliesInitialConfig(t *testing.T) 
 	if len(m.rooms) != 1 || m.rooms[0] != "Kitchen" {
 		t.Fatalf("rooms not forwarded: %+v", m.rooms)
 	}
-	if dev, ok := c.ModelRegistry.Get("DEV004"); !ok || dev.Name != "Kitchen Switch" {
+	if dev, ok := c.ModelRegistry.Get("DEV004"); !ok || dev.Name() != "Kitchen Switch" {
 		t.Fatalf("rename not applied in-memory: %+v", dev)
 	}
 }

@@ -1053,7 +1053,7 @@ func (b *EventBridge) registerAndLoadDP(
 		chAddr, _ := parseChannel(ch.Address)
 		if _, _, ok, _ := b.buildPublishEvent(
 			centralName, ifaceID, d.Address, chAddr, channelNo,
-			d.Model, d.Name, dpk, raw, paramsetKey,
+			d.Model, d.Name(), dpk, raw, paramsetKey,
 		); !ok {
 			return
 		}
@@ -1081,7 +1081,7 @@ func (b *EventBridge) registerAndLoadDP(
 	chAddr, _ := parseChannel(ch.Address)
 	if _, _, ok, _ := b.buildPublishEvent(
 		centralName, ifaceID, d.Address, chAddr, channelNo,
-		d.Model, d.Name, dpk, nil, paramsetKey,
+		d.Model, d.Name(), dpk, nil, paramsetKey,
 	); !ok {
 		return
 	}
@@ -1119,7 +1119,7 @@ func (b *EventBridge) publishDiscoveryForUnobservedDP(
 	if bridge == nil {
 		return
 	}
-	model, name := d.Model, d.Name
+	model, name := d.Model, d.Name()
 	channel, _ := parseChannel(ch.Address)
 	key := hmtypes.DataPointKey{
 		InterfaceID:    ifaceID,
@@ -2420,7 +2420,7 @@ func (b *EventBridge) publishChannelEventDiscoverySnapshot(
 		Central:        centralName,
 		Interface:      iface,
 		DeviceAddress:  d.Address,
-		DeviceName:     d.Name,
+		DeviceName:     d.Name(),
 		Model:          d.Model,
 		ChannelNo:      channelNo,
 		ChannelAddress: ch.Address,
@@ -2494,7 +2494,7 @@ func (b *EventBridge) publishCustomDPDiscoverySnapshot(
 		Central:        centralName,
 		Interface:      iface,
 		DeviceAddress:  d.Address,
-		DeviceName:     d.Name,
+		DeviceName:     d.Name(),
 		Model:          d.Model,
 		ChannelNo:      channelNo,
 		ChannelAddress: ch.Address,
@@ -2676,7 +2676,7 @@ func lookupDevice(reg *central.Registry, address string) (model, name string) {
 	}
 	for _, u := range reg.List() {
 		if d, ok := u.ModelRegistry.Get(address); ok {
-			return d.Model, d.Name
+			return d.Model, d.Name()
 		}
 	}
 	return "", ""
@@ -2911,7 +2911,7 @@ func (b *EventBridge) publishUpdateSnapshot(
 		Central:       centralName,
 		Interface:     iface,
 		DeviceAddress: d.Address,
-		DeviceName:    d.Name,
+		DeviceName:    d.Name(),
 		Model:         d.Model,
 		Device:        d,
 		Update:        upd,
@@ -2986,7 +2986,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 		Interface:     iface,
 		DeviceAddress: d.Address,
 		ChannelNo:     channelNo,
-		DeviceName:    d.Name,
+		DeviceName:    d.Name(),
 		Model:         d.Model,
 		Device:        d,
 	}
@@ -3217,7 +3217,7 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 			Interface:         iface,
 			DeviceAddress:     d.Address,
 			ScheduleChannelNo: scheduleChannelNo,
-			DeviceName:        d.Name,
+			DeviceName:        d.Name(),
 			Model:             d.Model,
 			Device:            d,
 			Key:               key,
@@ -3488,7 +3488,7 @@ func (b *EventBridge) publishCombinedProjection(
 		Interface:     iface,
 		DeviceAddress: d.Address,
 		ChannelNo:     channelNo,
-		DeviceName:    d.Name,
+		DeviceName:    d.Name(),
 		Model:         d.Model,
 		Device:        d,
 		Kind:          kind,

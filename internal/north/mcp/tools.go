@@ -34,7 +34,7 @@ func summarize(d *device.Device, central string) deviceSummary {
 	return deviceSummary{
 		Address:   d.Address,
 		Model:     d.Model,
-		Name:      d.Name,
+		Name:      d.Name(),
 		Interface: string(d.Interface),
 		Central:   central,
 	}

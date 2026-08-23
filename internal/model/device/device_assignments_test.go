@@ -57,6 +57,46 @@ func TestDeviceAssignmentsSurviveConcurrentWriteAndRead(t *testing.T) {
 	wg.Wait()
 }
 
+// TestDeviceNameSurvivesConcurrentWriteAndRead reproduces the race between
+// the device-admin rename path (Unit.RenameDevice calling SetName from a
+// REST/WS handler goroutine) and any north-bound reader assembling the
+// device payload at the same time. Name is a string header, so an
+// unsynchronised concurrent write/read is a data race the same way the
+// room/function slice headers were before assignmentMu covered them.
+func TestDeviceNameSurvivesConcurrentWriteAndRead(t *testing.T) {
+	t.Parallel()
+	d := device.New(device.Config{
+		Address: "VCU0000002",
+		Name:    "Living Room Lamp",
+	})
+
+	const rounds = 500
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range rounds {
+			if i%2 == 0 {
+				d.SetName("Kitchen Lamp")
+			} else {
+				d.SetName("Living Room Lamp")
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range rounds {
+			info := d.Info()
+			if info == nil {
+				t.Error("Info returned nil")
+				return
+			}
+			_ = d.Name()
+		}
+	}()
+	wg.Wait()
+}
+
 // TestDeviceAssignmentAccessorsCopyOnReadAndWrite pins that neither the
 // caller of the setter nor the caller of the getter shares storage with the
 // device: the alarm candidate scan and the snapshot exporter keep the

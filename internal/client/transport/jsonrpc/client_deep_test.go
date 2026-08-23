@@ -1086,13 +1086,14 @@ func TestCallOnceReadBodyError(t *testing.T) {
 // Login backoff and error paths
 // ---------------------------------------------------------------------------
 
-// TestLoginBackoffContextCancelledDuringWait verifies that Login respects
-// context cancellation while it is sleeping in the backoff path (i.e. when
-// a backoff from a prior failure is pending).
+// TestLoginBackoffContextCancelledDuringWait verifies that Login honours an
+// already-cancelled context even while a backoff from a prior failure is
+// pending — it must surface the context error, not silently fail-fast with
+// an auth error that could be mistaken for a fresh rejection.
 func TestLoginBackoffContextCancelledDuringWait(t *testing.T) {
 	t.Parallel()
-	// We need a server that the client will never reach in this test (because
-	// the context will be cancelled before the backoff expires).
+	// We need a server that the client will never reach in this test (the
+	// backoff check runs before any HTTP round-trip).
 	srv := newTestServer(t, map[string]func(envelope) any{
 		"Session.login": func(_ envelope) any { return okResult("session") },
 	})
@@ -1101,32 +1102,34 @@ func TestLoginBackoffContextCancelledDuringWait(t *testing.T) {
 	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
 
 	// Manually set the client into the "too many failures" state with a long
-	// backoff so the select in Login will block long enough for us to cancel.
+	// backoff so the pending-backoff path is exercised.
 	c.mu.Lock()
 	c.failedLoginAttempts = loginMaxFailedAttempts
-	c.currentBackoff = 10 * time.Second // much longer than the test timeout
+	c.currentBackoff = 10 * time.Second
+	c.nextLoginAttempt = time.Now().Add(c.currentBackoff)
 	c.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
 	err := c.Login(ctx)
 	if err == nil {
-		t.Fatal("expected error when context is cancelled during backoff")
+		t.Fatal("expected error when context is already cancelled")
 	}
-	// The error must be context-derived, not an auth failure.
-	if errors.Is(err, hmerr.ErrAuthFailure) {
-		t.Fatalf("backoff cancellation must not surface as ErrAuthFailure, got %v", err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected a context-derived error, got %v", err)
 	}
 }
 
 // TestLoginBackoffAppliesFromTheFirstFailure verifies that a pending
-// backoff delays the next Login call even when far fewer than
+// backoff makes the next Login call fail fast even when far fewer than
 // loginMaxFailedAttempts have accumulated — the very first rejected login
-// must already slow the second one down, not just the eleventh. Gating
-// the wait on loginMaxFailedAttempts let the first ten rejected logins
-// fire back-to-back with no delay at all, which is what keeps an
-// exhausted CCU session pool exhausted.
+// must already gate the second one, not just the eleventh. Gating the
+// wait on loginMaxFailedAttempts let the first ten rejected logins fire
+// back-to-back with no delay at all, which is what keeps an exhausted CCU
+// session pool exhausted. The gate itself must never block a caller —
+// Login is reached under sessionLoginMu, and blocking here would
+// serialize every other JSON-RPC call on the central behind the wait.
 func TestLoginBackoffAppliesFromTheFirstFailure(t *testing.T) {
 	t.Parallel()
 	srv := newTestServer(t, map[string]func(envelope) any{
@@ -1140,14 +1143,20 @@ func TestLoginBackoffAppliesFromTheFirstFailure(t *testing.T) {
 	c.mu.Lock()
 	c.failedLoginAttempts = 1 // one failure — nowhere near loginMaxFailedAttempts
 	c.currentBackoff = backoff
+	c.nextLoginAttempt = time.Now().Add(backoff)
 	c.mu.Unlock()
 
 	start := time.Now()
-	if err := c.Login(context.Background()); err != nil {
-		t.Fatalf("Login: %v", err)
+	err := c.Login(context.Background())
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected Login to fail fast on the pending backoff")
 	}
-	if elapsed := time.Since(start); elapsed < backoff {
-		t.Fatalf("Login returned after %v, want at least the pending backoff of %v", elapsed, backoff)
+	if !errors.Is(err, hmerr.ErrAuthFailure) {
+		t.Fatalf("expected ErrAuthFailure for a pending backoff, got %v", err)
+	}
+	if elapsed >= backoff {
+		t.Fatalf("Login blocked for %v waiting out the pending backoff of %v — it must fail fast instead", elapsed, backoff)
 	}
 }
 
@@ -1194,6 +1203,14 @@ func TestLoginBackoffDoublesOnRepeatedFailure(t *testing.T) {
 	if b1 != loginBaseBackoff {
 		t.Fatalf("after 1st failure: backoff=%v, want %v", b1, loginBaseBackoff)
 	}
+
+	// The pending-backoff deadline from the first failure would otherwise
+	// make this second call fail fast without ever reaching the server —
+	// clear it to simulate the deadline having elapsed, the same as a
+	// caller arriving later in real time would see.
+	c.mu.Lock()
+	c.nextLoginAttempt = time.Time{}
+	c.mu.Unlock()
 
 	// Second failure: backoff doubles.
 	_ = c.Login(context.Background())

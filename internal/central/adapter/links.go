@@ -600,8 +600,8 @@ func deviceNameOr(dev *device.Device, fallback string) string {
 	if dev == nil {
 		return fallback
 	}
-	if dev.Name != "" {
-		return dev.Name
+	if dev.Name() != "" {
+		return dev.Name()
 	}
 	return dev.Address
 }

@@ -111,10 +111,13 @@ type Light struct {
 	pendingOn   *time.Duration // deferred ON_TIME for next TurnOn
 	pendingRamp *time.Duration // deferred RAMP_TIME for next TurnOn
 
-	// hasOnTimeUnit is true when the channel carries ON_TIME_UNIT, meaning the
-	// device interprets ON_TIME as a timed shutdown. When true, TurnOn without an
-	// explicit on-time sends the NotUsed sentinel to cancel any previously
-	// running timer rather than leaving the old value active.
+	// hasOnTimeUnit is true when the channel's on-time timer resolves to a
+	// value/unit pair (DURATION_VALUE + DURATION_UNIT — see
+	// [resolveOnTimeParams]; no device carries the literal ON_TIME_UNIT wire
+	// name), meaning the device interprets the reset as a timed shutdown. When
+	// true, TurnOn without an explicit on-time sends the NotUsed sentinel to
+	// cancel any previously running timer rather than leaving the old value
+	// active.
 	hasOnTimeUnit bool
 
 	// onTimeValueParam / onTimeUnitParam are the wire parameter(s)
@@ -141,8 +144,8 @@ type Light struct {
 // replaced on the channel.
 func New(cfg Config) *Light {
 	level := custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel))
-	hasOnTimeUnit := cfg.Channel != nil && cfg.Channel.Parameter(hmenum.ParameterOnTimeUnit) != nil
 	onTimeValueParam, onTimeUnitParam := resolveOnTimeParams(cfg.Channel)
+	hasOnTimeUnit := onTimeUnitParam != ""
 	l := &Light{
 		Float:                level,
 		Capabilities:         cfg.Capabilities,

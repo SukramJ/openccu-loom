@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // TestDispatchMessageAnswersMalformedFrameWithError asserts that a text
@@ -64,5 +65,30 @@ func TestDispatchMessageAnswersUnknownOpWithError(t *testing.T) {
 	}
 	if reply.Error == nil || reply.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("error=%+v, want code %q", reply.Error, CommandErrorBadRequest)
+	}
+}
+
+// TestSubscribeWithEmptyTopicsStillGetsAcked asserts that a `subscribe`
+// frame whose `topics` list is missing or empty still receives the
+// documented `{op:"subscribed"}` ack, rather than being discarded because
+// there is nothing to subscribe to. A client waiting on that ack before
+// considering itself connected would otherwise hang forever on a request
+// the daemon accepted but never answered.
+func TestSubscribeWithEmptyTopicsStillGetsAcked(t *testing.T) {
+	hub := NewHub()
+	server := httptest.NewServer(Handler(hub, nil, nil))
+	defer server.Close()
+
+	conn := dialWS(t, server)
+	conn.send(map[string]any{"op": "subscribe"})
+
+	_ = conn.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	raw := readServerText(t, conn.br)
+	var reply outboundOp
+	if err := json.Unmarshal(raw, &reply); err != nil {
+		t.Fatalf("decode reply: %v, raw=%s", err, string(raw))
+	}
+	if reply.Op != "subscribed" {
+		t.Fatalf("op=%q, want %q", reply.Op, "subscribed")
 	}
 }

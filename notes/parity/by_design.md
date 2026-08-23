@@ -1030,12 +1030,23 @@ Consequence: a number of WS commands from the reference protocol are **not imple
 | `ChangeHistoryClearer` | `change_history.clear` | ditto |
 | `CentralInfo` | `central.info`, `central.connectivity`, `central.system_health`, `central.reconcile` | ditto |
 | `ThrottleStats` | `ccu.throttle_stats` | ditto |
-| `CacheClearer` | `ccu.cache_clear` | ditto |
 | `DeviceStatisticsQuery` | `ccu.device_statistics` | ditto |
-| `FirmwareRefresher` | `firmware.refresh` | ditto |
-| `IncidentClearer` | `incidents.clear` | ditto |
-| `ExtendedHub` | `service_messages.disable` | ditto |
-| `ParamsetReader` | `paramset.copy` | ditto |
+| `IncidentClearer` | `incidents.list`, `incidents.get`, `incidents.clear` | ditto |
+| `ExtendedHub` | `service_messages.disable`, `service_messages.suppressed`, `service_messages.unsuppress` | ditto |
+| `ParamsetReader` | `paramset.copy`, `paramset.form_schema` | ditto |
+
+`CacheClearer` (`ccu.cache_clear`) and `FirmwareRefresher` (`firmware.refresh`)
+used to sit in that table and no longer belong there: both are wired in
+`cmd/openccu-loom/ws_adapters.go` — the first to `cachereset.Service` (ADR 0042),
+the second to `adapter.NewFirmwareDomain`. A table naming a live command as
+dormant is worse than no table, because it is the document a reader consults
+before deciding a command is not worth wiring.
+
+The authoritative list is not this table but
+`TestExtendedCommandsStubEveryOptionalProviderCommandWhenUnwired`
+(`internal/north/rest/ws/commands_more_apis_test.go`): it dispatches every
+command that must answer `not_implemented` while its provider is nil, so a
+command that gains a provider — or loses one — fails there first.
 
 **Rationale:** The Svelte SPA has REST counterparts for all operations relevant to it (`/install-mode`, `/devices/{addr}/firmware/update`, `/devices/{addr}/channels/{no}/config/export`, `/devices/{addr}/links`, `/sessions/edit/*`, `/incidents`, `/audit`, `/metrics`). The WS command frames are a second address space that OpenCCU-Loom does not actively maintain. If someone wanted to run the `homematicip-local-frontend` Lit SPA against OpenCCU-Loom, the bridge would need to wire the `nil` providers.
 

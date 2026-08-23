@@ -697,12 +697,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities, d.ConfigUIURL))
 		r.Get("/health", handlers.Health(d.Health))
 
-		// Device-type icon proxy. Unauthenticated like /health: it
-		// serves only non-sensitive device model artwork and must
-		// resolve from an <img> tag regardless of auth scheme. Nil
-		// proxy → 404 (SPA falls back to a generic glyph).
-		r.Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
-
 		// Auth endpoints stay outside the AuthRequire group — a logged-
 		// out SPA must be able to POST credentials to /auth/login.
 		// `/auth/me` is the probe the SPA uses on startup to decide
@@ -787,6 +781,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Config != nil {
 				pr.Get("/config", handlers.Config(d.Config))
 			}
+			// Device-type icon proxy. The artwork itself is not sensitive,
+			// but the route answers differently for a known and an unknown
+			// address, so serving it pre-auth turned it into an
+			// unauthenticated existence oracle for the whole device
+			// inventory. The SPA renders it from an <img> tag, which carries
+			// the same-origin session cookie the rest of the SPA
+			// authenticates with; a bearer-only client has to fetch the
+			// image itself rather than hand the URL to the browser.
+			// Nil proxy → 404 (SPA falls back to a generic glyph).
+			pr.Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
 			// UI telemetry — fire-and-forget endpoint the SPA uses to
 			// log toggle / view-selector events (ADR 0016). It sits in
 			// this authenticated group: the payload is
@@ -1279,7 +1283,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm-messages/ack-all", handlers.AckAllAlarmMessages(d.Hub))
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))
 				pr.Get("/service-messages", handlers.ListServiceMessages(d.Hub))
-				pr.Get("/service-messages/suppressed", handlers.ListSuppressedServiceMessages(d.Hub))
+				// Operator-tier, like its unsuppress sibling: the suppressed
+				// list is the record of which faults an operator chose to
+				// silence, and the published contract has always declared it
+				// operator-scoped.
+				pr.With(op).Get("/service-messages/suppressed", handlers.ListSuppressedServiceMessages(d.Hub))
 				pr.With(op).Post("/service-messages/ack-all", handlers.AckAllServiceMessages(d.Hub))
 				pr.With(op).Post("/service-messages/unsuppress", handlers.UnsuppressServiceMessage(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/ack", handlers.AckServiceMessage(d.Hub))
@@ -1348,8 +1356,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Discovery routes register the static `discovered` segment
 				// before the `{name}` param so chi resolves them unambiguously.
 				if d.Discovery != nil {
-					pr.Get("/centrals/discovered", handlers.ListDiscoveredCCUs(d.Discovery))
-					pr.Get("/centrals/discovered/ignored", handlers.ListIgnoredCCUs(d.Discovery))
+					// Admin-tier like the ignore/unignore siblings below. Every
+					// field these two return is a CCU network coordinate —
+					// serial, host, suggested host — so masking them for a
+					// viewer would leave an empty list rather than a narrowed
+					// one, and the only thing the list is for is adding a CCU,
+					// which is an admin action anyway.
+					pr.With(admin).Get("/centrals/discovered", handlers.ListDiscoveredCCUs(d.Discovery))
+					pr.With(admin).Get("/centrals/discovered/ignored", handlers.ListIgnoredCCUs(d.Discovery))
 					pr.With(admin).Post("/centrals/discovered/{serial}/ignore", handlers.IgnoreDiscoveredCCU(d.Discovery))
 					pr.With(admin).Delete("/centrals/discovered/{serial}/ignore", handlers.UnignoreDiscoveredCCU(d.Discovery))
 				}

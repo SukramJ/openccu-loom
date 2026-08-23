@@ -33,6 +33,18 @@ func Config(reader ConfigReader) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Config reader unavailable", ""))
 			return
 		}
-		JSON(w, http.StatusOK, reader.SanitizedConfig())
+		cfg := reader.SanitizedConfig()
+		if hideCCUCoordinates(r.Context()) {
+			// Copy before blanking: SanitizedConfig may hand back a slice
+			// backed by the reader's own snapshot, and blanking in place
+			// would strip the host for every later admin read too.
+			centrals := make([]hmapi.ConfigCentral, len(cfg.Centrals))
+			copy(centrals, cfg.Centrals)
+			for i := range centrals {
+				centrals[i].Host = ""
+			}
+			cfg.Centrals = centrals
+		}
+		JSON(w, http.StatusOK, cfg)
 	}
 }
