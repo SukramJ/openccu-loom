@@ -18,8 +18,10 @@ import (
 //
 // Supported constructs:
 //
-//   - `{% if value_json is defined %} … {% endif %}` — guard against undefined
-//     value_json (empty or non-JSON input → empty output)
+//   - `{% if value_json is defined %} … {% endif %}` and its
+//     `{% if value_json is defined and value_json.value is not none %}`
+//     variant — guard against undefined value_json (empty or non-JSON
+//     input → empty output)
 //   - `{{ expr }}` — variable/filter expression output
 //   - Filters: `lower`, `int`, `float`, `tojson`, `default(x)`, `default(x, true)`
 //   - `value_json.<field>` — JSON field access
@@ -54,17 +56,32 @@ func evalTemplate(tmpl string, valueJSON map[string]any) string {
 	// Strip outer whitespace from template.
 	tmpl = strings.TrimSpace(tmpl)
 
-	// --- Handle {% if value_json is defined %} … {% endif %} ----------------
+	// --- Handle {% if value_json is defined [and ... is not none] %} … {% endif %}
 	// This is the guard pattern used by valueJSONValueTemplate and
-	// valueJSONValueLowerTemplate. When the block is present:
-	//   - valueJSON == nil → return ""  (guard fires, renders empty)
-	//   - valueJSON != nil → evaluate the inner block
-	ifDefinedRe := regexp.MustCompile(`(?s)\{%[-\s]*if\s+value_json\s+is\s+defined\s*[-\s]*%\}(.*?)\{%[-\s]*endif\s*[-\s]*%\}`)
+	// valueJSONValueLowerTemplate. Both halves are evaluated:
+	//   - valueJSON == nil → return ""  (`is defined` fires)
+	//   - the `is not none` clause present AND value_json.value is JSON
+	//     null → return "" as well
+	//   - otherwise evaluate the inner block
+	//
+	// Evaluating the second clause rather than merely tolerating it is
+	// what makes it load-bearing here. While the regex only skipped over
+	// it, deleting `and value_json.value is not none` from production left
+	// every guard in this package green — and the real Jinja renders
+	// `none | lower` as the literal string "none", which Home Assistant
+	// matches against neither payload_on nor payload_off.
+	ifDefinedRe := regexp.MustCompile(`(?s)\{%[-\s]*if\s+value_json\s+is\s+defined(\s+and\s+value_json\.value\s+is\s+not\s+none)?\s*[-\s]*%\}(.*?)\{%[-\s]*endif\s*[-\s]*%\}`)
 	if loc := ifDefinedRe.FindStringSubmatchIndex(tmpl); loc != nil {
 		if valueJSON == nil {
 			return ""
 		}
-		inner := tmpl[loc[2]:loc[3]]
+		notNoneClause := loc[2] >= 0
+		if notNoneClause {
+			if v, ok := valueJSON["value"]; !ok || v == nil {
+				return ""
+			}
+		}
+		inner := tmpl[loc[4]:loc[5]]
 		return evalTemplate(inner, valueJSON)
 	}
 

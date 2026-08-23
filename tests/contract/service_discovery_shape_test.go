@@ -635,19 +635,27 @@ func TestServiceDiscoveryShape_Cover_Position(t *testing.T) {
 
 // TestServiceDiscoveryShape_TopicSegmentContract is a structural contract
 // test that enumerates the topic shapes all components declare and verifies
-// every shape matches one of the registered subscriber wildcards:
-//
-//   - 8-segment:     <base>/+/+/+/+/+/+/set     (bucket-aware dp)
-//   - 7-segment svc: <base>/+/+/+/+/svc/+/set   (service-method)
-//   - 7-segment:     <base>/+/+/+/+/+/set        (legacy dp)
-//
-// Any command_topic that falls outside all three patterns is a mismatch
-// (the declared topic is not subscribed → silent drop at the broker).
+// every shape matches one of the wildcards a real CommandSubscriber.Start
+// actually registers (read via [mqtt.NoopClient.SubscribedFilters] off a
+// subscriber started through the production path — not restated by hand).
+// Any command_topic that matches none of them is a mismatch: the declared
+// topic is not subscribed, so it would be silently dropped at the broker.
 func TestServiceDiscoveryShape_TopicSegmentContract(t *testing.T) {
 	t.Parallel()
 
 	tb := mqtt.NewTopicBuilder("openccu-loom")
 	db := mqtt.NewDefaultDiscoveryBuilder(tb, "ccu")
+
+	// Read the actually-registered subscriber filters off a CommandSubscriber
+	// started the real way (Start against a live NoopClient), instead of
+	// restating what Start is believed to register. A filter Start no
+	// longer subscribes disappears from this list and the matching cases
+	// below start failing.
+	_, noop := newSubscriberWithNoop(t, &contractFakeSink{}, nil)
+	knownFilters := noop.SubscribedFilters()
+	if len(knownFilters) == 0 {
+		t.Fatal("CommandSubscriber.Start registered no filters at all — cannot validate topic shapes against nothing")
+	}
 
 	// Per-parameter cases that use the discovery builder's Build method.
 	// Every Event must carry Category per ADR 0011.
@@ -697,13 +705,6 @@ func TestServiceDiscoveryShape_TopicSegmentContract(t *testing.T) {
 				Parameter: "SUBMIT", Category: hmenum.DataPointCategoryButton,
 			},
 		},
-	}
-
-	// Known subscriber wildcards (derived from CommandSubscriber.Start).
-	knownFilters := []string{
-		"openccu-loom/+/+/+/+/+/+/set",   // 8-segment bucket-aware
-		"openccu-loom/+/+/+/+/+/set",     // 7-segment legacy
-		"openccu-loom/+/+/+/+/svc/+/set", // service-method
 	}
 
 	matchesFilter := func(topic, filter string) bool {

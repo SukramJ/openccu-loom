@@ -112,32 +112,61 @@ func TestNaming_HmIPPS_SingleSwitchPrimary_NoSuffix(t *testing.T) {
 
 // TestNaming_HmIPPS_SecondaryChannels_VchSuffix verifies that the secondary
 // channels of HmIP-PS (ch4 and ch5, which mirror the primary for group
-// membership) are correctly classified as secondary (not primary) and would
-// therefore receive "vch<N>" suffixes in the discovery name builder.
+// membership) are classified as secondary rather than primary, AND that
+// the name builder actually renders them as "vch<N>".
+//
+// The classification alone is not the contract a reader of this name
+// expects: the two predicates are only the inputs to
+// [device.BuildCustomDataPointName], and a builder that stopped
+// consulting them — or that emitted "ch4" for a secondary — would leave
+// both assertions green while every secondary entity in Home Assistant
+// silently collided with its primary.
 func TestNaming_HmIPPS_SecondaryChannels_VchSuffix(t *testing.T) {
 	t.Parallel()
 
 	dev := buildNamingDevice("HmIP-PS", 8)
 	ch3 := dev.Channel("0001NAMING:3")
 	putBool(ch3, hmenum.ParameterState)
+	// IPSwitch's ChannelGroupConfig lists SecondaryChannels [1, 2] off the
+	// base channel (3), so ch4/ch5 are in the profile's relevant set too —
+	// but switch.New only materialises a CustomDataPoint on a channel that
+	// itself carries a STATE wire DP (switch.go: "Returns nil when ch
+	// carries no *generic.Switch for STATE"). Without STATE on ch4/ch5 the
+	// constructor returns nil for both and the loop below never has
+	// anything to assert against.
+	ch4 := dev.Channel("0001NAMING:4")
+	putBool(ch4, hmenum.ParameterState)
+	ch5 := dev.Channel("0001NAMING:5")
+	putBool(ch5, hmenum.ParameterState)
 
 	materializeNaming(t, dev)
 
 	// ch4 and ch5 are the secondary channels for HmIP-PS IPSwitch.
+	sawSecondary := false
 	for _, num := range []int{4, 5} {
 		ch := dev.Channel("0001NAMING:" + itoa(num))
 		if ch == nil {
-			continue // channel may not exist in this fixture
+			t.Fatalf("HmIP-PS ch%d must exist in this fixture", num)
 		}
 		if ch.CustomDataPoint() == nil {
-			continue // no custom DP on this channel — skip
+			t.Fatalf("HmIP-PS ch%d must carry a custom DP — IPSwitch's SecondaryChannels offsets [1,2] must materialise it", num)
 		}
+		sawSecondary = true
 		if ch.IsCustomDPPrimaryChannel() {
 			t.Errorf("HmIP-PS ch%d must NOT be a primary channel — it is secondary", num)
 		}
 		if !ch.IsCustomDPSecondaryChannel() {
 			t.Errorf("HmIP-PS ch%d must be IsCustomDPSecondaryChannel=true", num)
 		}
+		// The rendered marker, not just the classification that feeds it.
+		nd := device.BuildCustomDataPointName(ch, "", "")
+		if want := "vch" + itoa(num); nd.ParameterName != want {
+			t.Errorf("HmIP-PS ch%d renders ParameterName %q, want %q — a secondary channel that renders the primary marker collides with the primary entity",
+				num, nd.ParameterName, want)
+		}
+	}
+	if !sawSecondary {
+		t.Fatal("no secondary channel was exercised — the test asserted nothing")
 	}
 }
 

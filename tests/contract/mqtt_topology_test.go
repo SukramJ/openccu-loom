@@ -8,62 +8,108 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	mqtt "github.com/SukramJ/openccu-loom/internal/north/mqtt"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
-// TestMQTTTopicHierarchyShape pins the ADR-0011 topic shape produced
-// by [mqtt.TopicBuilder]. The bridge composes the path; the model
-// declares the slot. A change to either segment breaks downstream
-// consumers (HA Discovery payloads, REST exporters, retained-state
-// migrators) — a fail here forces a deliberate update of the ADR
-// topic-tree fixture and any consumer that depends on the shape.
+// TestMQTTTopicHierarchyShape pins the ADR-0011 topic shape actually
+// produced by [mqtt.TopicBuilder] — every case below calls the real
+// builder method rather than restating its output as a literal, so a
+// TopicBuilder change that breaks the hierarchy (a swapped segment, a
+// method that stops delegating to the model layer) fails here instead
+// of silently reaching HA Discovery / REST exporters / retained-state
+// migrators.
 func TestMQTTTopicHierarchyShape(t *testing.T) {
 	t.Parallel()
-	type want struct{ method, sample string }
+
+	const (
+		base    = "openccu-loom"
+		central = "GoOtto"
+		iface   = "HmIP-RF"
+		addr    = "000C9709AEF157"
+		channel = 1
+	)
+	tb := mqtt.NewTopicBuilder(base)
+
+	type want struct {
+		method       string
+		topic        string
+		wantSegments int
+		// checks maps a 0-indexed segment position to its required value.
+		checks map[int]string
+	}
 	cases := []want{
-		// SlotState: <base>/<central>/<iface>/<addr>/channels/<ch>/<bucket>/<param>/state
 		{
-			method: "SlotState/values",
-			sample: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/channels/1/values/ACTUAL_TEMPERATURE/state",
+			method:       "SlotState/values",
+			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketValues, Parameter: "ACTUAL_TEMPERATURE"}),
+			wantSegments: 7,
+			checks:       map[int]string{4: "1", 5: "values", 6: "ACTUAL_TEMPERATURE"},
 		},
 		{
-			method: "SlotState/master",
-			sample: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/channels/1/master/TEMPERATURE_MINIMUM/state",
+			method:       "SlotState/master",
+			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketMaster, Parameter: "TEMPERATURE_MINIMUM"}),
+			wantSegments: 7,
+			checks:       map[int]string{5: "master", 6: "TEMPERATURE_MINIMUM"},
 		},
 		{
-			method: "SlotState/calculated",
-			sample: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/channels/1/calculated/DEW_POINT/state",
+			method:       "SlotState/calculated",
+			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketCalculated, Parameter: "DEW_POINT"}),
+			wantSegments: 7,
+			checks:       map[int]string{5: "calculated", 6: "DEW_POINT"},
 		},
 		{
-			method: "SlotState/custom",
-			sample: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/channels/1/custom/climate/state",
-		},
-		// CustomDPServiceMethod: …/channels/<ch>/custom/<kind>/set/<method>
-		{
-			method: "CustomDPServiceMethod",
-			sample: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/channels/1/custom/climate/set/set_temperature",
-		},
-		// Device-level
-		{
-			method: "DeviceInfo",
-			sample: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/info",
+			method:       "SlotState/custom",
+			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketCustom, Parameter: "climate"}),
+			wantSegments: 7,
+			checks:       map[int]string{4: "1", 5: "custom", 6: "climate"},
 		},
 		{
-			method: "DeviceDiagnostics",
-			sample: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/diagnostics",
+			method:       "CustomDPServiceMethod",
+			topic:        tb.CustomDPServiceMethod(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketCustom, Parameter: "climate"}, "set_temperature"),
+			wantSegments: 9,
+			checks:       map[int]string{4: "1", 5: "custom", 6: "climate", 7: "set", 8: "set_temperature"},
+		},
+		{
+			method:       "DeviceInfo",
+			topic:        tb.DeviceInfo(central, iface, addr),
+			wantSegments: 5,
+			checks:       map[int]string{4: "info"},
+		},
+		{
+			method:       "DeviceDiagnostics",
+			topic:        tb.DeviceDiagnostics(central, iface, addr),
+			wantSegments: 5,
+			checks:       map[int]string{4: "diagnostics"},
 		},
 	}
-	// We don't import the mqtt package here (it would create a cycle
-	// because contract tests pull the entire stack); we validate the
-	// shape *contract* — that the published topic strings keep their
-	// hierarchical positions. Failing assertions point to either a
-	// TopicBuilder change or an undisciplined consumer.
+
 	for _, c := range cases {
-		segments := strings.Split(c.sample, "/")
-		if len(segments) < 4 {
-			t.Errorf("%s: sample %q has too few segments", c.method, c.sample)
+		segments := strings.Split(c.topic, "/")
+		if c.topic == "" {
+			t.Errorf("%s: TopicBuilder returned an empty topic", c.method)
+			continue
 		}
-		if segments[0] != "openccu-loom" {
-			t.Errorf("%s: sample %q must start with topic_base", c.method, c.sample)
+		if len(segments) != c.wantSegments {
+			t.Errorf("%s: topic %q has %d segments, want %d", c.method, c.topic, len(segments), c.wantSegments)
+			continue
+		}
+		if segments[0] != base {
+			t.Errorf("%s: topic %q segment[0] = %q, want base %q", c.method, c.topic, segments[0], base)
+		}
+		if segments[1] != central {
+			t.Errorf("%s: topic %q segment[1] = %q, want central %q", c.method, c.topic, segments[1], central)
+		}
+		if segments[2] != iface {
+			t.Errorf("%s: topic %q segment[2] = %q, want interface %q", c.method, c.topic, segments[2], iface)
+		}
+		if segments[3] != addr {
+			t.Errorf("%s: topic %q segment[3] = %q, want device address %q", c.method, c.topic, segments[3], addr)
+		}
+		for pos, want := range c.checks {
+			if pos >= len(segments) || segments[pos] != want {
+				t.Errorf("%s: topic %q segment[%d] = %q, want %q", c.method, c.topic, pos, segments[pos], want)
+			}
 		}
 	}
 }

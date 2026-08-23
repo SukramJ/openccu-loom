@@ -30,14 +30,14 @@ import (
 // probe, the fact that the caller cannot distinguish "unsupported" from
 // "absent" and does not need to.
 var emptyAbsentFailedCollapseExemptions = map[string]string{
-	"internal/client/interface_client_orchestration.go:346:FetchAllDeviceData":                 "guarded by isUnsupported(err): the backend declared it does not implement GetAllDeviceData, which is a capability fact, not an unknown query outcome",
-	"internal/client/interface_client_orchestration.go:363:FetchDeviceDetails":                 "guarded by isUnsupported(err): same capability-probe shape as FetchAllDeviceData",
-	"internal/client/interface_client_orchestration.go:444:GetDeviceDescriptionWithCoalescing": "guarded by isUnsupported(err) before the coalesced call's error is inspected",
-	"internal/client/interface_client_orchestration.go:689:GetParamsetDescriptionOnDemand":     "guarded by isUnsupported(err): LINK paramsets are optional per backend",
-	"internal/store/linkprofile/store.go:205:GetLinkProfiles":                                  "the branch narrows on an unknown receiver channel type from Store.load, which the store's own contract treats as \"no profiles registered\", not a query failure",
-	"internal/store/sqlite/devices.go:221:GetModel":                                            "the branch narrows via errors.Is(err, sql.ErrNoRows), the specific sentinel for a query that ran and found nothing",
-	"internal/store/sqlite/paramsets.go:236:GetParameterData":                                  "the branch narrows via errors.Is(err, ErrParamsetNotFound), the store's own not-found sentinel, documented as the method's nil,nil contract",
-	"cmd/openccu-loom/daemon_matter.go:1663:GetByID":                                           "any resumption-lookup failure intentionally falls through to a full CASE handshake (matter.js CaseServer.ts resumption branch); the fallback is the safe direction, never a deletion",
+	"internal/client/interface_client_orchestration.go:FetchAllDeviceData":                 "guarded by isUnsupported(err): the backend declared it does not implement GetAllDeviceData, which is a capability fact, not an unknown query outcome",
+	"internal/client/interface_client_orchestration.go:FetchDeviceDetails":                 "guarded by isUnsupported(err): same capability-probe shape as FetchAllDeviceData",
+	"internal/client/interface_client_orchestration.go:GetDeviceDescriptionWithCoalescing": "guarded by isUnsupported(err) before the coalesced call's error is inspected",
+	"internal/client/interface_client_orchestration.go:GetParamsetDescriptionOnDemand":     "guarded by isUnsupported(err): LINK paramsets are optional per backend",
+	"internal/store/linkprofile/store.go:GetLinkProfiles":                                  "the branch narrows on an unknown receiver channel type from Store.load, which the store's own contract treats as \"no profiles registered\", not a query failure",
+	"internal/store/sqlite/devices.go:GetModel":                                            "the branch narrows via errors.Is(err, sql.ErrNoRows), the specific sentinel for a query that ran and found nothing",
+	"internal/store/sqlite/paramsets.go:GetParameterData":                                  "the branch narrows via errors.Is(err, ErrParamsetNotFound), the store's own not-found sentinel, documented as the method's nil,nil contract",
+	"cmd/openccu-loom/daemon_matter.go:GetByID":                                            "any resumption-lookup failure intentionally falls through to a full CASE handshake (matter.js CaseServer.ts resumption branch); the fallback is the safe direction, never a deletion",
 }
 
 // readFuncNameRE matches the read-verb prefixes this guard cares about:
@@ -57,8 +57,15 @@ type collapseHit struct {
 // a function can carry both a narrowed sentinel check (safe) and a
 // broad collapse (a defect) at different lines, and the two must never
 // share one exemption entry.
+// key identifies the hit for the exemption map. It deliberately omits
+// the line number: a line-keyed exemption is silently invalidated by any
+// edit above the function — an unrelated insertion in the same file
+// turns a reviewed decision into a fresh failure, and, worse, can leave
+// a stale entry sitting on whatever function later occupies that line.
+// File plus function name is stable under everything except a rename,
+// which is exactly when the reason deserves re-reading.
 func (h collapseHit) key() string {
-	return fmt.Sprintf("%s:%d:%s", h.relFile, h.line, h.fn)
+	return h.relFile + ":" + h.fn
 }
 
 // isZeroValueWithNilError reports whether rs is `return <zero>, nil`:

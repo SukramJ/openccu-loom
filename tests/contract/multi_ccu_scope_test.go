@@ -669,13 +669,15 @@ func TestCentralRegistryLookupRequiresName(t *testing.T) {
 	// Methods that legitimately take no central name, each with the reason.
 	// Everything else on the registry must name its central.
 	allowedWithoutName := map[string]string{
-		"Names":      "returns all names — correct to not take a name param",
-		"List":       "returns all centrals — aggregation, not lookup",
-		"Len":        "counts the registry — no single central involved",
-		"StartAll":   "fans out to all centrals",
-		"StopAll":    "fans out to all centrals",
-		"Register":   "takes a *Unit, which carries its own Name()",
-		"OnRegister": "installs an observer that is replayed per central; the central arrives as the callback argument",
+		"Names":              "returns all names — correct to not take a name param",
+		"List":               "returns all centrals — aggregation, not lookup",
+		"Len":                "counts the registry — no single central involved",
+		"StartAll":           "fans out to all centrals",
+		"StopAll":            "fans out to all centrals",
+		"Register":           "takes a *Unit, which carries its own Name()",
+		"OnRegister":         "installs an observer that is replayed per central; the central arrives as the callback argument",
+		"OnRegisterDeclared": "OnRegister with the seam declared in the manifest (ADR 0065); same per-central replay, same callback argument",
+		"Manifest":           "returns the daemon-wide wiring manifest; a declared seam spans every central by construction",
 	}
 
 	registryDirs := []string{
