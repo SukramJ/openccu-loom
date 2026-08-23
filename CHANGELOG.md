@@ -16,15 +16,30 @@ read them, and classic BidCos thermostats whose composed values never bound.
 
 ### Added
 
-- MQTT now publishes a "Daemon connection" binary sensor per central, so a
-  daemon that goes away — a CCU reboot, an add-on restart, a killed process —
-  is visible as a state an automation can act on. The retained bridge status
-  it reads has been there from the start, but only ever appeared inside other
-  entities' availability blocks, where it can express "this entity's data is
-  stale" and nothing else: every entity went unavailable and no entity
-  anywhere said why. The new sensor deliberately carries no availability
-  block of its own, because pointing it at the topic it reads its state from
-  would make it unavailable in exactly the situation it exists to report.
+- The daemon's own liveness is now visible on every north-bound surface, not
+  just as an absence. A daemon that goes away — a CCU reboot, an add-on
+  restart, a killed process — used to leave every Home Assistant entity
+  unavailable with nothing anywhere saying why, and nothing an automation
+  could act on.
+    - **MQTT**: a "Daemon connection" binary sensor per central, reading the
+      retained bridge status the broker also carries the last will on. It
+      deliberately carries no availability block of its own, because pointing
+      it at the topic it reads its state from would make it unavailable in
+      exactly the situation it exists to report.
+    - **WebSocket**: a `daemon_status.changed` broadcast on the daemon-level
+      topic `system.daemon_status`, emitted during a graceful shutdown before
+      the servers stop. A WebSocket client has no broker holding a last will,
+      so a stopping daemon and a dropped network looked identical to it; now
+      the daemon says which it is while it still can. A killed daemon cannot,
+      and that stays the client's own job to detect.
+    - **REST**: `GET /api/v1/hub/data-points` declares a `daemon_connection`
+      singleton, so a client can build the entity — and name it — without
+      hard-coding a name the daemon owns. Its value is true by construction
+      there; the negative state comes from the broadcast above or from the
+      client's own connection.
+    - **Config UI**: the connection badge distinguishes an announced shutdown
+      from the ordinary self-healing reconnect, which read as "wait a moment"
+      when the thing being waited for had gone.
 - Backups can now be deleted from the Backups view, one archive at a time.
   Until now the only way an archive left the daemon's storage was the
   scheduled-backup rotation, so an operator who imported the wrong file, or

@@ -301,3 +301,49 @@ func checkMetric(t *testing.T, m HubMetricDataPoint, wantName string, wantValue 
 		t.Errorf("metric[%s] unit=%q want %q", m.LegacyName, m.Unit, wantUnit)
 	}
 }
+
+// TestGetHubDataPoints_DeclaresTheDaemonConnectionSingleton pins the
+// declaration a client builds the daemon-liveness entity from.
+//
+// The value is true by construction — the response exists, so the daemon
+// does — which is exactly why this needs a test of its own: nothing else
+// would notice the entry disappearing, since no assertion about a hub
+// count or metric touches it, and a client that stops being told the
+// singleton exists simply stops creating the entity. The negative state
+// arrives over the WebSocket (`daemon_status.changed`) or from the
+// client's own connection, never from here.
+func TestGetHubDataPoints_DeclaresTheDaemonConnectionSingleton(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hub.NewHub("ccu-a"), centralName: "ccu-a"}
+
+	rr := httptest.NewRecorder()
+	GetHubDataPoints(idx)(rr, httptest.NewRequest(http.MethodGet, "/api/v1/hub/data-points", http.NoBody))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var out []HubDataPoints
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("entries = %d, want 1", len(out))
+	}
+	dc := out[0].DaemonConnection
+	if dc.LegacyName != "daemon_connection" {
+		t.Fatalf("legacy_name = %q, want %q — the name is the daemon's to own, and a client cannot invent it", dc.LegacyName, "daemon_connection")
+	}
+	if !dc.Connected {
+		t.Fatal("connected = false in a response the daemon just produced")
+	}
+	// The field must survive JSON round-tripping as a present member, not
+	// as an omitted one: a client keying on its presence to decide whether
+	// the daemon supports the singleton would otherwise never see it.
+	var raw []map[string]json.RawMessage
+	if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	if _, ok := raw[0]["daemon_connection"]; !ok {
+		t.Fatal("daemon_connection missing from the JSON body")
+	}
+}

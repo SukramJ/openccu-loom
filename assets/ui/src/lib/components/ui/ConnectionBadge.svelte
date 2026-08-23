@@ -4,6 +4,7 @@
     subscribe,
     status as wsStatus,
     diagnostics,
+    daemonIsStopping,
   } from "$lib/stores/events.svelte";
   import { t } from "$lib/i18n";
 
@@ -22,14 +23,22 @@
   // Svelte's $derived tracks it and re-runs whenever the state changes.
   const wsState: "connecting" | "open" | "closed" = $derived(wsStatus());
 
+  // The daemon announced its own stop before the socket went away. Without
+  // this the badge shows the ordinary self-healing "reconnecting", which
+  // reads as "wait a moment" when what actually happened is that the thing
+  // being waited for is gone.
+  const stopping = $derived(daemonIsStopping() && wsState !== "open");
+
   // This badge reflects the live-update (WebSocket) stream, not the CCU
   // link — label it as such so a red dot doesn't read as a CCU outage.
   const label = $derived(
-    wsState === "open"
-      ? t("connection.live_on")
-      : wsState === "connecting"
-        ? t("connection.reconnecting")
-        : t("connection.live_off"),
+    stopping
+      ? t("connection.daemon_stopping")
+      : wsState === "open"
+        ? t("connection.live_on")
+        : wsState === "connecting"
+          ? t("connection.reconnecting")
+          : t("connection.live_off"),
   );
 
   // A disconnected live-stream is an expected, self-healing state (the pump
@@ -47,11 +56,13 @@
   // and the aria-label so the meaning survives even on phones, where the
   // text label collapses to just the coloured dot.
   const explain = $derived(
-    wsState === "open"
-      ? t("connection.tooltip.on")
-      : wsState === "connecting"
-        ? t("connection.tooltip.connecting")
-        : t("connection.tooltip.off"),
+    stopping
+      ? t("connection.tooltip.daemon_stopping")
+      : wsState === "open"
+        ? t("connection.tooltip.on")
+        : wsState === "connecting"
+          ? t("connection.tooltip.connecting")
+          : t("connection.tooltip.off"),
   );
 
   const diag = $derived(diagnostics());

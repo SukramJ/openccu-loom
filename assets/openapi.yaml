@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.4.0
+  version: 7.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -11694,13 +11694,14 @@ components:
         Aggregated hub-singleton snapshot for one central (returned by
         `GET /hub/data-points`). Gathers the hub singletons into the
         coordinator shape a client builds its singleton entities from.
-      required: [alarm_messages, service_messages, inbox, update]
+      required: [alarm_messages, service_messages, inbox, update, daemon_connection]
       properties:
         central: { type: string }
         alarm_messages: { $ref: "#/components/schemas/HubCountDataPoint" }
         service_messages: { $ref: "#/components/schemas/HubCountDataPoint" }
         inbox: { $ref: "#/components/schemas/HubCountDataPoint" }
         update: { $ref: "#/components/schemas/HubUpdateDataPoint" }
+        daemon_connection: { $ref: "#/components/schemas/HubDaemonConnectionDataPoint" }
         metrics:
           type: array
           items: { $ref: "#/components/schemas/HubMetricDataPoint" }
@@ -11710,6 +11711,61 @@ components:
         install_mode:
           type: array
           items: { $ref: "#/components/schemas/HubInstallModeDataPoint" }
+
+    HubDaemonConnectionDataPoint:
+      type: object
+      required: [legacy_name, connected]
+      description: >-
+        Declares the daemon-liveness singleton: the entity answering "is the
+        daemon reachable at all", the counterpart of the MQTT binary sensor
+        fed from the retained bridge status.
+
+
+        `connected` is true in every response this endpoint produces, and
+        that is not an oversight — a REST answer is itself proof the daemon
+        is running, so no other value can be observed here. The field carries
+        the declaration: the singleton's existence and its stable name, which
+        a client cannot invent without hard-coding a name the daemon owns.
+
+
+        The negative state has two sources, both outside this response: the
+        `daemon_status.changed` broadcast the daemon sends over the WebSocket
+        while stopping (topic `system.daemon_status`), and the client's own
+        connection state when the daemon goes away without warning. Wire the
+        entity to whichever of the two arrives first.
+      properties:
+        legacy_name:
+          type: string
+          description: Stable singleton name; always `daemon_connection`.
+        connected: { type: boolean }
+
+    DaemonStatusPayload:
+      type: object
+      required: [status, event_at]
+      description: >-
+        Payload of a `daemon_status.changed` broadcast on the daemon-level
+        topic `system.daemon_status`. The daemon emits it while shutting
+        down, so a WebSocket client can tell "the daemon is stopping" apart
+        from "my connection dropped" — a distinction MQTT clients get from
+        the broker's last will and WebSocket clients otherwise cannot draw.
+
+
+        Only a graceful stop can announce itself. A killed process cannot,
+        and detecting that stays the client's own job.
+      properties:
+        status:
+          type: string
+          enum: [online, offline]
+          description: >-
+            The same two words the MQTT bridge retains on
+            `<base>/bridge/status`, so a client bridging both planes needs no
+            translation.
+        reason:
+          type: string
+          description: >-
+            Short machine-readable cause of an offline announcement
+            (`shutdown`); absent otherwise.
+        event_at: { type: string, format: date-time }
 
     DeviceCreatedPayload:
       type: object

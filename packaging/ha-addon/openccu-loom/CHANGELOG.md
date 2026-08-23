@@ -11,10 +11,11 @@ own:
   names the directory, how many archives are in it and how much room they take.
 - **Backups can be deleted.** One button per archive, with a confirmation that
   names the file. Previously only the automatic rotation ever removed one.
-- **A "Daemon connection" sensor over MQTT.** It turns off when the daemon is
-  gone — a CCU reboot, an add-on restart, a crash — so you can see it and build
-  automations on it. Before, entities merely went unavailable and nothing said
-  why.
+- **You can see when the daemon itself is gone.** A CCU reboot, an add-on
+  restart or a crash used to leave every entity merely "unavailable" with
+  nothing saying why. There is now a "Daemon connection" sensor over MQTT, the
+  daemon announces its shutdown over the WebSocket so clients know it is a stop
+  and not their network, and the Config UI's connection badge says so too.
 - **A garage door's ventilation position is selectable.** Vent-capable drives
   (HmIP-MOD-HO, HmIP-MOD-TM) get a select with closed / ventilation / open.
   Note: paired Matter garage doors have to be re-added once.

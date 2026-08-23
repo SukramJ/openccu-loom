@@ -8855,9 +8855,38 @@ export interface components {
             service_messages: components["schemas"]["HubCountDataPoint"];
             inbox: components["schemas"]["HubCountDataPoint"];
             update: components["schemas"]["HubUpdateDataPoint"];
+            daemon_connection: components["schemas"]["HubDaemonConnectionDataPoint"];
             metrics?: components["schemas"]["HubMetricDataPoint"][];
             connectivity?: components["schemas"]["HubConnectivityDataPoint"][];
             install_mode?: components["schemas"]["HubInstallModeDataPoint"][];
+        };
+        /**
+         * @description Declares the daemon-liveness singleton: the entity answering "is the daemon reachable at all", the counterpart of the MQTT binary sensor fed from the retained bridge status.
+         *
+         *     `connected` is true in every response this endpoint produces, and that is not an oversight — a REST answer is itself proof the daemon is running, so no other value can be observed here. The field carries the declaration: the singleton's existence and its stable name, which a client cannot invent without hard-coding a name the daemon owns.
+         *
+         *     The negative state has two sources, both outside this response: the `daemon_status.changed` broadcast the daemon sends over the WebSocket while stopping (topic `system.daemon_status`), and the client's own connection state when the daemon goes away without warning. Wire the entity to whichever of the two arrives first.
+         */
+        HubDaemonConnectionDataPoint: {
+            /** @description Stable singleton name; always `daemon_connection`. */
+            legacy_name: string;
+            connected: boolean;
+        };
+        /**
+         * @description Payload of a `daemon_status.changed` broadcast on the daemon-level topic `system.daemon_status`. The daemon emits it while shutting down, so a WebSocket client can tell "the daemon is stopping" apart from "my connection dropped" — a distinction MQTT clients get from the broker's last will and WebSocket clients otherwise cannot draw.
+         *
+         *     Only a graceful stop can announce itself. A killed process cannot, and detecting that stays the client's own job.
+         */
+        DaemonStatusPayload: {
+            /**
+             * @description The same two words the MQTT bridge retains on `<base>/bridge/status`, so a client bridging both planes needs no translation.
+             * @enum {string}
+             */
+            status: "online" | "offline";
+            /** @description Short machine-readable cause of an offline announcement (`shutdown`); absent otherwise. */
+            reason?: string;
+            /** Format: date-time */
+            event_at: string;
         };
         /**
          * @description Payload of a `device.created` broadcast. Topic pattern

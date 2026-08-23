@@ -5,6 +5,7 @@ import { render } from "@testing-library/svelte";
 // The events store drives the badge's WS state. We mock the whole
 // module so no real WebSocket is opened during the unit test.
 let wsStatusValue: "connecting" | "open" | "closed" = "closed";
+let daemonStoppingValue = false;
 
 vi.mock("$lib/stores/events.svelte", () => ({
   onResync: () => () => {},
@@ -12,6 +13,7 @@ vi.mock("$lib/stores/events.svelte", () => ({
   // status() is a reactive getter — return whatever the outer variable says.
   status: () => wsStatusValue,
   diagnostics: () => ({ received: 0, lastType: "" }),
+  daemonIsStopping: () => daemonStoppingValue,
 }));
 
 vi.mock("$lib/i18n", () => ({
@@ -23,6 +25,7 @@ import ConnectionBadge from "./ConnectionBadge.svelte";
 beforeEach(() => {
   vi.clearAllMocks();
   wsStatusValue = "closed";
+  daemonStoppingValue = false;
 });
 
 describe("ConnectionBadge", () => {
@@ -79,5 +82,43 @@ describe("ConnectionBadge", () => {
     // so the meaning survives on phones, where only the dot is visible.
     expect(badge!.getAttribute("title")).toContain("connection.tooltip.off");
     expect(badge!.getAttribute("aria-label")).toContain("connection.tooltip.off");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Daemon shutdown announcement (#591)
+// ---------------------------------------------------------------------------
+
+describe("ConnectionBadge — announced daemon shutdown", () => {
+  // Assertions read this render's own container rather than the global
+  // screen: the suite renders without cleanup between cases, so a global
+  // query would still find the previous case's badge.
+  it("says the daemon is stopping instead of the self-healing reconnect text", () => {
+    wsStatusValue = "connecting";
+    daemonStoppingValue = true;
+    const { container } = render(ConnectionBadge);
+
+    expect(container.textContent).toContain("connection.daemon_stopping");
+    // "reconnecting…" reads as "wait a moment"; the thing being waited for
+    // has said it is going away.
+    expect(container.textContent).not.toContain("connection.reconnecting");
+  });
+
+  it("keeps the ordinary reconnect text when nothing was announced", () => {
+    wsStatusValue = "connecting";
+    daemonStoppingValue = false;
+    const { container } = render(ConnectionBadge);
+
+    expect(container.textContent).toContain("connection.reconnecting");
+    expect(container.textContent).not.toContain("connection.daemon_stopping");
+  });
+
+  it("drops the shutdown wording as soon as the stream is open again", () => {
+    wsStatusValue = "open";
+    daemonStoppingValue = true;
+    const { container } = render(ConnectionBadge);
+
+    expect(container.textContent).toContain("connection.live_on");
+    expect(container.textContent).not.toContain("connection.daemon_stopping");
   });
 });

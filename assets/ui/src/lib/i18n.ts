@@ -2968,6 +2968,7 @@ const EN: Catalog = {
   "connection.online": "online",
   "connection.offline": "offline",
   "connection.reconnecting": "reconnecting…",
+  "connection.daemon_stopping": "daemon stopping",
   "connection.live_on": "Live",
   "connection.live_off": "Live offline",
   "connection.ws_tooltip": "Real-time updates from the daemon (WebSocket)",
@@ -2975,6 +2976,8 @@ const EN: Catalog = {
   "connection.tooltip.off":
     "Live connection lost — values no longer update automatically. The connection is restored automatically.",
   "connection.tooltip.connecting": "Establishing live connection…",
+  "connection.tooltip.daemon_stopping":
+    "The daemon announced that it is shutting down. This is not a network problem — live updates return once it is running again.",
   "connection.events": "events",
   "connection.last": "last",
   "session.timeout.warning":
@@ -7125,6 +7128,7 @@ const DE: Catalog = {
   "connection.online": "online",
   "connection.offline": "offline",
   "connection.reconnecting": "verbinde…",
+  "connection.daemon_stopping": "Daemon beendet sich",
   "connection.live_on": "Live",
   "connection.live_off": "Live getrennt",
   "connection.ws_tooltip": "Echtzeit-Aktualisierungen vom Daemon (WebSocket)",
@@ -7133,6 +7137,8 @@ const DE: Catalog = {
   "connection.tooltip.off":
     "Live-Verbindung getrennt — Werte aktualisieren sich nicht automatisch. Die Verbindung wird automatisch wiederhergestellt.",
   "connection.tooltip.connecting": "Live-Verbindung wird hergestellt…",
+  "connection.tooltip.daemon_stopping":
+    "Der Daemon hat sein Herunterfahren angekündigt. Das ist kein Netzwerkproblem — die Live-Aktualisierung kehrt zurück, sobald er wieder läuft.",
   "connection.events": "Ereignisse",
   "connection.last": "zuletzt",
   "session.timeout.warning":
