@@ -4,12 +4,15 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.64.0]
 
-A garage door's ventilation position had no control anywhere Home Assistant
-could see it, and the reason it was easy to miss also hid a second problem:
-combined data points reached MQTT through a type switch that silently ignored
-anything it did not recognise.
+Three feature requests from the field and the two fix rounds that never
+shipped on their own. The Backups view now says where the archives live and
+lets an operator delete one, MQTT finally exposes the daemon's own liveness
+as an entity, and a garage door's ventilation position gets a control Home
+Assistant can see. Underneath: a bring-up that reconnected a CCU that was
+never gone, Matter boot events that were evicted before a controller could
+read them, and classic BidCos thermostats whose composed values never bound.
 
 ### Added
 
@@ -70,14 +73,6 @@ anything it did not recognise.
   field for a vent command, so the key never reached an entity. The select above
   replaces it.
 
-## [0.63.1]
-
-Two defects behind one symptom: the nightly chip-tool suite has been red since
-0.61.0 because a controller reading the bridge's `StartUp` and `BootReason`
-events got an empty answer. The events were emitted; they were gone by the
-time anything read them, and the reason they were gone was a reconnect that
-should never have run.
-
 ### Fixed
 
 - The daemon no longer runs a connection recovery against a CCU that was never
@@ -113,6 +108,23 @@ should never have run.
   opposite. Every emitted event's priority is now checked against a table read
   from matter.js, and an emitter whose event is not in that table fails the
   build rather than picking a priority unreviewed.
+
+- Classic HM-CC-TC thermostats (and the ZEL STG RM FWT that shares their
+  profile) now report a temperature and a target temperature. Their setpoint is
+  `SETPOINT` on the regulator channel while the thermostat entity is
+  materialised on the weather channel, and their current temperature is
+  `TEMPERATURE`, not the `ACTUAL_TEMPERATURE` every other thermostat family
+  uses. Neither value bound, so the entity showed no temperatures at all, its HA
+  discovery named state topics nothing publishes to, and `set_temperature` wrote
+  a parameter the device does not have.
+- The classic RF wall thermostats (HM-TC-IT-WM-W-EU, HM-CC-VG-1) now report
+  their humidity on the thermostat entity — they publish it as
+  `ACTUAL_HUMIDITY`, which the fixed `HUMIDITY` lookup never found.
+- A wire value that belongs to a custom data point on *another* channel now
+  updates that data point's aggregate on the WebSocket and MQTT planes. The
+  fan-out keyed on the channel the value arrived on, so an HM-CC-TC setpoint
+  change reached no aggregate surface until an unrelated parameter on the
+  thermostat's own channel happened to change.
 
 ### Internal
 
@@ -159,35 +171,6 @@ should never have run.
   files are reformatted in the same change: local `make fmt` and CI had drifted
   apart on a rule gofumpt relaxed in v0.11.0, and they now satisfy both
   versions.
-## [0.63.1]
-
-Classic BidCos thermostats. A custom data point binds the values it composes by
-parameter name on its own channel, and the profile schema has always said that
-neither is universal: it names both the parameter and the channel per device
-family. Where the two disagreed, the binding silently produced nothing — most
-visibly on the HM-CC-TC, whose thermostat entity carried no temperature at all.
-Every composed field now resolves through the schema.
-
-The north-bound API contract is unchanged.
-
-### Fixed
-
-- Classic HM-CC-TC thermostats (and the ZEL STG RM FWT that shares their
-  profile) now report a temperature and a target temperature. Their setpoint is
-  `SETPOINT` on the regulator channel while the thermostat entity is
-  materialised on the weather channel, and their current temperature is
-  `TEMPERATURE`, not the `ACTUAL_TEMPERATURE` every other thermostat family
-  uses. Neither value bound, so the entity showed no temperatures at all, its HA
-  discovery named state topics nothing publishes to, and `set_temperature` wrote
-  a parameter the device does not have.
-- The classic RF wall thermostats (HM-TC-IT-WM-W-EU, HM-CC-VG-1) now report
-  their humidity on the thermostat entity — they publish it as
-  `ACTUAL_HUMIDITY`, which the fixed `HUMIDITY` lookup never found.
-- A wire value that belongs to a custom data point on *another* channel now
-  updates that data point's aggregate on the WebSocket and MQTT planes. The
-  fan-out keyed on the channel the value arrived on, so an HM-CC-TC setpoint
-  change reached no aggregate surface until an unrelated parameter on the
-  thermostat's own channel happened to change.
 
 ## [0.63.0]
 
