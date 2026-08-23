@@ -1,6 +1,7 @@
 # Round 5 — audit the detectors, not the code
 
-- **Status**: accepted; M1, M2, M5, M6 done (ADR 0065 accepted), M3–M4 in progress
+- **Status**: accepted; M1–M6 done. ADR 0065 accepted; its incremental
+  adoption is tracked in [`roadmap.md`](./roadmap.md).
 - **Scope**: what replaces a fifth full-codebase instance sweep
 - **Related**: [`../audits/2026-08-17-round4-audit-findings.json`](../audits/2026-08-17-round4-audit-findings.json)
   (carries a per-finding `status` since PR #606),
@@ -168,11 +169,64 @@ guard:
 Evidence that this pays: the four guards written during the round-4 tail each
 found something on their first run that four audit rounds had missed.
 
+**Done, 2026-08-23.** Four detectors attempted, three shipped, and the fourth
+is the interesting one.
+
+| class | guard | result |
+|---|---|---|
+| return paths | `TestEveryTeardownCloserIsInvokedByATest` | bites |
+| empty = absent = failed | `TestReadFunctionsDoNotCollapseFailureIntoEmpty` | bites |
+| success without effect | `TestWSCentralStateBroadcastReachesHub` | bites, covers 1 of ~34 broadcasts |
+| multi-CCU keys | `TestHADiscoveryIdentifiersComeFromOneBuilder` | bites — **4 production defects** |
+
+**The multi-CCU one was first reported as impossible, and that was a framing
+error rather than a fact.** The batch was told, correctly, that the obvious
+detector — "find composite keys missing a central" — drowns in profile and
+weekday strings, and concluded no detector could bite. The tractable rule is
+the inverse: *only these functions may write the `openccu-loom_` prefix.*
+
+That rule found four sites building a Home Assistant identifier by hand from
+the bare device address. For the address classes that repeat between CCUs —
+`INT000*`, CUxD, the virtual remotes — two CCUs then publish byte-identical
+discovery configs for two different heating groups, and Home Assistant keeps
+whichever arrived first, permanently, because the payload is retained. One of
+the four needs no second CCU at all: a `via_device` pointing at a parent
+identifier no device declares, so the sub-device floats unparented.
+
+The lesson is worth more than the guard: **"no detector is possible" is a claim
+about a rule, not about a class.** The batch reported honestly and the reviewer
+disagreed by finding two instances by hand; the correctly-framed rule then found
+four. Keep the instruction that an honest negative is a valid outcome — it is —
+but treat one as a prompt to re-frame before accepting it.
+
+One guard had committed its own defect: the empty-collapses-into-absent detector
+swallowed a directory-walk error into a skip, which would have made it scan less
+and report fewer offenders. Caught by lint, not by review.
+
 ### M4 — generate the SPA fixtures from `openapi.yaml`
 
 Types *and* fixtures. This closes the gap where the e2e suite asserts against
 DTOs that no longer match the spec, on the largest and least-protected surface.
 The `maxDiffPixels: 0` baselines need their own decision in the same pass.
+
+**Done, 2026-08-23 — and the premise above was wrong.** `mock-api.ts` is not
+1179 lines of hand-written DTOs; it is a *router* mapping URLs to 59 JSON files
+under `assets/ui/tests/e2e/fixtures/`. The gap is narrower and more actionable:
+nothing validated those files against `assets/openapi.yaml`.
+
+So the measure became validation rather than generation — generating fixtures
+would lose the realistic German device names the screenshots depend on, and the
+check is what was missing. `TestSPAE2EFixturesMatchOpenAPISchema` validates
+every fixture against the 200 schema of the route that serves it.
+
+Seven fixtures had drifted, and all seven are fixed rather than ratcheted. The
+sharpest: `users.json` answered both `/auth/users` and `/users`, which use
+different schemas for the same concept — `username` versus `subject` plus
+`created_at` — so one file satisfied neither and could not. Fixing the first
+missing field on a fixture repeatedly surfaced more behind it: `matter-status`
+was short five of seven required counters, not one.
+
+The `maxDiffPixels: 0` question is untouched and still open.
 
 ### M5 — hold the fix wave to the audit's standard
 
@@ -224,6 +278,22 @@ Without a number, "drastically fewer" is not a claim. Four metrics, per round:
 3. **Defect-injection rate of the fix wave** — currently ~14 %. Target: zero.
 4. **Ratchet entry count** — must shrink, not freeze. 82 at the start of
    round 5, 77 after M2.
+
+### Where round 5 left the numbers
+
+| metric | before | after |
+|---|---:|---:|
+| contract guards | 359 | 364 |
+| decorative guards (mutation-tested) | 17 of 359 | 17 identified, repair ongoing |
+| ratchet entries | 82 | 77 |
+| dead exported identifiers | 3023 | 3021 |
+| production defects found by the new guards | — | 4 (multi-CCU identifiers) |
+| contract drift found by the new guards | — | 7 (SPA fixtures) |
+
+The number that matters most is not in the table: **every one of the six
+measures found something the four preceding instance sweeps had not.** Not
+because the sweeps were careless, but because they were looking at the code and
+the defects were in what looks at the code.
 
 ## What this plan deliberately does not do
 
