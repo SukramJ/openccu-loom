@@ -28,9 +28,12 @@ func TestPin_OpenWindow_PaseReject(t *testing.T) {
 // runtime. Mirrors chip CommissioningWindowManager +
 // AdministratorCommissioningCluster VerifyOrExit(IsFailSafeFullyDisarmed).
 func TestPin_OpenWindow_FailSafeCheck(t *testing.T) {
-	contract.MustFindCallerInFile(
+	// SetIsFailSafeArmed is a method on the AdministratorCommissioning
+	// cluster (the local `admComm` value), not a package-level function —
+	// pin the method call directly.
+	contract.MustFindMethodCall(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/matter/cluster/wire", "SetIsFailSafeArmed",
+		"admComm", "SetIsFailSafeArmed",
 	)
 }

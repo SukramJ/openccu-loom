@@ -14,9 +14,12 @@ import (
 // accumulate unboundedly; the CCU bridge would eventually exhaust its session
 // table and reject new commissioning attempts.
 func TestPin_StartReaper_CalledInDaemon(t *testing.T) {
-	contract.MustFindCallerInFile(
+	// StartReaper is a method on the operational session Manager (the
+	// local `opMgr` value), not a package-level function — pin the
+	// method call directly.
+	contract.MustFindMethodCall(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/matter", "StartReaper",
+		"opMgr", "StartReaper",
 	)
 }

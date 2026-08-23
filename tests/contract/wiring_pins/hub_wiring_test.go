@@ -11,25 +11,16 @@ import (
 
 // TestPin_HubSetConnectivity_CalledInHubWiring pins that hub_wiring.go wires
 // the per-interface reachability tracker via Hub.SetConnectivity.
-// Without this call the Hub never receives interface health events.
+// Without this call the Hub never receives interface health events. This
+// is a method call on unit.HubModel, not a package function, so it is
+// pinned by receiver + method name; HubModel is the distinctive part of
+// the receiver expression and survives a rename of the enclosing unit
+// variable.
 func TestPin_HubSetConnectivity_CalledInHubWiring(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_wiring.go",
-		"internal/model/hub", "SetConnectivity",
-	)
-}
-
-// TestPin_LoadSysvars_UsesHubSysvarLookup pins that loadSysvars in
-// hub_wiring.go calls Hub.Sysvar() for in-place updates of existing
-// sysvars.  Without this lookup, every CCU sync would reallocate all
-// sysvar objects instead of updating them in place, breaking any
-// existing observers that hold references.
-func TestPin_LoadSysvars_UsesHubSysvarLookup(t *testing.T) {
-	contract.MustFindCallerInFile(
-		t,
-		"internal/central/adapter/hub_wiring.go",
-		"internal/model/hub", "Sysvar",
+		"HubModel", "SetConnectivity",
 	)
 }
 
@@ -50,11 +41,14 @@ func TestPin_UpdateFirmwareUpdater_WiredOnHub(t *testing.T) {
 // TestPin_SetProgramExecutor_CalledInHubWiring pins that hub_wiring.go calls
 // HubCoordinator.SetProgramExecutor to wire the CCU-side program execution
 // hook.  Without this call, program execution silently becomes a no-op.
+// This is a method call on unit.Hub, not a package function, so it is
+// pinned by receiver + method name; Hub (the *coordinators.HubCoordinator
+// field) is the distinctive part of the receiver expression.
 func TestPin_SetProgramExecutor_CalledInHubWiring(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_wiring.go",
-		"internal/central/coordinators", "SetProgramExecutor",
+		"Hub", "SetProgramExecutor",
 	)
 }
 
@@ -64,24 +58,27 @@ func TestPin_SetProgramExecutor_CalledInHubWiring(t *testing.T) {
 // permanent service-message suppression (`POST
 // /service-messages/{id}/disable`, the ServiceMessages aggregate's
 // Disable path) silently becomes a no-op instead of reaching the CCU's
-// Interface.suppressServiceMessages.
+// Interface.suppressServiceMessages. This is a method call on unit.Hub,
+// not a package function, so it is pinned by receiver + method name.
 func TestPin_SetServiceMessageSuppressor_WiredInHubWiring(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_wiring.go",
-		"internal/central/coordinators", "SetServiceMessageSuppressor",
+		"Hub", "SetServiceMessageSuppressor",
 	)
 }
 
 // TestPin_SetServiceMessageReader_WiredInHubWiring pins that hub_wiring.go
 // wires the suppressed-parameter reader via
 // HubCoordinator.SetServiceMessageReader so the management view can be
-// reconciled against the CCU's live getSuppressedServiceMessages.
+// reconciled against the CCU's live getSuppressedServiceMessages. This is
+// a method call on unit.Hub, not a package function, so it is pinned by
+// receiver + method name.
 func TestPin_SetServiceMessageReader_WiredInHubWiring(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_wiring.go",
-		"internal/central/coordinators", "SetServiceMessageReader",
+		"Hub", "SetServiceMessageReader",
 	)
 }
 
@@ -112,10 +109,29 @@ func TestPin_WireServiceMessageSuppressor_CalledInCcuWiring(t *testing.T) {
 // The sibling pin above (SetProgramExecutor) covers the same writer being
 // handed over for programs. The two calls sit on adjacent lines, which is
 // how the omission stayed plausible to a reader.
+//
+// This is a method call on unit.Hub, not a package function, so it is
+// pinned by receiver + method name.
 func TestPin_SetSysvarValueWriter_WiredInHubWiring(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_wiring.go",
-		"internal/central/coordinators", "SetSysvarValueWriter",
+		"Hub", "SetSysvarValueWriter",
+	)
+}
+
+// TestPin_LoadSysvars_UsesHubSysvarLookup pins that the sysvar load path looks
+// an existing system variable up before writing it, so a refresh updates the
+// data point in place. Replacing the entry instead would drop every observer
+// reference held on it — the SPA and MQTT would keep a data point the model no
+// longer owns, and stop seeing changes.
+//
+// Method call on the hub model; `h` is that model throughout the function, and
+// the receiver matcher compares whole segments.
+func TestPin_LoadSysvars_UsesHubSysvarLookup(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/hub_wiring.go",
+		"h", "Sysvar",
 	)
 }

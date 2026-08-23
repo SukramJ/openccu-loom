@@ -18,9 +18,12 @@ import (
 // Mirrors chip FailSafeContext::Reset() called on the CommissioningComplete
 // success path in CommissioningWindowManager.
 func TestPin_CommissioningComplete_ClearsPendingFabric(t *testing.T) {
-	contract.MustFindCallerInFile(
+	// SetOnCommissioningComplete is a method on the GeneralCommissioning
+	// cluster (the local `gc` value), not a package-level function — pin
+	// the method call directly.
+	contract.MustFindMethodCall(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/matter/cluster/core", "SetOnCommissioningComplete",
+		"gc", "SetOnCommissioningComplete",
 	)
 }

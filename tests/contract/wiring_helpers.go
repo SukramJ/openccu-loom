@@ -91,10 +91,20 @@ func parseFiles(t *testing.T, callerPath string) []*ast.File {
 	return parseUnit(t, callerPath).files
 }
 
-// MustFindCallerInFile asserts that callerFile (repo-root-relative) contains
-// a call-expression or argument whose selector name equals calleeIdent.
-// calleePackage is used only in the failure message to give context; the AST
-// search is purely name-based to survive import-alias changes.
+// MustFindCallerInFile asserts that callerFile (repo-root-relative) contains a
+// use of calleeIdent that really belongs to calleePackage — resolved through
+// the caller file's own import list, so an import alias changing does not
+// break the pin.
+//
+// The name-only search this replaced was a documented trade-off ("purely
+// name-based to survive import-alias changes"), and it was a false dilemma:
+// reading the alias out of the file gives both properties. Its cost was
+// measured in the M1 mutation pass — a pin asserting that the daemon verifies
+// a Matter NOC certificate chain was satisfied by `spake2.NewVerifier`, which
+// shares nothing with certificate verification but the word `NewVerifier`, so
+// deleting all three real calls would have left the pin green. The same
+// blindness hid a stale argument: that pin names a package
+// (`internal/north/matter/cert`) that does not exist.
 //
 // The check skips any occurrence of calleeIdent that is the name of a
 // top-level FuncDecl in callerFile (i.e. the definition itself), so passing
@@ -115,19 +125,142 @@ func MustFindCallerInFile(t *testing.T, callerFile, calleePackage, calleeIdent s
 	t.Helper()
 	unit := parseUnit(t, callerFile)
 	var matches []matchedCall
+	importedAnywhere := false
 	for _, f := range unit.files {
-		for _, use := range identUsesNotDefinition(f, calleeIdent) {
-			matches = append(matches, matchedCall{file: f, node: use})
+		if calleePackage == "" {
+			// No package named: the callee is unqualified — an unexported
+			// helper of the caller's own package. There is no import to
+			// resolve and no qualifier to check.
+			importedAnywhere = true
+			for _, use := range identUsesNotDefinition(f, calleeIdent) {
+				matches = append(matches, matchedCall{file: f, node: use})
+			}
+			continue
 		}
+		local, imported := importLocalName(f, calleePackage)
+		switch {
+		case imported:
+			importedAnywhere = true
+			for _, sel := range qualifiedUses(f, local, calleeIdent) {
+				matches = append(matches, matchedCall{file: f, node: sel})
+			}
+		case samePackage(unit, calleePackage):
+			// The caller lives in the callee's own package, so the call
+			// carries no qualifier and there is no import to resolve.
+			importedAnywhere = true
+			for _, use := range identUsesNotDefinition(f, calleeIdent) {
+				matches = append(matches, matchedCall{file: f, node: use})
+			}
+		}
+	}
+	if !importedAnywhere {
+		t.Errorf(
+			"wiring pin: %s does not import %s at all, so it cannot call %s.%s.\n"+
+				"  Either the wiring is gone, or this pin names the wrong package — check\n"+
+				"  the import path before assuming the first.",
+			callerFile, calleePackage, calleePackage, calleeIdent,
+		)
+		return
 	}
 	if len(matches) == 0 {
 		t.Errorf(
-			"wiring pin: %s not found in %s\n  expected a call to %s.%s",
-			calleeIdent, callerFile, calleePackage, calleeIdent,
+			"wiring pin: %s imports %s but calls nothing named %s from it\n"+
+				"  expected a call to %s.%s",
+			callerFile, calleePackage, calleeIdent, calleePackage, calleeIdent,
 		)
 		return
 	}
 	assertAnyCallExecutable(t, unit, matches, calleeIdent, callerFile)
+}
+
+// helperModulePath is this module's import prefix. It is spelled here rather
+// than borrowed from a _test.go file so this non-test source keeps compiling
+// on its own.
+const helperModulePath = "github.com/SukramJ/openccu-loom"
+
+// importLocalName reports the name f refers to pkgPath by — the explicit
+// alias when there is one, otherwise the path's last segment — and whether f
+// imports it at all. pkgPath is module-relative ("internal/model/hub").
+//
+// Reading the alias out of the file is what lets the pin survive an import
+// being renamed while still refusing a same-named identifier from somewhere
+// else entirely.
+func importLocalName(f *ast.File, pkgPath string) (string, bool) {
+	want := helperModulePath + "/" + pkgPath
+	for _, spec := range f.Imports {
+		if spec.Path == nil {
+			continue
+		}
+		got := strings.Trim(spec.Path.Value, `"`)
+		if got != want && got != pkgPath {
+			continue
+		}
+		if spec.Name != nil {
+			if spec.Name.Name == "_" || spec.Name.Name == "." {
+				// A blank import calls nothing; a dot import erases the
+				// qualifier this check depends on. Neither can be pinned.
+				return "", false
+			}
+			return spec.Name.Name, true
+		}
+		return got[strings.LastIndex(got, "/")+1:], true
+	}
+	return "", false
+}
+
+// samePackage reports whether the parsed unit is itself the callee package,
+// in which case calls to it carry no qualifier.
+func samePackage(unit parsedUnit, pkgPath string) bool {
+	if unit.pkgName == "" {
+		return false
+	}
+	return pkgPath[strings.LastIndex(pkgPath, "/")+1:] == unit.pkgName
+}
+
+// qualifiedUses returns every use of ident in f that provably belongs to the
+// package imported as local. Unlike a bare identifier search it cannot be
+// satisfied by a same-named function from somewhere else.
+//
+// Two shapes count, because this codebase wires with both:
+//
+//   - a qualified reference, `local.Ident` — an ordinary call or value;
+//   - a field key in a composite literal whose TYPE is qualified,
+//     `local.Config{Ident: fn}` — the functional-config shape a good deal of
+//     the Matter and MQTT wiring uses. The key itself is a bare identifier, so
+//     only the literal's type tells you which package's field it is.
+func qualifiedUses(f *ast.File, local, ident string) []ast.Node {
+	var found []ast.Node
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.SelectorExpr:
+			if node.Sel == nil || node.Sel.Name != ident {
+				return true
+			}
+			if x, ok := node.X.(*ast.Ident); ok && x.Name == local {
+				found = append(found, node)
+			}
+		case *ast.CompositeLit:
+			sel, ok := node.Type.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			x, ok := sel.X.(*ast.Ident)
+			if !ok || x.Name != local {
+				return true
+			}
+			for _, elt := range node.Elts {
+				kv, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if key, ok := kv.Key.(*ast.Ident); ok && key.Name == ident {
+					found = append(found, kv)
+				}
+			}
+		}
+		return true
+	})
+	return found
 }
 
 // matchedCall is one occurrence a pin's name search found.
@@ -163,9 +296,12 @@ func MustFindMethodCall(t *testing.T, callerFile, receiverIdent, methodName stri
 			if !ok || sel.Sel.Name != methodName {
 				return true
 			}
-			// Accept any expression whose string representation ends with receiverIdent.
-			xStr := exprString(sel.X)
-			if strings.HasSuffix(xStr, receiverIdent) || strings.Contains(xStr, receiverIdent+".") {
+			// The receiver must appear as a WHOLE segment of the expression,
+			// not as a suffix of one. Suffix matching accepted `ccu` for a
+			// pin written against `u`, and `dispatch` for one written against
+			// `ch` — which is how a pin on a short receiver came to prove
+			// nothing and was mistaken for unpinnable.
+			if receiverSegmentMatches(exprString(sel.X), receiverIdent) {
 				matches = append(matches, matchedCall{file: f, node: sel})
 			}
 			return true
@@ -180,6 +316,22 @@ func MustFindMethodCall(t *testing.T, callerFile, receiverIdent, methodName stri
 	}
 	assertAnyCallExecutable(t, unit, matches,
 		fmt.Sprintf("%s.%s", receiverIdent, methodName), callerFile)
+}
+
+// receiverSegmentMatches reports whether want is one of the dot-separated
+// segments of the receiver expression — `b` matches `b` and `p.b`, but not
+// `sb` or `web`. A short receiver is then as discriminating as the code makes
+// it: within one file `b` is one variable, and pinning it says something.
+func receiverSegmentMatches(expr, want string) bool {
+	if want == "" {
+		return false
+	}
+	for _, seg := range strings.Split(expr, ".") {
+		if seg == want {
+			return true
+		}
+	}
+	return false
 }
 
 // assertAnyCallExecutable passes when at least one of the occurrences the

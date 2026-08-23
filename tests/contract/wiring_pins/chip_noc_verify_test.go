@@ -18,6 +18,6 @@ func TestPin_NewVerifier_CalledInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/matter/cert", "NewVerifier",
+		"internal/north/matter/secure/mattercert", "NewVerifier",
 	)
 }

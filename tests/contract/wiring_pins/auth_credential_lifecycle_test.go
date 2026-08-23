@@ -317,12 +317,17 @@ func TestBasicAuthBudgetGatesThePasswordVerification(t *testing.T) {
 // does, which proves the mechanism works — not that the daemon still does it.
 // Without that assignment the accounting falls back to the guard behind the
 // key derivation, which bounds the sweep but no longer bounds its cost.
+//
+// This is a field write on the middleware value, not a package function, so
+// it is pinned as a method-shaped selector: the receiver is authMw's own
+// field assignment (`d.authMw.BasicThrottle = ...`), not a call qualified by
+// package internal/auth.
 func TestDaemonGivesTheResolverTheBasicThrottle(t *testing.T) {
 	t.Parallel()
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"cmd/openccu-loom/daemon_rest_mount.go",
-		"internal/auth",
+		"authMw",
 		"BasicThrottle",
 	)
 }
