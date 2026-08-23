@@ -43,14 +43,17 @@ func (s *stubWriter) params() []hmenum.Parameter {
 type putWriter struct {
 	stubWriter
 	puts []map[string]any
+	// addrs holds the target address of each PutParamset call, parallel to puts.
+	addrs []string
 }
 
-func (p *putWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority) error {
+func (p *putWriter) PutParamset(_ context.Context, address string, _ hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	cp := make(map[string]any, len(values))
 	maps.Copy(cp, values)
 	p.puts = append(p.puts, cp)
+	p.addrs = append(p.addrs, address)
 	return nil
 }
 
@@ -185,6 +188,45 @@ func TestWriteRejectsDisplayIDAboveMax(t *testing.T) {
 	err := d.Write(context.Background(), Row{ID: 6}, hmenum.CommandPriorityHigh)
 	if !errors.Is(err, ErrInvalidRow) {
 		t.Fatalf("got %v, want ErrInvalidRow for ID=6", err)
+	}
+}
+
+// TestWriteRowsAddressesSingleChannelWithDisplayDataID verifies that a
+// two-row WriteRows call writes both rows to the display's own channel
+// address (DISPLAY_DATA_ID selects the row, not the channel) and that every
+// row carries DISPLAY_DATA_ID. HmIP-WRCD — the only text-display model —
+// exposes every DISPLAY_DATA_* parameter on a single channel
+// (../godevccu/internal/embed/data/paramset_descriptions/HmIP-WRCD.json,
+// channel :3); there is no per-row channel to address.
+func TestWriteRowsAddressesSingleChannelWithDisplayDataID(t *testing.T) {
+	t.Parallel()
+
+	w := &putWriter{}
+	d := New("VCU4243444:3", w)
+	rows := []Row{
+		{ID: 1, Text: "row1"},
+		{ID: 2, Text: "row2"},
+	}
+	if err := d.WriteRows(context.Background(), rows, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.puts) != len(rows) {
+		t.Fatalf("got %d PutParamset calls, want %d", len(w.puts), len(rows))
+	}
+	for i, addr := range w.addrs {
+		if addr != d.Address {
+			t.Errorf("row %d addressed %q, want the single display channel %q", i, addr, d.Address)
+		}
+	}
+	for i, row := range rows {
+		id, ok := w.puts[i][string(hmenum.ParameterDisplayDataID)]
+		if !ok {
+			t.Errorf("row %d put values %v missing DISPLAY_DATA_ID", i, w.puts[i])
+			continue
+		}
+		if id != row.ID {
+			t.Errorf("row %d DISPLAY_DATA_ID = %v, want %v", i, id, row.ID)
+		}
 	}
 }
 

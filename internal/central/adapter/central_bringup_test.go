@@ -10,13 +10,16 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -580,5 +583,127 @@ func TestBringUpManagerAddCentralWiresDescriptorPersistence(t *testing.T) {
 	}
 	if _, ok := rec.Paramset["STATE"]; !ok {
 		t.Errorf("persisted paramset missing STATE: %+v", rec.Paramset)
+	}
+}
+
+// TestCentralBringUp_ClearModelDoesNotEvictPersistedValuesCache reproduces
+// one half of the teardown's split contract. A device- or interface-scoped cache clear
+// (cachereset.Service.Clear) deletes only the scoped persisted VALUES rows
+// itself, then calls BringUpManager.ReinitCentral, which tears the whole
+// central's in-memory model down via clearModel before re-pulling.
+// clearModel used to remove every device through Unit.RemoveDevice, which
+// fires hmevent.DeviceRemovedEvent unconditionally — and the persistent
+// values-cache evictor (WireValuesCacheEviction) deletes on that event for
+// every device it fires for, not just the one the operator scoped. The net
+// effect was that clearModel's blast radius silently widened any scoped
+// clear into a whole-central wipe of the persisted VALUES cache, exactly
+// what docs/caching.md says cannot happen.
+//
+// The reproducer never asks for device B's cache to be cleared (no explicit
+// store delete for it, mirroring what cachereset.Service.Clear does for an
+// out-of-scope device) — only clearModel is invoked, exactly as reinit()
+// calls it. Device B's rows must survive.
+func TestCentralBringUp_ClearModelDoesNotEvictPersistedValuesCache(t *testing.T) {
+	t.Parallel()
+
+	store := freshValuesCacheStoreForAdapter(t)
+	reg, unit := registryWithEventBus(t)
+
+	const (
+		centralName = "ccu-test"
+		ifaceID     = "HmIP-RF"
+		devA        = "DEVICE-A" // in the requested clear scope
+		devB        = "DEVICE-B" // NOT in the requested clear scope
+	)
+
+	saveRowsForDevice(t, store, centralName, ifaceID, devA, []string{"STATE"})
+	saveRowsForDevice(t, store, centralName, ifaceID, devB, []string{"TEMPERATURE", "HUMIDITY"})
+
+	evictor := WireValuesCacheEviction(reg, store, nil)
+	t.Cleanup(evictor.Stop)
+
+	unit.ModelRegistry.Put(device.New(device.Config{
+		InterfaceID: ifaceID, Interface: hmenum.InterfaceHmIPRF,
+		Address: devA, Model: "HmIP-PS",
+	}))
+	unit.ModelRegistry.Put(device.New(device.Config{
+		InterfaceID: ifaceID, Interface: hmenum.InterfaceHmIPRF,
+		Address: devB, Model: "HmIP-STH",
+	}))
+
+	b := &centralBringUp{logger: slog.Default(), unit: unit}
+	b.clearModel()
+
+	if n := rowCountForDevice(t, store, centralName, ifaceID, devB); n != 2 {
+		t.Errorf("device B was outside the requested clear scope, but clearModel dropped its "+
+			"persisted VALUES cache rows anyway: expected 2 rows intact, got %d", n)
+	}
+}
+
+// TestCentralBringUp_ClearModelStillAnnouncesRemoval pins the other half.
+//
+// The cache evictors must stand down on a model teardown, but every other
+// consumer must not: the north-bound planes learn that a device is gone only
+// from this event. Silencing it wholesale — the first attempt at the fix
+// above — meant a device the CCU had genuinely dropped kept its MQTT
+// discovery config, its WebSocket presence and its live subscriptions until
+// the next daemon boot, because the re-pull that follows a teardown re-creates
+// only the devices the CCU still reports.
+//
+// So: the event fires, and it carries ModelTeardown so the two evictors can
+// tell the two situations apart.
+func TestCentralBringUp_ClearModelStillAnnouncesRemoval(t *testing.T) {
+	t.Parallel()
+
+	reg, unit := registryWithEventBus(t)
+	_ = reg
+
+	const (
+		ifaceID = "HmIP-RF"
+		addr    = "DEVICE-GONE"
+	)
+
+	var mu sync.Mutex
+	var seen []hmevent.DeviceRemovedEvent
+	unsub := events.Subscribe(unit.EventBus, func(e hmevent.DeviceRemovedEvent) {
+		mu.Lock()
+		seen = append(seen, e)
+		mu.Unlock()
+	})
+	t.Cleanup(unsub)
+
+	unit.ModelRegistry.Put(device.New(device.Config{
+		InterfaceID: ifaceID, Interface: hmenum.InterfaceHmIPRF,
+		Address: addr, Model: "HmIP-PS",
+	}))
+
+	b := &centralBringUp{logger: slog.Default(), unit: unit}
+	b.clearModel()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		n := len(seen)
+		mu.Unlock()
+		if n > 0 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) == 0 {
+		t.Fatalf("clearModel removed %s without announcing it: every north-bound plane "+
+			"(MQTT retraction, the WebSocket device-lifecycle push, the Matter bridge) "+
+			"learns of a vanished device only from this event", addr)
+	}
+	if got := seen[0].Address; got != addr {
+		t.Errorf("removal event carried address %q, want %q", got, addr)
+	}
+	if !seen[0].ModelTeardown {
+		t.Error("the removal event must carry ModelTeardown so the persistent " +
+			"VALUES/MASTER cache evictors can stand down; without it a scoped " +
+			"cache clear widens into a whole-central wipe")
 	}
 }

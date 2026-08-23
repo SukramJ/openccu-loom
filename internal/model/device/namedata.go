@@ -53,7 +53,7 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 	deviceName := ""
 	model := ""
 	if channel.device != nil {
-		deviceName = channel.device.Name
+		deviceName = channel.device.Name()
 		model = channel.device.Model
 	}
 	channelName := baseChannelName(channel, model, deviceName)
@@ -104,7 +104,7 @@ func BuildCustomDataPointName(channel *Channel, postfix, postfixTranslation stri
 	deviceName := ""
 	model := ""
 	if channel.device != nil {
-		deviceName = channel.device.Name
+		deviceName = channel.device.Name()
 		model = channel.device.Model
 	}
 	channelName := baseChannelName(channel, model, deviceName)

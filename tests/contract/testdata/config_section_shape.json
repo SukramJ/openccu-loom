@@ -50,7 +50,6 @@
   "north.mqtt.discovery_enabled": "bool",
   "north.mqtt.enabled": "bool",
   "north.mqtt.password": "string",
-  "north.mqtt.payload_format": "string",
   "north.mqtt.protocol_version": "string,omitempty",
   "north.mqtt.raw_enabled": "bool",
   "north.mqtt.retain_cleanup_window_ms": "int,omitempty",

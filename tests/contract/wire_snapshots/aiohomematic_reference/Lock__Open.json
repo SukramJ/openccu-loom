@@ -2,7 +2,7 @@
   "dp_type": "Lock",
   "setter": "Open",
   "source": "aiohomematic",
-  "aiohomematic_version": "2026.5.7",
+  "aiohomematic_version": "2026.8.3",
   "inputs": [
     {
       "label": "priority=normal",

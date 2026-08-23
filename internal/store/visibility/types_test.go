@@ -118,33 +118,33 @@ func TestIgnoreCacheKeyUsableAsMapKey(t *testing.T) {
 // Custom_only dimension.
 func TestUnIgnoreCacheKeyDiffersOnCustomOnly(t *testing.T) {
 	t.Parallel()
-	base := unIgnoreCacheKey{
-		model:       "HmIP-BS2",
-		channelType: "SWITCH",
-		paramsetKey: hmenum.ParamsetKeyValues,
-		parameter:   hmenum.ParameterState,
-		customOnly:  false,
+	base := UnIgnoreCacheKey{
+		Model:       "HmIP-BS2",
+		ChannelType: "SWITCH",
+		ParamsetKey: hmenum.ParamsetKeyValues,
+		Parameter:   hmenum.ParameterState,
+		CustomOnly:  false,
 	}
 	custom := base
-	custom.customOnly = true
+	custom.CustomOnly = true
 	if base == custom {
-		t.Error("unIgnoreCacheKey must differ when customOnly changes")
+		t.Error("UnIgnoreCacheKey must differ when customOnly changes")
 	}
 }
 
 // TestUnIgnoreCacheKeyEqualityForSameInputs verifies struct equality holds
-// for two unIgnoreCacheKey values built from the same fields.
+// for two UnIgnoreCacheKey values built from the same fields.
 func TestUnIgnoreCacheKeyEqualityForSameInputs(t *testing.T) {
 	t.Parallel()
-	a := unIgnoreCacheKey{
-		model:       "HmIP-BROLL",
-		channelType: "BLIND",
-		paramsetKey: hmenum.ParamsetKeyMaster,
-		parameter:   hmenum.ParameterLevel,
-		customOnly:  true,
+	a := UnIgnoreCacheKey{
+		Model:       "HmIP-BROLL",
+		ChannelType: "BLIND",
+		ParamsetKey: hmenum.ParamsetKeyMaster,
+		Parameter:   hmenum.ParameterLevel,
+		CustomOnly:  true,
 	}
 	b := a // copy
 	if a != b {
-		t.Error("identical unIgnoreCacheKey structs must be equal")
+		t.Error("identical UnIgnoreCacheKey structs must be equal")
 	}
 }

@@ -344,7 +344,7 @@ func (s *SchedulesDomain) ListScheduleDevices(_ context.Context) ([]hmapi.Schedu
 			out = append(out, hmapi.ScheduleDeviceSummary{
 				Central: u.Name(),
 				Address: dev.Address,
-				Name:    dev.Name,
+				Name:    dev.Name(),
 				Model:   dev.Model,
 				Channel: hmapi.ScheduleChannelRef{
 					Address: ch.Address,

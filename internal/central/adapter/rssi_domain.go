@@ -46,7 +46,7 @@ func (d *RSSIInfoDomain) RSSIInfo(_ context.Context) (map[string]any, error) {
 			}
 			devices = append(devices, map[string]any{
 				"address":       dev.Address,
-				"name":          dev.Name,
+				"name":          dev.Name(),
 				"interface_id":  dev.InterfaceID,
 				"central":       u.Name(),
 				"rssi_device":   intOrNil(info.SignalStrength),

@@ -203,7 +203,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 	if ch.IsHidden() {
 		return
 	}
-	displayName := dev.Name
+	displayName := dev.Name()
 	if displayName == "" {
 		displayName = dev.Address
 	}

@@ -606,16 +606,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	}
 	if d.AuthResolve != nil {
 		r.Use(d.AuthResolve)
-		// Throttle per-source HTTP Basic credential guessing on every
-		// Resolve-protected route, not just POST /auth/login: a Basic header
-		// that fails verification is charged against the same per-IP buckets
-		// the login limiter uses, so a guessing sweep on GET /auth/me (or any
-		// route) is rate-limited the same way the login route is. Mounted
-		// right after Resolve so the guard reads the identity Resolve attached
-		// — a valid credential costs nothing, only failures charge.
-		if d.LoginRateLimit != nil {
-			r.Use(auth.GuardBasicAuth(d.LoginRateLimit))
-		}
 	}
 	if d.Idempotent {
 		// Mounted after AuthResolve so the cache key can incorporate the
@@ -687,6 +677,27 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// Throttle per-source HTTP Basic credential guessing across the whole
+		// API, not just POST /auth/login: a Basic header that fails
+		// verification is charged against the same per-IP bucket the login
+		// limiter uses, so a guessing sweep on GET /auth/me — or any other
+		// route — costs an attacker exactly what the login route costs them.
+		// Sharing that bucket is deliberate: it is one credential space, and
+		// two buckets would simply hand a sweep twice the attempts.
+		//
+		// Scoped to /api/v1 rather than the whole mux. Above this line sit the
+		// SPA mount, /app/*, /about, /health and the UI bootstrap — one page
+		// load is dozens of asset requests, and a browser that once answered a
+		// Basic challenge and now holds a stale credential would charge the
+		// bucket once per asset. The source is locked out of login before the
+		// page has finished rendering, by its own cached header rather than by
+		// anything an attacker did. Mounted after Resolve so the guard reads
+		// the identity Resolve attached — a valid credential costs nothing,
+		// only failures charge.
+		if d.LoginRateLimit != nil {
+			r.Use(auth.GuardBasicAuth(d.LoginRateLimit))
+		}
+
 		// OpenAPI request validation runs only inside the /api/v1
 		// subtree — the SPA mount, /app/*, and any future static-
 		// asset routes are not described by the spec and would
@@ -696,12 +707,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		}
 		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities, d.ConfigUIURL))
 		r.Get("/health", handlers.Health(d.Health))
-
-		// Device-type icon proxy. Unauthenticated like /health: it
-		// serves only non-sensitive device model artwork and must
-		// resolve from an <img> tag regardless of auth scheme. Nil
-		// proxy → 404 (SPA falls back to a generic glyph).
-		r.Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
 
 		// Auth endpoints stay outside the AuthRequire group — a logged-
 		// out SPA must be able to POST credentials to /auth/login.
@@ -787,6 +792,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Config != nil {
 				pr.Get("/config", handlers.Config(d.Config))
 			}
+			// Device-type icon proxy. The artwork itself is not sensitive,
+			// but the route answers differently for a known and an unknown
+			// address, so serving it pre-auth turned it into an
+			// unauthenticated existence oracle for the whole device
+			// inventory. The SPA renders it from an <img> tag, which carries
+			// the same-origin session cookie the rest of the SPA
+			// authenticates with; a bearer-only client has to fetch the
+			// image itself rather than hand the URL to the browser.
+			// Nil proxy → 404 (SPA falls back to a generic glyph).
+			pr.Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
 			// UI telemetry — fire-and-forget endpoint the SPA uses to
 			// log toggle / view-selector events (ADR 0016). It sits in
 			// this authenticated group: the payload is
@@ -1279,7 +1294,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm-messages/ack-all", handlers.AckAllAlarmMessages(d.Hub))
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))
 				pr.Get("/service-messages", handlers.ListServiceMessages(d.Hub))
-				pr.Get("/service-messages/suppressed", handlers.ListSuppressedServiceMessages(d.Hub))
+				// Operator-tier, like its unsuppress sibling: the suppressed
+				// list is the record of which faults an operator chose to
+				// silence, and the published contract has always declared it
+				// operator-scoped.
+				pr.With(op).Get("/service-messages/suppressed", handlers.ListSuppressedServiceMessages(d.Hub))
 				pr.With(op).Post("/service-messages/ack-all", handlers.AckAllServiceMessages(d.Hub))
 				pr.With(op).Post("/service-messages/unsuppress", handlers.UnsuppressServiceMessage(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/ack", handlers.AckServiceMessage(d.Hub))
@@ -1348,8 +1367,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Discovery routes register the static `discovered` segment
 				// before the `{name}` param so chi resolves them unambiguously.
 				if d.Discovery != nil {
-					pr.Get("/centrals/discovered", handlers.ListDiscoveredCCUs(d.Discovery))
-					pr.Get("/centrals/discovered/ignored", handlers.ListIgnoredCCUs(d.Discovery))
+					// Admin-tier like the ignore/unignore siblings below. Every
+					// field these two return is a CCU network coordinate —
+					// serial, host, suggested host — so masking them for a
+					// viewer would leave an empty list rather than a narrowed
+					// one, and the only thing the list is for is adding a CCU,
+					// which is an admin action anyway.
+					pr.With(admin).Get("/centrals/discovered", handlers.ListDiscoveredCCUs(d.Discovery))
+					pr.With(admin).Get("/centrals/discovered/ignored", handlers.ListIgnoredCCUs(d.Discovery))
 					pr.With(admin).Post("/centrals/discovered/{serial}/ignore", handlers.IgnoreDiscoveredCCU(d.Discovery))
 					pr.With(admin).Delete("/centrals/discovered/{serial}/ignore", handlers.UnignoreDiscoveredCCU(d.Discovery))
 				}

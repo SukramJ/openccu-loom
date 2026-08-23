@@ -202,8 +202,12 @@ Follows the general event-topic policy below. Payload shape:
 `FAILED_TO_ARM`, `DISARMED`, `ARMED`, `NOTIFICATION`. `open_sensors`
 and `delay_s` are present only where meaningful (e.g. `FAILED_TO_ARM`
 carries `open_sensors`; a `pending`→`triggered` transition may carry
-`delay_s`). `INVALID_CODE` and `DURESS` extend this vocabulary once
-per-zone codes ship (`notes/concepts/alarm-concept.md` §13.3, §15 item 6).
+`delay_s`). Per-zone codes have shipped, but `INVALID_CODE` and
+`DURESS` never join this vocabulary: the alarm engine deliberately does
+not route a duress disarm through the MQTT publisher (it fires a
+Hidden journal entry and a report instead, gated by
+`alarm.duress_visibility`) — see `notes/concepts/alarm-concept.md`
+§13.3, §15 item 6.
 
 `NOTIFICATION` (0.43.1) is published once per enrolled notification
 output at incident-fire time — for every mode the output is enrolled

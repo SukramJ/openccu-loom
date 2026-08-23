@@ -107,6 +107,16 @@ func serialBackfiller(store *sqlite.CentralsStore, logger *slog.Logger) func(ctx
 		case updated:
 			logger.Info("central.serial.backfilled",
 				slog.String("central", centralName), slog.String("serial", serial))
+		default:
+			// Not an error, but not nothing either: the UPDATE matched no row.
+			// Either the serial was already stored (the ordinary case on every
+			// boot after the first) or the row does not exist yet, which is
+			// what happens on a first boot where the centrals table is seeded
+			// after this callback has already run. The silent version of this
+			// branch is why that ordering defect survived: the miss looked
+			// exactly like success.
+			logger.Debug("central.serial.backfill_no_row",
+				slog.String("central", centralName), slog.String("serial", serial))
 		}
 	}
 }
@@ -281,11 +291,20 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// the same address after removal is seeded from the previous pairing's
 	// stale configuration instead of the CCU's current one.
 	masterEvictor := adapter.WireMasterValuesEviction(reg, d.masterValuesStore, logger)
+	// And the operator's own overrides: a device's Hidden/Locked channel flags
+	// outlived the device being unpaired, so a replacement paired into the same
+	// address — routine when hardware is swapped, the CCU reuses addresses —
+	// silently inherited the previous device's visibility decisions. A
+	// whole-model teardown is excluded inside the evictor: the cache-clear
+	// re-init removes every device without the operator asking for any of them
+	// to go (see hmevent.DeviceRemovedEvent.ModelTeardown).
+	channelFlagsEvictor := adapter.WireChannelFlagsEviction(reg, d.channelFlagsStore, d.channelFlagsOverlay, logger)    //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
 	stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
 	teardowns = append(
 		teardowns,
 		evictor.Stop,
 		masterEvictor.Stop,
+		channelFlagsEvictor.Stop,
 		stopHistoryRecorder,
 	)
 	// Surface the values-cache counters as health gauges so the

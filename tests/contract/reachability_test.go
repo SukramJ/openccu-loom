@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-// inventoryWhitelistEntry spiegelt den Whitelist-Eintrag aus dead-code-inventory.json.
+// inventoryWhitelistEntry mirrors one whitelist row of dead-code-inventory.json.
 type inventoryWhitelistEntry struct {
 	Package    string `json:"package"`
 	Identifier string `json:"identifier"`
@@ -31,7 +31,7 @@ type inventoryWhitelistEntry struct {
 	Line       int    `json:"line"`
 }
 
-// inventoryUnreachableEntry spiegelt den Unreachable-Eintrag aus dead-code-inventory.json.
+// inventoryUnreachableEntry mirrors one unreachable row of dead-code-inventory.json.
 type inventoryUnreachableEntry struct {
 	Package    string `json:"package"`
 	Identifier string `json:"identifier"`
@@ -40,7 +40,7 @@ type inventoryUnreachableEntry struct {
 	Kind       string `json:"kind"`
 }
 
-// inventorySummary spiegelt das Summary-Objekt aus dead-code-inventory.json.
+// inventorySummary mirrors the summary object of dead-code-inventory.json.
 type inventorySummary struct {
 	TotalExported int `json:"total_exported"`
 	Reachable     int `json:"reachable"`
@@ -48,7 +48,7 @@ type inventorySummary struct {
 	Unreachable   int `json:"unreachable"`
 }
 
-// inventoryPackageSummary spiegelt einen by_package-Eintrag aus dead-code-inventory.json.
+// inventoryPackageSummary mirrors one by_package row of dead-code-inventory.json.
 type inventoryPackageSummary struct {
 	Package          string `json:"package"`
 	UnreachableFuncs int    `json:"unreachable_funcs"`
@@ -67,12 +67,12 @@ type deadCodeInventory struct {
 	Whitelisted []inventoryWhitelistEntry   `json:"whitelisted"`
 }
 
-// repoRootFromTestFile bestimmt den Repo-Root relativ zu dieser Testdatei.
+// repoRootFromTestFile resolves the repo root relative to this test file.
 func repoRootFromTestFile(t *testing.T) string {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("runtime.Caller schlug fehl")
+		t.Fatal("runtime.Caller failed")
 	}
 	// tests/contract/reachability_test.go → ../../ = repo root
 	root := filepath.Join(filepath.Dir(thisFile), "..", "..")
@@ -102,10 +102,10 @@ func loadDeadCodeInventory(t *testing.T) deadCodeInventory {
 	return inv
 }
 
-// TestReachabilityInventoryExists prüft dass das Inventory-File existiert und lesbar ist.
+// TestReachabilitySnapshotExists prüft dass das Inventory-File existiert und lesbar ist.
 // Inhaltliche Baseline-Prüfungen folgen in einer späteren Phase, nachdem das erste
 // Inventory-Run manuell reviewed und committed wurde.
-func TestReachabilityInventoryExists(t *testing.T) {
+func TestReachabilitySnapshotExists(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	path := filepath.Join(root, "notes", "parity", "dead-code-inventory.json")
 
@@ -136,9 +136,9 @@ func TestReachabilityInventoryExists(t *testing.T) {
 	)
 }
 
-// TestReachabilityWhitelistFormat verifies that all whitelist entries have the
+// TestReachabilitySnapshotWhitelistFormat verifies that all whitelist entries have the
 // required JSON fields populated (package, identifier, reason, file, line).
-func TestReachabilityWhitelistFormat(t *testing.T) {
+func TestReachabilitySnapshotWhitelistFormat(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
 	if len(inv.Whitelisted) == 0 {
@@ -170,9 +170,9 @@ func TestReachabilityWhitelistFormat(t *testing.T) {
 	t.Logf("Whitelist-Format OK: %d Einträge geprüft", len(inv.Whitelisted))
 }
 
-// TestReachabilityUnreachableFormat prüft dass alle Unreachable-Einträge
+// TestReachabilitySnapshotUnreachableFormat prüft dass alle Unreachable-Einträge
 // vollständige und konsistente Felder haben.
-func TestReachabilityUnreachableFormat(t *testing.T) {
+func TestReachabilitySnapshotUnreachableFormat(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
 	validKinds := map[string]bool{"func": true, "type": true, "var": true, "const": true, "unknown": true}
@@ -203,8 +203,8 @@ func TestReachabilityUnreachableFormat(t *testing.T) {
 	}
 }
 
-// TestReachabilitySummaryConsistency prüft dass die Summary-Zähler konsistent sind.
-func TestReachabilitySummaryConsistency(t *testing.T) {
+// TestReachabilitySnapshotSummaryConsistency prüft dass die Summary-Zähler konsistent sind.
+func TestReachabilitySnapshotSummaryConsistency(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
 	if inv.Summary.Unreachable != len(inv.Unreachable) {
@@ -222,9 +222,9 @@ func TestReachabilitySummaryConsistency(t *testing.T) {
 	}
 }
 
-// TestReachabilityByPackageConsistency prüft dass by_package-Zähler mit den
+// TestReachabilitySnapshotByPackageConsistency prüft dass by_package-Zähler mit den
 // Unreachable-Einträgen übereinstimmen.
-func TestReachabilityByPackageConsistency(t *testing.T) {
+func TestReachabilitySnapshotByPackageConsistency(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
 	if len(inv.ByPackage) == 0 && len(inv.Unreachable) > 0 {
@@ -271,13 +271,13 @@ func TestReachabilityByPackageConsistency(t *testing.T) {
 	t.Logf("by_package Konsistenz OK: %d Packages", len(inv.ByPackage))
 }
 
-// TestReachabilityProductionOnlyExists asserts that the production-only
+// TestReachabilitySnapshotProductionOnlyExists asserts that the production-only
 // inventory file exists. It is generated by `go run ./script/reachability
 // -production-only` and lists only items reachable from non-test entry
 // points. The production-only inventory typically has more unreachable
 // entries than the combined inventory — that is the intended outcome:
 // test-only callers hide real dead-code in the combined run.
-func TestReachabilityProductionOnlyExists(t *testing.T) {
+func TestReachabilitySnapshotProductionOnlyExists(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	path := filepath.Join(root, "notes", "parity", "dead-code-production-only.json")
 
@@ -302,9 +302,9 @@ func TestReachabilityProductionOnlyExists(t *testing.T) {
 		inv.Summary.Unreachable, inv.Summary.Whitelisted, inv.Summary.TotalExported)
 }
 
-// TestReachabilityNoTestFilesInUnreachable prüft dass keine _test.go oder tests/-Items
+// TestReachabilitySnapshotHasNoTestFiles prüft dass keine _test.go oder tests/-Items
 // im unreachable-Array erscheinen (sie sollen in whitelisted landen).
-func TestReachabilityNoTestFilesInUnreachable(t *testing.T) {
+func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
 	for i, entry := range inv.Unreachable {
@@ -320,5 +320,41 @@ func TestReachabilityNoTestFilesInUnreachable(t *testing.T) {
 
 	if !t.Failed() {
 		t.Logf("Keine Test-File-Items im unreachable-Array: OK")
+	}
+}
+
+// reachabilityUnreachableCeiling is the number of unreachable exported
+// identifiers the committed snapshot is allowed to carry.
+//
+// It is a ratchet, and it only moves down. Raising it is a decision someone
+// has to make and explain in the commit that raises it — which is the entire
+// point: without a ceiling, `make reachability` regenerating a snapshot with
+// two hundred more dead identifiers than the last one produced a green test
+// run and a diff nobody had a reason to read closely.
+const reachabilityUnreachableCeiling = 3023
+
+// TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
+// file that says something about the tree rather than about the snapshot's
+// JSON shape.
+//
+// It is still not a dead-code guard: it reads the committed snapshot, so it
+// can only notice growth once somebody regenerates. What it removes is the
+// step where growth is invisible even then. The honest way to check the tree
+// itself remains `make reachability` followed by reading the diff.
+func TestReachabilitySnapshotUnreachableCountHasACeiling(t *testing.T) {
+	inv := loadDeadCodeInventory(t)
+	got := inv.Summary.Unreachable
+	switch {
+	case got > reachabilityUnreachableCeiling:
+		t.Errorf("the committed reachability snapshot carries %d unreachable exported "+
+			"identifiers, %d more than the ceiling of %d.\n\n"+
+			"Either reach them (wire the seam, or delete the identifier), or whitelist each "+
+			"one with a reason, or — if the growth is genuinely justified — raise "+
+			"reachabilityUnreachableCeiling in the same commit and say why there.",
+			got, got-reachabilityUnreachableCeiling, reachabilityUnreachableCeiling)
+	case got < reachabilityUnreachableCeiling:
+		t.Errorf("the committed snapshot is down to %d unreachable identifiers, below the "+
+			"ceiling of %d. Lower reachabilityUnreachableCeiling to %d so the ground gained "+
+			"cannot be given back unnoticed.", got, reachabilityUnreachableCeiling, got)
 	}
 }

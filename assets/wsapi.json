@@ -567,6 +567,14 @@
    "name": "devices.list"
   },
   {
+   "category": "devices",
+   "description": "Server-pushed: a device or one of its channels was renamed, or its room / function assignment changed. Rides the same device.{address}.lifecycle topic as device.created — subscribers route by envelope `type`. Address is always the DEVICE address even when a channel changed, because a client materialises a device's name and area as one unit and has to re-read the whole device to stay consistent.",
+   "kind": "broadcast",
+   "name": "device.metadata_changed",
+   "topic": "device.{address}.lifecycle",
+   "payload": "DeviceMetadataChangedPayload"
+  },
+  {
    "category": "firmware",
    "description": "Report the current and available firmware versions and pending update status. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
    "name": "firmware.info",
@@ -1181,6 +1189,14 @@
     "enabled": "boolean",
     "channel_key": "string?"
    }
+  },
+  {
+   "category": "schedules",
+   "description": "Server-pushed: a channel's week profile changed — written through this daemon, or observed on the CCU. Carries the channel whose schedule moved so a client can re-read it; the profile body is not inlined because a week profile is large and most subscribers only need to invalidate.",
+   "kind": "broadcast",
+   "name": "schedules.changed",
+   "topic": "device.{address}.lifecycle",
+   "payload": "ScheduleChangedPayload"
   },
   {
    "category": "alarms",

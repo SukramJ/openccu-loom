@@ -188,7 +188,7 @@ func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, centralName string,
 	if !item.OK {
 		return nil
 	}
-	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
 }
 
 // PublishUpdateState publishes the firmware-state JSON to the per-device

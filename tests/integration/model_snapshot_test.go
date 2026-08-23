@@ -308,7 +308,7 @@ func (s *snapshotDumper) dumpDevice(d *device.Device) snapshotDevice {
 		Address:      d.Address,
 		Model:        d.Model,
 		ModelLabel:   d.ModelLabel,
-		Name:         d.Name,
+		Name:         d.Name(),
 		InterfaceID:  string(d.ProductGroup),
 		Firmware:     fw,
 		Version:      d.SchemaVersion,

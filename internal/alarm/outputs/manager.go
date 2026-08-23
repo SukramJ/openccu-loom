@@ -29,7 +29,10 @@ type Config struct {
 	Journal   engine.Journal
 	Rows      OutputRowSource
 	Health    HealthFunc
-	Logger    *slog.Logger
+	// ZoneHealth is the optional zone-scoped counterpart of Health; see
+	// [ZoneHealthFunc].
+	ZoneHealth ZoneHealthFunc
+	Logger     *slog.Logger
 	// DefaultSirenDuration bounds acoustic activations whose output
 	// does not configure one (engine default, typically 180 s).
 	DefaultSirenDuration time.Duration
@@ -81,15 +84,16 @@ type instance struct {
 // watchdog stops run on scheduler callbacks. The manager never calls
 // back into engine verbs (OutputPort contract).
 type Manager struct {
-	clk      clock.Clock
-	sched    engine.TimerScheduler
-	resolver DeviceResolver
-	ledger   IncidentLedger
-	journal  engine.Journal
-	rows     OutputRowSource
-	health   HealthFunc
-	notify   NotificationSink
-	log      *slog.Logger
+	clk        clock.Clock
+	sched      engine.TimerScheduler
+	resolver   DeviceResolver
+	ledger     IncidentLedger
+	journal    engine.Journal
+	rows       OutputRowSource
+	health     HealthFunc
+	zoneHealth ZoneHealthFunc
+	notify     NotificationSink
+	log        *slog.Logger
 
 	defaultSiren     time.Duration
 	maxPerIncident   time.Duration
@@ -100,14 +104,16 @@ type Manager struct {
 	active    map[string]*activation // by output ID
 	demands   map[string]demandRec   // by output ID; see arbitration.go
 	lastChirp map[string]time.Time
-	// failed is the set of output IDs with an outstanding, unresolved
-	// failure (a failed fire, a failed stop write, an unverified stop).
-	// Alarm health is the worst outstanding condition, not the last
-	// sample: an output is added on failure and removed only when a
-	// verified stop of that same output confirms it is safely inactive,
-	// so a verified stop of an unrelated output can never erase the
-	// degradation a still-failed output owns (S7).
-	failed map[string]struct{} // by output ID
+	// failed maps each output ID with an outstanding, unresolved failure
+	// (a failed fire, a failed stop write, an unverified stop) to the
+	// zone it belongs to. Alarm health is the worst outstanding
+	// condition, not the last sample: an output is added on failure and
+	// removed only when a verified stop of that same output confirms it
+	// is safely inactive, so a verified stop of an unrelated output can
+	// never erase the degradation a still-failed output owns (S7). The
+	// zone value drives the per-zone panel signal (ZoneHealth) the same
+	// way the key set drives the fleet-wide one (Health).
+	failed map[string]string // output ID -> zone ID
 }
 
 // NewManager constructs the driver layer. Call Reload before use.
@@ -139,6 +145,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		journal:          journal,
 		rows:             cfg.Rows,
 		health:           cfg.Health,
+		zoneHealth:       cfg.ZoneHealth,
 		notify:           cfg.Notify,
 		log:              logger,
 		defaultSiren:     cfg.DefaultSirenDuration,
@@ -148,7 +155,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		active:           map[string]*activation{},
 		demands:          map[string]demandRec{},
 		lastChirp:        map[string]time.Time{},
-		failed:           map[string]struct{}{},
+		failed:           map[string]string{},
 	}
 	if m.defaultSiren <= 0 {
 		m.defaultSiren = 180 * time.Second
@@ -635,21 +642,36 @@ func (m *Manager) outputFailed(
 	if cause != nil {
 		note += ": " + cause.Error()
 	}
-	m.noteFailure(outputID, note)
+	m.noteFailure(outputID, zoneID, note)
+}
+
+// zoneStillFailedLocked reports whether any output of zoneID still
+// carries an outstanding failure. The caller holds m.mu.
+func (m *Manager) zoneStillFailedLocked(zoneID string) bool {
+	for _, z := range m.failed {
+		if z == zoneID {
+			return true
+		}
+	}
+	return false
 }
 
 // noteFailure records an outstanding failure for outputID and emits the
-// degradation. The output stays in the outstanding-failure set until a
+// degradation, fleet-wide and — for the panel projection — scoped to
+// zoneID alone. The output stays in the outstanding-failure set until a
 // verified stop of that same output resolves it (see resolveFailure), so
 // a later success on an unrelated output cannot erase this degradation —
 // alarm health reflects the worst outstanding condition, not the last
 // sample (S7).
-func (m *Manager) noteFailure(outputID, note string) {
+func (m *Manager) noteFailure(outputID, zoneID, note string) {
 	m.mu.Lock()
-	m.failed[outputID] = struct{}{}
+	m.failed[outputID] = zoneID
 	m.mu.Unlock()
 	if m.health != nil {
 		m.health(false, note)
+	}
+	if m.zoneHealth != nil {
+		m.zoneHealth(zoneID, false)
 	}
 }
 
@@ -659,14 +681,20 @@ func (m *Manager) noteFailure(outputID, note string) {
 // verified stop of one output must never clear the degradation another
 // failed output still owns: a siren whose fire failed and never sounded
 // stays degraded until its own condition resolves, not until any
-// unrelated stop verifies.
-func (m *Manager) resolveFailure(outputID string) {
+// unrelated stop verifies. The same rule applies per zone for the panel
+// projection: zoneID only reports recovered once none of ITS outputs
+// are still failed, regardless of another zone's condition.
+func (m *Manager) resolveFailure(outputID, zoneID string) {
 	m.mu.Lock()
 	delete(m.failed, outputID)
 	recovered := len(m.failed) == 0
+	zoneRecovered := !m.zoneStillFailedLocked(zoneID)
 	m.mu.Unlock()
 	if recovered && m.health != nil {
 		m.health(true, "alarm output stop verified")
+	}
+	if zoneRecovered && m.zoneHealth != nil {
+		m.zoneHealth(zoneID, true)
 	}
 }
 
@@ -686,16 +714,29 @@ func (m *Manager) resolveFailure(outputID string) {
 func (m *Manager) pruneFailed(rowIDs map[string]struct{}) {
 	m.mu.Lock()
 	pruned := false
-	for id := range m.failed {
+	prunedZones := map[string]bool{}
+	for id, zoneID := range m.failed {
 		if _, ok := rowIDs[id]; !ok {
 			delete(m.failed, id)
 			pruned = true
+			prunedZones[zoneID] = true
 		}
 	}
 	recovered := pruned && len(m.failed) == 0
+	var zonesRecovered []string
+	for zoneID := range prunedZones {
+		if !m.zoneStillFailedLocked(zoneID) {
+			zonesRecovered = append(zonesRecovered, zoneID)
+		}
+	}
 	m.mu.Unlock()
 	if recovered && m.health != nil {
 		m.health(true, "alarm output removed while degraded")
+	}
+	if m.zoneHealth != nil {
+		for _, zoneID := range zonesRecovered {
+			m.zoneHealth(zoneID, true)
+		}
 	}
 }
 

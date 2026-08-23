@@ -9,7 +9,10 @@
 // paths, so neither imports the model nor the store package (no cycle).
 package channelflags
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // Flags is the pair of operator overrides for one channel. The zero value
 // (both false) means "no override" — a channel with default behaviour.
@@ -62,6 +65,33 @@ func (o *Overlay) Set(central, address string, f Flags) {
 		o.m[central] = make(map[string]Flags)
 	}
 	o.m[central][address] = f
+}
+
+// DeleteDevice removes every channel entry for one device (its own address
+// plus every "<address>:<n>" channel) from one central's map. Mirrors
+// [sqlite.ChannelFlagsStore.DeleteDevice] so the in-memory copy follows the
+// row a device-unpair purges: without it, a device re-paired at the same
+// address inherits the previous pairing's Hidden/Locked overrides until the
+// next full Replace.
+func (o *Overlay) DeleteDevice(central, deviceAddress string) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	m := o.m[central]
+	if m == nil {
+		return
+	}
+	prefix := deviceAddress + ":"
+	for addr := range m {
+		if addr == deviceAddress || strings.HasPrefix(addr, prefix) {
+			delete(m, addr)
+		}
+	}
+	if len(m) == 0 {
+		delete(o.m, central)
+	}
 }
 
 // Replace atomically swaps the full contents for one central. Used on the

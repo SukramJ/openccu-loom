@@ -788,7 +788,7 @@ func TestResolveDeviceName_ReturnsDeviceName(t *testing.T) {
 		Model:       "HmIP-SW2",
 		InterfaceID: "iface",
 	})
-	d.Name = "My Light"
+	d.SetName("My Light")
 	c.ModelRegistry.Put(d)
 
 	if got := c.ResolveDeviceName(addr); got != "My Light" {

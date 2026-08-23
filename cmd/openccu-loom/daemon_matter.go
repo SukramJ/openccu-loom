@@ -3177,6 +3177,12 @@ func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func()) []fu
 	return []func(){
 		events.Subscribe(u.EventBus, func(hmevent.DeviceCreatedEvent) { fire() }),
 		events.Subscribe(u.EventBus, func(hmevent.DeviceRemovedEvent) { fire() }),
+		// A rename is a topology change too, even though the set of devices is
+		// unchanged: the accessory's NodeLabel is built from the device's name,
+		// so without this a device renamed in the CCU WebUI keeps its old name
+		// in Apple Home and Google Home until the daemon restarts. MQTT and the
+		// WebSocket already learn about it from the same event.
+		events.Subscribe(u.EventBus, func(hmevent.DeviceMetadataChangedEvent) { fire() }),
 	}
 }
 

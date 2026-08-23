@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 352.
+Guards without a doc comment: 7 of 359.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -27,6 +27,9 @@ Guards without a doc comment: 7 of 352.
 | TestAlarmS5CriticalCommandProbesOpenCircuit | alarm_siren_safety_test.go | TestAlarmS5CriticalCommandProbesOpenCircuit pins the S5 exception in the reliability layer: a CommandPriorityCritical call (the alarm engine's stop/silence path) is attempted as a single probe even while the interface circuit breaker is OPEN, while non-critical traffic keeps being shed. |
 | TestAlarmS6SilenceAndDisarmNeverStateGated | alarm_siren_safety_test.go | TestAlarmS6SilenceAndDisarmNeverStateGated pins the S3/S6 rule at the engine surface: silence and disarm succeed from every state-machine position — they are role-gated by surfaces, never state-gated by the engine, and no confirmation step exists between the verb and its effect. |
 | TestAlarmWSPayloadStructsMatchOpenAPISchemas | alarm_ws_payload_parity_test.go | TestAlarmWSPayloadStructsMatchOpenAPISchemas pins the alarm broadcast payload structs to their OpenAPI component schemas: every schema property must exist as a JSON field on the Go struct, every Go field must be documented, and every required property must not be omitempty. |
+| TestAPISurfaceChangesCarryTheRightBump | api_surface_bump_test.go | TestAPISurfaceChangesCarryTheRightBump pins the two halves of this project's versioning policy to each other: what [handlers.APIVersion] claims about a change, and what the specification actually did. |
+| TestAPIVersionMatchesTheSpecDocument | api_surface_bump_test.go | TestAPIVersionMatchesTheSpecDocument keeps the constant and the document from drifting: they are two spellings of one number, and a bump applied to only one of them makes every other check here meaningless. |
+| TestValueSemanticsChangesAreWellFormed | api_surface_bump_test.go | TestValueSemanticsChangesAreWellFormed keeps [valueSemanticsChanges] a register rather than a comment block. |
 | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling | auth_subject_canonicalisation_test.go | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling guards the other half of the canonicalisation: the CCU's user database is its own namespace, so folding the subject for Loom-side bookkeeping must not change the name the credential validation and the user-level lookup ask about. |
 | TestEveryUserStoreReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestEveryUserStoreReportsCanonicalSubject pins that every [auth.UserStore] in the daemon reports the canonical subject regardless of the casing the caller typed. |
 | TestOIDCLoginReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestOIDCLoginReportsCanonicalSubject pins the remaining login path. |
@@ -34,6 +37,7 @@ Guards without a doc comment: 7 of 352.
 | TestHomegearBackendCapabilities | backend_capabilities_test.go | TestHomegearBackendCapabilities pins the SPECIFICATION §9.2 statement: Homegear is XML-RPC-only. |
 | TestJSONRPCOnlyInterfacesEmpty | backend_capabilities_test.go | TestJSONRPCOnlyInterfacesEmpty verifies that no interface is classified as "JSON-RPC only / pull-only" — CCU-Jack was removed. |
 | TestXMLRPCInterfacesUseCCUBackend | backend_capabilities_test.go | TestXMLRPCInterfacesUseCCUBackend pins CCU-native interfaces to the CcuBackend kind. |
+| TestBasicAuthGuardDoesNotChargeTheSPAMount | basic_auth_guard_scope_test.go | TestBasicAuthGuardDoesNotChargeTheSPAMount pins where the per-IP Basic-credential throttle is mounted. |
 | TestCacheresetGuardNoOperatorStateTouched | cachereset_guard_test.go | TestCacheresetGuardNoOperatorStateTouched enforces ADR 0042: the cache-reset service must never reference operator or system state tables. |
 | TestKeepaliveContract_AnyEventRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_AnyEventRefreshesLiveness pins that an ordinary (non-PONG) inbound callback also refreshes liveness — even for a device the daemon does not mirror. |
 | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness pins the full keepalive round-trip: a recorded outbound PING (as the check_connection job records it) is closed by a PONG delivered through the production callback handler, and that PONG also marks the channel alive. |
@@ -192,13 +196,14 @@ Guards without a doc comment: 7 of 352.
 | TestEveryPublishedDocIsInTheNav | published_docs_test.go | TestEveryPublishedDocIsInTheNav fails when a Markdown file under `docs/` is missing from `mkdocs.yml`'s nav. |
 | TestPublishedDocsLinksStayInsideDocsDir | published_docs_test.go | TestPublishedDocsLinksStayInsideDocsDir fails when a page under `docs/` links to a file outside `docs/` with a relative path. |
 | TestRatchetReasonsAreNotDeferrals | ratchet_reason_purity_test.go | TestRatchetReasonsAreNotDeferrals enforces textually what the ratchet headers already demand in prose: an entry in a declared-silence list says someone looked and decided the silence is CORRECT — not that the work is pending. |
-| TestReachabilityByPackageConsistency | reachability_test.go | TestReachabilityByPackageConsistency prüft dass by_package-Zähler mit den Unreachable-Einträgen übereinstimmen. |
-| TestReachabilityInventoryExists | reachability_test.go | TestReachabilityInventoryExists prüft dass das Inventory-File existiert und lesbar ist. |
-| TestReachabilityNoTestFilesInUnreachable | reachability_test.go | TestReachabilityNoTestFilesInUnreachable prüft dass keine _test.go oder tests/-Items im unreachable-Array erscheinen (sie sollen in whitelisted landen). |
-| TestReachabilityProductionOnlyExists | reachability_test.go | TestReachabilityProductionOnlyExists asserts that the production-only inventory file exists. |
-| TestReachabilitySummaryConsistency | reachability_test.go | TestReachabilitySummaryConsistency prüft dass die Summary-Zähler konsistent sind. |
-| TestReachabilityUnreachableFormat | reachability_test.go | TestReachabilityUnreachableFormat prüft dass alle Unreachable-Einträge vollständige und konsistente Felder haben. |
-| TestReachabilityWhitelistFormat | reachability_test.go | TestReachabilityWhitelistFormat verifies that all whitelist entries have the required JSON fields populated (package, identifier, reason, file, line). |
+| TestReachabilitySnapshotByPackageConsistency | reachability_test.go | TestReachabilitySnapshotByPackageConsistency prüft dass by_package-Zähler mit den Unreachable-Einträgen übereinstimmen. |
+| TestReachabilitySnapshotExists | reachability_test.go | TestReachabilitySnapshotExists prüft dass das Inventory-File existiert und lesbar ist. |
+| TestReachabilitySnapshotHasNoTestFiles | reachability_test.go | TestReachabilitySnapshotHasNoTestFiles prüft dass keine _test.go oder tests/-Items im unreachable-Array erscheinen (sie sollen in whitelisted landen). |
+| TestReachabilitySnapshotProductionOnlyExists | reachability_test.go | TestReachabilitySnapshotProductionOnlyExists asserts that the production-only inventory file exists. |
+| TestReachabilitySnapshotSummaryConsistency | reachability_test.go | TestReachabilitySnapshotSummaryConsistency prüft dass die Summary-Zähler konsistent sind. |
+| TestReachabilitySnapshotUnreachableCountHasACeiling | reachability_test.go | TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this file that says something about the tree rather than about the snapshot's JSON shape. |
+| TestReachabilitySnapshotUnreachableFormat | reachability_test.go | TestReachabilitySnapshotUnreachableFormat prüft dass alle Unreachable-Einträge vollständige und konsistente Felder haben. |
+| TestReachabilitySnapshotWhitelistFormat | reachability_test.go | TestReachabilitySnapshotWhitelistFormat verifies that all whitelist entries have the required JSON fields populated (package, identifier, reason, file, line). |
 | TestEveryRegistryWalkerHasAnAdoptSeam | registry_walker_adopt_seam_test.go | TestEveryRegistryWalkerHasAnAdoptSeam asserts that every collaborator which subscribes to a central's event bus by walking the shared registry also exposes a per-central seam the composition root calls when a CCU is adopted at runtime. |
 | TestCircuitBreakerHalfOpenFailReopens | reliability_constants_test.go | — (no doc comment) |
 | TestCircuitBreakerNeedsTwoSuccessesToClose | reliability_constants_test.go | — (no doc comment) |
@@ -207,6 +212,7 @@ Guards without a doc comment: 7 of 352.
 | TestXMLRPCFaultCodeValues | reliability_constants_test.go | TestXMLRPCFaultCodeValues pins the wire-level CCU fault codes the retry layer treats as retryable. |
 | TestReliabilityInstrumentCoverage | reliability_observability_test.go | TestReliabilityInstrumentCoverage verifies that every core reliability component (Coalescer, Throttle, Retrier, CircuitBreaker, PingPong tracker) exposes an observability interface. |
 | TestReloadDepsFieldsAreOnlyTouchedByItsAccessors | reload_deps_nil_safety_test.go | TestReloadDepsFieldsAreOnlyTouchedByItsAccessors asserts that no code outside reload_deps.go reads or writes a field of the daemon's late-bound dependency bag directly. |
+| TestRESTRouteTiersMatchOpenAPIScopes | rest_authz_scope_test.go | TestRESTRouteTiersMatchOpenAPIScopes pins the two halves of the authorization contract to each other: the scope assets/openapi.yaml publishes for an operation, and the gate the chi router actually wraps that route in. |
 | TestRESTHandlersDoNotDecodePathParamsTwice | rest_path_decode_test.go | TestRESTHandlersDoNotDecodePathParamsTwice fails when a REST source file feeds a chi.URLParam value into url.PathUnescape or url.QueryUnescape. |
 | TestRESTRouterMatchesOpenAPISpec | rest_router_openapi_walk_test.go | TestRESTRouterMatchesOpenAPISpec walks the real chi router NewRouter assembles (every optional facade wired, so every conditionally-mounted route is present) and cross-checks it against assets/openapi.yaml in both directions: 1. |
 | TestRoutingKeyCUxDScopingGolden | routing_key_contract_test.go | TestRoutingKeyCUxDScopingGolden locks the one address family whose key deliberately differs from the shared cross-backend contract: CUxD hands out the same synthetic addresses on every CCU it runs on (the first "(28) System" device is `CUX2801001` on every install), so the parameter-level key carries the central discriminator here while the reference implementation leaves it bare. |
@@ -279,6 +285,7 @@ Guards without a doc comment: 7 of 352.
 | TestGenerateWireSnapshots | wire_snapshots/generator_test.go | — (no doc comment) |
 | TestReferenceCompare | wire_snapshots/reference_compare_test.go | TestReferenceCompare runs every Go Custom-DP setter covered by a reference wire snapshot and fails when the wire calls differ. |
 | TestWireSnapshots | wire_snapshots/snapshot_pin_test.go | TestWireSnapshots loads every golden snapshot and verifies that re-running the same setter with the same inputs produces identical wire calls. |
+| TestEveryWireFunctionHasAProductionCaller | wiring_free_functions_test.go | TestEveryWireFunctionHasAProductionCaller closes the hole its sibling TestEveryWiringSetterHasAProductionCaller cannot reach. |
 | TestPin_AlarmCentralHook_Installed | wiring_pins/alarm_wiring_test.go | TestPin_AlarmCentralHook_Installed pins that runtime-adopted centrals are subscribed onto the alarm service — otherwise sensors on a live-adopted CCU silently never reach the engine. |
 | TestPin_AlarmMotionReset_Wired | wiring_pins/alarm_wiring_test.go | TestPin_AlarmMotionReset_Wired pins that the alarm service passes a motion-reset port into the engine. |
 | TestPin_AlarmService_ConstructedInDaemon | wiring_pins/alarm_wiring_test.go | TestPin_AlarmService_ConstructedInDaemon pins that the daemon composition root actually constructs the alarm service. |

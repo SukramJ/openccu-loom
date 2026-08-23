@@ -111,10 +111,13 @@ type Light struct {
 	pendingOn   *time.Duration // deferred ON_TIME for next TurnOn
 	pendingRamp *time.Duration // deferred RAMP_TIME for next TurnOn
 
-	// hasOnTimeUnit is true when the channel carries ON_TIME_UNIT, meaning the
-	// device interprets ON_TIME as a timed shutdown. When true, TurnOn without an
-	// explicit on-time sends the NotUsed sentinel to cancel any previously
-	// running timer rather than leaving the old value active.
+	// hasOnTimeUnit is true when the channel's on-time timer resolves to a
+	// value/unit pair (DURATION_VALUE + DURATION_UNIT — see
+	// [resolveOnTimeParams]; no device carries the literal ON_TIME_UNIT wire
+	// name), meaning the device interprets the reset as a timed shutdown. When
+	// true, TurnOn without an explicit on-time sends the NotUsed sentinel to
+	// cancel any previously running timer rather than leaving the old value
+	// active.
 	hasOnTimeUnit bool
 
 	// onTimeValueParam / onTimeUnitParam are the wire parameter(s)
@@ -141,8 +144,8 @@ type Light struct {
 // replaced on the channel.
 func New(cfg Config) *Light {
 	level := custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel))
-	hasOnTimeUnit := cfg.Channel != nil && cfg.Channel.Parameter(hmenum.ParameterOnTimeUnit) != nil
 	onTimeValueParam, onTimeUnitParam := resolveOnTimeParams(cfg.Channel)
+	hasOnTimeUnit := onTimeUnitParam != ""
 	l := &Light{
 		Float:                level,
 		Capabilities:         cfg.Capabilities,
@@ -720,13 +723,19 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 	params := map[hmenum.Parameter]any{
 		hmenum.ParameterLevel: level,
 	}
-	if cfg.OnTime != nil {
-		params[hmenum.ParameterOnTime] = cfg.OnTime.Seconds()
-	} else if cfg.RampTime != nil {
-		// Ramp-without-on-time: the CCU otherwise treats ON_TIME as the implicit
-		// "back to off" timer, which the operator did not request. Send the NotUsed
-		// sentinel so RAMP_TIME runs stand-alone.
-		params[hmenum.ParameterOnTime] = NotUsed
+	// The on-time parameter is whichever shape this channel actually describes
+	// (see resolveOnTimeParams): a bare ON_TIME in seconds for the plain dimmer
+	// families, a DURATION_VALUE/DURATION_UNIT pair for signal lights and RGBW
+	// dimmers, or none at all — a channel without a timer must not be sent one,
+	// because the CCU faults the whole putParamset and the light never comes on.
+	switch {
+	case cfg.OnTime != nil:
+		l.stageOnTimeParam(params, *cfg.OnTime)
+	case cfg.RampTime != nil:
+		// Ramp-without-on-time: the CCU otherwise treats the on-time as the
+		// implicit "back to off" timer, which the operator did not request.
+		// Send the NotUsed sentinel so RAMP_TIME runs stand-alone.
+		l.stageOnTimeParam(params, time.Duration(NotUsed*float64(time.Second)))
 	}
 	if cfg.RampTime != nil {
 		params[hmenum.ParameterRampTime] = cfg.RampTime.Seconds()
@@ -823,9 +832,20 @@ func (l *Light) BrightnessPct() (pct int, observed bool) {
 // read here directly off the wire so the probe works regardless of which
 // profile registered the channel.
 func resolveOnTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Parameter) {
-	if ch != nil && ch.Parameter(hmenum.ParameterDurationValue) != nil && ch.Parameter(hmenum.ParameterDurationUnit) != nil {
+	if ch == nil {
+		// No channel to interrogate — a group-backed light, or a fixture that
+		// builds the data point directly. Keep the historical default rather
+		// than reporting a device with no timer at all.
+		return hmenum.ParameterOnTime, ""
+	}
+	if ch.Parameter(hmenum.ParameterDurationValue) != nil && ch.Parameter(hmenum.ParameterDurationUnit) != nil {
 		return hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit
 	}
+	// ON_TIME is the fallback rather than a third probe: it is write-only on
+	// most families, and this lookup only sees materialised VALUES data points,
+	// so a probe would report "no timer" on every channel whose write-only
+	// parameters were not materialised — disabling the timer far more widely
+	// than any device warrants.
 	return hmenum.ParameterOnTime, ""
 }
 
@@ -1014,3 +1034,23 @@ func (l *Light) commandedColorTempKelvin() (uint16, bool) { _ = l; return 0, fal
 func (l *Light) commandedEffect() (string, bool)          { _ = l; return "", false }
 func (l *Light) commandedOnTime() (float64, bool)         { _ = l; return 0, false }
 func (l *Light) commandedRampTime() (float64, bool)       { _ = l; return 0, false }
+
+// stageOnTimeParam writes d into params using the on-time shape this light's
+// channel describes, and writes nothing when it describes none.
+//
+// The seconds-valued sentinel [NotUsed] survives the value/unit encoding the
+// same way a real duration does, so a caller cancelling a timer does not need
+// to know which shape it is cancelling.
+func (l *Light) stageOnTimeParam(params map[hmenum.Parameter]any, d time.Duration) {
+	valueParam := l.onTimeValueParam
+	if valueParam == "" {
+		return
+	}
+	if l.onTimeUnitParam == "" {
+		params[valueParam] = d.Seconds()
+		return
+	}
+	value, unit := custom.EncodeTimerDuration(d)
+	params[valueParam] = value
+	params[l.onTimeUnitParam] = unit
+}

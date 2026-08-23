@@ -268,7 +268,7 @@ func (s *Service) indexUnit(u *central.Unit, overrides map[string]sqlitestore.Se
 				if !ok {
 					continue
 				}
-				src.ref.Name = channelDisplayName(ch, d.Name)
+				src.ref.Name = channelDisplayName(ch, d.Name())
 				// Seed the activation from the model's current value.
 				//
 				// Without this nothing is active until its next wire

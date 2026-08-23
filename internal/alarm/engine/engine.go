@@ -2079,8 +2079,10 @@ func (e *Engine) sortedZoneIDs() []string {
 	return ids
 }
 
-// noopOutputs is the default OutputPort until the driver layer is
-// wired: it does nothing and reports success.
+// noopOutputs is the OutputPort fallback for an Engine built without a
+// wired driver layer (e.g. in a test that has no siren/output hardware
+// to drive): it does nothing and reports success. Production wires
+// Outputs to the real manager — see internal/alarm/service.go.
 type noopOutputs struct{}
 
 func (noopOutputs) FireCycle(context.Context, string, sqlitestore.AlarmIncident, FireOptions) error {

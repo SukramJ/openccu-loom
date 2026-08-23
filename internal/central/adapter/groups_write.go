@@ -373,7 +373,7 @@ func fillDeviceIdentity(id *memberIdentity, dev *device.Device) {
 		return
 	}
 	id.DeviceAddress = dev.Address
-	id.DeviceName = dev.Name
+	id.DeviceName = dev.Name()
 	id.DeviceModel = dev.Model
 	if av := dev.Availability(); av != nil {
 		id.ConfigPending = av.IsConfigPending()

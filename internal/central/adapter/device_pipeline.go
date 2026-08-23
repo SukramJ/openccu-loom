@@ -742,13 +742,6 @@ func (p *DevicePipeline) finishIngest(
 	// other custom DP and continues to operate via its generic DPs
 	// ( E.13).
 	p.materialiseCustomDataPoints(interfaceID, logger)
-	// Suppress every undefined generic data point on devices whose custom DPs
-	// deny the `allow_undefined_generic_data_points` flag. Without this pass
-	// HmIP-BWTH channels 10-12 STATE-DPs would surface as switches alongside the
-	// channel-9 switch the IP_THERMOSTAT profile explicitly marks visible. The
-	// pass runs after the materialiser so every `Visible(...) / Hidden(...) /
-	// additional_data_points` mark has been stamped on the relevant DPs first.
-	p.suppressUndefinedGenericDataPoints(interfaceID)
 	// Calculated DPs (DewPoint / Enthalpy / VaporConcentration / FrostPoint
 	// ApparentTemperature / OperatingVoltageLevel / DerivedBinary) are
 	// channel-scoped derivations that subscribe to live wire-level parameters.
@@ -864,6 +857,18 @@ func (p *DevicePipeline) finishIngest(
 	p.applyChannelOperationModeGating(interfaceID)
 	// Propagate the operator's `un_ignore` configuration onto each data point.
 	p.applyUnIgnoredMarks(interfaceID)
+	// Suppress every undefined generic data point on devices whose custom DPs
+	// deny the `allow_undefined_generic_data_points` flag. Without this pass
+	// HmIP-BWTH channels 10-12 STATE-DPs would surface as switches alongside the
+	// channel-9 switch the IP_THERMOSTAT profile explicitly marks visible. The
+	// pass runs after the un-ignore marks (rather than right after the
+	// materialiser) because [custom.SuppressUndefinedGenericDataPoints] skips
+	// every DP whose `IsUnIgnored()` mark is set — an operator un-ignore only
+	// survives this suppression walk if the mark it depends on already exists.
+	// SetForcedUsage has no clearing counterpart, so running the two passes in
+	// the other order left every un-ignored parameter on a custom-DP device
+	// permanently forced to NoCreate.
+	p.suppressUndefinedGenericDataPoints(interfaceID)
 	// Force NoCreate on every parameter the visibility decider reports
 	// as ignored (ignoredParameters / wildcard pattern
 	// ignoreParametersByDevice / RELEVANT_MASTER_PARAMSETS_BY_DEVICE

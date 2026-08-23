@@ -757,11 +757,12 @@ func (c *client) rawWrite(op byte, payload []byte) error {
 
 // sendAck confirms a subscribe / unsubscribe operation. The topics
 // slice mirrors what the client requested so a reconnect can be
-// reasoned about without inspecting daemon-side state.
+// reasoned about without inspecting daemon-side state. Always answers,
+// even for a missing or empty topics list — the wire contract promises
+// one ack per subscribe/unsubscribe frame, and a client waiting on it
+// before considering itself connected would otherwise hang forever on a
+// request the daemon accepted but never confirmed.
 func (c *client) sendAck(op string, topics []string) {
-	if len(topics) == 0 {
-		return
-	}
 	buf, err := json.Marshal(outboundOp{Op: op, Topics: topics})
 	if err != nil {
 		return

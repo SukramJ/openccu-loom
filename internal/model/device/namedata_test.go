@@ -81,7 +81,7 @@ func TestBaseChannelName(t *testing.T) {
 		d := makeDevice("Schlafzimmer", "HmIP-eTRV", "000ABC")
 		ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
 		ch.SetName("Schlafzimmer Heizung")
-		got := baseChannelName(ch, d.Model, d.Name)
+		got := baseChannelName(ch, d.Model, d.Name())
 		if got != "Schlafzimmer Heizung" {
 			t.Fatalf("got %q, want %q", got, "Schlafzimmer Heizung")
 		}
@@ -92,7 +92,7 @@ func TestBaseChannelName(t *testing.T) {
 		d := makeDevice("Schlafzimmer", "HmIP-eTRV", "000ABC")
 		ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
 		ch.SetName("HmIP-eTRV 000ABC:1") // auto-default form
-		got := baseChannelName(ch, d.Model, d.Name)
+		got := baseChannelName(ch, d.Model, d.Name())
 		want := "Schlafzimmer:1"
 		if got != want {
 			t.Fatalf("got %q, want %q", got, want)
@@ -104,7 +104,7 @@ func TestBaseChannelName(t *testing.T) {
 		d := makeDevice("Schlafzimmer", "HmIP-eTRV", "000ABC")
 		ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
 		// ch.Name == "" (zero value)
-		got := baseChannelName(ch, d.Model, d.Name)
+		got := baseChannelName(ch, d.Model, d.Name())
 		want := "Schlafzimmer:1"
 		if got != want {
 			t.Fatalf("got %q, want %q", got, want)
@@ -116,7 +116,7 @@ func TestBaseChannelName(t *testing.T) {
 		d := makeDevice("", "HmIP-eTRV", "000ABC")
 		ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
 		// ch.Name == "" (zero value), deviceName == ""
-		got := baseChannelName(ch, d.Model, d.Name)
+		got := baseChannelName(ch, d.Model, d.Name())
 		if got != "" {
 			t.Fatalf("got %q, want empty", got)
 		}

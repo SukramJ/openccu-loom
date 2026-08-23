@@ -313,6 +313,26 @@ type DeviceRemovedEvent struct {
 	CentralName string
 	InterfaceID string
 	Address     string
+	// ModelTeardown marks a removal that drops the device from the in-memory
+	// model without the operator having asked for that device to go: the
+	// cache-clear re-init tears the whole model down and immediately re-pulls
+	// it from the CCU.
+	//
+	// It exists because the consumers of this event fall into two groups that
+	// want opposite things. The north-bound planes — MQTT retraction, the
+	// WebSocket device-lifecycle push, the Matter bridge, the alarm and
+	// security indexes — must react either way: a device the CCU no longer
+	// reports has to disappear from them, and a teardown is the only moment
+	// they learn it. The persistent VALUES/MASTER cache evictors must not:
+	// a scoped cache clear (ADR 0042) already deleted exactly the rows the
+	// operator asked for, and evicting on the teardown would drop every other
+	// device's cache with it.
+	//
+	// Suppressing the event entirely for a teardown — the obvious shortcut —
+	// silences the first group to protect the second, and a device genuinely
+	// gone from the CCU then lingers on every north-bound plane until the
+	// next daemon boot.
+	ModelTeardown bool
 }
 
 // Type implements Event.

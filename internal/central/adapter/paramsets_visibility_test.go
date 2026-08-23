@@ -55,7 +55,7 @@ func registryWithDeviceAndChannel(t *testing.T, model, channelAddr, channelType 
 		Interface:   hmenum.InterfaceHmIPRF,
 		Address:     dev.Address,
 		Model:       model,
-		Name:        dev.Name,
+		Name:        dev.Name(),
 	})
 	dev2.AddChannel(channelAddr, 1, channelType, hmenum.ParamsetKeyValues)
 	// Overwrite device in the registry.

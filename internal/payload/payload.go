@@ -40,7 +40,29 @@ func For(obj any, k Kind) map[string]any {
 	return ForWith(obj, k, Options{})
 }
 
-// ForWith is [For] with explicit options.
+// ExtraProperties is implemented by a type that contributes properties
+// reflection over its exported fields cannot see.
+//
+// The reason it exists: a field that several goroutines read while one
+// writes it cannot stay a plain exported field — the readers tear. Moving
+// such a field behind a mutex and an accessor makes it correct and, in the
+// same stroke, invisible to [ForWith], which walks exported fields only.
+// Losing a property that way is silent: the harvest simply returns one key
+// fewer, the consumer falls back, and nothing fails. `Device.name` went
+// through exactly that and dropped the device name out of every
+// HA-Discovery device block.
+//
+// Implementations return the properties for kind k, using the same alt
+// naming [Options.UseAltNames] selects, and honour opts.IncludeZero.
+// Anything they return overrides a same-named reflected field.
+//
+// loom:reachable:reason="ForWith type-asserts every obj against it, and *device.Device implements it to publish its mutex-guarded name; an interface reached only by assertion, which the analyzer cannot see used"
+type ExtraProperties interface {
+	PayloadExtra(k Kind, opts Options) map[string]any
+}
+
+// ForWith returns the k-partitioned view of obj with explicit options — [For]
+// with the defaults spelled out.
 //
 // Read-only contract: values in the returned map are the field's live
 // `any`-boxed value, not a deep copy. A field holding a map, slice, or
@@ -79,6 +101,11 @@ func ForWith(obj any, k Kind, opts Options) map[string]any {
 			name = f.altName
 		}
 		out[name] = val.Interface()
+	}
+	if ep, ok := obj.(ExtraProperties); ok {
+		for name, val := range ep.PayloadExtra(k, opts) {
+			out[name] = val
+		}
 	}
 	return out
 }

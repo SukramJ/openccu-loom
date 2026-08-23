@@ -55,10 +55,8 @@ COPY --from=builder /out/openccu-loom /app/openccu-loom
 COPY --from=builder /src/assets/openapi.yaml /app/assets/openapi.yaml
 USER nonroot:nonroot
 
-# REST API + Config UI (SPA)
+# REST API + Config UI (SPA) + first-run /setup + bootstrap
 EXPOSE 8119/tcp
-# first-run /setup + bootstrap HTMX (pre-auth)
-EXPOSE 8081/tcp
 # XML-RPC callback (CCU -> daemon)
 EXPOSE 8120/tcp
 # BIN-RPC callback (CUxD -> daemon)

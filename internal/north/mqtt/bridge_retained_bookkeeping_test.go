@@ -295,12 +295,12 @@ func TestPublishDiscoveryRepublishesAfterAFailedPublish(t *testing.T) {
 	ctx := context.Background()
 	payload := []byte(`{"name":"Bücherregal"}`)
 
-	if err := b.publishDiscovery(ctx, "switch", "ccu01_aabb", "ch1_state", payload); err == nil {
+	if err := b.publishDiscovery(ctx, "ccu01", "switch", "ccu01_aabb", "ch1_state", payload); err == nil {
 		t.Fatal("publishDiscovery: want the broker error, got nil")
 	}
 
 	mp.failFor = ""
-	if err := b.publishDiscovery(ctx, "switch", "ccu01_aabb", "ch1_state", payload); err != nil {
+	if err := b.publishDiscovery(ctx, "ccu01", "switch", "ccu01_aabb", "ch1_state", payload); err != nil {
 		t.Fatalf("publishDiscovery (broker back): %v", err)
 	}
 	if got := len(mp.publications()); got != 1 {
@@ -344,7 +344,7 @@ func TestRepublishDiscoveryContinuesPastAFailedTopic(t *testing.T) {
 	b := NewBridge(BridgeConfig{Base: "loom", HADiscoveryEnabled: true}, mp)
 	ctx := context.Background()
 	for _, object := range []string{"ch1_state", "ch2_state", "ch3_state"} {
-		if err := b.publishDiscovery(ctx, "switch", "ccu01_aabb", object, []byte(`{"o":"`+object+`"}`)); err != nil {
+		if err := b.publishDiscovery(ctx, "ccu01", "switch", "ccu01_aabb", object, []byte(`{"o":"`+object+`"}`)); err != nil {
 			t.Fatalf("publishDiscovery(%s): %v", object, err)
 		}
 	}
@@ -396,7 +396,7 @@ func TestRetractionForOneCentralLeavesTheOtherCentralsTopics(t *testing.T) {
 		stateTopics[central] = b.topics.SlotState(central, iface, slot)
 
 		nodeID := naming.NewDevicePathData(hmtypes.ParseWireInterfaceID(iface), addr).DiscoveryNodeID(central)
-		if err := b.publishDiscovery(ctx, "event", nodeID, "1_press_short",
+		if err := b.publishDiscovery(ctx, central, "event", nodeID, "1_press_short",
 			[]byte(`{"name":"`+central+`"}`)); err != nil {
 			t.Fatalf("%s: publishDiscovery: %v", central, err)
 		}

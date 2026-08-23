@@ -363,6 +363,7 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		// whatever [publishDeviceSnapshot] last observed until a broker
 		// reconnect or daemon restart re-walked the whole model.
 		events.Subscribe(bus, func(e hmevent.DeviceMetadataChangedEvent) {
+			b.publishDeviceMetadataChangedWS(u.Name(), e)
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceMetadataChanged(jobCtx, u, e) })
 		}),
 		// An availability flip that did NOT come from an inbound value —
@@ -468,6 +469,39 @@ func (b *EventBridge) onDeviceMetadataChanged(ctx context.Context, u *central.Un
 		restampChannelDataPointNames(ch, ch.MasterDataPoints())
 	}
 	b.publishDeviceSnapshot(ctx, u.Name(), d)
+}
+
+// deviceMetadataChangedWSPayload is the `device.metadata_changed` WS
+// broadcast payload declared in assets/wsapi.json. Address is always the
+// device address, even when a channel was renamed — a client materialises a
+// device's name and area as one unit and re-reads the whole device.
+type deviceMetadataChangedWSPayload struct {
+	Central       string `json:"central"`
+	InterfaceID   string `json:"interface_id"`
+	DeviceAddress string `json:"device_address"`
+}
+
+// publishDeviceMetadataChangedWS broadcasts the WebSocket
+// `device.metadata_changed` frame for a rename or room/function change,
+// alongside the MQTT re-publish [EventBridge.onDeviceMetadataChanged]
+// performs on the same event. Unlike the MQTT arm it does not depend on
+// b.mqtt: the WS plane keeps no declared-topic bookkeeping a disabled
+// bridge would leave inconsistent, so a client holding a device list learns
+// about the rename regardless of whether MQTT is wired.
+func (b *EventBridge) publishDeviceMetadataChangedWS(centralName string, e hmevent.DeviceMetadataChangedEvent) {
+	if b == nil || b.wsHub == nil {
+		return
+	}
+	b.wsHub.Publish(ws.Event{
+		Topic: ws.DeviceLifecycleTopic(e.Address),
+		Type:  string(hmevent.EventTypeDeviceMetadataChanged),
+		When:  e.Timestamp(),
+		Payload: deviceMetadataChangedWSPayload{
+			Central:       centralName,
+			InterfaceID:   e.InterfaceID,
+			DeviceAddress: e.Address,
+		},
+	})
 }
 
 // detach releases every subscription, stops the MQTT fan-out worker and waits
@@ -1053,7 +1087,7 @@ func (b *EventBridge) registerAndLoadDP(
 		chAddr, _ := parseChannel(ch.Address)
 		if _, _, ok, _ := b.buildPublishEvent(
 			centralName, ifaceID, d.Address, chAddr, channelNo,
-			d.Model, d.Name, dpk, raw, paramsetKey,
+			d.Model, d.Name(), dpk, raw, paramsetKey,
 		); !ok {
 			return
 		}
@@ -1081,7 +1115,7 @@ func (b *EventBridge) registerAndLoadDP(
 	chAddr, _ := parseChannel(ch.Address)
 	if _, _, ok, _ := b.buildPublishEvent(
 		centralName, ifaceID, d.Address, chAddr, channelNo,
-		d.Model, d.Name, dpk, nil, paramsetKey,
+		d.Model, d.Name(), dpk, nil, paramsetKey,
 	); !ok {
 		return
 	}
@@ -1119,7 +1153,7 @@ func (b *EventBridge) publishDiscoveryForUnobservedDP(
 	if bridge == nil {
 		return
 	}
-	model, name := d.Model, d.Name
+	model, name := d.Model, d.Name()
 	channel, _ := parseChannel(ch.Address)
 	key := hmtypes.DataPointKey{
 		InterfaceID:    ifaceID,
@@ -2420,7 +2454,7 @@ func (b *EventBridge) publishChannelEventDiscoverySnapshot(
 		Central:        centralName,
 		Interface:      iface,
 		DeviceAddress:  d.Address,
-		DeviceName:     d.Name,
+		DeviceName:     d.Name(),
 		Model:          d.Model,
 		ChannelNo:      channelNo,
 		ChannelAddress: ch.Address,
@@ -2494,7 +2528,7 @@ func (b *EventBridge) publishCustomDPDiscoverySnapshot(
 		Central:        centralName,
 		Interface:      iface,
 		DeviceAddress:  d.Address,
-		DeviceName:     d.Name,
+		DeviceName:     d.Name(),
 		Model:          d.Model,
 		ChannelNo:      channelNo,
 		ChannelAddress: ch.Address,
@@ -2676,7 +2710,7 @@ func lookupDevice(reg *central.Registry, address string) (model, name string) {
 	}
 	for _, u := range reg.List() {
 		if d, ok := u.ModelRegistry.Get(address); ok {
-			return d.Model, d.Name
+			return d.Model, d.Name()
 		}
 	}
 	return "", ""
@@ -2833,6 +2867,7 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 			return cp.OnChange(func(_, _ *schedule.Climate) {
 				SafeGo("eventbridge.climate_dp_state", func() {
 					b.publishCustomDPState(context.Background(), centralName, iface, d.Address, channelNo, ch)
+					b.publishScheduleChangedWS(centralName, iface, d.Address, channelNo)
 				})
 			})
 		})
@@ -2876,7 +2911,48 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 				context.Background(), capturedCentral, capturedIface, capturedAddr, capturedChannel,
 				capturedWP.CurrentProfile(),
 			)
+			b.publishScheduleChangedWS(capturedCentral, capturedIface, capturedAddr, capturedChannel)
 		})
+	})
+}
+
+// scheduleChangedWSPayload is the `schedules.changed` WS broadcast payload
+// declared in assets/wsapi.json. The profile body is deliberately not
+// inlined — a week profile is large and most subscribers only need to
+// invalidate and re-read.
+type scheduleChangedWSPayload struct {
+	Central       string `json:"central"`
+	InterfaceID   string `json:"interface_id"`
+	DeviceAddress string `json:"device_address"`
+	Channel       int    `json:"channel"`
+}
+
+// publishScheduleChangedWS broadcasts the WebSocket `schedules.changed`
+// frame for the channel whose week profile moved, alongside the MQTT
+// publish the caller performs on the same OnChange tick, so an SPA
+// schedule view held open learns about a CCU-side or second-operator
+// change instead of keeping the stale schedule until the user navigates
+// away and back.
+//
+// Both call sites live inside [EventBridge.publishWeekProfileSnapshot],
+// which still wires its OnChange subscriptions only when b.mqtt is set —
+// with MQTT disabled neither plane sees the change. Decoupling the WS
+// wiring from that guard is a separate, larger change to that function's
+// gating and out of scope here.
+func (b *EventBridge) publishScheduleChangedWS(centralName, iface, deviceAddr string, channel int) {
+	if b == nil || b.wsHub == nil {
+		return
+	}
+	b.wsHub.Publish(ws.Event{
+		Topic: ws.DeviceLifecycleTopic(deviceAddr),
+		Type:  "schedules.changed",
+		When:  time.Now(),
+		Payload: scheduleChangedWSPayload{
+			Central:       centralName,
+			InterfaceID:   iface,
+			DeviceAddress: deviceAddr,
+			Channel:       channel,
+		},
 	})
 }
 
@@ -2911,7 +2987,7 @@ func (b *EventBridge) publishUpdateSnapshot(
 		Central:       centralName,
 		Interface:     iface,
 		DeviceAddress: d.Address,
-		DeviceName:    d.Name,
+		DeviceName:    d.Name(),
 		Model:         d.Model,
 		Device:        d,
 		Update:        upd,
@@ -2986,7 +3062,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 		Interface:     iface,
 		DeviceAddress: d.Address,
 		ChannelNo:     channelNo,
-		DeviceName:    d.Name,
+		DeviceName:    d.Name(),
 		Model:         d.Model,
 		Device:        d,
 	}
@@ -3217,7 +3293,7 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 			Interface:         iface,
 			DeviceAddress:     d.Address,
 			ScheduleChannelNo: scheduleChannelNo,
-			DeviceName:        d.Name,
+			DeviceName:        d.Name(),
 			Model:             d.Model,
 			Device:            d,
 			Key:               key,
@@ -3488,7 +3564,7 @@ func (b *EventBridge) publishCombinedProjection(
 		Interface:     iface,
 		DeviceAddress: d.Address,
 		ChannelNo:     channelNo,
-		DeviceName:    d.Name,
+		DeviceName:    d.Name(),
 		Model:         d.Model,
 		Device:        d,
 		Kind:          kind,

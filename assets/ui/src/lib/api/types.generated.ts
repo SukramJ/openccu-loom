@@ -98,6 +98,10 @@ export interface paths {
          *     feature flags (`features`), per-central wiring (`centrals`),
          *     callback ports, and static behaviour policies (`policies`).
          *
+         *     Each central's `host` is admin-only and reads as an empty
+         *     string for a viewer or operator — the same narrowing
+         *     `GET /centrals` and `GET /system/ccu` apply.
+         *
          *     The `policies` object documents daemon-side defaults that
          *     external clients ask about — currently always-on values:
          *
@@ -302,7 +306,7 @@ export interface paths {
         };
         /**
          * Device-type icon image (proxied from the CCU)
-         * @description Returns the device's model-icon PNG, proxied from the owning CCU's web server (`/config/img/devices/250/<file>`). Unauthenticated, like /health — it exposes only non-sensitive device model artwork and must resolve from an <img> tag regardless of auth scheme. Responds 404 when the device, its central, or the upstream image is unavailable; the SPA then falls back to a generic glyph.
+         * @description Returns the device's model-icon PNG, proxied from the owning CCU's web server (`/config/img/devices/250/<file>`). Authenticated like every other device route: the artwork itself is not sensitive, but the route answers differently for a known and an unknown address, so serving it openly made it an existence oracle for the device inventory. The SPA renders it from an <img> tag, which carries the same-origin session cookie; a bearer-only client must fetch the image itself rather than hand the URL to the browser. Responds 404 when the device, its central, or the upstream image is unavailable; the SPA then falls back to a generic glyph.
          */
         get: operations["getDeviceIcon"];
         put?: never;
@@ -1919,6 +1923,13 @@ export interface paths {
          *     and the configured-interface list HA's Repair-Flows need to
          *     validate that the daemon manages the same CCU the user
          *     expects.
+         *
+         *     The CCU's network coordinates — `host`, `hostname`, `serial`,
+         *     `url` and the per-adapter `port` / `address` / `url` — are
+         *     admin-only. A viewer or operator reads them as empty strings /
+         *     zero, the same narrowing `GET /centrals` has always applied;
+         *     everything else on the entry stays visible so a status page
+         *     still renders.
          *
          *     Centrals that have not yet completed their first connect
          *     round have empty `model` / `version` / `serial` / `hostname`
@@ -7329,7 +7340,11 @@ export interface components {
         SysvarSetRequest: {
             value: unknown;
         };
-        /** @description One aggregated bucket of measurement history: the average, minimum, maximum and sample count over the bucket's time span. */
+        /**
+         * @description One aggregated bucket of measurement history: the average, minimum, maximum and sample count over the bucket's time span.
+         *
+         *     `avg` is time-weighted, not a plain mean of the samples. CCU parameters arrive push-driven, so sample spacing is irregular by construction and an unweighted mean reports a mostly-idle series as several times its true average. `covered_ms` is the span that weighting divides by; combine two buckets by weighting each `avg` with its own `covered_ms`, never with `count`, because two samples an hour apart and two a second apart are both `count: 2`.
+         */
         HistoryBucket: {
             /**
              * Format: date-time
@@ -7347,6 +7362,11 @@ export interface components {
              * @description Number of raw samples aggregated into this bucket.
              */
             count: number;
+            /**
+             * Format: int64
+             * @description The millisecond span `avg` is weighted over. Omitted (or zero) when the span is unknown — a bucket built entirely from rows the daemon recorded before it stored the span — in which case `avg` is the plain mean over `count`.
+             */
+            covered_ms?: number;
         };
         /** @description Effective measurement-recording state of one data point. */
         RecordingState: {
@@ -8931,6 +8951,40 @@ export interface components {
             available: boolean;
         };
         /**
+         * @description Payload of a `device.metadata_changed` broadcast. Topic pattern
+         *     `device.{address}.lifecycle` — the same topic as `device.created`;
+         *     subscribers route by the envelope `type` field. Fires when a device
+         *     or one of its channels is renamed, or its room / function assignment
+         *     changes.
+         *
+         *     `device_address` is always the DEVICE address, even when the change
+         *     was made on a channel: a client materialises a device's name and area
+         *     as one unit, so a channel-level change still means "re-read this
+         *     device". The new values are not inlined — re-read the device summary.
+         */
+        DeviceMetadataChangedPayload: {
+            central: string;
+            interface_id: string;
+            device_address: string;
+        };
+        /**
+         * @description Payload of a `schedules.changed` broadcast. Topic pattern
+         *     `device.{address}.lifecycle`, shared with the other device lifecycle
+         *     events; subscribers route by the envelope `type` field. Fires when a
+         *     channel's week profile changes — written through this daemon, or
+         *     observed on the CCU.
+         *
+         *     The profile body is deliberately not inlined: a week profile is large
+         *     and most subscribers only need to invalidate and re-read the channel's
+         *     schedule. `channel` is the channel number the profile belongs to.
+         */
+        ScheduleChangedPayload: {
+            central: string;
+            interface_id: string;
+            device_address: string;
+            channel: number;
+        };
+        /**
          * @description Payload of a `datapoint.optimistic_rolled_back` broadcast. Rides
          *     the same `device.{address}.channels.{channel}.data_points.{parameter}`
          *     topic as `datapoint.value_changed`; subscribers route by the
@@ -10131,6 +10185,8 @@ export interface components {
             faults?: components["schemas"]["SecurityFault"][];
             /** @description The alarm engine's verdict about itself, distinct from a transport outage. */
             engine_healthy: boolean;
+            /** @description Whether the classification index still reflects the model behind this snapshot. False means the classes and zones were folded from an index the daemon knows to be stale — a source may be missing or attributed to the wrong class. Render the view as degraded rather than trusting a quiet result. */
+            index_healthy?: boolean;
             last_alarm?: components["schemas"]["SecurityNotification"];
             last_fault?: components["schemas"]["SecurityNotification"];
         };

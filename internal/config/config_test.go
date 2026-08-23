@@ -301,28 +301,18 @@ north:
 	}
 }
 
-func TestMQTTInvalidPayloadFormat(t *testing.T) {
-	buf := []byte(minimalCentralYAML + `
-north:
-  mqtt:
-    enabled: true
-    broker_url: tcp://192.168.1.5:1883
-    payload_format: xml
-`)
-	_, err := Parse(buf)
-	if err == nil {
-		t.Fatal("expected error: invalid payload_format")
-	}
-	if !strings.Contains(err.Error(), "payload_format") {
-		t.Fatalf("error should mention 'payload_format', got: %v", err)
-	}
-}
-
-func TestMQTTValidPayloadFormats(t *testing.T) {
-	for _, pf := range []string{"", "bare", "json"} {
+// TestMQTTPayloadFormatKeyIsOrphaned pins the removal of the dead
+// north.mqtt.payload_format knob: no production code ever read it (only the
+// validator round-tripped it), so the field is gone from NorthMQTT and the
+// key is now an unrecognised leaf. yaml.Unmarshal ignores unknown keys, so a
+// config file left over from before the removal — any value, not just the
+// two the validator used to accept — must still parse cleanly instead of
+// erroring the way it did while the field, and its validation branch, existed.
+func TestMQTTPayloadFormatKeyIsOrphaned(t *testing.T) {
+	for _, pf := range []string{"", "bare", "json", "xml"} {
 		buf := minimalCentralYAML + "\nnorth:\n  mqtt:\n    enabled: true\n    broker_url: tcp://192.168.1.5:1883\n    payload_format: " + pf + "\n"
 		if _, err := Parse([]byte(buf)); err != nil {
-			t.Fatalf("payload_format %q should be valid: %v", pf, err)
+			t.Fatalf("orphaned payload_format key %q should be silently ignored: %v", pf, err)
 		}
 	}
 }

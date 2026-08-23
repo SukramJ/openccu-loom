@@ -588,7 +588,7 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 			if modelFilter != "" && !strings.Contains(strings.ToLower(d.Model), modelFilter) {
 				continue
 			}
-			if nameFilter != "" && !strings.Contains(strings.ToLower(d.Name), nameFilter) {
+			if nameFilter != "" && !strings.Contains(strings.ToLower(d.Name()), nameFilter) {
 				continue
 			}
 			if addrFilter != "" && !strings.Contains(strings.ToLower(d.Address), addrFilter) {
@@ -920,7 +920,7 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 		ModelLabel:                 d.ModelLabel,
 		ModelIcon:                  d.ModelIcon,
 		SubModel:                   d.SubModel,
-		Name:                       d.Name,
+		Name:                       d.Name(),
 		Manufacturer:               string(d.Manufacturer),
 		ProductGroup:               string(d.ProductGroup),
 		IsAvailable:                d.Available(),

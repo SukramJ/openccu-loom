@@ -1455,14 +1455,6 @@ type NorthMQTT struct {
 	// surfaces a named error, and this knob is the fix.
 	ProtocolVersion string `yaml:"protocol_version,omitempty" json:"protocol_version,omitempty" cfg:"expert"`
 
-	// PayloadFormat is currently reserved and has no effect: the bridge
-	// always publishes the JSON envelope `{"value":..,"available":..,
-	// "modified_at":..}` on state topics (the bare-scalar mode was retired
-	// with the ADR-0011 payload unification). The value is still validated
-	// (accepts "", "bare" or "json") so a saved config round-trips, but no
-	// publisher branches on it.
-	PayloadFormat string `yaml:"payload_format" json:"payload_format" cfg:"expert"`
-
 	// SubDevicesEnabled splits multi-channel-group devices into one
 	// HA device per channel group. Each sub-device's MQTT discovery
 	// stamps `device.identifiers = "<topic_base>_<addr>-<group_no>"`
@@ -1911,6 +1903,23 @@ func (c *Config) applyDefaults() {
 		slog.Warn("config: north.mqtt.discovery_enabled requires the raw topic plane; enabling north.mqtt.raw_enabled",
 			slog.String("field", "north.mqtt.raw_enabled"))
 	}
+	// The mount path becomes an http.ServeMux pattern verbatim (see
+	// mcpMountPathPattern), and ServeMux answers a malformed pattern with a
+	// panic at registration, not an error — a value that fails the class
+	// would otherwise abort every subsequent boot until an operator finds
+	// and edits the YAML by hand. The value is corrected rather than
+	// rejected only while the adapter is enabled, mirroring the MQTT
+	// raw/discovery correction above: an operator with MCP off is never
+	// exposed to the value at all, so leaving a stale one alone is right.
+	if c.North.MCP.Enabled && c.North.MCP.Path != "" {
+		if err := c.North.MCP.ValidateMountPath(); err != nil {
+			slog.Warn("config: north.mcp.path is not usable as an HTTP mount path; falling back to the default \"/mcp\"",
+				slog.String("field", "north.mcp.path"),
+				slog.String("value", c.North.MCP.Path),
+				slog.String("reason", err.Error()))
+			c.North.MCP.Path = ""
+		}
+	}
 	if c.North.REST.WS.ReplayCapacity == 0 {
 		c.North.REST.WS.ReplayCapacity = 1024
 	}
@@ -2229,7 +2238,6 @@ func validatePublicURL(raw string) error {
 //     accepted for bare host:port shorthand).
 //
 // Optional but range-checked:
-//   - mqtt.payload_format — must be "", "bare" or "json".
 //   - mqtt.topic_base — must be non-empty (filled by applyDefaults so
 //     this is only reachable if someone sets it to an explicit empty
 //     string in YAML).
@@ -2256,12 +2264,6 @@ func validateMQTT(m *NorthMQTT) error {
 	}
 	if u.Hostname() == "" {
 		return errors.New("config: mqtt.broker_url: host must not be empty")
-	}
-	switch m.PayloadFormat {
-	case "", "bare", "json":
-		// valid
-	default:
-		return fmt.Errorf("config: mqtt.payload_format: invalid value %q (use bare or json)", m.PayloadFormat)
 	}
 	if m.TopicBase == "" {
 		return errors.New("config: mqtt.topic_base: required")

@@ -185,7 +185,7 @@ func TestDeviceNameOr_NilDevice(t *testing.T) {
 func TestDeviceNameOr_HasName(t *testing.T) {
 	t.Parallel()
 	dev := device.New(device.Config{Address: "DEV004", InterfaceID: "test", Model: "M"})
-	dev.Name = "Named Device"
+	dev.SetName("Named Device")
 	if got := deviceNameOr(dev, "fallback"); got != "Named Device" {
 		t.Errorf("deviceNameOr with name = %q, want Named Device", got)
 	}
@@ -194,7 +194,7 @@ func TestDeviceNameOr_HasName(t *testing.T) {
 func TestDeviceNameOr_NoName(t *testing.T) {
 	t.Parallel()
 	dev := device.New(device.Config{Address: "DEV005", InterfaceID: "test", Model: "M"})
-	dev.Name = ""
+	dev.SetName("")
 	if got := deviceNameOr(dev, "fallback"); got != "DEV005" {
 		t.Errorf("deviceNameOr no name = %q, want DEV005 (address)", got)
 	}

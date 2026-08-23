@@ -266,7 +266,7 @@ func (q *QueryFacade) GetScheduleCapableDevices() []ScheduleInfo {
 		}
 		info := ScheduleInfo{
 			DeviceAddress: d.Address,
-			DeviceName:    d.Name,
+			DeviceName:    d.Name(),
 		}
 		// Find the first channel carrying a week profile.
 		for _, ch := range d.Channels() {

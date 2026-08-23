@@ -603,89 +603,31 @@ func (t *TextDisplay) Clear(ctx context.Context, id int32, priority hmenum.Comma
 	return t.Write(ctx, Row{ID: id, Text: ""}, priority)
 }
 
-// writeRowsDefaultIcon is the DISPLAY_DATA_ICON value sent by WriteRows when
-// no icon is requested. Clears any previously-set icon.
-const writeRowsDefaultIcon = "NONE"
-
-// WriteRows writes a sequence of rows as one atomic put_paramset per row
-// followed by a single DISPLAY_DATA_COMMIT write. Each row is sent to its
-// own channel address (row 1 → base address, row N → base device + :N).
-// This matches the reference pattern where send_text is called once per row
-// and each call emits one put_paramset to the row-specific channel.
+// WriteRows writes a sequence of rows, one row per call to [TextDisplay.Write].
 //
-// Each per-row paramset always includes STRING, ICON and ALIGNMENT so
-// previously-set values are explicitly cleared rather than left as-is.
-// There is no DISPLAY_DATA_SCROLLING field on any real CCU text-display
-// channel — it does not exist on the Python reference's TextDisplay data
-// point (text_display.py) nor on HmIP-WRCD, the only text-display model.
+// There is exactly one physical display channel per device — HmIP-WRCD, the
+// only text-display model, carries every DISPLAY_DATA_* parameter on a single
+// channel and nowhere else
+// (../godevccu/internal/embed/data/paramset_descriptions/HmIP-WRCD.json).
+// DISPLAY_DATA_ID selects which row a write applies to, so every row goes to
+// t.Address with its own ID; the id addresses the row, not the channel.
+//
+// Delegating to Write rather than building the paramset again here is what
+// keeps the two in step: Write applies the row defaults, validates icon,
+// colours and alignment against what the device actually offers, and carries
+// DISPLAY_DATA_COMMIT inside the row's own paramset so the row lands
+// atomically. A second implementation drifted from all four — it skipped the
+// defaults, so a row arrived without the colours the device expects, and it
+// deferred a single trailing commit, so a failure midway left some rows
+// applied and others staged.
 func (t *TextDisplay) WriteRows(ctx context.Context, rows []Row, priority hmenum.CommandPriority) error {
 	if len(rows) == 0 {
 		return nil
 	}
 	ctx = custom.EnsureContext(ctx)
-	pw, hasPW := t.Writer.(generic.ParamsetWriter)
 	for _, r := range rows {
-		if r.ID < 1 || r.ID > maxDisplayID {
-			return fmt.Errorf("%w: id=%d (must be 1..%d)", ErrInvalidRow, r.ID, maxDisplayID)
-		}
-		rowAddr := t.rowAddress(r.ID)
-		iconVal := r.Icon
-		if iconVal == "" {
-			iconVal = writeRowsDefaultIcon
-		}
-		alignVal := AlignLeft
-		if r.Alignment != nil && *r.Alignment != "" {
-			alignVal = *r.Alignment
-		}
-		if hasPW {
-			values := map[string]any{
-				string(hmenum.ParameterDisplayDataString):    r.Text,
-				string(hmenum.ParameterDisplayDataIcon):      iconVal,
-				string(hmenum.ParameterDisplayDataAlignment): alignVal,
-			}
-			if r.TextColor != nil && *r.TextColor != "" {
-				values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor
-			}
-			if r.BackgroundColor != nil && *r.BackgroundColor != "" {
-				values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
-			}
-			if err := pw.PutParamset(ctx, rowAddr, hmenum.ParamsetKeyValues, values, priority); err != nil {
-				return fmt.Errorf("textdisplay: WriteRows row %d: %w", r.ID, err)
-			}
-		} else {
-			if err := t.writeRowFieldsToAddr(ctx, r, rowAddr, iconVal, priority); err != nil {
-				return err
-			}
-		}
-	}
-	return t.Commit(ctx, priority)
-}
-
-// rowAddress builds the channel address for the given 1-based row ID.
-// Row 1 maps to the TextDisplay's own address; row N maps to the base
-// device address with channel index N (e.g. "SDV0001:1" → "SDV0001:2").
-func (t *TextDisplay) rowAddress(rowID int32) string {
-	// Find the last colon to split base-device from channel index.
-	for i := len(t.Address) - 1; i >= 0; i-- {
-		if t.Address[i] == ':' {
-			return fmt.Sprintf("%s:%d", t.Address[:i], rowID)
-		}
-	}
-	return fmt.Sprintf("%s:%d", t.Address, rowID)
-}
-
-// writeRowFieldsToAddr is the SetValue fallback path when no ParamsetWriter is
-// available; writes each display field individually to rowAddr.
-func (t *TextDisplay) writeRowFieldsToAddr(ctx context.Context, r Row, rowAddr, iconVal string, priority hmenum.CommandPriority) error {
-	if err := t.Writer.SetValue(ctx, rowAddr, hmenum.ParameterDisplayDataString, r.Text, priority); err != nil {
-		return fmt.Errorf("textdisplay: STRING row %d: %w", r.ID, err)
-	}
-	if err := t.Writer.SetValue(ctx, rowAddr, hmenum.ParameterDisplayDataIcon, iconVal, priority); err != nil {
-		return fmt.Errorf("textdisplay: ICON row %d: %w", r.ID, err)
-	}
-	if r.Alignment != nil && *r.Alignment != "" {
-		if err := t.Writer.SetValue(ctx, rowAddr, hmenum.ParameterDisplayDataAlignment, *r.Alignment, priority); err != nil {
-			return fmt.Errorf("textdisplay: ALIGNMENT row %d: %w", r.ID, err)
+		if err := t.Write(ctx, r, priority); err != nil {
+			return fmt.Errorf("textdisplay: WriteRows row %d: %w", r.ID, err)
 		}
 	}
 	return nil

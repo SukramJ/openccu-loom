@@ -34,7 +34,7 @@ func summarize(d *device.Device, central string) deviceSummary {
 	return deviceSummary{
 		Address:   d.Address,
 		Model:     d.Model,
-		Name:      d.Name,
+		Name:      d.Name(),
 		Interface: string(d.Interface),
 		Central:   central,
 	}
@@ -219,6 +219,21 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 		registerListAlarmMessages(s, d)
 		registerListInbox(s, d)
 		registerGetSystemInfo(s, d)
+	}
+	// Operational-domain read tools each project a single narrow REST
+	// facade the daemon already wires for its own routes: the Matter
+	// bridge, stored CCU backups, and the add-on self-updater. The
+	// bridge and the self-updater are each one instance per daemon, not
+	// one per CCU, so neither tool takes central_name; list_backups
+	// does, since each stored archive names the central it backs up.
+	if d.Matter != nil {
+		registerGetMatterStatus(s, d)
+	}
+	if d.Backups != nil {
+		registerListBackups(s, d)
+	}
+	if d.AddonUpdate != nil {
+		registerGetAddonUpdateStatus(s, d)
 	}
 }
 

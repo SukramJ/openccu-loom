@@ -150,7 +150,7 @@ func (s *Service) OutputCandidates(class hmenum.AlarmOutputClass) []OutputCandid
 				}
 				cand.Central = centralName
 				cand.DeviceAddress = d.Address
-				cand.DeviceName = d.Name
+				cand.DeviceName = d.Name()
 				cand.Model = d.Model
 				cand.ChannelAddress = ch.Address
 				cand.ChannelNo = ch.Number
@@ -228,7 +228,7 @@ func (s *Service) RemoteKeyCandidates() []RemoteKeyCandidate {
 				out = append(out, RemoteKeyCandidate{
 					Central:        centralName,
 					DeviceAddress:  d.Address,
-					DeviceName:     d.Name,
+					DeviceName:     d.Name(),
 					Model:          d.Model,
 					ChannelAddress: ch.Address,
 					ChannelNo:      ch.Number,

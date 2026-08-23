@@ -1030,12 +1030,23 @@ Consequence: a number of WS commands from the reference protocol are **not imple
 | `ChangeHistoryClearer` | `change_history.clear` | ditto |
 | `CentralInfo` | `central.info`, `central.connectivity`, `central.system_health`, `central.reconcile` | ditto |
 | `ThrottleStats` | `ccu.throttle_stats` | ditto |
-| `CacheClearer` | `ccu.cache_clear` | ditto |
 | `DeviceStatisticsQuery` | `ccu.device_statistics` | ditto |
-| `FirmwareRefresher` | `firmware.refresh` | ditto |
-| `IncidentClearer` | `incidents.clear` | ditto |
-| `ExtendedHub` | `service_messages.disable` | ditto |
-| `ParamsetReader` | `paramset.copy` | ditto |
+| `IncidentClearer` | `incidents.list`, `incidents.get`, `incidents.clear` | ditto |
+| `ExtendedHub` | `service_messages.disable`, `service_messages.suppressed`, `service_messages.unsuppress` | ditto |
+| `ParamsetReader` | `paramset.copy`, `paramset.form_schema` | ditto |
+
+`CacheClearer` (`ccu.cache_clear`) and `FirmwareRefresher` (`firmware.refresh`)
+used to sit in that table and no longer belong there: both are wired in
+`cmd/openccu-loom/ws_adapters.go` — the first to `cachereset.Service` (ADR 0042),
+the second to `adapter.NewFirmwareDomain`. A table naming a live command as
+dormant is worse than no table, because it is the document a reader consults
+before deciding a command is not worth wiring.
+
+The authoritative list is not this table but
+`TestExtendedCommandsStubEveryOptionalProviderCommandWhenUnwired`
+(`internal/north/rest/ws/commands_more_apis_test.go`): it dispatches every
+command that must answer `not_implemented` while its provider is nil, so a
+command that gains a provider — or loses one — fails there first.
 
 **Rationale:** The Svelte SPA has REST counterparts for all operations relevant to it (`/install-mode`, `/devices/{addr}/firmware/update`, `/devices/{addr}/channels/{no}/config/export`, `/devices/{addr}/links`, `/sessions/edit/*`, `/incidents`, `/audit`, `/metrics`). The WS command frames are a second address space that OpenCCU-Loom does not actively maintain. If someone wanted to run the `homematicip-local-frontend` Lit SPA against OpenCCU-Loom, the bridge would need to wire the `nil` providers.
 
@@ -4141,3 +4152,65 @@ populates the hub model. The reference shape is preserved in Git history
 (`internal/central/adapter/homegear_hub_wiring.go` before its removal); the
 per-sysvar writer routed through the XML-RPC `setSystemVariable` method and left
 the create/update/delete mutator nil, which the milestone should restore.
+
+### BD-MQTT-RawGateCoversRawTopicsOnly — `raw_enabled: false` silences the raw plane, not a discovery payload's own state topics
+
+**Decision.** `north.mqtt.raw_enabled` gates the raw topic plane. It does
+**not** gate `PublishAlarmState`, `PublishAlarmAvailability`,
+`RetractAlarmTopic` or the Security & Safety publisher, and that asymmetry is
+deliberate rather than an oversight. Only `PublishAlarmEvent` — a genuinely
+raw-plane emission with no HA entity behind it — takes the gate.
+
+**Why.** Those topics are the `state_topic` and `availability_topic` that the
+alarm and security entities' own HA-Discovery payloads name. Silencing them
+while discovery still declares them leaves every alarm entity in Home
+Assistant present and permanently `unknown` or `unavailable` — the operator
+sees a full set of controls that never report and never respond. That is the
+exact shape the plane round-trip guards exist to catch: **declared and
+published have to be the same set** (CLAUDE.md, wiring rule 4).
+
+A blanket gate across every alarm/security publisher was proposed on the
+grounds that the flag reads as "no raw topics at all". Taking it would have
+traded a naming inconsistency for a broken plane. The honest fix for the
+naming is documentation, not behaviour.
+
+**What an operator should expect.** Turning the raw plane off removes the raw
+mirror of alarm and security state. It does not remove the Home Assistant
+entities, and it does not stop them updating — those ride the discovery
+contract, which has its own switch (`ha_discovery_enabled`).
+
+**Retirement condition.** None. If the two switches are ever merged, the merge
+has to retract the discovery configs in the same step, or it reintroduces the
+declared-but-never-published set this entry exists to prevent.
+
+### BD-Auth-BasicGuessingSharesTheLoginBucket — a failed Basic credential and a failed login draw from one per-IP budget
+
+**Decision.** `GuardBasicAuth` charges an unresolvable HTTP Basic header against
+the same per-IP bucket `POST /auth/login` uses, rather than a bucket of its own.
+An audit asked for the two to be separated; they are not, and will not be.
+
+**Why.** It is one credential space. An attacker guessing a password can send it
+as a Basic header on any API route or as a login body — the work the daemon does
+is the same bcrypt verification either way, and the thing being guessed is the
+same secret. Two buckets would simply hand a sweep twice the attempts for the
+same wall-clock cost, which is the opposite of what a throttle is for.
+
+The concern behind the request was real but different: collateral lockout. A
+client that once answered a Basic challenge and still replays a stale credential
+would deplete the bucket without any attacker present, and then be unable to log
+in. Two things address that without splitting the budget:
+
+- a Basic header the daemon never even attempts to verify — because the scheme
+  is administratively off — is not charged at all
+  (`basicSchemeDisabled`, `internal/auth/bruteforce.go`);
+- the guard is mounted on the `/api/v1` subtree, not on the whole mux. Above it
+  sit the SPA, `/app/*`, `/about`, `/health` and the UI bootstrap, and one page
+  load is dozens of asset requests. Charging per asset drained the burst of five
+  before the page finished rendering. Pinned by
+  `TestBasicAuthGuardDoesNotChargeTheSPAMount` (`tests/contract/`), which
+  measures the effect through the real router rather than reading the mount
+  point out of the source.
+
+**Retirement condition.** If Basic verification ever stops sharing a credential
+store with the login route — a separate machine-account realm, say — the shared
+bucket stops being justified and should split with it.

@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: dbcbda12
-HEAD: dbcbda12
+Generated: 3a648134
+HEAD: 3a648134
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29813 |
-| Reachable | 5128 |
-| Whitelisted | 21659 |
-| **Unreachable** | **3026** |
+| Total Exported | 29868 |
+| Reachable | 5133 |
+| Whitelisted | 21712 |
+| **Unreachable** | **3023** |
 
 ## Top-20 Packages by Dead Code
 
@@ -143,7 +143,7 @@ HEAD: dbcbda12
 | internal/health | 0 | 16 | 0 |
 | internal/history | 0 | 13 | 0 |
 | internal/i18n | 0 | 2 | 2 |
-| internal/metrics | 0 | 65 | 2 |
+| internal/metrics | 0 | 64 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
 | internal/model/alarmpanel | 0 | 1 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
@@ -171,7 +171,7 @@ HEAD: dbcbda12
 | internal/north/matter/bridge | 0 | 51 | 38 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
 | internal/north/matter/endpoint | 0 | 8 | 0 |
-| internal/north/matter/im | 0 | 78 | 16 |
+| internal/north/matter/im | 0 | 76 | 16 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/mdns | 0 | 8 | 4 |
 | internal/north/matter/schema | 0 | 0 | 8 |

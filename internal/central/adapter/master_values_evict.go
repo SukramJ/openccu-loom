@@ -50,6 +50,13 @@ func (e *MasterValuesEvictor) StartCentral(u *central.Unit) func() {
 		return func() {}
 	}
 	unsub := events.Subscribe(u.EventBus, func(ev hmevent.DeviceRemovedEvent) {
+		if ev.ModelTeardown {
+			// A cache-clear re-init drops the whole model and re-pulls it. The
+			// operator's requested scope was already deleted by
+			// cachereset.Service.Clear; evicting here would take every other
+			// device's cache with it (ADR 0042).
+			return
+		}
 		//nolint:contextcheck // bus handlers carry no ctx; the removal DELETE is bounded by masterValuesEvictTimeout
 		ctx, cancel := context.WithTimeout(context.Background(), masterValuesEvictTimeout)
 		defer cancel()

@@ -141,6 +141,13 @@ Scopes: **global**, a single **central**, a single **interface**, or a single
 **device**. The scope decides which rows are cleared; the re-pull always
 re-initializes the whole owning central — so the affected central's entities
 briefly read `unavailable` while it re-pulls, exactly as during a normal boot.
+The whole-central re-pull tears down and rebuilds every device's in-memory
+model regardless of scope, but that teardown never deletes a persisted row on
+its own: only the rows the requested scope names are removed, up front,
+before the re-pull starts. An interface- or device-scoped clear therefore
+leaves every other device's persisted VALUES cache intact — the brief
+"unavailable" window on the untouched devices is a re-pull from a warm cache,
+not a cold one.
 
 Surfaces (all drive the same operation):
 

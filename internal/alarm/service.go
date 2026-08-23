@@ -65,6 +65,13 @@ type Service struct {
 	clk      clock.Clock
 	log      *slog.Logger
 	health   outputs.HealthFunc
+	// outputHealth is the driver layer's fleet-wide health fan-out: the
+	// alarm bus and the daemon tracker still see every output failure,
+	// but — unlike health — it never triggers onPanelHealthEvent, so it
+	// cannot blanket-flip every panel's availability. The output
+	// manager's failures reach the panel projection exclusively through
+	// its zone-scoped ZoneHealth signal (K1).
+	outputHealth outputs.HealthFunc
 
 	bus     *events.Bus
 	journal *alarmjournal.Journal
@@ -141,6 +148,20 @@ func NewService(deps Deps) (*Service, error) {
 			Base: hmevent.NewBaseAt(s.clk.Now()), Healthy: healthy, Note: note,
 		})
 	}
+	// outputHealth mirrors s.health's fan-out to the inner tracker and
+	// the alarm bus, but publishes directly onto the bus instead of
+	// through s.publish — the output manager's failures are scoped to
+	// one zone via the ZoneHealth callback wired below, and going
+	// through s.publish would additionally hit onPanelHealthEvent's
+	// fleet-wide flip (see the field doc on Service.outputHealth).
+	s.outputHealth = func(healthy bool, note string) {
+		if inner != nil {
+			inner(healthy, note)
+		}
+		events.Publish(s.bus, hmevent.AlarmHealthChangedEvent{
+			Base: hmevent.NewBaseAt(s.clk.Now()), Healthy: healthy, Note: note,
+		})
+	}
 	s.journal = alarmjournal.New(deps.Stores.Journal, clk, s.publish, logger)
 
 	resolver := &deviceResolver{reg: deps.Registry}
@@ -158,8 +179,13 @@ func NewService(deps Deps) (*Service, error) {
 		// an unverified stop has to reach the alarm bus as well as the
 		// daemon tracker. Passing the inner callback here leaves every
 		// live surface reporting a healthy alarm system while a siren is
-		// stuck on.
-		Health:                 s.health,
+		// stuck on. outputHealth rather than health: see the field doc
+		// on Service.outputHealth for why the two must stay distinct.
+		Health: s.outputHealth,
+		// ZoneHealth drives the alarm-control-panel projection's
+		// per-zone availability (K1): a failure scoped to one zone must
+		// not remove Home Assistant's disarm control from the others.
+		ZoneHealth:             s.onOutputZoneHealth,
 		Logger:                 logger,
 		DefaultSirenDuration:   time.Duration(deps.Settings.DefaultSirenSeconds) * time.Second,
 		MaxAcousticPerIncident: time.Duration(deps.Settings.MaxAcousticPerIncidentSeconds) * time.Second,

@@ -80,7 +80,6 @@ type Device struct {
 	ModelLabel   string                 `payload:"info,alt=model_label"`
 	ModelIcon    string                 `payload:"info,alt=model_icon"`
 	SubModel     string                 `payload:"info,alt=sub_model"`
-	Name         string                 `payload:"info"`
 	Manufacturer hmenum.Manufacturer    `payload:"info"`
 	ProductGroup hmenum.ProductGroup    `payload:"info,alt=product_group"`
 	RxModes      []hmenum.CommandRxMode `payload:"config,alt=rx_modes"`
@@ -116,26 +115,28 @@ type Device struct {
 	// value poll" list.
 	IgnoreOnInitialLoad bool
 
-	// assignmentMu guards the operator-assigned room / function state
-	// below. It is deliberately independent of mu (which guards the
+	// assignmentMu guards the operator-assigned room / function / name
+	// state below. It is deliberately independent of mu (which guards the
 	// channel map): the assignment accessors never touch a channel, so
 	// the two locks are never held simultaneously and no ordering
 	// constraint exists between them.
 	//
 	// rooms / functions carry the CCU operator's assignments for the whole
-	// device. The ingest pipeline seeds them at construction, and the
-	// device-admin path rewrites them from a REST / WebSocket handler
-	// goroutine long after the device went live, while north-bound readers
-	// (device list, snapshot export, MQTT discovery, MCP tools) are serving
-	// requests — as plain exported fields they were a torn slice-header
+	// device. name carries the operator-assigned device name. The ingest
+	// pipeline seeds all three at construction, and the device-admin path
+	// rewrites them from a REST / WebSocket handler goroutine long after
+	// the device went live, while north-bound readers (device list,
+	// snapshot export, MQTT discovery, MCP tools) are serving requests —
+	// as plain exported fields they were a torn slice-header / string-header
 	// read for every one of those readers.
 	//
-	// room / function are derived from them under the same lock: they hold
-	// the unambiguous single assignment (empty when none or several are
-	// assigned) that MQTT-Discovery's `suggested_area` needs, and a caller
-	// able to set them independently would let them drift from the set
-	// they summarise.
+	// room / function are derived from rooms / functions under the same
+	// lock: they hold the unambiguous single assignment (empty when none
+	// or several are assigned) that MQTT-Discovery's `suggested_area`
+	// needs, and a caller able to set them independently would let them
+	// drift from the set they summarise.
 	assignmentMu sync.RWMutex
+	name         string
 	rooms        []string
 	functions    []string
 	room         string
@@ -217,9 +218,9 @@ func New(cfg Config) *Device {
 		Address:                      cfg.Address,
 		Model:                        cfg.Model,
 		SubModel:                     cfg.SubModel,
-		Name:                         cfg.Name,
 		Manufacturer:                 cfg.Manufacturer,
 		ProductGroup:                 cfg.ProductGroup,
+		name:                         cfg.Name,
 		rooms:                        slices.Clone(cfg.Rooms),
 		functions:                    slices.Clone(cfg.Functions),
 		room:                         singleOrEmpty(cfg.Rooms),
@@ -244,6 +245,20 @@ func New(cfg Config) *Device {
 		d.update = NewUpdate(d, nil, nil)
 	}
 	return d
+}
+
+// Name returns the operator-assigned device name.
+func (d *Device) Name() string {
+	d.assignmentMu.RLock()
+	defer d.assignmentMu.RUnlock()
+	return d.name
+}
+
+// SetName replaces the device's operator-assigned name.
+func (d *Device) SetName(name string) {
+	d.assignmentMu.Lock()
+	d.name = name
+	d.assignmentMu.Unlock()
 }
 
 // Rooms returns a copy of the device's assigned room names.
@@ -348,7 +363,7 @@ func (d *Device) Info() payload.InfoPayload {
 		ModelLabel:    d.ModelLabel,
 		ModelIcon:     d.ModelIcon,
 		SubModel:      d.SubModel,
-		Name:          d.Name,
+		Name:          d.Name(),
 		Manufacturer:  string(d.Manufacturer),
 		ProductGroup:  string(d.ProductGroup),
 		Rooms:         d.Rooms(),
@@ -924,4 +939,26 @@ func (d *Device) UseGroupChannelForCoverState() bool {
 	d.behaviorMu.RLock()
 	defer d.behaviorMu.RUnlock()
 	return d.useGroupChannelForCoverState
+}
+
+// PayloadExtra publishes the accessor-backed properties that
+// [payload.ForWith]'s field reflection cannot reach.
+//
+// name lives behind assignmentMu because the device-admin rename path
+// writes it from a request goroutine while the north-bound readers are
+// serving. That makes it correct and, as a side effect, unreflectable —
+// so it is contributed here instead. Without this the HA-Discovery device
+// block loses its `name` and every device falls back to its raw address.
+func (d *Device) PayloadExtra(k payload.Kind, opts payload.Options) map[string]any {
+	if k != payload.KindInfo {
+		return nil
+	}
+	name := d.Name()
+	if name == "" && !opts.IncludeZero {
+		return nil
+	}
+	// The key follows the same rule [payload.ForWith] applies to a
+	// reflected field: the Go name lower-cased, with no alt override
+	// declared for this one.
+	return map[string]any{"name": name}
 }

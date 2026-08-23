@@ -87,3 +87,15 @@ type OutputRowSource interface {
 // declines for a class without a safe test path reports nothing, so the
 // signal keeps meaning "something is wrong" (S7).
 type HealthFunc func(healthy bool, note string)
+
+// ZoneHealthFunc receives a zone-scoped output health transition: an
+// output enrolled in exactly this zone failed or recovered. Optional;
+// nil drops the signal. Unlike HealthFunc — fleet-wide, feeds the
+// daemon health tracker and the alarm bus for external planes — this
+// drives only the alarm-control-panel projection's per-zone
+// availability, so a siren stuck in one zone does not remove Home
+// Assistant's disarm control from every other zone during an active
+// alarm.
+//
+// loom:reachable:reason="the callback type OutputManager reports a per-zone output failure through; a func alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
+type ZoneHealthFunc func(zoneID string, healthy bool)

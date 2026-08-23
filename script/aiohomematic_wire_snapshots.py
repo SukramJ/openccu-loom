@@ -529,41 +529,43 @@ def _gen_blind_set_tilt() -> None:
 
 def _gen_text_display_write_rows() -> None:
     """
-    TextDisplay WriteRows: aiohomematic calls send_text() (which uses a Collector)
-    for each row → 1 put_paramset per row + 1 commit paramset.
-    Loom sends 10 individual SetValues.
-    The reference reflects the aiohomematic pattern: per-row put_paramset + commit.
+    TextDisplay WriteRows: aiohomematic calls send_text() once per row, each
+    call wrapped in its own Collector, so every row lands as ONE put_paramset
+    on the device's single display channel (text_display.py: send_text
+    writes DISPLAY_DATA_BACKGROUND_COLOR, _TEXT_COLOR, _ICON, _ALIGNMENT,
+    _STRING, _ID, then DISPLAY_DATA_COMMIT — "must be last" per the source
+    comment — all via the same collector, so they flush as one call).
+    DISPLAY_DATA_ID selects which row a write applies to; there is no
+    per-row *channel* to address — HmIP-WRCD, the only text-display model,
+    carries every DISPLAY_DATA_* parameter on one channel alone
+    (../godevccu/internal/embed/data/paramset_descriptions/HmIP-WRCD.json).
+    Loom's WriteRows emits the identical sequence: it calls its own Write per
+    row, which applies the row defaults and carries DISPLAY_DATA_COMMIT inside
+    the row's paramset. The address here is the fixture's channel, the same one
+    every other TextDisplay snapshot uses, so the comparison is about wire
+    shape rather than about which channel the fixture happened to pick.
     """
     rows = [
         {"ID": 1, "Text": "Line one"},
         {"ID": 2, "Text": "Line two"},
         {"ID": 3, "Text": "Line three"},
     ]
-    # aiohomematic text_display.py: send_text builds a paramset per row with
-    # DISPLAY_DATA_STRING, DISPLAY_DATA_ALIGNMENT, DISPLAY_DATA_ICON, then a
-    # final DISPLAY_DATA_COMMIT. There is no DISPLAY_DATA_SCROLLING field —
-    # it does not exist on _dp_display_data_* in text_display.py, nor on any
-    # CCU device (HmIP-WRCD is the only text-display model and its channel
-    # :3 does not expose it either).
     calls = []
     for row in rows:
-        row_id = row["ID"]
         calls.append({
             "method": "PutParamset",
-            "address": f"SDV0001:{row_id}",
+            "address": "SDV0001:1",
             "paramset_key": "VALUES",
             "put_values": {
-                "DISPLAY_DATA_ALIGNMENT": "LEFT",
-                "DISPLAY_DATA_ICON": "NONE",
+                "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+                "DISPLAY_DATA_TEXT_COLOR": "BLACK",
+                "DISPLAY_DATA_ICON": "NO_ICON",
+                "DISPLAY_DATA_ALIGNMENT": "CENTER",
                 "DISPLAY_DATA_STRING": row["Text"],
+                "DISPLAY_DATA_ID": row["ID"],
+                "DISPLAY_DATA_COMMIT": True,
             },
         })
-    calls.append({
-        "method": "SetValue",
-        "address": "SDV0001:1",
-        "parameter": "DISPLAY_DATA_COMMIT",
-        "value": True,
-    })
     inputs = [{"label": "3-rows", "calls": calls}]
     _write_snapshot("TextDisplay", "WriteRows", inputs)
 

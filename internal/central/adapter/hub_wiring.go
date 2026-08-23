@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -299,11 +300,12 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// hard prerequisite of the bring-up, like the serial above: the pipeline
 	// reads them exactly once per device, so a central brought up without them
 	// serves address-only names — across the SPA, REST, MQTT discovery and
-	// Matter — with no room or function, for the rest of the daemon run. The
-	// periodic detail refresh only re-fills the cache, it never re-names an
-	// already-built model. Failing here returns to the readiness gate, which
-	// re-probes within seconds; a fleet that lost its names cannot recover at
-	// all. An empty answer is not a failure — a CCU without devices is legal.
+	// Matter — with no room or function, for the rest of the daemon run.
+	// [restampDeviceDetails] keeps the running model current after this
+	// initial stamp — see the periodic refresh job below. Failing here
+	// returns to the readiness gate, which re-probes within seconds; a
+	// fleet that lost its names cannot recover at all. An empty answer is
+	// not a failure — a CCU without devices is legal.
 	names, iseToAddress, err := loadDeviceNames(ctx, jc)
 	if err != nil {
 		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
@@ -353,10 +355,13 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	logger.Info("hub.device_details.ok",
 		slog.String("central", cc.Name))
 
-	// Register a 5-minute refresh job so the cache stays current after
-	// operators rename devices or change room assignments via the CCU
-	// WebUI. The loader uses the cache-age gate (≈3 s) so rapid-fire
-	// reconnects skip redundant reloads automatically.
+	// Register a 5-minute refresh job so the cache — AND the live model —
+	// stay current after operators rename devices or change room
+	// assignments via the CCU WebUI. The loader uses the cache-age gate
+	// (≈3 s) so rapid-fire reconnects skip redundant reloads
+	// automatically; [restampDeviceDetails] then re-applies whatever
+	// changed onto the already-built devices and channels, because
+	// nothing else re-visits them after the one-time ingest stamp above.
 	//
 	// The job closes over THIS generation's JSON-RPC session, and the scheduler
 	// has no way to unregister a job: a re-init (cache clear) adds a second one
@@ -375,7 +380,11 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			if !generationActive.Load() {
 				return nil
 			}
-			return loader.Load(ctx, false)
+			if err := loader.Load(ctx, false); err != nil {
+				return err
+			}
+			restampDeviceDetails(unit, logger)
+			return nil
 		},
 	}); err != nil {
 		// Validation failure (empty name, zero interval, nil Run) — should
@@ -570,6 +579,67 @@ func populateDeviceDetailsCache(
 	}
 
 	cache.MarkRefreshed(time.Now())
+}
+
+// restampDeviceDetails re-applies unit.DeviceDetails onto every device and
+// channel already built in unit's live model, so a rename or room/function
+// change an operator makes in the CCU WebUI reaches the running daemon
+// without a restart. [DevicePipeline.ensureDevice] and
+// [DevicePipeline.channelAssignments] read the same cache, but only once,
+// at ingest time; nothing else visits an already-built device or channel
+// afterwards, which is why the periodic refresh job above has to call this
+// once it has reloaded the cache.
+//
+// Only a value that actually differs from what is stamped triggers a
+// [central.Unit.PublishDeviceMetadataChanged] — the cache is reloaded every
+// 5 minutes regardless of whether anything changed on the CCU, and firing
+// the event on every tick would republish every device's MQTT/Matter
+// footprint for no reason. Returns the number of devices that changed.
+func restampDeviceDetails(unit *central.Unit, logger *slog.Logger) int {
+	if unit == nil || unit.ModelRegistry == nil || unit.DeviceDetails == nil {
+		return 0
+	}
+	changed := 0
+	for _, dev := range unit.ModelRegistry.List() {
+		devChanged := false
+		if name := unit.DeviceDetails.GetName(dev.Address); name != "" && name != dev.Name() {
+			dev.SetName(name)
+			devChanged = true
+		}
+		if rooms := unit.DeviceDetails.GetDeviceRooms(dev.Address); len(rooms) > 0 && !slices.Equal(rooms, dev.Rooms()) {
+			dev.SetRooms(rooms)
+			devChanged = true
+		}
+		if functions := unit.DeviceDetails.GetFunctions(dev.Address); len(functions) > 0 && !slices.Equal(functions, dev.Functions()) {
+			dev.SetFunctions(functions)
+			devChanged = true
+		}
+		for _, ch := range dev.Channels() {
+			if name := unit.DeviceDetails.GetName(ch.Address); name != "" && name != ch.Name() {
+				ch.SetName(name)
+				devChanged = true
+			}
+			if rooms := unit.DeviceDetails.GetChannelRooms(ch.Address); len(rooms) > 0 && !slices.Equal(rooms, ch.Rooms()) {
+				ch.SetRooms(rooms)
+				devChanged = true
+			}
+			if functions := unit.DeviceDetails.GetFunctions(ch.Address); len(functions) > 0 && !slices.Equal(functions, ch.Functions()) {
+				ch.SetFunctions(functions)
+				devChanged = true
+			}
+		}
+		if !devChanged {
+			continue
+		}
+		changed++
+		unit.PublishDeviceMetadataChanged(dev)
+	}
+	if changed > 0 && logger != nil {
+		logger.Info("hub.device_details.restamped",
+			slog.String("central", unit.Name()),
+			slog.Int("changed", changed))
+	}
+	return changed
 }
 
 // deviceDetailEntry is the subset of Device.listAllDetail the UI

@@ -6,6 +6,7 @@ package light
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -13,9 +14,13 @@ import (
 )
 
 // newRGBWLightRigWithOnTimeUnit builds a RGBWLight on a channel that carries
-// ON_TIME_UNIT — the same setup that previously triggered the regression where
-// plain TurnOn would emit a put_paramset with DURATION_VALUE/DURATION_UNIT
-// instead of a bare LEVEL SetValue.
+// DURATION_VALUE/DURATION_UNIT — the real HmIP-BSL wire shape for a timed
+// on-time (godevccu paramset_descriptions/HmIP-BSL.json, channel :8: LEVEL,
+// COLOR, DURATION_VALUE, DURATION_UNIT, RAMP_TIME_VALUE, RAMP_TIME_UNIT; no
+// device in the fleet carries ON_TIME_UNIT). This is the same setup that
+// previously triggered the regression where plain TurnOn would emit a
+// put_paramset with DURATION_VALUE/DURATION_UNIT instead of a bare LEVEL
+// SetValue.
 func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *RGBWLight {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "RGBW0002"})
@@ -24,8 +29,11 @@ func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *
 	putWritableInteger(ch, address, hmenum.ParameterHue, w)
 	putWritableFloat(ch, address, hmenum.ParameterSaturation, w)
 	putWritableInteger(ch, address, hmenum.ParameterColorTemperature, w)
-	// ON_TIME_UNIT is present on the channel so hasOnTimeUnit=true inside New().
-	putWritableInteger(ch, address, hmenum.ParameterOnTimeUnit, w)
+	// DURATION_VALUE/DURATION_UNIT are present on the channel so
+	// resolveOnTimeParams (and hasOnTimeUnit, derived from it) resolve
+	// true inside New().
+	putWritableFloat(ch, address, hmenum.ParameterDurationValue, w)
+	putWritableInteger(ch, address, hmenum.ParameterDurationUnit, w)
 	r := NewRGBWLight(Config{
 		Channel:      ch,
 		Writer:       w,
@@ -35,8 +43,10 @@ func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *
 }
 
 // newFixedColorLightRigWithOnTimeUnit builds a FixedColorLight on a channel
-// that carries ON_TIME_UNIT. FixedColorLight sets resetsOnTimeOnTurnOn=true,
-// so plain TurnOn on this rig must emit the NotUsed sentinel via put_paramset.
+// that carries DURATION_VALUE/DURATION_UNIT, matching the real HmIP-BSL
+// signal-light channel (godevccu paramset_descriptions/HmIP-BSL.json,
+// channel :8). FixedColorLight sets resetsOnTimeOnTurnOn=true, so plain
+// TurnOn on this rig must emit the NotUsed sentinel via put_paramset.
 func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *FixedColorLight {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "SIG0001"})
@@ -45,8 +55,10 @@ func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWri
 	putWritableSelect(ch, address, hmenum.ParameterColor, w, []string{
 		"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE",
 	})
-	// ON_TIME_UNIT presence makes hasOnTimeUnit=true.
-	putWritableInteger(ch, address, hmenum.ParameterOnTimeUnit, w)
+	// DURATION_VALUE/DURATION_UNIT presence makes hasOnTimeUnit=true via
+	// resolveOnTimeParams, exactly as it does on a real HmIP-BSL channel.
+	putWritableFloat(ch, address, hmenum.ParameterDurationValue, w)
+	putWritableInteger(ch, address, hmenum.ParameterDurationUnit, w)
 	fc := NewFixedColorLight(Config{
 		Channel:      ch,
 		Writer:       w,
@@ -90,10 +102,16 @@ func TestRGBWLightPlainTurnOnDoesNotSendOnTime(t *testing.T) {
 }
 
 // TestFixedColorLightPlainTurnOnSendsNotUsedSentinel verifies that a plain
-// TurnOn on a FixedColorLight (signal light) channel that carries ON_TIME_UNIT
-// emits a put_paramset with ON_TIME=NotUsed. This preserves the #3111
-// behaviour: without the sentinel the old on-time timer remains active and the
-// light switches itself off unexpectedly after the previous timer expires.
+// TurnOn on a FixedColorLight (signal light) cancels any timer still running,
+// so the light does not switch itself off when the previous on-time expires.
+//
+// The cancel rides the on-time shape the channel actually describes. A signal
+// light's timer is the DURATION_VALUE/DURATION_UNIT pair, and the encoder maps
+// the seconds-valued sentinel onto (111600, H) precisely so the device can tell
+// "timer disabled" from a real duration. Writing a bare ON_TIME here instead —
+// which is what the paramset builder used to hard-code — is a parameter such a
+// channel does not describe, and the CCU faults the whole call, so the light
+// never comes on at all.
 func TestFixedColorLightPlainTurnOnSendsNotUsedSentinel(t *testing.T) {
 	w := &putWriter{}
 	fc := newFixedColorLightRigWithOnTimeUnit(t, "SIG0001:1", w)
@@ -110,17 +128,20 @@ func TestFixedColorLightPlainTurnOnSendsNotUsedSentinel(t *testing.T) {
 
 	got := w.puts[0]
 
-	// ON_TIME must be present and equal to the NotUsed sentinel.
-	rawOnTime, hasOnTime := got[string(hmenum.ParameterOnTime)]
-	if !hasOnTime {
-		t.Fatalf("put_paramset missing ON_TIME; payload: %v", got)
+	// The cancel must ride the pair this channel describes, never a bare
+	// ON_TIME the CCU would reject.
+	if _, wrongShape := got[string(hmenum.ParameterOnTime)]; wrongShape {
+		t.Errorf("put_paramset carries ON_TIME on a channel whose timer is the "+
+			"DURATION pair; the CCU faults the whole call. payload: %v", got)
 	}
-	onTime, ok := rawOnTime.(float64)
-	if !ok {
-		t.Fatalf("ON_TIME is not float64: %T(%v)", rawOnTime, rawOnTime)
+	wantValue, wantUnit := custom.EncodeTimerDuration(time.Duration(NotUsed * float64(time.Second)))
+	if got[string(hmenum.ParameterDurationValue)] != wantValue {
+		t.Errorf("DURATION_VALUE=%v, want the disabled-timer sentinel %v; payload: %v",
+			got[string(hmenum.ParameterDurationValue)], wantValue, got)
 	}
-	if onTime != NotUsed {
-		t.Errorf("ON_TIME=%v, want NotUsed (%v)", onTime, NotUsed)
+	if got[string(hmenum.ParameterDurationUnit)] != wantUnit {
+		t.Errorf("DURATION_UNIT=%v, want %v; payload: %v",
+			got[string(hmenum.ParameterDurationUnit)], wantUnit, got)
 	}
 
 	// LEVEL must also be present in the same bundle.

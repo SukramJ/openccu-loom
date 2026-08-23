@@ -23,6 +23,14 @@ type SecuritySnapshot struct {
 	// EngineHealthy is the alarm engine's verdict about itself,
 	// distinct from a transport outage.
 	EngineHealthy bool `json:"engine_healthy"`
+	// IndexHealthy reports whether the classification index still
+	// reflects the model behind this snapshot. When it is false the
+	// classes and zones below were folded from an index the daemon
+	// knows to be stale, so a source may be missing or attributed to
+	// the wrong class — the view is degraded, not wrong-and-silent.
+	// Without it on the wire an operator had no way to tell a quiet
+	// house from an index that had stopped following the model.
+	IndexHealthy bool `json:"index_healthy"`
 	// LastAlarm / LastFault survive a consumer restart, which an event
 	// cannot.
 	LastAlarm *SecurityNotification `json:"last_alarm,omitempty"`

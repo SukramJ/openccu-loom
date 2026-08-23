@@ -126,11 +126,18 @@ func TestMeasurement_QueryBuckets_AggregatesCorrectly(t *testing.T) {
 		param   = "TEMP"
 	)
 
-	// Insert samples:
-	// ts=0 ms → bucket 0 (width=1000ms): value 10
-	// ts=500 ms → bucket 0: value 20   → avg=15, min=10, max=20, count=2
-	// ts=1000 ms → bucket 1: value 30  → avg=30, min=30, max=30, count=1
-	// ts=3500 ms → bucket 3: value 40  → avg=40, min=40, max=40, count=1
+	// Insert samples (bucket width 1000ms):
+	// ts=0 ms   → bucket 0: value 10 — held until ts=500 (500ms)
+	// ts=500 ms → bucket 0: value 20 — held to bucket end (500ms)
+	//   → time-weighted avg = (10*500 + 20*500) / 1000 = 15, min=10, max=20, count=2
+	// ts=1000 ms → bucket 1: value 30, alone, held the whole bucket
+	//   → avg=30, min=30, max=30, count=1
+	// ts=3500 ms → bucket 3: value 40, the bucket's only new sample. Bucket 2
+	// is empty (omitted), so this row's value carries backward from bucket
+	// 3's own start using the last sample observed before it — value 30,
+	// from ts=1000 — for the 500ms gap, then holds its own value 40 for the
+	// remaining 500ms to the bucket end:
+	//   → avg = (30*500 + 40*500) / 1000 = 35, min=40, max=40, count=1
 	samples := []MeasurementSample{
 		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(0), Value: 10},
 		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(500), Value: 20},
@@ -158,10 +165,15 @@ func TestMeasurement_QueryBuckets_AggregatesCorrectly(t *testing.T) {
 		max   float64
 		count int64
 	}
+	// count here is the covered span in ms ([MeasurementBucket.CoveredMs]),
+	// not a sample count: every bucket here is fully covered — either by real
+	// samples spanning it (bucket 0) or by a single sample self-carrying
+	// across the whole bucket (buckets 1 and 3) — so count is always the
+	// full 1000ms bucket width.
 	want := []wantBucket{
-		{tsMS: 0, avg: 15, min: 10, max: 20, count: 2},
-		{tsMS: 1000, avg: 30, min: 30, max: 30, count: 1},
-		{tsMS: 3000, avg: 40, min: 40, max: 40, count: 1},
+		{tsMS: 0, avg: 15, min: 10, max: 20, count: 1000},
+		{tsMS: 1000, avg: 30, min: 30, max: 30, count: 1000},
+		{tsMS: 3000, avg: 35, min: 40, max: 40, count: 1000},
 	}
 
 	for i, w := range want {
@@ -178,9 +190,48 @@ func TestMeasurement_QueryBuckets_AggregatesCorrectly(t *testing.T) {
 		if b.Max != w.max {
 			t.Errorf("bucket[%d].Max = %v, want %v", i, b.Max, w.max)
 		}
-		if b.Count != w.count {
-			t.Errorf("bucket[%d].Count = %d, want %d", i, b.Count, w.count)
+		if b.CoveredMs != w.count {
+			t.Errorf("bucket[%d].CoveredMs = %d, want %d", i, b.CoveredMs, w.count)
 		}
+	}
+}
+
+// TestMeasurement_QueryBuckets_Avg_IsTimeWeighted is the reproducer for the
+// unweighted-mean defect: a bucket holding 1 W for the first 59 minutes of
+// an hour and 100 W for the last minute must report an average close to
+// 2.65 W (weighted: (59*1 + 1*100) / 60), not the plain per-sample mean of
+// (1+100)/2 = 50.5 W a SUM/COUNT average would give.
+func TestMeasurement_QueryBuckets_Avg_IsTimeWeighted(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "PSM:1"
+		param   = "POWER"
+	)
+	from := time.UnixMilli(0)
+	to := time.UnixMilli(60 * 60 * 1000) // one hour, one bucket
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(0), Value: 1},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(59 * 60 * 1000), Value: 100},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	buckets, _, err := s.QueryBuckets(ctx, central, iface, ch, param, from, to, 1)
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if len(buckets) != 1 {
+		t.Fatalf("QueryBuckets: got %d buckets, want 1", len(buckets))
+	}
+	const want = 159.0 / 60.0 // (59*1 + 1*100) / 60 minutes
+	if diff := buckets[0].Avg - want; diff < -0.01 || diff > 0.01 {
+		t.Errorf("QueryBuckets: Avg = %v, want ~%v (time-weighted, not the ~50.5 plain sample mean)", buckets[0].Avg, want)
 	}
 }
 
@@ -263,8 +314,10 @@ func TestMeasurement_QueryBuckets_Isolation(t *testing.T) {
 	if buckets[0].Avg != 100 {
 		t.Errorf("QueryBuckets: Avg = %v, want 100 (other DPs bled in)", buckets[0].Avg)
 	}
-	if buckets[0].Count != 1 {
-		t.Errorf("QueryBuckets: Count = %d, want 1 (other DPs bled in)", buckets[0].Count)
+	// CoveredMs is the span the bucket covers, in ms: the
+	// bucket's own width, 1000ms.
+	if buckets[0].CoveredMs != 1000 {
+		t.Errorf("QueryBuckets: CoveredMs = %d, want 1000 (other DPs bled in)", buckets[0].CoveredMs)
 	}
 }
 
@@ -364,7 +417,9 @@ func TestMeasurement_DeleteDevice_PrefixSafety(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryBuckets ABC1234:1: %v", err)
 	}
-	if len(buckets) != 1 || buckets[0].Count != 1 {
+	// CoveredMs is the span the bucket covers, in ms: the
+	// single bucket spans the whole 2000ms query window.
+	if len(buckets) != 1 || buckets[0].CoveredMs != 2000 {
 		t.Errorf("ABC1234:1 was incorrectly removed by DeleteDevice(\"ABC123\")")
 	}
 }
@@ -501,7 +556,9 @@ func TestMeasurement_DeleteForCentral_RemovesOnlyThatCentral(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryBuckets central-b: %v", err)
 	}
-	if len(buckets) != 1 || buckets[0].Count != 1 {
+	// CoveredMs is the span the bucket covers, in ms: the
+	// single bucket spans the whole 2000ms query window.
+	if len(buckets) != 1 || buckets[0].CoveredMs != 2000 {
 		t.Errorf("central-b history was incorrectly removed by DeleteForCentral(central-a)")
 	}
 
@@ -774,11 +831,16 @@ func TestMeasurement_SaveBatch_Empty_IsNoOp(t *testing.T) {
 // rollupRow is a scanned measurements_hourly / measurements_daily row, used
 // only by tests to assert on the rollup tiers directly (the store has no
 // public reader for them yet — that lands with the energy query endpoint).
+// Sum/Count are the legacy, always-plain pair (a sum of sampled values, a
+// sample count); WeightedSum/WeightMs are the time-weighted pair added by
+// migrations_history/007_time_weighted_rollups.sql — see [tierBucket].
 type rollupRow struct {
 	BucketTS      int64
 	Sum, Min, Max float64
 	Count         int64
 	First, Last   float64
+	WeightedSum   float64
+	WeightMs      int64
 }
 
 // queryHourly returns every measurements_hourly row for the given key,
@@ -786,7 +848,7 @@ type rollupRow struct {
 func queryHourly(t *testing.T, s *MeasurementStore, central, iface, ch, param string) []rollupRow {
 	t.Helper()
 	rows, err := s.db.QueryContext(context.Background(), `
-        SELECT bucket_ts, sum, min, max, count, first, last
+        SELECT bucket_ts, sum, min, max, count, first, last, weighted_sum, weight_ms
           FROM measurements_hourly
          WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND parameter = ?
          ORDER BY bucket_ts`, central, iface, ch, param)
@@ -797,7 +859,7 @@ func queryHourly(t *testing.T, s *MeasurementStore, central, iface, ch, param st
 	var out []rollupRow
 	for rows.Next() {
 		var r rollupRow
-		if err := rows.Scan(&r.BucketTS, &r.Sum, &r.Min, &r.Max, &r.Count, &r.First, &r.Last); err != nil {
+		if err := rows.Scan(&r.BucketTS, &r.Sum, &r.Min, &r.Max, &r.Count, &r.First, &r.Last, &r.WeightedSum, &r.WeightMs); err != nil {
 			t.Fatalf("queryHourly scan: %v", err)
 		}
 		out = append(out, r)
@@ -810,7 +872,7 @@ func queryHourly(t *testing.T, s *MeasurementStore, central, iface, ch, param st
 func queryDaily(t *testing.T, s *MeasurementStore, central, iface, ch, param string) []rollupRow {
 	t.Helper()
 	rows, err := s.db.QueryContext(context.Background(), `
-        SELECT bucket_ts, sum, min, max, count, first, last
+        SELECT bucket_ts, sum, min, max, count, first, last, weighted_sum, weight_ms
           FROM measurements_daily
          WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND parameter = ?
          ORDER BY bucket_ts`, central, iface, ch, param)
@@ -821,7 +883,7 @@ func queryDaily(t *testing.T, s *MeasurementStore, central, iface, ch, param str
 	var out []rollupRow
 	for rows.Next() {
 		var r rollupRow
-		if err := rows.Scan(&r.BucketTS, &r.Sum, &r.Min, &r.Max, &r.Count, &r.First, &r.Last); err != nil {
+		if err := rows.Scan(&r.BucketTS, &r.Sum, &r.Min, &r.Max, &r.Count, &r.First, &r.Last, &r.WeightedSum, &r.WeightMs); err != nil {
 			t.Fatalf("queryDaily scan: %v", err)
 		}
 		out = append(out, r)
@@ -910,8 +972,22 @@ func TestMeasurement_RollupHourly_AggregatesCorrectly(t *testing.T) {
 	if r.BucketTS != wantBucket {
 		t.Errorf("bucket_ts = %d, want %d", r.BucketTS, wantBucket)
 	}
+	// sum/count are the plain, legacy pair: 10+5+30 and 3 samples.
 	if r.Sum != 45 || r.Min != 5 || r.Max != 30 || r.Count != 3 {
 		t.Errorf("sum/min/max/count = %v/%v/%v/%v, want 45/5/30/3", r.Sum, r.Min, r.Max, r.Count)
+	}
+	// weighted_sum/weight_ms is time-weighted (see [MeasurementBucket.Avg]):
+	// 10 held 0-20min, 5 held 20-50min, 30 held 50-60min (bucket end) — the
+	// whole hour is covered, so the weighted sum divides out to the plain
+	// 10/20/30 arithmetic scaled by minutes: (10*20 + 5*30 + 30*10) / 60 =
+	// 10.8333, stored here as the numerator over the full hourBucketMs.
+	// weight_ms is the covered span in ms, not a sample count: the three
+	// samples cover the whole hour between them (10 held 0-20min, 5 held
+	// 20-50min, 30 held to the bucket end), so weight_ms is the full
+	// hourBucketMs.
+	wantWeightedSum := (10*20 + 5*30 + 30*10) * float64(hourBucketMs) / 60
+	if r.WeightedSum != wantWeightedSum || r.WeightMs != hourBucketMs {
+		t.Errorf("weighted_sum/weight_ms = %v/%v, want %v/%v", r.WeightedSum, r.WeightMs, wantWeightedSum, hourBucketMs)
 	}
 	if r.First != 10 {
 		t.Errorf("first = %v, want 10 (value at earliest ts)", r.First)
@@ -1001,13 +1077,15 @@ func TestMeasurement_Rollup_MultiCCU_Isolation(t *testing.T) {
 		t.Fatalf("RollupHourly: %v", err)
 	}
 
+	// weighted_sum is time-weighted (see [MeasurementBucket.Avg]): the lone
+	// sample holds for the whole complete hour it was folded into.
 	r1 := queryHourly(t, s, "ccu1", iface, ch, param)
 	r2 := queryHourly(t, s, "ccu2", iface, ch, param)
-	if len(r1) != 1 || r1[0].Sum != 10 {
-		t.Errorf("ccu1 hourly = %+v, want one row with sum=10", r1)
+	if want := 10 * float64(hourBucketMs); len(r1) != 1 || r1[0].WeightedSum != want {
+		t.Errorf("ccu1 hourly = %+v, want one row with weighted_sum=%v", r1, want)
 	}
-	if len(r2) != 1 || r2[0].Sum != 999 {
-		t.Errorf("ccu2 hourly = %+v, want one row with sum=999", r2)
+	if want := 999 * float64(hourBucketMs); len(r2) != 1 || r2[0].WeightedSum != want {
+		t.Errorf("ccu2 hourly = %+v, want one row with weighted_sum=%v", r2, want)
 	}
 }
 
@@ -1060,8 +1138,19 @@ func TestMeasurement_RollupDaily_ReAggregatesHourlyRows(t *testing.T) {
 	if d.BucketTS != day.UnixMilli() {
 		t.Errorf("daily bucket_ts = %d, want %d", d.BucketTS, day.UnixMilli())
 	}
+	// sum/count are the plain, legacy pair, additive across the fold:
+	// 100+400 and 2 samples.
 	if d.Sum != 500 || d.Count != 2 || d.Min != 100 || d.Max != 400 {
 		t.Errorf("sum/count/min/max = %v/%v/%v/%v, want 500/2/100/400", d.Sum, d.Count, d.Min, d.Max)
+	}
+	// weighted_sum/weight_ms are time-weighted (see [MeasurementBucket.Avg]):
+	// each sample is alone in its complete hour, so each hourly bucket's
+	// weighted_sum is value*hourBucketMs and weight_ms is hourBucketMs; the
+	// daily fold sums both across the two hours.
+	wantWeightedSum := (100 + 400) * float64(hourBucketMs)
+	wantWeightMs := 2 * hourBucketMs
+	if d.WeightedSum != wantWeightedSum || d.WeightMs != wantWeightMs {
+		t.Errorf("weighted_sum/weight_ms = %v/%v, want %v/%v", d.WeightedSum, d.WeightMs, wantWeightedSum, wantWeightMs)
 	}
 	if d.First != 100 {
 		t.Errorf("first = %v, want 100 (earliest hourly bucket)", d.First)
@@ -1269,9 +1358,13 @@ func TestMeasurement_QueryEnergy_HourGroupReadsHourlyTier(t *testing.T) {
 	if energy.First != 100 || energy.Last != 150 {
 		t.Errorf("ENERGY_COUNTER first/last = %v/%v, want 100/150", energy.First, energy.Last)
 	}
+	// Sum/Count are time-weighted (see [MeasurementBucket.Avg]): 20 held
+	// for the first half of the hour, 40 for the second half — the whole
+	// hour is covered, so Count is the full hourBucketMs.
+	wantSum := (20*30 + 40*30) * float64(hourBucketMs) / 60
 	power := energyRowFor(t, rows, ch, "POWER")
-	if power.Sum != 60 || power.Count != 2 || power.Max != 40 {
-		t.Errorf("POWER sum/count/max = %v/%v/%v, want 60/2/40", power.Sum, power.Count, power.Max)
+	if power.Sum != wantSum || power.Count != hourBucketMs || power.Max != 40 {
+		t.Errorf("POWER sum/count/max = %v/%v/%v, want %v/%v/40", power.Sum, power.Count, power.Max, wantSum, hourBucketMs)
 	}
 }
 
@@ -1313,8 +1406,11 @@ func TestMeasurement_QueryEnergy_DayGroupReadsDailyTier(t *testing.T) {
 	if rows[0].BucketTS.UnixMilli() != day.UnixMilli() {
 		t.Errorf("bucket_ts = %v, want %v", rows[0].BucketTS, day)
 	}
-	if rows[0].First != 100 || rows[0].Last != 400 || rows[0].Sum != 500 {
-		t.Errorf("first/last/sum = %v/%v/%v, want 100/400/500", rows[0].First, rows[0].Last, rows[0].Sum)
+	// Sum is time-weighted (see [MeasurementBucket.Avg]): each sample is
+	// alone in its complete hour, contributing value*hourBucketMs.
+	wantSum := (100 + 400) * float64(hourBucketMs)
+	if rows[0].First != 100 || rows[0].Last != 400 || rows[0].Sum != wantSum {
+		t.Errorf("first/last/sum = %v/%v/%v, want 100/400/%v", rows[0].First, rows[0].Last, rows[0].Sum, wantSum)
 	}
 }
 
@@ -1375,13 +1471,18 @@ func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
 	if !found {
 		t.Fatalf("no March bucket in %+v", rows)
 	}
-	if march.First != 100 || march.Last != 300 || march.Sum != 400 || march.Count != 2 {
-		t.Errorf("March bucket = %+v, want first=100 last=300 sum=400 count=2", march)
+	// Sum/Count are time-weighted (see [MeasurementBucket.Avg]): each
+	// sample is alone in its complete hour, so each hour contributes
+	// value*hourBucketMs and hourBucketMs of covered span.
+	marchSum, marchCount := (100+300)*float64(hourBucketMs), 2*hourBucketMs
+	if march.First != 100 || march.Last != 300 || march.Sum != marchSum || march.Count != marchCount {
+		t.Errorf("March bucket = %+v, want first=100 last=300 sum=%v count=%v", march, marchSum, marchCount)
 	}
+	aprilSum := 500 * float64(hourBucketMs)
 	for _, r := range rows {
 		if r.BucketTS.UTC().Month() == time.April {
-			if r.First != 500 || r.Last != 500 || r.Sum != 500 || r.Count != 1 {
-				t.Errorf("April bucket = %+v, want first=last=sum=500 count=1", r)
+			if r.First != 500 || r.Last != 500 || r.Sum != aprilSum || r.Count != hourBucketMs {
+				t.Errorf("April bucket = %+v, want first=last=500 sum=%v count=%v", r, aprilSum, hourBucketMs)
 			}
 		}
 	}
@@ -1447,19 +1548,22 @@ func TestMeasurement_QueryEnergy_CentralScoping(t *testing.T) {
 		t.Fatalf("RollupHourly: %v", err)
 	}
 
+	// Sum is time-weighted (see [MeasurementBucket.Avg]): the lone sample
+	// sits alone in its complete hourly bucket, so it is held for the
+	// bucket's full width, contributing value*hourBucketMs.
 	rows1, err := s.QueryEnergy(ctx, "ccu1", "", base.Add(-time.Hour), base.Add(time.Hour), "hour")
 	if err != nil {
 		t.Fatalf("QueryEnergy ccu1: %v", err)
 	}
-	if len(rows1) != 1 || rows1[0].Sum != 10 {
-		t.Errorf("ccu1 rows = %+v, want one row sum=10", rows1)
+	if want := 10 * float64(hourBucketMs); len(rows1) != 1 || rows1[0].Sum != want {
+		t.Errorf("ccu1 rows = %+v, want one row sum=%v", rows1, want)
 	}
 	rows2, err := s.QueryEnergy(ctx, "ccu2", "", base.Add(-time.Hour), base.Add(time.Hour), "hour")
 	if err != nil {
 		t.Fatalf("QueryEnergy ccu2: %v", err)
 	}
-	if len(rows2) != 1 || rows2[0].Sum != 999 {
-		t.Errorf("ccu2 rows = %+v, want one row sum=999", rows2)
+	if want := 999 * float64(hourBucketMs); len(rows2) != 1 || rows2[0].Sum != want {
+		t.Errorf("ccu2 rows = %+v, want one row sum=%v", rows2, want)
 	}
 }
 
@@ -1558,8 +1662,10 @@ func TestMeasurement_RollupHourly_BoundedFold_NoReFoldBelowWatermark(t *testing.
 	if len(after) != 1 || after[0] != before[0] {
 		t.Errorf("finalized bucket was re-folded: before=%+v after=%+v", before, after)
 	}
-	if after[0].Sum != 42 {
-		t.Errorf("bucket sum = %v, want 42 (the late 999 must NOT be folded in)", after[0].Sum)
+	// weighted_sum is time-weighted (see [MeasurementBucket.Avg]): the lone
+	// sample holds for the whole complete hour it was folded into.
+	if want := 42 * float64(hourBucketMs); after[0].WeightedSum != want {
+		t.Errorf("bucket weighted_sum = %v, want %v (the late 999 must NOT be folded in)", after[0].WeightedSum, want)
 	}
 }
 
@@ -1703,8 +1809,14 @@ func TestMeasurement_QueryEnergy_Day_MergesTiersAndTail(t *testing.T) {
 	if day1Bucket.Last != 700 {
 		t.Errorf("day1 last = %v, want 700 (latest raw-tail reading)", day1Bucket.Last)
 	}
-	if day1Bucket.Sum != 1700 || day1Bucket.Count != 3 {
-		t.Errorf("day1 sum/count = %v/%v, want 1700/3", day1Bucket.Sum, day1Bucket.Count)
+	// Sum/Count are time-weighted (see [MeasurementBucket.Avg]): each of
+	// the three source hours (1h, 3h, and the raw tail's 4h bucket, whose
+	// sample self-carries across its own whole hour) is fully covered, so
+	// each contributes value*hourBucketMs and count sums to 3*hourBucketMs.
+	wantSum := (400 + 600 + 700) * float64(hourBucketMs)
+	wantCount := 3 * hourBucketMs
+	if day1Bucket.Sum != wantSum || day1Bucket.Count != wantCount {
+		t.Errorf("day1 sum/count = %v/%v, want %v/%v", day1Bucket.Sum, day1Bucket.Count, wantSum, wantCount)
 	}
 	if day1Bucket.Min != 400 || day1Bucket.Max != 700 {
 		t.Errorf("day1 min/max = %v/%v, want 400/700", day1Bucket.Min, day1Bucket.Max)
@@ -1744,8 +1856,11 @@ func TestMeasurement_Retention_FinalizedDailyNotCorruptedByPurge(t *testing.T) {
 	if len(before) != 1 {
 		t.Fatalf("daily rows = %d, want 1", len(before))
 	}
-	if before[0].Sum != 500 || before[0].First != 100 || before[0].Last != 400 {
-		t.Fatalf("daily aggregate = %+v, want sum=500 first=100 last=400", before[0])
+	// weighted_sum is time-weighted (see [MeasurementBucket.Avg]): each
+	// sample is alone in its complete hour, contributing value*hourBucketMs.
+	wantWeightedSum := (100 + 400) * float64(hourBucketMs)
+	if before[0].WeightedSum != wantWeightedSum || before[0].First != 100 || before[0].Last != 400 {
+		t.Fatalf("daily aggregate = %+v, want weighted_sum=%v first=100 last=400", before[0], wantWeightedSum)
 	}
 
 	// Purge the source rows (both below their fold frontier).
@@ -1806,8 +1921,11 @@ func TestMeasurement_QueryBuckets_FinalBucketIndexClamped(t *testing.T) {
 	if last.TS.UnixMilli() != 6 {
 		t.Errorf("final bucket TS = %d ms, want 6 (index 2, clamped)", last.TS.UnixMilli())
 	}
-	if last.Count != 2 {
-		t.Errorf("final bucket count = %d, want 2 (ts=6 and clamped ts=9)", last.Count)
+	// CoveredMs is the span the bucket covers, in ms, not
+	// a sample count: the final, clamped bucket spans from its start (6)
+	// to the range end (10), so its count is 4, not the 2 samples it holds.
+	if last.CoveredMs != 4 {
+		t.Errorf("final bucket count = %d, want 4 (spans 6..10, ts=6 and clamped ts=9)", last.CoveredMs)
 	}
 	for _, b := range buckets {
 		if b.TS.UnixMilli() == 9 {
@@ -1916,10 +2034,14 @@ func TestQueryBucketsPromotesToHourlyWhenRawPurged(t *testing.T) {
 	}
 	var total int64
 	for _, b := range buckets {
-		total += b.Count
+		total += b.CoveredMs
 	}
-	if total != 2 {
-		t.Errorf("total sample count across buckets = %d, want 2", total)
+	// Count is the covered span in ms, not a sample count (see
+	// [MeasurementBucket.CoveredMs]): the promoted hourly row covers the
+	// whole hour regardless of how many 1-minute chart buckets it folds
+	// into, so the total is the full hourBucketMs.
+	if total != hourBucketMs {
+		t.Errorf("total covered span across buckets = %d, want %d", total, hourBucketMs)
 	}
 }
 
@@ -1973,12 +2095,15 @@ func TestQueryBucketsKeepsRawForAYoungSeriesWithNarrowBuckets(t *testing.T) {
 		t.Fatalf("QueryBuckets returned %d buckets, want 10 (one per sample); "+
 			"a collapsed chart is the symptom of an unwarranted tier promotion", len(buckets))
 	}
+	// CoveredMs is the span the bucket covers, in ms, not
+	// a sample count: each of the 10 buckets is fully covered by its lone
+	// sample self-carrying across the whole 30-second bucket width.
 	var total int64
 	for _, b := range buckets {
-		total += b.Count
+		total += b.CoveredMs
 	}
-	if total != 10 {
-		t.Errorf("total sample count across buckets = %d, want 10", total)
+	if want := int64(10) * (30 * time.Minute).Milliseconds() / 60; total != want {
+		t.Errorf("total covered span across buckets = %d, want %d", total, want)
 	}
 }
 
@@ -2065,18 +2190,21 @@ func TestQueryBucketsHourlyAssemblyMergesAcrossWatermark(t *testing.T) {
 	if len(buckets) != 2 {
 		t.Fatalf("buckets = %d, want 2", len(buckets))
 	}
+	// CoveredMs is the span the bucket covers, in ms, not
+	// a sample count: both hours are fully covered by their two samples
+	// each, so each bucket's count is a full hourBucketMs.
 	var total int64
 	for _, b := range buckets {
-		total += b.Count
+		total += b.CoveredMs
 	}
-	if total != int64(len(samples)) {
-		t.Errorf("total sample count across buckets = %d, want %d (a source was double-counted or dropped)", total, len(samples))
+	if want := 2 * hourBucketMs; total != want {
+		t.Errorf("total covered span across buckets = %d, want %d (a source was double-counted or dropped)", total, want)
 	}
-	if buckets[0].Count != 2 || buckets[0].Avg != 15 {
-		t.Errorf("hour-0 bucket (rollup tier) = %+v, want Count=2 Avg=15", buckets[0])
+	if buckets[0].CoveredMs != hourBucketMs || buckets[0].Avg != 15 {
+		t.Errorf("hour-0 bucket (rollup tier) = %+v, want CoveredMs=%d Avg=15", buckets[0], hourBucketMs)
 	}
-	if buckets[1].Count != 2 || buckets[1].Avg != 35 {
-		t.Errorf("hour-1 bucket (raw tail) = %+v, want Count=2 Avg=35", buckets[1])
+	if buckets[1].CoveredMs != hourBucketMs || buckets[1].Avg != 35 {
+		t.Errorf("hour-1 bucket (raw tail) = %+v, want CoveredMs=%d Avg=35", buckets[1], hourBucketMs)
 	}
 }
 
@@ -2132,29 +2260,39 @@ func TestQueryBucketsDailyAssemblyMergesThreeSources(t *testing.T) {
 	if len(buckets) != 2 {
 		t.Fatalf("buckets = %d, want 2", len(buckets))
 	}
+	// CoveredMs is the span the bucket covers, in ms, not
+	// a sample count: each of the 5 samples is alone in its own complete
+	// hour, so each contributes a full hourBucketMs.
 	var total int64
 	for _, b := range buckets {
-		total += b.Count
+		total += b.CoveredMs
 	}
-	if total != int64(len(samples)) {
-		t.Errorf("total sample count across buckets = %d, want %d (a source was double-counted or dropped)", total, len(samples))
+	if want := int64(len(samples)) * hourBucketMs; total != want {
+		t.Errorf("total covered span across buckets = %d, want %d (a source was double-counted or dropped)", total, want)
 	}
-	if buckets[0].Count != 2 || buckets[0].Avg != 15 {
-		t.Errorf("day0 bucket (daily tier) = %+v, want Count=2 Avg=15", buckets[0])
+	if want := 2 * hourBucketMs; buckets[0].CoveredMs != want || buckets[0].Avg != 15 {
+		t.Errorf("day0 bucket (daily tier) = %+v, want CoveredMs=%d Avg=15", buckets[0], want)
 	}
-	if buckets[1].Count != 3 || buckets[1].Avg != 40 {
-		t.Errorf("day1 bucket (hourly + raw tail) = %+v, want Count=3 Avg=40", buckets[1])
+	if want := 3 * hourBucketMs; buckets[1].CoveredMs != want || buckets[1].Avg != 40 {
+		t.Errorf("day1 bucket (hourly + raw tail) = %+v, want CoveredMs=%d Avg=40", buckets[1], want)
 	}
 }
 
-// TestQueryBucketsAverageIsExactNotAverageOfAverages is the core property
-// the sum+count rollup design buys: folding two source buckets with very
-// different sample counts into one output bucket must produce the true
-// sum/count average, not the average of the two sources' own averages. One
-// hour contributes a single sample of 100; the other contributes 9999
-// samples of 0. The naive average-of-averages would read (100+0)/2 = 50;
-// the true average is 100/10000 = 0.01.
-func TestQueryBucketsAverageIsExactNotAverageOfAverages(t *testing.T) {
+// TestQueryBucketsAverageIsTimeWeightedNotSampleWeighted is the core
+// property the time-weighted design buys: folding two source hours with
+// very different sample COUNTS into one output bucket must produce a
+// time-weighted average — sample density must not bias it. One hour holds
+// a single sample of 100 (held for the whole hour, since nothing else
+// happened); the other holds 9999 samples of 0 tightly clustered near its
+// start (each held only until the next, at 0, so the hour is still ~0
+// throughout). Both hours are therefore fully and equally "100 for an
+// hour" and "0 for an hour" regardless of their wildly different sample
+// counts — the true time-weighted average across the 2-hour range is
+// (100*1 + 0*1) / 2 = 50. A sample-count-weighted average (the defect this
+// fix replaces) would instead read close to 100/10000 = 0.01, letting the
+// 9999 dense-but-flat samples drown out the one hour that actually held
+// 100.
+func TestQueryBucketsAverageIsTimeWeightedNotSampleWeighted(t *testing.T) {
 	t.Parallel()
 	s := freshMeasurementStore(t)
 	ctx := context.Background()
@@ -2201,15 +2339,19 @@ func TestQueryBucketsAverageIsExactNotAverageOfAverages(t *testing.T) {
 	if len(buckets) != 1 {
 		t.Fatalf("buckets = %d, want 1", len(buckets))
 	}
-	if buckets[0].Count != int64(len(samples)) {
-		t.Fatalf("Count = %d, want %d", buckets[0].Count, len(samples))
+	// CoveredMs is the span the bucket covers, in ms, not
+	// a sample count: both hours are fully covered (the lone sample and
+	// the dense-but-flat cluster each carry their value across their
+	// whole hour), so CoveredMs is exactly two full hourBucketMs regardless
+	// of how many raw samples went into either.
+	if want := 2 * hourBucketMs; buckets[0].CoveredMs != want {
+		t.Fatalf("CoveredMs = %d, want %d", buckets[0].CoveredMs, want)
 	}
-	want := 100.0 / float64(len(samples))
-	if buckets[0].Avg != want {
-		t.Errorf("Avg = %v, want %v (sum/count)", buckets[0].Avg, want)
+	if buckets[0].Avg != 50 {
+		t.Errorf("Avg = %v, want 50 (time-weighted: 100 for one hour, 0 for the next)", buckets[0].Avg)
 	}
-	if buckets[0].Avg == 50 {
-		t.Error("Avg = 50: this is the average of the two per-hour averages, not the true sum/count")
+	if diff := buckets[0].Avg - 100.0/float64(len(samples)); diff > -0.01 && diff < 0.01 {
+		t.Error("Avg is close to the sample-count-weighted 0.01: sample density is biasing the average again")
 	}
 }
 
@@ -2311,8 +2453,11 @@ func TestQueryBucketsMinMaxSurviveDailyThreeSourceMerge(t *testing.T) {
 	if len(buckets) != 1 {
 		t.Fatalf("buckets = %d, want 1", len(buckets))
 	}
-	if buckets[0].Count != int64(len(samples)) {
-		t.Errorf("Count = %d, want %d", buckets[0].Count, len(samples))
+	// CoveredMs is the span the bucket covers, in ms, not
+	// a sample count: each of the 5 samples is alone in its own complete
+	// hour, so each contributes a full hourBucketMs.
+	if want := int64(len(samples)) * hourBucketMs; buckets[0].CoveredMs != want {
+		t.Errorf("CoveredMs = %d, want %d", buckets[0].CoveredMs, want)
 	}
 	if buckets[0].Min != -100 {
 		t.Errorf("Min = %v, want -100", buckets[0].Min)
@@ -2370,8 +2515,8 @@ func TestFoldTierBuckets(t *testing.T) {
 	t.Run("repeated indices accumulate", func(t *testing.T) {
 		t.Parallel()
 		// Two source buckets mapping to the same output index — the
-		// straddling-day-bucket case — must merge (sum/count add, min/max
-		// fold), not silently overwrite one another.
+		// straddling-day-bucket case — must merge (sum/count add,
+		// min/max fold), not silently overwrite one another.
 		src := []tierBucket{
 			{bucketTS: 0, sum: 10, minV: 1, maxV: 10, count: 2},
 			{bucketTS: 500, sum: 5, minV: -3, maxV: 8, count: 3},
@@ -2384,7 +2529,7 @@ func TestFoldTierBuckets(t *testing.T) {
 		if b.Count != 5 {
 			t.Errorf("Count = %d, want 5 (2+3)", b.Count)
 		}
-		if b.Avg != 3 { // (10+5) / 5
+		if b.Avg != 3 { // (10+5) / (2+3)
 			t.Errorf("Avg = %v, want 3", b.Avg)
 		}
 		if b.Min != -3 || b.Max != 10 {

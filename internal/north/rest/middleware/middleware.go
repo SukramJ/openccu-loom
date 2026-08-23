@@ -90,6 +90,10 @@ func Logger(logger *slog.Logger) func(http.Handler) http.Handler {
 			case sw.status >= 400:
 				level = slog.LevelWarn
 			}
+			// request_id is not added here: reqctx.ContextHandler already
+			// injects it from the RequestContext that ReqContextWithCentral
+			// installs upstream of this middleware. Adding it again would
+			// emit the key twice in the same JSON record.
 			logger.LogAttrs(
 				r.Context(), level, "http.request",
 				slog.String("method", r.Method),
@@ -97,7 +101,6 @@ func Logger(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.Int("status", sw.status),
 				slog.Int("bytes", sw.bytes),
 				slog.Duration("elapsed", time.Since(start)),
-				slog.String("request_id", RequestIDFrom(r.Context())),
 			)
 		})
 	}
@@ -150,11 +153,12 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 			//nolint:contextcheck // deferred panic-recovery closure logs with r.Context(); no new detached context is created
 			defer func() {
 				if rec := recover(); rec != nil {
+					// request_id is not added here for the same reason as in
+					// Logger: reqctx.ContextHandler already injects it.
 					logger.LogAttrs(
 						r.Context(), slog.LevelError, "http.panic",
 						slog.String("panic", fmt.Sprint(rec)),
 						slog.String("stack", string(debug.Stack())),
-						slog.String("request_id", RequestIDFrom(r.Context())),
 					)
 					problem.Write(w, http.StatusInternalServerError,
 						problem.New(problem.TypeInternal, r, "Internal error", "panic recovered"))

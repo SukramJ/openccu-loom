@@ -758,11 +758,15 @@ func (o *centralOrchestrator) lifecycleLock(name string) *sync.Mutex {
 	return m
 }
 
-// evictModel drops every device from unit's in-memory model, mirroring
-// centralBringUp.clearModel (internal/central/adapter/central_bringup.go)
-// via Unit's exported registries — clearModel itself is unexported to the
-// adapter package, so live remove replicates its sequence rather than
-// reaching into that package.
+// evictModel drops every device from unit's in-memory model when the central
+// itself is being removed, working through Unit's exported registries because
+// the adapter package's equivalent is unexported.
+//
+// It deliberately uses [central.Unit.RemoveDevice] rather than the teardown
+// variant its cache-clear counterpart uses: this really is a removal, the
+// central is going away, and [purgeCentralState] deletes the persisted rows in
+// the same flow. A teardown-flagged event would tell the cache evictors to
+// stand down, which is right for a re-init and wrong here.
 func evictModel(u *central.Unit) {
 	if u == nil || u.ModelRegistry == nil {
 		return

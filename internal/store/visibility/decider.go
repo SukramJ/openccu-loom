@@ -122,6 +122,14 @@ func (d *ParameterDecider) LoadUnIgnore(entries []UnIgnoreEntry) {
 // channelNo is the channel number; pass [channelNoUnknown] (-1) when the
 // channel number is not available (MASTER gating will be less precise but safe).
 //
+// IsParameterIgnored answers for the central-agnostic ("global") scope: only
+// un-ignore entries with an empty [UnIgnoreEntry.Central] can re-enable a
+// parameter here. Callers that know which central they are answering for —
+// every production call site does, since multi-CCU is first class (ADR
+// 0002) — must use [ParameterDecider.IsParameterIgnoredForCentral] instead,
+// so a per-central un-ignore entry cannot decide visibility for a different
+// central sharing this decider instance.
+//
 // Decision order
 // 1. For VALUES: static IGNORED_PARAMETERS / wildcard patterns → ignored,
 // unless model appears in unIgnoreParametersByDevice (prefix match).
@@ -132,7 +140,15 @@ func (d *ParameterDecider) LoadUnIgnore(entries []UnIgnoreEntry) {
 // 4. Rules.Evaluate (hiddenParameters merged in NewRules) → ignored,
 // unless an UnIgnoreEntry re-enables it.
 func (d *ParameterDecider) IsParameterIgnored(model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+	return d.IsParameterIgnoredForCentral("", model, channelType, channelNo, paramset, p)
+}
+
+// IsParameterIgnoredForCentral is [ParameterDecider.IsParameterIgnored]
+// scoped to one central: an [UnIgnoreEntry] only re-enables the parameter
+// here when its Central field is empty (global) or equals `central`.
+func (d *ParameterDecider) IsParameterIgnoredForCentral(central, model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	key := ignoreCacheKey{
+		central:     central,
 		model:       model,
 		channelType: channelType,
 		channelNo:   channelNo,
@@ -154,7 +170,7 @@ func (d *ParameterDecider) IsParameterIgnored(model, channelType string, channel
 		gen := d.ruleGen
 		d.mu.RUnlock()
 
-		ignored := d.computeIgnored(model, channelNo, paramset, p)
+		ignored := d.computeIgnored(central, model, channelNo, paramset, p)
 
 		if d.storeVerdictIfCurrent(key, ignored, gen) {
 			return ignored
@@ -192,19 +208,19 @@ func (d *ParameterDecider) storeVerdictIfCurrent(key ignoreCacheKey, ignored boo
 // HIDDEN_PARAMETERS (UI-hidden) but still be created as a data point for
 // MASTER if it is whitelisted by the device entry.
 // - Other paramsets (LINK, …): no ignore rules — return false.
-func (d *ParameterDecider) computeIgnored(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+func (d *ParameterDecider) computeIgnored(central, model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	switch paramset {
 	case hmenum.ParamsetKeyValues:
-		return d.computeIgnoredValues(model, channelNo, paramset, p)
+		return d.computeIgnoredValues(central, model, channelNo, paramset, p)
 	case hmenum.ParamsetKeyMaster:
-		return d.computeIgnoredMaster(model, channelNo, paramset, p)
+		return d.computeIgnoredMaster(central, model, channelNo, paramset, p)
 	default:
 		return false
 	}
 }
 
 // computeIgnoredValues applies the VALUES-paramset ignore rules.
-func (d *ParameterDecider) computeIgnoredValues(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+func (d *ParameterDecider) computeIgnoredValues(central, model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	name := string(p)
 
 	// 0. Early-exit guard: if the parameter is un-ignored (custom or
@@ -218,7 +234,7 @@ func (d *ParameterDecider) computeIgnoredValues(model string, channelNo int, par
 	// (step 2) applies regardless. OPERATING_VOLTAGE is required (it sits in
 	// the default-DP catalogue) yet mains-powered models like HmIP-BSM must
 	// still suppress it.
-	if d.matchesUnIgnore(model, channelNo, paramset, p) || deviceUnIgnoresByPrefix(model, p) {
+	if d.matchesUnIgnore(central, model, channelNo, paramset, p) || deviceUnIgnoresByPrefix(model, p) {
 		return false
 	}
 
@@ -272,10 +288,10 @@ func (d *ParameterDecider) computeIgnoredValues(model string, channelNo int, par
 // Note: hiddenParameters / Rules are NOT checked here because a parameter
 // can be "hidden" (UI-only flag) but still whitelisted for MASTER data-point
 // creation. The hidden flag is applied separately by IsParameterHidden.
-func (d *ParameterDecider) computeIgnoredMaster(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+func (d *ParameterDecider) computeIgnoredMaster(central, model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	if checkMasterParameterIgnored(channelNo, p, model) {
 		// Un-ignore entries can still re-enable a MASTER parameter.
-		if !d.matchesUnIgnore(model, channelNo, paramset, p) {
+		if !d.matchesUnIgnore(central, model, channelNo, paramset, p) {
 			return true
 		}
 	}
@@ -477,6 +493,12 @@ func (d *ParameterDecider) ShouldSkipParameter(model, channelType string, channe
 	return d.IsParameterIgnored(model, channelType, channelNo, paramset, p)
 }
 
+// ShouldSkipParameterForCentral is [ParameterDecider.ShouldSkipParameter]
+// scoped to one central; see [ParameterDecider.IsParameterIgnoredForCentral].
+func (d *ParameterDecider) ShouldSkipParameterForCentral(central, model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+	return d.IsParameterIgnoredForCentral(central, model, channelType, channelNo, paramset, p)
+}
+
 // Len returns the number of entries currently held in the memoisation
 // cache. It is safe to call concurrently and satisfies the
 // [coordinators.CacheSizeProvider] interface so the CacheCoordinator
@@ -498,16 +520,28 @@ func (d *ParameterDecider) IsParameterHidden(model, channelType string, channelN
 	return d.IsParameterIgnored(model, channelType, channelNo, paramset, p)
 }
 
+// IsParameterHiddenForCentral is [ParameterDecider.IsParameterHidden]
+// scoped to one central; see [ParameterDecider.IsParameterIgnoredForCentral].
+func (d *ParameterDecider) IsParameterHiddenForCentral(central, model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+	return d.IsParameterIgnoredForCentral(central, model, channelType, channelNo, paramset, p)
+}
+
 // IsUnIgnored reports whether the (model, channelNo, paramset, parameter)
 // tuple is explicitly un-ignored. Mirrors
 // `ParameterVisibilityDecider.is_un_ignored`.
 func (d *ParameterDecider) IsUnIgnored(model, channelType string, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+	return d.IsUnIgnoredForCentral("", model, channelType, paramset, p)
+}
+
+// IsUnIgnoredForCentral is [ParameterDecider.IsUnIgnored] scoped to one
+// central; see [ParameterDecider.IsParameterIgnoredForCentral].
+func (d *ParameterDecider) IsUnIgnoredForCentral(central, model, channelType string, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	// channelType is retained in the public signature for API stability;
 	// un-ignore matching uses channelNoUnknown because the channel number is not
 	// available in this call path.
-	return d.matchesUnIgnoreLocked(model, channelNoUnknown, paramset, p)
+	return d.matchesUnIgnoreLocked(central, model, channelNoUnknown, paramset, p)
 }
 
 // IsUnIgnoredCustomOnly reports whether p is explicitly un-ignored,
@@ -520,12 +554,20 @@ func (d *ParameterDecider) IsUnIgnored(model, channelType string, paramset hmenu
 // [UnIgnoreEntry] list (loaded via [LoadUnIgnore]) is consulted — built-in
 // device un-ignores are intentionally excluded.
 func (d *ParameterDecider) IsUnIgnoredCustomOnly(model, channelType string, paramset hmenum.ParamsetKey, p hmenum.Parameter, customOnly bool) bool {
+	return d.IsUnIgnoredCustomOnlyForCentral("", model, channelType, paramset, p, customOnly)
+}
+
+// IsUnIgnoredCustomOnlyForCentral is [ParameterDecider.IsUnIgnoredCustomOnly]
+// scoped to one central; see [ParameterDecider.IsParameterIgnoredForCentral].
+// The built-in device un-ignores checked when customOnly is false have no
+// central dimension — they are global by construction, not per-CCU data.
+func (d *ParameterDecider) IsUnIgnoredCustomOnlyForCentral(central, model, channelType string, paramset hmenum.ParamsetKey, p hmenum.Parameter, customOnly bool) bool {
 	if !customOnly {
 		// Full check: user entries + built-in device entries.
 		if deviceUnIgnoresByPrefix(model, p) {
 			return true
 		}
-		return d.IsUnIgnored(model, channelType, paramset, p)
+		return d.IsUnIgnoredForCentral(central, model, channelType, paramset, p)
 	}
 	// customOnly=true: only consult user-provided un_ignore entries.
 	// Built-in device un-ignores (unIgnoreParametersByDevice) are
@@ -535,14 +577,14 @@ func (d *ParameterDecider) IsUnIgnoredCustomOnly(model, channelType string, para
 	// (parameter_decider.py).
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return d.matchesUnIgnoreLocked(model, channelNoUnknown, paramset, p)
+	return d.matchesUnIgnoreLocked(central, model, channelNoUnknown, paramset, p)
 }
 
 // matchesUnIgnore acquires RLock and delegates to [matchesUnIgnoreLocked].
-func (d *ParameterDecider) matchesUnIgnore(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+func (d *ParameterDecider) matchesUnIgnore(central, model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return d.matchesUnIgnoreLocked(model, channelNo, paramset, p)
+	return d.matchesUnIgnoreLocked(central, model, channelNo, paramset, p)
 }
 
 // matchesUnIgnoreLocked checks whether any UnIgnoreEntry in d.unIgnore matches
@@ -561,10 +603,18 @@ func (d *ParameterDecider) matchesUnIgnore(model string, channelNo int, paramset
 //
 // Simple entries (IsSimple==true) match any VALUES parameter lookup
 // immediately. Caller must hold d.mu (read or write).
-func (d *ParameterDecider) matchesUnIgnoreLocked(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+//
+// An entry whose Central field is set only matches a lookup for the same
+// central; an entry with an empty Central is global and matches every
+// lookup. This is what keeps an un-ignore registered for one CCU from
+// deciding visibility for another CCU sharing this decider instance.
+func (d *ParameterDecider) matchesUnIgnoreLocked(central, model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	modelL := strings.ToLower(model)
 	for _, e := range d.unIgnore {
 		if e.Parameter != p {
+			continue
+		}
+		if e.Central != "" && e.Central != central {
 			continue
 		}
 		// Simple entries match any VALUES lookup without further checks.

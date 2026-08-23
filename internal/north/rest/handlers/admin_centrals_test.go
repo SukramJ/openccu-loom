@@ -301,6 +301,80 @@ func TestUpdateCentral_MissingInterfaces_Returns400AndKeepsThem(t *testing.T) {
 	}
 }
 
+// TestUpdateCentral_PartialBody_PreservesOmittedFields pins the general form
+// of the full-replace hazard: `enabled`, `interfaces` and `password_plain`
+// already have presence tracking, but every other optional field in
+// [sqlite.CentralRow] does not have `omitempty`'s safety net either once it
+// decodes — a body that only changes username must not silently zero the
+// port, TLS posture, serial or every other field it never mentioned.
+func TestUpdateCentral_PartialBody_PreservesOmittedFields(t *testing.T) {
+	t.Parallel()
+	stored := sqlite.CentralRow{
+		Name:                  "home",
+		Host:                  "192.168.1.10",
+		Serial:                "SER123",
+		Port:                  2001,
+		JSONRPCPort:           2010,
+		Username:              "olduser",
+		PasswordEnv:           "CCU_PW",
+		TLS:                   true,
+		TLSInsecureSkipVerify: true,
+		PrimaryInterface:      "HmIP-RF",
+		Interfaces:            []config.InterfaceSpec{{Name: "HmIP-RF"}},
+		Ports:                 map[string]int{"HmIP-RF": 2010},
+		Visibility:            config.VisibilityConfig{UnIgnore: []string{"*:*:LEVEL"}},
+		Enabled:               true,
+	}
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{"home": stored}}
+
+	// The body carries only the required trio plus a single changed field
+	// (username); every other optional field is omitted.
+	body := strings.NewReader(`{"Host":"192.168.1.10","Enabled":true,"Interfaces":[{"name":"HmIP-RF"}],"username":"newuser"}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	got := svc.centrals["home"]
+	if got.Username != "newuser" {
+		t.Errorf("expected username to update to newuser, got %q", got.Username)
+	}
+	var zeroed []string
+	if got.Serial != stored.Serial {
+		zeroed = append(zeroed, "serial")
+	}
+	if got.Port != stored.Port {
+		zeroed = append(zeroed, "port")
+	}
+	if got.JSONRPCPort != stored.JSONRPCPort {
+		zeroed = append(zeroed, "json_rpc_port")
+	}
+	if got.PasswordEnv != stored.PasswordEnv {
+		zeroed = append(zeroed, "password_env")
+	}
+	if got.TLS != stored.TLS {
+		zeroed = append(zeroed, "tls")
+	}
+	if got.TLSInsecureSkipVerify != stored.TLSInsecureSkipVerify {
+		zeroed = append(zeroed, "tls_insecure_skip_verify")
+	}
+	if got.PrimaryInterface != stored.PrimaryInterface {
+		zeroed = append(zeroed, "primary_interface")
+	}
+	if len(got.Ports) != len(stored.Ports) {
+		zeroed = append(zeroed, "ports")
+	}
+	if len(got.Visibility.UnIgnore) != len(stored.Visibility.UnIgnore) {
+		zeroed = append(zeroed, "visibility")
+	}
+	if len(zeroed) > 0 {
+		t.Errorf("partial update zeroed fields it never mentioned: %v", zeroed)
+	}
+}
+
 // --- Password masking ---
 
 func TestListCentrals_MasksPassword(t *testing.T) {

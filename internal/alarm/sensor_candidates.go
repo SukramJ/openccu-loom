@@ -102,7 +102,7 @@ func (s *Service) SensorCandidates(ctx context.Context) []SensorCandidate {
 					cand.Central = centralName
 					cand.InterfaceID = dp.DataPointKey().InterfaceID
 					cand.DeviceAddress = d.Address
-					cand.DeviceName = d.Name
+					cand.DeviceName = d.Name()
 					cand.Model = d.Model
 					cand.ChannelAddress = ch.Address
 					cand.ChannelNo = ch.Number

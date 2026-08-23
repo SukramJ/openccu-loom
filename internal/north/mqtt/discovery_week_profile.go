@@ -173,7 +173,7 @@ func (b *Bridge) PublishWeekProfileDiscovery(ctx context.Context, centralName st
 	if !item.OK {
 		return nil
 	}
-	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
 }
 
 // PublishWeekProfileState publishes the current active profile key

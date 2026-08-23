@@ -33,7 +33,6 @@ var PropKindsByType = map[string][]PropKindEntry{
 		{Kind: "info", Field: "Model", Alt: ""},
 		{Kind: "info", Field: "ModelIcon", Alt: "model_icon"},
 		{Kind: "info", Field: "ModelLabel", Alt: "model_label"},
-		{Kind: "info", Field: "Name", Alt: ""},
 		{Kind: "info", Field: "ProductGroup", Alt: "product_group"},
 		{Kind: "info", Field: "SchemaVersion", Alt: "schema_version"},
 		{Kind: "info", Field: "SubModel", Alt: "sub_model"},

@@ -123,7 +123,7 @@ func (b *Bridge) PublishScheduleEntityDiscovery(ctx context.Context, centralName
 	if !item.OK {
 		return nil
 	}
-	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
 }
 
 // PublishScheduleEntityState publishes the active-entry count to the
@@ -281,7 +281,7 @@ func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, centralName
 	if !item.OK {
 		return nil
 	}
-	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
+	return b.publishDiscovery(ctx, centralName, item.Component, item.NodeID, item.ObjectID, item.Payload)
 }
 
 // scheduleSubDeviceDescriptor builds the HA `device` block for the

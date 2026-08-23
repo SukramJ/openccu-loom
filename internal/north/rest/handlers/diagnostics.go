@@ -59,16 +59,19 @@ type DiagnosticsClient struct {
 // DiagnosticsEnvelope is the top-level body of
 // `GET /api/v1/diagnostics`.
 type DiagnosticsEnvelope struct {
-	SchemaVersion  string              `json:"schema_version"`
-	GeneratedAt    string              `json:"generated_at"`
-	Build          DiagnosticsBuild    `json:"build"`
-	Anonymized     bool                `json:"anonymized"`
-	Health         DiagnosticsHealth   `json:"health"`
-	Interfaces     []InterfaceState    `json:"interfaces,omitempty"`
-	Incidents      []Incident          `json:"incidents,omitempty"`
-	SystemStatus   []SystemStatusEntry `json:"system_status,omitempty"`
-	LogLevels      *LogLevelsResponse  `json:"log_levels,omitempty"`
-	CapturesActive int                 `json:"captures_active,omitempty"`
+	SchemaVersion string              `json:"schema_version"`
+	GeneratedAt   string              `json:"generated_at"`
+	Build         DiagnosticsBuild    `json:"build"`
+	Anonymized    bool                `json:"anonymized"`
+	Health        DiagnosticsHealth   `json:"health"`
+	Interfaces    []InterfaceState    `json:"interfaces,omitempty"`
+	Incidents     []Incident          `json:"incidents,omitempty"`
+	SystemStatus  []SystemStatusEntry `json:"system_status,omitempty"`
+	LogLevels     *LogLevelsResponse  `json:"log_levels,omitempty"`
+	// CapturesActive is reserved for a future debug-capture count; no
+	// producer in this tree assigns it, so it always serializes as
+	// absent (omitempty).
+	CapturesActive int `json:"captures_active,omitempty"`
 	// Metrics carries one typed metrics snapshot per central, keyed by
 	// central name — the structured twin of the flat Prometheus
 	// exposition at `/metrics`. Counters only (requests, recovery

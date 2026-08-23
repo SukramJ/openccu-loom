@@ -76,24 +76,24 @@ func TestVerifiedStopReportsHealthyOnlyWhenNothingElseFailed(t *testing.T) {
 	h.build(nil)
 
 	// No outstanding failures: a verified stop of sirA reports healthy.
-	h.mgr.resolveFailure("sirA")
+	h.mgr.resolveFailure("sirA", "eg")
 	if got := h.lastHealth(t); !got.Healthy {
 		t.Fatalf("verified stop with no outstanding failure = %+v, want healthy", got)
 	}
 
 	// A different output is now failed; a verified stop of sirA must not
 	// clear it.
-	h.mgr.noteFailure("sirB", "sirB failed")
+	h.mgr.noteFailure("sirB", "eg", "sirB failed")
 	if got := h.lastHealth(t); got.Healthy {
 		t.Fatalf("noteFailure(sirB) = %+v, want degraded", got)
 	}
-	h.mgr.resolveFailure("sirA")
+	h.mgr.resolveFailure("sirA", "eg")
 	if got := h.lastHealth(t); got.Healthy {
 		t.Fatalf("a verified stop of sirA reported healthy=%v while sirB is still failed", got.Healthy)
 	}
 
 	// Resolving sirB clears the last failure and reports healthy.
-	h.mgr.resolveFailure("sirB")
+	h.mgr.resolveFailure("sirB", "eg")
 	if got := h.lastHealth(t); !got.Healthy {
 		t.Fatalf("resolving the last outstanding failure = %+v, want healthy", got)
 	}

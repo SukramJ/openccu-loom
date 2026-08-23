@@ -21,7 +21,7 @@ the caller's role itself, so both surfaces draw the same boundary.
 
 - Design rationale: [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
 - Dev-mode surface: [ADR 0026 — MCP dev mode](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0026-mcp-dev-mode.md)
-- Implementation: `internal/north/mcp/` (`server.go`, `tools.go`)
+- Implementation: `internal/north/mcp/` (`server.go`, `tools.go`, `tools_hub.go`, `tools_alarm.go`, `tools_ops.go`)
 
 ---
 
@@ -106,7 +106,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://host:8119/info \
 
 ## 2. The tool surface
 
-Twenty-five tools, in two tiers: 19 read tools + 6 write tools. **Read
+Thirty-one tools, in two tiers: 23 read tools + 8 write tools. **Read
 tools** are always registered (each gated on its backing subsystem
 being wired). **Write tools** are registered only when
 `allow_writes: true` — and that flag includes arming and disarming the
@@ -131,6 +131,7 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_devices` | `central_name?` | Device summaries (address, model, name, interface, central). Omit `central_name` to list all. |
 | `get_device` | `address` | A single device summary + its owning central. |
 | `list_channels` | `address` (device-level) | The device's channels (address, number, type, name, room, data-point count). Use it to discover channel addresses (`<device>:<n>`) before `read_paramset`. |
+| `get_device_schedule` | `address` (device-level) | The device's weekly schedule (week profile) per channel: schedule type (`climate`/`default`), active/available profiles, entry counts, schedule-enabled state. |
 | `read_paramset` | `address` (channel, e.g. `ABC:1`), `key` (`MASTER` or `VALUES`) | The parameter→value map. `MASTER` = configuration, `VALUES` = current state. |
 | `list_rooms` | `central_name?` | Configured rooms with the device count for each. |
 | `list_functions` | `central_name?` | Configured functions (Gewerke) with the device count for each. |
@@ -146,6 +147,9 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_alarm_zones` | — | Every alarm zone with its arm state, active countdown and the number of latched motion detectors. The `id` is what `arm_alarm_zone` / `disarm_alarm_zone` take. Registered only when the alarm domain is wired. |
 | `list_triggered_motion` | `zone_id?` | The motion detectors that are currently latched and can be cleared. Omit `zone_id` for every zone. Registered only when the alarm domain is wired. |
 | `get_security_status` | — | Overall Security & Safety state: the folded severity, the hazard classes that have known sources, and the active faults. Registered only when the security domain is wired. |
+| `get_matter_status` | — | The Matter bridge's runtime state: enabled/listening, paired-controller (fabric) and bridged-endpoint counts, and whether a commissioning window is open. Registered only when the Matter bridge dependency is wired. |
+| `list_backups` | `central_name?` | Locally-stored CCU backup archives (id, owning central, size, creation time, download filename). Registered only when the backup store is wired. |
+| `get_addon_update_status` | — | The CCU add-on self-updater's status: current/available version, whether an update is available, and whether a download or install is currently running. Registered only when the add-on self-updater is wired. |
 
 The central-spanning read tools (`central_name?`) span every configured
 central when `central_name` is omitted, or scope to the named one when
@@ -397,7 +401,7 @@ multi-CCU deployment.
 ## 7. Where to read more
 
 - **Architecture & decisions:** [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
-- **Tool definitions (source of truth):** `internal/north/mcp/tools.go`
+- **Tool definitions (source of truth):** `internal/north/mcp/tools.go`, `tools_hub.go`, `tools_ops.go`, `tools_alarm.go`
 - **Wiring / mount point:** `cmd/openccu-loom/daemon_rest_mount.go` (`mountMCP`)
 - **Config reference:** [`example.config.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/example.config.full.yaml) (`north.mcp` section)
 - **Capability tokens:** `internal/north/rest/handlers/info.go`

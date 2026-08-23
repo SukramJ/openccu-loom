@@ -115,6 +115,18 @@ func TestEventBridgeWSDeliveryWithoutMQTT(t *testing.T) {
 			},
 			wantType: hmevent.EventTypeCentralReadinessChanged,
 		},
+		{
+			name: "device_metadata_changed",
+			publish: func(u *central.Unit, d *device.Device) {
+				events.Publish(u.EventBus, hmevent.DeviceMetadataChangedEvent{
+					Base:        hmevent.NewBase(),
+					CentralName: "ccu-01",
+					InterfaceID: "HmIP-RF",
+					Address:     d.Address,
+				})
+			},
+			wantType: hmevent.EventTypeDeviceMetadataChanged,
+		},
 	}
 
 	for _, tc := range cases {

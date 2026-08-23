@@ -12,8 +12,13 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // eliminates separator-ambiguity (model names that contain '|') and avoids
 // a heap allocation per lookup after warm-up.
 //
+// central carries the querying central's name so a verdict computed for one
+// CCU's un-ignore rules is never served back to a different CCU sharing the
+// same decider instance (multi-CCU is first class, ADR 0002).
+//
 // Mirrors the Python reference implementation's IgnoreCacheKey.
 type ignoreCacheKey struct {
+	central     string
 	model       string
 	channelType string
 	channelNo   int
@@ -21,25 +26,11 @@ type ignoreCacheKey struct {
 	parameter   hmenum.Parameter
 }
 
-// unIgnoreCacheKey is the composite key for
-// [ParameterDecider.IsUnIgnored] lookups. The extra customOnly dimension
-// mirrors the Python reference implementation's custom_only field, which
-// distinguishes lookups that should consider only user-provided rules from
-// lookups that include built-in device rules.
-//
-// Mirrors the Python reference implementation's UnIgnoreCacheKey.
-type unIgnoreCacheKey struct {
-	model       string
-	channelType string
-	paramsetKey hmenum.ParamsetKey
-	parameter   hmenum.Parameter
-	customOnly  bool
-}
-
 // IgnoreCacheKey is the exported variant of [ignoreCacheKey] for consumers
 // that need to inspect or replicate memoisation key contents (e.g. diagnostic
 // endpoints).
 type IgnoreCacheKey struct {
+	Central     string
 	Model       string
 	ChannelType string
 	ChannelNo   int
@@ -47,8 +38,17 @@ type IgnoreCacheKey struct {
 	Parameter   hmenum.Parameter
 }
 
-// UnIgnoreCacheKey is the exported variant of [unIgnoreCacheKey].
+// UnIgnoreCacheKey is the composite key an un-ignore lookup memoises on, for
+// consumers that need to inspect or replicate the memoisation (e.g. a
+// diagnostics endpoint).
+//
+// Central is part of the key because an un-ignore rule is scoped to one CCU: a
+// key without it answers a question about the fleet that was only ever asked
+// about one central, and hands one CCU's re-enable decision to every other.
+// CustomOnly distinguishes a lookup that considers only operator-provided
+// rules from one that includes the built-in device rules.
 type UnIgnoreCacheKey struct {
+	Central     string
 	Model       string
 	ChannelType string
 	ParamsetKey hmenum.ParamsetKey

@@ -77,7 +77,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_NotReadyUnitSkipsTrigger(t *testi
 
 // TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring verifies
 // teardown: the function returns exactly two unsubscribe closers (one per
-// subscribed event type), and calling both stops any further trigger
+// subscribed event type), and calling all of them stops any further trigger
 // invocation.
 func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing.T) {
 	t.Parallel()
@@ -87,8 +87,8 @@ func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing
 
 	fired := 0
 	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ })
-	if len(unsubs) != 2 {
-		t.Fatalf("unsubs = %d, want 2 (DeviceCreatedEvent + DeviceRemovedEvent)", len(unsubs))
+	if len(unsubs) != 3 {
+		t.Fatalf("unsubs = %d, want 3 (DeviceCreated + DeviceRemoved + DeviceMetadataChanged)", len(unsubs))
 	}
 
 	for _, unsub := range unsubs {
@@ -122,5 +122,39 @@ func TestSubscribeMatterDeviceLifecycleTrigger_NilInputsReturnNil(t *testing.T) 
 	unit, _ := reg.Get("ccu-a")
 	if unsubs := subscribeMatterDeviceLifecycleTrigger(unit, nil); unsubs != nil {
 		t.Errorf("unsubs = %v for nil trigger, want nil", unsubs)
+	}
+}
+
+// TestSubscribeMatterDeviceLifecycleTrigger_FiresOnRename pins the rename arm.
+//
+// A rename changes no device's existence, so it is easy to read as "not a
+// topology change" — but a Matter accessory's NodeLabel is built from the
+// device's name, so without this subscription a device renamed in the CCU
+// WebUI keeps its old label in Apple Home and Google Home until the daemon
+// restarts. MQTT and the WebSocket both react to the same event; Matter was
+// the plane left behind.
+func TestSubscribeMatterDeviceLifecycleTrigger_FiresOnRename(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-a")
+	unit, _ := reg.Get("ccu-a")
+	unit.MarkSouthboundReady()
+
+	fired := 0
+	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ })
+	t.Cleanup(func() {
+		for _, unsub := range unsubs {
+			unsub()
+		}
+	})
+
+	events.Publish(unit.EventBus, hmevent.DeviceMetadataChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "ccu-a",
+		InterfaceID: "HmIP-RF",
+		Address:     "0001ABCD",
+	})
+	if fired != 1 {
+		t.Errorf("fired = %d after a rename, want 1 — a renamed device keeps its old "+
+			"NodeLabel in every Matter controller until the daemon restarts", fired)
 	}
 }
