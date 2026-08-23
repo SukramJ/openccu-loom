@@ -325,13 +325,22 @@ func (s *FilesystemBackupStorage) readName(id string) string {
 	return name
 }
 
-// namePathForID resolves id to its name sidecar, with the same containment
-// check [FilesystemBackupStorage.pathForID] applies to the archive itself.
+// namePathForID resolves id to its name sidecar, derived from the archive
+// path [FilesystemBackupStorage.pathForID] already validated rather than
+// rebuilt from the raw id.
+//
+// The distinction matters even though both spellings reject the same ids
+// today: building a second path from the unvalidated id leaves the check and
+// the use in different expressions, so a later change to pathForID's
+// containment rule silently stops applying here — and a reader (or a taint
+// analyser) has to prove the equivalence by hand. Deriving keeps the sidecar
+// beside the archive it describes by construction.
 func (s *FilesystemBackupStorage) namePathForID(id string) (string, error) {
-	if _, err := s.pathForID(id); err != nil {
+	archive, err := s.pathForID(id)
+	if err != nil {
 		return "", err
 	}
-	return filepath.Clean(filepath.Join(s.Dir, id+backupNameSuffix)), nil
+	return strings.TrimSuffix(archive, ".sbk") + backupNameSuffix, nil
 }
 
 // Delete implements [BackupStorage]. A missing file is not an error.

@@ -1847,3 +1847,55 @@ func TestBackupAdapterDeleteLeavesOtherArchivesAlone(t *testing.T) {
 		t.Fatalf("entries = %+v, want only ccu-20260819-140257", entries)
 	}
 }
+
+// TestNamePathForIDRejectsEveryIDTheArchivePathRejects pins the sidecar path
+// to the archive path's containment rule.
+//
+// The two used to be independent expressions — one validated, one rebuilt
+// from the raw id — which is exactly the shape that goes wrong quietly: the
+// rule can be tightened in one and not the other, and nothing fails until a
+// crafted id reaches the delete route the REST surface now exposes.
+func TestNamePathForIDRejectsEveryIDTheArchivePathRejects(t *testing.T) {
+	t.Parallel()
+	s, err := NewFilesystemBackupStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	for _, id := range []string{
+		"", ".", "..", "../escape", "..\\escape", "sub/dir", "a/../../etc/passwd",
+	} {
+		if _, err := s.pathForID(id); err == nil {
+			t.Fatalf("pathForID(%q) accepted an id it must reject; the case no longer tests anything", id)
+		}
+		if _, err := s.namePathForID(id); err == nil {
+			t.Fatalf("namePathForID(%q) accepted an id the archive path rejects", id)
+		}
+	}
+}
+
+// TestNamePathForIDSitsBesideItsArchive is the positive half: an accepted id
+// resolves to a sidecar in the same directory as its archive, differing only
+// in the suffix.
+func TestNamePathForIDSitsBesideItsArchive(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	const id = "ccu-20260818-140257"
+	archive, err := s.pathForID(id)
+	if err != nil {
+		t.Fatalf("pathForID: %v", err)
+	}
+	name, err := s.namePathForID(id)
+	if err != nil {
+		t.Fatalf("namePathForID: %v", err)
+	}
+	if filepath.Dir(name) != filepath.Dir(archive) {
+		t.Fatalf("sidecar %q is not in the archive's directory %q", name, filepath.Dir(archive))
+	}
+	if want := strings.TrimSuffix(archive, ".sbk") + backupNameSuffix; name != want {
+		t.Fatalf("sidecar = %q, want %q", name, want)
+	}
+}
