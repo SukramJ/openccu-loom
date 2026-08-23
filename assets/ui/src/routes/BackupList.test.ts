@@ -9,6 +9,7 @@ import { render, cleanup, waitFor, screen } from "@testing-library/svelte";
 const mockListCentralsV2 = vi.fn();
 const mockListBackups = vi.fn();
 const mockTriggerBackup = vi.fn();
+const mockBackupStorageInfo = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the component
@@ -19,6 +20,7 @@ vi.mock("$lib/api/client", () => ({
     listCentralsV2: (...args: unknown[]) => mockListCentralsV2(...args),
     listBackups: (...args: unknown[]) => mockListBackups(...args),
     triggerBackup: (...args: unknown[]) => mockTriggerBackup(...args),
+    backupStorageInfo: (...args: unknown[]) => mockBackupStorageInfo(...args),
     backupDownloadUrl: (id: string) => `/api/v1/backups/${id}/download`,
   },
   ApiError: class ApiError extends Error {
@@ -58,6 +60,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockListBackups.mockResolvedValue([]);
   mockTriggerBackup.mockResolvedValue({ id: "backup-001" });
+  mockBackupStorageInfo.mockResolvedValue({
+    dir: "/media/usb0/backup",
+    available: true,
+    count: 0,
+    bytes: 0,
+  });
 });
 
 afterEach(() => {
@@ -103,5 +111,53 @@ describe("BackupList — trigger-target central picker", () => {
     await waitFor(() => {
       expect(mockTriggerBackup).toHaveBeenCalledWith("alpha");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Storage location (#589)
+// ---------------------------------------------------------------------------
+
+describe("BackupList — storage location", () => {
+  it("renders the directory the daemon actually writes to", async () => {
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockBackupStorageInfo.mockResolvedValue({
+      dir: "/media/usb0/backup",
+      available: true,
+      count: 3,
+      bytes: 4096,
+    });
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("/media/usb0/backup")).toBeInTheDocument();
+    });
+  });
+
+  it("warns instead of showing a path when the daemon has no storage directory", async () => {
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockBackupStorageInfo.mockResolvedValue({
+      dir: "",
+      available: false,
+      count: 0,
+      bytes: 0,
+    });
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("backup.storage.unavailable")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("backup.storage.summary")).toBeNull();
+  });
+
+  it("renders the list without a location row when the daemon does not serve one", async () => {
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockBackupStorageInfo.mockRejectedValue(new Error("404"));
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(mockListBackups).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId("backup-storage")).toBeNull();
   });
 });

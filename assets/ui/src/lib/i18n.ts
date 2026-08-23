@@ -826,6 +826,11 @@ const EN: Catalog = {
   "backup.download": "Download",
   "backup.confirm_restore_aria": "Confirm restore",
   "backup.started": "Backup started (id {id}).",
+  "backup.storage.label": "Storage location",
+  "backup.storage.unknown": "not reported",
+  "backup.storage.unavailable":
+    "No storage directory — the daemon could not create it. Backups cannot be kept.",
+  "backup.storage.summary": "{count} archives · {bytes}",
   "backup.restore_started": "Restore of {id} triggered.",
   "common.acknowledge": "Acknowledge",
   "common.add": "Add",
@@ -4922,6 +4927,11 @@ const DE: Catalog = {
   "backup.download": "Download",
   "backup.confirm_restore_aria": "Restore bestätigen",
   "backup.started": "Backup angestoßen (ID {id}).",
+  "backup.storage.label": "Speicherpfad",
+  "backup.storage.unknown": "nicht gemeldet",
+  "backup.storage.unavailable":
+    "Kein Speicherverzeichnis — der Daemon konnte es nicht anlegen. Backups können nicht abgelegt werden.",
+  "backup.storage.summary": "{count} Archive · {bytes}",
   "backup.restore_started": "Restore von {id} angestoßen.",
   "common.acknowledge": "Quittieren",
   "common.add": "Hinzufügen",

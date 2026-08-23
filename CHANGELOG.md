@@ -13,6 +13,15 @@ anything it did not recognise.
 
 ### Added
 
+- The Backups view now names the directory the archives are kept in, together
+  with how many there are and how much space they take. That path was
+  effectively unknowable from outside the daemon: `backup.dir` is empty in the
+  common case, and on a CCU add-on install the service script resolves it at
+  every start from the CCU's own backup target — so it varies per installation,
+  changes when a USB stick is plugged in, and appeared nowhere but the start-up
+  log. A daemon that could not create its archive directory at all now says so
+  in the same place, instead of showing an empty list that looks like "no
+  backups taken yet". New endpoint `GET /api/v1/backups/storage`.
 - A vent-capable garage drive (HmIP-MOD-HO, HmIP-MOD-TM) now exposes its door
   mode as a select entity offering closed, ventilation and open. Home
   Assistant's cover platform has no ventilation state, so the position was

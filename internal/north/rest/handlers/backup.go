@@ -100,6 +100,30 @@ func ListBackups(svc BackupService) http.HandlerFunc {
 	}
 }
 
+// BackupStorageInfo renders where the daemon keeps its CCU archives.
+//
+// Without it an operator cannot tell where a backup went: the path comes
+// from `backup.dir`, which is empty in the common case, and on a CCU
+// add-on install it is written by the service script from the CCU's own
+// backup target — so it is neither in the config the SPA reads nor
+// reconstructible from anything else the API exposes.
+func BackupStorageInfo(svc BackupService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			// Not an error: a daemon without a backup service simply has no
+			// storage, which is exactly what the zero value says.
+			JSON(w, http.StatusOK, hmapi.BackupStorageInfo{})
+			return
+		}
+		info, err := svc.StorageInfo(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup storage query failed", err)
+			return
+		}
+		JSON(w, http.StatusOK, info)
+	}
+}
+
 // RestoreBackup re-installs a previously taken backup on the CCU.
 func RestoreBackup(svc BackupService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

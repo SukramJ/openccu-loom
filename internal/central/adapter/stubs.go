@@ -521,6 +521,35 @@ func (a *BackupAdapter) List(ctx context.Context) ([]hmapi.BackupEntry, error) {
 	return entries, nil
 }
 
+// StorageInfo implements [interfaces.BackupService]. It reports where the
+// archives are kept and what is currently in there.
+//
+// The location comes from the storage backend itself rather than from the
+// configuration: `backup.dir` is empty in the common case (the daemon then
+// falls back to `<data_dir>/backups`) and on a CCU add-on install it is set
+// from the CCU's own backup target at every start, so the config value and
+// the directory actually in use are routinely different strings. A backend
+// that does not implement [BackupStorageLocator] reports no location, which
+// reads back as "not known" rather than as a wrong path.
+func (a *BackupAdapter) StorageInfo(ctx context.Context) (hmapi.BackupStorageInfo, error) {
+	if a.storage == nil {
+		return hmapi.BackupStorageInfo{}, nil
+	}
+	info := hmapi.BackupStorageInfo{Available: true}
+	if loc, ok := a.storage.(BackupStorageLocator); ok {
+		info.Dir = loc.Location()
+	}
+	entries, err := a.storage.List(ctx)
+	if err != nil {
+		return hmapi.BackupStorageInfo{}, err
+	}
+	info.Count = len(entries)
+	for _, e := range entries {
+		info.Bytes += e.Bytes
+	}
+	return info, nil
+}
+
 // Stream implements handlers.BackupService.
 func (a *BackupAdapter) Stream(ctx context.Context, id string, w io.Writer) error {
 	if a.storage == nil {

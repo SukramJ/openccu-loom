@@ -29,6 +29,7 @@ import type {
   SecuritySourceView,
   AuditEntry,
   BackupEntry,
+  BackupStorageInfo,
   CentralLinksReport,
   CentralLinksStatus,
   ConfigSnapshot,
@@ -728,6 +729,12 @@ export const api = {
   },
   listBackups() {
     return request<BackupEntry[]>(`/backups`);
+  },
+  // Where the daemon keeps the archives. Not derivable from the config:
+  // `backup.dir` is empty in the common case, and the CCU add-on's service
+  // script sets it from the CCU's own backup target at every start.
+  backupStorageInfo() {
+    return request<BackupStorageInfo>(`/backups/storage`);
   },
   backupDownloadUrl(id: string): string {
     return `${apiBase()}/backups/${encodeURIComponent(id)}/download`;

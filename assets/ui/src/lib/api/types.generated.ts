@@ -3834,6 +3834,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backups/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where locally-stored CCU backups are kept
+         * @description Reports the directory the daemon writes downloaded `.sbk` archives
+         *     to, together with how many are there and how much space they take.
+         *     Admin-gated with the rest of the backup surface: it names a
+         *     filesystem path on the host.
+         */
+        get: operations["backupStorageInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backups/upload": {
         parameters: {
             query?: never;
@@ -9630,6 +9653,16 @@ export interface components {
             /** @description The archive's name in the CCU's own convention, `<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`, recorded when the archive was taken. This is what the download is served as; show or store this rather than rebuilding a name, because the id is a storage key and carries no firmware version. Absent for archives taken before this field existed, or when the CCU had not reported its system information yet — fall back to `<id>.sbk`. */
             filename?: string;
         };
+        /** @description Where the daemon keeps the CCU archives it downloads, and what is currently there. The directory is not derivable by a client: it comes from `backup.dir`, which is empty in the common case (the daemon then falls back to `<data_dir>/backups`), and on a CCU add-on install the service script sets it from the CCU's own backup target, which varies per installation. */
+        BackupStorageInfo: {
+            /** @description Absolute path the archives are read from and written to. Absent when no storage is configured, or when the storage backend has no location to report. */
+            dir?: string;
+            /** @description Whether a storage backend is wired at all. False means the daemon could not create its archive directory (read-only mount, missing permissions) — the backup list is then empty for a reason that has nothing to do with the CCU. */
+            available: boolean;
+            count: number;
+            /** Format: int64 */
+            bytes: number;
+        };
         /** @description Identifies a live edit session on the heartbeat and close routes. The token is what proves ownership; a request that omits it is accepted syntactically but cannot refresh or release the lock. */
         EditSessionRequest: {
             key: string;
@@ -14047,6 +14080,27 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    backupStorageInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup storage location */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupStorageInfo"];
+                };
+            };
+            502: components["responses"]["BadGateway"];
         };
     };
     uploadBackup: {

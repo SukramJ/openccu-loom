@@ -1233,6 +1233,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// which enumerates the fleet's backup history and hands any
 				// authenticated user the id a download or restore addresses.
 				pr.With(admin).Get("/backups", handlers.ListBackups(d.Backup))
+				// Where the archives live. Admin-gated with the rest of the
+				// surface: it names a filesystem path on the host.
+				pr.With(admin).Get("/backups/storage", handlers.BackupStorageInfo(d.Backup))
 				// Importing an operator-supplied archive. Admin-gated like
 				// the trigger: what is imported here can later overwrite a
 				// CCU's entire configuration.

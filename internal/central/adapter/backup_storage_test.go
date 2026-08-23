@@ -1664,3 +1664,91 @@ func TestBackupAdapterRestorerWiringIsConcurrencySafe(t *testing.T) {
 		t.Fatal("every central's restorer must survive the concurrent wiring")
 	}
 }
+
+// TestBackupAdapterStorageInfoReportsTheDirectoryInUse pins the fact the
+// route exists for: the directory reported is the one the storage actually
+// writes to, not the configured value. On a CCU add-on install those are
+// routinely different strings — `backup.dir` is empty in the config while
+// the service script points the storage at the CCU's own backup target —
+// so an operator reading the config still cannot tell where an archive
+// went.
+func TestBackupAdapterStorageInfoReportsTheDirectoryInUse(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	if err := storage.Save(t.Context(), "ccu-20260818-140257", "", []byte("payload")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	info, err := a.StorageInfo(t.Context())
+	if err != nil {
+		t.Fatalf("storage info: %v", err)
+	}
+	if info.Dir != dir {
+		t.Fatalf("dir = %q, want %q", info.Dir, dir)
+	}
+	if !info.Available {
+		t.Fatal("available = false, want true for a wired filesystem storage")
+	}
+	if info.Count != 1 || info.Bytes != int64(len("payload")) {
+		t.Fatalf("count/bytes = %d/%d, want 1/%d", info.Count, info.Bytes, len("payload"))
+	}
+}
+
+// TestBackupAdapterStorageInfoWithoutStorageReportsUnavailable is the
+// negative control for the test above: with no storage wired the same call
+// must report available=false and no directory, so "storage is missing"
+// cannot be mistaken for "storage is empty".
+func TestBackupAdapterStorageInfoWithoutStorageReportsUnavailable(t *testing.T) {
+	t.Parallel()
+	a := NewBackupAdapter(central.NewRegistry())
+
+	info, err := a.StorageInfo(t.Context())
+	if err != nil {
+		t.Fatalf("storage info: %v", err)
+	}
+	if info.Available || info.Dir != "" || info.Count != 0 {
+		t.Fatalf("expected unavailable storage, got %+v", info)
+	}
+}
+
+// TestBackupAdapterStorageInfoWithoutLocatorReportsNoDirectory covers a
+// storage backend that cannot name a location. It must come back empty
+// rather than inventing one — a wrong path sends an operator looking in
+// the wrong place, which is worse than saying nothing.
+func TestBackupAdapterStorageInfoWithoutLocatorReportsNoDirectory(t *testing.T) {
+	t.Parallel()
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(&locationlessStorage{})
+
+	info, err := a.StorageInfo(t.Context())
+	if err != nil {
+		t.Fatalf("storage info: %v", err)
+	}
+	if !info.Available {
+		t.Fatal("available = false, want true — a storage is wired, it just has no location")
+	}
+	if info.Dir != "" {
+		t.Fatalf("dir = %q, want empty", info.Dir)
+	}
+	if info.Count != 1 || info.Bytes != 7 {
+		t.Fatalf("count/bytes = %d/%d, want 1/7", info.Count, info.Bytes)
+	}
+}
+
+// locationlessStorage is a BackupStorage that does not implement
+// BackupStorageLocator.
+type locationlessStorage struct{}
+
+func (*locationlessStorage) List(context.Context) ([]hmapi.BackupEntry, error) {
+	return []hmapi.BackupEntry{{ID: "x", Bytes: 7}}, nil
+}
+
+func (*locationlessStorage) Open(context.Context, string) (io.ReadCloser, error) {
+	return nil, errors.New("not implemented")
+}
+func (*locationlessStorage) Save(context.Context, string, string, []byte) error { return nil }
+func (*locationlessStorage) Delete(context.Context, string) error               { return nil }

@@ -44,6 +44,27 @@ type BackupStorage interface {
 	Delete(ctx context.Context, id string) error
 }
 
+// BackupStorageLocator is the optional capability a [BackupStorage]
+// implements when it can name where it keeps its archives.
+//
+// It is separate from [BackupStorage] because not every backend has a
+// location an operator can act on — a future object-store backend would
+// report a bucket URL, an in-memory one nothing at all — while the
+// filesystem backend's directory is the single most useful fact about it:
+// on a CCU add-on install it is resolved at every start from the CCU's own
+// backup target, so it differs per installation and changes when a USB
+// stick is plugged in.
+//
+// It is a capability interface rather than a type assertion on
+// [FilesystemBackupStorage] so a second filesystem-shaped backend does not
+// silently lose the location the moment it is swapped in.
+type BackupStorageLocator interface {
+	// Location returns the human-readable place archives are kept —
+	// an absolute directory path for the filesystem backend. Empty means
+	// the backend has no location to report.
+	Location() string
+}
+
 // BackupRestorer uploads a backup payload back to the CCU. The
 // implementation is responsible for the HTTP-multipart POST against
 // the CCU's `cp_security.cgi` (or equivalent) endpoint.
@@ -327,6 +348,9 @@ func (s *FilesystemBackupStorage) Delete(_ context.Context, id string) error {
 	s.writeName(id, "")
 	return nil
 }
+
+// Location implements [BackupStorageLocator].
+func (s *FilesystemBackupStorage) Location() string { return s.Dir }
 
 // pathForID resolves id to a `.sbk` path inside Dir, rejecting ids that
 // contain path separators or dot segments so a crafted id cannot escape

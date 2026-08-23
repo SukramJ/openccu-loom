@@ -35,6 +35,9 @@ type stubBackupService struct {
 	streamData string
 	streamErr  error
 
+	storageInfo    hmapi.BackupStorageInfo
+	storageInfoErr error
+
 	// unscopedTriggerCalls / forCentralCalls record which trigger method
 	// the handler invoked and, for the scoped call, which central name it
 	// was given — so tests can assert the handler routed to the right one.
@@ -61,6 +64,10 @@ func (s *stubBackupService) TriggerBackupForCentral(_ context.Context, centralNa
 }
 
 func (s *stubBackupService) Prune(_ context.Context, _ string, _ int) error { return nil }
+
+func (s *stubBackupService) StorageInfo(_ context.Context) (hmapi.BackupStorageInfo, error) {
+	return s.storageInfo, s.storageInfoErr
+}
 
 // Stream writes streamData (if any) before evaluating streamErr, so a case
 // can exercise a failure that happens after payload bytes are already on
@@ -752,5 +759,64 @@ func TestUploadBackup_ValidArchive_Returns201WithEntryAndAudits(t *testing.T) {
 	}
 	if got := rec.entries[0]; got.Action != audit.ActionBackupUpload || got.Note != "upload-20260731-120000.000" {
 		t.Fatalf("audit entry mismatch: %+v", got)
+	}
+}
+
+// TestBackupStorageInfo_ReportsLocation pins the answer to "where did my
+// backup go?": the route reports the directory the daemon actually writes
+// to, which no other endpoint carries — `backup.dir` is empty in the common
+// case and the CCU add-on sets it from the CCU's own backup target.
+func TestBackupStorageInfo_ReportsLocation(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{storageInfo: hmapi.BackupStorageInfo{
+		Dir: "/media/usb0/backup", Available: true, Count: 3, Bytes: 4096,
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/storage", http.NoBody)
+	w := httptest.NewRecorder()
+	BackupStorageInfo(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body hmapi.BackupStorageInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Dir != "/media/usb0/backup" || !body.Available || body.Count != 3 || body.Bytes != 4096 {
+		t.Fatalf("unexpected body: %+v", body)
+	}
+}
+
+// TestBackupStorageInfo_NoService_ReportsUnavailable covers the daemon that
+// could not create its archive directory. It must answer 200 with
+// available=false rather than an error: the storage being absent is a
+// deployment state the operator has to see, not an upstream fault.
+func TestBackupStorageInfo_NoService_ReportsUnavailable(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/storage", http.NoBody)
+	w := httptest.NewRecorder()
+	BackupStorageInfo(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body hmapi.BackupStorageInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Available || body.Dir != "" {
+		t.Fatalf("expected unavailable storage, got %+v", body)
+	}
+}
+
+func TestBackupStorageInfo_ServiceError_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{storageInfoErr: errors.New("boom")}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/storage", http.NoBody)
+	w := httptest.NewRecorder()
+	BackupStorageInfo(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
