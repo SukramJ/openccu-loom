@@ -5,4 +5,4 @@
 #
 # Kept separate from reference-stack.txt so the integration workflow, which
 # needs nothing else, does not pull the whole Python reference stack.
-pydevccu==0.2.5
+pydevccu==0.2.6
