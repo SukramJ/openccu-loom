@@ -1664,3 +1664,238 @@ func TestBackupAdapterRestorerWiringIsConcurrencySafe(t *testing.T) {
 		t.Fatal("every central's restorer must survive the concurrent wiring")
 	}
 }
+
+// TestBackupAdapterStorageInfoReportsTheDirectoryInUse pins the fact the
+// route exists for: the directory reported is the one the storage actually
+// writes to, not the configured value. On a CCU add-on install those are
+// routinely different strings — `backup.dir` is empty in the config while
+// the service script points the storage at the CCU's own backup target —
+// so an operator reading the config still cannot tell where an archive
+// went.
+func TestBackupAdapterStorageInfoReportsTheDirectoryInUse(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	if err := storage.Save(t.Context(), "ccu-20260818-140257", "", []byte("payload")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	info, err := a.StorageInfo(t.Context())
+	if err != nil {
+		t.Fatalf("storage info: %v", err)
+	}
+	if info.Dir != dir {
+		t.Fatalf("dir = %q, want %q", info.Dir, dir)
+	}
+	if !info.Available {
+		t.Fatal("available = false, want true for a wired filesystem storage")
+	}
+	if info.Count != 1 || info.Bytes != int64(len("payload")) {
+		t.Fatalf("count/bytes = %d/%d, want 1/%d", info.Count, info.Bytes, len("payload"))
+	}
+}
+
+// TestBackupAdapterStorageInfoWithoutStorageReportsUnavailable is the
+// negative control for the test above: with no storage wired the same call
+// must report available=false and no directory, so "storage is missing"
+// cannot be mistaken for "storage is empty".
+func TestBackupAdapterStorageInfoWithoutStorageReportsUnavailable(t *testing.T) {
+	t.Parallel()
+	a := NewBackupAdapter(central.NewRegistry())
+
+	info, err := a.StorageInfo(t.Context())
+	if err != nil {
+		t.Fatalf("storage info: %v", err)
+	}
+	if info.Available || info.Dir != "" || info.Count != 0 {
+		t.Fatalf("expected unavailable storage, got %+v", info)
+	}
+}
+
+// TestBackupAdapterStorageInfoWithoutLocatorReportsNoDirectory covers a
+// storage backend that cannot name a location. It must come back empty
+// rather than inventing one — a wrong path sends an operator looking in
+// the wrong place, which is worse than saying nothing.
+func TestBackupAdapterStorageInfoWithoutLocatorReportsNoDirectory(t *testing.T) {
+	t.Parallel()
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(&locationlessStorage{})
+
+	info, err := a.StorageInfo(t.Context())
+	if err != nil {
+		t.Fatalf("storage info: %v", err)
+	}
+	if !info.Available {
+		t.Fatal("available = false, want true — a storage is wired, it just has no location")
+	}
+	if info.Dir != "" {
+		t.Fatalf("dir = %q, want empty", info.Dir)
+	}
+	if info.Count != 1 || info.Bytes != 7 {
+		t.Fatalf("count/bytes = %d/%d, want 1/7", info.Count, info.Bytes)
+	}
+}
+
+// locationlessStorage is a BackupStorage that does not implement
+// BackupStorageLocator.
+type locationlessStorage struct{}
+
+func (*locationlessStorage) List(context.Context) ([]hmapi.BackupEntry, error) {
+	return []hmapi.BackupEntry{{ID: "x", Bytes: 7}}, nil
+}
+
+func (*locationlessStorage) Open(context.Context, string) (io.ReadCloser, error) {
+	return nil, errors.New("not implemented")
+}
+func (*locationlessStorage) Save(context.Context, string, string, []byte) error { return nil }
+func (*locationlessStorage) Delete(context.Context, string) error               { return nil }
+
+// TestBackupAdapterDeleteRemovesTheArchiveAndItsName pins the whole delete
+// path down to the filesystem: the archive is gone from the listing, its
+// bytes are gone from disk, and the sidecar carrying its display name goes
+// with it — a name left behind would be inherited by the next id that
+// collides with it.
+func TestBackupAdapterDeleteRemovesTheArchiveAndItsName(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	const id = "ccu-20260818-140257"
+	if err := storage.Save(t.Context(), id, "ccu-3.89.8-2026-08-18-1402.sbk", []byte("payload")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	if err := a.Delete(t.Context(), id); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	entries, err := a.List(t.Context())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("entries after delete = %+v, want none", entries)
+	}
+	if _, err := os.Stat(filepath.Join(dir, id+".sbk")); !os.IsNotExist(err) {
+		t.Fatalf("archive still on disk: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, id+backupNameSuffix)); !os.IsNotExist(err) {
+		t.Fatalf("name sidecar still on disk: %v", err)
+	}
+}
+
+// TestBackupAdapterDeleteIsIdempotent covers the second click and the retry
+// after a lost response: the caller asked for the archive to be gone, and
+// it is. An error here would read as "the storage is broken".
+func TestBackupAdapterDeleteIsIdempotent(t *testing.T) {
+	t.Parallel()
+	storage, err := NewFilesystemBackupStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	if err := a.Delete(t.Context(), "never-existed"); err != nil {
+		t.Fatalf("delete of a missing archive: %v", err)
+	}
+}
+
+// TestBackupAdapterDeleteWithoutStorageIsUnsupported is the negative
+// control: without storage the call must report ErrUnsupported so the
+// handler can answer 503 (a deployment state) instead of 502 (an upstream
+// fault the CCU never caused).
+func TestBackupAdapterDeleteWithoutStorageIsUnsupported(t *testing.T) {
+	t.Parallel()
+	a := NewBackupAdapter(central.NewRegistry())
+
+	err := a.Delete(t.Context(), "b1")
+	if !errors.Is(err, hmerr.ErrUnsupported) {
+		t.Fatalf("err = %v, want ErrUnsupported", err)
+	}
+}
+
+// TestBackupAdapterDeleteLeavesOtherArchivesAlone is the bite the id-based
+// tests cannot give on their own: a delete that removed the directory, or
+// resolved the wrong path, would pass every assertion about the archive
+// that was asked for.
+func TestBackupAdapterDeleteLeavesOtherArchivesAlone(t *testing.T) {
+	t.Parallel()
+	storage, err := NewFilesystemBackupStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	for _, id := range []string{"ccu-20260818-140257", "ccu-20260819-140257"} {
+		if err := storage.Save(t.Context(), id, "", []byte("payload")); err != nil {
+			t.Fatalf("save %s: %v", id, err)
+		}
+	}
+	a := NewBackupAdapter(central.NewRegistry()).SetStorage(storage)
+
+	if err := a.Delete(t.Context(), "ccu-20260818-140257"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	entries, err := a.List(t.Context())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(entries) != 1 || entries[0].ID != "ccu-20260819-140257" {
+		t.Fatalf("entries = %+v, want only ccu-20260819-140257", entries)
+	}
+}
+
+// TestNamePathForIDRejectsEveryIDTheArchivePathRejects pins the sidecar path
+// to the archive path's containment rule.
+//
+// The two used to be independent expressions — one validated, one rebuilt
+// from the raw id — which is exactly the shape that goes wrong quietly: the
+// rule can be tightened in one and not the other, and nothing fails until a
+// crafted id reaches the delete route the REST surface now exposes.
+func TestNamePathForIDRejectsEveryIDTheArchivePathRejects(t *testing.T) {
+	t.Parallel()
+	s, err := NewFilesystemBackupStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	for _, id := range []string{
+		"", ".", "..", "../escape", "..\\escape", "sub/dir", "a/../../etc/passwd",
+	} {
+		if _, err := s.pathForID(id); err == nil {
+			t.Fatalf("pathForID(%q) accepted an id it must reject; the case no longer tests anything", id)
+		}
+		if _, err := s.namePathForID(id); err == nil {
+			t.Fatalf("namePathForID(%q) accepted an id the archive path rejects", id)
+		}
+	}
+}
+
+// TestNamePathForIDSitsBesideItsArchive is the positive half: an accepted id
+// resolves to a sidecar in the same directory as its archive, differing only
+// in the suffix.
+func TestNamePathForIDSitsBesideItsArchive(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	const id = "ccu-20260818-140257"
+	archive, err := s.pathForID(id)
+	if err != nil {
+		t.Fatalf("pathForID: %v", err)
+	}
+	name, err := s.namePathForID(id)
+	if err != nil {
+		t.Fatalf("namePathForID: %v", err)
+	}
+	if filepath.Dir(name) != filepath.Dir(archive) {
+		t.Fatalf("sidecar %q is not in the archive's directory %q", name, filepath.Dir(archive))
+	}
+	if want := strings.TrimSuffix(archive, ".sbk") + backupNameSuffix; name != want {
+		t.Fatalf("sidecar = %q, want %q", name, want)
+	}
+}

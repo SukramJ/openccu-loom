@@ -2444,9 +2444,12 @@ func parseMutateResult(out string, notFoundErr error) error {
 	return notFoundErr
 }
 
-// TriggerBackup kicks off the OpenCCU backup script. The .sbk file
-// lands at /usr/local/tmp/last_backup.sbk; status is polled via
-// `create_backup_status`.
+// TriggerBackup kicks off the OpenCCU backup script. The .sbk file lands at
+// /usr/local/tmp/last_backup.sbk, where `create_backup_status` reads its
+// name and size on the first poll that sees it finished and then removes
+// it — the archive has no reader (the daemon downloads its own copy through
+// cp_security.cgi) and used to occupy CCU disk until the next backup
+// overwrote it. Later status polls answer from the markers that poll wrote.
 func (w *hubJSONRPCWriter) TriggerBackup(ctx context.Context) error {
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptCreateBackupStart, map[string]string{})
 	return err

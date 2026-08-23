@@ -897,6 +897,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// sequence (Matter ShutDown emit + bounded reverse-order StopAll, which
 	// stops REST first — registered last — then the webhook). Extracted
 	// into awaitShutdown (daemon_north.go).
-	awaitShutdown(ctx, logger, matter, northBridges)
+	awaitShutdown(ctx, logger, matter, northBridges, wsHub)
 	return nil
 }
