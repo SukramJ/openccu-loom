@@ -33,10 +33,7 @@ var wiringSettersWithoutCaller = map[string]string{
 
 	// Verified: the surface around the seam has no caller either, so the
 	// seam is dead along with the feature it would have fed.
-	"github.com/SukramJ/openccu-loom/internal/central.QueryFacade.SetHubStatePathProvider":                         "GetStatePaths and GetStatePathEntries have no production caller; the combined state-path list is unbuilt",
 	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetAcceptInboxFn":                                       "reached only through ServiceRegistry.Invoke, which production never calls; the real accept-inbox path is DeviceAdminDomain.AcceptInboxDevice",
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetSaveFilesFn":                                         "the method it feeds has no callers outside tests",
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetValidateConfigFn":                                    "the method it feeds has no callers outside tests",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetDeviceNameOverrideChecker": "RenameNewDeviceFromOverride has no production caller either; documented in by_design.md as not wired for 0.1.0",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetRecorder":                  "its three consumers — InitialPull, RefreshAfterPair, RefreshAfterUnpair — have no production caller either, so the telemetry gap has no live effect",
 	"github.com/SukramJ/openccu-loom/internal/central/adapter.BackupAdapter.SetRestorer":                           "restore resolves per central via SetRestorerForCentral, and an ownerless archive now resolves to the sole configured central; this legacy field is only an explicit override",
@@ -44,7 +41,6 @@ var wiringSettersWithoutCaller = map[string]string{
 	// Verified: an alternative production path carries the same duty.
 	"github.com/SukramJ/openccu-loom/internal/client.InterfaceClient.SetClearJSONRPCSessionHook": "the JSON-RPC client invalidates its own session in transport/jsonrpc/client.go; nothing ever invokes the hook this stores either, so both ends of the path are dead",
 	"github.com/SukramJ/openccu-loom/internal/client.ValueWriter.RegisterIC":                     "the branch it feeds runs only when WriteOptions.SkipRetry is set, and no production caller sets it; ordinary writes go through the backend",
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetHubLogoutFn":                       "logout on Stop already runs through the closer WireHub returns (addCloser); this hook is a second, dead path",
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile.Profile.SetPublishHook":          "the profile-change push flows through Profile.OnChange, which the event bridge subscribes to; this is an unused parallel API",
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge.Bridge.AttachCaseHandler":      "CASE dispatch is wired via AttachCaseHandlerProvider, which takes precedence for every exchange; this is the unused singleton fallback",
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge.CaseAdapter.SetResponder":      "identity rotation builds a fresh CaseAdapter plus Responder per AddNOC; nothing swaps a responder into an existing adapter",
@@ -57,13 +53,14 @@ var wiringSettersWithoutCaller = map[string]string{
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core.DiagnosticLogs.AttachProvider": "the DiagnosticLogs cluster is deliberately not mounted on the root endpoint; the dead-code inventory already exempts the file",
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/light.ColorControlServer.SetWriter": "colour-temperature lights are served by internal/model/custom/light, not by this standalone reference server, which nothing constructs",
 
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt.DefaultDiscoveryBuilder.WithTranslations": "documented as a test override; NewDefaultDiscoveryBuilder auto-loads the embedded catalogues in production, and nothing — not even a test — calls this setter",
+
 	// Verified: fluent With* setters (isWiringVerb now covers them too),
 	// each with its own doc comment naming the reason the daemon leaves
 	// it nil and the alternate path that already does the job.
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.ConnectionRecoveryCoordinator.WithStateMachine":           "the daemon deliberately leaves this nil — central.Unit.EvaluateCentralState owns central-wide state instead of one interface's Run driving it; wire only together with a per-interface state model",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.ConnectionRecoveryCoordinator.WithCircuitBreakerResetter": "the daemon leaves this nil because the reset already happens one layer down, in InterfaceClient.Reconnect's own success path",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.ConnectionRecoveryCoordinator.WithJSONRPCSessionClearer":  "ClearJSONRPCSessionBeforeRecovery, the only consumer of this seam, has no production caller either; the recovery-pipeline step it feeds is unbuilt",
-	"github.com/SukramJ/openccu-loom/internal/north/mqtt.DefaultDiscoveryBuilder.WithTranslations":                           "documented as a test override; NewDefaultDiscoveryBuilder auto-loads the embedded catalogues in production, and nothing — not even a test — calls this setter",
 }
 
 // wiringSeamsUnderInvestigation is the same shape and a different claim.

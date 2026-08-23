@@ -16,34 +16,12 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// HubStatePathProvider is the minimal contract the [QueryFacade] uses
-// to collect hub data-point state paths for [QueryFacade.GetStatePaths].
-// Implemented by [*coordinators.HubCoordinator].
-type HubStatePathProvider interface {
-	// HubStatePaths returns the state-path strings for all registered
-	// sysvar and program data points.
-	HubStatePaths() []string
-}
-
 // InstallModeProvider is the minimal contract the [QueryFacade] uses
 // to retrieve install-mode data points. Implemented by
 // [*coordinators.HubCoordinator].
 type InstallModeProvider interface {
 	// InstallModeDPs returns all registered install-mode data points.
 	InstallModeDPs() []*hub.InstallMode
-}
-
-// statePather is a local opt-in interface for data points that carry a
-// path-data cache. [*datapoint.BaseDataPointFields] satisfies it.
-type statePather interface {
-	StatePath() string
-}
-
-// pushCapabilityReporter is satisfied by data points that expose whether
-// their backend interface can deliver push callbacks. Implemented by
-// [*generic.DataPoint[T]] via its embedded Spec.NoPushUpdates field.
-type pushCapabilityReporter interface {
-	RequiresPolling() bool
 }
 
 // QueryFacade is the read-only aggregate view north-bound adapters
@@ -55,7 +33,6 @@ type QueryFacade struct {
 	devices     *registry.DeviceRegistry
 	model       *registry.ModelRegistry
 	health      *health.Tracker
-	hub         HubStatePathProvider
 	installMode InstallModeProvider
 }
 
@@ -475,14 +452,6 @@ func operationsMatchParamset(dp device.ParameterDataPoint, paramsetKey hmenum.Pa
 	}
 }
 
-// SetHubStatePathProvider wires an optional hub coordinator so
-// [GetStatePaths] can include sysvar and program state paths.
-// Returns the receiver for chaining.
-func (q *QueryFacade) SetHubStatePathProvider(h HubStatePathProvider) *QueryFacade {
-	q.hub = h
-	return q
-}
-
 // SetInstallModeProvider wires an [InstallModeProvider] so
 // [GetInstallMode] can look up cached install-mode data points.
 // Returns the receiver for chaining.
@@ -552,100 +521,6 @@ func (q *QueryFacade) GetInstallModeByID(interfaceID string) (remaining time.Dur
 		return rem, enabled
 	}
 	return 0, false
-}
-
-// GetStatePaths returns all RPC callback / subscription state paths for
-// device data points (filtered by rpcCallbackSupported when non-nil) and hub
-// data points (sysvars, programs). The paths are the stable string keys
-// callers register on the CCU side to receive push notifications.
-//
-// When rpcCallbackSupported is non-nil the result is filtered:
-//   - true  → only data points whose backend interface can push callbacks
-//     (i.e. RequiresPolling() == false)
-//   - false → only data points that require polling (RequiresPolling() == true)
-//
-// Hub paths are always included regardless of the filter because hub data
-// points (sysvars, programs) use the JSON-RPC subscription path which is
-// independent of the RPC-callback capability of device interfaces.
-func (q *QueryFacade) GetStatePaths(rpcCallbackSupported *bool) []string {
-	out := make([]string, 0)
-	if q.model != nil {
-		for _, d := range q.model.List() {
-			for _, dp := range d.AllDataPoints() {
-				if rpcCallbackSupported != nil {
-					if pc, ok := dp.(pushCapabilityReporter); ok {
-						// rpcCallbackSupported==true → want push-capable (polling NOT required)
-						// rpcCallbackSupported==false → want poll-only (polling IS required)
-						if pc.RequiresPolling() == *rpcCallbackSupported {
-							continue
-						}
-					}
-				}
-				if sp, ok := dp.(statePather); ok {
-					if p := sp.StatePath(); p != "" {
-						out = append(out, p)
-					}
-				}
-			}
-		}
-	}
-	if q.hub != nil {
-		out = append(out, q.hub.HubStatePaths()...)
-	}
-	return out
-}
-
-// StatePathEntry is a lightweight record for one data-point state path. It
-// carries enough structure for northbound adapters to build MQTT topics or
-// RPC subscription lists without iterating over the full device model.
-//
-// this struct complements [GetStatePaths] with a richer, structured output.
-type StatePathEntry struct {
-	// Address is the channel address (e.g. "ABC0001234:1").
-	Address string
-	// Channel is the numeric channel index (0 for the root channel).
-	Channel int
-	// Parameter is the parameter name (e.g. "STATE").
-	Parameter string
-	// Topic is the canonical MQTT state path (the same string that
-	// GetStatePaths returns for this data point).
-	Topic string
-}
-
-// GetStatePathEntries returns a structured list of all state paths for device
-// data points in this central. Hub paths (sysvars, programs) are included as
-// Topic-only entries with Address, Channel, and Parameter set to their zero
-// values.
-func (q *QueryFacade) GetStatePathEntries() []StatePathEntry {
-	var out []StatePathEntry
-	if q.model != nil {
-		for _, d := range q.model.List() {
-			for _, ch := range d.Channels() {
-				for _, dp := range ch.DataPoints() {
-					sp, ok := dp.(statePather)
-					if !ok {
-						continue
-					}
-					topic := sp.StatePath()
-					if topic == "" {
-						continue
-					}
-					out = append(out, StatePathEntry{
-						Address:   ch.Address,
-						Channel:   ch.Number,
-						Parameter: string(dp.Parameter()),
-						Topic:     topic,
-					})
-				}
-			}
-		}
-	}
-	if q.hub != nil {
-		for _, p := range q.hub.HubStatePaths() {
-			out = append(out, StatePathEntry{Topic: p})
-		}
-	}
-	return out
 }
 
 // deviceAddress strips the ":N" channel suffix from a channel address

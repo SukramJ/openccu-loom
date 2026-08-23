@@ -284,29 +284,3 @@ func TestHubClearDropsAllSnapshots(t *testing.T) {
 		t.Fatalf("after Clear: want 0 sysvars in hub model, got %d", len(h.SysvarDataPoints()))
 	}
 }
-
-// TestHubStatePaths returns non-empty paths for registered sysvars and programs.
-func TestHubStatePathsReflectsRegistered(t *testing.T) {
-	t.Parallel()
-
-	bus := events.NewBus()
-	h := NewHubCoordinator("c-paths", bus)
-	m := hub.NewHub("c-paths")
-	h.SetHubModel(m)
-
-	// No data points yet.
-	if paths := h.HubStatePaths(); len(paths) != 0 {
-		t.Fatalf("HubStatePaths with empty model: want 0, got %d", len(paths))
-	}
-
-	// Add a sysvar and a program.
-	sv := hub.NewSysvar("c-paths", "MyVar", "desc", hmenum.HubValueTypeLogic, nil)
-	h.AddSysvarDP(sv)
-	p := hub.NewProgram("c-paths", "prog-1", "Test Program", "", false, nil)
-	h.AddProgramDP(p)
-
-	paths := h.HubStatePaths()
-	if len(paths) == 0 {
-		t.Fatal("HubStatePaths: want at least 1 path after registering sysvar and program")
-	}
-}
