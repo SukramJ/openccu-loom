@@ -122,6 +122,7 @@ func apiSecuritySnapshot(snap security.Snapshot) hmapi.SecuritySnapshot {
 	out := hmapi.SecuritySnapshot{
 		Severity:      string(snap.Severity),
 		EngineHealthy: snap.EngineHealthy,
+		IndexHealthy:  snap.IndexHealthy,
 		LastAlarm:     apiSecurityNotification(snap.LastAlarm),
 		LastFault:     apiSecurityNotification(snap.LastFault),
 	}

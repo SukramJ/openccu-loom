@@ -1911,6 +1911,23 @@ func (c *Config) applyDefaults() {
 		slog.Warn("config: north.mqtt.discovery_enabled requires the raw topic plane; enabling north.mqtt.raw_enabled",
 			slog.String("field", "north.mqtt.raw_enabled"))
 	}
+	// The mount path becomes an http.ServeMux pattern verbatim (see
+	// mcpMountPathPattern), and ServeMux answers a malformed pattern with a
+	// panic at registration, not an error — a value that fails the class
+	// would otherwise abort every subsequent boot until an operator finds
+	// and edits the YAML by hand. The value is corrected rather than
+	// rejected only while the adapter is enabled, mirroring the MQTT
+	// raw/discovery correction above: an operator with MCP off is never
+	// exposed to the value at all, so leaving a stale one alone is right.
+	if c.North.MCP.Enabled && c.North.MCP.Path != "" {
+		if err := c.North.MCP.ValidateMountPath(); err != nil {
+			slog.Warn("config: north.mcp.path is not usable as an HTTP mount path; falling back to the default \"/mcp\"",
+				slog.String("field", "north.mcp.path"),
+				slog.String("value", c.North.MCP.Path),
+				slog.String("reason", err.Error()))
+			c.North.MCP.Path = ""
+		}
+	}
 	if c.North.REST.WS.ReplayCapacity == 0 {
 		c.North.REST.WS.ReplayCapacity = 1024
 	}

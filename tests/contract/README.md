@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 353.
+Guards without a doc comment: 7 of 355.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -27,6 +27,8 @@ Guards without a doc comment: 7 of 353.
 | TestAlarmS5CriticalCommandProbesOpenCircuit | alarm_siren_safety_test.go | TestAlarmS5CriticalCommandProbesOpenCircuit pins the S5 exception in the reliability layer: a CommandPriorityCritical call (the alarm engine's stop/silence path) is attempted as a single probe even while the interface circuit breaker is OPEN, while non-critical traffic keeps being shed. |
 | TestAlarmS6SilenceAndDisarmNeverStateGated | alarm_siren_safety_test.go | TestAlarmS6SilenceAndDisarmNeverStateGated pins the S3/S6 rule at the engine surface: silence and disarm succeed from every state-machine position — they are role-gated by surfaces, never state-gated by the engine, and no confirmation step exists between the verb and its effect. |
 | TestAlarmWSPayloadStructsMatchOpenAPISchemas | alarm_ws_payload_parity_test.go | TestAlarmWSPayloadStructsMatchOpenAPISchemas pins the alarm broadcast payload structs to their OpenAPI component schemas: every schema property must exist as a JSON field on the Go struct, every Go field must be documented, and every required property must not be omitempty. |
+| TestAPISurfaceChangesCarryTheRightBump | api_surface_bump_test.go | TestAPISurfaceChangesCarryTheRightBump pins the two halves of this project's versioning policy to each other: what [handlers.APIVersion] claims about a change, and what the specification actually did. |
+| TestAPIVersionMatchesTheSpecDocument | api_surface_bump_test.go | TestAPIVersionMatchesTheSpecDocument keeps the constant and the document from drifting: they are two spellings of one number, and a bump applied to only one of them makes every other check here meaningless. |
 | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling | auth_subject_canonicalisation_test.go | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling guards the other half of the canonicalisation: the CCU's user database is its own namespace, so folding the subject for Loom-side bookkeeping must not change the name the credential validation and the user-level lookup ask about. |
 | TestEveryUserStoreReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestEveryUserStoreReportsCanonicalSubject pins that every [auth.UserStore] in the daemon reports the canonical subject regardless of the casing the caller typed. |
 | TestOIDCLoginReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestOIDCLoginReportsCanonicalSubject pins the remaining login path. |

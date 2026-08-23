@@ -727,6 +727,14 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		EditLocks:   d.editSessions,
 		AllowWrites: cfg.North.MCP.AllowWrites,
 		Version:     build.Version,
+		// The three read-only status seams REST already serves. They are
+		// wired from the same fields the REST mount above uses, so an
+		// assistant answering "is the bridge paired", "when was the last
+		// backup" or "is an update pending" reads exactly what the operator
+		// sees in the UI rather than a second, drifting projection.
+		Matter:      d.matter.statusReader,
+		Backups:     d.backupAdapter,
+		AddonUpdate: addonUpdateServiceFrom(d.addonUpdater),
 	}))
 	// Rebuild the same two request-volume guards rest.NewRouter mounts —
 	// see the doc comment above for why the MCP path needs its own copy.

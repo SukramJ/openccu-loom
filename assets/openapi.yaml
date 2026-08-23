@@ -11856,6 +11856,44 @@ components:
         device_address: { type: string }
         available: { type: boolean }
 
+    DeviceMetadataChangedPayload:
+      type: object
+      description: |
+        Payload of a `device.metadata_changed` broadcast. Topic pattern
+        `device.{address}.lifecycle` — the same topic as `device.created`;
+        subscribers route by the envelope `type` field. Fires when a device
+        or one of its channels is renamed, or its room / function assignment
+        changes.
+
+        `device_address` is always the DEVICE address, even when the change
+        was made on a channel: a client materialises a device's name and area
+        as one unit, so a channel-level change still means "re-read this
+        device". The new values are not inlined — re-read the device summary.
+      required: [central, interface_id, device_address]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+
+    ScheduleChangedPayload:
+      type: object
+      description: |
+        Payload of a `schedules.changed` broadcast. Topic pattern
+        `device.{address}.lifecycle`, shared with the other device lifecycle
+        events; subscribers route by the envelope `type` field. Fires when a
+        channel's week profile changes — written through this daemon, or
+        observed on the CCU.
+
+        The profile body is deliberately not inlined: a week profile is large
+        and most subscribers only need to invalidate and re-read the channel's
+        schedule. `channel` is the channel number the profile belongs to.
+      required: [central, interface_id, device_address, channel]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+        channel: { type: integer }
+
     OptimisticRollbackPayload:
       type: object
       description: |
@@ -13544,6 +13582,14 @@ components:
           description: >
             The alarm engine's verdict about itself, distinct from a transport
             outage.
+        index_healthy:
+          type: boolean
+          description: >
+            Whether the classification index still reflects the model behind
+            this snapshot. False means the classes and zones were folded from
+            an index the daemon knows to be stale — a source may be missing or
+            attributed to the wrong class. Render the view as degraded rather
+            than trusting a quiet result.
         last_alarm: { $ref: "#/components/schemas/SecurityNotification" }
         last_fault: { $ref: "#/components/schemas/SecurityNotification" }
 

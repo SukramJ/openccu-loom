@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
@@ -93,7 +94,7 @@ func (p *Profile[T]) Load(ctx context.Context) (T, error) {
 		var zero T
 		return zero, err
 	}
-	p.publish(v)
+	p.publish(v, true)
 	return v, nil
 }
 
@@ -106,12 +107,26 @@ func (p *Profile[T]) Save(ctx context.Context, v T) error {
 	if err := p.saver.Save(ctx, v); err != nil {
 		return err
 	}
-	p.publish(v)
+	p.publish(v, false)
 	return nil
 }
 
-// OnChange subscribes a handler for every published schedule. The
-// returned closure is idempotent.
+// OnChange subscribes a handler for every schedule change: every [Save], the
+// first [Load], and afterwards only a Load whose value actually differs from
+// the one held. The returned closure is idempotent.
+//
+// That last clause is load-bearing, not an optimisation. Load publishes
+// whatever it fetched, and the north-bound snapshot pass warms every climate
+// channel's profile with a background Load on boot, on every broker reconnect,
+// on every device-created pass and on every rename. Notifying subscribers each
+// time told them a schedule had changed when nothing had — and the WebSocket
+// contract that carries it says, in as many words, that a week profile
+// changed. A client that believes it re-reads the profile from the CCU once
+// per climate channel per reconnect.
+//
+// A Save always notifies, even when it writes back a value equal to the one
+// held: it is an intentional write that has just gone to the device, and the
+// copy here is not authoritative enough to call it a no-op.
 func (p *Profile[T]) OnChange(fn func(prev, next T)) func() {
 	p.mu.Lock()
 	p.callbacks = append(p.callbacks, fn)
@@ -142,15 +157,27 @@ func (p *Profile[T]) SetPublishHook(fn func()) {
 	p.mu.Unlock()
 }
 
-func (p *Profile[T]) publish(v T) {
+func (p *Profile[T]) publish(v T, fromLoad bool) {
 	p.mu.Lock()
 	prev := p.current
+	wasLoaded := p.loaded
 	p.current = v
 	p.loaded = true
 	cbs := make([]func(prev, next T), len(p.callbacks))
 	copy(cbs, p.callbacks)
 	hook := p.publishHook
 	p.mu.Unlock()
+
+	// The state above is updated either way — a warm-up Load has to mark the
+	// profile loaded so CurrentOrLoad stops hitting the CCU. What a re-load
+	// must not do is tell anyone the schedule changed when it fetched the same
+	// profile back. A Save is different and always notifies: it is an
+	// intentional write, and the value it carries has just been sent to the
+	// device whether or not it matches the copy held here.
+	if fromLoad && wasLoaded && reflect.DeepEqual(prev, v) {
+		return
+	}
+
 	for _, cb := range cbs {
 		if cb != nil {
 			cb(prev, v)

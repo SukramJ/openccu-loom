@@ -107,6 +107,27 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeDeviceRemoved)"},
 		WireValue: string(hmevent.EventTypeDeviceRemoved),
 	},
+	// Emitted from the event bridge rather than the ws package: the rename
+	// arrives on the domain bus and the MQTT re-publish rides the same
+	// handler, so keeping both arms in one place is what stops one plane
+	// learning about a rename the other missed.
+	"device.metadata_changed": {
+		Files:     []string{"internal/central/adapter/eventbridge.go"},
+		Tokens:    []string{"func (b *EventBridge) publishDeviceMetadataChangedWS", "b.wsHub.Publish(ws.Event{", "string(hmevent.EventTypeDeviceMetadataChanged)"},
+		WireValue: string(hmevent.EventTypeDeviceMetadataChanged),
+	},
+	// No hmevent.EventType of its own: a week-profile change reaches the
+	// bridge through the profile's OnChange callback, not the domain bus,
+	// so the wire identity is a literal pinned via Tokens.
+	"schedules.changed": {
+		Files: []string{"internal/central/adapter/eventbridge.go"},
+		Tokens: []string{
+			"func (b *EventBridge) publishScheduleChangedWS",
+			"b.wsHub.Publish(ws.Event{",
+			`Type:  "schedules.changed"`,
+		},
+		WireValue: "schedules.changed",
+	},
 	"device.trigger": {
 		Files:     []string{"internal/north/rest/ws/device_trigger.go"},
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeDeviceTrigger)"},

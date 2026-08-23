@@ -1069,3 +1069,39 @@ func TestSimpleEntryLevelOutOfRangeRejected(t *testing.T) {
 		t.Fatalf("level 1.01 must be accepted: %v", err)
 	}
 }
+
+// TestRepeatedLoadOfTheSameProfileIsNotAChange pins the boundary between a
+// refresh and a change.
+//
+// The north-bound snapshot pass warms every climate channel's profile with a
+// background Load — on boot, on every broker reconnect, on every
+// device-created pass and on every device rename. Each of those published to
+// the OnChange subscribers, which is how the WebSocket `schedules.changed`
+// broadcast came to fire per climate channel when no schedule had moved. The
+// contract behind that frame says a week profile changed, and a client acting
+// on it makes a CCU round-trip per channel to re-read something identical.
+//
+// The first load still notifies: a subscriber has nothing before it, so the
+// profile's arrival genuinely is new information.
+func TestRepeatedLoadOfTheSameProfileIsNotAChange(t *testing.T) {
+	t.Parallel()
+
+	loader := &climateLoader{value: schedule.NewClimate()}
+	p := weekprofile.NewClimate(loader, nil)
+
+	var calls int
+	p.OnChange(func(_, _ *schedule.Climate) { calls++ })
+
+	for range 4 {
+		if _, err := p.Load(context.Background()); err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+	}
+
+	if calls != 1 {
+		t.Errorf("four warm-up loads of an unchanged profile produced %d change "+
+			"notifications, want 1 (the first load only) — every extra one becomes a "+
+			"schedules.changed broadcast telling clients to re-read a schedule that "+
+			"never moved", calls)
+	}
+}

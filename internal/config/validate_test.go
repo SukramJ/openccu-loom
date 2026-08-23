@@ -227,6 +227,25 @@ func TestValidateSkipsTheMCPMountPathWhileDisabled(t *testing.T) {
 	assertAccepted(t, cfg.Validate())
 }
 
+// TestApplyDefaultsFallsBackOnInvalidMCPPathWhileEnabled pins the recovery
+// path for an operator who has MCP enabled and carries a north.mcp.path that
+// fails the tightened mount-path class: the daemon must still come up, on
+// the documented "/mcp" default, rather than abort startup with no way back
+// into the UI that would let the operator fix the value.
+func TestApplyDefaultsFallsBackOnInvalidMCPPathWhileEnabled(t *testing.T) {
+	t.Parallel()
+	c := Default()
+	c.North.MCP.Enabled = true
+	c.North.MCP.Path = "mcp-no-leading-slash"
+	c.applyDefaults()
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() after applyDefaults() = %v, want the daemon to boot on the fallback path", err)
+	}
+	if got := c.North.MCP.MountPath(); got != "/mcp" {
+		t.Fatalf("north.mcp.path fallback = %q, want the documented default %q", got, "/mcp")
+	}
+}
+
 // TestValidateChecksTheMatterBridgeParameters pins the bridge's listen
 // address and the commissioning parameters a certified commissioner
 // verifies during PASE — a value outside the accepted window presents to

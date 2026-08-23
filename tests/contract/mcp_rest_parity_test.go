@@ -12,10 +12,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -144,10 +147,8 @@ var restDomainsWithoutMCPTools = map[string]string{
 // neither map fails the test, so the backlog can shrink but never grow
 // unnoticed.
 var restDomainsAwaitingMCPTools = map[string]string{
-	"matter":     "10 routes: bridge status, fabrics, exposure allowlist, commissioning window",
 	"groups":     "6 routes: heating-group roster and administration",
 	"areas":      "5 routes: operator-defined room groupings",
-	"backups":    "5 routes: create / list / download / restore",
 	"interfaces": "3 routes: per-interface state and reconnect",
 	"history":    "3 routes: recorded measurement series",
 	"visibility": "3 routes: the hidden-parameter picker",
@@ -276,9 +277,33 @@ func fullyWiredMCPDeps() mcp.Deps {
 		Alarm:        mcpParityAlarm{},
 		AlarmControl: mcpParityAlarm{},
 		Security:     mcpParitySecurity{},
+		Matter:       mcpParityMatterStatus{},
+		Backups:      mcpParityBackups{},
+		AddonUpdate:  mcpParityAddonUpdate{},
 		AllowWrites:  true,
 	}
 }
+
+// The three read-only status seams. Present here for the same reason every
+// other seam is: this builder's whole claim is that a tool missing from the
+// catalogue it produces is missing everywhere, and a nil seam quietly drops
+// its tool and makes the claim false.
+
+type mcpParityMatterStatus struct{}
+
+func (mcpParityMatterStatus) MatterStatus(context.Context) handlers.MatterStatusResponse {
+	return handlers.MatterStatusResponse{}
+}
+
+type mcpParityBackups struct{}
+
+func (mcpParityBackups) List(context.Context) ([]hmapi.BackupEntry, error) { return nil, nil }
+
+type mcpParityAddonUpdate struct{}
+
+func (mcpParityAddonUpdate) Status() addonupdate.Status         { return addonupdate.Status{} }
+func (mcpParityAddonUpdate) Check(context.Context) error        { return nil }
+func (mcpParityAddonUpdate) InstallAsync(context.Context) error { return nil }
 
 // mcpParityAuditRecorder satisfies audit.Recorder so the audit-backed
 // tool registers; the catalogue is all this test reads.

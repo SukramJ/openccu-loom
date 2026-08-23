@@ -126,6 +126,27 @@ type IncidentsReader interface {
 	Incidents() []hmapi.Incident
 }
 
+// MatterStatusReader is an alias for the narrow facade GET
+// /matter/status reads through (internal/north/rest/handlers). Reusing
+// it rather than declaring a second copy keeps the two adapters
+// consuming the same seam, so a daemon that wires REST's Matter status
+// reader also lights up get_matter_status for free.
+type MatterStatusReader = handlers.MatterStatusReader
+
+// AddonUpdateService is an alias for the narrow facade the REST addon
+// self-update routes read and act through (internal/north/rest/handlers).
+// get_addon_update_status only ever calls Status(); the write half
+// (Check/InstallAsync) is intentionally not reached from MCP.
+type AddonUpdateService = handlers.AddonUpdateService
+
+// BackupLister is the read half of [interfaces.BackupService] —
+// list_backups needs nothing else, so it depends on this narrower seam
+// rather than the full read/write facade. Any concrete backup service
+// the composition root already wires for REST satisfies it directly.
+type BackupLister interface {
+	List(ctx context.Context) ([]hmapi.BackupEntry, error)
+}
+
 // Deps is the wiring surface. Writer may be nil (no writes available).
 // Audit may be nil (no change-log surface); when present it serves both
 // the read tool (List) and records MCP-origin writes (Record).
@@ -153,8 +174,24 @@ type Deps struct {
 	Alarm        AlarmReader
 	AlarmControl AlarmController
 	Security     SecurityReader
-	AllowWrites  bool
-	Version      string
+	// Matter backs get_matter_status: the bridge's enabled/listening
+	// state, commissioned-fabric and enabled-exposure counts, and
+	// whether a commissioning window is currently open. Nil leaves the
+	// tool unregistered rather than reporting a disabled bridge as if
+	// it had been asked and answered "off".
+	Matter MatterStatusReader
+	// Backups backs list_backups: the locally-stored CCU archives, the
+	// same read the REST GET /backups handler serves. Nil leaves the
+	// tool unregistered.
+	Backups BackupLister
+	// AddonUpdate backs get_addon_update_status: current/available
+	// version and install-progress state for the CCU add-on
+	// self-updater (ADR 0057). Nil leaves the tool unregistered — never
+	// registered as "unsupported", which would be indistinguishable
+	// from a real answer.
+	AddonUpdate AddonUpdateService
+	AllowWrites bool
+	Version     string
 }
 
 // NewServer builds the MCP server and registers the tool set. Read
