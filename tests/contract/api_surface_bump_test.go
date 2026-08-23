@@ -45,6 +45,7 @@ type apiSurface struct {
 var valueSemanticsChanges = []string{
 	"7.0.0 CaptureIndex: the diagnostics capture response became an array, having been declared an object",
 	"7.1.0 DataPoint.value: unchanged, but display_value was added beside it — value stays the raw CCU wire value",
+	"7.7.0 DataPointValueChangedPayload.display_value: documented, not introduced — the daemon has emitted it on the push since 7.2.0, so a client can observe the field from a 7.2.0..7.6.0 daemon whose spec does not declare it",
 }
 
 // TestAPISurfaceChangesCarryTheRightBump pins the two halves of this project's

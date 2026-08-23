@@ -4,6 +4,40 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.64.1]
+
+A contract correction and the guard that would have caught it. The
+north-bound API moves to **7.7.0** — additive: one payload field that the
+daemon had been sending all along without documenting it.
+
+### Fixed
+
+- The `datapoint.value_changed` broadcast documents `display_value`. The
+  field shipped with 7.2.0 on both planes — the REST data-point summary and
+  the WebSocket push — but only the REST half was written into
+  `assets/openapi.yaml`. Generated client packages take their models from
+  those components, so the typed WebSocket payload had no such field and no
+  client could read it however faithfully the daemon sent it. A consumer
+  that seeds a reading from REST and updates it from the push was then
+  stuck with the seeded projection: a dimmer whose raw `LEVEL` moves to
+  0.8 kept announcing the bootstrap "42 %", which is the exact
+  disagreement `display_value` exists to prevent. The wire is unchanged;
+  what changes is that the field is now part of the contract.
+
+### Added
+
+- A field-level parity guard over every WebSocket broadcast payload
+  (`tests/contract/ws_payload_field_parity_test.go`). The existing
+  cross-asset guard proved a payload schema *exists*; nothing compared what
+  was inside it, which is why a field could be emitted for a whole API line
+  without being documented. It now fails in both directions — a Go field the
+  spec omits reaches no generated client, a documented property nothing
+  emits arrives as a permanent null — and a second guard fails when a new
+  broadcast joins the contract with no such check at all. Eight payloads
+  whose Go type lives outside `internal/north/rest/ws` (the Matter family,
+  and two unexported adapter structs) are recorded as documented coverage
+  holes rather than quietly skipped.
+
 ## [0.64.0]
 
 Three feature requests from the field and the two fix rounds that never

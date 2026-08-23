@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.64.1
+
+- Version alignment with OpenCCU-Loom 0.64.1. The proxy itself is unchanged;
+  the release documents a live-event field the daemon had been sending
+  without describing it, so external clients can consume it.
+
 # 0.64.0
 
 - Version alignment with OpenCCU-Loom 0.64.0. The proxy itself is unchanged; the

@@ -8160,6 +8160,21 @@ export interface components {
             /** @description New value in its native CCU type (bool/int/float/string/list/null). */
             value: unknown;
             /**
+             * @description `value` expressed in the unit the data point names, i.e.
+             *     `value * multiplier`. Present only when that projection is
+             *     non-trivial; absent means `value` already is the displayable
+             *     number.
+             *
+             *     Carries the same meaning as `display_value` on the REST
+             *     data-point summary and must agree with it: a client seeds a
+             *     reading from REST and updates it from here, so a value scaled on
+             *     one plane and raw on the other makes the reading jump on the
+             *     first push. Render `display_value` when present and `value`
+             *     otherwise; writes always carry `value`, which stays the raw CCU
+             *     wire value.
+             */
+            display_value?: number;
+            /**
              * @description Prior value. Omitted when no prior value was tracked (initial
              *     push). Future revisions may surface a `kind: "initial"|"change"|"refresh"`
              *     discriminator on the envelope.
