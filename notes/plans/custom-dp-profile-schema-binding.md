@@ -1,6 +1,6 @@
 # Implementation plan — bind custom-DP fields through the profile schema
 
-**Status:** the climate family is done and shipped (0.63.1). Three further
+**Status:** the climate family is done and shipped (0.64.0). Three further
 device families are confirmed broken by the same mechanism and are **open**;
 each is measured, not suspected. Everything needed to continue is inline —
 this file assumes no access to the conversation that produced it.
@@ -43,7 +43,7 @@ A `ChannelFields` entry keyed `n` rebases to `groupNo + n`, so `n = -1` means
 "the channel before the custom DP" and `n = 1` means "the one after";
 `AnyChannelOffset` and the `Fields` block both mean "this channel".
 
-## What already shipped (0.63.1, PR #588)
+## What already shipped (0.64.0, PR #588)
 
 `custom.ResolveFieldSlot` (`internal/model/custom/field_resolve.go`) resolves
 one profile field to `(channel, parameter)` in the same order the materializer
@@ -164,7 +164,7 @@ report the same fact under `ACTIVITY_STATE`. Reword it when fixing.
   runtime by probing which parameters the channel carries
   (`internal/model/custom/light/light.go`, `onTimeParams`). Different
   mechanism, same effect.
-- **`FieldTemperature` / `FieldSetpoint` / `FieldHumidity`**: done in 0.63.1.
+- **`FieldTemperature` / `FieldSetpoint` / `FieldHumidity`**: done in 0.64.0.
 
 ## Not examined — the boundary of this analysis
 
@@ -295,4 +295,4 @@ pointer will show up as unbound and need declaring.
    ratchet's size is known.
 
 Each fix needs its regression test proven to fail with the fix taken back out;
-the three that shipped with 0.63.1 were each verified that way.
+the three that shipped with 0.64.0 were each verified that way.

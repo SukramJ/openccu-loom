@@ -105,6 +105,11 @@ const (
 	// prompted it.
 	ActionBackupPreUpdate Action = "backup_pre_update"
 
+	// ActionBackupDelete records a stored CCU archive being removed.
+	// Audited because deleting a backup is unrecoverable and removes the
+	// only copy of a CCU configuration the daemon holds.
+	ActionBackupDelete Action = "backup_delete"
+
 	// ActionSystemCCUPoweroff, ActionSystemCCUSafeMode and
 	// ActionSystemCCURecoveryMode record the host-level power and
 	// boot-mode actions. All three take the CCU out of normal service,

@@ -3834,6 +3834,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backups/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where locally-stored CCU backups are kept
+         * @description Reports the directory the daemon writes downloaded `.sbk` archives
+         *     to, together with how many are there and how much space they take.
+         *     Admin-gated with the rest of the backup surface: it names a
+         *     filesystem path on the host.
+         */
+        get: operations["backupStorageInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backups/upload": {
         parameters: {
             query?: never;
@@ -3853,6 +3876,29 @@ export interface paths {
          */
         post: operations["uploadBackup"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one stored CCU backup
+         * @description Removes the archive from the daemon's storage. Unrecoverable: the
+         *     archive may be the only copy of that CCU's configuration the daemon
+         *     holds. Deleting an archive that is not there succeeds — the caller
+         *     asked for it to be gone, and it is.
+         */
+        delete: operations["deleteBackup"];
         options?: never;
         head?: never;
         patch?: never;
@@ -8809,9 +8855,38 @@ export interface components {
             service_messages: components["schemas"]["HubCountDataPoint"];
             inbox: components["schemas"]["HubCountDataPoint"];
             update: components["schemas"]["HubUpdateDataPoint"];
+            daemon_connection: components["schemas"]["HubDaemonConnectionDataPoint"];
             metrics?: components["schemas"]["HubMetricDataPoint"][];
             connectivity?: components["schemas"]["HubConnectivityDataPoint"][];
             install_mode?: components["schemas"]["HubInstallModeDataPoint"][];
+        };
+        /**
+         * @description Declares the daemon-liveness singleton: the entity answering "is the daemon reachable at all", the counterpart of the MQTT binary sensor fed from the retained bridge status.
+         *
+         *     `connected` is true in every response this endpoint produces, and that is not an oversight — a REST answer is itself proof the daemon is running, so no other value can be observed here. The field carries the declaration: the singleton's existence and its stable name, which a client cannot invent without hard-coding a name the daemon owns.
+         *
+         *     The negative state has two sources, both outside this response: the `daemon_status.changed` broadcast the daemon sends over the WebSocket while stopping (topic `system.daemon_status`), and the client's own connection state when the daemon goes away without warning. Wire the entity to whichever of the two arrives first.
+         */
+        HubDaemonConnectionDataPoint: {
+            /** @description Stable singleton name; always `daemon_connection`. */
+            legacy_name: string;
+            connected: boolean;
+        };
+        /**
+         * @description Payload of a `daemon_status.changed` broadcast on the daemon-level topic `system.daemon_status`. The daemon emits it while shutting down, so a WebSocket client can tell "the daemon is stopping" apart from "my connection dropped" — a distinction MQTT clients get from the broker's last will and WebSocket clients otherwise cannot draw.
+         *
+         *     Only a graceful stop can announce itself. A killed process cannot, and detecting that stays the client's own job.
+         */
+        DaemonStatusPayload: {
+            /**
+             * @description The same two words the MQTT bridge retains on `<base>/bridge/status`, so a client bridging both planes needs no translation.
+             * @enum {string}
+             */
+            status: "online" | "offline";
+            /** @description Short machine-readable cause of an offline announcement (`shutdown`); absent otherwise. */
+            reason?: string;
+            /** Format: date-time */
+            event_at: string;
         };
         /**
          * @description Payload of a `device.created` broadcast. Topic pattern
@@ -9629,6 +9704,16 @@ export interface components {
             created_at: string;
             /** @description The archive's name in the CCU's own convention, `<hostname>-<CCU firmware version>-<YYYY-MM-DD-HHMM>.sbk`, recorded when the archive was taken. This is what the download is served as; show or store this rather than rebuilding a name, because the id is a storage key and carries no firmware version. Absent for archives taken before this field existed, or when the CCU had not reported its system information yet — fall back to `<id>.sbk`. */
             filename?: string;
+        };
+        /** @description Where the daemon keeps the CCU archives it downloads, and what is currently there. The directory is not derivable by a client: it comes from `backup.dir`, which is empty in the common case (the daemon then falls back to `<data_dir>/backups`), and on a CCU add-on install the service script sets it from the CCU's own backup target, which varies per installation. */
+        BackupStorageInfo: {
+            /** @description Absolute path the archives are read from and written to. Absent when no storage is configured, or when the storage backend has no location to report. */
+            dir?: string;
+            /** @description Whether a storage backend is wired at all. False means the daemon could not create its archive directory (read-only mount, missing permissions) — the backup list is then empty for a reason that has nothing to do with the CCU. */
+            available: boolean;
+            count: number;
+            /** Format: int64 */
+            bytes: number;
         };
         /** @description Identifies a live edit session on the heartbeat and close routes. The token is what proves ownership; a request that omits it is accepted syntactically but cannot refresh or release the lock. */
         EditSessionRequest: {
@@ -14049,6 +14134,27 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    backupStorageInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup storage location */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupStorageInfo"];
+                };
+            };
+            502: components["responses"]["BadGateway"];
+        };
+    };
     uploadBackup: {
         parameters: {
             query?: never;
@@ -14098,6 +14204,28 @@ export interface operations {
                 content?: never;
             };
             500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

@@ -20,14 +20,18 @@ import (
 // constructed from a single fetch without orchestrating six requests. Mirrors
 // the reference stack's hub data-point set.
 type HubDataPoints struct {
-	Central         string                     `json:"central,omitempty"`
-	AlarmMessages   HubCountDataPoint          `json:"alarm_messages"`
-	ServiceMessages HubCountDataPoint          `json:"service_messages"`
-	Inbox           HubCountDataPoint          `json:"inbox"`
-	Update          HubUpdateDataPoint         `json:"update"`
-	Metrics         []HubMetricDataPoint       `json:"metrics,omitempty"`
-	Connectivity    []HubConnectivityDataPoint `json:"connectivity,omitempty"`
-	InstallMode     []HubInstallModeDataPoint  `json:"install_mode,omitempty"`
+	Central         string             `json:"central,omitempty"`
+	AlarmMessages   HubCountDataPoint  `json:"alarm_messages"`
+	ServiceMessages HubCountDataPoint  `json:"service_messages"`
+	Inbox           HubCountDataPoint  `json:"inbox"`
+	Update          HubUpdateDataPoint `json:"update"`
+	// DaemonConnection declares the daemon-liveness singleton so a client
+	// can build the entity for it. See [HubDaemonConnectionDataPoint] for
+	// why the value read here is always true.
+	DaemonConnection HubDaemonConnectionDataPoint `json:"daemon_connection"`
+	Metrics          []HubMetricDataPoint         `json:"metrics,omitempty"`
+	Connectivity     []HubConnectivityDataPoint   `json:"connectivity,omitempty"`
+	InstallMode      []HubInstallModeDataPoint    `json:"install_mode,omitempty"`
 }
 
 // HubCountDataPoint is a count-valued hub singleton (alarm / service messages,
@@ -43,6 +47,27 @@ type HubUpdateDataPoint struct {
 	LegacyName      string `json:"legacy_name"`
 	UpdateAvailable bool   `json:"update_available"`
 	InProgress      bool   `json:"in_progress"`
+}
+
+// HubDaemonConnectionDataPoint declares the daemon-liveness singleton: the
+// entity that answers "is the daemon reachable at all", the counterpart of
+// the MQTT `binary_sensor` fed from the retained bridge status.
+//
+// Connected is true in every response this endpoint ever produces, and that
+// is not an oversight: a REST answer is itself proof the daemon is running,
+// so no other value could be observed here. What the field carries is the
+// declaration — the singleton's existence and its stable legacy name — which
+// a client cannot invent for itself without hard-coding a name the daemon
+// owns.
+//
+// The negative state has two sources, both outside this response: the
+// `daemon_status.changed` broadcast the daemon sends on the WebSocket while
+// stopping (`system.daemon_status`), and the client's own connection state
+// when the daemon goes away without warning. A client wires this entity to
+// whichever of the two it sees first.
+type HubDaemonConnectionDataPoint struct {
+	LegacyName string `json:"legacy_name"`
+	Connected  bool   `json:"connected"`
 }
 
 // HubMetricDataPoint is one hub metric (system health, connection latency,
@@ -102,6 +127,8 @@ func hubDataPoints(central string, h *hub.Hub) HubDataPoints {
 		ServiceMessages: HubCountDataPoint{LegacyName: "service_messages"},
 		Inbox:           HubCountDataPoint{LegacyName: "inbox"},
 		Update:          HubUpdateDataPoint{LegacyName: "system_update"},
+		// True by construction: the response exists, so the daemon does.
+		DaemonConnection: HubDaemonConnectionDataPoint{LegacyName: "daemon_connection", Connected: true},
 	}
 	if h.Messages != nil {
 		dp.AlarmMessages.Value = h.Messages.Count()

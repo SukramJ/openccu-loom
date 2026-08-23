@@ -4,14 +4,17 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
-# 0.63.1
+# 0.64.0
 
-- Version alignment with OpenCCU-Loom 0.63.1. The proxy itself is unchanged; the
-  release stops the daemon from reconnecting an interface it is still bringing
-  up — which announced the whole fleet going offline and back on every start —
-  and restores the start-up events a Matter controller reads after pairing.
-  release fixes the classic BidCos thermostats — HM-CC-TC showing no temperature
-  at all, and the RF wall thermostats showing no humidity.
+- Version alignment with OpenCCU-Loom 0.64.0. The proxy itself is unchanged; the
+  release adds the backup storage location and a delete button to the Backups
+  page, an MQTT sensor for the daemon's own connection, and a ventilation
+  select for garage doors. It also stops the daemon from reconnecting an
+  interface it is still bringing up — which announced the whole fleet going
+  offline and back on every start — restores the start-up events a Matter
+  controller reads after pairing, and fixes the classic BidCos thermostats:
+  HM-CC-TC showing no temperature at all, and the RF wall thermostats showing
+  no humidity.
 
 # 0.63.0
 

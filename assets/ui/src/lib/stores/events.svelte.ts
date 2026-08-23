@@ -17,6 +17,14 @@ const connectionState = $state<{
   current: "connecting" | "open" | "closed";
 }>({ current: "closed" });
 
+// Set when the daemon announced its own shutdown on the WebSocket before
+// the socket went away. It is the one thing a closed socket cannot tell
+// us on its own: "the daemon is stopping" and "your network dropped" look
+// identical from this side, and only the first is worth telling the
+// operator about — the second is self-healing and the badge already says
+// so. Cleared as soon as a socket is open again.
+const daemonStopping = $state<{ current: boolean }>({ current: false });
+
 // Diagnostic counters — kept reactive so the ConnectionBadge can
 // display a "received N events since open" hint. Helps debug live-
 // update plumbing without resorting to browser-devtools poking.
@@ -35,6 +43,11 @@ function ensure(): EventStream {
   stream = connectEvents();
   stream.onStateChange((s) => {
     connectionState.current = s;
+    if (s === "open") {
+      // A live socket means the daemon is back; whatever it announced
+      // before the last disconnect no longer describes the present.
+      daemonStopping.current = false;
+    }
   });
   // Sync the initial state emitted during connect() before this
   // onStateChange registration could fire.
@@ -42,6 +55,10 @@ function ensure(): EventStream {
   stream.onMessage((ev) => {
     counters.received += 1;
     counters.lastType = ev.type ?? "";
+    if (ev.type === "daemon_status.changed") {
+      const status = (ev.payload as { status?: string } | undefined)?.status;
+      daemonStopping.current = status === "offline";
+    }
     for (const h of handlers) h(ev);
   });
   stream.onResync(() => {
@@ -113,6 +130,20 @@ export function shutdown(): void {
  */
 export function status(): "connecting" | "open" | "closed" {
   return connectionState.current;
+}
+
+/**
+ * Reactive read of whether the daemon announced its own shutdown before
+ * the stream went away. False whenever a socket is open.
+ *
+ * A closed socket alone says nothing about the cause: a stopping daemon
+ * and a dropped network look the same from the browser. The daemon says
+ * which it is while it still can (`daemon_status.changed`), and a stop it
+ * could not announce — a killed process — correctly reads as an ordinary
+ * disconnect here.
+ */
+export function daemonIsStopping(): boolean {
+  return daemonStopping.current;
 }
 
 /**

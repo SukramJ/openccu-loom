@@ -1279,6 +1279,14 @@
    "payload": "AddonUpdateStatus"
   },
   {
+   "category": "system",
+   "description": "Server-pushed: the daemon is stopping. Emitted once during a graceful shutdown, before the servers stop, so a client can tell a stopping daemon apart from its own connection dropping — the distinction MQTT clients get from the broker's last will. A killed daemon cannot send it; detecting that stays the client's own job from its connection state.",
+   "kind": "broadcast",
+   "name": "daemon_status.changed",
+   "topic": "system.daemon_status",
+   "payload": "DaemonStatusPayload"
+  },
+  {
    "category": "sysvars",
    "description": "Force re-pull the CCU system-variable catalogue into the hub model. Optional central_name scopes the refresh to one CCU. Mirrors Python fetch_system_variables.",
    "name": "sysvars.fetch",
