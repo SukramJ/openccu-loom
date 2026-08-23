@@ -130,6 +130,8 @@ func (r *Registry) LabeledCounter(name, help, labelName string) *LabeledCounter 
 
 // LabeledCounter is a Counter family keyed by one label's value —
 // registered lazily, one series per distinct value seen.
+//
+// loom:reachable:reason="the per-central MQTT counters are LabeledCounter values reached through the collector's accessor funcs; the analyzer sees the accessor, not the type behind it"
 type LabeledCounter struct {
 	reg       *Registry
 	name      string

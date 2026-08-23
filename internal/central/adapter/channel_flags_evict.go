@@ -26,6 +26,8 @@ const channelFlagsEvictTimeout = 30 * time.Second
 // at the same address — a factory reset is the common path, since the CCU
 // keeps the serial as the address — silently inherits the previous
 // pairing's overrides instead of starting with none.
+//
+// loom:reachable:reason="returned by WireChannelFlagsEviction and held by the daemon's teardown list in cmd/openccu-loom/daemon_southbound.go; the analyzer resolves the constructor call but not the type it yields"
 type ChannelFlagsEvictor struct {
 	store   *sqlite.ChannelFlagsStore
 	overlay *channelflags.Overlay

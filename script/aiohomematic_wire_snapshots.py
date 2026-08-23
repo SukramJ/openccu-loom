@@ -537,12 +537,13 @@ def _gen_text_display_write_rows() -> None:
     comment — all via the same collector, so they flush as one call).
     DISPLAY_DATA_ID selects which row a write applies to; there is no
     per-row *channel* to address — HmIP-WRCD, the only text-display model,
-    carries every DISPLAY_DATA_* parameter on channel :3 alone
+    carries every DISPLAY_DATA_* parameter on one channel alone
     (../godevccu/internal/embed/data/paramset_descriptions/HmIP-WRCD.json).
-    Loom's WriteRows sends the same per-row field set to that single channel
-    but batches one trailing DISPLAY_DATA_COMMIT after all rows instead of
-    committing inside each row's paramset — a deliberate divergence (see
-    _gen_blind_set_tilt above for the same documented-divergence pattern).
+    Loom's WriteRows emits the identical sequence: it calls its own Write per
+    row, which applies the row defaults and carries DISPLAY_DATA_COMMIT inside
+    the row's paramset. The address here is the fixture's channel, the same one
+    every other TextDisplay snapshot uses, so the comparison is about wire
+    shape rather than about which channel the fixture happened to pick.
     """
     rows = [
         {"ID": 1, "Text": "Line one"},
@@ -553,7 +554,7 @@ def _gen_text_display_write_rows() -> None:
     for row in rows:
         calls.append({
             "method": "PutParamset",
-            "address": "SDV0001:3",
+            "address": "SDV0001:1",
             "paramset_key": "VALUES",
             "put_values": {
                 "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",

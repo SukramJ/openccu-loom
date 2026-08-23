@@ -331,7 +331,7 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // point: without a ceiling, `make reachability` regenerating a snapshot with
 // two hundred more dead identifiers than the last one produced a green test
 // run and a diff nobody had a reason to read closely.
-const reachabilityUnreachableCeiling = 3026
+const reachabilityUnreachableCeiling = 3023
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's

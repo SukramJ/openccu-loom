@@ -2,7 +2,7 @@
   "dp_type": "SmokeSiren",
   "setter": "TurnOff",
   "source": "aiohomematic",
-  "aiohomematic_version": "2026.5.7",
+  "aiohomematic_version": "2026.8.3",
   "inputs": [
     {
       "label": "INTRUSION_ALARM_OFF",

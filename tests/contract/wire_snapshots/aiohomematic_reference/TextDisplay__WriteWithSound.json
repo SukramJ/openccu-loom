@@ -2,7 +2,7 @@
   "dp_type": "TextDisplay",
   "setter": "WriteWithSound",
   "source": "aiohomematic",
-  "aiohomematic_version": "2026.5.7",
+  "aiohomematic_version": "2026.8.3",
   "inputs": [
     {
       "label": "row1-sound=LONG_SHORT",

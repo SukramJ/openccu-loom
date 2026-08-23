@@ -143,6 +143,8 @@ type AddonUpdateService = handlers.AddonUpdateService
 // list_backups needs nothing else, so it depends on this narrower seam
 // rather than the full read/write facade. Any concrete backup service
 // the composition root already wires for REST satisfies it directly.
+//
+// loom:reachable:reason="the Deps.Backups seam the composition root satisfies with *adapter.BackupAdapter; an interface reached only by assignment, which the analyzer's type heuristic cannot see used"
 type BackupLister interface {
 	List(ctx context.Context) ([]hmapi.BackupEntry, error)
 }

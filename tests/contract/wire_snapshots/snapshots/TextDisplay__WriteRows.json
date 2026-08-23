@@ -10,10 +10,13 @@
           "paramset_key": "VALUES",
           "address": "SDV0001:1",
           "put_values": {
-            "DISPLAY_DATA_ALIGNMENT": "LEFT",
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
             "DISPLAY_DATA_ICON": "NO_ICON",
             "DISPLAY_DATA_ID": 1,
-            "DISPLAY_DATA_STRING": "Line one"
+            "DISPLAY_DATA_STRING": "Line one",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
           }
         },
         {
@@ -21,10 +24,13 @@
           "paramset_key": "VALUES",
           "address": "SDV0001:1",
           "put_values": {
-            "DISPLAY_DATA_ALIGNMENT": "LEFT",
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
             "DISPLAY_DATA_ICON": "NO_ICON",
             "DISPLAY_DATA_ID": 2,
-            "DISPLAY_DATA_STRING": "Line two"
+            "DISPLAY_DATA_STRING": "Line two",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
           }
         },
         {
@@ -32,17 +38,14 @@
           "paramset_key": "VALUES",
           "address": "SDV0001:1",
           "put_values": {
-            "DISPLAY_DATA_ALIGNMENT": "LEFT",
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
             "DISPLAY_DATA_ICON": "NO_ICON",
             "DISPLAY_DATA_ID": 3,
-            "DISPLAY_DATA_STRING": "Line three"
+            "DISPLAY_DATA_STRING": "Line three",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
           }
-        },
-        {
-          "method": "SetValue",
-          "address": "SDV0001:1",
-          "parameter": "DISPLAY_DATA_COMMIT",
-          "value": true
         }
       ]
     }

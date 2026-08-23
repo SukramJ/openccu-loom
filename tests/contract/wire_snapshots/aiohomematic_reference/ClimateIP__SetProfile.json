@@ -2,7 +2,7 @@
   "dp_type": "ClimateIP",
   "setter": "SetProfile",
   "source": "aiohomematic",
-  "aiohomematic_version": "2026.7.4",
+  "aiohomematic_version": "2026.8.3",
   "inputs": [
     {
       "label": "profile=WeekProgram1",

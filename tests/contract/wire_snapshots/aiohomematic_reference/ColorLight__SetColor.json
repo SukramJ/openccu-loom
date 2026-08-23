@@ -2,7 +2,7 @@
   "dp_type": "ColorLight",
   "setter": "SetColor",
   "source": "aiohomematic",
-  "aiohomematic_version": "2026.5.7",
+  "aiohomematic_version": "2026.8.3",
   "inputs": [
     {
       "label": "hue=0,sat=1.0",

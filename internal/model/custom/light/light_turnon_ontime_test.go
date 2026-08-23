@@ -6,6 +6,7 @@ package light
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -101,10 +102,16 @@ func TestRGBWLightPlainTurnOnDoesNotSendOnTime(t *testing.T) {
 }
 
 // TestFixedColorLightPlainTurnOnSendsNotUsedSentinel verifies that a plain
-// TurnOn on a FixedColorLight (signal light) channel that carries ON_TIME_UNIT
-// emits a put_paramset with ON_TIME=NotUsed. This preserves the #3111
-// behaviour: without the sentinel the old on-time timer remains active and the
-// light switches itself off unexpectedly after the previous timer expires.
+// TurnOn on a FixedColorLight (signal light) cancels any timer still running,
+// so the light does not switch itself off when the previous on-time expires.
+//
+// The cancel rides the on-time shape the channel actually describes. A signal
+// light's timer is the DURATION_VALUE/DURATION_UNIT pair, and the encoder maps
+// the seconds-valued sentinel onto (111600, H) precisely so the device can tell
+// "timer disabled" from a real duration. Writing a bare ON_TIME here instead —
+// which is what the paramset builder used to hard-code — is a parameter such a
+// channel does not describe, and the CCU faults the whole call, so the light
+// never comes on at all.
 func TestFixedColorLightPlainTurnOnSendsNotUsedSentinel(t *testing.T) {
 	w := &putWriter{}
 	fc := newFixedColorLightRigWithOnTimeUnit(t, "SIG0001:1", w)
@@ -121,17 +128,20 @@ func TestFixedColorLightPlainTurnOnSendsNotUsedSentinel(t *testing.T) {
 
 	got := w.puts[0]
 
-	// ON_TIME must be present and equal to the NotUsed sentinel.
-	rawOnTime, hasOnTime := got[string(hmenum.ParameterOnTime)]
-	if !hasOnTime {
-		t.Fatalf("put_paramset missing ON_TIME; payload: %v", got)
+	// The cancel must ride the pair this channel describes, never a bare
+	// ON_TIME the CCU would reject.
+	if _, wrongShape := got[string(hmenum.ParameterOnTime)]; wrongShape {
+		t.Errorf("put_paramset carries ON_TIME on a channel whose timer is the "+
+			"DURATION pair; the CCU faults the whole call. payload: %v", got)
 	}
-	onTime, ok := rawOnTime.(float64)
-	if !ok {
-		t.Fatalf("ON_TIME is not float64: %T(%v)", rawOnTime, rawOnTime)
+	wantValue, wantUnit := custom.EncodeTimerDuration(time.Duration(NotUsed * float64(time.Second)))
+	if got[string(hmenum.ParameterDurationValue)] != wantValue {
+		t.Errorf("DURATION_VALUE=%v, want the disabled-timer sentinel %v; payload: %v",
+			got[string(hmenum.ParameterDurationValue)], wantValue, got)
 	}
-	if onTime != NotUsed {
-		t.Errorf("ON_TIME=%v, want NotUsed (%v)", onTime, NotUsed)
+	if got[string(hmenum.ParameterDurationUnit)] != wantUnit {
+		t.Errorf("DURATION_UNIT=%v, want %v; payload: %v",
+			got[string(hmenum.ParameterDurationUnit)], wantUnit, got)
 	}
 
 	// LEVEL must also be present in the same bundle.

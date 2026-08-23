@@ -96,4 +96,6 @@ type HealthFunc func(healthy bool, note string)
 // availability, so a siren stuck in one zone does not remove Home
 // Assistant's disarm control from every other zone during an active
 // alarm.
+//
+// loom:reachable:reason="the callback type OutputManager reports a per-zone output failure through; a func alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
 type ZoneHealthFunc func(zoneID string, healthy bool)

@@ -100,9 +100,16 @@ func TestTextDisplayInvalidRowIDRejected(t *testing.T) {
 	}
 }
 
-// TestTextDisplayWriteRowsMultipleRows verifies that WriteRows commits only
-// once after writing all rows.
-func TestTextDisplayWriteRowsMultipleRows(t *testing.T) {
+// TestTextDisplayWriteRowsCommitsEveryRow pins that each row is committed as
+// it is written, not once at the end.
+//
+// DISPLAY_DATA_COMMIT applies the staged row to the physical display, and the
+// reference implementation sends it as the last field of every row's own write
+// for that reason. Batching a single commit after all rows looked tidier and
+// was wrong in the one case that matters: a failure part-way through left the
+// earlier rows staged and never applied, so the display kept showing whatever
+// it had before while the call reported the rows it had managed to stage.
+func TestTextDisplayWriteRowsCommitsEveryRow(t *testing.T) {
 	t.Parallel()
 
 	w := &stubWriter{}
@@ -116,15 +123,17 @@ func TestTextDisplayWriteRowsMultipleRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	params := w.params()
-	// Exactly one COMMIT at the end.
+
 	commitCount := 0
 	for _, p := range params {
 		if p == hmenum.ParameterDisplayDataCommit {
 			commitCount++
 		}
 	}
-	if commitCount != 1 {
-		t.Errorf("WriteRows(%d rows) committed %d times, want 1", len(rows), commitCount)
+	if commitCount != len(rows) {
+		t.Errorf("WriteRows(%d rows) committed %d times, want %d — one per row, so a "+
+			"failure part-way through leaves the rows already written applied rather "+
+			"than staged", len(rows), commitCount, len(rows))
 	}
 	if params[len(params)-1] != hmenum.ParameterDisplayDataCommit {
 		t.Errorf("last param = %q, want DISPLAY_DATA_COMMIT", params[len(params)-1])

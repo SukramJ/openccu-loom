@@ -55,6 +55,8 @@ func For(obj any, k Kind) map[string]any {
 // Implementations return the properties for kind k, using the same alt
 // naming [Options.UseAltNames] selects, and honour opts.IncludeZero.
 // Anything they return overrides a same-named reflected field.
+//
+// loom:reachable:reason="ForWith type-asserts every obj against it, and *device.Device implements it to publish its mutex-guarded name; an interface reached only by assertion, which the analyzer cannot see used"
 type ExtraProperties interface {
 	PayloadExtra(k Kind, opts Options) map[string]any
 }

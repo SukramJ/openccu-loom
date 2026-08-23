@@ -2,14 +2,14 @@
   "dp_type": "TextDisplay",
   "setter": "WriteRows",
   "source": "aiohomematic",
-  "aiohomematic_version": "2026.5.7",
+  "aiohomematic_version": "2026.8.3",
   "inputs": [
     {
       "label": "3-rows",
       "calls": [
         {
           "method": "PutParamset",
-          "address": "SDV0001:3",
+          "address": "SDV0001:1",
           "paramset_key": "VALUES",
           "put_values": {
             "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
@@ -23,7 +23,7 @@
         },
         {
           "method": "PutParamset",
-          "address": "SDV0001:3",
+          "address": "SDV0001:1",
           "paramset_key": "VALUES",
           "put_values": {
             "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
@@ -37,7 +37,7 @@
         },
         {
           "method": "PutParamset",
-          "address": "SDV0001:3",
+          "address": "SDV0001:1",
           "paramset_key": "VALUES",
           "put_values": {
             "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
