@@ -65,6 +65,23 @@ fan-out table hand-written instead of derived from the domain's own catalogue.
 Output is a report, not a diff. Which decorative guards get repaired is a
 separate decision.
 
+**Done, 2026-08-23.** All 359 guards mutation-tested, eight agents in isolated
+worktrees:
+
+| verdict | count |
+|---|---:|
+| bites | 333 |
+| bites weakly | 6 |
+| **decorative** | **17** |
+| unclear | 3 |
+
+Report: [`../audits/2026-08-23-m1-guard-mutation-report.md`](../audits/2026-08-23-m1-guard-mutation-report.md).
+The suite is mostly sound — 93 % bite — and the failures cluster: one helper,
+`MustFindCallerInFile`, ignores the package argument it is given and so matches
+an identifier anywhere, which alone accounts for four decorative pins out of the
+46 that depend on it. Repairing that one helper is the highest-leverage item in
+the whole of round 5.
+
 ### M2 — thaw the 15 ratchets
 
 Every entry is either "looked at and decided" or "nobody got to it".
