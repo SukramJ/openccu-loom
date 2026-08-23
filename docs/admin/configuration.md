@@ -346,7 +346,6 @@ The MQTT bridge (Home Assistant Discovery and/or raw topic planes).
 | `north.mqtt.raw_enabled` | bool | `false` | — | no |
 | `north.mqtt.discovery_enabled` | bool | `false` | — | no |
 | `north.mqtt.protocol_version` | string | `"5"` | — | no |
-| `north.mqtt.payload_format` | string | — | — | no |
 | `north.mqtt.sub_devices_enabled` | bool | `false` | — | no |
 | `north.mqtt.retain_cleanup_window_ms` | int | `2000` | — | no |
 
@@ -368,12 +367,6 @@ supported setup for non-Home-Assistant MQTT consumers.
 the bridge waits at boot for the broker to deliver retained messages
 before evicting stale discovery/legacy topics — raise it on
 high-latency brokers.
-
-!!! note "`payload_format` is currently a no-op / reserved"
-    The field is still validated (`bare` / `json`) but the bridge does
-    not read it: per-DP state topics **always** carry the JSON envelope
-    `{"value":..,"available":..}`. There is no primitive-scalar (`bare`)
-    output mode today. Treat this key as reserved.
 
 ### `north.matter`
 

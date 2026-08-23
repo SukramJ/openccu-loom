@@ -236,8 +236,10 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 	}
 }
 
-// UpdateCentral handles PUT /admin/centrals/{name}. Performs a
-// full-replace upsert. Returns 204 on success.
+// UpdateCentral handles PUT /admin/centrals/{name}. Merges on omit: a
+// field the body never mentions keeps its stored value, except
+// `enabled` and `interfaces`, which the body must always supply.
+// Returns 204 on success.
 func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "name")
@@ -265,19 +267,19 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
 			return
 		}
-		// This is a full-replace PUT: unlike the optional fields below,
-		// `enabled` and `interfaces` have no "unchanged" fallback to
-		// restore, so a body that omits either is rejected rather than
-		// silently decoding to the Go zero value — false / nil — which
-		// would disable the central and drop every configured interface.
+		// Unlike the optional fields below, `enabled` and `interfaces` have no
+		// "unchanged" fallback to restore, so a body that omits either is
+		// rejected rather than silently decoding to the Go zero value —
+		// false / nil — which would disable the central and drop every
+		// configured interface. `host` above is mandatory for the same reason.
 		if !present["enabled"] {
 			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeValidation, r, "Missing enabled", "enabled is required for a full replace"))
+				problem.New(problem.TypeValidation, r, "Missing enabled", "enabled must be supplied: it has no stored value to fall back to"))
 			return
 		}
 		if !present["interfaces"] {
 			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeValidation, r, "Missing interfaces", "interfaces is required for a full replace"))
+				problem.New(problem.TypeValidation, r, "Missing interfaces", "interfaces must be supplied: it has no stored value to fall back to"))
 			return
 		}
 		// Every other field in sqlite.CentralRow is optional per the

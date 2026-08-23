@@ -247,7 +247,42 @@ func (p *HubMQTTPublisher) RetractCentral(u *central.Unit, connectivityInterface
 
 	p.publish(func() {
 		retractHubDiscoveryItems(ctx, b, items)
+		retractHubRawState(ctx, b, u, centralName)
 	})
+}
+
+// retractHubRawState clears the raw-plane retained state topics the
+// discovery half above has no reach into: program state and execute-
+// availability, sysvar state, and the hub firmware-update singleton.
+// retractHubDiscoveryItems only ever re-publishes `.../config` topics — it
+// never touches the state topics those configs point at — so without this a
+// removed central's raw-plane consumers (anything subscribing outside HA
+// discovery) kept reading the last-known program/sysvar/update state
+// forever.
+//
+// Built from the same live hub model the discovery items were, using the
+// identical [payload.MQTTAddressable] resolvers the publish side calls
+// (Bridge.RetractSysvarState / RetractProgramTopics / RetractHubUpdate
+// mirror PublishSysvar / PublishProgram / PublishHubUpdate) so the retract
+// side can never drift from what was actually published.
+func retractHubRawState(ctx context.Context, b *mqtt.Bridge, u *central.Unit, centralName string) {
+	hubModel := u.HubModel
+	if hubModel == nil {
+		return
+	}
+	for _, prog := range hubModel.Programs() {
+		if prog == nil || prog.Internal() {
+			continue
+		}
+		_ = b.RetractProgramTopics(ctx, centralName, prog)
+	}
+	for _, sv := range hubModel.Sysvars() {
+		if sv == nil {
+			continue
+		}
+		_ = b.RetractSysvarState(ctx, centralName, sv)
+	}
+	_ = b.RetractHubUpdate(ctx, centralName)
 }
 
 // publish hands one hub-plane broker interaction to the fan-out worker.

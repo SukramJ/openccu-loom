@@ -184,7 +184,16 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 			for i := range cfg.Centrals {
 				cc := &cfg.Centrals[i]
 				row := sqlitestore.CentralRow{
-					Name:                  cc.Name,
+					Name: cc.Name,
+					// The southbound bring-up ran before this seed and has
+					// already resolved the CCU's serial, but the backfill it
+					// performs updates an existing row — and on a first boot
+					// there is none yet, so it matched nothing and reported
+					// success. Carrying the resolved serial into the seed is
+					// what makes the first boot persist it; SSDP then
+					// recognises a host-configured CCU (localhost, where a
+					// host match can never succeed) by serial instead.
+					Serial:                serialForSeed(d.reg, cc.Name),
 					Host:                  cc.Host,
 					Port:                  cc.Port,
 					JSONRPCPort:           cc.JSONRPCPort,
@@ -326,4 +335,19 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		authMw:        authMw,
 		authResolve:   restResolve,
 	}
+}
+
+// serialForSeed returns the serial the southbound bring-up resolved for
+// centralName, or "" when the central is not registered yet or its CCU has not
+// answered. Empty is the documented value for a row whose serial is unknown,
+// and the periodic backfill fills it in later.
+func serialForSeed(reg *central.Registry, centralName string) string {
+	if reg == nil {
+		return ""
+	}
+	u, ok := reg.Get(centralName)
+	if !ok || u == nil {
+		return ""
+	}
+	return u.SystemInformation().Serial
 }

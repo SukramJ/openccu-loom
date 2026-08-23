@@ -337,13 +337,6 @@ north:
     # Enable HA auto-discovery.  [default: false]
     discovery_enabled: false
 
-    # Payload format for state topics — CURRENTLY A NO-OP / RESERVED.
-    # The value is accepted and validated (only "" | "bare" | "json"),
-    # but the bridge never reads it: state topics ALWAYS carry the JSON
-    # envelope {"value":..,"available":..}. There is no primitive-scalar
-    # ("bare") mode today. Left in place for a future format switch.
-    # payload_format: ""
-
     # Sub-devices: splits devices with multiple channel groups into one
     # HA device per group. Parent device is linked via via_device.
     # [default: false]

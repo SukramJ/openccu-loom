@@ -163,8 +163,9 @@ type getAddonUpdateStatusOut struct {
 // registerGetAddonUpdateStatus implements `get_addon_update_status`,
 // projecting the same [AddonUpdateService] seam GET /system/addon-update
 // reads through. Only Status() is called — Check and InstallAsync stay
-// off the assistant surface; see the caller's own note on why an area
-// that needs a write to be useful is out of scope here.
+// off the assistant surface: triggering an update check or install is a
+// write with real side effects on the CCU's add-on, and belongs behind
+// the write-tool gate (AllowWrites), not a read-only status query.
 func registerGetAddonUpdateStatus(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name: "get_addon_update_status",

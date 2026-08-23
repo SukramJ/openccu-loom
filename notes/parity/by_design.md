@@ -4182,3 +4182,35 @@ contract, which has its own switch (`ha_discovery_enabled`).
 **Retirement condition.** None. If the two switches are ever merged, the merge
 has to retract the discovery configs in the same step, or it reintroduces the
 declared-but-never-published set this entry exists to prevent.
+
+### BD-Auth-BasicGuessingSharesTheLoginBucket — a failed Basic credential and a failed login draw from one per-IP budget
+
+**Decision.** `GuardBasicAuth` charges an unresolvable HTTP Basic header against
+the same per-IP bucket `POST /auth/login` uses, rather than a bucket of its own.
+An audit asked for the two to be separated; they are not, and will not be.
+
+**Why.** It is one credential space. An attacker guessing a password can send it
+as a Basic header on any API route or as a login body — the work the daemon does
+is the same bcrypt verification either way, and the thing being guessed is the
+same secret. Two buckets would simply hand a sweep twice the attempts for the
+same wall-clock cost, which is the opposite of what a throttle is for.
+
+The concern behind the request was real but different: collateral lockout. A
+client that once answered a Basic challenge and still replays a stale credential
+would deplete the bucket without any attacker present, and then be unable to log
+in. Two things address that without splitting the budget:
+
+- a Basic header the daemon never even attempts to verify — because the scheme
+  is administratively off — is not charged at all
+  (`basicSchemeDisabled`, `internal/auth/bruteforce.go`);
+- the guard is mounted on the `/api/v1` subtree, not on the whole mux. Above it
+  sit the SPA, `/app/*`, `/about`, `/health` and the UI bootstrap, and one page
+  load is dozens of asset requests. Charging per asset drained the burst of five
+  before the page finished rendering. Pinned by
+  `TestBasicAuthGuardDoesNotChargeTheSPAMount` (`tests/contract/`), which
+  measures the effect through the real router rather than reading the mount
+  point out of the source.
+
+**Retirement condition.** If Basic verification ever stops sharing a credential
+store with the login route — a separate machine-account realm, say — the shared
+bucket stops being justified and should split with it.

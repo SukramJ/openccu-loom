@@ -13,11 +13,14 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestPayloadFormatBareIsBackwardCompatible pins the contract that
-// the default (zero-value) PayloadFormat publishes bare scalars on
-// the state topic, so existing non-HA consumers (Node-RED,
-// InfluxDB) keep working when they upgrade.
-// Raw per-DP state is now published via PublishSlotState (not PublishState).
+// TestPayloadFormatBareIsBackwardCompatible pins the raw plane's wire shape:
+// PublishSlotState emits a bare scalar, not a JSON envelope, so a non-HA
+// consumer reading a raw topic (Node-RED, InfluxDB) parses a number rather
+// than an object. The JSON envelope belongs to the HA state topics (ADR 0011).
+//
+// The name is historical: there was once a `payload_format` switch offering a
+// bare mode. It never reached the publisher and has been removed; the raw
+// plane's bare shape is not configurable and is what this pins.
 func TestPayloadFormatBareIsBackwardCompatible(t *testing.T) {
 	rec := &recordingPublisher{}
 	b := NewBridge(BridgeConfig{

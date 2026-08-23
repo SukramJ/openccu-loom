@@ -10,10 +10,10 @@
 //
 // The tracker keeps a per-component sample history so dashboards can
 // render a sparkline and so [WindowedScore] computes "healthy fraction
-// over the last N seconds". Samples older than [Tracker.StaleAfter]
-// downgrade the component to [StatusUnknown] — an interface that has
-// gone silent should not look healthy just because its last reading
-// was OK.
+// over the last N seconds". Samples older than the staleness window
+// set by [WithStaleAfter] (default [DefaultStaleAfter]) downgrade the
+// component to [StatusUnknown] — an interface that has gone silent
+// should not look healthy just because its last reading was OK.
 package health
 
 import (

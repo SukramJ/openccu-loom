@@ -362,7 +362,6 @@ func TestMQTTDiffersStructurally(t *testing.T) {
 		TopicBase:         "home",
 		RawEnabled:        true,
 		DiscoveryEnabled:  true,
-		PayloadFormat:     "json",
 		SubDevicesEnabled: true,
 	}
 
@@ -423,12 +422,6 @@ func TestMQTTDiffersStructurally(t *testing.T) {
 			name: "DiscoveryEnabled",
 			a:    base,
 			b:    func() config.NorthMQTT { c := base; c.DiscoveryEnabled = false; return c }(),
-			want: true,
-		},
-		{
-			name: "PayloadFormat",
-			a:    base,
-			b:    func() config.NorthMQTT { c := base; c.PayloadFormat = "bare"; return c }(),
 			want: true,
 		},
 		{

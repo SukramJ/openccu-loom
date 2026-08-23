@@ -106,7 +106,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://host:8119/info \
 
 ## 2. The tool surface
 
-Twenty-nine tools, in two tiers: 23 read tools + 6 write tools. **Read
+Thirty-one tools, in two tiers: 23 read tools + 8 write tools. **Read
 tools** are always registered (each gated on its backing subsystem
 being wired). **Write tools** are registered only when
 `allow_writes: true` — and that flag includes arming and disarming the

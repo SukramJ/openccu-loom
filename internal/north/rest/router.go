@@ -606,16 +606,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	}
 	if d.AuthResolve != nil {
 		r.Use(d.AuthResolve)
-		// Throttle per-source HTTP Basic credential guessing on every
-		// Resolve-protected route, not just POST /auth/login: a Basic header
-		// that fails verification is charged against the same per-IP buckets
-		// the login limiter uses, so a guessing sweep on GET /auth/me (or any
-		// route) is rate-limited the same way the login route is. Mounted
-		// right after Resolve so the guard reads the identity Resolve attached
-		// — a valid credential costs nothing, only failures charge.
-		if d.LoginRateLimit != nil {
-			r.Use(auth.GuardBasicAuth(d.LoginRateLimit))
-		}
 	}
 	if d.Idempotent {
 		// Mounted after AuthResolve so the cache key can incorporate the
@@ -687,6 +677,27 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// Throttle per-source HTTP Basic credential guessing across the whole
+		// API, not just POST /auth/login: a Basic header that fails
+		// verification is charged against the same per-IP bucket the login
+		// limiter uses, so a guessing sweep on GET /auth/me — or any other
+		// route — costs an attacker exactly what the login route costs them.
+		// Sharing that bucket is deliberate: it is one credential space, and
+		// two buckets would simply hand a sweep twice the attempts.
+		//
+		// Scoped to /api/v1 rather than the whole mux. Above this line sit the
+		// SPA mount, /app/*, /about, /health and the UI bootstrap — one page
+		// load is dozens of asset requests, and a browser that once answered a
+		// Basic challenge and now holds a stale credential would charge the
+		// bucket once per asset. The source is locked out of login before the
+		// page has finished rendering, by its own cached header rather than by
+		// anything an attacker did. Mounted after Resolve so the guard reads
+		// the identity Resolve attached — a valid credential costs nothing,
+		// only failures charge.
+		if d.LoginRateLimit != nil {
+			r.Use(auth.GuardBasicAuth(d.LoginRateLimit))
+		}
+
 		// OpenAPI request validation runs only inside the /api/v1
 		// subtree — the SPA mount, /app/*, and any future static-
 		// asset routes are not described by the spec and would

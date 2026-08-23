@@ -63,7 +63,7 @@ func waitForWSType(t *testing.T, hub *ws.Hub, topic, typ string) bool {
 }
 
 // TestClimateScheduleChangeBroadcastsSchedulesChangedWS pins the WS half of
-// K2-fanout-matrix-4: a week-profile / climate-schedule change published a
+// A week-profile / climate-schedule change published a
 // state topic to MQTT and reached no other plane, so an SPA schedule view
 // already open never learned a CCU-side or second-operator change happened.
 // The reproducer drives the real OnChange seam (SetCurrentProfile, the same

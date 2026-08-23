@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 355.
+Guards without a doc comment: 7 of 357.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -36,6 +36,7 @@ Guards without a doc comment: 7 of 355.
 | TestHomegearBackendCapabilities | backend_capabilities_test.go | TestHomegearBackendCapabilities pins the SPECIFICATION §9.2 statement: Homegear is XML-RPC-only. |
 | TestJSONRPCOnlyInterfacesEmpty | backend_capabilities_test.go | TestJSONRPCOnlyInterfacesEmpty verifies that no interface is classified as "JSON-RPC only / pull-only" — CCU-Jack was removed. |
 | TestXMLRPCInterfacesUseCCUBackend | backend_capabilities_test.go | TestXMLRPCInterfacesUseCCUBackend pins CCU-native interfaces to the CcuBackend kind. |
+| TestBasicAuthGuardDoesNotChargeTheSPAMount | basic_auth_guard_scope_test.go | TestBasicAuthGuardDoesNotChargeTheSPAMount pins where the per-IP Basic-credential throttle is mounted. |
 | TestCacheresetGuardNoOperatorStateTouched | cachereset_guard_test.go | TestCacheresetGuardNoOperatorStateTouched enforces ADR 0042: the cache-reset service must never reference operator or system state tables. |
 | TestKeepaliveContract_AnyEventRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_AnyEventRefreshesLiveness pins that an ordinary (non-PONG) inbound callback also refreshes liveness — even for a device the daemon does not mirror. |
 | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness pins the full keepalive round-trip: a recorded outbound PING (as the check_connection job records it) is closed by a PONG delivered through the production callback handler, and that PONG also marks the channel alive. |
@@ -282,6 +283,7 @@ Guards without a doc comment: 7 of 355.
 | TestGenerateWireSnapshots | wire_snapshots/generator_test.go | — (no doc comment) |
 | TestReferenceCompare | wire_snapshots/reference_compare_test.go | TestReferenceCompare runs every Go Custom-DP setter covered by a reference wire snapshot and fails when the wire calls differ. |
 | TestWireSnapshots | wire_snapshots/snapshot_pin_test.go | TestWireSnapshots loads every golden snapshot and verifies that re-running the same setter with the same inputs produces identical wire calls. |
+| TestEveryWireFunctionHasAProductionCaller | wiring_free_functions_test.go | TestEveryWireFunctionHasAProductionCaller closes the hole its sibling TestEveryWiringSetterHasAProductionCaller cannot reach. |
 | TestPin_AlarmCentralHook_Installed | wiring_pins/alarm_wiring_test.go | TestPin_AlarmCentralHook_Installed pins that runtime-adopted centrals are subscribed onto the alarm service — otherwise sensors on a live-adopted CCU silently never reach the engine. |
 | TestPin_AlarmMotionReset_Wired | wiring_pins/alarm_wiring_test.go | TestPin_AlarmMotionReset_Wired pins that the alarm service passes a motion-reset port into the engine. |
 | TestPin_AlarmService_ConstructedInDaemon | wiring_pins/alarm_wiring_test.go | TestPin_AlarmService_ConstructedInDaemon pins that the daemon composition root actually constructs the alarm service. |

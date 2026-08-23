@@ -162,10 +162,10 @@ func TestListBackups_ScopesToNamedCentral(t *testing.T) {
 	}
 }
 
-// TestListBackups_UnknownCentralIsAnError is the negative-control the
-// caller's brief demands: a mistyped or hallucinated central_name must
-// surface as an error, never as a silently empty list that reads as
-// "this central genuinely has no backups".
+// TestListBackups_UnknownCentralIsAnError is the negative control: a
+// mistyped or hallucinated central_name must surface as an error, never
+// as a silently empty list that reads as "this central genuinely has no
+// backups".
 func TestListBackups_UnknownCentralIsAnError(t *testing.T) {
 	backups := &fakeBackupLister{entries: []hmapi.BackupEntry{
 		{ID: "b1", Central: "alpha", Bytes: 1024},

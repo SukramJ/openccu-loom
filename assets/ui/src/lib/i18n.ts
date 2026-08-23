@@ -1294,7 +1294,6 @@ const EN: Catalog = {
   "config.field.north.mqtt.raw_enabled": "Publish raw plane",
   "config.field.north.mqtt.discovery_enabled": "Publish HA discovery",
   "config.field.north.mqtt.protocol_version": "MQTT protocol version",
-  "config.field.north.mqtt.payload_format": "Payload format",
   "config.field.north.mqtt.sub_devices_enabled":
     "One HA device per channel group",
   "config.field.north.matter.enabled": "Enable Matter bridge",
@@ -1502,8 +1501,6 @@ const EN: Catalog = {
     "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices. Implies the raw plane — the payloads name its topics, so enabling this enables 'Publish raw plane' as well.",
   "config.help.north.mqtt.protocol_version":
     'MQTT wire dialect: "5" (default) or "3.1.1" for brokers without MQTT 5.0 support. No silent downgrade — a v5 connect against a v3-only broker fails with a named error.',
-  "config.help.north.mqtt.payload_format":
-    "Reserved, currently a no-op: state topics always carry the JSON envelope {value, available, modified_at} regardless of this setting. There is no primitive-scalar (bare) output mode today.",
   "config.help.north.mqtt.sub_devices_enabled":
     "Split multi-channel-group devices into one HA device per channel group. Renders the parent + N children hierarchy in HA.",
   "config.help.north.matter.enabled":
@@ -5188,7 +5185,6 @@ const DE: Catalog = {
   "config.field.north.mqtt.raw_enabled": "Rohebene veröffentlichen",
   "config.field.north.mqtt.discovery_enabled": "HA-Discovery veröffentlichen",
   "config.field.north.mqtt.protocol_version": "MQTT-Protokollversion",
-  "config.field.north.mqtt.payload_format": "Payload-Format",
   "config.field.north.mqtt.sub_devices_enabled":
     "Ein HA-Gerät pro Kanal-Gruppe",
   "config.field.north.matter.enabled": "Matter-Bridge aktiv",
@@ -5400,8 +5396,6 @@ const DE: Catalog = {
     "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert. Setzt die Rohebene voraus — die Payloads benennen deren Topics, daher wird „Rohebene veröffentlichen“ mit aktiviert.",
   "config.help.north.mqtt.protocol_version":
     'MQTT-Dialekt: "5" (Standard) oder "3.1.1" für Broker ohne MQTT-5.0-Unterstützung. Kein stilles Downgrade — ein v5-Connect gegen einen v3-Broker schlägt mit benanntem Fehler fehl.',
-  "config.help.north.mqtt.payload_format":
-    "Reserviert, aktuell ohne Wirkung: State-Topics tragen unabhängig von dieser Einstellung immer den JSON-Envelope {value, available, modified_at}. Einen primitiven Scalar-Modus (bare) gibt es derzeit nicht.",
   "config.help.north.mqtt.sub_devices_enabled":
     "Multi-Channel-Group-Geräte als ein HA-Gerät pro Kanal-Gruppe rendern. Zeigt Parent + N Children in HA.",
   "config.help.north.matter.enabled":

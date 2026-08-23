@@ -1294,6 +1294,25 @@ func (b *Bridge) PublishSysvar(ctx context.Context, centralName string, sv pload
 	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
 }
 
+// RetractSysvarState clears the retained raw-plane state topic
+// [Bridge.PublishSysvar] wrote for sv, by re-resolving the identical topic
+// from sv.MQTTTopics and publishing an empty retained payload to it. Used
+// when a whole central is removed at runtime: the per-sysvar OnRemoved hook
+// only fires for a sysvar the CCU drops one at a time, never for the whole
+// central leaving the registry, so this is the only path that clears it.
+// No-op when the raw plane is disabled — nothing was published in the first
+// place.
+func (b *Bridge) RetractSysvarState(ctx context.Context, centralName string, sv pload.MQTTAddressable) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
+	topics := sv.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
+	if topics.State == "" {
+		return nil
+	}
+	return b.client.Publish(ctx, topics.State, nil, b.cfg.QoS.State, true)
+}
+
 // ProgramRoles returns a source's declared controls, resolved against the bridge's
 // runtime context (topic base, resolved central name), which the model
 // does not hold. Returns nil for a source that declares none — a single
@@ -1344,6 +1363,39 @@ func (b *Bridge) PublishProgram(ctx context.Context, centralName string, prog pl
 		body = []byte("true")
 	}
 	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+}
+
+// RetractProgramTopics clears every retained raw-plane topic
+// [Bridge.PublishProgram] and [Bridge.PublishRoleAvailability] wrote for
+// prog: its state topic and, for each declared role that owns one (the
+// execute button's availability), that role's topic. Built from the same
+// prog.MQTTTopics / prog.MQTTRoles resolvers the publish side calls, so the
+// retract side can never name a topic the publish side would not also name.
+// Used when a whole central is removed at runtime — the per-program
+// OnRemoved hook only fires for a program the CCU drops one at a time.
+// No-op when the raw plane is disabled.
+func (b *Bridge) RetractProgramTopics(ctx context.Context, centralName string, prog pload.MQTTAddressable) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
+	central := b.resolvedCentral(centralName)
+	topics := prog.MQTTTopics(b.cfg.Base, central)
+	if topics.State != "" {
+		if err := b.client.Publish(ctx, topics.State, nil, b.cfg.QoS.State, true); err != nil {
+			return err
+		}
+	}
+	if ra, ok := prog.(pload.MQTTRoleAddressable); ok {
+		for _, role := range ra.MQTTRoles(b.cfg.Base, central) {
+			if role.Topics.Availability == "" {
+				continue
+			}
+			if err := b.client.Publish(ctx, role.Topics.Availability, nil, b.cfg.QoS.State, true); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // PublishInstallMode emits the per-interface install-mode countdown
@@ -1613,6 +1665,18 @@ func (b *Bridge) PublishHubUpdate(ctx context.Context, centralName, installedVer
 		return err
 	}
 	return b.client.Publish(ctx, b.topics.HubUpdate(centralName), body, b.cfg.QoS.State, true)
+}
+
+// RetractHubUpdate clears the retained topic [Bridge.PublishHubUpdate]
+// wrote for centralName. Used when a whole central is removed at runtime:
+// unlike a program or sysvar there is no OnRemoved hook for this singleton
+// at all, so RetractCentral is its only retract path. No-op when the raw
+// plane is disabled.
+func (b *Bridge) RetractHubUpdate(ctx context.Context, centralName string) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
+	return b.client.Publish(ctx, b.topics.HubUpdate(centralName), nil, b.cfg.QoS.State, true)
 }
 
 // PublishAddonUpdateState publishes the CCU add-on self-updater's

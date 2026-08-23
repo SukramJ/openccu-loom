@@ -121,3 +121,50 @@ func TestFlagsSetReportsEitherFlag(t *testing.T) {
 		})
 	}
 }
+
+// TestOverlayDeleteDeviceRemovesOwnAddressAndChannelsKeepsOtherDevice
+// verifies that DeleteDevice drops both the device's own-address entry and
+// every "<address>:<n>" channel entry, while leaving another device's
+// entries (and a same-prefixed different device) untouched.
+func TestOverlayDeleteDeviceRemovesOwnAddressAndChannelsKeepsOtherDevice(t *testing.T) {
+	t.Parallel()
+	o := New()
+	o.Set("ccu1", "DEVICE-A", Flags{Locked: true})    // device-level entry
+	o.Set("ccu1", "DEVICE-A:1", Flags{Hidden: true})  // channel entry
+	o.Set("ccu1", "DEVICE-A:2", Flags{Locked: true})  // second channel entry
+	o.Set("ccu1", "DEVICE-A2:1", Flags{Hidden: true}) // different device sharing the prefix
+	o.Set("ccu1", "DEVICE-B:1", Flags{Hidden: true})  // unrelated device
+	o.Set("ccu2", "DEVICE-A:1", Flags{Hidden: true})  // same address, different central
+
+	o.DeleteDevice("ccu1", "DEVICE-A")
+
+	if got := o.Get("ccu1", "DEVICE-A"); got != (Flags{}) {
+		t.Errorf("DEVICE-A own-address entry survived DeleteDevice: %+v", got)
+	}
+	if got := o.Get("ccu1", "DEVICE-A:1"); got != (Flags{}) {
+		t.Errorf("DEVICE-A:1 survived DeleteDevice: %+v", got)
+	}
+	if got := o.Get("ccu1", "DEVICE-A:2"); got != (Flags{}) {
+		t.Errorf("DEVICE-A:2 survived DeleteDevice: %+v", got)
+	}
+	if got := o.Get("ccu1", "DEVICE-A2:1"); got != (Flags{Hidden: true}) {
+		t.Errorf("DEVICE-A2:1 (prefix collision) must survive, got %+v", got)
+	}
+	if got := o.Get("ccu1", "DEVICE-B:1"); got != (Flags{Hidden: true}) {
+		t.Errorf("DEVICE-B:1 must survive, got %+v", got)
+	}
+	if got := o.Get("ccu2", "DEVICE-A:1"); got != (Flags{Hidden: true}) {
+		t.Errorf("ccu2's DEVICE-A:1 must survive a ccu1 DeleteDevice, got %+v", got)
+	}
+}
+
+// TestOverlayDeleteDeviceOnEmptyOrNilIsNoOp verifies that DeleteDevice never
+// panics on an empty overlay, an unknown central, or a nil receiver.
+func TestOverlayDeleteDeviceOnEmptyOrNilIsNoOp(t *testing.T) {
+	t.Parallel()
+	o := New()
+	o.DeleteDevice("ccu1", "DEVICE-A") // unknown central: no-op
+
+	var nilOverlay *Overlay
+	nilOverlay.DeleteDevice("ccu1", "DEVICE-A") // nil receiver: no-op
+}

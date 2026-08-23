@@ -226,9 +226,11 @@ func (c *DeviceCoordinator) applyPull(iface hmtypes.WireInterfaceID, snapshot []
 
 // RefreshAfterPair re-pulls the snapshot after a fresh pair so the
 // newly-added device's description and child channels land in the
-// registry. The function is a thin wrapper over InitialPull (full
+// registry. The function is a thin wrapper over InitialPull: a full
 // re-pull is cheaper than a targeted single-device pull on the CCU
-// Side and matches what
+// side and reuses the idempotent guarantee InitialPull already
+// documents, so re-running it over devices that were already known
+// is a safe no-op.
 func (c *DeviceCoordinator) RefreshAfterPair(ctx context.Context, lister DeviceLister, iface hmtypes.WireInterfaceID) (PullReport, error) {
 	return observability.InstrumentValue(ctx, c.recorder, "device_coordinator.refresh_after_pair", observability.ScopeCoordinator,
 		func(ctx context.Context) (PullReport, error) {

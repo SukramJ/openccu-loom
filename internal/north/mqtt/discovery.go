@@ -1069,9 +1069,8 @@ func resolveMultiplier(ev Event, override *float64) (float64, bool) {
 
 // applyMultiplierSensor patches body["value_template"] when ev.Channel or
 // override reports a non-trivial multiplier for ev.Parameter. The emitted
-// Jinja template multiplies the wire scalar (raw or value_json.value,
-// depending on PayloadFormat) by the multiplier, mirroring the math
-// the Python reference implementation's `sensor.py:201` does.
+// Jinja template multiplies the wire scalar — `value_json.value` on a
+// state topic, the bare payload on a raw one — by the multiplier.
 func applyMultiplierSensor(ev Event, body map[string]any, override *float64) {
 	m, nontrivial := resolveMultiplier(ev, override)
 	if !nontrivial {
