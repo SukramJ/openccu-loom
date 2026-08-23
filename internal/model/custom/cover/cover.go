@@ -233,7 +233,8 @@ func New(cfg Config) *Cover {
 // [toCoverDirection] handles either.
 func resolveDirectionDP(ch *device.Channel, group custom.RebasedChannelGroupConfig) *generic.Sensor[int32] {
 	if dp := custom.EnumSensorField(
-		custom.ResolveSlotOnCarryingChannel(ch, group, hmenum.FieldDirection, hmenum.ParameterDirection)); dp != nil {
+		custom.ResolveSlotOnCarryingChannel(ch, group, hmenum.FieldDirection, hmenum.ParameterDirection),
+	); dp != nil {
 		return dp
 	}
 	if dp := custom.EnumSensorField(ch, hmenum.ParameterDirection); dp != nil {

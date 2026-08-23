@@ -111,7 +111,8 @@ func NewBlind(cfg BlindConfig) *Blind {
 		Group:        cfg.Group,
 	})
 	tiltChannel, tiltParam := custom.ResolveSlotOr(
-		cfg.Channel, cfg.Group, hmenum.FieldLevel2, hmenum.ParameterLevel2)
+		cfg.Channel, cfg.Group, hmenum.FieldLevel2, hmenum.ParameterLevel2,
+	)
 	b := &Blind{
 		Cover:  cov,
 		Kind:   cfg.Kind,

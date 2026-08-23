@@ -198,13 +198,15 @@ func New(cfg Config) *Lock {
 		// -1 offset states, while the HmIP-DLP carries it on the lock
 		// channel itself.
 		jammedDp: custom.BinarySensorField(
-			custom.ResolveSlotOnCarryingChannel(cfg.Channel, cfg.Group, hmenum.FieldError, hmenum.ParameterErrorJammed)),
+			custom.ResolveSlotOnCarryingChannel(cfg.Channel, cfg.Group, hmenum.FieldError, hmenum.ParameterErrorJammed),
+		),
 	}
 	// RF locks (HM-Sec-Key family) carry a string ERROR parameter instead of
 	// the binary ERROR_JAMMED that IP/Button locks use.
 	if cfg.Kind == KindRF {
 		l.rfErrorDp = custom.EnumSensorField(
-			custom.ResolveSlotOnCarryingChannel(cfg.Channel, cfg.Group, hmenum.FieldError, hmenum.ParameterError))
+			custom.ResolveSlotOnCarryingChannel(cfg.Channel, cfg.Group, hmenum.FieldError, hmenum.ParameterError),
+		)
 	}
 	// Which way the motor last turned is a read-only ENUM that the two
 	// families report under different names: the HM key-matic devices call
@@ -212,7 +214,8 @@ func New(cfg Config) *Lock {
 	// DIRECTION at all. The profile states which one applies, so binding
 	// through it reaches both instead of leaving the IP families empty.
 	l.directionDp = custom.EnumSensorField(
-		custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection))
+		custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection),
+	)
 	switch cfg.Kind {
 	case KindIP:
 		// HmIP locks: LOCK_STATE (read-only ENUM).

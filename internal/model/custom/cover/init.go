@@ -135,7 +135,8 @@ func newIPCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 	// the channel actually carries the tilt parameter its profile names —
 	// the same question the RF path asks, asked the same way.
 	if tiltChannel, tiltParam := custom.ResolveSlotOr(
-		ch, rebased, hmenum.FieldLevel2, hmenum.ParameterLevel2); custom.FloatField(tiltChannel, tiltParam) != nil {
+		ch, rebased, hmenum.FieldLevel2, hmenum.ParameterLevel2,
+	); custom.FloatField(tiltChannel, tiltParam) != nil {
 		blind := NewBlind(BlindConfig{
 			Channel: ch,
 			Writer:  w,
