@@ -1,6 +1,6 @@
 {
-  "generated": "3a648134",
-  "head": "3a648134",
+  "generated": "d74723d8",
+  "head": "d74723d8",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29868,
+    "total_exported": 29864,
     "reachable": 4971,
-    "whitelisted": 21712,
-    "unreachable": 3185
+    "whitelisted": 21710,
+    "unreachable": 3183
   },
   "by_package": [
     {
@@ -265,7 +265,7 @@
     {
       "package": "internal/central/coordinators",
       "unreachable_funcs": 0,
-      "unreachable_types": 112,
+      "unreachable_types": 110,
       "unreachable_other": 6
     },
     {
@@ -4552,20 +4552,6 @@
       "identifier": "ParamsetInconsistency",
       "file": "internal/central/coordinators/device.go",
       "line": 945,
-      "kind": "type"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "ParamsetInvalidator",
-      "file": "internal/central/coordinators/cache.go",
-      "line": 276,
-      "kind": "type"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "ParamsetInvalidator",
-      "file": "internal/central/coordinators/cache.go",
-      "line": 276,
       "kind": "type"
     },
     {
@@ -54923,20 +54909,6 @@
     },
     {
       "package": "internal/central/coordinators",
-      "identifier": "TestCacheInvalidateDelegates",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 214
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "TestCacheInvalidateNoopWhenNotWired",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 205
-    },
-    {
-      "package": "internal/central/coordinators",
       "identifier": "TestCacheLenReflectsInsertAndDelete",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/cache_deep_test.go",
@@ -56130,14 +56102,14 @@
       "identifier": "TestGetVirtualRemoteAddressesReturnsVirtualTypes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 330
+      "line": 288
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestGetVirtualRemotesEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 316
+      "line": 274
     },
     {
       "package": "internal/central/coordinators",
@@ -56165,7 +56137,7 @@
       "identifier": "TestGetVirtualRemotesReturnsVirtualTypes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 349
+      "line": 307
     },
     {
       "package": "internal/central/coordinators",
@@ -56823,21 +56795,21 @@
       "identifier": "TestIdentifyChannelEmptyTextReturnsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 405
+      "line": 363
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestIdentifyChannelFindsMatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 376
+      "line": 334
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestIdentifyChannelNoMatchReturnsNotFound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 395
+      "line": 353
     },
     {
       "package": "internal/central/coordinators",
@@ -58363,7 +58335,7 @@
       "identifier": "TestSuppressServiceMessageDelegates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 265
+      "line": 223
     },
     {
       "package": "internal/central/coordinators",
@@ -58391,14 +58363,14 @@
       "identifier": "TestSuppressServiceMessageNoopWhenNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 255
+      "line": 213
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestSuppressServiceMessagePropagatesError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_stage_duration_test.go",
-      "line": 284
+      "line": 242
     },
     {
       "package": "internal/central/coordinators",
@@ -72531,14 +72503,14 @@
       "identifier": "CentralsModifiedInPlace",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 816
+      "line": 836
     },
     {
       "package": "internal/config",
       "identifier": "CentralsModifiedInPlace",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 816
+      "line": 836
     },
     {
       "package": "internal/config",
@@ -73427,28 +73399,28 @@
       "identifier": "RestartRequiredDiff",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 798
+      "line": 818
     },
     {
       "package": "internal/config",
       "identifier": "RestartRequiredDiff",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 798
+      "line": 818
     },
     {
       "package": "internal/config",
       "identifier": "RestartRequiredFieldPaths",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 781
+      "line": 801
     },
     {
       "package": "internal/config",
       "identifier": "RestartRequiredFieldPaths",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 781
+      "line": 801
     },
     {
       "package": "internal/config",
@@ -73469,14 +73441,14 @@
       "identifier": "RestartRules",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 775
+      "line": 795
     },
     {
       "package": "internal/config",
       "identifier": "RestartRules",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 775
+      "line": 795
     },
     {
       "package": "internal/config",
@@ -172267,70 +172239,70 @@
       "identifier": "MustFindCallerInFile",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 114
+      "line": 124
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindCallerInFile",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 114
+      "line": 124
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindInterfaceImpl",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 461
+      "line": 613
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindInterfaceImpl",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 461
+      "line": 613
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindMethodCall",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 156
+      "line": 289
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindMethodCall",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 156
+      "line": 289
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStringLiteralInFile",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 524
+      "line": 676
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStringLiteralInFile",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 524
+      "line": 676
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStructLiteralField",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 409
+      "line": 561
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStructLiteralField",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 409
+      "line": 561
     },
     {
       "package": "tests/contract",
@@ -172477,7 +172449,7 @@
       "identifier": "TestCentralsRestartRuleNeedsAnInPlaceModification",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/config_restart_required_test.go",
-      "line": 194
+      "line": 190
     },
     {
       "package": "tests/contract",
@@ -172554,7 +172526,7 @@
       "identifier": "TestConfigSchemaRestartBadgeMatchesRestartRules",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/config_restart_required_test.go",
-      "line": 223
+      "line": 219
     },
     {
       "package": "tests/contract",
@@ -172666,7 +172638,7 @@
       "identifier": "TestDeclaredLiveConfigLeavesStillExist",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/config_restart_required_test.go",
-      "line": 155
+      "line": 151
     },
     {
       "package": "tests/contract",
@@ -172680,7 +172652,7 @@
       "identifier": "TestDeclaredSilentEventDocsClaimNoConsumers",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/event_subscriber_coverage_test.go",
-      "line": 300
+      "line": 309
     },
     {
       "package": "tests/contract",
@@ -172897,7 +172869,7 @@
       "identifier": "TestEveryConfigLeafIsEitherRestartRequiredOrDeclaredLive",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/config_restart_required_test.go",
-      "line": 127
+      "line": 123
     },
     {
       "package": "tests/contract",
@@ -172911,7 +172883,7 @@
       "identifier": "TestEveryEventTypeHasASubscriber",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/event_subscriber_coverage_test.go",
-      "line": 80
+      "line": 89
     },
     {
       "package": "tests/contract",
@@ -172925,7 +172897,7 @@
       "identifier": "TestEveryHTTPClientOwnsItsTransport",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/http_transport_ownership_test.go",
-      "line": 68
+      "line": 71
     },
     {
       "package": "tests/contract",
@@ -172995,7 +172967,7 @@
       "identifier": "TestEveryWiringSetterHasAProductionCaller",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_setter_callers_test.go",
-      "line": 111
+      "line": 109
     },
     {
       "package": "tests/contract",
@@ -173709,7 +173681,7 @@
       "identifier": "TestRestartRequiredFieldsExistInConfigSchema",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/config_restart_required_test.go",
-      "line": 276
+      "line": 272
     },
     {
       "package": "tests/contract",
@@ -174381,7 +174353,7 @@
       "identifier": "TestDaemonGivesTheResolverTheBasicThrottle",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/auth_credential_lifecycle_test.go",
-      "line": 320
+      "line": 325
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174444,7 +174416,7 @@
       "identifier": "TestPin_AddOnStopHook_CalledInDaemon",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/daemon_wiring_test.go",
-      "line": 16
+      "line": 20
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174472,14 +174444,14 @@
       "identifier": "TestPin_BINRPCCallbackServer_Started",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/daemon_wiring_test.go",
-      "line": 28
+      "line": 32
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_BINRPCCallbackServer_WiredToDeps",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/daemon_wiring_test.go",
-      "line": 39
+      "line": 43
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174493,14 +174465,14 @@
       "identifier": "TestPin_BuildHubUpdateDiscovery_CalledInPublisher",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_mqtt_publisher_wiring_test.go",
-      "line": 15
+      "line": 17
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_BuildInboxDiscovery_CalledInPublisher",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_mqtt_publisher_wiring_test.go",
-      "line": 37
+      "line": 31
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174612,14 +174584,14 @@
       "identifier": "TestPin_FinalizeInit_CalledInDevicePipeline",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/device_model_wiring_test.go",
-      "line": 15
+      "line": 17
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_HubSetConnectivity_CalledInHubWiring",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
-      "line": 15
+      "line": 19
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174633,7 +174605,7 @@
       "identifier": "TestPin_IsAlive_CalledInEvaluateCentralState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/central_wiring_test.go",
-      "line": 29
+      "line": 30
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174647,14 +174619,14 @@
       "identifier": "TestPin_LoadSysvars_UsesHubSysvarLookup",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
-      "line": 28
+      "line": 131
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_NewMqttCollector_CalledInDaemon",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/daemon_wiring_test.go",
-      "line": 51
+      "line": 55
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174682,7 +174654,7 @@
       "identifier": "TestPin_OnConfigChanged_CalledInReloadDeviceConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/device_model_wiring_test.go",
-      "line": 27
+      "line": 29
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174717,14 +174689,14 @@
       "identifier": "TestPin_PublishHubConnectionLatency_CalledInPublisher",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_mqtt_publisher_wiring_test.go",
-      "line": 49
+      "line": 59
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_PublishHubUpdate_CalledInPublisher",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_mqtt_publisher_wiring_test.go",
-      "line": 25
+      "line": 46
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174738,7 +174710,7 @@
       "identifier": "TestPin_RemoveChannel_CalledInCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/device_model_wiring_test.go",
-      "line": 38
+      "line": 42
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174752,7 +174724,7 @@
       "identifier": "TestPin_SetCollector_CalledInDaemon",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/daemon_wiring_test.go",
-      "line": 63
+      "line": 68
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174808,21 +174780,21 @@
       "identifier": "TestPin_SetProgramExecutor_CalledInHubWiring",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
-      "line": 53
+      "line": 47
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_SetServiceMessageReader_WiredInHubWiring",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
-      "line": 80
+      "line": 77
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_SetServiceMessageSuppressor_WiredInHubWiring",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
-      "line": 68
+      "line": 63
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174850,7 +174822,7 @@
       "identifier": "TestPin_SyncCentralState_CalledInCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/central_wiring_test.go",
-      "line": 41
+      "line": 44
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174864,7 +174836,7 @@
       "identifier": "TestPin_UpdateFirmwareUpdater_WiredOnHub",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
-      "line": 42
+      "line": 33
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174878,7 +174850,7 @@
       "identifier": "TestPin_WireServiceMessageSuppressor_CalledInCcuWiring",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
-      "line": 93
+      "line": 90
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -174899,21 +174871,21 @@
       "identifier": "TestVerifiedBasicCredentialIsNotReThrottled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/auth_credential_lifecycle_test.go",
-      "line": 333
+      "line": 338
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestWSHandlerAcceptsAllowedOrigins",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/security_csrf_origin_test.go",
-      "line": 56
+      "line": 63
     },
     {
       "package": "tests/contract/wiring_pins",
       "identifier": "TestWSHandlerOriginCheckWiredInDaemon",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/security_csrf_origin_test.go",
-      "line": 42
+      "line": 49
     },
     {
       "package": "tests/golden",

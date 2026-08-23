@@ -35,10 +35,8 @@ var wiringSettersWithoutCaller = map[string]string{
 	// seam is dead along with the feature it would have fed.
 	"github.com/SukramJ/openccu-loom/internal/central.QueryFacade.SetHubStatePathProvider":                         "GetStatePaths and GetStatePathEntries have no production caller; the combined state-path list is unbuilt",
 	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetAcceptInboxFn":                                       "reached only through ServiceRegistry.Invoke, which production never calls; the real accept-inbox path is DeviceAdminDomain.AcceptInboxDevice",
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetLoadAndRefreshForInterfaceFn":                        "the method it feeds has no callers at all",
 	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetSaveFilesFn":                                         "the method it feeds has no callers outside tests",
 	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetValidateConfigFn":                                    "the method it feeds has no callers outside tests",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.CacheCoordinator.SetParamsetInvalidator":        "no type implements ParamsetInvalidator and InvalidateParamsetDescriptions has no caller; bulk per-interface eviction is unbuilt",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetDeviceNameOverrideChecker": "RenameNewDeviceFromOverride has no production caller either; documented in by_design.md as not wired for 0.1.0",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetRecorder":                  "its three consumers — InitialPull, RefreshAfterPair, RefreshAfterUnpair — have no production caller either, so the telemetry gap has no live effect",
 	"github.com/SukramJ/openccu-loom/internal/central/adapter.BackupAdapter.SetRestorer":                           "restore resolves per central via SetRestorerForCentral, and an ownerless archive now resolves to the sole configured central; this legacy field is only an explicit override",

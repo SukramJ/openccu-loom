@@ -3,7 +3,7 @@
 
 // connection_recovery_stage_duration_test.go covers:
 // RecoveryStageChangedEvent.DurationInOldStageMs (stage timing),
-// per-interface CurrentStage tracking, CacheCoordinator.InvalidateParamsetDescriptions,
+// per-interface CurrentStage tracking,
 // HubCoordinator.SuppressServiceMessage, and DeviceCoordinator.GetVirtualRemotes
 // / IdentifyChannel.
 
@@ -185,48 +185,6 @@ func TestCurrentStageReflectedInStateSnapshot(t *testing.T) {
 	snap := coord.State("iface-snap")
 	if snap.CurrentStage != hmenum.RecoveryStageFailed {
 		t.Errorf("State.CurrentStage=%v, want Failed", snap.CurrentStage)
-	}
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// P2 — CacheCoordinator.InvalidateParamsetDescriptions
-// ──────────────────────────────────────────────────────────────────────────────
-
-type stubParamsetInvalidator struct {
-	called []string
-}
-
-func (s *stubParamsetInvalidator) InvalidateByInterface(iface string) {
-	s.called = append(s.called, iface)
-}
-
-// TestCacheInvalidateNoopWhenNotWired verifies no panic when no
-// invalidator is wired.
-func TestCacheInvalidateNoopWhenNotWired(t *testing.T) {
-	t.Parallel()
-	c := NewCacheCoordinator()
-	// Must not panic.
-	c.InvalidateParamsetDescriptions("HmIP-RF")
-}
-
-// TestCacheInvalidateDelegates verifies that InvalidateParamsetDescriptions
-// delegates to the wired ParamsetInvalidator.
-func TestCacheInvalidateDelegates(t *testing.T) {
-	t.Parallel()
-	c := NewCacheCoordinator()
-	stub := &stubParamsetInvalidator{}
-	c.SetParamsetInvalidator(stub)
-	c.InvalidateParamsetDescriptions("HmIP-RF")
-	c.InvalidateParamsetDescriptions("")
-
-	if len(stub.called) != 2 {
-		t.Fatalf("expected 2 calls, got %d: %v", len(stub.called), stub.called)
-	}
-	if stub.called[0] != "HmIP-RF" {
-		t.Errorf("first call iface=%q, want HmIP-RF", stub.called[0])
-	}
-	if stub.called[1] != "" {
-		t.Errorf("second call iface=%q, want empty (clear all)", stub.called[1])
 	}
 }
 

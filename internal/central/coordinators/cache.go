@@ -103,10 +103,6 @@ type CacheCoordinator struct {
 	paramsetDescriptions CacheSizeProvider
 	visibilityCache      CacheSizeProvider
 
-	// paramsetInvalidator is called by InvalidateParamsetDescriptions.
-	// Nil = no-op.
-	paramsetInvalidator ParamsetInvalidator
-
 	// persister is the optional storage back-end. Nil = in-memory only.
 	// Wired via SetPersister.
 	persister CachePersister
@@ -268,39 +264,6 @@ func (c *CacheCoordinator) MetricsVisibilityCacheSize() int {
 		return 0
 	}
 	return p.Len()
-}
-
-// ParamsetInvalidator is the contract for objects that can invalidate
-// cached paramset descriptions by interface. Wire via
-// [CacheCoordinator.SetParamsetInvalidator].
-type ParamsetInvalidator interface {
-	// InvalidateByInterface evicts all paramset description entries
-	// belonging to iface. Pass an empty string to evict all entries.
-	InvalidateByInterface(iface string)
-}
-
-// SetParamsetInvalidator wires an optional invalidator that
-// [InvalidateParamsetDescriptions] delegates to. Nil disables
-// invalidation (the call becomes a no-op). Returns the receiver for
-// chaining.
-func (c *CacheCoordinator) SetParamsetInvalidator(inv ParamsetInvalidator) *CacheCoordinator {
-	c.mu.Lock()
-	c.paramsetInvalidator = inv
-	c.mu.Unlock()
-	return c
-}
-
-// InvalidateParamsetDescriptions evicts cached paramset descriptions for
-// iface by calling the wired [ParamsetInvalidator]. Pass an empty string to
-// evict all entries. No-op when no invalidator is wired.
-func (c *CacheCoordinator) InvalidateParamsetDescriptions(iface string) {
-	c.mu.RLock()
-	inv := c.paramsetInvalidator
-	c.mu.RUnlock()
-	if inv == nil {
-		return
-	}
-	inv.InvalidateByInterface(iface)
 }
 
 // --- Persistence methods ------------------------------------

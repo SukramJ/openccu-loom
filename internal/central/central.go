@@ -1058,15 +1058,6 @@ func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
 	u.services.mu.Unlock()
 }
 
-// SetLoadAndRefreshForInterfaceFn wires the per-interface reload handler.
-// When wired, [LoadAndRefreshDataPointDataForInterface] uses this instead of
-// the plain handler so interfaceID and paramset are actually forwarded.
-func (u *Unit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error) {
-	u.services.mu.Lock()
-	u.services.loadAndRefreshForInterfaceFn = fn
-	u.services.mu.Unlock()
-}
-
 // RenameDevice changes the operator-visible name of a device.
 // Updates both the in-memory model and persists the new name through
 // the configured `RenameDeviceFn` hook.
@@ -1441,28 +1432,6 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 			DegradedInterfaceReasons: degradedReasons,
 		})
 	}
-}
-
-// LoadAndRefreshDataPointDataForInterface triggers a data-point reload for a
-// specific interface and paramset. When directCall is true the reload is
-// executed synchronously in the caller's goroutine; when false it is
-// dispatched through the wired loadAndRefreshFn (which may batch or
-// coalesce calls). Wire the per-interface hook via
-// [SetLoadAndRefreshForInterfaceFn] to forward the full scope to the backend;
-// without it the call falls back to the global [LoadAndRefreshDataPointData].
-func (u *Unit) LoadAndRefreshDataPointDataForInterface(
-	ctx context.Context,
-	interfaceID string,
-	paramset hmenum.ParamsetKey,
-	directCall bool,
-) error {
-	u.services.mu.RLock()
-	fn := u.services.loadAndRefreshForInterfaceFn
-	u.services.mu.RUnlock()
-	if fn != nil {
-		return fn(ctx, interfaceID, paramset, directCall)
-	}
-	return u.LoadAndRefreshDataPointData(ctx)
 }
 
 // ReadableGenericDataPoints returns every VALUES-paramset data point across

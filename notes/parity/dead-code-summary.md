@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 3a648134
-HEAD: 3a648134
+Generated: d74723d8
+HEAD: d74723d8
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29868 |
+| Total Exported | 29864 |
 | Reachable | 5133 |
-| Whitelisted | 21712 |
-| **Unreachable** | **3023** |
+| Whitelisted | 21710 |
+| **Unreachable** | **3021** |
 
 ## Top-20 Packages by Dead Code
 
@@ -129,7 +129,7 @@ HEAD: 3a648134
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 26 | 2 |
 | internal/central/cachereset | 0 | 18 | 0 |
-| internal/central/coordinators | 0 | 107 | 6 |
+| internal/central/coordinators | 0 | 105 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 14 | 4 |
 | internal/channelflags | 0 | 2 | 0 |
