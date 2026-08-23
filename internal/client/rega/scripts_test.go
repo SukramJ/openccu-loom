@@ -236,3 +236,45 @@ func TestScriptsWithoutPlaceholdersAreParamFree(t *testing.T) {
 		})
 	}
 }
+
+// TestBackupScriptsAgreeOnTheirMarkerFiles pins the one coupling between
+// the two backup scripts that nothing else can catch: create_backup_status
+// answers "completed" from marker files it writes when it cleans up the
+// archive, and create_backup_start has to remove exactly those markers
+// before a new run — a stale pair would report the previous backup as this
+// run's result for as long as this one takes.
+//
+// This is a text check, and it is worth being explicit about its limit: it
+// proves the two scripts name the same paths, not that either runs
+// correctly on a CCU. Nothing in this repository can prove the latter —
+// the simulator does not evaluate script bodies — so the behaviour is
+// verified against a real CCU.
+func TestBackupScriptsAgreeOnTheirMarkerFiles(t *testing.T) {
+	t.Parallel()
+	status, err := loadScript(hmenum.RegaScriptCreateBackupStatus)
+	if err != nil {
+		t.Fatalf("status script: %v", err)
+	}
+	start, err := loadScript(hmenum.RegaScriptCreateBackupStart)
+	if err != nil {
+		t.Fatalf("start script: %v", err)
+	}
+
+	markers := []string{
+		"/usr/local/tmp/backup.done",
+		"/usr/local/tmp/backup.done.size",
+	}
+	for _, m := range markers {
+		if !strings.Contains(status, m) {
+			t.Fatalf("create_backup_status no longer mentions %s; the completion marker moved", m)
+		}
+		if !strings.Contains(start, m) {
+			t.Fatalf("create_backup_start does not clear %s; a finished backup would answer for the next run too", m)
+		}
+	}
+	// The cleanup is what the whole change is for: without it the archive
+	// stays on the CCU until the next backup overwrites it.
+	if !strings.Contains(status, "rm -f /usr/local/tmp/last_backup.sbk") {
+		t.Fatal("create_backup_status no longer removes the archive it just described")
+	}
+}

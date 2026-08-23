@@ -1,6 +1,28 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.63.1
+## 0.64.0
+
+Three things you asked for, and the two fix rounds that never shipped on their
+own:
+
+- **The Backups page says where the backups are.** On a CCU install the
+  archives go to the CCU's own backup target — a USB stick, or whatever you
+  set as the backup path — and until now nothing told you which. The page now
+  names the directory, how many archives are in it and how much room they take.
+- **Backups can be deleted.** One button per archive, with a confirmation that
+  names the file. Previously only the automatic rotation ever removed one.
+- **You can see when the daemon itself is gone.** A CCU reboot, an add-on
+  restart or a crash used to leave every entity merely "unavailable" with
+  nothing saying why. There is now a "Daemon connection" sensor over MQTT, the
+  daemon announces its shutdown over the WebSocket so clients know it is a stop
+  and not their network, and the Config UI's connection badge says so too.
+- **A garage door's ventilation position is selectable.** Vent-capable drives
+  (HmIP-MOD-HO, HmIP-MOD-TM) get a select with closed / ventilation / open.
+  Note: paired Matter garage doors have to be re-added once.
+
+- **A CCU backup no longer leaves a copy lying on the CCU.** Triggering one
+  through the "Backup erstellen" entity left several megabytes in the CCU's
+  temp directory until the next backup overwrote them.
 
 Two fixes that only show up when the daemon starts or when a Matter controller
 pairs:
@@ -13,6 +35,7 @@ pairs:
   events a controller reads right after pairing were being pushed out of the
   bridge's event buffer by the very reconnect above, which could leave the
   bridge showing as added but not supported.
+
 Classic BidCos thermostats. What you will notice:
 
 - **Classic HM-CC-TC wall thermostats show a temperature again.** Their

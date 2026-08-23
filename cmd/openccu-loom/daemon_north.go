@@ -381,11 +381,12 @@ func configuredAuthSources(cfg *config.Config, src authSources) []string {
 }
 
 // awaitShutdown blocks until ctx is cancelled, then runs the graceful
-// shutdown sequence: emit the Matter ShutDown event (best-effort) and stop
-// every north-bound server with a bounded timeout. Production wires ctx to
-// SIGINT/SIGTERM via signal.NotifyContext in main.go; tests pass a
-// context.WithCancel ctx so they can drive shutdown without signals.
-func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring, northBridges *northbridge.Registry) {
+// shutdown sequence: announce the stop to every WebSocket client, emit the
+// Matter ShutDown event (both best-effort) and stop every north-bound server
+// with a bounded timeout. Production wires ctx to SIGINT/SIGTERM via
+// signal.NotifyContext in main.go; tests pass a context.WithCancel ctx so
+// they can drive shutdown without signals.
+func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring, northBridges *northbridge.Registry, wsHub *ws.Hub) {
 	logger.Info("daemon.ready")
 	<-ctx.Done()
 	// context.Cause is non-nil once ctx is cancelled (guaranteed here by the
@@ -396,6 +397,21 @@ func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring
 		cause = c.Error()
 	}
 	logger.Info("daemon.shutdown", slog.String("cause", cause))
+
+	// Tell every WebSocket client the daemon is going away before the
+	// servers stop. It is the counterpart of the MQTT bridge's
+	// AnnounceOffline: on MQTT a broker holds the last will, so a client
+	// learns about a stopped daemon either way, while a WebSocket client
+	// sees only a socket that stopped answering — indistinguishable from
+	// its own network dropping (#591). The announcement is bounded and
+	// best-effort; a SIGKILL cannot send it, and detecting that stays the
+	// client's job.
+	if wsHub != nil {
+		announceCtx, cancelAnnounce := context.WithTimeout(context.Background(), wsShutdownAnnounceTimeout)
+		//nolint:contextcheck // shutdown path: the daemon ctx is already cancelled, so the announcement carries its own deadline
+		wsHub.PublishDaemonShuttingDown(announceCtx, time.Now().UTC())
+		cancelAnnounce()
+	}
 
 	// Matter ShutDown event: spec §11.1.6.2 mandates the cluster fires this
 	// event when the bridge is about to terminate so commissioners can detach
@@ -413,6 +429,13 @@ func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring
 	// matching the old serverGroup.stopAll placement — then the webhook.
 	northBridges.StopAll(shutdownCtx) //nolint:contextcheck // shutdown path: shutdownCtx intentionally not derived from daemon ctx
 }
+
+// wsShutdownAnnounceTimeout bounds how long the shutdown waits for the
+// "daemon is stopping" broadcast to reach the wire. It is deliberately far
+// below the 15 s server-stop budget below: the announcement is a courtesy
+// that saves a client one reconnect cycle, never a reason to hold up a
+// shutdown a supervisor is already timing.
+const wsShutdownAnnounceTimeout = 500 * time.Millisecond
 
 func buildTokenMap(cfg *config.Config) map[string]auth.Identity {
 	out := make(map[string]auth.Identity, len(cfg.North.REST.Auth.Tokens))

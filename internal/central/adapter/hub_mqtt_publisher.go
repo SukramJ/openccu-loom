@@ -237,6 +237,7 @@ func (p *HubMQTTPublisher) RetractCentral(u *central.Unit, connectivityInterface
 		items,
 		disco.BuildAlarmMessagesDiscovery(centralName),
 		disco.BuildServiceMessagesDiscovery(centralName),
+		disco.BuildDaemonStatusDiscovery(centralName),
 		disco.BuildSystemHealthDiscovery(centralName),
 		disco.BuildLastEventAgeDiscovery(centralName),
 		disco.BuildConnectionLatencyDiscovery(centralName),
@@ -470,6 +471,11 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// forwarded to the retained metric topics whenever the Metrics
 	// aggregate observes a new sample.
 	p.publish(func() {
+		// Daemon status: the one entity that reports the daemon itself being
+		// gone. Its state topic is the retained bridge status the broker
+		// carries the last will on, so it needs no state publisher here —
+		// AnnounceOnline/AnnounceOffline and the will already write it.
+		_ = b.PublishHubDiscovery(ctx, disco.BuildDaemonStatusDiscovery(centralName))
 		_ = b.PublishHubDiscovery(ctx, disco.BuildSystemHealthDiscovery(centralName))
 		// Last-Event-Age: a central-wide liveness sensor (seconds since the
 		// newest backend event). Reference parity (hub_last-event-age). The

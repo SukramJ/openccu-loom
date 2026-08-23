@@ -521,6 +521,53 @@ func (a *BackupAdapter) List(ctx context.Context) ([]hmapi.BackupEntry, error) {
 	return entries, nil
 }
 
+// StorageInfo implements [interfaces.BackupService]. It reports where the
+// archives are kept and what is currently in there.
+//
+// The location comes from the storage backend itself rather than from the
+// configuration: `backup.dir` is empty in the common case (the daemon then
+// falls back to `<data_dir>/backups`) and on a CCU add-on install it is set
+// from the CCU's own backup target at every start, so the config value and
+// the directory actually in use are routinely different strings. A backend
+// that does not implement [BackupStorageLocator] reports no location, which
+// reads back as "not known" rather than as a wrong path.
+func (a *BackupAdapter) StorageInfo(ctx context.Context) (hmapi.BackupStorageInfo, error) {
+	if a.storage == nil {
+		return hmapi.BackupStorageInfo{}, nil
+	}
+	info := hmapi.BackupStorageInfo{Available: true}
+	if loc, ok := a.storage.(BackupStorageLocator); ok {
+		info.Dir = loc.Location()
+	}
+	entries, err := a.storage.List(ctx)
+	if err != nil {
+		return hmapi.BackupStorageInfo{}, err
+	}
+	info.Count = len(entries)
+	for _, e := range entries {
+		info.Bytes += e.Bytes
+	}
+	return info, nil
+}
+
+// Delete implements [interfaces.BackupService]. It removes one stored
+// archive and its recorded display name.
+//
+// It takes the owning central's lock, so a delete never runs while that
+// central's create-and-save or rotation prune is mid-flight: the pruner
+// lists, sorts and deletes under the same lock, and a concurrent delete
+// would otherwise let it act on a listing that no longer describes the
+// storage.
+func (a *BackupAdapter) Delete(ctx context.Context, id string) error {
+	if a.storage == nil {
+		return errStorageNotConfigured
+	}
+	lock := a.centralLock(a.ownerCentralName(id))
+	lock.Lock()
+	defer lock.Unlock()
+	return a.storage.Delete(ctx, id)
+}
+
 // Stream implements handlers.BackupService.
 func (a *BackupAdapter) Stream(ctx context.Context, id string, w io.Writer) error {
 	if a.storage == nil {

@@ -150,6 +150,7 @@ hierarchical topic prefix:
 | `device.*` | events from every device across every central |
 | `central.home.state` | only the `home` central's lifecycle |
 | `system.*.status` | status events from every central |
+| `system.daemon_status` | the daemon itself starting to shut down |
 | `hub.home.sysvars.*` | sysvar changes on the `home` central only |
 
 A single openccu-loom daemon can manage multiple CCUs (see ADR-0002).
@@ -267,6 +268,7 @@ list does not drift from reality.
 | `device.availability_changed` | `device.{address}.lifecycle` | [`DeviceAvailabilityChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `central.state_changed` | `central.{name}.state` | [`CentralStateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `system.status_changed` | `system.{central}.status` | [`SystemStatusChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `daemon_status.changed` | `system.daemon_status` | [`DaemonStatusPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `hub.sysvar_changed` | `hub.{central}.sysvars.{name}` | [`SysvarChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `hub.program_executed` | `hub.{central}.programs.{id}` | [`ProgramExecutedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `hub.install_mode_changed` | `hub.{central}.install_mode` | [`InstallModeChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |

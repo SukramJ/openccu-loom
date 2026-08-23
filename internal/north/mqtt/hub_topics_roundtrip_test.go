@@ -74,6 +74,7 @@ func TestHubPlaneTopicsRoundTrip(t *testing.T) {
 		db.BuildInstallModeSensorDiscovery(central, "HmIP-RF"),
 		db.BuildInstallModeButtonDiscovery(central, "HmIP-RF"),
 		db.BuildConnectivityDiscovery(central, "HmIP-RF"),
+		db.BuildDaemonStatusDiscovery(central),
 		db.BuildSystemHealthDiscovery(central),
 		db.BuildConnectionLatencyDiscovery(central),
 		db.BuildLastEventAgeDiscovery(central),
@@ -166,6 +167,16 @@ func runHubPlane(t *testing.T, base, central, sysvarName, programID string) *obs
 	}
 	if err := bridge.PublishHubUpdate(ctx, central, "1.0.0", "1.1.0", false); err != nil {
 		t.Fatalf("publish hub update: %v", err)
+	}
+
+	// The daemon-status sensor is the one hub entity whose state topic is
+	// not written by a hub publisher: it reads the retained bridge status,
+	// written by AnnounceOnline and by the broker's last will. That is
+	// exactly the coupling worth pinning — the entity is on the hub plane,
+	// its writer is not, so a rename on either side would leave it stuck at
+	// whatever the broker last held.
+	if err := bridge.AnnounceOnline(ctx); err != nil {
+		t.Fatalf("announce online: %v", err)
 	}
 
 	// The command half is observed rather than mirrored: the real

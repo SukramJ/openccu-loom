@@ -3,9 +3,23 @@
 !# This script checks the status of a backup started by create_backup_start.fn.
 !# Returns:
 !#   - "running": Backup process is still running
-!#   - "completed": Backup file exists and process has finished
+!#   - "completed": Backup finished; the archive's name and size are reported
 !#   - "failed": Process finished but no backup file exists
 !#   - "idle": No backup process started (no pid file)
+!#
+!# On the first poll that observes a finished backup, the archive's name and
+!# size are recorded in a small marker file and the multi-megabyte .sbk in
+!# /usr/local/tmp is removed. It used to stay there until the next backup
+!# overwrote it, occupying disk nothing ever read: the daemon downloads its
+!# own copy through cp_security.cgi, and this script's only consumers are the
+!# hub's backup.status callers, which read the status and the name. Later
+!# polls answer "completed" from the marker, so cleaning up does not turn the
+!# result back into "idle".
+!#
+!# The two values live in two marker files rather than one structured one:
+!# reading them back is then a plain `cat` with no field splitting, and
+!# neither a JSON body nor an awk program has to survive `sh -c '...'`
+!# quoting, which is where the shell's single-quote nesting has no answer.
 !#
 
 string sResult   = "";
@@ -20,6 +34,7 @@ string sDate     = "";
 boolean bProcessRunning = false;
 boolean bFileExists = false;
 boolean bPidFileExists = false;
+boolean bDoneExists = false;
 boolean bBackupComplete = false;
 
 !# Check if pid file exists
@@ -48,6 +63,15 @@ if (sResult.Trim() == "YES") {
     bFileExists = true;
 }
 
+!# Check whether an earlier poll already reported and cleaned up a finished
+!# backup. The marker is what keeps "completed" answerable once the archive
+!# itself is gone.
+sResult = "";
+system.Exec("test -f /usr/local/tmp/backup.done && echo 'YES' || echo 'NO'", &sResult);
+if (sResult.Trim() == "YES") {
+    bDoneExists = true;
+}
+
 !# Determine status
 if (bProcessRunning) {
     sStatus = "running";
@@ -57,6 +81,8 @@ if (bProcessRunning) {
         bBackupComplete = true;
         !# Clean up pid file
         system.Exec("rm -f /usr/local/tmp/backup.pid &");
+    } elseif (bDoneExists) {
+              sStatus = "completed";
     } elseif (bPidFileExists) {
               sStatus = "failed";
               !# Clean up pid file
@@ -66,7 +92,6 @@ if (bProcessRunning) {
     }
 }
 
-!# Build response
 if (bBackupComplete) {
     !# Get file size
     system.Exec("stat -c %s /usr/local/tmp/last_backup.sbk 2>/dev/null", &sSize);
@@ -83,7 +108,30 @@ if (bBackupComplete) {
 
     sFilename = sHostname # "-" # sVersion # "-" # sDate # ".sbk";
 
-    Write('{"status":"' # sStatus # '","file":"/usr/local/tmp/last_backup.sbk","filename":"' # sFilename # '","size":' # sSize # '}');
+    !# Record the two values before removing the archive, so a later poll can
+    !# still name what was produced. Writing the marker first also means a
+    !# crash between the two steps leaves the archive in place rather than a
+    !# backup nothing can describe.
+    system.Exec("/bin/sh -c 'echo " # sSize # " > /usr/local/tmp/backup.done.size'");
+    system.Exec("/bin/sh -c 'echo " # sFilename # " > /usr/local/tmp/backup.done'");
+    system.Exec("rm -f /usr/local/tmp/last_backup.sbk");
+
+    Write('{"status":"completed","filename":"' # sFilename # '","size":' # sSize # ',"removed":true}');
+} elseif (sStatus == "completed") {
+          !# Answer from the markers an earlier poll wrote. The size marker is
+          !# written first, so it is present whenever the name marker is; the
+          !# fallback covers a marker pair left behind by an older daemon,
+          !# where a missing number would emit invalid JSON.
+          sResult = "";
+          system.Exec("cat /usr/local/tmp/backup.done", &sResult);
+          sFilename = sResult.Trim();
+          sResult = "";
+          system.Exec("cat /usr/local/tmp/backup.done.size 2>/dev/null", &sResult);
+          sSize = sResult.Trim();
+          if (sSize == "") {
+              sSize = "0";
+          }
+          Write('{"status":"completed","filename":"' # sFilename # '","size":' # sSize # ',"removed":true}');
 } else {
     Write('{"status":"' # sStatus # '"}');
 }
