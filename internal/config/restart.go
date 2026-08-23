@@ -601,6 +601,26 @@ func authRestartRules() []RestartRule {
 				return b.North.REST.Auth.BearerAuthEnabled() != e.North.REST.Auth.BearerAuthEnabled()
 			},
 		},
+		// The YAML-declared users and tokens are re-read into an in-memory
+		// store on every boot and kept as the login chain's secondary source
+		// (buildAuthStores / buildTokenMap in cmd/openccu-loom/daemon_north.go),
+		// so an edit reaches nothing until the process restarts. The SQLite
+		// stores in front of them ARE live, which is what made this look like a
+		// one-time seed — but a credential that exists only in YAML is exactly
+		// the case where the distinction matters, and it is the case an
+		// operator hits when revoking one.
+		{
+			Path: "north.rest.auth.users",
+			Differs: func(b, e *Config) bool {
+				return !maps.Equal(b.North.REST.Auth.Users, e.North.REST.Auth.Users)
+			},
+		},
+		{
+			Path: "north.rest.auth.tokens",
+			Differs: func(b, e *Config) bool {
+				return !maps.Equal(b.North.REST.Auth.Tokens, e.North.REST.Auth.Tokens)
+			},
+		},
 		// The OIDC client — issuer discovery, credentials, redirect URL and
 		// the role claim — is constructed once while the router is mounted and
 		// then lives for the process, so every field in the block is

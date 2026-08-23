@@ -115,22 +115,43 @@ func TestMCPExemptionsAreStillReal(t *testing.T) {
 // has not been done yet does NOT belong here — it belongs in the
 // failure list until a tool exists.
 var restDomainsWithoutMCPTools = map[string]string{
-	"auth":     "credential exchange; an assistant authenticates through its own token, never by driving the login flow",
-	"me":       "the caller's own session identity; MCP callers are tokens, not sessions",
-	"sessions": "browser session lifecycle, meaningless to a token-authenticated client",
+	"auth": "credential exchange; an assistant authenticates through its own token, never by driving the login flow",
+	// Not session identity — /auth/me lives in the auth domain. This one is
+	// the per-user preferences store (GET/PUT/DELETE /me/preferences/{key}),
+	// which records how one operator arranged their own UI. An assistant has
+	// no UI to arrange and no user whose preferences are its own.
+	"me": "per-user UI preferences; an assistant has no UI state of its own",
+	// Not browser sessions: all four routes are the concurrent-edit lock, and
+	// MCP already projects it as open_edit_session / close_edit_session. The
+	// entry stays only because this guard matches domains by their REST noun
+	// and the MCP tools carry a different one; it is covered, not excluded.
+	"sessions": "the concurrent-edit lock, already projected as open_edit_session / close_edit_session",
 	"config":   "daemon configuration editing is an operator action with a secret-masking round trip (see CLAUDE.md); an assistant that can rewrite config can lock the operator out of the daemon",
 	"metrics":  "Prometheus scrape endpoint; a text exposition format is not a tool surface",
 	"ui":       "surface-profile registry for the SPA's own navigation, not a fleet capability",
-	"snapshot": "bulk state dump for backup tooling; the per-domain read tools cover the same ground in a shape an assistant can reason about",
+	// The per-domain tools cover most of it, but not all: the snapshot
+	// aggregates devices, hub AND interfaces, and interfaces has no read tool
+	// at all — it sits in restDomainsAwaitingMCPTools below. This entry is
+	// therefore only fully true once that backlog item lands.
+	"snapshot": "bulk state dump; the per-domain tools cover devices and hub, and interfaces once its tool lands",
 	"diagrams": "SPA-side floor-plan editor state, not a fleet capability",
 	"install-mode": "pairing window control actuates the radio; deliberately kept off the assistant surface " +
 		"until the write posture for physical pairing is designed",
 	"users": "account administration; an assistant that can create or delete accounts can lock the operator " +
 		"out of the daemon, the same argument that keeps `config` off the surface",
-	"setup":   "one-time first-run wizard; there is no fleet to reason about before it completes",
-	"admin":   "daemon-level maintenance actions (reload, cache clear) whose blast radius is the daemon itself, not the fleet",
-	"i18n":    "translation catalogue for the SPA; static content, not a capability",
-	"webhook": "outbound notification configuration — config-shaped, and covered by the `config` argument",
+	"setup": "one-time first-run wizard; there is no fleet to reason about before it completes",
+	"admin": "daemon-level maintenance actions (reload, cache clear) whose blast radius is the daemon itself, not the fleet",
+	// Not an SPA catalogue: /i18n/entities exists precisely for non-SPA REST
+	// and WebSocket consumers, and the SPA-chrome namespaces are deliberately
+	// excluded from it (ADR 0046). It stays out of MCP because an assistant
+	// reads an entity's name off the entity itself rather than resolving a
+	// catalogue key.
+	"i18n": "entity-name catalogue for non-SPA consumers; an assistant reads names off the entities",
+	// Inbound, not outbound: both routes ingest — one writes a data point,
+	// the other triggers a program. That is a write capability, and an
+	// assistant already has it through set_datapoint and trigger_program;
+	// the webhook shape exists for header-only callers such as a doorbell.
+	"webhook": "inbound ingestion for header-only callers; the same writes are set_datapoint / trigger_program",
 }
 
 // restDomainsAwaitingMCPTools is the declared backlog: domains that

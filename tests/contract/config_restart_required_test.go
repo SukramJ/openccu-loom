@@ -105,10 +105,6 @@ var configLeavesAppliedWithoutRestart = map[string]string{
 		"through the effective config rather than a boot snapshot",
 	"north.ui.embedded_scope": "read per request while the surface profile is resolved",
 	"north.ui.profiles":       "read per request while the surface profile is resolved",
-	"north.rest.auth.users": "credentials live in the SQLite user store, which the login chain reads live; " +
-		"the config map is a one-time seed for a database with no users",
-	"north.rest.auth.tokens": "credentials live in the SQLite token store, which the login chain reads live; " +
-		"the config map is a one-time seed for a database with no tokens",
 	"north.mqtt.retain_cleanup_window_ms": "boot-only inside an otherwise live block: it bounds the " +
 		"retain scrub that runs once at boot, so a new value applies to the next boot's scrub and there " +
 		"is nothing a restart would make happen sooner",
