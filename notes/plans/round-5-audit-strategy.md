@@ -1,6 +1,6 @@
 # Round 5 — audit the detectors, not the code
 
-- **Status**: accepted; M1 done, M2–M6 open
+- **Status**: accepted; M1 and M2 done, M3–M6 open
 - **Scope**: what replaces a fifth full-codebase instance sweep
 - **Related**: [`../audits/2026-08-17-round4-audit-findings.json`](../audits/2026-08-17-round4-audit-findings.json)
   (carries a per-finding `status` since PR #606),
@@ -78,18 +78,78 @@ worktrees:
 | unclear | 3 |
 
 Report: [`../audits/2026-08-23-m1-guard-mutation-report.md`](../audits/2026-08-23-m1-guard-mutation-report.md).
-The suite is mostly sound — 93 % bite — and the failures cluster: one helper,
-`MustFindCallerInFile`, ignores the package argument it is given and so matches
-an identifier anywhere, which alone accounts for four decorative pins out of the
-46 that depend on it. Repairing that one helper is the highest-leverage item in
-the whole of round 5.
+The suite is mostly sound — 93 % bite — and the failures cluster rather than
+scatter.
 
-### M2 — thaw the 15 ratchets
+**The helper is repaired.** `MustFindCallerInFile` took a `calleePackage`
+argument and never read it, so a pin was satisfied by any identifier of that
+name anywhere: the NOC-chain pin was held up by `spake2.NewVerifier`, which
+shares nothing with certificate verification but the word. It now resolves the
+path through the caller file's own imports — which keeps the property the old
+comment defended ("survive import-alias changes") and adds package correctness,
+a combination the original trade-off treated as impossible.
+
+Sorting the 46 dependent pins is what the repair was for:
+
+| | |
+|---:|---|
+| 24 | already correct |
+| 21 | described a **method call**, not a package function; moved to `MustFindMethodCall` |
+| 3 | named a package that does not exist — `internal/north/matter/cert` has been `secure/mattercert` all along |
+
+The three stale arguments are the sharpest part: **being unread is what let them
+rot unnoticed.** `MustFindMethodCall` was tightened in the same pass — it
+compared receivers by string suffix, so a pin on `u` accepted `ccu` and one on
+`ch` accepted `dispatch`.
+
+### M2 — thaw the ratchets
 
 Every entry is either "looked at and decided" or "nobody got to it".
 `TestRatchetReasonsAreNotDeferrals` checks the wording, not the truth. Hold each
 entry against the code once. This is cheap and it uncovers exactly the surface
 that four rounds could not see, because it is marked as known.
+
+**Done, 2026-08-23.** All 82 entries across 16 maps audited (the plan said 15
+maps; the count was off by one).
+
+| verdict | count |
+|---|---:|
+| decision | 58 |
+| stale | **1** |
+| deferral | 15 |
+| **false reason** | **8** |
+
+Report: [`../audits/2026-08-23-m2-ratchet-audit-report.md`](../audits/2026-08-23-m2-ratchet-audit-report.md).
+
+**The expectation above was wrong, and the correction matters more than the
+finding.** This section predicted free tightening as M2's yield. Exactly one
+entry of 82 was stale. Ratchets are well guarded at *admission*; nothing was
+being let in that should not have been.
+
+What is actually broken is different: **eight reasons were false**, five of them
+in `restDomainsWithoutMCPTools` — the map reserved for settled decisions. The
+most confident map was the least accurate. Two more (`north.rest.auth.users`
+and `.tokens`) reproduced the very defect their guard's own doc says it exists
+to prevent: a leaf bound at boot, exempted as live, so revoking a YAML-only
+credential reported "saved" while the daemon kept accepting it. Both now carry
+a restart rule.
+
+Both Tier-2 deferrals turned out to be delete decisions rather than build ones:
+plumbing built for a granularity nothing asks for. Entry count 82 → 77.
+
+**The mechanism finding.** Admission is guarded; *shrinking has no mechanism at
+all* — no owner, no age, no expiry. That is why one entry was stale but eight
+reasons were false and fifteen are deferrals: nothing is admitted wrongly,
+nobody ever looks again. Two consequences worth acting on:
+
+- the pre-release comment-claims sweep names ratchet justifications in its own
+  scope line, and eight false ones survived it — that sweep does not do what it
+  says, which is itself an M1-shaped finding;
+- a ratchet entry needs an owner and a re-check date, or the next audit finds
+  the same thing.
+
+Thirteen deferrals remain (Tier 3–5), eight of them accurate MCP backlog items
+that were simply never retired.
 
 ### M3 — detectors for the four recurring classes
 
@@ -141,7 +201,8 @@ Without a number, "drastically fewer" is not a claim. Four metrics, per round:
    could have caught. Rising means M1 and M3 are working.
 2. **Findings/kLOC per package** — must fall in `cmd/`.
 3. **Defect-injection rate of the fix wave** — currently ~14 %. Target: zero.
-4. **Ratchet entry count** — must shrink, not freeze.
+4. **Ratchet entry count** — must shrink, not freeze. 82 at the start of
+   round 5, 77 after M2.
 
 ## What this plan deliberately does not do
 
