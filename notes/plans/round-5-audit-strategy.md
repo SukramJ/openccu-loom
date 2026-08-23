@@ -1,6 +1,6 @@
 # Round 5 — audit the detectors, not the code
 
-- **Status**: accepted, M1 started
+- **Status**: accepted; M1 done, M2–M6 open
 - **Scope**: what replaces a fifth full-codebase instance sweep
 - **Related**: [`../audits/2026-08-17-round4-audit-findings.json`](../audits/2026-08-17-round4-audit-findings.json)
   (carries a per-finding `status` since PR #606),
@@ -34,10 +34,12 @@ densely contract-tested package, carried **0.28 findings/kLOC** — a fifth of
 `cmd/`. Where contracts exist, density collapses. That is the entire lever, and
 it is an existence proof rather than a theory.
 
-**The guard suite is large and partly untested.** 272 contract guards, of which
-15 are ratchet or exemption maps — surface that is frozen rather than
-shrinking. Three guards were found to be decorative during the round-4 tail,
-all three by accident.
+**The guard suite is large and partly untested.** 359 contract guards — the
+figure first quoted, 272, counted only the top level of `tests/contract/` and
+missed the 84 pins under `wiring_pins/`. 15 of them are ratchet or exemption
+maps: surface that is frozen rather than shrinking. Three guards were found to
+be decorative during the round-4 tail, all three by accident, which is what
+motivated M1.
 
 **The fix wave is itself a defect source.** The round-4 tail introduced six
 significant defects into 43 fixes, two of them worse than the finding they
@@ -51,7 +53,7 @@ and the visual baselines pin whatever is currently rendered at
 
 ## The six measures
 
-### M1 — mutation-test the 272 contract guards
+### M1 — mutation-test the contract guards
 
 First, because if the guards do not bite, everything downstream is theatre.
 For each guard: locate the production line it claims to protect, negate it, run
