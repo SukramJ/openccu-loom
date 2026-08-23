@@ -1,6 +1,6 @@
 # Round 5 — audit the detectors, not the code
 
-- **Status**: accepted; M1, M2, M5 done, M6 proposed as ADR 0065, M3–M4 in progress
+- **Status**: accepted; M1, M2, M5, M6 done (ADR 0065 accepted), M3–M4 in progress
 - **Scope**: what replaces a fifth full-codebase instance sweep
 - **Related**: [`../audits/2026-08-17-round4-audit-findings.json`](../audits/2026-08-17-round4-audit-findings.json)
   (carries a per-finding `status` since PR #606),
@@ -199,11 +199,12 @@ correctness is checkable only by reading. This is the real answer to improving
 code quality rather than defect count, and the largest and riskiest of the six.
 It belongs in an ADR, decided, not done in passing.
 
-**Done, 2026-08-23 — as a proposal.**
+**Done, 2026-08-23 — and accepted.**
 [ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md) records
-the problem, four options and a recommendation, and is deliberately marked
-*proposed* rather than accepted: M6's whole point is that this is a decision,
-and an ADR written and self-approved in the same pass would not be one.
+the problem, four options and the decision. It was written as *proposed* and
+accepted separately, because M6's whole point is that this is a decision and an
+ADR self-approved in the same pass would not be one. The incremental adoption is
+tracked in [`roadmap.md`](./roadmap.md).
 
 The recommendation is a wiring manifest — each `wire*` function declaring what
 it wires and its ordering constraint, so "is X wired, and does it run before Y"

@@ -23,6 +23,25 @@ replace it, and the metrics that say whether it worked.
 
 ## Open development items
 
+### Composition root
+
+- **Adopt the wiring manifest** ([ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md),
+  accepted 2026-08-23). Each `wire*` function in `cmd/openccu-loom` registers
+  what it wires — the seam, the collaborator and its ordering constraint
+  relative to south-bound bring-up — so "is X wired, and does it run before Y"
+  becomes exactly decidable instead of approximated by name matching.
+
+  Additive and incremental: nothing is rewritten, and each of the 38 `wire*`
+  functions makes its own seam checkable the moment it adopts. Order by defect
+  density, highest first.
+
+  Two things unblock as it lands: `wiringSettersWithoutCaller` (26 entries) can
+  shrink toward deletion rather than staying frozen, and the manifest is the
+  artefact a `/diagnostics` surface can serve so an operator sees what a running
+  daemon actually wired. The first adoption should carry the guard that makes an
+  unregistered seam fail, otherwise the manifest is documentation rather than a
+  check.
+
 ### Matter
 
 - **Matter IM protocol depth.** The cluster/schema layer is broad, and

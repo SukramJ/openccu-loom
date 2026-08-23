@@ -1,6 +1,6 @@
 # ADR 0065 — The composition root states its wiring, so a machine can check it
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-23
 
 ## Context
@@ -43,10 +43,12 @@ fact.
 
 ## Decision
 
-**Proposed, not accepted.** This ADR records the problem, the options and a
-recommendation; it does not authorise the work.
+Option **C** — the wiring manifest — is adopted, incrementally, highest-density
+subsystem first. Nothing is rewritten: the manifest is an additive registration
+next to wiring that already exists, and each `wire*` function that adopts it
+makes that one seam exactly checkable from the moment it does.
 
-The recommendation is to make the composition root *declare* its wiring as data
+The decision is to make the composition root *declare* its wiring as data
 alongside performing it, so that "is X wired, and does it run before Y" becomes
 a question a test can answer exactly rather than approximately.
 
@@ -83,24 +85,25 @@ a time, and each adoption immediately makes that seam exactly checkable.
 **D. Split `cmd/` into per-subsystem packages.** Attacks size, not decidability.
 A seam wired at the wrong moment is wrong in a small package too.
 
-C is recommended, adopted incrementally, highest-density subsystem first.
-
 ## Consequences
 
-**If adopted.** A one-off cost per `wire*` function, and a standing obligation
+**The cost.** A one-off effort per `wire*` function, and a standing obligation
 that new wiring registers itself — enforceable by a guard, unlike the reading it
 replaces. `TestEveryWiringSetterHasAProductionCaller` and its ratchet can then
 shrink toward deletion rather than being frozen, which is what the round-5 M2
 audit found they currently are.
 
-**If not adopted.** The composition root stays at roughly twice the average
-defect density, and each audit round keeps finding fresh instances of the same
-class. That is a defensible choice — the work is real and the daemon ships — but
-it should be a choice, not the default that follows from nobody deciding.
+**The alternative that was rejected by accepting this.** Leaving the composition
+root as it is would have kept it at roughly twice the average defect density,
+with each audit round finding fresh instances of the same class. That was a
+defensible position — the work is real and the daemon ships — but it would have
+been a choice, and the reason this ADR exists is that until now it was instead
+the default that followed from nobody deciding.
 
-**Either way**, the two facts this ADR rests on are worth keeping: contract
-coverage is what moves defect density, by a factor of five in the one package
-that has it; and a guard that matches a *name* is not checking a *fact*.
+**The two facts this rests on** are worth keeping whatever happens to the
+manifest itself: contract coverage is what moves defect density, by a factor of
+five in the one package that has it; and a guard that matches a *name* is not
+checking a *fact*.
 
 ## References
 
