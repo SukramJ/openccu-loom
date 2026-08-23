@@ -1,6 +1,6 @@
 # Round 5 — audit the detectors, not the code
 
-- **Status**: accepted; M1 and M2 done, M3–M6 open
+- **Status**: accepted; M1, M2, M5 done, M6 proposed as ADR 0065, M3–M4 in progress
 - **Scope**: what replaces a fifth full-codebase instance sweep
 - **Related**: [`../audits/2026-08-17-round4-audit-findings.json`](../audits/2026-08-17-round4-audit-findings.json)
   (carries a per-finding `status` since PR #606),
@@ -186,12 +186,32 @@ tail:
 - the brief asks *what could your fix make worse?* — one agent optimised for its
   own finding and silenced seven consumers of an event.
 
+**Done, 2026-08-23.** Written into
+[`../contributor/subagent-delegation.md`](../contributor/subagent-delegation.md),
+where CLAUDE.md already points for the long form, with the numbers behind each
+of the three obligations. M5 is a process change, so "done" means the rule is
+recorded where a brief author will meet it — not that a guard enforces it.
+
 ### M6 — address `cmd/` structurally (ADR, not a sweep)
 
 Twice the density, stable across two audits. Procedural wiring whose
 correctness is checkable only by reading. This is the real answer to improving
 code quality rather than defect count, and the largest and riskiest of the six.
 It belongs in an ADR, decided, not done in passing.
+
+**Done, 2026-08-23 — as a proposal.**
+[ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md) records
+the problem, four options and a recommendation, and is deliberately marked
+*proposed* rather than accepted: M6's whole point is that this is a decision,
+and an ADR written and self-approved in the same pass would not be one.
+
+The recommendation is a wiring manifest — each `wire*` function declaring what
+it wires and its ordering constraint, so "is X wired, and does it run before Y"
+becomes exactly decidable instead of approximated by name matching. It is
+additive, needs no dependency, and can be adopted one function at a time.
+
+The measurement behind it: 60 files, ~48 000 lines, 38 `wire*` functions, and
+every existing guard over them matching a form rather than a fact.
 
 ## How we will know it worked
 
