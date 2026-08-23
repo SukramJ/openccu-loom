@@ -175,10 +175,14 @@ func parseEnergyQuery(r *http.Request) (q EnergyQuery, errMsg string) { //nolint
 // importing the store package, keeping the handler import graph
 // decoupled (same pattern as HistoryBucket vs. MeasurementBucket).
 //
-// Sum is a time-weighted sum, not a plain sum of sampled values, and Count
-// is the covered span backing it in milliseconds, not a sample count — see
-// [sqlite.EnergyRow] for why the store repurposes Count that way for this
-// row shape specifically.
+// Sum/Count are the (numerator, denominator) pair the store already
+// resolved before returning the row: normally a time-weighted sum divided
+// by the covered span it backs in milliseconds, or — for a bucket folded
+// entirely from rows that predate the store's weighted rollup columns —
+// the plain sum of sampled values divided by the sample count instead. Sum
+// and Count are always drawn from the same representation, so dividing one
+// by the other is correct either way; see [sqlite.EnergyRow] and
+// [sqlite.QueryEnergy] for how the store picks between them.
 type EnergyRawRow struct {
 	ChannelAddress string
 	Parameter      string
@@ -226,11 +230,12 @@ type counterReading struct {
 // package, rather than in the cmd-layer adapter, so it is unit-testable
 // without a live store or central registry:
 //
-//   - POWER (instantaneous, W): avg_power_w = sum/count, a time-weighted
-//     mean — row.Sum is a weighted sum of the raw samples folded into the
-//     bucket and row.Count (despite the name) is the span it covers in
-//     milliseconds, not a sample count; see [EnergyRawRow]. peak_power_w
-//     = max. Multiple POWER channels on the same device accumulate
+//   - POWER (instantaneous, W): avg_power_w = sum/count — normally a
+//     time-weighted mean, where row.Sum is a weighted sum of the raw
+//     samples folded into the bucket and row.Count is the span it covers
+//     in milliseconds rather than a sample count, but a plain sample mean
+//     for a bucket the store could not time-weight; see [EnergyRawRow].
+//     peak_power_w = max. Multiple POWER channels on the same device accumulate
 //     additively (their instantaneous loads sum; the running mean of
 //     each channel is summed as an approximation of the device's total
 //     average load).

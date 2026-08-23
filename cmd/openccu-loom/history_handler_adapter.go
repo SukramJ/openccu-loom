@@ -41,11 +41,12 @@ func (a *historyHandlerAdapter) Query(
 	out := make([]handlers.HistoryBucket, len(rows))
 	for i := range rows {
 		out[i] = handlers.HistoryBucket{
-			TS:    rows[i].TS,
-			Avg:   rows[i].Avg,
-			Min:   rows[i].Min,
-			Max:   rows[i].Max,
-			Count: rows[i].Count,
+			TS:        rows[i].TS,
+			Avg:       rows[i].Avg,
+			Min:       rows[i].Min,
+			Max:       rows[i].Max,
+			Count:     rows[i].Count,
+			CoveredMs: rows[i].CoveredMs,
 		}
 	}
 	return out, string(tier), nil

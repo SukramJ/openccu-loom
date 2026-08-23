@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.5.0
+  version: 7.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9624,6 +9624,15 @@ components:
       description: >
         One aggregated bucket of measurement history: the average,
         minimum, maximum and sample count over the bucket's time span.
+
+
+        `avg` is time-weighted, not a plain mean of the samples. CCU
+        parameters arrive push-driven, so sample spacing is irregular by
+        construction and an unweighted mean reports a mostly-idle series as
+        several times its true average. `covered_ms` is the span that
+        weighting divides by; combine two buckets by weighting each `avg`
+        with its own `covered_ms`, never with `count`, because two samples an
+        hour apart and two a second apart are both `count: 2`.
       properties:
         ts:
           type: string
@@ -9642,6 +9651,14 @@ components:
           type: integer
           format: int64
           description: Number of raw samples aggregated into this bucket.
+        covered_ms:
+          type: integer
+          format: int64
+          description: >
+            The millisecond span `avg` is weighted over. Omitted (or zero)
+            when the span is unknown — a bucket built entirely from rows the
+            daemon recorded before it stored the span — in which case `avg`
+            is the plain mean over `count`.
     RecordingState:
       type: object
       required: [record, source]

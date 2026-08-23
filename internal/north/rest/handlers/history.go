@@ -14,12 +14,23 @@ import (
 
 // HistoryBucket is one aggregated point in a `GET /api/v1/history`
 // response: the average / min / max / sample-count over a time bucket.
+//
+// Avg is time-weighted: CCU parameters arrive push-driven, so sample spacing
+// is irregular by construction and a plain mean over the sample count reports
+// a mostly-idle series as several times its true average. CoveredMs is the
+// span that weighting divides by, and it is what a client needs to combine
+// two buckets correctly — Count cannot serve for that, because two samples an
+// hour apart and two a second apart are both "count 2".
 type HistoryBucket struct {
 	TS    time.Time `json:"ts"`
 	Avg   float64   `json:"avg"`
 	Min   float64   `json:"min"`
 	Max   float64   `json:"max"`
 	Count int64     `json:"count"`
+	// CoveredMs is the millisecond span backing Avg. Zero means the span is
+	// unknown — a bucket built entirely from rows recorded before the daemon
+	// stored it — and Avg is then the plain sample mean over Count.
+	CoveredMs int64 `json:"covered_ms,omitempty"`
 }
 
 // HistoryQuery is the parsed, validated request for the history handler.
