@@ -90,7 +90,7 @@ var fixtureRoutes = []fixtureRoute{
 	{"security-faults.json", "/security/faults", "GET"},
 	{"security-sources.json", "/security/sources", "GET"},
 	{"security-snapshot.json", "/security", "GET"},
-	{"users.json", "/auth/users", "GET"},
+	{"auth-users.json", "/auth/users", "GET"},
 	{"users.json", "/users", "GET"},
 	{"tokens.json", "/auth/tokens", "GET"},
 	{"tokens.json", "/auth/tokens/v2", "GET"},
@@ -118,15 +118,7 @@ var fixtureRoutes = []fixtureRoute{
 // fixing the fixture against a confirmed daemon response, or fixing the
 // spec) must make TestSPAE2EFixturesMatchOpenAPISchema fail until the entry
 // is deleted too — see the loop below.
-var driftedFixtures = map[string]string{
-	"info.json|GET|/info":                     `missing required "config_ui_url"`,
-	"programs.json|GET|/programs":             `item missing required "unique_id"`,
-	"users.json|GET|/auth/users":              `item missing required "username"`,
-	"users.json|GET|/users":                   `item missing required "created_at"`,
-	"centrals.json|GET|/centrals":             `item missing required "interfaces"`,
-	"matter-fabrics.json|GET|/matter/fabrics": `item missing required "fabric_id_hex"`,
-	"matter-status.json|GET|/matter/status":   `missing required "listening"`,
-}
+var driftedFixtures = map[string]string{}
 
 // TestSPAE2EFixturesMatchOpenAPISchema validates every fixture in
 // fixtureRoutes against the OpenAPI 200 response schema for the route it

@@ -4,6 +4,7 @@
     "name": "Morning Routine",
     "active": true,
     "is_active": true,
-    "central": "ccu1"
+    "central": "ccu1",
+    "unique_id": "loom_3014f711a0001234_program_prog1"
   }
 ]

@@ -1,1 +1,15 @@
-[{ "name": "ccu1", "host": "172.18.4.29", "enabled": true }]
+[
+  {
+    "name": "ccu1",
+    "host": "172.18.4.29",
+    "enabled": true,
+    "interfaces": [
+      {
+        "name": "HmIP-RF"
+      },
+      {
+        "name": "BidCos-RF"
+      }
+    ]
+  }
+]
