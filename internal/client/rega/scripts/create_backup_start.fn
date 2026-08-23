@@ -4,14 +4,19 @@
 !# It returns immediately without waiting for completion.
 !# Use create_backup_status.fn to check the backup status.
 !#
-!# The backup file is saved to /usr/local/tmp/last_backup.sbk
+!# The backup file is written to /usr/local/tmp/last_backup.sbk, where
+!# create_backup_status.fn picks up its name and size and then removes it —
+!# see that script for why the archive does not stay.
 !# Works for OpenCCU.
 !#
 
 string sPid = "";
 
-!# Remove any existing backup file and pid file
-system.Exec("/bin/sh -c 'rm -f /usr/local/tmp/last_backup.sbk /usr/local/tmp/backup.pid'");
+!# Remove any existing backup file, pid file and completion markers. The
+!# markers are what create_backup_status.fn answers "completed" from once it
+!# has cleaned up the archive, so a stale pair would report the previous
+!# backup as this run's result for as long as this one takes to finish.
+system.Exec("/bin/sh -c 'rm -f /usr/local/tmp/last_backup.sbk /usr/local/tmp/backup.pid /usr/local/tmp/backup.done /usr/local/tmp/backup.done.size'");
 
 !# Start backup in background using nohup
 !# Save the PID to a file for status checking

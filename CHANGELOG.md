@@ -90,6 +90,14 @@ read them, and classic BidCos thermostats whose composed values never bound.
 
 ### Fixed
 
+- A CCU backup triggered through the hub's `backup.trigger` command no longer
+  leaves its archive on the CCU. The command runs the CCU's own backup tool
+  into `/usr/local/tmp/last_backup.sbk`, and that file stayed there until the
+  next backup overwrote it — several megabytes nothing ever read, since the
+  daemon downloads its own copy through a different path. The status poll now
+  records the archive's name and size before removing it, and answers later
+  polls from that record, so a finished backup still reports as finished with
+  the name it was given. Reported in #584.
 - The daemon no longer runs a connection recovery against a CCU that was never
   gone. Bringing an interface up walks its client from `CREATED` to
   `CONNECTED`, and each intermediate step was announced on the event bus. While

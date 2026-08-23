@@ -20,6 +20,10 @@ own:
   (HmIP-MOD-HO, HmIP-MOD-TM) get a select with closed / ventilation / open.
   Note: paired Matter garage doors have to be re-added once.
 
+- **A CCU backup no longer leaves a copy lying on the CCU.** Triggering one
+  through the "Backup erstellen" entity left several megabytes in the CCU's
+  temp directory until the next backup overwrote them.
+
 Two fixes that only show up when the daemon starts or when a Matter controller
 pairs:
 
