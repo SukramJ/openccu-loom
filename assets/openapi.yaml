@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.2.0
+  version: 7.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4395,6 +4395,27 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/BackupEntry" }
         "502": { $ref: "#/components/responses/BadGateway" }
+  /backups/storage:
+    get:
+      operationId: backupStorageInfo
+      summary: Where locally-stored CCU backups are kept
+      description: |
+        Reports the directory the daemon writes downloaded `.sbk` archives
+        to, together with how many are there and how much space they take.
+        Admin-gated with the rest of the backup surface: it names a
+        filesystem path on the host.
+      tags: [backup]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Backup storage location
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupStorageInfo" }
+        "502": { $ref: "#/components/responses/BadGateway" }
   /backups/upload:
     post:
       operationId: uploadBackup
@@ -4469,6 +4490,29 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /backups/{id}:
+    delete:
+      operationId: deleteBackup
+      summary: Delete one stored CCU backup
+      description: |
+        Removes the archive from the daemon's storage. Unrecoverable: the
+        archive may be the only copy of that CCU's configuration the daemon
+        holds. Deleting an archive that is not there succeeds — the caller
+        asked for it to be gone, and it is.
+      tags: [backup]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /backups/{id}/download:
     get:
       operationId: downloadBackup
@@ -11650,13 +11694,14 @@ components:
         Aggregated hub-singleton snapshot for one central (returned by
         `GET /hub/data-points`). Gathers the hub singletons into the
         coordinator shape a client builds its singleton entities from.
-      required: [alarm_messages, service_messages, inbox, update]
+      required: [alarm_messages, service_messages, inbox, update, daemon_connection]
       properties:
         central: { type: string }
         alarm_messages: { $ref: "#/components/schemas/HubCountDataPoint" }
         service_messages: { $ref: "#/components/schemas/HubCountDataPoint" }
         inbox: { $ref: "#/components/schemas/HubCountDataPoint" }
         update: { $ref: "#/components/schemas/HubUpdateDataPoint" }
+        daemon_connection: { $ref: "#/components/schemas/HubDaemonConnectionDataPoint" }
         metrics:
           type: array
           items: { $ref: "#/components/schemas/HubMetricDataPoint" }
@@ -11666,6 +11711,61 @@ components:
         install_mode:
           type: array
           items: { $ref: "#/components/schemas/HubInstallModeDataPoint" }
+
+    HubDaemonConnectionDataPoint:
+      type: object
+      required: [legacy_name, connected]
+      description: >-
+        Declares the daemon-liveness singleton: the entity answering "is the
+        daemon reachable at all", the counterpart of the MQTT binary sensor
+        fed from the retained bridge status.
+
+
+        `connected` is true in every response this endpoint produces, and
+        that is not an oversight — a REST answer is itself proof the daemon
+        is running, so no other value can be observed here. The field carries
+        the declaration: the singleton's existence and its stable name, which
+        a client cannot invent without hard-coding a name the daemon owns.
+
+
+        The negative state has two sources, both outside this response: the
+        `daemon_status.changed` broadcast the daemon sends over the WebSocket
+        while stopping (topic `system.daemon_status`), and the client's own
+        connection state when the daemon goes away without warning. Wire the
+        entity to whichever of the two arrives first.
+      properties:
+        legacy_name:
+          type: string
+          description: Stable singleton name; always `daemon_connection`.
+        connected: { type: boolean }
+
+    DaemonStatusPayload:
+      type: object
+      required: [status, event_at]
+      description: >-
+        Payload of a `daemon_status.changed` broadcast on the daemon-level
+        topic `system.daemon_status`. The daemon emits it while shutting
+        down, so a WebSocket client can tell "the daemon is stopping" apart
+        from "my connection dropped" — a distinction MQTT clients get from
+        the broker's last will and WebSocket clients otherwise cannot draw.
+
+
+        Only a graceful stop can announce itself. A killed process cannot,
+        and detecting that stays the client's own job.
+      properties:
+        status:
+          type: string
+          enum: [online, offline]
+          description: >-
+            The same two words the MQTT bridge retains on
+            `<base>/bridge/status`, so a client bridging both planes needs no
+            translation.
+        reason:
+          type: string
+          description: >-
+            Short machine-readable cause of an offline announcement
+            (`shutdown`); absent otherwise.
+        event_at: { type: string, format: date-time }
 
     DeviceCreatedPayload:
       type: object
@@ -12739,6 +12839,33 @@ components:
             Absent for archives taken before this field existed, or when the
             CCU had not reported its system information yet — fall back to
             `<id>.sbk`.
+
+    BackupStorageInfo:
+      type: object
+      required: [available, count, bytes]
+      description: >-
+        Where the daemon keeps the CCU archives it downloads, and what is
+        currently there. The directory is not derivable by a client: it comes
+        from `backup.dir`, which is empty in the common case (the daemon then
+        falls back to `<data_dir>/backups`), and on a CCU add-on install the
+        service script sets it from the CCU's own backup target, which varies
+        per installation.
+      properties:
+        dir:
+          type: string
+          description: >-
+            Absolute path the archives are read from and written to. Absent
+            when no storage is configured, or when the storage backend has no
+            location to report.
+        available:
+          type: boolean
+          description: >-
+            Whether a storage backend is wired at all. False means the daemon
+            could not create its archive directory (read-only mount, missing
+            permissions) — the backup list is then empty for a reason that has
+            nothing to do with the CCU.
+        count: { type: integer }
+        bytes: { type: integer, format: int64 }
 
     EditSessionRequest:
       type: object

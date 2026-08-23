@@ -428,6 +428,10 @@ func (fakeBackupService) TriggerBackupForCentral(context.Context, string) (strin
 	return "", nil
 }
 func (fakeBackupService) Prune(context.Context, string, int) error { return nil }
+func (fakeBackupService) StorageInfo(context.Context) (hmapi.BackupStorageInfo, error) {
+	return hmapi.BackupStorageInfo{}, nil
+}
+func (fakeBackupService) Delete(context.Context, string) error { return nil }
 
 type fakeParamsetService struct{}
 

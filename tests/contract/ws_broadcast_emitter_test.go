@@ -318,6 +318,23 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		},
 		WireValue: "addon_update.state_changed",
 	},
+	// The only broadcast whose emitter lives in the shutdown sequence
+	// rather than in a subscriber: it is the daemon announcing its own
+	// stop, so the wiring that has to hold is awaitShutdown calling it
+	// *before* the north-bound servers are torn down.
+	"daemon_status.changed": {
+		Files: []string{
+			"internal/north/rest/ws/daemon_status_events.go",
+			"cmd/openccu-loom/daemon_north.go",
+		},
+		Tokens: []string{
+			`broadcastDaemonStatusChanged = "daemon_status.changed"`,
+			"func (h *Hub) PublishDaemonShuttingDown",
+			"h.Publish(Event{",
+			"wsHub.PublishDaemonShuttingDown(",
+		},
+		WireValue: "daemon_status.changed",
+	},
 }
 
 // normalizeWSTokens collapses runs of whitespace to single spaces so a

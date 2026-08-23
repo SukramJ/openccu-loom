@@ -287,6 +287,7 @@ export type ScheduleDeviceSummary = components["schemas"]["ScheduleDeviceSummary
 
 // BackupEntry re-exported from generated schema.
 export type BackupEntry = components["schemas"]["BackupEntry"];
+export type BackupStorageInfo = components["schemas"]["BackupStorageInfo"];
 
 // SysvarEntry re-exported from the generated SysvarSummary. central is
 // optional (Go json:"central,omitempty"); SysvarList.svelte builds its

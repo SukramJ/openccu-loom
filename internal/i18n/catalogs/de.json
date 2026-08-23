@@ -34,6 +34,7 @@
   "discovery.alarm_triggered_motion": "Ausgelöste Bewegungsmelder",
   "discovery.connection_latency": "Verbindungslatenz",
   "discovery.connectivity": "Konnektivität {iface}",
+  "discovery.daemon_status": "Daemon-Verbindung",
   "discovery.duration": "Zeitdauer",
   "discovery.energy_counter_feed_in_total": "Energiezähler Einspeisung Gesamt",
   "discovery.energy_counter_total": "Energiezähler Gesamt",

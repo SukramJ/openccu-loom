@@ -34,6 +34,30 @@ type BackupEntry struct {
 	Filename string `json:"filename,omitempty"`
 }
 
+// BackupStorageInfo describes where the daemon keeps the CCU archives it
+// downloads, and how much is currently there.
+//
+// It exists because that location is not derivable by a client: it comes
+// from `backup.dir`, which is empty in the common case (the daemon then
+// falls back to `<data_dir>/backups`) and is written by the CCU add-on's
+// service script from the CCU's own backup target — external storage that
+// varies per installation. An operator asking "where did my backup go?" had
+// no answer short of reading the daemon's start-up log.
+type BackupStorageInfo struct {
+	// Dir is the absolute path the archives are read from and written to.
+	// Empty when no storage is configured.
+	Dir string `json:"dir,omitempty"`
+	// Available reports whether a storage backend is wired at all. False
+	// means the daemon could not create its archive directory (read-only
+	// mount, missing permissions) and runs without one — the backup list is
+	// then empty for a reason that has nothing to do with the CCU.
+	Available bool `json:"available"`
+	// Count and Bytes summarise what the storage currently holds. Both are
+	// zero when Available is false.
+	Count int   `json:"count"`
+	Bytes int64 `json:"bytes"`
+}
+
 // --- Central links ---
 
 // CentralLinksReport summarises one create/remove call. Touched is the

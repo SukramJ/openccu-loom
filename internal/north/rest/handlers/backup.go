@@ -100,6 +100,30 @@ func ListBackups(svc BackupService) http.HandlerFunc {
 	}
 }
 
+// BackupStorageInfo renders where the daemon keeps its CCU archives.
+//
+// Without it an operator cannot tell where a backup went: the path comes
+// from `backup.dir`, which is empty in the common case, and on a CCU
+// add-on install it is written by the service script from the CCU's own
+// backup target — so it is neither in the config the SPA reads nor
+// reconstructible from anything else the API exposes.
+func BackupStorageInfo(svc BackupService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			// Not an error: a daemon without a backup service simply has no
+			// storage, which is exactly what the zero value says.
+			JSON(w, http.StatusOK, hmapi.BackupStorageInfo{})
+			return
+		}
+		info, err := svc.StorageInfo(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup storage query failed", err)
+			return
+		}
+		JSON(w, http.StatusOK, info)
+	}
+}
+
 // RestoreBackup re-installs a previously taken backup on the CCU.
 func RestoreBackup(svc BackupService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +171,44 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 			return
 		}
 		JSON(w, http.StatusAccepted, map[string]string{"id": jobID})
+	}
+}
+
+// DeleteBackup removes one stored archive.
+//
+// A missing archive answers 204 like a present one: the caller asked for
+// it to be gone, and it is. Reporting 404 here would make the SPA's retry
+// after a lost response look like a failure, and would let an operator
+// deleting the same entry twice believe something is wrong with the
+// storage.
+func DeleteBackup(svc BackupService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Backup service unavailable", ""))
+			return
+		}
+		id := chi.URLParam(r, "id")
+		if err := svc.Delete(r.Context(), id); err != nil {
+			if errors.Is(err, hmerr.ErrUnsupported) {
+				// No storage is a deployment state, not a fault: there is
+				// nothing to delete from, and saying "internal error" would
+				// send the operator hunting for a bug that is not there.
+				problem.Write(w, http.StatusServiceUnavailable,
+					problem.New(problem.TypeServiceUnready, r, "Backup storage unavailable", err.Error()))
+				return
+			}
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup delete failed", err)
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
+				Action: audit.ActionBackupDelete,
+				Note:   id,
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

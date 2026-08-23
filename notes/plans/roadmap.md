@@ -68,7 +68,7 @@ still open, trust this file plus `CHANGELOG.md`.
 - **Custom-DP fields still bound by a fixed parameter name.** A custom data
   point resolves the wire fields it composes by a constant parameter on its own
   channel, while the device profile's channel-group schema states both the
-  parameter and the channel per device family. 0.63.1 moved the climate family
+  parameter and the channel per device family. 0.64.0 moved the climate family
   onto the schema; three further families are confirmed broken by the same
   mechanism, each measured against the device descriptions a real CCU sends:
   HM-LC-JaX materialises without its slat axis (`LEVEL_SLATS`, not `LEVEL_2`),

@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -22,6 +23,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // stubBackupService is an inline stub for BackupService.
@@ -34,6 +36,14 @@ type stubBackupService struct {
 	restoreErr error
 	streamData string
 	streamErr  error
+
+	storageInfo    hmapi.BackupStorageInfo
+	storageInfoErr error
+
+	// deleted records the ids Delete was called with, so a test can assert
+	// the handler addressed the archive the route named.
+	deleted   []string
+	deleteErr error
 
 	// unscopedTriggerCalls / forCentralCalls record which trigger method
 	// the handler invoked and, for the scoped call, which central name it
@@ -61,6 +71,15 @@ func (s *stubBackupService) TriggerBackupForCentral(_ context.Context, centralNa
 }
 
 func (s *stubBackupService) Prune(_ context.Context, _ string, _ int) error { return nil }
+
+func (s *stubBackupService) StorageInfo(_ context.Context) (hmapi.BackupStorageInfo, error) {
+	return s.storageInfo, s.storageInfoErr
+}
+
+func (s *stubBackupService) Delete(_ context.Context, id string) error {
+	s.deleted = append(s.deleted, id)
+	return s.deleteErr
+}
 
 // Stream writes streamData (if any) before evaluating streamErr, so a case
 // can exercise a failure that happens after payload bytes are already on
@@ -753,4 +772,137 @@ func TestUploadBackup_ValidArchive_Returns201WithEntryAndAudits(t *testing.T) {
 	if got := rec.entries[0]; got.Action != audit.ActionBackupUpload || got.Note != "upload-20260731-120000.000" {
 		t.Fatalf("audit entry mismatch: %+v", got)
 	}
+}
+
+// TestBackupStorageInfo_ReportsLocation pins the answer to "where did my
+// backup go?": the route reports the directory the daemon actually writes
+// to, which no other endpoint carries — `backup.dir` is empty in the common
+// case and the CCU add-on sets it from the CCU's own backup target.
+func TestBackupStorageInfo_ReportsLocation(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{storageInfo: hmapi.BackupStorageInfo{
+		Dir: "/media/usb0/backup", Available: true, Count: 3, Bytes: 4096,
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/storage", http.NoBody)
+	w := httptest.NewRecorder()
+	BackupStorageInfo(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body hmapi.BackupStorageInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Dir != "/media/usb0/backup" || !body.Available || body.Count != 3 || body.Bytes != 4096 {
+		t.Fatalf("unexpected body: %+v", body)
+	}
+}
+
+// TestBackupStorageInfo_NoService_ReportsUnavailable covers the daemon that
+// could not create its archive directory. It must answer 200 with
+// available=false rather than an error: the storage being absent is a
+// deployment state the operator has to see, not an upstream fault.
+func TestBackupStorageInfo_NoService_ReportsUnavailable(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/storage", http.NoBody)
+	w := httptest.NewRecorder()
+	BackupStorageInfo(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body hmapi.BackupStorageInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Available || body.Dir != "" {
+		t.Fatalf("expected unavailable storage, got %+v", body)
+	}
+}
+
+func TestBackupStorageInfo_ServiceError_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{storageInfoErr: errors.New("boom")}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/storage", http.NoBody)
+	w := httptest.NewRecorder()
+	BackupStorageInfo(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestDeleteBackup_RemovesTheAddressedArchive pins that the route deletes
+// the archive its path names and records it: a delete that hit a different
+// id, or none at all, would look identical from the 204.
+func TestDeleteBackup_RemovesTheAddressedArchive(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{}
+	rec := &captureRecorder{}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/ccu-20260818-140257", http.NoBody)
+	req = withBackupID(req, "ccu-20260818-140257")
+	w := httptest.NewRecorder()
+	DeleteBackup(svc, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(svc.deleted) != 1 || svc.deleted[0] != "ccu-20260818-140257" {
+		t.Fatalf("deleted = %v, want [ccu-20260818-140257]", svc.deleted)
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionBackupDelete {
+		t.Fatalf("audit entries = %+v, want one backup_delete", rec.entries)
+	}
+	if rec.entries[0].Note != "ccu-20260818-140257" {
+		t.Fatalf("audit note = %q, want the deleted id", rec.entries[0].Note)
+	}
+}
+
+// TestDeleteBackup_NoStorage_Returns503 covers a daemon running without
+// archive storage. It is a deployment state, not an upstream fault: a 502
+// would blame a CCU that was never asked anything.
+func TestDeleteBackup_NoStorage_Returns503(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{deleteErr: fmt.Errorf("backup: no storage configured: %w", hmerr.ErrUnsupported)}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/b1", http.NoBody)
+	req = withBackupID(req, "b1")
+	w := httptest.NewRecorder()
+	DeleteBackup(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteBackup_StorageError_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{deleteErr: errors.New("disk on fire")}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/b1", http.NoBody)
+	req = withBackupID(req, "b1")
+	w := httptest.NewRecorder()
+	DeleteBackup(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteBackup_ServiceNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups/b1", http.NoBody)
+	w := httptest.NewRecorder()
+	DeleteBackup(nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+// withBackupID puts the {id} path parameter into the request the way chi
+// would, so the handler under test resolves the same id the route names.
+func withBackupID(req *http.Request, id string) *http.Request {
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 }
