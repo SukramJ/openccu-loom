@@ -146,7 +146,7 @@ func TestRESTRouteTiersMatchOpenAPIScopes(t *testing.T) {
 		}
 
 		observed = tierPublic
-		req := httptest.NewRequest(method, "/api/v1"+fillPathParams(path), nil)
+		req := httptest.NewRequest(method, "/api/v1"+fillPathParams(path), http.NoBody)
 		h.ServeHTTP(httptest.NewRecorder(), req)
 		routes = append(routes, route{method: method, path: path, tier: observed})
 		return nil

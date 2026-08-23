@@ -40,18 +40,8 @@ func For(obj any, k Kind) map[string]any {
 	return ForWith(obj, k, Options{})
 }
 
-// ForWith is [For] with explicit options.
-//
-// Read-only contract: values in the returned map are the field's live
-// `any`-boxed value, not a deep copy. A field holding a map, slice, or
-// pointer hands back a reference to the same backing storage obj owns.
-// Callers must treat the returned map (and any composite value inside it)
-// as read-only; mutating a nested map/slice mutates obj's field too. A
-// deep copy is deliberately not taken here — payload extraction happens on
-// every state publish, and obj's underlying data points are not shaped in
-// a way that this call site would ever mutate them afterward.
-// ExtraProperties lets a type contribute properties that reflection over
-// its exported fields cannot see.
+// ExtraProperties is implemented by a type that contributes properties
+// reflection over its exported fields cannot see.
 //
 // The reason it exists: a field that several goroutines read while one
 // writes it cannot stay a plain exported field — the readers tear. Moving
@@ -69,6 +59,17 @@ type ExtraProperties interface {
 	PayloadExtra(k Kind, opts Options) map[string]any
 }
 
+// ForWith returns the k-partitioned view of obj with explicit options — [For]
+// with the defaults spelled out.
+//
+// Read-only contract: values in the returned map are the field's live
+// `any`-boxed value, not a deep copy. A field holding a map, slice, or
+// pointer hands back a reference to the same backing storage obj owns.
+// Callers must treat the returned map (and any composite value inside it)
+// as read-only; mutating a nested map/slice mutates obj's field too. A
+// deep copy is deliberately not taken here — payload extraction happens on
+// every state publish, and obj's underlying data points are not shaped in
+// a way that this call site would ever mutate them afterward.
 func ForWith(obj any, k Kind, opts Options) map[string]any {
 	if obj == nil {
 		return map[string]any{}

@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 357.
+Guards without a doc comment: 7 of 359.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -29,6 +29,7 @@ Guards without a doc comment: 7 of 357.
 | TestAlarmWSPayloadStructsMatchOpenAPISchemas | alarm_ws_payload_parity_test.go | TestAlarmWSPayloadStructsMatchOpenAPISchemas pins the alarm broadcast payload structs to their OpenAPI component schemas: every schema property must exist as a JSON field on the Go struct, every Go field must be documented, and every required property must not be omitempty. |
 | TestAPISurfaceChangesCarryTheRightBump | api_surface_bump_test.go | TestAPISurfaceChangesCarryTheRightBump pins the two halves of this project's versioning policy to each other: what [handlers.APIVersion] claims about a change, and what the specification actually did. |
 | TestAPIVersionMatchesTheSpecDocument | api_surface_bump_test.go | TestAPIVersionMatchesTheSpecDocument keeps the constant and the document from drifting: they are two spellings of one number, and a bump applied to only one of them makes every other check here meaningless. |
+| TestValueSemanticsChangesAreWellFormed | api_surface_bump_test.go | TestValueSemanticsChangesAreWellFormed keeps [valueSemanticsChanges] a register rather than a comment block. |
 | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling | auth_subject_canonicalisation_test.go | TestCCUUserStoreQueriesTheCCUWithTheTypedSpelling guards the other half of the canonicalisation: the CCU's user database is its own namespace, so folding the subject for Loom-side bookkeeping must not change the name the credential validation and the user-level lookup ask about. |
 | TestEveryUserStoreReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestEveryUserStoreReportsCanonicalSubject pins that every [auth.UserStore] in the daemon reports the canonical subject regardless of the casing the caller typed. |
 | TestOIDCLoginReportsCanonicalSubject | auth_subject_canonicalisation_test.go | TestOIDCLoginReportsCanonicalSubject pins the remaining login path. |
@@ -195,13 +196,14 @@ Guards without a doc comment: 7 of 357.
 | TestEveryPublishedDocIsInTheNav | published_docs_test.go | TestEveryPublishedDocIsInTheNav fails when a Markdown file under `docs/` is missing from `mkdocs.yml`'s nav. |
 | TestPublishedDocsLinksStayInsideDocsDir | published_docs_test.go | TestPublishedDocsLinksStayInsideDocsDir fails when a page under `docs/` links to a file outside `docs/` with a relative path. |
 | TestRatchetReasonsAreNotDeferrals | ratchet_reason_purity_test.go | TestRatchetReasonsAreNotDeferrals enforces textually what the ratchet headers already demand in prose: an entry in a declared-silence list says someone looked and decided the silence is CORRECT — not that the work is pending. |
-| TestReachabilityByPackageConsistency | reachability_test.go | TestReachabilityByPackageConsistency prüft dass by_package-Zähler mit den Unreachable-Einträgen übereinstimmen. |
-| TestReachabilityInventoryExists | reachability_test.go | TestReachabilityInventoryExists prüft dass das Inventory-File existiert und lesbar ist. |
-| TestReachabilityNoTestFilesInUnreachable | reachability_test.go | TestReachabilityNoTestFilesInUnreachable prüft dass keine _test.go oder tests/-Items im unreachable-Array erscheinen (sie sollen in whitelisted landen). |
-| TestReachabilityProductionOnlyExists | reachability_test.go | TestReachabilityProductionOnlyExists asserts that the production-only inventory file exists. |
-| TestReachabilitySummaryConsistency | reachability_test.go | TestReachabilitySummaryConsistency prüft dass die Summary-Zähler konsistent sind. |
-| TestReachabilityUnreachableFormat | reachability_test.go | TestReachabilityUnreachableFormat prüft dass alle Unreachable-Einträge vollständige und konsistente Felder haben. |
-| TestReachabilityWhitelistFormat | reachability_test.go | TestReachabilityWhitelistFormat verifies that all whitelist entries have the required JSON fields populated (package, identifier, reason, file, line). |
+| TestReachabilitySnapshotByPackageConsistency | reachability_test.go | TestReachabilitySnapshotByPackageConsistency prüft dass by_package-Zähler mit den Unreachable-Einträgen übereinstimmen. |
+| TestReachabilitySnapshotExists | reachability_test.go | TestReachabilitySnapshotExists prüft dass das Inventory-File existiert und lesbar ist. |
+| TestReachabilitySnapshotHasNoTestFiles | reachability_test.go | TestReachabilitySnapshotHasNoTestFiles prüft dass keine _test.go oder tests/-Items im unreachable-Array erscheinen (sie sollen in whitelisted landen). |
+| TestReachabilitySnapshotProductionOnlyExists | reachability_test.go | TestReachabilitySnapshotProductionOnlyExists asserts that the production-only inventory file exists. |
+| TestReachabilitySnapshotSummaryConsistency | reachability_test.go | TestReachabilitySnapshotSummaryConsistency prüft dass die Summary-Zähler konsistent sind. |
+| TestReachabilitySnapshotUnreachableCountHasACeiling | reachability_test.go | TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this file that says something about the tree rather than about the snapshot's JSON shape. |
+| TestReachabilitySnapshotUnreachableFormat | reachability_test.go | TestReachabilitySnapshotUnreachableFormat prüft dass alle Unreachable-Einträge vollständige und konsistente Felder haben. |
+| TestReachabilitySnapshotWhitelistFormat | reachability_test.go | TestReachabilitySnapshotWhitelistFormat verifies that all whitelist entries have the required JSON fields populated (package, identifier, reason, file, line). |
 | TestEveryRegistryWalkerHasAnAdoptSeam | registry_walker_adopt_seam_test.go | TestEveryRegistryWalkerHasAnAdoptSeam asserts that every collaborator which subscribes to a central's event bus by walking the shared registry also exposes a per-central seam the composition root calls when a CCU is adopted at runtime. |
 | TestCircuitBreakerHalfOpenFailReopens | reliability_constants_test.go | — (no doc comment) |
 | TestCircuitBreakerNeedsTwoSuccessesToClose | reliability_constants_test.go | — (no doc comment) |

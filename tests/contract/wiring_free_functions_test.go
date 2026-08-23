@@ -105,23 +105,27 @@ func exportedWireFuncs(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("parse %s: %v", dir, err)
+		t.Fatalf("read %s: %v", dir, err)
 	}
-	for _, pkg := range pkgs {
-		for path, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || fn.Recv != nil || fn.Name == nil || !fn.Name.IsExported() {
-					continue
-				}
-				n := fn.Name.Name
-				if strings.HasPrefix(n, "Wire") && len(n) > 4 && n[4] >= 'A' && n[4] <= 'Z' {
-					out[n] = path
-				}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		full := filepath.Join(dir, e.Name())
+		file, perr := parser.ParseFile(fset, full, nil, 0)
+		if perr != nil {
+			t.Fatalf("parse %s: %v", full, perr)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Name == nil || !fn.Name.IsExported() {
+				continue
+			}
+			n := fn.Name.Name
+			if strings.HasPrefix(n, "Wire") && len(n) > 4 && n[4] >= 'A' && n[4] <= 'Z' {
+				out[n] = full
 			}
 		}
 	}
@@ -146,25 +150,26 @@ func calledIdentifiersTree(t *testing.T, dir string) map[string]bool {
 		}
 		file, perr := parser.ParseFile(fset, path, nil, 0)
 		if perr != nil {
-			return nil // a file this scan cannot parse is not evidence of a dead seam
+			// A file this scan cannot parse is not evidence of a dead seam;
+			// skipping it can only make the guard MORE likely to report an
+			// orphan, never less, so it cannot hide a defect.
+			return nil //nolint:nilerr // see above: an unparsable file is not a finding
 		}
-		{
-			ast.Inspect(file, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				switch fn := call.Fun.(type) {
-				case *ast.Ident:
-					out[fn.Name] = true
-				case *ast.SelectorExpr:
-					if fn.Sel != nil {
-						out[fn.Sel.Name] = true
-					}
-				}
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
 				return true
-			})
-		}
+			}
+			switch fn := call.Fun.(type) {
+			case *ast.Ident:
+				out[fn.Name] = true
+			case *ast.SelectorExpr:
+				if fn.Sel != nil {
+					out[fn.Sel.Name] = true
+				}
+			}
+			return true
+		})
 		return nil
 	})
 	if err != nil {

@@ -1386,7 +1386,9 @@ func (b *Bridge) RetractProgramTopics(ctx context.Context, centralName string, p
 		}
 	}
 	if ra, ok := prog.(pload.MQTTRoleAddressable); ok {
-		for _, role := range ra.MQTTRoles(b.cfg.Base, central) {
+		roles := ra.MQTTRoles(b.cfg.Base, central)
+		for i := range roles {
+			role := &roles[i]
 			if role.Topics.Availability == "" {
 				continue
 			}

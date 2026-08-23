@@ -46,7 +46,7 @@ func TestBasicAuthGuardDoesNotChargeTheSPAMount(t *testing.T) {
 	// A page load's worth of non-API requests, each carrying a stale Basic
 	// credential the chain cannot resolve.
 	for range 12 {
-		req := httptest.NewRequest(http.MethodGet, "/app/index.html", nil)
+		req := httptest.NewRequest(http.MethodGet, "/app/index.html", http.NoBody)
 		req.RemoteAddr = from
 		req.SetBasicAuth("stale", "credential")
 		router.ServeHTTP(httptest.NewRecorder(), req)

@@ -26,22 +26,6 @@ type ignoreCacheKey struct {
 	parameter   hmenum.Parameter
 }
 
-// unIgnoreCacheKey is the composite key for
-// [ParameterDecider.IsUnIgnored] lookups. The extra customOnly dimension
-// mirrors the Python reference implementation's custom_only field, which
-// distinguishes lookups that should consider only user-provided rules from
-// lookups that include built-in device rules.
-//
-// Mirrors the Python reference implementation's UnIgnoreCacheKey.
-type unIgnoreCacheKey struct {
-	central     string
-	model       string
-	channelType string
-	paramsetKey hmenum.ParamsetKey
-	parameter   hmenum.Parameter
-	customOnly  bool
-}
-
 // IgnoreCacheKey is the exported variant of [ignoreCacheKey] for consumers
 // that need to inspect or replicate memoisation key contents (e.g. diagnostic
 // endpoints).
@@ -54,7 +38,15 @@ type IgnoreCacheKey struct {
 	Parameter   hmenum.Parameter
 }
 
-// UnIgnoreCacheKey is the exported variant of [unIgnoreCacheKey].
+// UnIgnoreCacheKey is the composite key an un-ignore lookup memoises on, for
+// consumers that need to inspect or replicate the memoisation (e.g. a
+// diagnostics endpoint).
+//
+// Central is part of the key because an un-ignore rule is scoped to one CCU: a
+// key without it answers a question about the fleet that was only ever asked
+// about one central, and hands one CCU's re-enable decision to every other.
+// CustomOnly distinguishes a lookup that considers only operator-provided
+// rules from one that includes the built-in device rules.
 type UnIgnoreCacheKey struct {
 	Central     string
 	Model       string

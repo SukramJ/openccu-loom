@@ -104,10 +104,7 @@ func TestOutputFailureScopesPanelAvailabilityToItsOwnZone(t *testing.T) {
 	// The output failure is asynchronous relative to the fire call; poll
 	// for zone A's panel to reflect it before asserting on the others.
 	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if !panelAvailable(t, svc, zoneA) {
-			break
-		}
+	for panelAvailable(t, svc, zoneA) {
 		if time.Now().After(deadline) {
 			t.Fatal("zone A's panel never went unavailable after its only output failed to fire")
 		}

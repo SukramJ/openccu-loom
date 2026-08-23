@@ -273,7 +273,7 @@ func splitField(f string) (name, typ string) {
 	return f[:i], f[i+1:]
 }
 
-func majorMinor(t *testing.T, v string) (int, int) {
+func majorMinor(t *testing.T, v string) (major, minor int) {
 	t.Helper()
 	parts := strings.SplitN(v, ".", 3)
 	if len(parts) < 2 {
@@ -283,7 +283,7 @@ func majorMinor(t *testing.T, v string) (int, int) {
 	if err != nil {
 		t.Fatalf("APIVersion %q has a non-numeric major: %v", v, err)
 	}
-	minor, err := strconv.Atoi(parts[1])
+	minor, err = strconv.Atoi(parts[1])
 	if err != nil {
 		t.Fatalf("APIVersion %q has a non-numeric minor: %v", v, err)
 	}
@@ -310,5 +310,37 @@ func writeAPISurface(t *testing.T, path string, s apiSurface) {
 	}
 	if err := os.WriteFile(path, append(blob, '\n'), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// TestValueSemanticsChangesAreWellFormed keeps [valueSemanticsChanges] a
+// register rather than a comment block.
+//
+// The list is the only record of a change no schema diff can see: a field that
+// keeps its name and its type and starts meaning something else. Nothing can
+// verify such an entry mechanically — that is the whole reason the list exists
+// — so what this checks is the two things that would make the register useless
+// to the person reading it years later: an entry that names no version, and an
+// entry that names a version the API has not reached.
+func TestValueSemanticsChangesAreWellFormed(t *testing.T) {
+	currentMajor, _ := majorMinor(t, handlers.APIVersion)
+
+	for _, entry := range valueSemanticsChanges {
+		version, rest, ok := strings.Cut(entry, " ")
+		if !ok || rest == "" {
+			t.Errorf("value-semantics entry %q does not start with the version that carried "+
+				"it followed by a description", entry)
+			continue
+		}
+		major, _ := majorMinor(t, version)
+		if major > currentMajor {
+			t.Errorf("value-semantics entry %q names API major %d, but the API is only at %s. "+
+				"An entry recorded before the bump that carries it is a promise, not a record.",
+				entry, major, handlers.APIVersion)
+		}
+		if !strings.Contains(rest, ":") {
+			t.Errorf("value-semantics entry %q does not say WHICH field changed meaning; the "+
+				"format is \"<version> <schema>.<field>: what changed\"", entry)
+		}
 	}
 }

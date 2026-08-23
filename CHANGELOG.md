@@ -14,6 +14,13 @@ Assistant can see. Underneath: a bring-up that reconnected a CCU that was
 never gone, Matter boot events that were evicted before a controller could
 read them, and classic BidCos thermostats whose composed values never bound.
 
+It also carries the tail of the round-4 full-codebase audit: the 43 findings
+that 0.62.0 and 0.63.0 left open, re-verified against the tree before being
+worked. Two of them turned out to be decisions rather than defects and are
+recorded as such. The north-bound API contract moves to **7.6.0** — additive
+only: `covered_ms` on a history bucket, `index_healthy` on the security
+snapshot, two WebSocket broadcasts and three read-only MCP tools.
+
 ### Added
 
 - The daemon's own liveness is now visible on every north-bound surface, not
@@ -90,6 +97,72 @@ read them, and classic BidCos thermostats whose composed values never bound.
 
 ### Fixed
 
+- Unpairing a device now takes its Hidden/Locked channel overrides with it. The
+  store method and the doc comment saying it runs on unpair had both existed
+  for releases; nothing called them. A CCU reuses channel addresses, so a
+  replacement paired in after a hardware swap silently inherited the previous
+  device's visibility decisions — a channel hidden years ago stayed hidden on
+  hardware that had never been configured. A cache-clear re-init is excluded:
+  it removes every device without the operator asking for any of them to go.
+- A device the CCU no longer reports disappears from the north-bound planes at
+  cache-clear time instead of lingering until the next daemon start. The
+  re-init used to announce every removal, which also told the persistent-cache
+  evictors to run — so a clear scoped to one device wiped the whole central's
+  cache. Suppressing the announcement fixed that and broke the other half:
+  MQTT never retracted the discovery config, the WebSocket never reported the
+  deletion, and the event bridge never released the device's live
+  subscriptions. The removal event now carries a teardown marker, so the two
+  groups of consumers can want opposite things.
+- History and energy averages are time-weighted. CCU parameters arrive
+  push-driven, so sample spacing is irregular by construction and a mean over
+  the sample count reported a mostly-idle POWER series as several times its
+  true average. The weighting lives in its own columns (migration **007** of
+  the history schema): `count` keeps meaning a sample count, and rows written
+  before the change keep reporting the sample mean they were computed with
+  rather than being silently re-weighted to nothing.
+- Two system variables whose names differ only in punctuation no longer
+  collide. `Alarm: Küche` and `Alarm Küche` both slugged to the same
+  `unique_id`, and Home Assistant kept whichever discovery config arrived
+  first and dropped the other variable's entity outright — permanently, since
+  the payload is retained. Sysvar identity is now the CCU's own numeric
+  variable id. Every sysvar entity re-keys once on this upgrade; in exchange, a
+  rename in the CCU WebUI no longer orphans the entity's history and every
+  automation built on it. The client-side migration is in
+  `docs/external-clients/ha-unique-id-migration.md`.
+- CCU coordinates — host, serial, ports, WebUI URL — are admin-only on every
+  surface that carries them. `GET /centrals` had narrowed them for non-admins
+  since the role model landed; `GET /config`, `GET /system/ccu` and the LAN
+  discovery list never did. `GET /service-messages/suppressed` is
+  operator-tier, matching what the specification has always published, and
+  `GET /devices/{addr}/icon` is behind authentication: the artwork is not
+  sensitive, but the route answered differently for a known and an unknown
+  address and was an unauthenticated existence oracle for the whole inventory.
+- A browser replaying a stale HTTP Basic credential no longer locks its own
+  source out of logging in. The per-IP credential throttle was mounted on the
+  whole HTTP surface, so one page load's worth of asset requests drained the
+  budget before the page finished rendering. It now covers the API subtree
+  only; the budget stays shared with the login route on purpose, because it is
+  one credential space.
+- A renamed device reaches every plane. MQTT already learned about it; the
+  WebSocket now broadcasts `device.metadata_changed`, and the Matter bridge
+  reassembles, so an accessory no longer keeps its old name in Apple Home and
+  Google Home until the daemon restarts. A week-profile change likewise
+  broadcasts `schedules.changed` — and only when the profile actually changed:
+  a re-load that fetched the same profile back is not a change, which is what
+  the boot, reconnect and rename warm-up passes were reporting as one.
+- `PUT /centrals/{name}` keeps the fields a request omits instead of resetting
+  them to zero. A client following the published schema, where those fields are
+  optional, silently wiped port, TLS settings, credentials and serial.
+- Smaller: the security snapshot reports whether its classification index is
+  still current; a failing alarm output marks only the panels it actually
+  serves unavailable, not every zone plus the master during an alarm; removing
+  a central retracts its raw hub topics as well as its discovery configs; the
+  access log stopped emitting `request_id` twice, which some log pipelines
+  reject outright; MCP gained read tools for Matter, backups and add-on
+  updates; an invalid `north.mcp.path` no longer aborts the boot with no way
+  back in; and the un-ignore withdrawal runs before the suppression pass that
+  used to hide its effect.
+
 - A CCU backup triggered through the hub's `backup.trigger` command no longer
   leaves its archive on the CCU. The command runs the CCU's own backup tool
   into `/usr/local/tmp/last_backup.sbk`, and that file stayed there until the
@@ -150,6 +223,42 @@ read them, and classic BidCos thermostats whose composed values never bound.
   thermostat's own channel happened to change.
 
 ### Internal
+
+- Four new guards, each written because something had already gone past every
+  existing one:
+  - `TestRESTRouteTiersMatchOpenAPIScopes` compares the authorization scope the
+    specification publishes against the gate the router actually wraps a route
+    in — measured by walking the real middleware chain, not by matching names
+    in source. It found four further divergences on its first run; all four
+    turned out to be legitimate and are recorded with the middleware that
+    guards them.
+  - `TestAPISurfaceChangesCarryTheRightBump` holds the API version to the
+    policy written on the constant itself: a removal, rename or retype demands
+    a major, an addition at least a minor. It carries a hand-maintained
+    register for the one thing no schema diff can see — a field that keeps its
+    name and type and changes meaning.
+  - `TestEveryWireFunctionHasAProductionCaller` closes a hole in its sibling
+    setter guard, which models a wiring seam as a method and so could not see a
+    free `Wire*` constructor. That is exactly how the channel-flags eviction
+    above shipped complete and unwired.
+  - The reachability snapshot tests are renamed to say what they check — the
+    committed snapshot's shape — and gained the ceiling they were missing, so a
+    regenerated snapshot carrying more dead identifiers than the last one fails
+    instead of passing quietly.
+- `payload.ExtraProperties` gives a mutex-guarded field a way back into the
+  payload harvest. Moving `Device.name` behind a lock was correct — the rename
+  path writes it while four north-bound planes read it — and took it out of the
+  reflection that builds the HA-Discovery device block, so every device fell
+  back to its raw address. Nothing failed; one test happened to notice.
+- `north.mqtt.payload_format` is removed. It was validated, editable in the web
+  UI and read by no production code. Migration **040** drops the orphaned key
+  from stored config sections rather than bumping the section schema version,
+  which would have discarded every operator's persisted configuration.
+- Two audit findings are closed as decisions rather than defects, recorded in
+  `notes/parity/by_design.md`: `raw_enabled` governs the raw topic plane and
+  deliberately does not silence the state topics an entity's own discovery
+  payload names, and failed Basic credentials deliberately share the login
+  route's rate-limit budget.
 
 - The boot-lifecycle events are pinned through the composition root: a test
   wires the Matter runtime and reads both events back over the same path the
