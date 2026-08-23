@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: aa8ccfe3
-HEAD: aa8ccfe3
+Generated: dbcbda12
+HEAD: dbcbda12
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29767 |
-| Reachable | 5126 |
-| Whitelisted | 21619 |
-| **Unreachable** | **3022** |
+| Total Exported | 29813 |
+| Reachable | 5128 |
+| Whitelisted | 21659 |
+| **Unreachable** | **3026** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: aa8ccfe3
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 97 | 52 |
+| internal/central/adapter | 4 | 99 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -99,7 +99,7 @@ HEAD: aa8ccfe3
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 97 | 52 |
+| internal/central/adapter | 4 | 99 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -202,7 +202,7 @@ HEAD: aa8ccfe3
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 110 | 30 |
-| pkg/hmapi | 0 | 157 | 16 |
+| pkg/hmapi | 0 | 159 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |
