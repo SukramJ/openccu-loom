@@ -114,6 +114,12 @@ Go builder method: `TopicBuilder.DiscoveryConfig`.
 | Interface connectivity | `<base>/<central>/hub/connectivity/<iface>` |
 | System status event | `<base>/<central>/system/status` |
 
+`<base>/bridge/status` is also the state source of the "Daemon connection"
+binary sensor published for every central. That entity carries no
+availability block of its own: it reports the daemon being gone, so an
+availability source pointing at the same topic would render it unavailable
+in exactly the situation it exists to report.
+
 The program `set` and `trigger` topics are **command topics** — the
 daemon subscribes to them and never publishes there; only `state` and
 `execute_available` carry daemon-published (retained) content. A

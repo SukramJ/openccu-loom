@@ -34,6 +34,7 @@
   "discovery.alarm_triggered_motion": "Triggered motion detectors",
   "discovery.connection_latency": "Connection Latency",
   "discovery.connectivity": "Connectivity {iface}",
+  "discovery.daemon_status": "Daemon connection",
   "discovery.duration": "Duration",
   "discovery.energy_counter_feed_in_total": "Energy Counter feed in Total",
   "discovery.energy_counter_total": "Energy Counter Total",

@@ -804,6 +804,51 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 	return DiscoveryItem{Component: string(HAComponentBinarySensor), NodeID: hubNodeID(centralName, "connectivity"), ObjectID: safeLower(iface), Payload: buf, OK: true}
 }
 
+// BuildDaemonStatusDiscovery is the HA `binary_sensor` that reports
+// whether the daemon itself is reachable, read straight off the retained
+// bridge status topic the broker also carries the last will on.
+//
+// That topic existed from the start but only ever appeared inside other
+// entities' `availability` blocks, where it can express "this entity's
+// data is stale" and nothing else. A daemon that goes away — a CCU reboot,
+// an add-on restart, a killed process — therefore left every entity
+// `unavailable` with no entity anywhere saying why, and nothing an
+// automation could act on. This is that entity.
+//
+// It deliberately carries NO availability block, which is the one thing
+// separating it from every other hub entity here: pointing an entity's
+// availability at the same topic it reads its state from makes it go
+// `unavailable` in exactly the situation it exists to report, so the
+// disconnect would once again be visible only as an absence.
+func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string) DiscoveryItem {
+	if centralName == "" {
+		return DiscoveryItem{}
+	}
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
+	uniqueID := hubAggregateUniqueID(serial10, "daemon_status")
+	body := map[string]any{
+		"name":               d.tr("discovery.daemon_status"),
+		"unique_id":          uniqueID,
+		"default_entity_id":  defaultEntityID(string(HAComponentBinarySensor), uniqueID),
+		"state_topic":        d.TopicBuilder.BridgeStatus(),
+		"payload_on":         "online",
+		"payload_off":        "offline",
+		"device_class":       "connectivity",
+		"entity_category":    "diagnostic",
+		"enabled_by_default": true,
+		"device":             hubDeviceBlock(centralName, d.hubFor(centralName)),
+		"origin":             BuildOriginInfo(),
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{Component: string(HAComponentBinarySensor), NodeID: hubNodeID(centralName, "system"), ObjectID: "daemon_status", Payload: buf, OK: true}
+}
+
 // ----------------------- System-Health / Latency ------------------
 
 // BuildSystemHealthDiscovery emits a HA `sensor` for the openccu-loom

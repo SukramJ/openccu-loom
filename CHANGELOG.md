@@ -13,6 +13,15 @@ anything it did not recognise.
 
 ### Added
 
+- MQTT now publishes a "Daemon connection" binary sensor per central, so a
+  daemon that goes away — a CCU reboot, an add-on restart, a killed process —
+  is visible as a state an automation can act on. The retained bridge status
+  it reads has been there from the start, but only ever appeared inside other
+  entities' availability blocks, where it can express "this entity's data is
+  stale" and nothing else: every entity went unavailable and no entity
+  anywhere said why. The new sensor deliberately carries no availability
+  block of its own, because pointing it at the topic it reads its state from
+  would make it unavailable in exactly the situation it exists to report.
 - Backups can now be deleted from the Backups view, one archive at a time.
   Until now the only way an archive left the daemon's storage was the
   scheduled-backup rotation, so an operator who imported the wrong file, or
