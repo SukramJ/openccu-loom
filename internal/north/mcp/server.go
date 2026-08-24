@@ -151,6 +151,8 @@ type GroupsReader = handlers.GroupsReader
 // needs the area roster and its room assignments, nothing else, so it
 // depends on this narrower seam rather than the full CRUD facade.
 // *sqlite.AreaStore satisfies it directly.
+//
+// loom:reachable:reason="the declared type of Deps.Areas, filled at cmd/openccu-loom/daemon_rest_mount.go with the same area service REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
 type AreaLister interface {
 	GetAll(ctx context.Context) ([]sqlite.AreaRow, error)
 	ListAssignments(ctx context.Context) ([]sqlite.RoomAreaRow, error)
@@ -160,6 +162,8 @@ type AreaLister interface {
 // list_interfaces only ever calls Interfaces(). Reconnect is
 // deliberately not projected here: it actuates the radio link, the
 // same argument that keeps install-mode off the MCP surface.
+//
+// loom:reachable:reason="the declared type of Deps.Interfaces, filled at cmd/openccu-loom/daemon_rest_mount.go with the same interface index REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
 type InterfaceLister interface {
 	Interfaces() []hmapi.InterfaceState
 }
@@ -168,6 +172,8 @@ type InterfaceLister interface {
 // mirrors [handlers.HistoryService] field-for-field without importing
 // it as an alias, since the handler's query/bucket types are reused
 // directly as the tool's input/output shapes.
+//
+// loom:reachable:reason="the declared type of Deps.History, filled at cmd/openccu-loom/daemon_rest_mount.go with the history handler adapter; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
 type HistoryReader interface {
 	Query(ctx context.Context, q handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error)
 }
@@ -176,6 +182,8 @@ type HistoryReader interface {
 // list_hidden_parameters needs only the per-central pattern listing,
 // not the write/candidate machinery the REST facade also carries.
 // *sqlite.VisibilityUnIgnoreStore satisfies it directly.
+//
+// loom:reachable:reason="the declared type of Deps.Visibility, filled at cmd/openccu-loom/daemon_rest_mount.go with the un-ignore store; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
 type VisibilityLister interface {
 	List(ctx context.Context, centralName string) ([]sqlite.UnIgnoreEntry, error)
 }
@@ -187,6 +195,8 @@ type EnergyReader = handlers.EnergyService
 
 // LinkLister is the read seam list_links calls through — the same
 // method the REST global links overview (GET /api/v1/links) uses.
+//
+// loom:reachable:reason="the declared type of Deps.Links, filled at cmd/openccu-loom/daemon_rest_mount.go with the links domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
 type LinkLister interface {
 	ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error)
 }
@@ -194,6 +204,8 @@ type LinkLister interface {
 // ScheduleLister is the read seam list_schedules calls through — the
 // fleet-wide schedule overview, the same method GET /api/v1/schedules
 // uses.
+//
+// loom:reachable:reason="the declared type of Deps.Schedules, filled at cmd/openccu-loom/daemon_rest_mount.go with the schedules domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
 type ScheduleLister interface {
 	ListScheduleDevices(ctx context.Context) ([]hmapi.ScheduleDeviceSummary, error)
 }

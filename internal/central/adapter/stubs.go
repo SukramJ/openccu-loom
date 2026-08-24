@@ -120,6 +120,8 @@ func (a *BackupAdapter) centralLock(name string) *sync.Mutex {
 // CacheInvalidator clears the CCU-derivable caches of a scope and
 // re-pulls them from the CCU (ADR 0042). *cachereset.Service satisfies
 // it; the restore path needs only the one method.
+//
+// loom:reachable:reason="the declared type of BackupAdapter.cacheInvalidator, filled at cmd/openccu-loom/daemon.go with the *cachereset.Service; an interface reached only by assignment, which the analyzer's type heuristic cannot follow"
 type CacheInvalidator interface {
 	Clear(ctx context.Context, scope cachereset.Scope) (cachereset.Report, error)
 }

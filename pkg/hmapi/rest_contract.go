@@ -188,6 +188,8 @@ type ReliabilityState struct {
 // Absence is the interesting case: a seam that is not in the list was
 // not wired by this process, whether the call was deleted, skipped by a
 // nil guard, or never reached.
+//
+// loom:reachable:reason="constructed by handlers.DiagnosticsWiring, the GET /diagnostics/wiring handler the router mounts; a DTO reached only through a chi route registration, which the analyzer cannot follow (its REST siblings sit in the same inventory)"
 type WiringSeam struct {
 	// Name is the stable identifier, `<subsystem>.<what>`.
 	Name string `json:"name"`

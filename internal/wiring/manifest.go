@@ -36,6 +36,8 @@ import (
 // Phase says when a seam's collaborator is attached relative to
 // south-bound bring-up. It is the property the audits keep finding
 // broken: a caller that exists but runs before the value it needs.
+//
+// loom:reachable:reason="the type of Seam.Phase, set from the PhasePerCentral constant at every declaration site"
 type Phase string
 
 const (
@@ -57,6 +59,8 @@ const (
 // Why is not decoration. A seam whose absence has no describable
 // consequence is a seam nobody needs, and the sentence is what a
 // reader of a failing guard needs first.
+//
+// loom:reachable:reason="constructed as a composite literal at all eighteen OnRegisterDeclared call sites across cmd/ and five internal/ packages, and returned by Manifest.Seams; a type reached only through literals, which the analyzer's heuristic does not follow"
 type Seam struct {
 	// Name is the stable identifier, in `<subsystem>.<what>` form —
 	// e.g. "history.recorder". It is what a guard names and what the

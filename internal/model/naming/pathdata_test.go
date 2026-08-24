@@ -124,22 +124,9 @@ func TestPathData_MQTTState(t *testing.T) {
 
 func TestPathData_MQTTStateNonChannelEmpty(t *testing.T) {
 	t.Parallel()
-	if got := NewProgramPathData("X").MQTTState("gh", "ccu"); got != "" {
+	// A PathData with no channel address renders no MQTT state topic.
+	if got := (PathData{SetPath: "x/set", StatePath: "x/status", Kind: "X"}).MQTTState("gh", "ccu"); got != "" {
 		t.Errorf("non-channel PathData.MQTTState must be empty, got %q", got)
-	}
-}
-
-func TestNewProgramPathData(t *testing.T) {
-	t.Parallel()
-	pd := NewProgramPathData("MyScript")
-	if pd.SetPath != "program/set/MyScript" {
-		t.Errorf("SetPath = %q, want %q", pd.SetPath, "program/set/MyScript")
-	}
-	if pd.StatePath != "program/status/MyScript" {
-		t.Errorf("StatePath = %q, want %q", pd.StatePath, "program/status/MyScript")
-	}
-	if got := NewProgramPathData(""); !got.IsZero() {
-		t.Errorf("empty pid must yield zero PathData, got %+v", got)
 	}
 }
 

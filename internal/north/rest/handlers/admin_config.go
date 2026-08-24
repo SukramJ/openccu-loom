@@ -632,6 +632,8 @@ func GetConfigSection(svc ConfigAdminService) http.HandlerFunc {
 // A section no subsystem can take live is not an error: ApplySection
 // returns (false, nil) and the caller is told the value waits for a
 // restart.
+//
+// loom:reachable:reason="the declared type of rest.Deps.SectionApplier, filled at cmd/openccu-loom/daemon_rest_mount.go with *sectionApplier; an interface reached only by assignment"
 type SectionApplier interface {
 	ApplySection(ctx context.Context, section configstore.Section) (applied bool, err error)
 }

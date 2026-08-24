@@ -12,6 +12,8 @@ import (
 
 // WiringManifestReader is the read side of the composition root's
 // wiring manifest. *central.Registry satisfies it via Manifest().
+//
+// loom:reachable:reason="the declared type of rest.Deps.WiringManifest, filled at cmd/openccu-loom/daemon_rest_mount.go with central.Registry.Manifest(); an interface reached only by assignment"
 type WiringManifestReader interface {
 	Seams() []wiring.Seam
 }
