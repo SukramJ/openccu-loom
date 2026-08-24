@@ -437,7 +437,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// does not require it: an installation with smoke and water detectors
 	// and no burglar alarm still gets the hazard classes, the fault plane
 	// and the notifications.
-	securitySvc := wireSecurityService(cfg, reg, auditDB, alarmSvc, catalogs, logger)
+	securitySvc := wireSecurityService(cfg, reg, auditDB, alarmSvc, healthTracker, catalogs, logger)
 	if securitySvc != nil {
 		northBridges.Register(securitySvc)
 		// Forward the rendered reports and fault transitions through the

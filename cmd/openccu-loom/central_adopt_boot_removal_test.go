@@ -129,7 +129,7 @@ func TestRemovingABootCentralDetachesTheDomainsWithoutReAttaching(t *testing.T) 
 		t.Fatalf("alarm service Start: %v", err)
 	}
 	t.Cleanup(func() { _ = alarmSvc.Stop(ctx) })
-	securitySvc := wireSecurityService(cfg, reg, db, alarmSvc, nil, logger)
+	securitySvc := wireSecurityService(cfg, reg, db, alarmSvc, nil, nil, logger)
 	if securitySvc == nil {
 		t.Fatal("wireSecurityService returned nil")
 	}

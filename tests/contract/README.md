@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 379.
+Guards without a doc comment: 7 of 380.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -38,6 +38,7 @@ Guards without a doc comment: 7 of 379.
 | TestJSONRPCOnlyInterfacesEmpty | backend_capabilities_test.go | TestJSONRPCOnlyInterfacesEmpty verifies that no interface is classified as "JSON-RPC only / pull-only" — CCU-Jack was removed. |
 | TestXMLRPCInterfacesUseCCUBackend | backend_capabilities_test.go | TestXMLRPCInterfacesUseCCUBackend pins CCU-native interfaces to the CcuBackend kind. |
 | TestBasicAuthGuardDoesNotChargeTheSPAMount | basic_auth_guard_scope_test.go | TestBasicAuthGuardDoesNotChargeTheSPAMount pins where the per-IP Basic-credential throttle is mounted. |
+| TestEveryBridgeServiceReportsHealth | bridge_health_coverage_test.go | TestEveryBridgeServiceReportsHealth pins that a subsystem the daemon registers as a north-bound bridge either records a /health component or is recorded here as deliberately silent. |
 | TestCacheresetGuardNoOperatorStateTouched | cachereset_guard_test.go | TestCacheresetGuardNoOperatorStateTouched enforces ADR 0042: the cache-reset service must never reference operator or system state tables. |
 | TestKeepaliveContract_AnyEventRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_AnyEventRefreshesLiveness pins that an ordinary (non-PONG) inbound callback also refreshes liveness — even for a device the daemon does not mirror. |
 | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness pins the full keepalive round-trip: a recorded outbound PING (as the check_connection job records it) is closed by a PONG delivered through the production callback handler, and that PONG also marks the channel alive. |

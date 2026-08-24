@@ -27,7 +27,7 @@ func newSecurityServiceForWiring(t *testing.T, visibility hmenum.DuressVisibilit
 	cfg.Alarm.DuressVisibility = string(visibility)
 
 	reg := central.NewRegistry()
-	svc := wireSecurityService(cfg, reg, db, nil, nil, discardTestLogger())
+	svc := wireSecurityService(cfg, reg, db, nil, nil, nil, discardTestLogger())
 	if svc == nil {
 		t.Fatal("wireSecurityService returned nil — the WebSocket plane would have no bus to ride")
 	}
