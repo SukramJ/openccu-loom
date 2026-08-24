@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 373.
+Guards without a doc comment: 7 of 374.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -187,6 +187,7 @@ Guards without a doc comment: 7 of 373.
 | TestNormalizeDeviceIdempotent | normalization_test.go | TestNormalizeDeviceIdempotent pins the invariant that normalisation applied twice is the same as once. |
 | TestNormalizeParameterIdempotent | normalization_test.go | TestNormalizeParameterIdempotent locks parameter normalisation. |
 | TestOpenAPIEnumsCoverEveryEmittedValue | openapi_enum_coverage_test.go | TestOpenAPIEnumsCoverEveryEmittedValue is the drift detector for hand-written enum lists in assets/openapi.yaml. |
+| TestNoRequestOrResponseBodyIsWrittenInline | openapi_inline_schema_test.go | TestNoRequestOrResponseBodyIsWrittenInline pins that a body with properties lives in `components/schemas` and is reached by `$ref`. |
 | TestOpenAPISpecIsValid | openapi_schema_test.go | TestOpenAPISpecIsValid runs the full kin-openapi validator on assets/openapi.yaml, verifying the spec is structurally valid. |
 | TestOpenAPIDeclaresMVPEndpoints | openapi_test.go | — (no doc comment) |
 | TestOpenAPIManagementPathsPresent | openapi_test.go | TestOpenAPIManagementPathsPresent pins the management and live-edit paths in the spec so a future router rename or refactor cannot silently drift away from the production OpenAPI validator middleware. |

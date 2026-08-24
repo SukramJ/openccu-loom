@@ -1696,13 +1696,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": {
-                        /**
-                         * @description Take a full backup of the target central before starting the update.
-                         * @default false
-                         */
-                        backup_first?: boolean;
-                    };
+                    "application/json": components["schemas"]["InstallSystemUpdateRequest"];
                 };
             };
             responses: {
@@ -10483,6 +10477,435 @@ export interface components {
             /** @description Fire only the output's optical/visual indication, suppressing sound. Ignored for outputs with no audible element. */
             optical_only?: boolean;
         };
+        AcceptInboxDeviceRequest: {
+            name?: string;
+            /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
+            include_channels?: boolean;
+            rooms?: string[];
+            functions?: string[];
+        };
+        BulkUpdateMatterExposableResponse: {
+            applied: number;
+        };
+        ChangeOwnPasswordRequest: {
+            current_password: string;
+            new_password: string;
+        };
+        CreateFunctionRequest: {
+            name: string;
+            central?: string;
+        };
+        CreateRoomRequest: {
+            name: string;
+            /** @description Target CCU (required when more than one is configured). */
+            central?: string;
+        };
+        CreateSysvarRequest: {
+            /** @description Name of the new system variable. */
+            name: string;
+            /**
+             * @description Value kind of the new variable. ALARM provisions a binary, acknowledgeable alarm line (backed by an OT_ALARMDP on the CCU) and always routes through the Rega create script.
+             * @enum {string}
+             */
+            value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM" | "ALARM";
+            /** @description Physical unit string (e.g. "°C", "%"). */
+            unit?: string;
+            /** @description Minimum value (as string, CCU convention). */
+            min?: string;
+            /** @description Maximum value (as string, CCU convention). */
+            max?: string;
+            /** @description Human-readable label shown in the CCU UI. When set, creation routes through the Rega script (the native JSON-RPC create methods carry no description parameter). */
+            description?: string;
+            /** @description Ordered list of enum labels for ENUM-type sysvars. */
+            value_list?: string[];
+            /** @description False-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "false" default. Setting a custom label routes creation through the Rega script. */
+            value_name_0?: string;
+            /** @description True-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "true" default. */
+            value_name_1?: string;
+            /** @description Bind the new variable to a device channel ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves it unassigned. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+            channel_address?: string;
+        };
+        CreateTokenRequest: {
+            /** @description Logical owner of the token (e.g. "homeassistant", "ci-runner"). */
+            subject: string;
+            /** @enum {string} */
+            role: "viewer" | "operator" | "admin";
+        };
+        DetermineParameterRequest: {
+            /** @description Name of the parameter to determine (e.g. "TEMPERATURE"). */
+            parameter: string;
+        };
+        DetermineParameterResponse: {
+            /**
+             * @description The determined value. Type follows the parameter's
+             *     declared TYPE (bool / number / string); null when the
+             *     backend does not support the operation (e.g. CUxD).
+             */
+            value: unknown;
+        };
+        DeviceInstallModeRequest: {
+            /** @default 60 */
+            seconds: number;
+        };
+        DiscoveredCentral: {
+            serial: string;
+            name: string;
+            host: string;
+            /** @description Address the SPA pre-fills on adoption. Differs from host when a stabler value applies — "localhost" for a CCU on the daemon's own host, or a reverse-resolved docker hostname for a co-located HA add-on. Equals host otherwise. */
+            suggested_host: string;
+            manufacturer?: string;
+            model?: string;
+            /** Format: date-time */
+            last_seen: string;
+            already_configured: boolean;
+        };
+        DownloadSystemFirmwareRequest: {
+            /**
+             * Format: uri
+             * @description http/https firmware image the CCU should fetch.
+             */
+            url: string;
+            /** @description Target central (optional for single-CCU deployments). */
+            central?: string;
+        };
+        ForceCloseEditSessionRequest: {
+            key: string;
+        };
+        GetAlarmStateResponse: {
+            zones: components["schemas"]["AlarmZoneStatus"][];
+        };
+        GetConfigChangesResponse: {
+            fields: string[];
+        };
+        GetDeviceTeamCandidatesResponse: {
+            candidates: components["schemas"]["TeamCandidate"][];
+        };
+        GetDiagnosticsRSSIResponse: {
+            devices?: {
+                address?: string;
+                name?: string;
+                interface_id?: string;
+                central?: string;
+                /** @description RSSI_DEVICE in dBm (device's view); null when absent. */
+                rssi_device?: number | null;
+                /** @description RSSI_PEER in dBm (partner's view); null when absent. */
+                rssi_peer?: number | null;
+                /** @description Battery level 0-100 (%); null for mains-powered devices. */
+                battery_level?: number | null;
+                /** @description LOW_BAT flag; null when the device has no battery indicator. */
+                low_battery?: boolean | null;
+                /** @description Whether the device is currently reachable. */
+                reachable?: boolean;
+            }[];
+        };
+        GetPreferenceResponse: {
+            key?: string;
+            value?: unknown;
+        };
+        GetRestartPendingResponse: {
+            pending: boolean;
+            fields: string[];
+        };
+        IgnoredCentral: {
+            serial: string;
+            name?: string;
+            host?: string;
+            /** Format: date-time */
+            ignored_at: string;
+            ignored_by?: string;
+        };
+        InstallModeSearchRequest: {
+            /** @description The BidCos-Wired interface to scan. */
+            interface: string;
+            /** @description Disambiguates the CCU; optional for single-CCU setups. */
+            central?: string;
+        };
+        InstallModeSearchResponse: {
+            central?: string;
+            interface: string;
+            /** @description Number of devices the bus scan found. */
+            found: number;
+        };
+        InstallSystemUpdateRequest: {
+            /**
+             * @description Take a full backup of the target central before starting the update.
+             * @default false
+             */
+            backup_first: boolean;
+        };
+        ListAllLinksResponse: {
+            links: components["schemas"]["Link"][];
+        };
+        ListDeviceReplaceCandidatesResponse: {
+            candidates: components["schemas"]["ReplaceCandidate"][];
+        };
+        ListDiagramsResponse: {
+            diagrams: components["schemas"]["DiagramConfig"][];
+        };
+        ListGroupTypesResponse: {
+            types: components["schemas"]["GroupTypeEntry"][];
+        };
+        ListGroupsResponse: {
+            entries: components["schemas"]["GroupCentralEntry"][];
+        };
+        ListLogsResponse: {
+            /** Format: int64 */
+            last_seq: number;
+            records: components["schemas"]["LogRecord"][];
+        };
+        ListSchedulesResponse: {
+            items: components["schemas"]["ScheduleDeviceSummary"][];
+        };
+        ListSystemCCUResponse: {
+            entries: components["schemas"]["SystemCCUEntry"][];
+        };
+        ListSystemStatusResponse: {
+            events: {
+                central: string;
+                component: string;
+                healthy: boolean;
+                reason?: string;
+                interface_id?: string;
+                error_code?: number;
+                central_state?: string;
+                connection_state?: string;
+                degraded_interfaces?: string[];
+                issues?: string[];
+                /** Format: date-time */
+                event_at: string;
+            }[];
+        };
+        LoginRequest: {
+            username: string;
+            password: string;
+        };
+        MatchMasterProfileRequest: {
+            current_values?: {
+                [key: string]: unknown;
+            };
+        };
+        MatchMasterProfileResponse: {
+            active_id: number;
+        };
+        MatterFactoryResetRequest: {
+            /** @enum {string} */
+            confirm: "remove-all-fabrics";
+        };
+        OpenEditSessionRequest: {
+            key: string;
+            subject?: string;
+        };
+        PatchChannelRequest: {
+            name?: string;
+            /**
+             * @description Replaces the channel's room assignments. Room names
+             *     unknown to the CCU are silently skipped.
+             */
+            rooms?: string[];
+            /**
+             * @description Replaces the channel's function (Gewerk)
+             *     assignments. Unknown names are silently skipped.
+             */
+            functions?: string[];
+        };
+        PatchDeviceRequest: {
+            name?: string;
+            /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
+            include_channels?: boolean;
+            rooms?: string[];
+            functions?: string[];
+        };
+        PatchSysvarRequest: {
+            /** @description New name for the variable. When present and non-empty the sysvar is renamed in place (the path {name} stays the current name). Omit or leave empty to keep the name. */
+            name?: string;
+            /** @description Human-readable label shown in the CCU UI. */
+            description?: string;
+            /** @description Physical unit string (e.g. "°C", "%"). */
+            unit?: string;
+            /** @description Minimum value (as string, CCU convention). */
+            min?: string;
+            /** @description Maximum value (as string, CCU convention). */
+            max?: string;
+            /** @description Ordered list of enum labels for LIST/ENUM-type sysvars. */
+            value_list?: string[];
+            /** @description New false-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+            value_name_0?: string;
+            /** @description New true-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+            value_name_1?: string;
+            /** @description Toggle the CCU WebUI-visibility flag. Omit to leave it unchanged. */
+            is_visible?: boolean;
+            /** @description Toggle the archive flag (CCU DPArchive) that records value changes to the measurement history. Omit to leave it unchanged. */
+            is_logged?: boolean;
+            /** @description Reassign the CCU "Kanalzuordnung". Tri-state: omit to leave the assignment untouched, send an empty string to clear it, or a channel address ("ADDR:idx") to assign it. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+            channel_address?: string;
+        };
+        PutConfigSectionResponse: {
+            section: string;
+            /** Format: int64 */
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+            restart_required: boolean;
+            /** @description Whether the running daemon took the change without a restart. False is not an error on its own: most sections have no subsystem that can rebuild itself, and the value simply takes effect at the next restart. It is false with an `apply_error` when a subsystem that could have taken it refused. */
+            applied: boolean;
+            /** @description Present only when a live apply was attempted and failed. The section is persisted regardless and takes effect at the next restart. */
+            apply_error?: string;
+        };
+        ReliabilityState: {
+            central?: string;
+            interface?: string;
+            /** @description Circuit-breaker state code: 0 = closed, 1 = open, 2 = half-open. */
+            circuit_state?: number;
+            /** @description Live InterfaceClient state. Omitted when the client exposes none. */
+            state?: {
+                /** @description State-machine bucket (e.g. connected, degraded, disconnected). */
+                state?: string;
+                /** @description True once the client has been shut down. */
+                closed?: boolean;
+                /** Format: int64 */
+                total_requests?: number;
+                /** Format: int64 */
+                executed_requests?: number;
+                /** Format: int64 */
+                pending_requests?: number;
+                /**
+                 * Format: date-time
+                 * @description RFC3339 timestamp of the last request failure.
+                 */
+                last_failure_at?: string;
+                /**
+                 * Format: date-time
+                 * @description RFC3339 timestamp of the last received callback.
+                 */
+                last_callback_at?: string;
+            };
+        };
+        RenameFunctionRequest: {
+            new_name: string;
+            central?: string;
+        };
+        RenameRoomRequest: {
+            new_name: string;
+            central?: string;
+        };
+        ReplaceDeviceRequest: {
+            /** @description The paired device the new device replaces. */
+            old_address: string;
+            /** @description Disambiguates the CCU; optional for single-CCU setups. */
+            central?: string;
+        };
+        ReplaceDeviceResponse: {
+            /** @example replacing */
+            status: string;
+            old_address: string;
+            new_address: string;
+            central?: string;
+        };
+        SetDeviceChannelTeamRequest: {
+            /** @description The team channel address to join; null/empty resets to the default team. */
+            team?: string | null;
+        };
+        SetProgramEnabledRequest: {
+            active: boolean;
+        };
+        SetSystemCCUPositionRequest: {
+            longitude: number;
+            latitude: number;
+        };
+        SetupRequest: {
+            admin: {
+                username: string;
+                password: string;
+            };
+            locale: {
+                /** @enum {string} */
+                locale: "de" | "en";
+                /** @enum {string} */
+                theme: "light" | "dark" | "system";
+            };
+            /** @description Optional first CCU. Omit to skip. */
+            ccu?: {
+                name: string;
+                host: string;
+                username?: string;
+                password?: string;
+                interfaces: string[];
+            };
+            /** @description Optional MQTT broker. Omit to skip. */
+            mqtt?: {
+                broker_url: string;
+                username?: string;
+                password?: string;
+            };
+        };
+        SetupStatusResponse: {
+            required: boolean;
+        };
+        SystemRestartResponse: {
+            /**
+             * @description `shutdown_signalled` — this request sent the shutdown signal. `shutdown_in_progress` — a shutdown signalled less than 30 s ago is still running, so no second signal was sent; retry later if it did not complete.
+             * @enum {string}
+             */
+            status?: "shutdown_signalled" | "shutdown_in_progress";
+            /** Format: date-time */
+            at?: string;
+        };
+        TriggerBackupRequest: {
+            /** @description Name of the central to back up. Omit to back up the first registered central. */
+            central_name?: string;
+        };
+        UnsuppressServiceMessageRequest: {
+            /** @description CCU interface the channel lives on (e.g. "HmIP-RF"). Optional — resolved from the stored suppression when omitted. */
+            interface?: string;
+            /** @description Channel address ("ADDR:chn"). */
+            channel: string;
+            /** @description Service parameter to unsuppress (e.g. "LOWBAT"). Omit or empty to clear every service parameter of the channel. */
+            parameter?: string;
+        };
+        UpdateFirmwareResponse: {
+            /** @example scheduled */
+            status: string;
+            /** @description Transmit duty cycle in percent of the device's radio interface, present only when it is at or above the warning threshold (80%). Absent when unknown or below. */
+            duty_cycle_warning?: number;
+        };
+        UploadBackupRequest: {
+            /**
+             * Format: binary
+             * @description The `.sbk` archive.
+             */
+            file: string;
+        };
+        UploadTLSCertificateRequest: {
+            /** Format: binary */
+            cert: string;
+            /** Format: binary */
+            key: string;
+        };
+        WiringSeam: {
+            /**
+             * @description Stable identifier, `<subsystem>.<what>`.
+             * @example history.recorder
+             */
+            name: string;
+            /**
+             * @description The thing that was attached.
+             * @example *history.Recorder
+             */
+            collaborator: string;
+            /**
+             * @description `per-central` for an observer replayed over every central, `ordered` for a once-only attachment whose position in the boot sequence matters.
+             * @enum {string}
+             */
+            phase: "per-central" | "ordered";
+            /** @description Boot marks this seam must be attached before. Only an `ordered` seam carries them. */
+            before?: string[];
+            /** @description Boot marks this seam must be attached after. */
+            after?: string[];
+            /** @description What stops working when the seam is absent. */
+            why: string;
+            /** @description Ordering constraints that were already broken when the seam was attached. Empty is the normal case; a non-empty list is a wiring defect the daemon reports about itself — the collaborator IS wired, so nothing else about the daemon looks wrong. */
+            violations?: string[];
+        };
     };
     responses: {
         /** @description Validation or parsing failure */
@@ -10649,13 +11072,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name?: string;
-                    /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
-                    include_channels?: boolean;
-                    rooms?: string[];
-                    functions?: string[];
-                };
+                "application/json": components["schemas"]["PatchDeviceRequest"];
             };
         };
         responses: {
@@ -10707,19 +11124,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name?: string;
-                    /**
-                     * @description Replaces the channel's room assignments. Room names
-                     *     unknown to the CCU are silently skipped.
-                     */
-                    rooms?: string[];
-                    /**
-                     * @description Replaces the channel's function (Gewerk)
-                     *     assignments. Unknown names are silently skipped.
-                     */
-                    functions?: string[];
-                };
+                "application/json": components["schemas"]["PatchChannelRequest"];
             };
         };
         responses: {
@@ -10783,9 +11188,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        entries: components["schemas"]["GroupCentralEntry"][];
-                    };
+                    "application/json": components["schemas"]["ListGroupsResponse"];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -10842,9 +11245,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        types: components["schemas"]["GroupTypeEntry"][];
-                    };
+                    "application/json": components["schemas"]["ListGroupTypesResponse"];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -10956,9 +11357,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        diagrams: components["schemas"]["DiagramConfig"][];
-                    };
+                    "application/json": components["schemas"]["ListDiagramsResponse"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -11118,9 +11517,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: components["schemas"]["ScheduleDeviceSummary"][];
-                    };
+                    "application/json": components["schemas"]["ListSchedulesResponse"];
                 };
             };
             503: components["responses"]["ServiceUnavailable"];
@@ -11146,9 +11543,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        links: components["schemas"]["Link"][];
-                    };
+                    "application/json": components["schemas"]["ListAllLinksResponse"];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -11165,31 +11560,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": {
-                    /** @description Name of the new system variable. */
-                    name: string;
-                    /**
-                     * @description Value kind of the new variable. ALARM provisions a binary, acknowledgeable alarm line (backed by an OT_ALARMDP on the CCU) and always routes through the Rega create script.
-                     * @enum {string}
-                     */
-                    value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM" | "ALARM";
-                    /** @description Physical unit string (e.g. "°C", "%"). */
-                    unit?: string;
-                    /** @description Minimum value (as string, CCU convention). */
-                    min?: string;
-                    /** @description Maximum value (as string, CCU convention). */
-                    max?: string;
-                    /** @description Human-readable label shown in the CCU UI. When set, creation routes through the Rega script (the native JSON-RPC create methods carry no description parameter). */
-                    description?: string;
-                    /** @description Ordered list of enum labels for ENUM-type sysvars. */
-                    value_list?: string[];
-                    /** @description False-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "false" default. Setting a custom label routes creation through the Rega script. */
-                    value_name_0?: string;
-                    /** @description True-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "true" default. */
-                    value_name_1?: string;
-                    /** @description Bind the new variable to a device channel ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves it unassigned. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
-                    channel_address?: string;
-                };
+                "application/json": components["schemas"]["CreateSysvarRequest"];
             };
         };
         responses: {
@@ -11309,30 +11680,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description New name for the variable. When present and non-empty the sysvar is renamed in place (the path {name} stays the current name). Omit or leave empty to keep the name. */
-                    name?: string;
-                    /** @description Human-readable label shown in the CCU UI. */
-                    description?: string;
-                    /** @description Physical unit string (e.g. "°C", "%"). */
-                    unit?: string;
-                    /** @description Minimum value (as string, CCU convention). */
-                    min?: string;
-                    /** @description Maximum value (as string, CCU convention). */
-                    max?: string;
-                    /** @description Ordered list of enum labels for LIST/ENUM-type sysvars. */
-                    value_list?: string[];
-                    /** @description New false-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
-                    value_name_0?: string;
-                    /** @description New true-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
-                    value_name_1?: string;
-                    /** @description Toggle the CCU WebUI-visibility flag. Omit to leave it unchanged. */
-                    is_visible?: boolean;
-                    /** @description Toggle the archive flag (CCU DPArchive) that records value changes to the measurement history. Omit to leave it unchanged. */
-                    is_logged?: boolean;
-                    /** @description Reassign the CCU "Kanalzuordnung". Tri-state: omit to leave the assignment untouched, send an empty string to clear it, or a channel address ("ADDR:idx") to assign it. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
-                    channel_address?: string;
-                };
+                "application/json": components["schemas"]["PatchSysvarRequest"];
             };
         };
         responses: {
@@ -11389,12 +11737,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description The BidCos-Wired interface to scan. */
-                    interface: string;
-                    /** @description Disambiguates the CCU; optional for single-CCU setups. */
-                    central?: string;
-                };
+                "application/json": components["schemas"]["InstallModeSearchRequest"];
             };
         };
         responses: {
@@ -11404,12 +11747,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        central?: string;
-                        interface: string;
-                        /** @description Number of devices the bus scan found. */
-                        found: number;
-                    };
+                    "application/json": components["schemas"]["InstallModeSearchResponse"];
                 };
             };
             422: components["responses"]["UnprocessableEntity"];
@@ -11459,9 +11797,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        entries: components["schemas"]["SystemCCUEntry"][];
-                    };
+                    "application/json": components["schemas"]["ListSystemCCUResponse"];
                 };
             };
         };
@@ -11502,10 +11838,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    longitude: number;
-                    latitude: number;
-                };
+                "application/json": components["schemas"]["SetSystemCCUPositionRequest"];
             };
         };
         responses: {
@@ -11640,10 +11973,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        pending: boolean;
-                        fields: string[];
-                    };
+                    "application/json": components["schemas"]["GetRestartPendingResponse"];
                 };
             };
         };
@@ -11663,9 +11993,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        fields: string[];
-                    };
+                    "application/json": components["schemas"]["GetConfigChangesResponse"];
                 };
             };
         };
@@ -11685,22 +12013,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        events: {
-                            central: string;
-                            component: string;
-                            healthy: boolean;
-                            reason?: string;
-                            interface_id?: string;
-                            error_code?: number;
-                            central_state?: string;
-                            connection_state?: string;
-                            degraded_interfaces?: string[];
-                            issues?: string[];
-                            /** Format: date-time */
-                            event_at: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["ListSystemStatusResponse"];
                 };
             };
         };
@@ -11720,9 +12033,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        required: boolean;
-                    };
+                    "application/json": components["schemas"]["SetupStatusResponse"];
                 };
             };
         };
@@ -11736,32 +12047,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    admin: {
-                        username: string;
-                        password: string;
-                    };
-                    locale: {
-                        /** @enum {string} */
-                        locale: "de" | "en";
-                        /** @enum {string} */
-                        theme: "light" | "dark" | "system";
-                    };
-                    /** @description Optional first CCU. Omit to skip. */
-                    ccu?: {
-                        name: string;
-                        host: string;
-                        username?: string;
-                        password?: string;
-                        interfaces: string[];
-                    };
-                    /** @description Optional MQTT broker. Omit to skip. */
-                    mqtt?: {
-                        broker_url: string;
-                        username?: string;
-                        password?: string;
-                    };
-                };
+                "application/json": components["schemas"]["SetupRequest"];
             };
         };
         responses: {
@@ -11797,10 +12083,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    username: string;
-                    password: string;
-                };
+                "application/json": components["schemas"]["LoginRequest"];
             };
         };
         responses: {
@@ -11867,10 +12150,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    current_password: string;
-                    new_password: string;
-                };
+                "application/json": components["schemas"]["ChangeOwnPasswordRequest"];
             };
         };
         responses: {
@@ -11904,10 +12184,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        key?: string;
-                        value?: unknown;
-                    };
+                    "application/json": components["schemas"]["GetPreferenceResponse"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -12018,12 +12295,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description Logical owner of the token (e.g. "homeassistant", "ci-runner"). */
-                    subject: string;
-                    /** @enum {string} */
-                    role: "viewer" | "operator" | "admin";
-                };
+                "application/json": components["schemas"]["CreateTokenRequest"];
             };
         };
         responses: {
@@ -12255,13 +12527,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": {
-                    name?: string;
-                    /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
-                    include_channels?: boolean;
-                    rooms?: string[];
-                    functions?: string[];
-                };
+                "application/json": components["schemas"]["AcceptInboxDeviceRequest"];
             };
         };
         responses: {
@@ -12333,12 +12599,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @example scheduled */
-                        status: string;
-                        /** @description Transmit duty cycle in percent of the device's radio interface, present only when it is at or above the warning threshold (80%). Absent when unknown or below. */
-                        duty_cycle_warning?: number;
-                    };
+                    "application/json": components["schemas"]["UpdateFirmwareResponse"];
                 };
             };
             502: components["responses"]["BadGateway"];
@@ -12416,9 +12677,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        candidates: components["schemas"]["TeamCandidate"][];
-                    };
+                    "application/json": components["schemas"]["GetDeviceTeamCandidatesResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -12439,10 +12698,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description The team channel address to join; null/empty resets to the default team. */
-                    team?: string | null;
-                };
+                "application/json": components["schemas"]["SetDeviceChannelTeamRequest"];
             };
         };
         responses: {
@@ -12479,9 +12735,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        candidates: components["schemas"]["ReplaceCandidate"][];
-                    };
+                    "application/json": components["schemas"]["ListDeviceReplaceCandidatesResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -12501,12 +12755,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description The paired device the new device replaces. */
-                    old_address: string;
-                    /** @description Disambiguates the CCU; optional for single-CCU setups. */
-                    central?: string;
-                };
+                "application/json": components["schemas"]["ReplaceDeviceRequest"];
             };
         };
         responses: {
@@ -12519,13 +12768,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @example replacing */
-                        status: string;
-                        old_address: string;
-                        new_address: string;
-                        central?: string;
-                    };
+                    "application/json": components["schemas"]["ReplaceDeviceResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -12544,15 +12787,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /**
-                     * Format: uri
-                     * @description http/https firmware image the CCU should fetch.
-                     */
-                    url: string;
-                    /** @description Target central (optional for single-CCU deployments). */
-                    central?: string;
-                };
+                "application/json": components["schemas"]["DownloadSystemFirmwareRequest"];
             };
         };
         responses: {
@@ -12581,10 +12816,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": {
-                    /** @default 60 */
-                    seconds?: number;
-                };
+                "application/json": components["schemas"]["DeviceInstallModeRequest"];
             };
         };
         responses: {
@@ -12613,10 +12845,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description Name of the parameter to determine (e.g. "TEMPERATURE"). */
-                    parameter: string;
-                };
+                "application/json": components["schemas"]["DetermineParameterRequest"];
             };
         };
         responses: {
@@ -12626,14 +12855,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /**
-                         * @description The determined value. Type follows the parameter's
-                         *     declared TYPE (bool / number / string); null when the
-                         *     backend does not support the operation (e.g. CUxD).
-                         */
-                        value: unknown;
-                    };
+                    "application/json": components["schemas"]["DetermineParameterResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -13035,11 +13257,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": {
-                    current_values?: {
-                        [key: string]: unknown;
-                    };
-                };
+                "application/json": components["schemas"]["MatchMasterProfileRequest"];
             };
         };
         responses: {
@@ -13049,9 +13267,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        active_id: number;
-                    };
+                    "application/json": components["schemas"]["MatchMasterProfileResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -13630,11 +13846,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name: string;
-                    /** @description Target CCU (required when more than one is configured). */
-                    central?: string;
-                };
+                "application/json": components["schemas"]["CreateRoomRequest"];
             };
         };
         responses: {
@@ -13686,10 +13898,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    new_name: string;
-                    central?: string;
-                };
+                "application/json": components["schemas"]["RenameRoomRequest"];
             };
         };
         responses: {
@@ -13734,10 +13943,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name: string;
-                    central?: string;
-                };
+                "application/json": components["schemas"]["CreateFunctionRequest"];
             };
         };
         responses: {
@@ -13789,10 +13995,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    new_name: string;
-                    central?: string;
-                };
+                "application/json": components["schemas"]["RenameFunctionRequest"];
             };
         };
         responses: {
@@ -13988,9 +14191,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    active: boolean;
-                };
+                "application/json": components["schemas"]["SetProgramEnabledRequest"];
             };
         };
         responses: {
@@ -14154,14 +14355,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description CCU interface the channel lives on (e.g. "HmIP-RF"). Optional — resolved from the stored suppression when omitted. */
-                    interface?: string;
-                    /** @description Channel address ("ADDR:chn"). */
-                    channel: string;
-                    /** @description Service parameter to unsuppress (e.g. "LOWBAT"). Omit or empty to clear every service parameter of the channel. */
-                    parameter?: string;
-                };
+                "application/json": components["schemas"]["UnsuppressServiceMessageRequest"];
             };
         };
         responses: {
@@ -14208,10 +14402,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": {
-                    /** @description Name of the central to back up. Omit to back up the first registered central. */
-                    central_name?: string;
-                };
+                "application/json": components["schemas"]["TriggerBackupRequest"];
             };
         };
         responses: {
@@ -14257,13 +14448,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description The `.sbk` archive.
-                     */
-                    file: string;
-                };
+                "multipart/form-data": components["schemas"]["UploadBackupRequest"];
             };
         };
         responses: {
@@ -14392,10 +14577,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    key: string;
-                    subject?: string;
-                };
+                "application/json": components["schemas"]["OpenEditSessionRequest"];
             };
         };
         responses: {
@@ -14488,9 +14670,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    key: string;
-                };
+                "application/json": components["schemas"]["ForceCloseEditSessionRequest"];
             };
         };
         responses: {
@@ -14918,11 +15098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        last_seq: number;
-                        records: components["schemas"]["LogRecord"][];
-                    };
+                    "application/json": components["schemas"]["ListLogsResponse"];
                     "application/x-ndjson": string;
                 };
             };
@@ -14970,31 +15146,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /**
-                         * @description Stable identifier, `<subsystem>.<what>`.
-                         * @example history.recorder
-                         */
-                        name: string;
-                        /**
-                         * @description The thing that was attached.
-                         * @example *history.Recorder
-                         */
-                        collaborator: string;
-                        /**
-                         * @description `per-central` for an observer replayed over every central, `ordered` for a once-only attachment whose position in the boot sequence matters.
-                         * @enum {string}
-                         */
-                        phase: "per-central" | "ordered";
-                        /** @description Boot marks this seam must be attached before. Only an `ordered` seam carries them. */
-                        before?: string[];
-                        /** @description Boot marks this seam must be attached after. */
-                        after?: string[];
-                        /** @description What stops working when the seam is absent. */
-                        why: string;
-                        /** @description Ordering constraints that were already broken when the seam was attached. Empty is the normal case; a non-empty list is a wiring defect the daemon reports about itself — the collaborator IS wired, so nothing else about the daemon looks wrong. */
-                        violations?: string[];
-                    }[];
+                    "application/json": components["schemas"]["WiringSeam"][];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -15016,24 +15168,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        devices?: {
-                            address?: string;
-                            name?: string;
-                            interface_id?: string;
-                            central?: string;
-                            /** @description RSSI_DEVICE in dBm (device's view); null when absent. */
-                            rssi_device?: number | null;
-                            /** @description RSSI_PEER in dBm (partner's view); null when absent. */
-                            rssi_peer?: number | null;
-                            /** @description Battery level 0-100 (%); null for mains-powered devices. */
-                            battery_level?: number | null;
-                            /** @description LOW_BAT flag; null when the device has no battery indicator. */
-                            low_battery?: boolean | null;
-                            /** @description Whether the device is currently reachable. */
-                            reachable?: boolean;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["GetDiagnosticsRSSIResponse"];
                 };
             };
         };
@@ -15056,35 +15191,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        central?: string;
-                        interface?: string;
-                        /** @description Circuit-breaker state code: 0 = closed, 1 = open, 2 = half-open. */
-                        circuit_state?: number;
-                        /** @description Live InterfaceClient state. Omitted when the client exposes none. */
-                        state?: {
-                            /** @description State-machine bucket (e.g. connected, degraded, disconnected). */
-                            state?: string;
-                            /** @description True once the client has been shut down. */
-                            closed?: boolean;
-                            /** Format: int64 */
-                            total_requests?: number;
-                            /** Format: int64 */
-                            executed_requests?: number;
-                            /** Format: int64 */
-                            pending_requests?: number;
-                            /**
-                             * Format: date-time
-                             * @description RFC3339 timestamp of the last request failure.
-                             */
-                            last_failure_at?: string;
-                            /**
-                             * Format: date-time
-                             * @description RFC3339 timestamp of the last received callback.
-                             */
-                            last_callback_at?: string;
-                        };
-                    }[];
+                    "application/json": components["schemas"]["ReliabilityState"][];
                 };
             };
             503: components["responses"]["ServiceUnavailable"];
@@ -15265,12 +15372,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    cert: string;
-                    /** Format: binary */
-                    key: string;
-                };
+                "multipart/form-data": components["schemas"]["UploadTLSCertificateRequest"];
             };
         };
         responses: {
@@ -15614,15 +15716,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /**
-                         * @description `shutdown_signalled` — this request sent the shutdown signal. `shutdown_in_progress` — a shutdown signalled less than 30 s ago is still running, so no second signal was sent; retry later if it did not complete.
-                         * @enum {string}
-                         */
-                        status?: "shutdown_signalled" | "shutdown_in_progress";
-                        /** Format: date-time */
-                        at?: string;
-                    };
+                    "application/json": components["schemas"]["SystemRestartResponse"];
                 };
             };
         };
@@ -15829,10 +15923,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @enum {string} */
-                    confirm: "remove-all-fabrics";
-                };
+                "application/json": components["schemas"]["MatterFactoryResetRequest"];
             };
         };
         responses: {
@@ -16087,9 +16178,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        applied: number;
-                    };
+                    "application/json": components["schemas"]["BulkUpdateMatterExposableResponse"];
                 };
             };
             /** @description No content — all updates failed or zero applied */
@@ -16356,18 +16445,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        section: string;
-                        /** Format: int64 */
-                        version: number;
-                        /** Format: date-time */
-                        updated_at: string;
-                        restart_required: boolean;
-                        /** @description Whether the running daemon took the change without a restart. False is not an error on its own: most sections have no subsystem that can rebuild itself, and the value simply takes effect at the next restart. It is false with an `apply_error` when a subsystem that could have taken it refused. */
-                        applied: boolean;
-                        /** @description Present only when a live apply was attempted and failed. The section is persisted regardless and takes effect at the next restart. */
-                        apply_error?: string;
-                    };
+                    "application/json": components["schemas"]["PutConfigSectionResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -16735,18 +16813,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        serial: string;
-                        name: string;
-                        host: string;
-                        /** @description Address the SPA pre-fills on adoption. Differs from host when a stabler value applies — "localhost" for a CCU on the daemon's own host, or a reverse-resolved docker hostname for a co-located HA add-on. Equals host otherwise. */
-                        suggested_host: string;
-                        manufacturer?: string;
-                        model?: string;
-                        /** Format: date-time */
-                        last_seen: string;
-                        already_configured: boolean;
-                    }[];
+                    "application/json": components["schemas"]["DiscoveredCentral"][];
                 };
             };
         };
@@ -16766,14 +16833,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        serial: string;
-                        name?: string;
-                        host?: string;
-                        /** Format: date-time */
-                        ignored_at: string;
-                        ignored_by?: string;
-                    }[];
+                    "application/json": components["schemas"]["IgnoredCentral"][];
                 };
             };
         };
@@ -16916,9 +16976,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        zones: components["schemas"]["AlarmZoneStatus"][];
-                    };
+                    "application/json": components["schemas"]["GetAlarmStateResponse"];
                 };
             };
         };
