@@ -322,3 +322,67 @@ Left open, recorded with counts rather than silently dropped: 19 confirmed M1
 surface gaps (health coverage, capability liveness, surface-registry gates),
 ten inaccurate seam `Why` texts and nine seams without an effect test from M3,
 and two decorative-but-useful reachability guards from M4.
+
+---
+
+## Follow-up: the open points, worked
+
+### Closed
+
+**A seam that declared itself and wrapped nothing.** `mqtt.hub_ready_restart`
+was attached with an empty `func() {}`, its subscription set up in the next
+statement — so deleting the subscription left the daemon still reporting the
+seam as wired on `/api/v1/diagnostics/wiring`. That inverts ADR 0065:
+declaration and handover are meant to be one statement. Fixed, and
+`TestEverySeamAttachWrapsItsHandover` rules the shape out across both declaring
+forms (`Manifest.Attach`, `Registry.OnRegisterDeclared`).
+
+**Nine seam `Why` texts.** Each was measured against the code before it was
+rewritten. The two that mattered most:
+
+- `secret.config_store_crypto` claimed CCU passwords land in the database in
+  cleartext. They are refused — `sealPlain` returns
+  `ErrPlaintextSecretNotAllowed` and the save becomes a 400. Config *sections*
+  are the half that really is written in the clear, while `/health` still
+  reports secrets as encrypted.
+- `jobs.standard_per_central` claimed no circuit breaker ever recovers. A
+  per-interface ticker probes availability independently of the seam.
+
+**Two subsystems that could die silently.** `wireSecurityService` returns nil
+on two log-only paths, twelve lines from an alarm service that had recorded on
+the health tracker since it was written; and a failed mDNS advertiser left one
+Warn line while Matter QR pairing quietly stopped working.
+`TestEveryBridgeServiceReportsHealth` holds the class, with `rest` and
+`webhook` recorded as deliberately uncovered and why.
+
+### Two instruments corrected by their own negative controls
+
+Both belong with the three from the DTO guard — same shape, more evidence that
+this is the recurring failure and not a one-off:
+
+- The health-coverage guard reported the two **best**-instrumented services as
+  uninstrumented, because both name their component through a constant and the
+  walk matched string literals only. A second correction followed: the tracker
+  scopes components as `matter.bridge`, `startup.<central>`, so an exact-match
+  comparison called the Matter bridge uncovered.
+- The mDNS fix **did not fire**. Enabling mDNS in the harness and re-checking
+  showed the component still absent: `startMDNSAdvertiser` has a third outcome,
+  `(nil, nil)` for an unusable listen port, which the first version covered
+  neither way. Without that control this would have shipped as a fix that never
+  runs — the exact failure mode the round is named after, caught on the round's
+  own work.
+
+### Still open, and why
+
+- **Capability tokens report configuration, not liveness** (5). `matter.bridge.v1`
+  is emitted from `cfg.North.Matter.Enabled`, not from a running bridge. Whether
+  a capability token should mean "configured" or "working" is a contract
+  decision with a client-visible answer either way, not a defect to patch.
+- **Four surfaces have no token at all** — the MQTT raw plane, inbound webhook,
+  Diagrams, and the persistence-backed admin surface. Same decision.
+- **Surface-registry gate and role mismatches** (4).
+- **Nine seams without an effect test.** The Attach guard now pins that each
+  wraps real work, which is the structural half; asserting the *consequence*
+  each `Why` names is still one test per seam.
+- **`webhook` has no health component.** What counts as unhealthy for a
+  fire-and-forget sender needs deciding before it can be recorded.
