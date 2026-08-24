@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 372.
+Guards without a doc comment: 7 of 373.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -289,6 +289,7 @@ Guards without a doc comment: 7 of 372.
 | TestReferenceCompare | wire_snapshots/reference_compare_test.go | TestReferenceCompare runs every Go Custom-DP setter covered by a reference wire snapshot and fails when the wire calls differ. |
 | TestWireSnapshots | wire_snapshots/snapshot_pin_test.go | TestWireSnapshots loads every golden snapshot and verifies that re-running the same setter with the same inputs produces identical wire calls. |
 | TestEveryWireFunctionHasAProductionCaller | wiring_free_functions_test.go | TestEveryWireFunctionHasAProductionCaller closes the hole its sibling TestEveryWiringSetterHasAProductionCaller cannot reach. |
+| TestEveryWiringFunctionDeclaresOrExplainsItself | wiring_function_coverage_test.go | TestEveryWiringFunctionDeclaresOrExplainsItself is the guard that makes ADR 0065's end-state measurable instead of aspirational. |
 | TestDeclaredSeamNamesAreDistinctAndScoped | wiring_manifest_test.go | TestDeclaredSeamNamesAreDistinctAndScoped pins the shape of the seam names the manifest reports, because they are the identifiers guards and the diagnostics surface address a seam by — they outlive the Go function that declares them, so a rename must not silently become a new seam. |
 | TestEveryBootMarkIsPassedExactlyOnce | wiring_manifest_test.go | TestEveryBootMarkIsPassedExactlyOnce pins the other half of the ordered-seam mechanism. |
 | TestEveryRegistryObserverDeclaresItsSeam | wiring_manifest_test.go | TestEveryRegistryObserverDeclaresItsSeam is the guard that makes ADR 0065's wiring manifest a check rather than documentation. |

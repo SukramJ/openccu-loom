@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // southboundWiringDeps carries the already-constructed subsystems the
@@ -620,6 +621,17 @@ func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *
 	if d.mqttWiring == nil {
 		return
 	}
+	d.reg.Manifest().Attach(wiring.Seam{
+		Name:         "mqtt.retained_orphan_sweep",
+		Collaborator: "post-central-snapshot hook on *mqtt.Bridge",
+		Phase:        wiring.PhaseOnce,
+		Why:          "retained discovery configs for devices this build no longer publishes stay on the broker, so Home Assistant keeps entities the daemon has forgotten",
+	}, func() { wireRetainedOrphanSweepHook(ctx, d, cfg, logger) })
+}
+
+// wireRetainedOrphanSweepHook installs the hook itself, so the seam above
+// wraps the handover and nothing else.
+func wireRetainedOrphanSweepHook(ctx context.Context, d southboundWiringDeps, cfg *config.Config, logger *slog.Logger) {
 	cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
 	var sweptCentrals sync.Map
 	d.bridge.SetPostCentralSnapshotHook(func(_ context.Context, centralName string) {
@@ -676,6 +688,12 @@ func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *
 // post-ready hook (mDNS TXT refresh, ADR 0058), and seeds the trigger
 // for centrals that became ready before the subscription.
 func wireHubReadyRestart(ctx context.Context, d southboundWiringDeps, reg *central.Registry, logger *slog.Logger) (closers []func(), trigger func()) {
+	reg.Manifest().Attach(wiring.Seam{
+		Name:         "mqtt.hub_ready_restart",
+		Collaborator: "hub-MQTT restart on CCU readiness",
+		Phase:        wiring.PhaseOnce,
+		Why:          "the hub publisher keeps the empty serial it started with, so hub discovery is skipped and no sysvar, program or service-message entity appears in Home Assistant",
+	}, func() {})
 	var readyBuses []*events.Bus
 	for _, u := range reg.List() {
 		if u.EventBus != nil {

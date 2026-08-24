@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/security"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -103,10 +104,21 @@ func securityCentralHook(svc *security.Service) perCentralHook {
 // daemon restart.
 //
 // Nil-safe on both sides: either service may be absent.
-func wireSecurityIndexRefresh(alarmSvc *alarm.Service, securitySvc *security.Service, logger *slog.Logger) {
+func wireSecurityIndexRefresh(m *wiring.Manifest, alarmSvc *alarm.Service, securitySvc *security.Service, logger *slog.Logger) {
 	if alarmSvc == nil || securitySvc == nil {
 		return
 	}
+	m.Attach(wiring.Seam{
+		Name:         "security.index_refresh",
+		Collaborator: "config-changed hook on *alarm.Service",
+		Phase:        wiring.PhaseOnce,
+		Why:          "the hazard-classification index is never rebuilt after an alarm-config change, so a sensor the operator just re-assigned keeps its old class and opens faults on the wrong one",
+	}, func() { wireSecurityIndexRefreshHook(alarmSvc, securitySvc, logger) })
+}
+
+// wireSecurityIndexRefreshHook installs the hook, so the seam above wraps
+// the handover and nothing else.
+func wireSecurityIndexRefreshHook(alarmSvc *alarm.Service, securitySvc *security.Service, logger *slog.Logger) {
 	alarmSvc.SetConfigChangedHook(func(ctx context.Context) {
 		if err := securitySvc.RebuildIndex(ctx); err != nil {
 			logger.Error("security: rebuild index after alarm config change",

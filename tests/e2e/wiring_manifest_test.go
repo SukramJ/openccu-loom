@@ -31,6 +31,10 @@ import (
 // only ever answerable by reading.
 var expectedWiringSeams = []string{
 	"audit.incident_recorder",
+	"client.value_writer_hooks",
+	"config.assembler",
+	"mqtt.hub_ready_restart",
+	"mqtt.retained_orphan_sweep",
 	"audit.program_execute",
 	"audit.session_recorder_persistence",
 	"jobs.scheduled_backup",
@@ -59,8 +63,9 @@ var expectedWiringSeams = []string{
 // of serving it: "this deployment did not wire the history recorder"
 // used to be answerable only by reading the config next to the code.
 var configGatedWiringSeams = map[string]string{
-	"history.recorder": "persistence.history.enabled",
-	"webhook.outbound": "north.webhook.outbound",
+	"history.recorder":       "persistence.history.enabled",
+	"webhook.outbound":       "north.webhook.outbound",
+	"security.index_refresh": "the alarm and security services (both need the persistence tier)",
 }
 
 // expectedOrderedSeams are the once-only seams whose position in the

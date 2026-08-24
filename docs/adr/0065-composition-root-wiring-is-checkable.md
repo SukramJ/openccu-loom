@@ -124,7 +124,15 @@ reporting problem into an outage, and the point of the manifest is that a
 running daemon can be asked. The violation is recorded on the seam, served by
 the endpoint, and failed on by the end-to-end test.
 
-Four marks, six seams. The worked example is `webhook.alarm_bus`:
+Four marks and a third phase. Thirty seams are declared across the daemon:
+nineteen per-central observers from the first adoption, six ordered, and five
+that carry no constraint. `PhaseOnce` exists because the
+ADR's first promise — a seam with no entry is unwired — only holds while every
+seam has an entry, and a seam with no ordering constraint had no way to declare
+one. Choosing it is a claim in itself: that moving this attach earlier or later
+changes nothing observable.
+
+The worked example is `webhook.alarm_bus`:
 `Outbound.Start` reads the alarm bus once and subscribes, so a bus handed over
 after the north bridges start is stored and never read. The setter returns
 nothing, the daemon reports healthy, every static guard and pin stays green, and
@@ -165,10 +173,23 @@ replaces. `TestEveryWiringSetterHasAProductionCaller` and its ratchet can then
 shrink toward deletion rather than being frozen, which is what the round-5 M2
 audit found they currently are.
 
-**What is not covered yet.** The ordered seams that exist but have not been
-declared. Six are; `cmd/openccu-loom` carries more constraints of the same
-shape, and each one adopted is one more comment that becomes a check. Nothing
-about the mechanism needs to change for them.
+**Where it stands.** Every wiring function in `cmd/openccu-loom` now either
+declares a seam or records why it has none, and a guard fails when a new one
+joins without answering the question — which is what turns the ADR's end-state
+from a direction into a measurement. Of the forty-five, eight declare and
+thirty-seven are exempt, and the exemptions are the informative half: fifteen
+construct a value and hand it back, five run once per central, five compose
+several attaches whose seams are declared one level down, and four are
+aggregates.
+
+**One blind spot, and it is in the worst place.** The manifest hangs off the
+central registry, so anything wired before `bootstrap.Build` cannot declare into
+it. Two functions are on that side of the line, and both are secret handling:
+`wireAuditOverlay` installs the cipher and the secret transform on the config
+stores, and its absence means operator credentials persist in cleartext —
+exactly the silent, severe shape this ADR exists to make visible. The fix is
+small and known: build the manifest at the top of `runDaemon` and hand it to the
+registry, rather than letting the registry create it.
 
 **Struct-field seams do not need this mechanism, which is a measured answer
 rather than a deferral.** A collaborator handed over as a field of a deps

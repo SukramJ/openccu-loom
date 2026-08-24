@@ -38,11 +38,19 @@ replace it, and the metrics that say whether it worked.
   the seam attaches. Six seams are declared today, and moving one across its
   boundary turns the end-to-end test red with the consequence spelled out.
 
-  What is left is volume, not mechanism: `cmd/openccu-loom` carries more
-  constraints of exactly this shape, each currently a comment some distance
-  from the step it talks about. `webhook.alarm_bus` is the pattern — a setter
-  whose prose said "before the PhaseLate StartAll" five hundred lines from the
-  `StartAll` in question.
+  Every wiring function in `cmd/openccu-loom` now declares a seam or records
+  why it has none, and a guard fails when a new one joins without answering.
+  Eight declare, thirty-seven are exempt with a measured reason.
+
+  **The one thing genuinely left is a blind spot, not volume.** The manifest
+  hangs off the central registry, so anything wired before `bootstrap.Build`
+  cannot declare into it — and the two functions on that side are both secret
+  handling. `wireAuditOverlay` installs the cipher and the secret transform on
+  the config stores; without it operator credentials persist in cleartext, and
+  nothing would report the seam missing. Fix: build the manifest at the top of
+  `runDaemon` and hand it to the registry instead of letting the registry
+  create it. Small, and it closes the only place where the manifest's promise
+  does not hold.
 
   Struct-field seams are closed rather than open: measurement showed the class
   is already covered at the level of the consequence, not the mechanism — see

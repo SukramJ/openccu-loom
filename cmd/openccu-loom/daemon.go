@@ -256,7 +256,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Teach the reload path how to re-derive the effective config, so a
 	// REST-triggered reload picks up section edits the SPA persisted to the
 	// database after boot.
-	wireConfigAssembler(deps, ov)
+	wireConfigAssembler(reg.Manifest(), deps, ov)
 	catalogs := si.catalogs
 	visReg := si.visReg
 	visFilter := si.visFilter
@@ -444,7 +444,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 			Before:       []wiring.Mark{wiring.MarkNorthBridgesStarted},
 			Why:          "no fault transition or rendered security report reaches the operator's webhook endpoint",
 		}, func() { webhookOutbound.SetSecurityBus(securitySvc.Bus()) })
-		wireSecurityIndexRefresh(alarmSvc, securitySvc, logger)
+		wireSecurityIndexRefresh(reg.Manifest(), alarmSvc, securitySvc, logger)
 		_, stopSecurityCollector := metrics.NewSecurityCollector(metricsReg, securitySvc.Bus())
 		defer stopSecurityCollector()
 	}

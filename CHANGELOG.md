@@ -50,7 +50,10 @@ diagnostics payload.
   fact rather than a reading of the source. `GET /diagnostics/wiring` reports
   the constraints and any that were already broken.
 
-  Six seams are declared. The one to know about is the webhook's alarm bus:
+  Thirty seams are declared across the daemon — nineteen per-central
+  observers, six ordered, five with no constraint — and every wiring function
+  in the composition root now either declares one or records why it has none. The one to know about is
+  the webhook's alarm bus:
   `Outbound.Start` reads it once and subscribes, so a bus handed over after the
   north bridges start is stored and never read. No alarm or security event
   would ever be forwarded, the setter returns nothing, the daemon reports

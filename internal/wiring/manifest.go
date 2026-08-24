@@ -49,6 +49,21 @@ const (
 	// that matters. Its constraints are the [Seam.Before] and
 	// [Seam.After] marks.
 	PhaseOrdered Phase = "ordered"
+	// PhaseOnce is attached once and carries no ordering constraint:
+	// nothing reads the collaborator before the attach, and the attach
+	// reads nothing the boot sequence has yet to produce.
+	//
+	// It exists so that a seam with no order to declare can still be
+	// declared. That is not bookkeeping for its own sake — the manifest's
+	// first promise is that **a seam with no entry is unwired**, and that
+	// only holds while every seam has an entry. A wiring call that cannot
+	// express itself would otherwise be indistinguishable from one nobody
+	// wrote.
+	//
+	// Choosing it is a claim: that moving this attach earlier or later in
+	// the boot sequence changes nothing observable. Where that is not true,
+	// the seam is [PhaseOrdered] and says what it must precede or follow.
+	PhaseOnce Phase = "once"
 )
 
 // Mark names a point the daemon passes during boot. An ordered seam
@@ -258,7 +273,11 @@ func (m *Manifest) Declare(s Seam) {
 	case s.Phase == PhasePerCentral && (len(s.Before) > 0 || len(s.After) > 0):
 		panic(fmt.Sprintf("wiring: per-central seam %q carries ordering marks; the observer replays over the centrals already registered, so its call site has no order to constrain", s.Name))
 	case s.Phase == PhaseOrdered && len(s.Before) == 0 && len(s.After) == 0:
-		panic(fmt.Sprintf("wiring: ordered seam %q names no mark; an ordered seam with no constraint is a per-central seam with the wrong phase, or a seam whose order does not matter and should say so", s.Name))
+		panic(fmt.Sprintf("wiring: ordered seam %q names no mark; an ordered seam with no constraint is either a PhaseOnce seam with the wrong phase, or one whose constraint nobody wrote down", s.Name))
+	case s.Phase == PhaseOnce && (len(s.Before) > 0 || len(s.After) > 0):
+		panic(fmt.Sprintf("wiring: seam %q is declared PhaseOnce but names ordering marks; a seam with a constraint is PhaseOrdered, and leaving it PhaseOnce means the constraint is written down and not checked", s.Name))
+	case s.Phase != PhasePerCentral && s.Phase != PhaseOrdered && s.Phase != PhaseOnce:
+		panic(fmt.Sprintf("wiring: seam %q declares unknown phase %q", s.Name, s.Phase))
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()

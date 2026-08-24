@@ -1,6 +1,6 @@
 {
-  "generated": "68622197",
-  "head": "68622197",
+  "generated": "474e10f1",
+  "head": "474e10f1",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29920,
-    "reachable": 4979,
-    "whitelisted": 21762,
+    "total_exported": 29926,
+    "reachable": 4981,
+    "whitelisted": 21766,
     "unreachable": 3179
   },
   "by_package": [
@@ -167787,28 +167787,28 @@
       "identifier": "Manifest",
       "reason": "held as central.Registry.manifest, built by NewManifest there and served through Registry.Manifest() to the GET /diagnostics/wiring handler; a type reached only through a struct field and a constructor, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 133
+      "line": 148
     },
     {
       "package": "internal/wiring",
       "identifier": "Manifest",
       "reason": "held as central.Registry.manifest, built by NewManifest there and served through Registry.Manifest() to the GET /diagnostics/wiring handler; a type reached only through a struct field and a constructor, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 133
+      "line": 148
     },
     {
       "package": "internal/wiring",
       "identifier": "Mark",
       "reason": "the element type of Seam.Before and Seam.After, set from the Mark* constants at the ordered declaration sites and passed to Manifest.Mark from cmd/openccu-loom/daemon.go",
       "file": "internal/wiring/manifest.go",
-      "line": 65
+      "line": 80
     },
     {
       "package": "internal/wiring",
       "identifier": "Mark",
       "reason": "the element type of Seam.Before and Seam.After, set from the Mark* constants at the ordered declaration sites and passed to Manifest.Mark from cmd/openccu-loom/daemon.go",
       "file": "internal/wiring/manifest.go",
-      "line": 65
+      "line": 80
     },
     {
       "package": "internal/wiring",
@@ -167829,14 +167829,14 @@
       "identifier": "Seam",
       "reason": "constructed as a composite literal at all eighteen OnRegisterDeclared call sites across cmd/ and five internal/ packages, and returned by Manifest.Seams; a type reached only through literals, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 96
+      "line": 111
     },
     {
       "package": "internal/wiring",
       "identifier": "Seam",
       "reason": "constructed as a composite literal at all eighteen OnRegisterDeclared call sites across cmd/ and five internal/ packages, and returned by Manifest.Seams; a type reached only through literals, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 96
+      "line": 111
     },
     {
       "package": "internal/wiring",
@@ -167886,6 +167886,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/wiring/manifest_test.go",
       "line": 115
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestPhaseOnceAttachesWithoutConstraints",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 200
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestPhaseOnceRejectsMarks",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 179
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestUnknownPhaseIsRejected",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 221
     },
     {
       "package": "pkg/hmapi",
@@ -172820,35 +172841,35 @@
       "identifier": "TestCustomDP_HmIPBROLL",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_dp_anchor_test.go",
-      "line": 372
+      "line": 371
     },
     {
       "package": "tests/contract",
       "identifier": "TestCustomDP_HmIPBWTH",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_dp_anchor_test.go",
-      "line": 206
+      "line": 205
     },
     {
       "package": "tests/contract",
       "identifier": "TestCustomDP_HmIPPS_AsRfSwitchAnchor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_dp_anchor_test.go",
-      "line": 422
+      "line": 421
     },
     {
       "package": "tests/contract",
       "identifier": "TestCustomDP_HmIPWGT",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_dp_anchor_test.go",
-      "line": 325
+      "line": 324
     },
     {
       "package": "tests/contract",
       "identifier": "TestCustomDP_HmIPeTRV",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_dp_anchor_test.go",
-      "line": 287
+      "line": 286
     },
     {
       "package": "tests/contract",
@@ -173220,6 +173241,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_free_functions_test.go",
       "line": 46
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestEveryWiringFunctionDeclaresOrExplainsItself",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_function_coverage_test.go",
+      "line": 80
     },
     {
       "package": "tests/contract",

@@ -168,3 +168,63 @@ func toString(v any) string {
 	}
 	return ""
 }
+
+// TestPhaseOnceRejectsMarks pins the pair of rules that keep the three
+// phases from blurring: an ordered seam must name a mark, and a
+// PhaseOnce seam must not.
+//
+// The second is the one worth a test. A constraint written into a
+// PhaseOnce seam would read exactly like a checked one — the marks are
+// right there in the diagnostics payload — while nothing evaluated it.
+func TestPhaseOnceRejectsMarks(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("a PhaseOnce seam naming ordering marks must panic")
+		}
+		if !strings.Contains(toString(r), "written down and not checked") {
+			t.Errorf("panic should say the constraint would go unchecked; got %q", toString(r))
+		}
+	}()
+	NewManifest().Declare(Seam{
+		Name: "x.y", Collaborator: "*z", Phase: PhaseOnce,
+		Before: []Mark{MarkSouthboundWired}, Why: "w",
+	})
+}
+
+// TestPhaseOnceAttachesWithoutConstraints is the ordinary case: a seam
+// with nothing to constrain still gets an entry, because the manifest's
+// first promise is that a seam with no entry is unwired.
+func TestPhaseOnceAttachesWithoutConstraints(t *testing.T) {
+	t.Parallel()
+
+	m := NewManifest()
+	attached := false
+	m.Attach(Seam{
+		Name: "store.audit_overlay", Collaborator: "*sqlite.AuditStore",
+		Phase: PhaseOnce, Why: "the change log records nothing",
+	}, func() { attached = true })
+
+	if !attached {
+		t.Fatal("PhaseOnce must still run the attach")
+	}
+	got := m.Seams()
+	if len(got) != 1 || len(got[0].Violations) != 0 {
+		t.Fatalf("a seam with no constraint cannot be in violation: %+v", got)
+	}
+}
+
+// TestUnknownPhaseIsRejected keeps a typo from producing a seam that no
+// rule applies to.
+func TestUnknownPhaseIsRejected(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("an unknown phase must panic")
+		}
+	}()
+	NewManifest().Declare(Seam{Name: "x.y", Collaborator: "*z", Phase: "whenever", Why: "w"})
+}

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/wiring"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
@@ -290,10 +292,21 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 //
 // A no-op when the config store or the captured base is unavailable (no
 // database); reload consumers then fall back to the recorded snapshot.
-func wireConfigAssembler(deps *reloadDeps, ov *auditOverlay) {
+func wireConfigAssembler(m *wiring.Manifest, deps *reloadDeps, ov *auditOverlay) {
 	if deps == nil || ov == nil || ov.configStore == nil || ov.yamlBase == nil {
 		return
 	}
+	m.Attach(wiring.Seam{
+		Name:         "config.assembler",
+		Collaborator: "DB-overlay config assembler on *reloadDeps",
+		Phase:        wiring.PhaseOnce,
+		Why:          "every reload re-reads the YAML tier alone, so the running daemon silently reverts to the file's values and discards everything the operator saved in the SPA",
+	}, func() { wireConfigAssemblerFn(deps, ov) })
+}
+
+// wireConfigAssemblerFn installs the assembler, so the seam above wraps
+// the handover and nothing else.
+func wireConfigAssemblerFn(deps *reloadDeps, ov *auditOverlay) {
 	store, base := ov.configStore, ov.yamlBase
 	deps.SetConfigAssembler(func(ctx context.Context) (*config.Config, error) {
 		next := config.Clone(base)
