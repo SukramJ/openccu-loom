@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
@@ -73,6 +74,7 @@ type restMountDeps struct {
 	sessions *auth.SessionStore
 
 	healthAdapter        *adapter.HealthAdapter
+	healthTracker        *health.Tracker
 	configAdapter        *adapter.ConfigAdapter
 	devicesAdapter       *adapter.DevicesAdapter
 	deviceAdminDomain    *adapter.DeviceAdminDomain
@@ -201,6 +203,12 @@ func channelFlagsWriterFrom(s *sqlitestore.ChannelFlagsStore) handlers.ChannelFl
 // advertiser at daemon exit. When REST is disabled it is a no-op returning a
 // no-op teardown. The returned teardown folds the inline mDNS-stop defer that
 // previously lived in the composition root.
+// mdnsHealthComponent is the /health component for the mDNS advertiser.
+// Only recorded when discovery.mdns is enabled: an operator who switched
+// it off is not missing anything, and a component that reports on a
+// disabled feature makes the payload harder to read, not easier.
+const mdnsHealthComponent = "discovery.mdns"
+
 func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logger, northBridges *northbridge.Registry, d restMountDeps) (teardown func()) { //nolint:funlen // length is dominated by the flat rest.Deps assembly literal, not control flow
 	teardown = func() {}
 	if !cfg.North.REST.IsEnabled() {
@@ -545,10 +553,31 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// serverGroup gave. See ADR 0047.
 	northBridges.Register(rest.NewService(restServer, logger))
 
+	// A failed advertiser used to leave one Warn line at boot as its only
+	// trace, and the symptom it produces is remote from the cause: Matter
+	// commissioners find the bridge over mDNS, so pairing by QR code stops
+	// working while every surface the operator can see stays healthy.
+	// Diagnosing that from the outside means probing DNS-SD by hand.
 	if cfg.North.Discovery.MDNS.IsEnabled() {
-		if adv, err := startMDNSAdvertiser(ctx, cfg, d.reg, logger); err != nil {
+		recordMDNS := func(healthy bool, note string) {
+			if d.healthTracker != nil {
+				d.healthTracker.Record(mdnsHealthComponent, health.Sample{Healthy: healthy, Note: note})
+			}
+		}
+		adv, err := startMDNSAdvertiser(ctx, cfg, d.reg, logger)
+		switch {
+		case err != nil:
 			logger.Warn("discovery.mdns.start_failed", slog.String("err", err.Error()))
-		} else if adv != nil {
+			recordMDNS(false, "advertiser start failed: "+err.Error())
+		case adv == nil:
+			// startMDNSAdvertiser returns (nil, nil) when the listen
+			// address carries no usable port. Recorded rather than
+			// skipped: from the operator's side this is indistinguishable
+			// from a working advertiser — mDNS is on, nothing is
+			// announced, and without this the daemon says nothing at all.
+			recordMDNS(false, "no usable listen port to advertise")
+		default:
+			recordMDNS(true, "")
 			// Re-announce the TXT bundle when serials resolve or the
 			// central set changes (ADR 0058) — the hub-ready pipeline
 			// invokes this slot.

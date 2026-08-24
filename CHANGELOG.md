@@ -8,6 +8,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Security & Safety domain could be absent for a whole daemon lifetime
+  with nothing but one boot warning to show for it.** `wireSecurityService`
+  returns nil when persistence is missing or construction fails, and both exits
+  were log-only — so every hazard and fault surface answered as if the
+  installation had no sensors while `/health` stayed green. The alarm service
+  wired twelve lines away had recorded on the health tracker since it was
+  written; security now does too, as the new `security` component.
+
+- **A failed mDNS advertiser was equally silent**, and its symptom is remote
+  from its cause: Matter commissioners find the bridge over mDNS, so pairing by
+  QR code stops working with no other surface showing anything wrong. The new
+  `discovery.mdns` component reports all three outcomes, including the one that
+  produced no log line at all — an unusable listen port, where mDNS is enabled
+  and nothing is announced. Recorded only while `north.discovery.mdns` is on.
+
 - **Derived sensors were offered to Matter and then dropped.** Eight
   calculated sensor types — apparent temperature, dew point, dew-point spread,
   enthalpy, frost point, vapor concentration, operating-voltage level and
