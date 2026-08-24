@@ -95,9 +95,9 @@ func TestCoverHADiscoveryPayload_TopicValues(t *testing.T) {
 }
 
 // TestCoverHADiscoveryPayload_NoPositionWithoutCapability pins Task
-// #38: Cover ohne SupportsPosition-Capability emittiert keine
-// position_topic / set_position_topic. HA würde sonst fälschlich
-// einen Slider rendern für Geräte ohne LEVEL-Schreibsupport.
+// a cover without the SupportsPosition capability emits no
+// position_topic / set_position_topic. Without that, Home Assistant
+// renders a position slider for a device that cannot be written to.
 func TestCoverHADiscoveryPayload_NoPositionWithoutCapability(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})

@@ -4,6 +4,6 @@
 // Package backends holds the capability matrix and the backend
 // strategy implementations (CcuBackend, CuxdBackend, HomegearBackend).
 //
-// CCU-Jack ist gestrichen — der zugehörige Backend-Stub und das
-// Interface-Enum sind aus dem Lieferumfang entfernt.
+// CCU-Jack is dropped: its backend stub and its interface enum value
+// are no longer shipped.
 package backends

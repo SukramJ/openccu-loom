@@ -387,7 +387,7 @@ func writeAPISurface(t *testing.T, path string, s apiSurface) {
 // to the person reading it years later: an entry that names no version, and an
 // entry that names a version the API has not reached.
 func TestValueSemanticsChangesAreWellFormed(t *testing.T) {
-	currentMajor, _ := majorMinor(t, handlers.APIVersion)
+	currentMajor, currentMinor := majorMinor(t, handlers.APIVersion)
 
 	for _, entry := range valueSemanticsChanges {
 		version, rest, ok := strings.Cut(entry, " ")
@@ -396,11 +396,18 @@ func TestValueSemanticsChangesAreWellFormed(t *testing.T) {
 				"it followed by a description", entry)
 			continue
 		}
-		major, _ := majorMinor(t, version)
-		if major > currentMajor {
-			t.Errorf("value-semantics entry %q names API major %d, but the API is only at %s. "+
+		// Compared as a pair. Comparing majors alone let the guard miss
+		// every case the register can actually produce: its entries are
+		// minor-level ("7.0.0", "7.1.0", "7.7.0") and the API has stayed
+		// inside major 7 since the register was introduced, so `major >
+		// currentMajor` was false for any entry anyone would plausibly
+		// write. A "7.99.0" line against APIVersion 7.11.0 passed — the
+		// exact promise-not-a-record case the error text below describes.
+		major, minor := majorMinor(t, version)
+		if major > currentMajor || (major == currentMajor && minor > currentMinor) {
+			t.Errorf("value-semantics entry %q names API %d.%d, but the API is only at %s. "+
 				"An entry recorded before the bump that carries it is a promise, not a record.",
-				entry, major, handlers.APIVersion)
+				entry, major, minor, handlers.APIVersion)
 		}
 		if !strings.Contains(rest, ":") {
 			t.Errorf("value-semantics entry %q does not say WHICH field changed meaning; the "+

@@ -309,10 +309,10 @@ func parseMajorMinor(version string) (major, minor int) {
 
 // KindFor returns the backend kind the daemon should use for the given
 // interface. See SPECIFICATION §8.5 for the strategy — CUxD always
-// BIN-RPC, everything else CCU (XML-RPC). The Homegear-Kind ist
-// versionsabhängig und wird vom Detector ([DetermineBackendKind])
-// gewählt — KindFor wird nur aus der reinen Interface-ID heraus
-// aufgerufen.
+// BIN-RPC, everything else CCU (XML-RPC). The Homegear kind depends on
+// the firmware version and is chosen by the detector
+// ([DetermineBackendKind]); KindFor is called with nothing but the bare
+// interface id, which is not enough to make that call.
 func KindFor(iface hmenum.Interface) Kind {
 	switch iface {
 	case hmenum.InterfaceCUxD:
