@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 370.
+Guards without a doc comment: 7 of 373.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -215,6 +215,7 @@ Guards without a doc comment: 7 of 370.
 | TestRESTRouteTiersMatchOpenAPIScopes | rest_authz_scope_test.go | TestRESTRouteTiersMatchOpenAPIScopes pins the two halves of the authorization contract to each other: the scope assets/openapi.yaml publishes for an operation, and the gate the chi router actually wraps that route in. |
 | TestRESTHandlersDoNotDecodePathParamsTwice | rest_path_decode_test.go | TestRESTHandlersDoNotDecodePathParamsTwice fails when a REST source file feeds a chi.URLParam value into url.PathUnescape or url.QueryUnescape. |
 | TestRESTRouterMatchesOpenAPISpec | rest_router_openapi_walk_test.go | TestRESTRouterMatchesOpenAPISpec walks the real chi router NewRouter assembles (every optional facade wired, so every conditionally-mounted route is present) and cross-checks it against assets/openapi.yaml in both directions: 1. |
+| TestFullyWiredRouterDepsCoversEveryDep | router_deps_coverage_test.go | TestFullyWiredRouterDepsCoversEveryDep pins that the helper every router-level contract guard builds on either fills a dep or records why it does not. |
 | TestRoutingKeyCUxDScopingGolden | routing_key_contract_test.go | TestRoutingKeyCUxDScopingGolden locks the one address family whose key deliberately differs from the shared cross-backend contract: CUxD hands out the same synthetic addresses on every CCU it runs on (the first "(28) System" device is `CUX2801001` on every install), so the parameter-level key carries the central discriminator here while the reference implementation leaves it bare. |
 | TestRoutingKeyChannelUniqueIDGolden | routing_key_contract_test.go | TestRoutingKeyChannelUniqueIDGolden locks GenerateChannelUniqueID against the channel/device-level routing-key contract. |
 | TestRoutingKeyHubSlugGolden | routing_key_contract_test.go | TestRoutingKeyHubSlugGolden locks HubSlug against the hub-name slug contract — the Unicode-transliteration rule whose drift silently loses Home Assistant entities for any non-ASCII hub name. |
@@ -288,7 +289,9 @@ Guards without a doc comment: 7 of 370.
 | TestReferenceCompare | wire_snapshots/reference_compare_test.go | TestReferenceCompare runs every Go Custom-DP setter covered by a reference wire snapshot and fails when the wire calls differ. |
 | TestWireSnapshots | wire_snapshots/snapshot_pin_test.go | TestWireSnapshots loads every golden snapshot and verifies that re-running the same setter with the same inputs produces identical wire calls. |
 | TestEveryWireFunctionHasAProductionCaller | wiring_free_functions_test.go | TestEveryWireFunctionHasAProductionCaller closes the hole its sibling TestEveryWiringSetterHasAProductionCaller cannot reach. |
+| TestEveryWiringFunctionDeclaresOrExplainsItself | wiring_function_coverage_test.go | TestEveryWiringFunctionDeclaresOrExplainsItself is the guard that makes ADR 0065's end-state measurable instead of aspirational. |
 | TestDeclaredSeamNamesAreDistinctAndScoped | wiring_manifest_test.go | TestDeclaredSeamNamesAreDistinctAndScoped pins the shape of the seam names the manifest reports, because they are the identifiers guards and the diagnostics surface address a seam by — they outlive the Go function that declares them, so a rename must not silently become a new seam. |
+| TestEveryBootMarkIsPassedExactlyOnce | wiring_manifest_test.go | TestEveryBootMarkIsPassedExactlyOnce pins the other half of the ordered-seam mechanism. |
 | TestEveryRegistryObserverDeclaresItsSeam | wiring_manifest_test.go | TestEveryRegistryObserverDeclaresItsSeam is the guard that makes ADR 0065's wiring manifest a check rather than documentation. |
 | TestPin_AlarmCentralHook_Installed | wiring_pins/alarm_wiring_test.go | TestPin_AlarmCentralHook_Installed pins that runtime-adopted centrals are subscribed onto the alarm service — otherwise sensors on a live-adopted CCU silently never reach the engine. |
 | TestPin_AlarmMotionReset_Wired | wiring_pins/alarm_wiring_test.go | TestPin_AlarmMotionReset_Wired pins that the alarm service passes a motion-reset port into the engine. |

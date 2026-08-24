@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // TestBootSkipsAndReportsAStoredCentralWithAnUnroutableName pins the boot
@@ -58,7 +59,7 @@ func TestBootSkipsAndReportsAStoredCentralWithAnUnroutableName(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	gooseMigrateMu.Lock()
-	ov, teardown := wireAuditOverlay(ctx, cfg, logger)
+	ov, teardown := wireAuditOverlay(ctx, wiring.NewManifest(), cfg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(teardown)
 

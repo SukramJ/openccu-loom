@@ -182,3 +182,105 @@ func TestDeclaredSeamNamesAreDistinctAndScoped(t *testing.T) {
 		t.Fatal("no wiring.Seam literals found — the guard is measuring nothing")
 	}
 }
+
+// TestEveryBootMarkIsPassedExactlyOnce pins the other half of the
+// ordered-seam mechanism.
+//
+// A seam's `Before`/`After` constraint is evaluated against the marks the
+// daemon has passed. A mark that nothing passes is never in that set, so
+// every `Before` constraint naming it silently holds and every `After`
+// constraint naming it silently fails — either way the check has stopped
+// measuring the boot sequence and started measuring a typo. A mark passed
+// twice is worse: the manifest panics at boot, by design, because after a
+// second crossing the constraints evaluated later mean nothing.
+//
+// The count is what this guard asserts, not the position. Where each mark
+// belongs is the composition root's decision and is documented at the
+// call site; that it is reached at all is what a test can settle.
+func TestEveryBootMarkIsPassedExactlyOnce(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	declared := map[string]string{} // Go const name -> mark value
+	fset := token.NewFileSet()
+
+	manifest := filepath.Join(root, "internal", "wiring", "manifest.go")
+	file, err := parser.ParseFile(fset, manifest, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", manifest, err)
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		vs, ok := n.(*ast.ValueSpec)
+		if !ok || len(vs.Names) != 1 || len(vs.Values) != 1 {
+			return true
+		}
+		id, ok := vs.Type.(*ast.Ident)
+		if !ok || id.Name != "Mark" {
+			return true
+		}
+		lit, ok := vs.Values[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		value, uerr := strconv.Unquote(lit.Value)
+		if uerr != nil {
+			return true
+		}
+		declared[vs.Names[0].Name] = value
+		return true
+	})
+	if len(declared) == 0 {
+		t.Fatal("no wiring.Mark constants found — the guard is measuring nothing")
+	}
+
+	// Count Manifest.Mark(wiring.X) calls across the composition root.
+	counts := map[string]int{}
+	cmdDir := filepath.Join(root, "cmd")
+	walkErr := filepath.WalkDir(cmdDir, func(path string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if e.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, perr := parser.ParseFile(fset, path, nil, 0)
+		if perr != nil {
+			return perr
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) != 1 {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel == nil || sel.Sel.Name != "Mark" {
+				return true
+			}
+			arg, ok := call.Args[0].(*ast.SelectorExpr)
+			if !ok || arg.Sel == nil {
+				return true
+			}
+			if _, known := declared[arg.Sel.Name]; known {
+				counts[arg.Sel.Name]++
+			}
+			return true
+		})
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walk cmd: %v", walkErr)
+	}
+
+	for name, value := range declared {
+		switch counts[name] {
+		case 1:
+		case 0:
+			t.Errorf("mark %s (%q) is declared but never passed — every Before constraint naming "+
+				"it holds vacuously and every After constraint naming it fails, so both have "+
+				"stopped measuring the boot sequence", name, value)
+		default:
+			t.Errorf("mark %s (%q) is passed %d times; the manifest panics on the second crossing "+
+				"because constraints evaluated afterwards mean nothing", name, value, counts[name])
+		}
+	}
+}

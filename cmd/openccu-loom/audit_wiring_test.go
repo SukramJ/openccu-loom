@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // ── buildBackupAdapter ────────────────────────────────────────────────────────
@@ -259,7 +260,7 @@ func TestAuditOverlayTeardownPersistsQueuedEntries(t *testing.T) {
 	cfg.DataDir = dataDir
 	logger := slog.New(slog.DiscardHandler)
 
-	ov, teardown := wireAuditOverlay(context.Background(), cfg, logger)
+	ov, teardown := wireAuditOverlay(context.Background(), wiring.NewManifest(), cfg, logger)
 	if ov.db == nil {
 		t.Fatal("the audit overlay opened no database")
 	}

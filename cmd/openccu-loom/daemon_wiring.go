@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	metricswiring "github.com/SukramJ/openccu-loom/internal/metrics/wiring"
 	"github.com/SukramJ/openccu-loom/internal/observability"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -169,6 +170,17 @@ func wireValueWriterHooks(reg *central.Registry, valueWriter *clientpkg.ValueWri
 		}
 	}
 
+	reg.Manifest().Attach(wiring.Seam{
+		Name:         "client.value_writer_hooks",
+		Collaborator: "*client.ValueWriter bus resolver and command tracker",
+		Phase:        wiring.PhaseOnce,
+		Why:          "a value write reaches the CCU but publishes no event and is tracked by no command, so every north-bound plane keeps showing the value the device held before the write",
+	}, func() { wireValueWriterHookFns(reg, valueWriter) })
+}
+
+// wireValueWriterHookFns installs the hooks themselves. Split out so the
+// seam above wraps exactly the handover and nothing else.
+func wireValueWriterHookFns(reg *central.Registry, valueWriter *clientpkg.ValueWriter) {
 	valueWriter.SetBusResolver(func(centralName string) (any, bool) {
 		c, ok := reg.Get(centralName)
 		if !ok || c == nil {

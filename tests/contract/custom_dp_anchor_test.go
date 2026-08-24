@@ -6,6 +6,7 @@ package contract
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -178,17 +179,15 @@ func hasForcedUsage(t *testing.T, dp device.ParameterDataPoint) (hmenum.DataPoin
 	return f.ForcedUsage()
 }
 
-// itoa is a tiny stand-in for strconv.Itoa to keep the import
-// surface minimal — channel numbers in fixtures stay in [0..15].
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	if n < 10 {
-		return string(rune('0' + n)) //nolint:gosec // G115: n is 0..9; '0'+n is 48..57, well within valid rune range
-	}
-	return string(rune('0'+n/10)) + string(rune('0'+n%10)) //nolint:gosec // G115: n is 10..99; each digit is 0..9 so '0'+digit is 48..57
-}
+// itoa formats n for a guard's failure message.
+//
+// It was hand-rolled "to keep the import surface minimal" on the premise
+// that its inputs were channel numbers in [0..15], and it was correct for
+// [0..99] and silently wrong above: at n=197 it rendered "C7", because
+// '0'+19 is 'C'. That premise stopped holding the moment a guard put a
+// source line number in a message — and a message is the whole product of
+// a failing guard, so a garbled one costs exactly what the guard was for.
+func itoa(n int) string { return strconv.Itoa(n) }
 
 // =====================================================================
 // 1) HmIP-BWTH — IPThermostat (channel 1) + IPButtonLock (channel 0)

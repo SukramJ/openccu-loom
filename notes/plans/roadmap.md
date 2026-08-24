@@ -25,31 +25,48 @@ replace it, and the metrics that say whether it worked.
 
 ### Composition root
 
-- **Widen the wiring manifest to setter and struct-field seams**
+- **Declare the remaining ordered seams in `cmd/openccu-loom`**
   ([ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md),
   accepted 2026-08-23).
 
-  The first adoption is done and covers one seam class: every per-central
-  registry observer attaches through `Registry.OnRegisterDeclared`, eighteen
-  call sites across `cmd/` and five `internal/` packages. It carries the guard
-  the manifest needed to be a check rather than documentation — three of them,
-  in fact: a raw `OnRegister` fails statically, a duplicated seam name fails
-  statically, and `GET /diagnostics/wiring` lets an end-to-end test ask a
-  running daemon what it wired, so deleting one wiring line from the
-  composition root turns it red.
+  Two adoptions are done. The first covers the per-central registry observer:
+  eighteen call sites attach through `Registry.OnRegisterDeclared`. The second
+  covers ordering, which is the class the audits actually keep hitting — a
+  collaborator handed over after the thing that reads it has already started.
+  `wiring.Mark` names a boot boundary, an ordered seam declares which marks it
+  must precede and follow, and `Manifest.Attach` evaluates that at the moment
+  the seam attaches. Six seams are declared today, and moving one across its
+  boundary turns the end-to-end test red with the consequence spelled out.
 
-  What is left is the class the audits actually keep hitting: a setter or
-  struct field whose caller exists but runs at the wrong moment. `Seam` already
-  declares `before-southbound` and `after-southbound`; nothing uses them,
-  because the observer class is ordering-free by construction. The next
-  adoption should be a `wire*` function whose order relative to south-bound
-  bring-up is load-bearing, and it should make that ordering a declared
-  constraint a test can check rather than a property of line order in a
-  900-line function.
+  Every wiring function in `cmd/openccu-loom` now declares a seam or records
+  why it has none, and a guard fails when a new one joins without answering.
+  Eight declare, thirty-seven are exempt with a measured reason.
 
-  Ordering by defect density still applies, and `wiringSettersWithoutCaller`
-  (20 entries) should shrink toward deletion as each seam becomes exactly
-  checkable.
+  The pre-registry blind spot is closed: `runDaemon` builds the manifest and
+  the registry adopts it, so the audit overlay's cipher and secret transform —
+  whose absence writes operator credentials to the database in cleartext while
+  every surface reports success — is a declared seam like any other.
+
+  ADR 0065 is implemented. What could still be added is judgement, not
+  mechanism: an ordered seam wherever a constraint is currently only a comment,
+  and a mark whenever a boundary earns one. The guard makes both visible when
+  somebody adds wiring; neither needs a decision now.
+
+  Struct-field seams are closed rather than open: measurement showed the class
+  is already covered at the level of the consequence, not the mechanism — see
+  the ADR's consequences for the three cases and the negative control behind
+  each. The investigation's actual finding was one level up, in the test
+  helper, and is fixed (`TestFullyWiredRouterDepsCoversEveryDep`).
+
+  And one named gap: a mark has to be an unconditional boot boundary, so a
+  constraint relative to an optional subsystem's start is not expressible. The
+  Matter bridge's per-central readiness latch, which must precede its first
+  assembly, is the instance. Closing it means marks that may be absent, and
+  then a third answer beside satisfied and violated — see the ADR's
+  consequences for why that is a shape to avoid rather than reach for.
+
+  `wiringSettersWithoutCaller` (19 entries) should keep shrinking toward
+  deletion as each seam becomes exactly checkable.
 
 ### Matter
 

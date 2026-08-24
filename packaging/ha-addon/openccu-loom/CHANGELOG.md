@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.64.2
+
+The composition root now states its wiring as data, so the daemon can be
+asked what it actually wired instead of the answer living in comments. Two
+long-standing defects are fixed with it: a CCU backup restore left the daemon
+serving the configuration it had just replaced — not until the next restart,
+but for good — and saving the MQTT settings reported success while the running
+bridge kept the old topic base and plane toggles until a restart. Saving a
+settings section now says whether the daemon took the change.
+
 ## 0.64.1
 
 A correction to the published API description, for the benefit of programs

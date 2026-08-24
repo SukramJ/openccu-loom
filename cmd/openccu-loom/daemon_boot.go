@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/wiring"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
@@ -132,7 +134,7 @@ func openLoomDB(cfg *config.Config, logger *slog.Logger) (db *gosql.DB, err erro
 // caller defers early so it runs late (LIFO) — after the health probe and the
 // stores that read it. A leaked handle blocks temp-dir cleanup on Windows.
 // teardown is always non-nil (a no-op when the DB could not be opened).
-func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logger) (ov *auditOverlay, teardown func()) {
+func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Config, logger *slog.Logger) (ov *auditOverlay, teardown func()) {
 	ov = &auditOverlay{}
 	teardown = func() {}
 
@@ -189,9 +191,25 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 			cipher = &secret.Cipher{}
 		}
 		ov.secretsAvailable = cipher.Available()
-		ov.sqCentrals.SetCipher(cipher)
-		ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
-			return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)
+		// The two handovers that make a stored secret a secret. Declared
+		// because their absence is the quietest failure in the daemon: the
+		// stores accept every write, the SPA reports success, and the CCU
+		// password sits in the database in the clear.
+		//
+		// This is also why the manifest is built before the central
+		// registry rather than by it — everything here runs before
+		// bootstrap.Build, and a ledger that could not hold these seams
+		// was blindest exactly where it mattered most.
+		m.Attach(wiring.Seam{
+			Name:         "secret.config_store_crypto",
+			Collaborator: "*secret.Cipher on the centrals and sections stores",
+			Phase:        wiring.PhaseOnce,
+			Why:          "CCU passwords and every other config secret are written to the database in cleartext, and every surface still reports success",
+		}, func() {
+			ov.sqCentrals.SetCipher(cipher)
+			ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
+				return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)
+			})
 		})
 		// Capture the pre-overlay YAML/env tier so a later reload can replay
 		// exactly this assembly against the then-current DB rows — and hand the
@@ -290,10 +308,21 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 //
 // A no-op when the config store or the captured base is unavailable (no
 // database); reload consumers then fall back to the recorded snapshot.
-func wireConfigAssembler(deps *reloadDeps, ov *auditOverlay) {
+func wireConfigAssembler(m *wiring.Manifest, deps *reloadDeps, ov *auditOverlay) {
 	if deps == nil || ov == nil || ov.configStore == nil || ov.yamlBase == nil {
 		return
 	}
+	m.Attach(wiring.Seam{
+		Name:         "config.assembler",
+		Collaborator: "DB-overlay config assembler on *reloadDeps",
+		Phase:        wiring.PhaseOnce,
+		Why:          "every reload re-reads the YAML tier alone, so the running daemon silently reverts to the file's values and discards everything the operator saved in the SPA",
+	}, func() { wireConfigAssemblerFn(deps, ov) })
+}
+
+// wireConfigAssemblerFn installs the assembler, so the seam above wraps
+// the handover and nothing else.
+func wireConfigAssemblerFn(deps *reloadDeps, ov *auditOverlay) {
 	store, base := ov.configStore, ov.yamlBase
 	deps.SetConfigAssembler(func(ctx context.Context) (*config.Config, error) {
 		next := config.Clone(base)

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // Bootstrap is the composition root that turns a parsed [config.Config]
@@ -20,6 +21,11 @@ import (
 // can exercise Bootstrap without starting servers.
 type Bootstrap struct {
 	Logger *slog.Logger
+	// Manifest is the wiring ledger the registry records its seams into.
+	// Nil gets a fresh one, which is right for tests and for the CLI; the
+	// daemon passes the manifest it has already been declaring into since
+	// before the registry existed.
+	Manifest *wiring.Manifest
 }
 
 // Build materialises every central named in cfg.Centrals. Returns a
@@ -39,7 +45,7 @@ func (b *Bootstrap) Build(_ context.Context, cfg *config.Config) (*Registry, fun
 	// ADR-0024). Same for every central in this daemon.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 
-	reg := NewRegistry()
+	reg := NewRegistryWithManifest(b.Manifest)
 	for i := range cfg.Centrals {
 		cc := &cfg.Centrals[i]
 		unit, err := New(Config{

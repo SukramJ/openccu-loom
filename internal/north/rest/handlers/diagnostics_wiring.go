@@ -30,15 +30,33 @@ func DiagnosticsWiring(reader WiringManifestReader) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		out := []hmapi.WiringSeam{}
 		if reader != nil {
-			for _, s := range reader.Seams() {
+			seams := reader.Seams()
+			for i := range seams {
 				out = append(out, hmapi.WiringSeam{
-					Name:         s.Name,
-					Collaborator: s.Collaborator,
-					Phase:        string(s.Phase),
-					Why:          s.Why,
+					Name:         seams[i].Name,
+					Collaborator: seams[i].Collaborator,
+					Phase:        string(seams[i].Phase),
+					Before:       marksToStrings(seams[i].Before),
+					After:        marksToStrings(seams[i].After),
+					Why:          seams[i].Why,
+					Violations:   seams[i].Violations,
 				})
 			}
 		}
 		JSON(w, http.StatusOK, out)
 	}
+}
+
+// marksToStrings renders boot marks for the wire. Nil stays nil so an
+// observer seam, which has no order to constrain, omits the fields
+// rather than carrying empty arrays.
+func marksToStrings(marks []wiring.Mark) []string {
+	if len(marks) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(marks))
+	for _, m := range marks {
+		out = append(out, string(m))
+	}
+	return out
 }

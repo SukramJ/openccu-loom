@@ -88,7 +88,7 @@ Three checks come with it, and each fails for a different reason:
   this.
 
 The endpoint that makes the third one possible is `GET /diagnostics/wiring`
-(admin-only, API 7.7.0). It answers with an empty list rather than a 503 when
+(admin-only). It answers with an empty list rather than a 503 when
 nothing is wired: "the daemon wired none of these" and "the daemon cannot tell
 you" must not be the same status, because only one of them is checkable.
 
@@ -106,6 +106,45 @@ That buys three things no current guard can express:
   property of line order in a 900-line function;
 - the manifest is the same artefact a `/diagnostics` surface could serve, so an
   operator can see what a running daemon actually wired.
+
+### What the second adoption covers
+
+Ordering — the class the audits actually keep hitting, and the reason this ADR
+exists. It is expressed as **marks** rather than as the two phase constants the
+first adoption declared and never used, because "before south-bound bring-up"
+turned out to be the wrong axis: what these constraints are relative to is the
+moment something *reads* its collaborator, which is usually its own `Start`.
+
+`wiring.Mark` names a point the daemon passes; `Manifest.Mark` records the
+passage; an ordered seam declares `Before` and `After` marks; and
+`Manifest.Attach` evaluates them **at the moment the seam attaches** — the only
+moment at which the answer is a fact rather than a reading of the source. A
+broken constraint does not stop the wiring: refusing to attach would turn a
+reporting problem into an outage, and the point of the manifest is that a
+running daemon can be asked. The violation is recorded on the seam, served by
+the endpoint, and failed on by the end-to-end test.
+
+Four marks and a third phase. Thirty seams are declared across the daemon:
+nineteen per-central observers from the first adoption, six ordered, and five
+that carry no constraint. `PhaseOnce` exists because the
+ADR's first promise — a seam with no entry is unwired — only holds while every
+seam has an entry, and a seam with no ordering constraint had no way to declare
+one. Choosing it is a claim in itself: that moving this attach earlier or later
+changes nothing observable.
+
+The worked example is `webhook.alarm_bus`:
+`Outbound.Start` reads the alarm bus once and subscribes, so a bus handed over
+after the north bridges start is stored and never read. The setter returns
+nothing, the daemon reports healthy, every static guard and pin stays green, and
+no alarm or security event is ever forwarded. That constraint used to live in a
+comment five hundred lines from the `StartAll` it talked about. Moving the call
+across the boundary now turns the end-to-end test red with the consequence
+spelled out — verified by doing exactly that.
+
+The `PhaseBeforeSouthbound` / `PhaseAfterSouthbound` constants are gone. They
+were a guess at the shape of the ordering problem, made before a single instance
+had been expressed in them; keeping them beside the marks would have offered two
+ways to say one thing, one of which no seam had ever used.
 
 ### Options considered
 
@@ -134,12 +173,87 @@ replaces. `TestEveryWiringSetterHasAProductionCaller` and its ratchet can then
 shrink toward deletion rather than being frozen, which is what the round-5 M2
 audit found they currently are.
 
-**What is not covered yet.** Setter and struct-field seams, and the two
-ordering phases `Seam` declares but no adoption uses. `PhaseBeforeSouthbound`
-and `PhaseAfterSouthbound` exist because the ordering class is the one the
-audits keep hitting; the observer class is ordering-free by construction, so
-the first adoption cannot exercise them. They are the shape the next adoption
-is expected to fill, not a claim that ordering is checked today.
+**Where it stands.** Every wiring function in `cmd/openccu-loom` now either
+declares a seam or records why it has none, and a guard fails when a new one
+joins without answering the question — which is what turns the ADR's end-state
+from a direction into a measurement. Of the forty-nine, thirteen declare and
+thirty-six are exempt, and the exemptions are the informative half: fourteen
+construct a value and hand it back, six run once per central, five install the
+attach for a seam their caller declares, five compose several attaches, four
+start collaborators that declare their own seams one level down, and two are
+one-offs — the CLI's own crypto, which has no registry, and a call that hands
+over logging context rather than a collaborator.
+
+**The blind spot that was in the worst place is closed.** The manifest used to
+hang off the central registry, so anything wired before `bootstrap.Build` could
+not declare into it — and the function on that side was
+`wireAuditOverlay`, which installs the cipher and the secret transform on the
+config stores. Its absence means operator credentials persist in cleartext while
+every surface reports success: the quietest failure in the daemon, in the one
+place the ledger could not see.
+
+`runDaemon` now builds the manifest first and the registry adopts it
+(`central.NewRegistryWithManifest`). `secret.config_store_crypto` is a declared
+seam, and removing the handover makes a running daemon report it missing —
+verified by doing exactly that.
+
+What remains outside the ledger is `hmcli`'s own config-store crypto: the CLI
+builds no central registry and has no manifest. That is a different program with
+a different lifetime, not a gap in this one.
+
+**Struct-field seams do not need this mechanism, which is a measured answer
+rather than a deferral.** A collaborator handed over as a field of a deps
+literal was expected to need a shape of its own, because a literal has no
+attach point to hang a declaration on. It turns out not to need one:
+
+- Where a nil field changes the *route surface*, the bidirectional
+  router/OpenAPI walk catches it — and it is genuinely bidirectional, with nine
+  exemptions, all on `/events`, so nothing is being absorbed there.
+- Where a nil field changes the route's *tier* without changing the surface —
+  the auth gates, the one instance with recorded harm — the authz-scope guard
+  catches it. Verified by negative control: nil-ing `RequireAdmin` makes it
+  report every admin route as mounted at viewer tier.
+- Where a nil field changes neither, the route mounts anyway and the handler
+  answers 503. Nine of `rest.Deps`' seventy-five unfilled fields gate a mount,
+  all nine gate middleware or the SPA mount; the other sixty-six sit behind
+  routes that mount regardless. A 503 for an unconfigured subsystem is the
+  documented behaviour and it is loud.
+
+A manifest census of nil fields would have restated all of that at the level of
+the mechanism instead of the consequence, and flooded the ledger with a hundred
+and forty entries per deps struct to do it.
+
+What the investigation did find is one level up, in the *test helper*:
+`fullyWiredRouterDeps` fills 68 of 140 fields, so every guard built on it is
+blind to what the other 72 govern. That is now a ratchet of its own — each
+unfilled field carries the reason its absence is harmless, and a new dep
+joining the nil set fails until somebody decides.
+
+The marks stay deliberately few. A mark is a boundary something downstream
+genuinely depends on, and a guard asserts every declared mark is passed exactly
+once: a mark nothing passes makes every `Before` naming it hold vacuously and
+every `After` naming it fail, at which point the constraint has stopped
+measuring the boot sequence and started measuring a typo.
+
+That exactly-once rule is also the mechanism's one real limitation, and it is
+worth naming because there is an instance. **A mark has to be an unconditional
+boundary**, so a constraint relative to an *optional* subsystem's start cannot
+be expressed: the Matter bridge latches per-central readiness before its first
+assembly, and on a daemon with Matter switched off there is no assembly to
+mark. The MQTT supervisor is the near miss that shows where the line falls —
+its `Start` runs even with MQTT disabled, taking its own skip branch, so it is
+a boundary of the boot sequence rather than of a feature and does qualify.
+
+Lifting that would mean marks that may be absent, and then every `After`
+constraint naming one needs a third answer beside satisfied and violated —
+"could not be evaluated" — which is exactly the shape that lets an unchecked
+claim read as a checked one. Better to have the gap named than papered over.
+
+The live-CCU adopt path (`central_adopt.go`) is out of scope for the same
+reason from the other direction: it runs once per adopted central, so its
+orderings are relative to that central's own bring-up rather than to the
+daemon's boot, and marks that fire repeatedly are not something this ledger can
+reason about.
 
 **The alternative that was rejected by accepting this.** Leaving the composition
 root as it is would have kept it at roughly twice the average defect density,

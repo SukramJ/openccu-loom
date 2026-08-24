@@ -4,16 +4,21 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.64.2]
 
 The round-5 measures, finished. The composition root now states its wiring as
 data a test can read, the MCP/REST parity backlog is empty, and the seventeen
 contract guards that stayed green when what they protect was removed now
 either bite or are gone. The two findings round 4 carried forward are closed
 too — a backup restore that left the daemon serving the old configuration, and
-an MQTT save that reported success and changed nothing. The
-north-bound API contract moves to **7.8.0** — additive only: one admin-only
-diagnostics endpoint, and two fields on the config-section save response.
+an MQTT save that reported success and changed nothing.
+
+The manifest now covers ordering, which is the class two audits kept hitting: a
+collaborator handed over after the thing that reads it has already started. That
+compiles, runs, reports nothing, and leaves the feature off. The north-bound API
+contract moves to **7.9.0** — additive only: one admin-only diagnostics
+endpoint, two fields on the config-section save response, and four on a
+diagnostics payload.
 
 ### Added
 
@@ -38,6 +43,34 @@ diagnostics endpoint, and two fields on the config-section save response.
   all; every one is read-only, and the write halves of those facades
   (interface reconnect, un-ignore edits, schedule writes) are deliberately not
   projected. The declared backlog they were tracked in is now empty.
+
+- **Ordered wiring seams.** A once-only seam can now declare which boot
+  boundaries it must be attached before and after, and the manifest evaluates
+  that at the moment it attaches — the only moment at which the answer is a
+  fact rather than a reading of the source. `GET /diagnostics/wiring` reports
+  the constraints and any that were already broken.
+
+  Thirty-one seams are declared across the daemon — nineteen per-central
+  observers, six ordered, six with no constraint — and every wiring function in
+  the composition root now either declares one or records why it has none. That
+  includes the config-store crypto, whose absence writes CCU passwords to the
+  database in cleartext while every surface reports success; it sits before the
+  central registry exists, which is why the manifest is now built ahead of the
+  registry rather than by it. The one to know about is
+  the webhook's alarm bus:
+  `Outbound.Start` reads it once and subscribes, so a bus handed over after the
+  north bridges start is stored and never read. No alarm or security event
+  would ever be forwarded, the setter returns nothing, the daemon reports
+  healthy, and every static guard stays green. That constraint used to live in
+  a comment five hundred lines from the `StartAll` it talked about; moving the
+  call across the boundary now turns an end-to-end test red with the
+  consequence spelled out.
+
+- A guard over the test helper every router-level contract guard builds on.
+  `fullyWiredRouterDeps` fills 68 of `rest.Deps`' 140 fields, so those guards
+  are blind to whatever the rest govern — which already cost one silently
+  vacuous test. Every unfilled field now carries the reason its absence is
+  harmless, and a new dep joining the nil set fails until somebody decides.
 
 ### Changed
 
