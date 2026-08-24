@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 367.
+Guards without a doc comment: 7 of 370.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -382,6 +382,9 @@ Guards without a doc comment: 7 of 367.
 | TestWSCentralStateBroadcastReachesHub | ws_broadcast_roundtrip_test.go | TestWSCentralStateBroadcastReachesHub is the round-trip half of the WS broadcast contract for "central.state_changed": a real central state transition, driven through the real state machine, must produce a real entry in the hub's replay buffer — not merely a token in source text. |
 | TestEveryRegisteredWSCommandIsClassified | ws_command_classification_test.go | TestEveryRegisteredWSCommandIsClassified asserts that every command name registered via router.Register(...) in the WS command source files appears in exactly one of writeCommandRoles or readOnlyCommands (internal/north/rest/ws/commands.go). |
 | TestWebSocketAcceptsFragmentedClientMessages | ws_framing_test.go | TestWebSocketAcceptsFragmentedClientMessages pins RFC 6455 §5.4 on the north-bound WebSocket boundary: a client is free to split one logical message across a non-final data frame plus continuations, and the server must act on the assembled message. |
+| TestEveryBroadcastPayloadIsFieldChecked | ws_payload_field_parity_test.go | TestEveryBroadcastPayloadIsFieldChecked asserts that every payload named by a broadcast in assets/wsapi.json is either registered above or recorded as declared elsewhere. |
+| TestWSPayloadStructsMatchOpenAPISchemaFields | ws_payload_field_parity_test.go | TestWSPayloadStructsMatchOpenAPISchemaFields pins every registered broadcast payload struct to the fields of its OpenAPI component schema, in both directions. |
+| TestWSPayloadsDeclaredElsewhereStayUnreachable | ws_payload_field_parity_test.go | TestWSPayloadsDeclaredElsewhereStayUnreachable keeps the coverage-hole list honest. |
 | TestWSBroadcastPayloadsHaveOpenAPISchema | wsapi_openapi_payload_parity_test.go | TestWSBroadcastPayloadsHaveOpenAPISchema asserts that every `kind: "broadcast"` entry in assets/wsapi.json names a non-empty `payload` and that the named schema exists under `components.schemas` in assets/openapi.yaml. |
 | TestWSCommandCatalogParity | wsapi_schema_test.go | TestWSCommandCatalogParity verifies that every non-broadcast entry in assets/wsapi.json (the client-callable commands) has a matching handler registered in the WS router source files. |
 | TestWSCommandsMatchPinnedSchema | wsapi_schema_test.go | TestWSCommandsMatchPinnedSchema asserts that the set of command names extracted from the source files matches the set pinned in assets/wsapi.json exactly. |
