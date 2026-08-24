@@ -72,6 +72,7 @@ var valueSemanticsChanges = []string{
 func TestAPISurfaceChangesCarryTheRightBump(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	current := buildAPISurface(spec)
+	addCompanionSchemas(t, &current)
 
 	path := apiSurfacePath(t)
 	if *updateAPISurface {
@@ -230,6 +231,68 @@ func buildAPISurface(spec *openapi3.T) apiSurface {
 		out.Schemas[name] = fields
 	}
 	return out
+}
+
+// addCompanionSchemas folds assets/schemas/types.json into the same inventory
+// under a prefixed key.
+//
+// It is here because the two halves of this project's versioning policy
+// disagreed without it. script/check_api_version_bump.sh treats four files as
+// contract assets — openapi.yaml, wsapi.json, enums.json and types.json — and
+// demands a bump when any of them changes. This guard read only openapi.yaml,
+// so a bump earned by one of the other three arrived here as a version that
+// moved for no visible reason, and the only way past was to refresh the
+// baseline: the version change recorded, the change that caused it not.
+//
+// That happened the first time a types.json-only fix needed a release. Three
+// DataPointKey properties carried a `$ref` into `#/definitions/` for targets
+// that were never in the file, so no generator could resolve them; replacing
+// them with declared strings is a real contract change to a published asset,
+// and this guard had no way to say what it was.
+//
+// enums.json stays out: its entries are value lists rather than typed fields,
+// so this diff would report every added wire value as a schema change. CI
+// regenerates it and fails on a diff, which is the check that fits its shape.
+func addCompanionSchemas(t *testing.T, out *apiSurface) {
+	t.Helper()
+
+	const asset = "assets/schemas/types.json"
+
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), asset)) //nolint:gosec // fixed repo-relative asset
+	if err != nil {
+		t.Fatalf("read %s: %v", asset, err)
+	}
+	var doc struct {
+		Definitions map[string]struct {
+			Properties map[string]struct {
+				Type string `json:"type"`
+				Ref  string `json:"$ref"`
+			} `json:"properties"`
+		} `json:"definitions"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse %s: %v", asset, err)
+	}
+	if len(doc.Definitions) == 0 {
+		t.Fatalf("%s declares no definitions — the parse is wrong, and an inventory "+
+			"that reads nothing reports every later change as an addition", asset)
+	}
+
+	for name, def := range doc.Definitions {
+		fields := make([]string, 0, len(def.Properties))
+		for prop, spec := range def.Properties {
+			typ := spec.Type
+			if spec.Ref != "" {
+				typ = "$ref:" + spec.Ref[strings.LastIndex(spec.Ref, "/")+1:]
+			}
+			if typ == "" {
+				typ = "unknown"
+			}
+			fields = append(fields, prop+":"+typ)
+		}
+		sort.Strings(fields)
+		out.Schemas["types.json:"+name] = fields
+	}
 }
 
 // schemaTypeOf reduces a property to the coarse shape a client's generated

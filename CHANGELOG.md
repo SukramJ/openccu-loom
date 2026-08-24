@@ -86,6 +86,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   API **7.10.0** — additive: 58 schemas, no path or operation changed.
 
+- **Three `DataPointKey` properties in `assets/schemas/types.json` pointed at
+  definitions that were not there.** `interface`, `parameter` and `paramset_key`
+  each carried a `$ref` into `#/definitions/`, which holds only `DataPointKey`,
+  `ParamValue` and `ValueKind` — so no generator could resolve them and the
+  Python types package saw three unusable properties. They are plain strings
+  now, each naming the enum in `enums.json` that supplies its vocabulary.
+
+  API **7.11.0** — additive: an unresolvable reference becoming a resolvable
+  type takes nothing away from a consumer that could not resolve it.
+
 
 
 The round-5 measures, finished. The composition root now states its wiring as
