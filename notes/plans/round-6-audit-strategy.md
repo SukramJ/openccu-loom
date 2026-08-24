@@ -65,6 +65,56 @@ ledger was the third.
 **Negative control.** Seed each partition with one entry whose reason has been
 deliberately falsified. A pass that does not surface it did not measure.
 
+#### Done — what the pass found
+
+**191 entries checked, 5 falsifications planted, 5 found** — four by the
+auditors, the fifth (`restDomainsWithoutMCPTools["auth"]`, claiming two MCP
+tools that do not exist) only by the adversarial reviewer. The two-stage shape
+earned its keep on exactly one entry, which is the rate at which it usually
+does.
+
+**The experiment had a flaw of its own, and it is worth recording.** Every
+partition was told it contained a falsification; only three did. The two that
+did not went hunting for a plant that was not there — and still returned real
+findings. So "did not find the plant" was not evidence against those two, and
+the brief should have said "may contain".
+
+Findings that survived verification:
+
+- **13 entries in `routerDepsLeftNil` were wrong**, in a ledger written the same
+  week. Its three grouped reasons had been pattern-matched rather than measured:
+  two booleans gating middleware, two values the router defaults, three plain
+  parameters, and the two role gates that fall back to `AuthRequire` instead of
+  disappearing were all filed as "optional service facades answering 503".
+  Several genuine facades do not answer 503 either — a nil `Capabilities`
+  detector silently shrinks a list, a nil `DeviceIcons` proxy answers 404, and
+  `handlers.Health` does not nil-check its tracker at all. Re-measured per entry
+  against the router into seven categories, and the facade reason no longer
+  claims a status code it cannot support for all 57.
+- **Two exemptions were hiding missing seams**, not describing absent ones.
+  `registerFirmwareJobs` was filed as "constructs and returns" and returns
+  nothing; `wireAddonUpdateWS` claimed its collaborators declare themselves
+  through `OnRegisterDeclared`, and no such call exists anywhere in that path.
+  Both now declare a seam. Without them an add-on update's progress never
+  reaches a WebSocket client, and no central ever polls for device firmware.
+- **Two reasons named a mechanism the code does not have.**
+  `GetLinkProfiles` was said to "narrow" on an unknown receiver type; it
+  collapses every `load` error, which is safe only because `load` returns
+  exactly two, and the entry now says that instead.
+  `wireConfigStoreCrypto` was attributed to `hmcli`, which does not reference
+  it — it serves the daemon's own `config` subcommand.
+- **Two entries were stale**: `retain_cleanup.go` no longer spells the
+  identifier prefix it was exempted for, and the `snapshot` entry's comment
+  still described a backlog that had been emptied.
+
+**One reported finding was false** and did not survive: an auditor claimed
+`cmd/openccu-loom/ws_adapters.go` does not exist. It does. A false finding costs
+what a missed one costs — it sends somebody to correct something that was right.
+
+**Rate.** Of 191 entries, 19 needed correction and 2 concealed real work. That
+is roughly one in nine, in ledgers whose whole purpose is to record a decision
+somebody checked.
+
 ### M2 — follow the contract downstream instead of searching the repo
 
 The inline-schema gap had grown to 58 bodies and was **invisible from inside

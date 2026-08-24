@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/wiring"
+
 	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -63,13 +65,26 @@ func startAddonUpdatePeriodicCheck(ctx context.Context, updater *addonupdate.Upd
 // state transition — daemon-lifetime, independent of any MQTT broker
 // (re)connect. Returns an unsubscribe func; a no-op when updater or
 // hub is nil.
-func wireAddonUpdateWS(updater *addonupdate.Updater, hub *ws.Hub) (unsubscribe func()) {
+func wireAddonUpdateWS(m *wiring.Manifest, updater *addonupdate.Updater, hub *ws.Hub) (unsubscribe func()) {
 	if updater == nil || hub == nil {
 		return func() {}
 	}
-	return updater.OnChange(func(st addonupdate.Status) {
-		hub.PublishAddonUpdateStateChanged(addonUpdateWSPayload(st), time.Now())
+	// A plain listener registration on the updater, not an observer that
+	// declares itself — which is why the exemption that used to cover
+	// this function claimed a mechanism it does not have. Nothing else
+	// carries the seam, so it is declared here.
+	var unsub func()
+	m.Attach(wiring.Seam{
+		Name:         "ws.addon_update_status",
+		Collaborator: "*ws.Hub, listening on addonupdate.Updater.OnChange",
+		Phase:        wiring.PhaseOnce,
+		Why:          "an add-on update's progress never reaches a WebSocket client, so the SPA shows the state it had when the page loaded for the whole install",
+	}, func() {
+		unsub = updater.OnChange(func(st addonupdate.Status) {
+			hub.PublishAddonUpdateStateChanged(addonUpdateWSPayload(st), time.Now())
+		})
 	})
+	return unsub
 }
 
 // addonUpdateWSPayload converts the domain snapshot to the WS wire

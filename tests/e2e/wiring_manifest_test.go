@@ -37,6 +37,7 @@ var expectedWiringSeams = []string{
 	"mqtt.retained_orphan_sweep",
 	"audit.program_execute",
 	"audit.session_recorder_persistence",
+	"jobs.firmware_per_central",
 	"jobs.scheduled_backup",
 	"mqtt.system_status",
 	"rest.system_status_buffer",
@@ -66,6 +67,7 @@ var expectedWiringSeams = []string{
 var configGatedWiringSeams = map[string]string{
 	"history.recorder":       "persistence.history.enabled",
 	"webhook.outbound":       "north.webhook.outbound",
+	"ws.addon_update_status": "the add-on self-updater, which only exists on a supervised install",
 	"security.index_refresh": "the alarm and security services (both need the persistence tier)",
 }
 

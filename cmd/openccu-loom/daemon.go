@@ -464,7 +464,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// inside makeMQTTSubscriberBuilder below (they must target whichever
 	// bridge instance is currently live).
 	addonUpdater := wireAddonUpdate(ctx, logger)
-	defer wireAddonUpdateWS(addonUpdater, wsHub)()
+	defer wireAddonUpdateWS(reg.Manifest(), addonUpdater, wsHub)()
 	defer startAddonUpdatePeriodicCheck(ctx, addonUpdater, cfg, logger)()
 
 	if err := northBridges.StartPhase(ctx, northbridge.PhaseEarly); err != nil {

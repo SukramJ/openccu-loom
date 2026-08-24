@@ -1,6 +1,6 @@
 {
-  "generated": "4d823bc6",
-  "head": "4d823bc6",
+  "generated": "b0bc1b10",
+  "head": "b0bc1b10",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -172101,7 +172101,7 @@
       "identifier": "TestEveryWiringFunctionDeclaresOrExplainsItself",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_function_coverage_test.go",
-      "line": 79
+      "line": 77
     },
     {
       "package": "tests/contract",
@@ -172129,7 +172129,7 @@
       "identifier": "TestFullyWiredRouterDepsCoversEveryDep",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/router_deps_coverage_test.go",
-      "line": 124
+      "line": 129
     },
     {
       "package": "tests/contract",
@@ -172143,7 +172143,7 @@
       "identifier": "TestHADiscoveryIdentifiersComeFromOneBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_identifier_single_source_test.go",
-      "line": 75
+      "line": 74
     },
     {
       "package": "tests/contract",
