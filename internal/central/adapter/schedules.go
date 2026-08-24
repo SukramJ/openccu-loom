@@ -1482,7 +1482,7 @@ type rawSlot struct {
 // simple form may have gaps (times where no period is defined); those
 // default to the base temperature. Overlapping periods abort.
 func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
-	// Sortierte Perioden prüfen.
+	// Walk the periods in start-time order.
 	periods := append([]hmapi.ClimatePeriod(nil), wd.Periods...)
 	sort.Slice(periods, func(i, j int) bool {
 		return minutesFromTime(periods[i].StartTime) < minutesFromTime(periods[j].StartTime)

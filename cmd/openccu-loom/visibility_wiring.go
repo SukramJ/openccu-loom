@@ -88,7 +88,7 @@ func wireVisibilityUnIgnore(
 		Name:         "visibility.un_ignore",
 		Collaborator: "applyVisibilityUnIgnore",
 		Phase:        wiring.PhasePerCentral,
-		Why:          "the operator's un-ignore list is never applied, so every parameter they deliberately unhid stays hidden on every surface",
+		Why:          "the persisted un-ignore list is never loaded into the shared decider, so every parameter the operator deliberately unhid is hidden again on the next boot — silently, because the list is still there and the SPA keeps showing it as applied",
 	}, func(_ *central.Unit) func() {
 		apply()
 		return apply

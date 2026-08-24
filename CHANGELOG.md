@@ -6,7 +6,45 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Four capability tokens for surfaces a client could not discover** —
+  `mqtt.raw.v1`, `webhook.inbound.v1`, `diagrams.v1` and
+  `admin.persistence.v1`. Each mirrors the condition that mounts its own
+  surface. The SPA had been gating its diagram panel on `history.v1` as a
+  stand-in, which reads as correct and fails in one direction: with recording
+  on and no database the view renders, the editor opens, and every save is
+  refused. It now requires both tokens, because it needs both things.
+
+  The `Info.capabilities` description also gained the four tokens that already
+  reached every client and appeared in no spec at all — `auth.ccu.v1`,
+  `history.v1`, `mcp.write.v1` and `addon_self_update`.
+
+  API **7.12.0** — additive: the field is an array of strings either way, so
+  no schema diff sees this. A client that hardcoded the token set learns of
+  the additions from the value-vocabulary register.
+
+  What a token means is now written into the contract: **configured**, not
+  running. A briefly unreachable broker is not a missing capability, and a
+  token that came and went with connectivity would force every client to
+  re-derive its feature set on each poll. Liveness is `/health`'s answer.
+
 ### Fixed
+
+- **The Security & Safety domain could be absent for a whole daemon lifetime
+  with nothing but one boot warning to show for it.** `wireSecurityService`
+  returns nil when persistence is missing or construction fails, and both exits
+  were log-only — so every hazard and fault surface answered as if the
+  installation had no sensors while `/health` stayed green. The alarm service
+  wired twelve lines away had recorded on the health tracker since it was
+  written; security now does too, as the new `security` component.
+
+- **A failed mDNS advertiser was equally silent**, and its symptom is remote
+  from its cause: Matter commissioners find the bridge over mDNS, so pairing by
+  QR code stops working with no other surface showing anything wrong. The new
+  `discovery.mdns` component reports all three outcomes, including the one that
+  produced no log line at all — an unusable listen port, where mDNS is enabled
+  and nothing is announced. Recorded only while `north.discovery.mdns` is on.
 
 - **Derived sensors were offered to Matter and then dropped.** Eight
   calculated sensor types — apparent temperature, dew point, dew-point spread,

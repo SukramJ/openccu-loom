@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/security"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -22,6 +23,10 @@ import (
 // wireSecurityService constructs the Security & Safety domain.
 //
 // It takes the alarm service only for its event bus, and tolerates a
+// securityHealthComponent is the /health component name for the
+// Security & Safety domain. It mirrors the alarm domain's "alarm".
+const securityHealthComponent = "security"
+
 // nil one: the domain reports hazards and faults with or without an
 // alarm engine, and an installation with smoke and water detectors but
 // no burglar alarm is exactly the case the domain exists for.
@@ -30,11 +35,22 @@ import (
 // ledger is the reason: `since` has to survive a restart, and an
 // in-memory fallback would report every long-standing fault as new on
 // every boot.
+// Both failure exits record on the health tracker, as the alarm service
+// twelve lines away already did. Without that the Security & Safety
+// domain could be absent for a whole daemon lifetime with a single Warn
+// line as the only trace: every hazard and fault surface answers as if
+// the installation simply had no sensors, and /health stays green.
 func wireSecurityService(cfg *config.Config, reg *central.Registry, db *gosql.DB,
-	alarmSvc *alarm.Service, catalogs *i18n.Catalogs, logger *slog.Logger,
+	alarmSvc *alarm.Service, tracker *health.Tracker, catalogs *i18n.Catalogs, logger *slog.Logger,
 ) *security.Service {
+	recordUnhealthy := func(note string) {
+		if tracker != nil {
+			tracker.Record(securityHealthComponent, health.Sample{Healthy: false, Note: note})
+		}
+	}
 	if db == nil {
 		logger.Warn("security service unavailable: persistence tier missing")
+		recordUnhealthy("persistence-unavailable")
 		return nil
 	}
 	var bus *events.Bus
@@ -64,7 +80,11 @@ func wireSecurityService(cfg *config.Config, reg *central.Registry, db *gosql.DB
 	})
 	if err != nil {
 		logger.Error("security service construction failed", slog.String("err", err.Error()))
+		recordUnhealthy("construction-failed")
 		return nil
+	}
+	if tracker != nil {
+		tracker.Record(securityHealthComponent, health.Sample{Healthy: true})
 	}
 	return svc
 }
@@ -112,7 +132,7 @@ func wireSecurityIndexRefresh(m *wiring.Manifest, alarmSvc *alarm.Service, secur
 		Name:         "security.index_refresh",
 		Collaborator: "config-changed hook on *alarm.Service",
 		Phase:        wiring.PhaseOnce,
-		Why:          "the hazard-classification index is never rebuilt after an alarm-config change, so a sensor the operator just re-assigned keeps its old class and opens faults on the wrong one",
+		Why:          "the hazard-classification index is never rebuilt after any alarm-config write — enrollment, zone edit or class override alike — so a sensor the operator just re-assigned keeps its old class and opens faults on the wrong one until the daemon restarts",
 	}, func() { wireSecurityIndexRefreshHook(alarmSvc, securitySvc, logger) })
 }
 

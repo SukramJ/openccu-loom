@@ -16,12 +16,26 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "7.11.0"
+const APIVersion = "7.12.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
 // tokens rather than on [APIVersion] alone — capabilities can be
 // added before a major bump.
+//
+// A token means the daemon is CONFIGURED for that capability, not that
+// the subsystem is working right now. `matter.bridge.v1` is emitted from
+// `north.matter.enabled`; it stays emitted while the bridge is starting,
+// and it would stay emitted if the bridge crashed. That is deliberate and
+// is the question a client is actually asking: may I use this path at all.
+// A broker that is briefly unreachable is not a missing capability, and a
+// token that came and went with connectivity would make every client
+// re-derive its own feature set on every poll.
+//
+// Liveness is a different question with a different answer: /health, whose
+// components report what is running. Do not add a runtime probe to a
+// detector here — it would give one field two meanings and break the
+// clients that already read this one.
 const (
 	CapabilityREST          = "rest.v1"
 	CapabilityWSBroadcasts  = "ws.broadcasts.v1"
@@ -68,6 +82,35 @@ const (
 	// response, since that endpoint always answers 200 regardless of
 	// platform support.
 	CapabilityAddonSelfUpdate = "addon_self_update"
+	// CapabilityMQTTRaw is surfaced when the raw topic plane is enabled.
+	// It is independent of mqtt.discovery.v1: the two planes are
+	// configured separately and a deployment may run either, both or
+	// neither, so a client that wants raw state topics cannot infer their
+	// presence from the discovery token.
+	CapabilityMQTTRaw = "mqtt.raw.v1"
+	// CapabilityWebhookInbound is surfaced when the inbound webhook
+	// endpoints (POST /webhook/value, /webhook/program) are mounted.
+	// Without the token a caller cannot distinguish "not enabled" from
+	// "wrong path" — both answer 404.
+	CapabilityWebhookInbound = "webhook.inbound.v1"
+	// CapabilityDiagrams is surfaced when the diagram CRUD surface is
+	// mounted. The SPA gated its diagram panel on history.v1 as a stand-in
+	// because no token existed; that proxy breaks the moment an operator
+	// turns recording off while keeping their saved diagrams.
+	CapabilityDiagrams = "diagrams.v1"
+	// CapabilityAdminPersistence is surfaced when the persistence-backed
+	// admin surface is mounted — stored users, tokens, centrals, config
+	// sections, preferences, areas. Without a database these routes exist
+	// but every write is refused, which a client cannot tell apart from a
+	// permission problem.
+	//
+	// It and CapabilityDiagrams are driven by the same opened database
+	// today, so a client will see both or neither. They are separate tokens
+	// because they gate separate mounts, and each detector reads the
+	// condition of its own: deriving one from the other would make them
+	// agree by construction and hide the release where they stop being the
+	// same question.
+	CapabilityAdminPersistence = "admin.persistence.v1"
 )
 
 // InfoResponse is the body of `GET /api/v1/info`.
@@ -128,6 +171,17 @@ type CapabilityDetector interface {
 	// HasAddonSelfUpdate reports whether the CCU add-on self-update
 	// platform capability check passed (ADR 0057).
 	HasAddonSelfUpdate() bool
+	// HasMQTTRaw reports whether the raw MQTT topic plane is enabled,
+	// independently of HA discovery.
+	HasMQTTRaw() bool
+	// HasWebhookInbound reports whether the inbound webhook endpoints are
+	// mounted.
+	HasWebhookInbound() bool
+	// HasDiagrams reports whether the diagram CRUD surface is mounted.
+	HasDiagrams() bool
+	// HasAdminPersistence reports whether the persistence-backed admin
+	// surface has a database behind it.
+	HasAdminPersistence() bool
 }
 
 // Info serves build metadata plus the daemon's wall-clock uptime.
@@ -192,6 +246,18 @@ func capabilities(d CapabilityDetector) []string {
 	}
 	if d.HasAddonSelfUpdate() {
 		out = append(out, CapabilityAddonSelfUpdate)
+	}
+	if d.HasMQTTRaw() {
+		out = append(out, CapabilityMQTTRaw)
+	}
+	if d.HasWebhookInbound() {
+		out = append(out, CapabilityWebhookInbound)
+	}
+	if d.HasDiagrams() {
+		out = append(out, CapabilityDiagrams)
+	}
+	if d.HasAdminPersistence() {
+		out = append(out, CapabilityAdminPersistence)
 	}
 	return out
 }

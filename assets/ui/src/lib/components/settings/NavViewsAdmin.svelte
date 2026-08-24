@@ -134,8 +134,13 @@
   // promise it. These are the same two sources the navigation reads, so
   // the preview and the sidebar cannot disagree.
   const matterEnabled = $derived(matterStore.status?.enabled === true);
+  // The history gate asks for both tokens, matching the Diagrams view:
+  // charting needs recorded data, saving a definition needs the app
+  // database. Offering the row for hiding a view that cannot render is a
+  // row the operator cannot act on.
   const historyEnabled = $derived(
-    infoStore.info?.capabilities?.includes("history.v1") ?? false,
+    (infoStore.info?.capabilities?.includes("history.v1") ?? false) &&
+      (infoStore.info?.capabilities?.includes("diagrams.v1") ?? false),
   );
 
   function gateAvailable(s: SurfaceInfo): boolean {

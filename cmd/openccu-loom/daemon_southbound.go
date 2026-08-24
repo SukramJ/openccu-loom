@@ -625,7 +625,7 @@ func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *
 		Name:         "mqtt.retained_orphan_sweep",
 		Collaborator: "post-central-snapshot hook on *mqtt.Bridge",
 		Phase:        wiring.PhaseOnce,
-		Why:          "retained discovery configs for devices this build no longer publishes stay on the broker, so Home Assistant keeps entities the daemon has forgotten",
+		Why:          "the post-snapshot sweeps never run: retained discovery configs for devices this build no longer publishes stay on the broker, so Home Assistant keeps entities the daemon has forgotten, and the raw plane keeps its retired MASTER paramsets, suppressed VALUES parameters and dropped calculated data points too. The boot scrubs cover neither class",
 	}, func() { wireRetainedOrphanSweepHook(ctx, d, cfg, logger) })
 }
 
@@ -688,27 +688,34 @@ func wireRetainedOrphanSweepHook(ctx context.Context, d southboundWiringDeps, cf
 // post-ready hook (mDNS TXT refresh, ADR 0058), and seeds the trigger
 // for centrals that became ready before the subscription.
 func wireHubReadyRestart(ctx context.Context, d southboundWiringDeps, reg *central.Registry, logger *slog.Logger) (closers []func(), trigger func()) {
+	// The subscription is set up INSIDE the Attach closure, not beside it.
+	// It used to be attached with an empty `func() {}`, which made the seam
+	// declare itself and wrap nothing: deleting the subscription below left
+	// /api/v1/diagnostics/wiring still reporting the seam as wired. A
+	// declaration that survives the removal of what it declares is the one
+	// state ADR 0065 exists to rule out.
 	reg.Manifest().Attach(wiring.Seam{
 		Name:         "mqtt.hub_ready_restart",
 		Collaborator: "hub-MQTT restart on CCU readiness",
 		Phase:        wiring.PhaseOnce,
-		Why:          "the hub publisher keeps the empty serial it started with, so hub discovery is skipped and no sysvar, program or service-message entity appears in Home Assistant",
-	}, func() {})
-	var readyBuses []*events.Bus
-	for _, u := range reg.List() {
-		if u.EventBus != nil {
-			readyBuses = append(readyBuses, u.EventBus)
-		}
-	}
-	closers, trigger = wireHubDiscoveryOnReady(
-		ctx, readyBuses, func(rctx context.Context) {
-			d.hubMQTT.Start(rctx)
-			if d.postHubReady != nil {
-				d.postHubReady()
+		Why:          "the hub publisher keeps the empty serial it started with, so hub discovery is skipped and no sysvar, program or service-message entity appears in Home Assistant — and neither does the post-ready mDNS TXT refresh (ADR 0058) that rides the same trigger",
+	}, func() {
+		var readyBuses []*events.Bus
+		for _, u := range reg.List() {
+			if u.EventBus != nil {
+				readyBuses = append(readyBuses, u.EventBus)
 			}
-		},
-		hubDiscoveryReadyDebounce, logger,
-	)
+		}
+		closers, trigger = wireHubDiscoveryOnReady(
+			ctx, readyBuses, func(rctx context.Context) {
+				d.hubMQTT.Start(rctx)
+				if d.postHubReady != nil {
+					d.postHubReady()
+				}
+			},
+			hubDiscoveryReadyDebounce, logger,
+		)
+	})
 	for _, u := range reg.List() {
 		if u.IsSouthboundReady() {
 			trigger()

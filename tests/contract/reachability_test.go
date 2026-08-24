@@ -97,14 +97,15 @@ func loadDeadCodeInventory(t *testing.T) deadCodeInventory {
 
 	var inv deadCodeInventory
 	if err := json.Unmarshal(data, &inv); err != nil {
-		t.Fatalf("dead-code-inventory.json JSON-Fehler: %v", err)
+		t.Fatalf("dead-code-inventory.json is not valid JSON: %v", err)
 	}
 	return inv
 }
 
-// TestReachabilitySnapshotExists prüft dass das Inventory-File existiert und lesbar ist.
-// Inhaltliche Baseline-Prüfungen folgen in einer späteren Phase, nachdem das erste
-// Inventory-Run manuell reviewed und committed wurde.
+// TestReachabilitySnapshotExists checks that the inventory file exists and
+// parses. It is the floor the rest of this file stands on: every other test
+// here loads the same document, so a missing or truncated inventory fails
+// here first rather than passing everything vacuously.
 func TestReachabilitySnapshotExists(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	path := filepath.Join(root, "notes", "parity", "dead-code-inventory.json")
@@ -167,11 +168,19 @@ func TestReachabilitySnapshotWhitelistFormat(t *testing.T) {
 		}
 	}
 
-	t.Logf("Whitelist-Format OK: %d Einträge geprüft", len(inv.Whitelisted))
+	t.Logf("whitelist format ok: %d entries checked", len(inv.Whitelisted))
 }
 
-// TestReachabilitySnapshotUnreachableFormat prüft dass alle Unreachable-Einträge
-// vollständige und konsistente Felder haben.
+// TestReachabilitySnapshotUnreachableFormat checks that every unreachable
+// entry carries the fields its consumers read.//
+// This is a shape check on a generated artefact, not a statement about the
+// tree. The inventory is regenerated wholesale by script/reachability, which
+// writes every counter as the len() of the slice beside it, so the equalities
+// here hold by construction of the generator and no production edit can break
+// them. What it does catch is corruption of the committed file — a bad merge
+// resolution of thirty thousand generated lines, which this repo is worked on
+// concurrently enough to make plausible. The guard that is tethered to the
+// tree is TestReachabilitySnapshotUnreachableCountHasACeiling.
 func TestReachabilitySnapshotUnreachableFormat(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
@@ -197,33 +206,44 @@ func TestReachabilitySnapshotUnreachableFormat(t *testing.T) {
 	}
 
 	if t.Failed() {
-		t.Logf("Unreachable-Format-Fehler: prüfe notes/parity/dead-code-inventory.json")
+		t.Logf("unreachable format errors: see notes/parity/dead-code-inventory.json")
 	} else {
-		t.Logf("Unreachable-Format OK: %d Einträge geprüft", len(inv.Unreachable))
+		t.Logf("unreachable format ok: %d entries checked", len(inv.Unreachable))
 	}
 }
 
-// TestReachabilitySnapshotSummaryConsistency prüft dass die Summary-Zähler konsistent sind.
+// TestReachabilitySnapshotSummaryConsistency checks the summary counters
+// against the arrays they count.//
+// This is a shape check on a generated artefact, not a statement about the
+// tree. The inventory is regenerated wholesale by script/reachability, which
+// writes every counter as the len() of the slice beside it, so the equalities
+// here hold by construction of the generator and no production edit can break
+// them. What it does catch is corruption of the committed file — a bad merge
+// resolution of thirty thousand generated lines, which this repo is worked on
+// concurrently enough to make plausible. The guard that is tethered to the
+// tree is TestReachabilitySnapshotUnreachableCountHasACeiling.
 func TestReachabilitySnapshotSummaryConsistency(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
 	if inv.Summary.Unreachable != len(inv.Unreachable) {
-		t.Errorf("summary.unreachable=%d stimmt nicht mit len(unreachable)=%d überein",
+		t.Errorf("summary.unreachable=%d does not match len(unreachable)=%d",
 			inv.Summary.Unreachable, len(inv.Unreachable))
 	}
 	if inv.Summary.Whitelisted != len(inv.Whitelisted) {
-		t.Errorf("summary.whitelisted=%d stimmt nicht mit len(whitelisted)=%d überein",
+		t.Errorf("summary.whitelisted=%d does not match len(whitelisted)=%d",
 			inv.Summary.Whitelisted, len(inv.Whitelisted))
 	}
 	if inv.Summary.TotalExported < inv.Summary.Reachable+inv.Summary.Whitelisted+inv.Summary.Unreachable {
-		t.Errorf("summary.total_exported=%d < reachable+whitelisted+unreachable=%d (Inkonsistenz)",
+		t.Errorf("summary.total_exported=%d < reachable+whitelisted+unreachable=%d",
 			inv.Summary.TotalExported,
 			inv.Summary.Reachable+inv.Summary.Whitelisted+inv.Summary.Unreachable)
 	}
 }
 
-// TestReachabilitySnapshotByPackageConsistency prüft dass by_package-Zähler mit den
-// Unreachable-Einträgen übereinstimmen.
+// TestReachabilitySnapshotByPackageConsistency checks the by_package counters
+// against the unreachable entries. Unlike its siblings above it re-implements
+// the aggregation rather than re-reading it, so a change to the generator's
+// grouping does reach this test.
 func TestReachabilitySnapshotByPackageConsistency(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
@@ -302,14 +322,22 @@ func TestReachabilitySnapshotProductionOnlyExists(t *testing.T) {
 		inv.Summary.Unreachable, inv.Summary.Whitelisted, inv.Summary.TotalExported)
 }
 
-// TestReachabilitySnapshotHasNoTestFiles prüft dass keine _test.go oder tests/-Items
-// im unreachable-Array erscheinen (sie sollen in whitelisted landen).
+// TestReachabilitySnapshotHasNoTestFiles checks that no _test.go or tests/
+// item lands in the unreachable array — the analyzer auto-whitelists them.//
+// This is a shape check on a generated artefact, not a statement about the
+// tree. The inventory is regenerated wholesale by script/reachability, which
+// writes every counter as the len() of the slice beside it, so the equalities
+// here hold by construction of the generator and no production edit can break
+// them. What it does catch is corruption of the committed file — a bad merge
+// resolution of thirty thousand generated lines, which this repo is worked on
+// concurrently enough to make plausible. The guard that is tethered to the
+// tree is TestReachabilitySnapshotUnreachableCountHasACeiling.
 func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 	inv := loadDeadCodeInventory(t)
 
 	for i, entry := range inv.Unreachable {
 		if strings.HasSuffix(entry.File, "_test.go") {
-			t.Errorf("Unreachable[%d]: _test.go-Item im unreachable-Array (%s.%s file=%s) — soll auto-whitelisted sein",
+			t.Errorf("unreachable[%d]: a _test.go item is in the unreachable array (%s.%s file=%s) — it should have been auto-whitelisted",
 				i, entry.Package, entry.Identifier, entry.File)
 		}
 		if strings.HasPrefix(entry.File, "tests/") {

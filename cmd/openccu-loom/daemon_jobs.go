@@ -179,7 +179,7 @@ func registerFirmwareJobs(reg *central.Registry, valueWriter *clientpkg.ValueWri
 		Name:         "jobs.firmware_per_central",
 		Collaborator: "registerFirmwareJobsFor",
 		Phase:        wiring.PhaseOnce,
-		Why:          "no central ever polls the CCU for available device firmware, so the update surface reports nothing to install however long a new version has been out",
+		Why:          "no central ever polls the CCU for newly available device firmware, so the update surface stops learning about versions released after boot. It is not blank: available-firmware and update-state come from device materialisation, and POST /devices/firmware/refresh is wired independently, so an operator who knows to ask still gets an answer",
 	}, func() {
 		for _, u := range reg.List() {
 			registerFirmwareJobsFor(u, valueWriter, logger)

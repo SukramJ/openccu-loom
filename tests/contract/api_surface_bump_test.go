@@ -32,11 +32,16 @@ type apiSurface struct {
 	Schemas    map[string][]string `json:"schemas"`    // schema name -> ["field:type", …] sorted
 }
 
-// valueSemanticsChanges records fields whose *meaning* changed while their
-// name and type stayed the same. No schema diff can detect that — the shape is
-// identical on both sides — so the only honest mechanism is a list somebody
-// has to write by hand, and a review rule that says a semantics change is a
-// major bump.
+// valueSemanticsChanges records contract changes no schema diff can see:
+// the shape is identical on both sides, so the only honest mechanism is a
+// list somebody writes by hand.
+//
+// Two kinds qualify, and an entry says which. A field whose *meaning*
+// changed while its name and type stayed the same is the original case and
+// a major bump. A field whose *vocabulary* grew — a new value in an
+// open-ended set, a reference that became a declared type — is additive and
+// a minor bump, but it belongs here for the same reason: a client that
+// hardcoded the old set has no other way to learn it moved.
 //
 // The entry format is "<major-version-that-carried-it> <schema>.<field>: what
 // changed". Entries are never deleted: the list is the answer to "why did this
@@ -46,6 +51,8 @@ var valueSemanticsChanges = []string{
 	"7.0.0 CaptureIndex: the diagnostics capture response became an array, having been declared an object",
 	"7.1.0 DataPoint.value: unchanged, but display_value was added beside it — value stays the raw CCU wire value",
 	"7.7.0 DataPointValueChangedPayload.display_value: documented, not introduced — the daemon has emitted it on the push since 7.2.0, so a client can observe the field from a 7.2.0..7.6.0 daemon whose spec does not declare it",
+	"7.11.0 DataPointKey.interface/parameter/paramset_key: vocabulary — three properties in assets/schemas/types.json carried a $ref into #/definitions/ for targets the file never held, so no generator could resolve them; they are declared strings now, each naming the enum in enums.json that supplies its values",
+	"7.12.0 Info.capabilities: vocabulary — four tokens added to the open set (mqtt.raw.v1, webhook.inbound.v1, diagrams.v1, admin.persistence.v1). The field is an array of strings either way, so no diff sees it; a client that hardcoded the token list learns of them only from here",
 }
 
 // TestAPISurfaceChangesCarryTheRightBump pins the two halves of this project's
@@ -387,7 +394,7 @@ func writeAPISurface(t *testing.T, path string, s apiSurface) {
 // to the person reading it years later: an entry that names no version, and an
 // entry that names a version the API has not reached.
 func TestValueSemanticsChangesAreWellFormed(t *testing.T) {
-	currentMajor, _ := majorMinor(t, handlers.APIVersion)
+	currentMajor, currentMinor := majorMinor(t, handlers.APIVersion)
 
 	for _, entry := range valueSemanticsChanges {
 		version, rest, ok := strings.Cut(entry, " ")
@@ -396,11 +403,18 @@ func TestValueSemanticsChangesAreWellFormed(t *testing.T) {
 				"it followed by a description", entry)
 			continue
 		}
-		major, _ := majorMinor(t, version)
-		if major > currentMajor {
-			t.Errorf("value-semantics entry %q names API major %d, but the API is only at %s. "+
+		// Compared as a pair. Comparing majors alone let the guard miss
+		// every case the register can actually produce: its entries are
+		// minor-level ("7.0.0", "7.1.0", "7.7.0") and the API has stayed
+		// inside major 7 since the register was introduced, so `major >
+		// currentMajor` was false for any entry anyone would plausibly
+		// write. A "7.99.0" line against APIVersion 7.11.0 passed — the
+		// exact promise-not-a-record case the error text below describes.
+		major, minor := majorMinor(t, version)
+		if major > currentMajor || (major == currentMajor && minor > currentMinor) {
+			t.Errorf("value-semantics entry %q names API %d.%d, but the API is only at %s. "+
 				"An entry recorded before the bump that carries it is a promise, not a record.",
-				entry, major, handlers.APIVersion)
+				entry, major, minor, handlers.APIVersion)
 		}
 		if !strings.Contains(rest, ":") {
 			t.Errorf("value-semantics entry %q does not say WHICH field changed meaning; the "+

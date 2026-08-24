@@ -88,6 +88,13 @@ func (s *Service) Stop(ctx context.Context) error {
 
 // Healthy implements bridge.HealthReporter: the REST surface is healthy while
 // it is started (bound and serving).
+//
+// Nothing reads it. bridge.Registry.Health is its only consumer and has no
+// caller, and the verdict could not travel anyway: the one state it reports as
+// unhealthy is "not serving", which is also the state in which /health cannot
+// be fetched. Kept as the interface's reference implementation, not as a live
+// health source — the daemon's REST liveness is what the request you are
+// answering already demonstrates.
 func (s *Service) Healthy() (ok bool, detail string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

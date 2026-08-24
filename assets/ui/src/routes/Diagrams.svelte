@@ -31,11 +31,18 @@
   import { infoStore } from "$lib/stores/info.svelte";
   import { t } from "$lib/i18n";
 
-  // Diagrams chart measurement history; the whole surface is gated on the
-  // opt-in history-recording feature (SV03). The nav item is hidden when
-  // it is off; this guards direct navigation.
+  // Two capabilities, because the view needs two different things and they
+  // can be absent independently: `history.v1` says there is recorded data to
+  // chart (SV03's opt-in), `diagrams.v1` says the CRUD surface that stores a
+  // diagram definition is mounted at all.
+  //
+  // Until API 7.12.0 there was no `diagrams.v1`, and this gate used
+  // `history.v1` alone as a stand-in for both. That reads as correct and
+  // fails in one direction: with recording on and no database, the view
+  // renders, the editor opens, and every save is refused.
   const historyEnabled = $derived(
-    infoStore.info?.capabilities?.includes("history.v1") ?? false,
+    (infoStore.info?.capabilities?.includes("history.v1") ?? false) &&
+      (infoStore.info?.capabilities?.includes("diagrams.v1") ?? false),
   );
 
   let diagrams = $state<DiagramConfig[]>([]);

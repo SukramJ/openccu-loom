@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 377.
+Guards without a doc comment: 7 of 382.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -38,9 +38,12 @@ Guards without a doc comment: 7 of 377.
 | TestJSONRPCOnlyInterfacesEmpty | backend_capabilities_test.go | TestJSONRPCOnlyInterfacesEmpty verifies that no interface is classified as "JSON-RPC only / pull-only" — CCU-Jack was removed. |
 | TestXMLRPCInterfacesUseCCUBackend | backend_capabilities_test.go | TestXMLRPCInterfacesUseCCUBackend pins CCU-native interfaces to the CcuBackend kind. |
 | TestBasicAuthGuardDoesNotChargeTheSPAMount | basic_auth_guard_scope_test.go | TestBasicAuthGuardDoesNotChargeTheSPAMount pins where the per-IP Basic-credential throttle is mounted. |
+| TestEveryBridgeServiceReportsHealth | bridge_health_coverage_test.go | TestEveryBridgeServiceReportsHealth pins that a subsystem the daemon registers as a north-bound bridge either records a /health component or is recorded here as deliberately silent. |
 | TestCacheresetGuardNoOperatorStateTouched | cachereset_guard_test.go | TestCacheresetGuardNoOperatorStateTouched enforces ADR 0042: the cache-reset service must never reference operator or system state tables. |
 | TestKeepaliveContract_AnyEventRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_AnyEventRefreshesLiveness pins that an ordinary (non-PONG) inbound callback also refreshes liveness — even for a device the daemon does not mirror. |
 | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness pins the full keepalive round-trip: a recorded outbound PING (as the check_connection job records it) is closed by a PONG delivered through the production callback handler, and that PONG also marks the channel alive. |
+| TestCapabilityDetectorsReportConfigurationNotLiveness | capability_surface_test.go | TestCapabilityDetectorsReportConfigurationNotLiveness pins the decision that a token means "the daemon is configured for this", not "this is working right now". |
+| TestEveryCapabilityTokenIsEmittedAndDocumented | capability_surface_test.go | TestEveryCapabilityTokenIsEmittedAndDocumented pins the three sets that make up the capability surface against each other: the tokens the handlers package declares, the tokens capabilities() can actually append, and the tokens assets/openapi.yaml tells a client to expect. |
 | TestContractCatalogueIsComplete | catalogue_test.go | TestContractCatalogueIsComplete holds that tests/contract/README.md lists exactly the exported TestXxx functions that exist under tests/contract/ — no guard undocumented in the catalogue, no catalogue entry pointing at a guard that no longer exists. |
 | TestCCUAddonRegistersControlPanelEntry | ccu_addon_control_panel_entry_test.go | TestCCUAddonRegistersControlPanelEntry pins how the add-on claims its tile in the CCU's "Systemsteuerung": the platform helper by its real name, plus the underlying HomeMatic Tcl API as the fallback for firmware that predates the helper. |
 | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper | ccu_addon_control_panel_entry_test.go | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper verifies the miss is LOUD: on firmware that offers neither the helper nor a Tcl interpreter the install still succeeds (the daemon does not need the tile), but it says so rather than leaving the operator with a silently tile-less install — the exact failure mode that hid the wrong helper name. |
@@ -128,6 +131,7 @@ Guards without a doc comment: 7 of 377.
 | TestHARegistryDescriptionRulesCountUnchanged | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesCountUnchanged pins the entry count so an accidental truncation (e.g. |
 | TestHARegistryDescriptionRulesHaveKeys | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesHaveKeys fails when any entry in the generated slice has an empty Description.Key. |
 | TestHARegistryDescriptionRulesNoDuplicates | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesNoDuplicates fails when the generated haRegistryDescriptionRules slice contains two or more entries that have identical (category, parameters, devices, unit, postfix, varNameContains) matching criteria. |
+| TestEveryPublishedDTOFieldHasAWriter | hmapi_field_writer_coverage_test.go | TestEveryPublishedDTOFieldHasAWriter pins that a field pkg/hmapi declares — and assets/openapi.yaml therefore publishes — is populated somewhere in the daemon. |
 | TestAllInterfacesPush | hmenum_constants_test.go | TestAllInterfacesPush pins down SPECIFICATION §8.1: every interface supports push callbacks. |
 | TestBitmaskZeroIsEmpty | hmenum_constants_test.go | TestBitmaskZeroIsEmpty locks in the Operations / Flag zero-value semantics: no bits set. |
 | TestCUxDIsBINRPCOnly | hmenum_constants_test.go | TestCUxDIsBINRPCOnly enforces the "CUxD uses BIN-RPC" rule: CUxD must be in BINRPCInterfaces and must not appear anywhere else. |
@@ -198,13 +202,13 @@ Guards without a doc comment: 7 of 377.
 | TestEveryPublishedDocIsInTheNav | published_docs_test.go | TestEveryPublishedDocIsInTheNav fails when a Markdown file under `docs/` is missing from `mkdocs.yml`'s nav. |
 | TestPublishedDocsLinksStayInsideDocsDir | published_docs_test.go | TestPublishedDocsLinksStayInsideDocsDir fails when a page under `docs/` links to a file outside `docs/` with a relative path. |
 | TestRatchetReasonsAreNotDeferrals | ratchet_reason_purity_test.go | TestRatchetReasonsAreNotDeferrals enforces textually what the ratchet headers already demand in prose: an entry in a declared-silence list says someone looked and decided the silence is CORRECT — not that the work is pending. |
-| TestReachabilitySnapshotByPackageConsistency | reachability_test.go | TestReachabilitySnapshotByPackageConsistency prüft dass by_package-Zähler mit den Unreachable-Einträgen übereinstimmen. |
-| TestReachabilitySnapshotExists | reachability_test.go | TestReachabilitySnapshotExists prüft dass das Inventory-File existiert und lesbar ist. |
-| TestReachabilitySnapshotHasNoTestFiles | reachability_test.go | TestReachabilitySnapshotHasNoTestFiles prüft dass keine _test.go oder tests/-Items im unreachable-Array erscheinen (sie sollen in whitelisted landen). |
+| TestReachabilitySnapshotByPackageConsistency | reachability_test.go | TestReachabilitySnapshotByPackageConsistency checks the by_package counters against the unreachable entries. |
+| TestReachabilitySnapshotExists | reachability_test.go | TestReachabilitySnapshotExists checks that the inventory file exists and parses. |
+| TestReachabilitySnapshotHasNoTestFiles | reachability_test.go | TestReachabilitySnapshotHasNoTestFiles checks that no _test.go or tests/ item lands in the unreachable array — the analyzer auto-whitelists them.// This is a shape check on a generated artefact, not a statement about the tree. |
 | TestReachabilitySnapshotProductionOnlyExists | reachability_test.go | TestReachabilitySnapshotProductionOnlyExists asserts that the production-only inventory file exists. |
-| TestReachabilitySnapshotSummaryConsistency | reachability_test.go | TestReachabilitySnapshotSummaryConsistency prüft dass die Summary-Zähler konsistent sind. |
+| TestReachabilitySnapshotSummaryConsistency | reachability_test.go | TestReachabilitySnapshotSummaryConsistency checks the summary counters against the arrays they count.// This is a shape check on a generated artefact, not a statement about the tree. |
 | TestReachabilitySnapshotUnreachableCountHasACeiling | reachability_test.go | TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this file that says something about the tree rather than about the snapshot's JSON shape. |
-| TestReachabilitySnapshotUnreachableFormat | reachability_test.go | TestReachabilitySnapshotUnreachableFormat prüft dass alle Unreachable-Einträge vollständige und konsistente Felder haben. |
+| TestReachabilitySnapshotUnreachableFormat | reachability_test.go | TestReachabilitySnapshotUnreachableFormat checks that every unreachable entry carries the fields its consumers read.// This is a shape check on a generated artefact, not a statement about the tree. |
 | TestReachabilitySnapshotWhitelistFormat | reachability_test.go | TestReachabilitySnapshotWhitelistFormat verifies that all whitelist entries have the required JSON fields populated (package, identifier, reason, file, line). |
 | TestEveryRegistryWalkerHasAnAdoptSeam | registry_walker_adopt_seam_test.go | TestEveryRegistryWalkerHasAnAdoptSeam asserts that every collaborator which subscribes to a central's event bus by walking the shared registry also exposes a per-central seam the composition root calls when a CCU is adopted at runtime. |
 | TestCircuitBreakerHalfOpenFailReopens | reliability_constants_test.go | — (no doc comment) |
@@ -376,6 +380,7 @@ Guards without a doc comment: 7 of 377.
 | TestMatterSessionListerIsWiredFromBothManagers | wiring_pins/matter_session_diagnostics_test.go | TestMatterSessionListerIsWiredFromBothManagers pins the composition root's half of the session-diagnostics surface. |
 | TestPin_MCPFleetSeams_WiredInDaemon | wiring_pins/mcp_fleet_seams_test.go | TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every fleet read seam to the MCP server. |
 | TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
+| TestEverySeamAttachWrapsItsHandover | wiring_pins/seam_attach_wraps_work_test.go | TestEverySeamAttachWrapsItsHandover pins that a wiring seam's Attach closure actually performs the handover it declares. |
 | TestPin_SectionApplier_WiredIntoTheRESTRouter | wiring_pins/section_applier_test.go | TestPin_SectionApplier_WiredIntoTheRESTRouter pins that the daemon gives the config-save path something to apply a section with. |
 | TestCSRFDefaultEnabled | wiring_pins/security_csrf_origin_test.go | TestCSRFDefaultEnabled pins that the config default has CSRFEnabled set to true. |
 | TestCSRFExplicitFalseOptOut | wiring_pins/security_csrf_origin_test.go | TestCSRFExplicitFalseOptOut pins that setting CSRFEnabled to false in the config (opt-out path for API-token deployments) is honoured by CSRFIsEnabled. |

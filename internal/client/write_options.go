@@ -61,14 +61,17 @@ type WriteOptions struct {
 	// WaitForCallback opts the caller into waiting for the CCU's confirmation
 	// event before the SetValue / PutParamset call returns.
 	//
-	// - false (default) — schreibt sofort zurück ohne auf den CCU- Echo zu
-	// warten. Entspricht `wait_for_callback=None` in Python. - true — wartet,
-	// bis die CCU den neuen Wert per Push-Callback bestätigt,
-	// [WriteOptions.WaitForCallbackTimeout] abläuft oder der Context abgebrochen
-	// wird.
+	//   - false (default) — return as soon as the write is on the wire,
+	//     without waiting for the CCU to echo it back.
+	//   - true — wait until the CCU confirms the new value by push callback,
+	//     [WriteOptions.WaitForCallbackTimeout] elapses, or the context is
+	//     cancelled.
 	//
-	// Semantik von WaitForCallbackTimeout: - 0 (Null-Wert) → 60 s Standardwert -
-	// > 0 → wartet genau diese Dauer; danach [ErrStateChangeTimeout].
+	// WaitForCallbackTimeout: zero selects the 60s default; a positive value
+	// waits exactly that long and then returns [ErrStateChangeTimeout].
+	//
+	// No production caller sets this today — every site that does is a test —
+	// so the resolver requirement below is currently unexercised outside them.
 	//
 	// Requires a bus resolver installed via
 	// [ValueWriter.SetBusResolver]. Without one the wait path is

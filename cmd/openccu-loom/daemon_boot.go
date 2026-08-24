@@ -204,7 +204,7 @@ func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Confi
 			Name:         "secret.config_store_crypto",
 			Collaborator: "*secret.Cipher on the centrals and sections stores",
 			Phase:        wiring.PhaseOnce,
-			Why:          "CCU passwords and every other config secret are written to the database in cleartext, and every surface still reports success",
+			Why:          "every SPA-saved config section is written to the database in cleartext while /health keeps reporting secrets as encrypted; a CCU password is refused outright instead, because the plaintext gate is wired separately and turns the save into a 400",
 		}, func() {
 			ov.sqCentrals.SetCipher(cipher)
 			ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
@@ -316,7 +316,7 @@ func wireConfigAssembler(m *wiring.Manifest, deps *reloadDeps, ov *auditOverlay)
 		Name:         "config.assembler",
 		Collaborator: "DB-overlay config assembler on *reloadDeps",
 		Phase:        wiring.PhaseOnce,
-		Why:          "every reload re-reads the YAML tier alone, so the running daemon silently reverts to the file's values and discards everything the operator saved in the SPA",
+		Why:          "a file-watcher reload re-reads the YAML tier alone, so the running daemon silently reverts to the file's values and discards everything the operator saved in the SPA; a reload triggered through REST keeps the config it booted with instead, which is stale rather than wrong",
 	}, func() { wireConfigAssemblerFn(deps, ov) })
 }
 

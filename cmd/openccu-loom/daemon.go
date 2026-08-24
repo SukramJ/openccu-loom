@@ -189,11 +189,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		Phase:        wiring.PhaseOrdered,
 		Before:       []wiring.Mark{wiring.MarkCentralsStarted},
 		Why:          "the gated hub jobs run against a model that has no gate to wait on, so a job scheduled at boot fires before any device exists",
-	}, func() {
-		for _, u := range reg.List() {
-			u.WireDevicesCreatedGate()
-		}
-	})
+	}, func() { wireDevicesCreatedGates(reg) })
 
 	// The per-central background jobs have to be registered before the
 	// scheduler starts. Registering them afterwards compiles and logs
@@ -205,7 +201,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		Collaborator: "registerStandardJobsFor",
 		Phase:        wiring.PhaseOrdered,
 		Before:       []wiring.Mark{wiring.MarkCentralsStarted},
-		Why:          "central.health_heartbeat and central.check_connection never run, so the per-central health component decays to UNKNOWN a minute and a half after boot and no interface's circuit breaker ever recovers",
+		Why:          "central.health_heartbeat never runs, so the per-central health component is written once at boot and then decays to UNKNOWN ninety seconds later. Interface circuit breakers still recover: a per-interface ticker probes availability independently of this seam",
 	}, func() { registerStandardJobs(reg, cfg, logger) })
 
 	if err := reg.StartAll(ctx); err != nil {
@@ -437,7 +433,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// does not require it: an installation with smoke and water detectors
 	// and no burglar alarm still gets the hazard classes, the fault plane
 	// and the notifications.
-	securitySvc := wireSecurityService(cfg, reg, auditDB, alarmSvc, catalogs, logger)
+	securitySvc := wireSecurityService(cfg, reg, auditDB, alarmSvc, healthTracker, catalogs, logger)
 	if securitySvc != nil {
 		northBridges.Register(securitySvc)
 		// Forward the rendered reports and fault transitions through the
@@ -858,6 +854,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// stop defer.
 	restMountTeardown := mountRESTServer(ctx, cfg, logger, northBridges, restMountDeps{
 		reg:                    reg,
+		healthTracker:          healthTracker,
 		bootstrap:              bootstrapRouter,
 		noUsers:                noUsers,
 		sqUsers:                sqUsers,

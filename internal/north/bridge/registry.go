@@ -158,6 +158,20 @@ func (r *Registry) stopStarted(ctx context.Context) {
 // intentionally not surfaced here — this aggregate is a red/green liveness
 // summary, not a metrics channel. Reporters that want their healthy counters
 // observed expose them directly (Outbound.Dropped/Failed) or through the log.
+//
+// Nothing in the daemon calls this. Said plainly because the paragraph above
+// describes a design rather than a running path, and a reader has no way to
+// tell the two apart: [HealthReporter] has exactly one implementor,
+// rest.Service, and its verdict is unobservable by construction — it reports
+// unhealthy only while the REST surface is not serving, which is also when
+// nobody can reach /health to read it. The webhook the comment cites as an
+// example never implemented the interface at all.
+//
+// So this is not a seam waiting to be wired; it is an aggregate whose only
+// member cannot usefully report through it. Left in place rather than deleted
+// because a second bridge with a meaningful liveness verdict would make it
+// worth calling, and the shape is right. What is not left in place is the
+// impression that it already runs.
 func (r *Registry) Health() (ok bool, detail string) {
 	r.mu.Lock()
 	svcs := make([]Service, len(r.entries))
