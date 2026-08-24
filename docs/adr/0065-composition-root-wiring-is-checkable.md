@@ -176,20 +176,30 @@ audit found they currently are.
 **Where it stands.** Every wiring function in `cmd/openccu-loom` now either
 declares a seam or records why it has none, and a guard fails when a new one
 joins without answering the question — which is what turns the ADR's end-state
-from a direction into a measurement. Of the forty-five, eight declare and
-thirty-seven are exempt, and the exemptions are the informative half: fifteen
-construct a value and hand it back, five run once per central, five compose
-several attaches whose seams are declared one level down, and four are
-aggregates.
+from a direction into a measurement. Of the forty-nine, thirteen declare and
+thirty-six are exempt, and the exemptions are the informative half: fourteen
+construct a value and hand it back, six run once per central, five install the
+attach for a seam their caller declares, five compose several attaches, four
+start collaborators that declare their own seams one level down, and two are
+one-offs — the CLI's own crypto, which has no registry, and a call that hands
+over logging context rather than a collaborator.
 
-**One blind spot, and it is in the worst place.** The manifest hangs off the
-central registry, so anything wired before `bootstrap.Build` cannot declare into
-it. Two functions are on that side of the line, and both are secret handling:
-`wireAuditOverlay` installs the cipher and the secret transform on the config
-stores, and its absence means operator credentials persist in cleartext —
-exactly the silent, severe shape this ADR exists to make visible. The fix is
-small and known: build the manifest at the top of `runDaemon` and hand it to the
-registry, rather than letting the registry create it.
+**The blind spot that was in the worst place is closed.** The manifest used to
+hang off the central registry, so anything wired before `bootstrap.Build` could
+not declare into it — and the function on that side was
+`wireAuditOverlay`, which installs the cipher and the secret transform on the
+config stores. Its absence means operator credentials persist in cleartext while
+every surface reports success: the quietest failure in the daemon, in the one
+place the ledger could not see.
+
+`runDaemon` now builds the manifest first and the registry adopts it
+(`central.NewRegistryWithManifest`). `secret.config_store_crypto` is a declared
+seam, and removing the handover makes a running daemon report it missing —
+verified by doing exactly that.
+
+What remains outside the ledger is `hmcli`'s own config-store crypto: the CLI
+builds no central registry and has no manifest. That is a different program with
+a different lifetime, not a gap in this one.
 
 **Struct-field seams do not need this mechanism, which is a measured answer
 rather than a deferral.** A collaborator handed over as a field of a deps

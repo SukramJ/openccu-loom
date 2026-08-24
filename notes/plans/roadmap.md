@@ -42,15 +42,15 @@ replace it, and the metrics that say whether it worked.
   why it has none, and a guard fails when a new one joins without answering.
   Eight declare, thirty-seven are exempt with a measured reason.
 
-  **The one thing genuinely left is a blind spot, not volume.** The manifest
-  hangs off the central registry, so anything wired before `bootstrap.Build`
-  cannot declare into it — and the two functions on that side are both secret
-  handling. `wireAuditOverlay` installs the cipher and the secret transform on
-  the config stores; without it operator credentials persist in cleartext, and
-  nothing would report the seam missing. Fix: build the manifest at the top of
-  `runDaemon` and hand it to the registry instead of letting the registry
-  create it. Small, and it closes the only place where the manifest's promise
-  does not hold.
+  The pre-registry blind spot is closed: `runDaemon` builds the manifest and
+  the registry adopts it, so the audit overlay's cipher and secret transform —
+  whose absence writes operator credentials to the database in cleartext while
+  every surface reports success — is a declared seam like any other.
+
+  ADR 0065 is implemented. What could still be added is judgement, not
+  mechanism: an ordered seam wherever a constraint is currently only a comment,
+  and a mark whenever a boundary earns one. The guard makes both visible when
+  somebody adds wiring; neither needs a decision now.
 
   Struct-field seams are closed rather than open: measurement showed the class
   is already covered at the level of the consequence, not the mechanism — see

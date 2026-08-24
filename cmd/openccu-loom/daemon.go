@@ -74,7 +74,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Extracted into wireAuditOverlay (daemon_boot.go). The returned
 	// teardown is deferred early so it runs late (LIFO) — after the
 	// health probe and the stores that read the DB handle.
-	ov, auditOverlayTeardown := wireAuditOverlay(ctx, cfg, logger)
+	// The wiring ledger is built here, before anything that declares into
+	// it — including the audit overlay's secret handling below, which runs
+	// long before the central registry exists. The registry adopts it at
+	// bootstrap.Build rather than creating its own (ADR 0065).
+	wiringManifest := wiring.NewManifest()
+
+	ov, auditOverlayTeardown := wireAuditOverlay(ctx, wiringManifest, cfg, logger)
 	defer auditOverlayTeardown()
 
 	// Persist the external Config-UI URL hint now that the overlay has
@@ -161,7 +167,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 
 	// --- central registry --------------------------------------
-	bootstrap := &central.Bootstrap{Logger: logger}
+	bootstrap := &central.Bootstrap{Logger: logger, Manifest: wiringManifest}
 	reg, teardown, err := bootstrap.Build(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("bootstrap: %w", err)

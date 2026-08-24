@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 474e10f1
-HEAD: 474e10f1
+Generated: 1c9e7aea
+HEAD: 1c9e7aea
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29926 |
-| Reachable | 5143 |
+| Total Exported | 29928 |
+| Reachable | 5145 |
 | Whitelisted | 21766 |
 | **Unreachable** | **3017** |
 

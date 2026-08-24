@@ -25,7 +25,6 @@ var wiringFuncsWithoutSeam = map[string]string{
 	"wireAddonUpdate":                   "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireAddonUpdateWS":                 "starts collaborators that each declare their own seam through OnRegisterDeclared, so the entries exist one level down",
 	"wireAlarmService":                  "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
-	"wireAuditOverlay":                  "runs before bootstrap.Build creates the central registry, and the manifest hangs off that registry, so there is nothing to declare into yet",
 	"wireAuditPersistenceWithDB":        "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireBINRPCCallback":                "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireCentralNorthbound":             "runs once per central, from the boot walk and the live-adopt path alike; the manifest records daemon-level seams, and a name declared per central would collide",

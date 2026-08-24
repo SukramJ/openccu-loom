@@ -40,6 +40,7 @@ var expectedWiringSeams = []string{
 	"jobs.scheduled_backup",
 	"mqtt.system_status",
 	"rest.system_status_buffer",
+	"secret.config_store_crypto",
 	"store.channel_flags_eviction",
 	"store.master_values_eviction",
 	"store.values_cache_eviction",

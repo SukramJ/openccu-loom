@@ -76,10 +76,31 @@ type attachedUnwire struct {
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
+	return NewRegistryWithManifest(wiring.NewManifest())
+}
+
+// NewRegistryWithManifest returns an empty registry that records its
+// seams into m.
+//
+// It exists because the manifest has to outlive the registry's own
+// construction. The composition root wires several things before the
+// registry exists — the audit overlay's cipher and secret transform among
+// them — and a manifest created by [NewRegistry] could not hold their
+// seams, so the one place where a missing seam means credentials in
+// cleartext was the one place the manifest could not see. Building the
+// manifest first and handing it over closes that.
+//
+// A nil manifest is replaced with a fresh one rather than accepted:
+// [wiring.Manifest] tolerates nil, but a registry that silently recorded
+// nothing would make every guard reading it pass for the wrong reason.
+func NewRegistryWithManifest(m *wiring.Manifest) *Registry {
+	if m == nil {
+		m = wiring.NewManifest()
+	}
 	return &Registry{
 		items:    make(map[string]*Unit),
 		unwires:  make(map[string][]attachedUnwire),
-		manifest: wiring.NewManifest(),
+		manifest: m,
 	}
 }
 

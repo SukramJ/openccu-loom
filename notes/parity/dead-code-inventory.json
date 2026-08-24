@@ -1,6 +1,6 @@
 {
-  "generated": "474e10f1",
-  "head": "474e10f1",
+  "generated": "1c9e7aea",
+  "head": "1c9e7aea",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,8 +10,8 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29926,
-    "reachable": 5143,
+    "total_exported": 29928,
+    "reachable": 5145,
     "whitelisted": 21766,
     "unreachable": 3017
   },
@@ -2586,7 +2586,7 @@
       "package": "internal/central",
       "identifier": "Bootstrap",
       "file": "internal/central/bootstrap.go",
-      "line": 21,
+      "line": 22,
       "kind": "type"
     },
     {
@@ -2621,14 +2621,14 @@
       "package": "internal/central",
       "identifier": "ErrAlreadyRegistered",
       "file": "internal/central/central_registry.go",
-      "line": 191,
+      "line": 212,
       "kind": "var"
     },
     {
       "package": "internal/central",
       "identifier": "ErrAlreadyRegistered",
       "file": "internal/central/central_registry.go",
-      "line": 191,
+      "line": 212,
       "kind": "var"
     },
     {
@@ -23484,7 +23484,7 @@
       "identifier": "TestAuditOverlayTeardownPersistsQueuedEntries",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 254
+      "line": 255
     },
     {
       "package": "cmd/openccu-loom",
@@ -23631,14 +23631,14 @@
       "identifier": "TestBootRefusesCleartextCentralPasswordWithoutMasterKey",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/plaintext_secret_policy_wiring_test.go",
-      "line": 32
+      "line": 33
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBootReportsEveryStoredCentralRoutableWhenNoneOffends",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_boot_central_name_test.go",
-      "line": 111
+      "line": 112
     },
     {
       "package": "cmd/openccu-loom",
@@ -23659,7 +23659,7 @@
       "identifier": "TestBootSkipsAndReportsAStoredCentralWithAnUnroutableName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_boot_central_name_test.go",
-      "line": 34
+      "line": 35
     },
     {
       "package": "cmd/openccu-loom",
@@ -23729,42 +23729,42 @@
       "identifier": "TestBuildBackupAdapter_ConfiguredBackupDir_Wins",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 63
+      "line": 64
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildBackupAdapter_EmptyBackupDir_FallsBackToDataDir",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 109
+      "line": 110
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildBackupAdapter_EmptyDataDir_FallsBackToVar",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 44
+      "line": 45
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildBackupAdapter_NilConfig_ReturnsAdapter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 23
+      "line": 24
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildBackupAdapter_ValidDataDir_ReturnsAdapter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 32
+      "line": 33
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildBackupAdapter_WhitespaceBackupDir_FallsBackToDataDir",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 88
+      "line": 89
     },
     {
       "package": "cmd/openccu-loom",
@@ -28993,7 +28993,7 @@
       "identifier": "TestWireAuditPersistenceWithDB_NilBuf_ReturnsBuf",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 221
+      "line": 222
     },
     {
       "package": "cmd/openccu-loom",
@@ -29007,7 +29007,7 @@
       "identifier": "TestWireAuditPersistenceWithDB_NilDB_ReturnsBuf",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 208
+      "line": 209
     },
     {
       "package": "cmd/openccu-loom",
@@ -29021,7 +29021,7 @@
       "identifier": "TestWireAuditPersistenceWithDB_ValidDB_ReturnsPersistedRecorder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 228
+      "line": 229
     },
     {
       "package": "cmd/openccu-loom",
@@ -29077,21 +29077,21 @@
       "identifier": "TestWireIncidentRecorder_NilDB_IsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 173
+      "line": 174
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireIncidentRecorder_NilRegistry_IsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 180
+      "line": 181
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireIncidentRecorder_ValidDB_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 187
+      "line": 188
     },
     {
       "package": "cmd/openccu-loom",
@@ -29238,7 +29238,7 @@
       "identifier": "TestWireSessionRecorderPersistence_NilDB_ReturnsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 133
+      "line": 134
     },
     {
       "package": "cmd/openccu-loom",
@@ -29252,14 +29252,14 @@
       "identifier": "TestWireSessionRecorderPersistence_NilRegistry_ReturnsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 143
+      "line": 144
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireSessionRecorderPersistence_ValidDB_ReturnsCloser",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 153
+      "line": 154
     },
     {
       "package": "cmd/openccu-loom",
@@ -172101,7 +172101,7 @@
       "identifier": "TestEveryWiringFunctionDeclaresOrExplainsItself",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_function_coverage_test.go",
-      "line": 80
+      "line": 79
     },
     {
       "package": "tests/contract",

@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/secret"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // TestBootRefusesCleartextCentralPasswordWithoutMasterKey pins
@@ -43,7 +44,7 @@ func TestBootRefusesCleartextCentralPasswordWithoutMasterKey(t *testing.T) {
 	ctx := context.Background()
 
 	gooseMigrateMu.Lock()
-	ov, teardown := wireAuditOverlay(ctx, cfg, slog.New(slog.DiscardHandler))
+	ov, teardown := wireAuditOverlay(ctx, wiring.NewManifest(), cfg, slog.New(slog.DiscardHandler))
 	gooseMigrateMu.Unlock()
 	t.Cleanup(teardown)
 

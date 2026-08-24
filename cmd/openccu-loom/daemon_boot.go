@@ -134,7 +134,7 @@ func openLoomDB(cfg *config.Config, logger *slog.Logger) (db *gosql.DB, err erro
 // caller defers early so it runs late (LIFO) — after the health probe and the
 // stores that read it. A leaked handle blocks temp-dir cleanup on Windows.
 // teardown is always non-nil (a no-op when the DB could not be opened).
-func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logger) (ov *auditOverlay, teardown func()) {
+func wireAuditOverlay(ctx context.Context, m *wiring.Manifest, cfg *config.Config, logger *slog.Logger) (ov *auditOverlay, teardown func()) {
 	ov = &auditOverlay{}
 	teardown = func() {}
 
@@ -191,9 +191,25 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 			cipher = &secret.Cipher{}
 		}
 		ov.secretsAvailable = cipher.Available()
-		ov.sqCentrals.SetCipher(cipher)
-		ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
-			return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)
+		// The two handovers that make a stored secret a secret. Declared
+		// because their absence is the quietest failure in the daemon: the
+		// stores accept every write, the SPA reports success, and the CCU
+		// password sits in the database in the clear.
+		//
+		// This is also why the manifest is built before the central
+		// registry rather than by it — everything here runs before
+		// bootstrap.Build, and a ledger that could not hold these seams
+		// was blindest exactly where it mattered most.
+		m.Attach(wiring.Seam{
+			Name:         "secret.config_store_crypto",
+			Collaborator: "*secret.Cipher on the centrals and sections stores",
+			Phase:        wiring.PhaseOnce,
+			Why:          "CCU passwords and every other config secret are written to the database in cleartext, and every surface still reports success",
+		}, func() {
+			ov.sqCentrals.SetCipher(cipher)
+			ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
+				return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)
+			})
 		})
 		// Capture the pre-overlay YAML/env tier so a later reload can replay
 		// exactly this assembly against the then-current DB rows — and hand the
