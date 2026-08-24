@@ -256,3 +256,69 @@ M1 is more mixed. Its DTO finding is genuine and the guard is durable, but a
 third of its candidates were the instrument's own blind spots, and the surviving
 19 are decisions rather than defects. On its own M1 would be a weaker case for
 the thesis than M2 or M3.
+
+## Done — M4: bite audit of the guard corpus
+
+Four partitions over `tests/contract/`, each agent reading test bodies rather
+than doc comments — this repo's decorative guards have all had confident doc
+comments. Eleven candidates, put through a refute pass that ran real mutations
+against scratchpad copies rather than arguing: **five survived, six were
+refuted**, and several refutations came with a named production edit that does
+turn the test red.
+
+Three fixed:
+
+- **`TestDocPurity`'s German-word list was hand-picked.** Its doc says it bans
+  German function-words; the list held fifteen, and a whole German sentence
+  containing none of them passed. The *mechanism* had already been measured —
+  `TestGermanWordRuleBites` exists because a plain `\b` never matched an
+  umlaut-initial word — but nobody had measured the *list*. Eighteen words
+  added, twelve exposed comment lines translated, four of them in production
+  packages. Bite-proved in both directions, which a word list needs more than
+  most guards: German fires, English containing the same letter sequences does
+  not.
+- **`TestValueSemanticsChangesAreWellFormed` compared majors only** while its
+  register is minor-level, so an entry naming 7.99.0 against API 7.11.0 passed —
+  the exact case its own error text calls "a promise, not a record".
+- **The reachability shape tests** claim more than they check: their counters
+  are the `len()` of the slices beside them, written in one generator pass, so
+  the equalities hold by construction. Kept, because they do catch a bad merge
+  of a thirty-thousand-line generated file, but the comments now say what they
+  cover and name the guard that is tethered to the tree.
+
+One agent claim corrected: an empty inventory does **not** slide through — it
+fails two sibling guards first. The finding was real for the individual guard
+and overstated in consequence.
+
+### What M4 says about the corpus
+
+Eleven candidates from roughly 287 test functions, five confirmed, and the two
+strongest were about **guards whose own doc comment overclaimed** rather than
+guards that were empty. That is a milder result than rounds 5 and 6 found in
+wiring and ledgers, and it is worth saying plainly: the contract corpus is in
+better shape than the artefacts around it. The refutation rate — six of eleven,
+with mutations run to prove it — also suggests the remaining candidates would
+be mostly noise.
+
+## Round 7 verdict
+
+The thesis held for M2 and M3 and held weakly for M1 and M4.
+
+- **M2 and M3 produced findings no sweep could reach.** Every line of
+  `prometheus_test.go` is correct and the file passes; every wiring seam is
+  declared and the endpoint answers correctly. Both defects live in a
+  relationship — between a check and what it claims to check, between a
+  declaration and its consequence.
+- **M1 and M4 produced fewer, and a third of M1's candidates were the
+  instrument's own blind spots.** Both remain worth having for the guards they
+  left behind, but neither is evidence for the thesis on its own.
+
+Carried forward as the round's most reusable output: **an instrument that
+cannot be made to disagree has measured nothing**, and the three ways a write
+hid from the DTO reader (name collision, direction, write shape) are a
+checklist for the next reader-shaped audit.
+
+Left open, recorded with counts rather than silently dropped: 19 confirmed M1
+surface gaps (health coverage, capability liveness, surface-registry gates),
+ten inaccurate seam `Why` texts and nine seams without an effect test from M3,
+and two decorative-but-useful reachability guards from M4.
