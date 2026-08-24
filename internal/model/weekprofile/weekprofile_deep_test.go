@@ -97,26 +97,6 @@ func (s *simpleSaver) Save(_ context.Context, v *schedule.Simple) error {
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// Helper: build a valid full-day ClimateWeekday with n equal-duration periods.
-// n must evenly divide 1440 minutes. Temperature is set to baseTemp for all.
-//
-//nolint:unused // future helper for additional weekday-layout tests
-func fullDayWeekday(n int, baseTemp float64) schedule.ClimateWeekday {
-	minPerSlot := 24 * 60 / n
-	periods := make([]schedule.ClimatePeriod, n)
-	for i := range n {
-		startM := i * minPerSlot
-		endM := startM + minPerSlot
-		periods[i] = schedule.ClimatePeriod{
-			StartTime:   minutesToHHMM(startM),
-			EndTime:     minutesToHHMM(endM),
-			Temperature: baseTemp,
-		}
-	}
-	return schedule.ClimateWeekday{BaseTemperature: baseTemp, Periods: periods}
-}
-
 func minutesToHHMM(m int) string {
 	if m == 24*60 {
 		return "24:00"
@@ -535,10 +515,10 @@ func TestClimateWeekdayEmptyPeriodsIsValid(t *testing.T) {
 func TestClimateWeekdayMaxPeriodsAccepted(t *testing.T) {
 	t.Parallel()
 
-	// fullDayWeekday(13, …) gives 13 × ~110-minute slots which won't evenly
-	// divide 1440. Build the layout manually instead — 12 one-hour slots
-	// plus a final twelve-hour slot — so that the test exercises the exact
-	// MaxClimatePeriods = 13 cap with valid 24-hour coverage.
+	// Thirteen equal slots do not divide 1440 minutes, so the layout is
+	// built by hand — 12 one-hour slots plus a final twelve-hour one — to
+	// exercise the exact MaxClimatePeriods = 13 cap with valid 24-hour
+	// coverage.
 	periods := make([]schedule.ClimatePeriod, 13)
 	for i := range 12 {
 		periods[i] = schedule.ClimatePeriod{

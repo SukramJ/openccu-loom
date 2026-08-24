@@ -178,12 +178,33 @@ func curatedTypes() map[string]any {
 				"type":        "object",
 				"description": "Composite key identifying one wire data point.",
 				"required":    []string{"interface", "device_address", "channel_no", "paramset_key", "parameter"},
+				// The three vocabularies are enums, and enums live in
+				// enums.json — a different document with a different shape,
+				// which no `$ref` from here can reach. Until this was
+				// noticed the fields referenced #/definitions/Interface,
+				// ParamsetKey and Parameter, none of which this document
+				// defines: every one of them dangled, and a strict
+				// JSON-Schema consumer would have failed to resolve the
+				// type. There is no such consumer today, which is exactly
+				// why nothing said so.
+				//
+				// They are strings on the wire; the description names where
+				// the vocabulary is published.
 				"properties": map[string]any{
-					"interface":      map[string]any{"$ref": "#/definitions/Interface"},
+					"interface": map[string]any{
+						"type":        "string",
+						"description": "Wire interface id. Vocabulary: the Interface enum in enums.json.",
+					},
 					"device_address": map[string]any{"type": "string"},
 					"channel_no":     map[string]any{"type": "integer", "minimum": 0},
-					"paramset_key":   map[string]any{"$ref": "#/definitions/ParamsetKey"},
-					"parameter":      map[string]any{"$ref": "#/definitions/Parameter"},
+					"paramset_key": map[string]any{
+						"type":        "string",
+						"description": "Paramset selector. Vocabulary: the ParamsetKey enum in enums.json.",
+					},
+					"parameter": map[string]any{
+						"type":        "string",
+						"description": "Wire parameter name. Vocabulary: the Parameter enum in enums.json.",
+					},
 				},
 			},
 		},

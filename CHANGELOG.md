@@ -25,6 +25,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it cannot lock — with no failure anywhere; the schedule just stops locking
   one channel. Now pinned in both directions.
 
+- **`assets/schemas/types.json` referenced three definitions it does not
+  contain.** Its one composite type pointed at `Interface`, `ParamsetKey` and
+  `Parameter`, which are enums published in a different document with a
+  different shape that no same-document `$ref` can reach. A strict JSON-Schema
+  consumer would have failed to resolve the type; nothing said so because
+  there is no such consumer yet. The fields now declare their wire type and
+  name the vocabulary, and a guard fails on any local `$ref` that does not
+  resolve.
+
+- A reason the visibility classifier can match but its precedence list cannot
+  order was matched and then silently dropped, leaving the operator told the
+  daemon does not know why a parameter is hidden. Nothing at unit level caught
+  that; now something does.
+
 - Two exemptions in the contract ledgers were hiding missing wiring seams
   rather than describing absent ones: an add-on update's progress never reached
   a WebSocket client, and no central polled the CCU for device firmware. Both

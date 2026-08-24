@@ -143,13 +143,29 @@ exactly this gate, added after they had drifted a whole feature behind.
 A CI step now regenerates and fails on a diff. Negative control: adding one
 `RegaScript` constant makes `enums.json` diverge, and the step catches it.
 
-Three smaller holes, recorded rather than closed: the `display_value` field-
-drift mechanism is closed for 35 of 43 broadcast payloads and eight are
-documented exceptions; 104 of 136 WS commands declare no result while their
-handler publishes one, and the contract test justifies that vocabulary by
-naming "clients that want to generate type-safe wrappers" that do not exist;
-and `assets/schemas/types.json` carries dangling `$ref`s to definitions the
-document does not contain — decorative and broken, with no consumer today.
+Three smaller holes came with it, and two are now closed.
+
+`assets/schemas/types.json` carried dangling `$ref`s: its one composite type
+referenced `Interface`, `ParamsetKey` and `Parameter`, which are enums living
+in a different document with a different shape that no `$ref` from here can
+reach. All three dangled, and a strict JSON-Schema consumer would have failed
+to resolve the type on its first attempt. Nothing said so because there is no
+such consumer — which is the difficulty with a published artefact: it is
+checked by being used, and an unused one is checked by nothing. The generator
+now declares them as their wire type and names the vocabulary in the
+description, and a guard fails on any same-document `$ref` that does not
+resolve.
+
+The WS command vocabulary's contract test justified itself by naming "clients
+that want to generate type-safe wrappers" — no such client exists;
+`scripts/gen_ws.py` reads the broadcast half and nothing else. The comment says
+what the test does and does not do now.
+
+Left open deliberately: 104 of 136 WS commands declare no `result` while their
+handler publishes one, and the `display_value` field-drift mechanism is closed
+for 35 of 43 broadcast payloads with eight documented exceptions. Both are
+contract-shaped decisions rather than defects to patch, and neither should be
+made by a sweep.
 
 ### M3 — measure the names that claim completeness
 
@@ -184,7 +200,22 @@ locking one channel. Now pinned in both directions.
 Also found: `reason.go` names `TestEveryHiddenCandidateHasAKnownReason` as the
 check that fails on a drifted classifier. No such test exists; the real one is
 a subtest that runs only under `-tags=integration`, so a unit run stays green
-while the drift is present. The comment says that now.
+while the drift is present. The comment says that now, and a unit-level guard
+pins the drift the comment was worried about: a reason `Classify` can match but
+`reasonPrecedence` cannot order is matched and then silently dropped, and
+`ClassifyPrimary` reports the parameter as hidden for an unknown reason.
+
+That one is worth a note on method. A first pass measured the precedence list
+with a regex window that stopped short of the end and concluded `ReasonReadOnly`
+was missing — a live defect, on paper. Reading the actual slice showed it
+present at line 104. The finding was the drift *risk*, not a drift; the guard is
+right either way, and the difference between the two is what a second look
+costs.
+
+`fullDayWeekday` is gone: an unused test helper kept "for additional
+weekday-layout tests", carrying an unenforced precondition (its `n` must divide
+1440, and `n = 7` would silently build a 1435-minute day). A helper kept for a
+future that has not arrived is dead code with a plan attached to it.
 
 ### M4 — mutation-test the guards round 5 added
 

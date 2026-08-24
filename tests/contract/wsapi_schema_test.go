@@ -412,9 +412,17 @@ func TestWSCommandCatalogParity(t *testing.T) {
 // documented vocabulary (`string`, `integer`, `number`, `boolean`,
 // `object`, `array`, `any`), optionally suffixed with `?` to mark the
 // field as optional. Nested objects are allowed (recursive map). This
-// blocks typos like `"strng"` and keeps the file machine-consumable by
-// clients that want to generate type-safe wrappers around the WS-call
-// surface.
+// blocks typos like `"strng"`.
+//
+// What it does not do is keep the file consumable, and the doc comment
+// used to claim otherwise by naming "clients that want to generate
+// type-safe wrappers". No such client exists: scripts/gen_ws.py in
+// openccu-loom-types reads the broadcast half of this document and
+// nothing else, so the command vocabulary is checked for spelling and
+// consumed by no generator. 104 of the 136 commands declare no `result`
+// at all while their handler publishes one, which is the same gap one
+// level up and is recorded in notes/plans/round-6-audit-strategy.md
+// rather than closed here.
 func TestWSSchemaArgsResultUseTypedVocabulary(t *testing.T) {
 	t.Parallel()
 

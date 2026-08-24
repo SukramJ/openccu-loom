@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 374.
+Guards without a doc comment: 7 of 375.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -230,6 +230,7 @@ Guards without a doc comment: 7 of 374.
 | TestSimpleScheduleRoundTripContract | schedule_round_trip_test.go | TestSimpleScheduleRoundTripContract pins the read-write invariant that the SPA's schedule editor depends on: for any entry e that the read path emits for a SimpleSchedule on a given category C, the same e MUST pass ValidateFor(C). |
 | TestOpenAPIInfoVersionMatchesAPIVersion | schema_digest_test.go | TestOpenAPIInfoVersionMatchesAPIVersion pins the two declarations of the contract version to each other: the OpenAPI document's `info.version` and the [handlers.APIVersion] constant served by `GET /api/v1/info`. |
 | TestSchemaDigestFresh | schema_digest_test.go | TestSchemaDigestFresh recomputes the contract digest from the repo assets and fails when the generated constant served by `GET /api/v1/info` has gone stale. |
+| TestExportedSchemasResolveTheirOwnRefs | schema_export_refs_test.go | TestExportedSchemasResolveTheirOwnRefs pins that assets/schemas/*.json can be resolved by a consumer that only has the file in front of it. |
 | TestSPASecurityClassLabelsMatchDaemonCatalogues | security_class_labels_test.go | TestSPASecurityClassLabelsMatchDaemonCatalogues pins the Config UI's security class names to the daemon's. |
 | TestSecurityPlane_AnnouncedEventTypesCoverEmittedVerbs | security_mqtt_plane_test.go | TestSecurityPlane_AnnouncedEventTypesCoverEmittedVerbs derives the set of [hmenum.SecurityVerb] values the production code actually attaches to a security notification or fault-change event — from internal/security/subscribe.go (Triggered/Cleared), internal/security/fault.go (Raised/Cleared) and internal/north/mqtt/security_publisher.go's verbForFault (Raised/Cleared) — and asserts every one of them appears in the event_types the "event" and "fault" HA-Discovery entities announce. |
 | TestSecurityPlane_AttributePayloadsAreObjects | security_mqtt_plane_test.go | TestSecurityPlane_AttributePayloadsAreObjects builds a snapshot that exercises every attribute builder in internal/north/mqtt/ security_reconcile.go (systemAttributes, hazardAttributes, faultAttributes, classAttributes, zoneAttributes, sourcesAttribute) via the real reconcile path and asserts each published payload unmarshals as a JSON object. |
