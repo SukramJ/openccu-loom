@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.64.2]
 
 The round-5 measures, finished. The composition root now states its wiring as
 data a test can read, the MCP/REST parity backlog is empty, and the seventeen
@@ -58,6 +58,12 @@ diagnostics payload.
   a comment five hundred lines from the `StartAll` it talked about; moving the
   call across the boundary now turns an end-to-end test red with the
   consequence spelled out.
+
+- A guard over the test helper every router-level contract guard builds on.
+  `fullyWiredRouterDeps` fills 68 of `rest.Deps`' 140 fields, so those guards
+  are blind to whatever the rest govern — which already cost one silently
+  vacuous test. Every unfilled field now carries the reason its absence is
+  harmless, and a new dep joining the nil set fails until somebody decides.
 
 ### Changed
 

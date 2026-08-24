@@ -44,9 +44,11 @@ replace it, and the metrics that say whether it worked.
   whose prose said "before the PhaseLate StartAll" five hundred lines from the
   `StartAll` in question.
 
-  Also still open: struct-field seams, where a collaborator arrives as a field
-  of a deps literal rather than through a call. Those need a shape decision
-  first — a literal has no attach point to hang a declaration on.
+  Struct-field seams are closed rather than open: measurement showed the class
+  is already covered at the level of the consequence, not the mechanism — see
+  the ADR's consequences for the three cases and the negative control behind
+  each. The investigation's actual finding was one level up, in the test
+  helper, and is fixed (`TestFullyWiredRouterDepsCoversEveryDep`).
 
   And one named gap: a mark has to be an unconditional boot boundary, so a
   constraint relative to an optional subsystem's start is not expressible. The

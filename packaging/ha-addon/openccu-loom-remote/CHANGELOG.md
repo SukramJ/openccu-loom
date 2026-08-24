@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.64.2
+
+- Version alignment with OpenCCU-Loom 0.64.2. The proxy itself is unchanged;
+  the release fixes a backup restore that left the daemon serving the
+  configuration it had just replaced, and an MQTT settings save that reported
+  success without reaching the running bridge.
+
 # 0.64.1
 
 - Version alignment with OpenCCU-Loom 0.64.1. The proxy itself is unchanged;

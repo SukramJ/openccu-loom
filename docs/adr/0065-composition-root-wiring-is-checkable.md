@@ -165,12 +165,38 @@ replaces. `TestEveryWiringSetterHasAProductionCaller` and its ratchet can then
 shrink toward deletion rather than being frozen, which is what the round-5 M2
 audit found they currently are.
 
-**What is not covered yet.** Struct-field seams — a collaborator handed over as
-a field of a deps literal rather than through a call — and the ordered seams
-that exist but have not been declared. Four are declared; `cmd/openccu-loom`
-carries more constraints of the same shape, and each one adopted is one more
-comment that becomes a check. Nothing about the mechanism needs to change for
-them.
+**What is not covered yet.** The ordered seams that exist but have not been
+declared. Six are; `cmd/openccu-loom` carries more constraints of the same
+shape, and each one adopted is one more comment that becomes a check. Nothing
+about the mechanism needs to change for them.
+
+**Struct-field seams do not need this mechanism, which is a measured answer
+rather than a deferral.** A collaborator handed over as a field of a deps
+literal was expected to need a shape of its own, because a literal has no
+attach point to hang a declaration on. It turns out not to need one:
+
+- Where a nil field changes the *route surface*, the bidirectional
+  router/OpenAPI walk catches it — and it is genuinely bidirectional, with nine
+  exemptions, all on `/events`, so nothing is being absorbed there.
+- Where a nil field changes the route's *tier* without changing the surface —
+  the auth gates, the one instance with recorded harm — the authz-scope guard
+  catches it. Verified by negative control: nil-ing `RequireAdmin` makes it
+  report every admin route as mounted at viewer tier.
+- Where a nil field changes neither, the route mounts anyway and the handler
+  answers 503. Nine of `rest.Deps`' seventy-five unfilled fields gate a mount,
+  all nine gate middleware or the SPA mount; the other sixty-six sit behind
+  routes that mount regardless. A 503 for an unconfigured subsystem is the
+  documented behaviour and it is loud.
+
+A manifest census of nil fields would have restated all of that at the level of
+the mechanism instead of the consequence, and flooded the ledger with a hundred
+and forty entries per deps struct to do it.
+
+What the investigation did find is one level up, in the *test helper*:
+`fullyWiredRouterDeps` fills 68 of 140 fields, so every guard built on it is
+blind to what the other 72 govern. That is now a ratchet of its own — each
+unfilled field carries the reason its absence is harmless, and a new dep
+joining the nil set fails until somebody decides.
 
 The marks stay deliberately few. A mark is a boundary something downstream
 genuinely depends on, and a guard asserts every declared mark is passed exactly
