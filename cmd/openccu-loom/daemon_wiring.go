@@ -174,12 +174,21 @@ func wireValueWriterHooks(reg *central.Registry, valueWriter *clientpkg.ValueWri
 		Name:         "client.value_writer_hooks",
 		Collaborator: "*client.ValueWriter bus resolver and command tracker",
 		Phase:        wiring.PhaseOnce,
-		Why:          "a value write reaches the CCU but publishes no event and is tracked by no command, so every north-bound plane keeps showing the value the device held before the write",
+		Why:          "a value write reaches the CCU and is recorded by no command tracker, so the in-flight gauge under-reports and the callback path has no entry to clear when the CCU echoes the value back",
 	}, func() { wireValueWriterHookFns(reg, valueWriter) })
 }
 
 // wireValueWriterHookFns installs the hooks themselves. Split out so the
 // seam above wraps exactly the handover and nothing else.
+//
+// The two hooks are not equally live, and the seam's Why covers only the
+// tracker for that reason. The bus resolver feeds the wait-for-callback
+// path in [client.SetValueWithOptions], and no production site asks for
+// that wait: WriteOptions.WaitForCallback is set only in tests, and
+// generic.WithWaitForCallback has no caller outside them either. Removing
+// the resolver would therefore change nothing observable today — which is
+// precisely why it is worth writing down, rather than leaving a future
+// reader to infer from the seam that both halves carry traffic.
 func wireValueWriterHookFns(reg *central.Registry, valueWriter *clientpkg.ValueWriter) {
 	valueWriter.SetBusResolver(func(centralName string) (any, bool) {
 		c, ok := reg.Get(centralName)

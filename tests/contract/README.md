@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 377.
+Guards without a doc comment: 7 of 378.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -128,6 +128,7 @@ Guards without a doc comment: 7 of 377.
 | TestHARegistryDescriptionRulesCountUnchanged | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesCountUnchanged pins the entry count so an accidental truncation (e.g. |
 | TestHARegistryDescriptionRulesHaveKeys | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesHaveKeys fails when any entry in the generated slice has an empty Description.Key. |
 | TestHARegistryDescriptionRulesNoDuplicates | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesNoDuplicates fails when the generated haRegistryDescriptionRules slice contains two or more entries that have identical (category, parameters, devices, unit, postfix, varNameContains) matching criteria. |
+| TestEveryPublishedDTOFieldHasAWriter | hmapi_field_writer_coverage_test.go | TestEveryPublishedDTOFieldHasAWriter pins that a field pkg/hmapi declares — and assets/openapi.yaml therefore publishes — is populated somewhere in the daemon. |
 | TestAllInterfacesPush | hmenum_constants_test.go | TestAllInterfacesPush pins down SPECIFICATION §8.1: every interface supports push callbacks. |
 | TestBitmaskZeroIsEmpty | hmenum_constants_test.go | TestBitmaskZeroIsEmpty locks in the Operations / Flag zero-value semantics: no bits set. |
 | TestCUxDIsBINRPCOnly | hmenum_constants_test.go | TestCUxDIsBINRPCOnly enforces the "CUxD uses BIN-RPC" rule: CUxD must be in BINRPCInterfaces and must not appear anywhere else. |
