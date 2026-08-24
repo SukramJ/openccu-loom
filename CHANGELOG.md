@@ -6,7 +6,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-08-24
+
+Round 7 of the defect audit, and the round-8 live verification that followed
+it. The audit's premise was that the remaining defects live in the seams
+*between* artefacts rather than inside any one of them, and it held: the check
+standing between the daemon and Prometheus could not fail for the reason it
+existed, half the wiring seams described a consequence that does not follow,
+and two subsystems could die leaving one boot warning behind.
+
+Round 8 then held all of it against a real CCU and a real Matter commissioner
+for the first time in three audit rounds. Nothing was found wrong — the
+features behave the way the hermetic tests said they would, including the
+derived-sensor exposure this release makes reachable at all.
+
+The north-bound API contract moves to **7.12.0** — additive only: four
+capability tokens, and the documented meaning of a token pinned down as
+*configured*, not running. Liveness is what `/health` answers, and it gained
+two components for it.
+
 ### Added
+
+- **`north.matter.include_measurements`** — exposes the daemon's calculated
+  sensors as Matter measurement endpoints alongside the device's own
+  projection. Off by default: these are derived from data the CCU already
+  reports rather than read from the device, so a controller showing all of
+  them turns one wall thermostat into a row of sensors most users did not ask
+  for. Matter-only — MQTT, HA-Discovery and REST have always carried derived
+  sensors. See Fixed: until now there was no way to turn this on at all.
 
 - **Four capability tokens for surfaces a client could not discover** —
   `mqtt.raw.v1`, `webhook.inbound.v1`, `diagrams.v1` and
@@ -134,7 +161,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   API **7.11.0** — additive: an unresolvable reference becoming a resolvable
   type takes nothing away from a consumer that could not resolve it.
 
-
+## [0.64.2] - 2026-08-24
 
 The round-5 measures, finished. The composition root now states its wiring as
 data a test can read, the MCP/REST parity backlog is empty, and the seventeen
@@ -151,14 +178,6 @@ endpoint, two fields on the config-section save response, and four on a
 diagnostics payload.
 
 ### Added
-
-- **`north.matter.include_measurements`** — exposes the daemon's calculated
-  sensors as Matter measurement endpoints alongside the device's own
-  projection. Off by default: these are derived from data the CCU already
-  reports rather than read from the device, so a controller showing all of
-  them turns one wall thermostat into a row of sensors most users did not ask
-  for. Matter-only — MQTT, HA-Discovery and REST have always carried derived
-  sensors. See Fixed: until now there was no way to turn this on at all.
 
 - **`GET /api/v1/diagnostics/wiring`** (admin-only) — the seams the running
   daemon declared as it wired them (ADR 0065). Each entry names the seam, the

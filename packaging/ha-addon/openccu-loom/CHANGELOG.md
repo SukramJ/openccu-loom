@@ -1,5 +1,24 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.65.0
+
+Derived sensors can now reach Matter. Apparent temperature, dew point,
+enthalpy, frost point and the rest are calculated by the daemon rather than
+read from the device, and until now they were offered in the exposure list and
+then silently dropped — the switch that admits them existed in code with no way
+to turn it on. `north.matter.include_measurements` is that switch, off by
+default so a controller does not turn one wall thermostat into a row of
+sensors.
+
+Two subsystems could previously fail leaving nothing but a boot warning: the
+Security & Safety domain, which then answered as if the installation had no
+sensors, and the mDNS advertiser, whose failure stops Matter pairing by QR code
+while every other surface looks healthy. Both now report on the health page.
+
+Clients gain four capability tokens for surfaces they could not discover — the
+raw MQTT plane, the inbound webhook endpoints, diagrams, and the
+persistence-backed admin surface.
+
 ## 0.64.2
 
 The composition root now states its wiring as data, so the daemon can be

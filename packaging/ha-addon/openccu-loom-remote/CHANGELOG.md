@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.65.0
+
+- Version alignment with OpenCCU-Loom 0.65.0. The proxy itself is unchanged;
+  the release makes the daemon's calculated sensors reachable over Matter,
+  surfaces the Security & Safety domain and the mDNS advertiser on the health
+  page, and adds four capability tokens for surfaces a client could not
+  discover before.
+
 # 0.64.2
 
 - Version alignment with OpenCCU-Loom 0.64.2. The proxy itself is unchanged;
