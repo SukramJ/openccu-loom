@@ -12,6 +12,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
@@ -47,7 +48,13 @@ import (
 // (AddonUpdateStatus is carried by ws.AddonUpdateStatusPayload) and the
 // schema name is what wsapi.json and the generated clients agree on.
 var wsPayloadStructs = map[string]any{
-	"AddonUpdateStatus":                  ws.AddonUpdateStatusPayload{},
+	"AddonUpdateStatus": ws.AddonUpdateStatusPayload{},
+	// Two handler DTOs that double as broadcast payloads. They were
+	// recorded as holes on the grounds that they live outside the ws
+	// package — true, and irrelevant: they are exported, so reflection
+	// reaches them exactly as it reaches a ws struct.
+	"MatterCommissioningWindowResponse":  handlers.MatterCommissioningWindowResponse{},
+	"MatterExposureUpdate":               handlers.MatterExposureUpdate{},
 	"AlarmCountdownPayload":              ws.AlarmCountdownPayload{},
 	"AlarmHealthChangedPayload":          ws.AlarmHealthChangedPayload{},
 	"AlarmJournalAppendedPayload":        ws.AlarmJournalAppendedPayload{},
@@ -92,14 +99,26 @@ var wsPayloadStructs = map[string]any{
 // Never add a name here to silence a failure on a payload that *is* a ws
 // struct: registering it in [wsPayloadStructs] is the whole point.
 var wsPayloadsDeclaredElsewhere = map[string]string{
-	"DeviceMetadataChangedPayload":       "unexported adapter struct (internal/central/adapter/eventbridge.go deviceMetadataChangedWSPayload) — export it into the ws package to cover it",
-	"ScheduleChangedPayload":             "unexported adapter struct — same as DeviceMetadataChangedPayload",
-	"MatterCommissioningProgressPayload": "built by the Matter north-bound adapter, not the ws package",
-	"MatterCommissioningWindowResponse":  "handlers DTO reused as a broadcast payload (handlers.MatterCommissioningWindowResponse)",
-	"MatterEndpointAssembledPayload":     "built by the Matter north-bound adapter, not the ws package",
-	"MatterExposureUpdate":               "handlers DTO reused as a broadcast payload (handlers.MatterExposureUpdate)",
-	"MatterFabric":                       "handlers DTO reused as a broadcast payload",
-	"MatterFabricRemovedPayload":         "built by the Matter north-bound adapter, not the ws package",
+	"DeviceMetadataChangedPayload": "unexported adapter struct (internal/central/adapter/eventbridge.go deviceMetadataChangedWSPayload) — export it into the ws package to cover it",
+	"ScheduleChangedPayload":       "unexported adapter struct — same as DeviceMetadataChangedPayload",
+	// These three have no Go type at all: the publish sites assemble them
+	// as `map[string]any` literals (handlers/matter_exposures.go:397,428,
+	// handlers/matter_maintenance.go:111, cmd/openccu-loom/
+	// matter_event_publisher.go). There is nothing to reflect over, so the
+	// hole cannot be closed by registering a struct — it closes by giving
+	// the payload one, or by a guard that reads the literal's keys.
+	//
+	// The earlier reason said they were "built by the Matter north-bound
+	// adapter, not the ws package", which reads as a location problem and
+	// is not one.
+	"MatterCommissioningProgressPayload": "assembled as a map[string]any literal at the publish site; no struct exists to field-check",
+	// The schema component is named MatterFabric; no Go type of that name
+	// exists. Whatever the fabric-added broadcast publishes is assembled
+	// elsewhere, so the component describes a shape nothing in this tree
+	// declares — worth naming as that rather than as a package boundary.
+	"MatterFabric":                   "no Go type of this name exists; the component describes a shape assembled at the publish site",
+	"MatterEndpointAssembledPayload": "assembled as a map[string]any literal at the publish site; no struct exists to field-check",
+	"MatterFabricRemovedPayload":     "assembled as a map[string]any literal at the publish site; no struct exists to field-check",
 }
 
 // TestWSPayloadStructsMatchOpenAPISchemaFields pins every registered
