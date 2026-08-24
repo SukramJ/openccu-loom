@@ -419,10 +419,13 @@ func TestWSCommandCatalogParity(t *testing.T) {
 // type-safe wrappers". No such client exists: scripts/gen_ws.py in
 // openccu-loom-types reads the broadcast half of this document and
 // nothing else, so the command vocabulary is checked for spelling and
-// consumed by no generator. 104 of the 136 commands declare no `result`
-// at all while their handler publishes one, which is the same gap one
-// level up and is recorded in notes/plans/round-6-audit-strategy.md
-// rather than closed here.
+// consumed by no generator. Two different numbers describe that gap and
+// they are easy to conflate: 104 of the 136 commands declare no `result`
+// at all, and 82 of those 104 have a handler that returns a payload —
+// only the 82 are a mismatch, the other 22 are ack-only commands whose
+// silence is correct. TestWSCommandResultsMatchTheirHandlers holds the 82
+// as a declared backlog; the reasoning is in
+// notes/plans/round-6-audit-strategy.md rather than closed here.
 func TestWSSchemaArgsResultUseTypedVocabulary(t *testing.T) {
 	t.Parallel()
 
