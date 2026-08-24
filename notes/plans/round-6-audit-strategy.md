@@ -298,3 +298,58 @@ cliff must leave a partial but truthful record, not a complete silence.
 
 M1 first: it is the largest concentrated body of unverified claims, and it is
 the one whose failure mode is silence rather than noise.
+
+---
+
+## Done — M5: the composition root against the structs it fills
+
+Added after M1–M4, from the observation that closed M1 (a ledger's own entries
+are worth auditing) applied one level down: the composition root is a ledger
+too. Every `<pkg>.Deps{…}` literal is a claim that the daemon hands over what
+the adapter declared, and nothing compared the two sets.
+
+Twelve dependency structs measured, declared-vs-filled, each gap then read
+against its consumer. Yield:
+
+| Verdict | Count | What it was |
+|---|---|---|
+| Real defect | 1 | `bridge.Config.IncludeMeasurements` — see below |
+| Real, trivial | 1 | `mqtt.BridgeConfig.DiscoveryObjectIDFmt`, a dead field whose comment advertised a default nothing applied |
+| Refuted | 7 | wired after construction, which the measurement could not see |
+| Known / by design | ~13 | defaulted values, stub handlers that answer with a visible error, one already-registered dead feature |
+
+**The defect.** Eight calculated sensor types are reported `Mappable` by
+`GET /api/v1/matter/exposable`, so the SPA lists them and an operator can
+allowlist them; the assembler dropped every one, because the flag admitting
+them was never handed to the bridge and no config key existed to set it. The
+field's comment claimed operators enable it "via the config UI or daemon config
+flag". The assembler was tested with the flag both true and false — it set the
+flag itself, so it proved the assembler could honour a value and never that the
+daemon supplied one. This is the bracketing test, in the one place seven audit
+rounds had not looked.
+
+**The refutations are the methodological result.** Seven of twenty-two findings
+were wrong for a single reason: the measurement read composite literals, and
+`deps.Foo = bar` after the literal, or `obj.SetFoo(…)` after construction, are
+both ordinary wiring. The instrument had no negative control for its own blind
+spot — it could not distinguish "never wired" from "wired in a shape I do not
+parse", and returned the same answer for both. That is the rule the guards are
+held to, failing on the tool auditing them, and it is why the guard that landed
+covers five seams rather than twelve: the seven that wire post-construction are
+named as uncovered, with their twenty-one unfilled fields counted, rather than
+absorbed into a ledger whose entries would be excusing the guard's limitation.
+
+**The guard.** `TestCompositionRootHandsOverEveryDeclaredField` catches the
+class no per-field pin can: a *new* field added to a Deps struct whose author
+fills it in the tests and forgets the daemon. A pin for that field would have
+to be written by the same person in the same change that forgot it. Bite-proved
+once per seam; the `matterbridge.Config` bite is the original defect.
+
+### What the round confirmed about the thesis
+
+M5 is the strongest evidence for round 6's premise. The defect had survived
+seven green PRs and four audit rounds, and no instance sweep would have found
+it: nothing is wrong at any single site. `eligibility.go` is correct,
+`assembler.go` is correct, the config struct was consistent, and every test
+passed. The defect lived in the *disagreement between two artefacts*, which is
+only visible when you audit the relationship rather than the instances.
