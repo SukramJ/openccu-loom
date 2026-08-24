@@ -43,13 +43,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   not to the CCU, and one daemon serves a LAN tab, an Ingress-tunnelled add-on
   and a public host at once.
 - **Broker and controller latency in diagnostics.** New gauges
-  `ws.heartbeat_rtt_ms`, `mqtt.publish_ack_ms` and `matter.controller_rtt_ms`,
-  each paired with a `*_samples` gauge so "nothing measured" stays
-  distinguishable from "measured as zero". The MQTT probe times only
-  acknowledged (QoS ≥ 1) publishes — a QoS 0 publish is never answered by the
-  broker, so timing one would report near-zero however sick the broker is. The
-  Matter probe times only first-try acknowledgements (Karn's algorithm): after
-  a retransmit the ACK cannot be attributed to either transmission.
+  `ws.heartbeat_rtt_ms`, `mqtt.publish_ack_ms` and `matter.controller_rtt_ms`.
+  Each is paired with a companion so "nothing measured" stays distinguishable
+  from "measured as zero": a connection count for the WebSocket, and a
+  cumulative `*_total` for the two windowed probes — window occupancy
+  saturates after the first burst and then reads identically whether the
+  median describes the last minute or the bring-up of a daemon that has been
+  running for days. The MQTT probe times only acknowledged (QoS ≥ 1)
+  publishes — a QoS 0 publish is never answered by the broker, so timing one
+  would report near-zero however sick the broker is. Note that state topics
+  default to QoS 0, so on a stock configuration this gauge reports the
+  discovery plane rather than the state plane. The Matter probe times only
+  first-try acknowledgements (Karn's algorithm): after a retransmit the ACK
+  cannot be attributed to either transmission.
 
 ### Changed
 

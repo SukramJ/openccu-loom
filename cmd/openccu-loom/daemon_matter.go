@@ -282,15 +282,18 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// Controller round-trip: how long a paired Apple/Google hub takes to
 		// ACK a reliable message this bridge sent. It separates a controller
 		// that has gone unreachable from one that is merely slow — both look
-		// like "subscriptions alive" everywhere else. Zero samples is the
-		// correct steady state of a bridge nobody has paired yet, which is
-		// why the sample count is a gauge of its own rather than left to be
-		// inferred from a median of zero.
+		// like "subscriptions alive" everywhere else.
+		//
+		// The companion gauge is the cumulative count rather than the window
+		// occupancy, for the reason spelled out at the MQTT pair in
+		// daemon_infra.go: occupancy saturates and then cannot tell a live
+		// median from one frozen at the last successful exchange. A total of
+		// zero is the correct steady state of a bridge nobody has paired.
 		mb := bridge
 		healthTracker.RegisterGauge("matter.controller_rtt_ms",
 			func() float64 { return mb.ControllerRTT().MedianMs })
-		healthTracker.RegisterGauge("matter.controller_rtt_samples",
-			func() float64 { return float64(mb.ControllerRTT().Samples) })
+		healthTracker.RegisterGauge("matter.controller_rtt_total",
+			func() float64 { return float64(mb.ControllerRTT().Total) })
 	}
 
 	// Boot-time fabric announce: if a fabric is already persisted

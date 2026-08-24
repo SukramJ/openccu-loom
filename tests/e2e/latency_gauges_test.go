@@ -60,13 +60,24 @@ func TestE2ELatencyGaugesReachTheDiagnosticsSurface(t *testing.T) {
 		"ws.heartbeat_rtt_ms",
 		"ws.heartbeat_rtt_samples",
 		"mqtt.publish_ack_ms",
-		"mqtt.publish_ack_samples",
+		"mqtt.publish_ack_total",
 	} {
 		if _, ok := gauges[name]; !ok {
 			t.Errorf("gauge %q is absent from the diagnostics dump — it is registered but nothing reads it, "+
 				"so the measurement is invisible to the operator it was added for. Gauges present: %v",
 				name, keysOf(gauges))
 		}
+	}
+
+	// The MQTT companion gauge must be the cumulative count, not the window
+	// occupancy: occupancy saturates at the window size after the first burst
+	// of acknowledged publishes and then reads identically whether the median
+	// describes the last minute or the bring-up of a daemon running for days.
+	// The live run that motivated this showed exactly that — 128 samples,
+	// pinned, while the median quietly went stale.
+	if _, ok := gauges["mqtt.publish_ack_samples"]; ok {
+		t.Error("mqtt.publish_ack_samples is still registered: window occupancy cannot distinguish a live " +
+			"median from one frozen at boot, which is what mqtt.publish_ack_total replaced it for")
 	}
 
 	// Matter is opt-in and off in this harness, so its gauges must NOT be here.

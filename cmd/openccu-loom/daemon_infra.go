@@ -309,14 +309,21 @@ func wireMQTTSupervisor(
 	// Broker acknowledgement time, read from whichever stack generation is
 	// live — a config swap replaces the probe, and a gauge holding the
 	// predecessor would report a broker connection that no longer exists.
-	// Empty on a QoS 0 deployment, where nothing is measurable; the samples
-	// gauge is what tells that apart from a broker that has gone quiet.
+	//
+	// The companion gauge is the cumulative count, not the window occupancy.
+	// Occupancy pins to the window size after the first burst of acknowledged
+	// publishes and stays there, so it cannot distinguish a median describing
+	// the last minute from one describing the bring-up of a daemon that has
+	// been running for days. A total that stops advancing says plainly that
+	// the median is stale — and a total of zero says the deployment publishes
+	// state at QoS 0, where the broker acknowledges nothing and there is
+	// nothing to measure.
 	if si.healthTracker != nil {
 		sup := si.mqttSup
 		si.healthTracker.RegisterGauge("mqtt.publish_ack_ms",
 			func() float64 { return sup.PublishLatency().MedianMs })
-		si.healthTracker.RegisterGauge("mqtt.publish_ack_samples",
-			func() float64 { return float64(sup.PublishLatency().Samples) })
+		si.healthTracker.RegisterGauge("mqtt.publish_ack_total",
+			func() float64 { return float64(sup.PublishLatency().Total) })
 	}
 	startErr := si.mqttSup.Start(ctx, cfg)
 	reg.Manifest().Mark(wiring.MarkMQTTSupervisorStarted)
