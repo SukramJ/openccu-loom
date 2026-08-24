@@ -189,11 +189,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		Phase:        wiring.PhaseOrdered,
 		Before:       []wiring.Mark{wiring.MarkCentralsStarted},
 		Why:          "the gated hub jobs run against a model that has no gate to wait on, so a job scheduled at boot fires before any device exists",
-	}, func() {
-		for _, u := range reg.List() {
-			u.WireDevicesCreatedGate()
-		}
-	})
+	}, func() { wireDevicesCreatedGates(reg) })
 
 	// The per-central background jobs have to be registered before the
 	// scheduler starts. Registering them afterwards compiles and logs

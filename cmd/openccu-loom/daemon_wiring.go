@@ -207,3 +207,18 @@ func wireValueWriterHookFns(reg *central.Registry, valueWriter *clientpkg.ValueW
 		}
 	})
 }
+
+// wireDevicesCreatedGates installs the device-creation gate on every
+// registered central. Split out so the seam wraps exactly the handover and
+// nothing else — and so an effect test can drive it the way boot does.
+//
+// Before the gate is installed, Unit.IsDevicesCreated answers true
+// unconditionally: with no gate there is nothing to wait on, so every
+// gated hub job is free to run. That is the state the seam exists to leave
+// behind, and it is why the gate has to be in place before the standard
+// jobs are registered.
+func wireDevicesCreatedGates(reg *central.Registry) {
+	for _, u := range reg.List() {
+		u.WireDevicesCreatedGate()
+	}
+}

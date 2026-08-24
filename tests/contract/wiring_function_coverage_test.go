@@ -47,6 +47,7 @@ var wiringFuncsWithoutSeam = map[string]string{
 	"wireSouthbound":                    "composes several attaches rather than being one; the ones with a constraint declare it themselves, at the call that makes them",
 	"wireSystemStatusSubscribers":       "starts collaborators that each declare their own seam through OnRegisterDeclared, so the entries exist one level down",
 	"wireValueWriterHookFns":            "installs the attach for the seam its caller declares; a second declaration would collide on the name",
+	"wireDevicesCreatedGates":           "installs the attach for the seam its caller declares; a second declaration would collide on the name",
 	"wireValuesCacheStore":              "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireVisibilityUnIgnoreStore":       "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireWSCommands":                    "hands over logging context (logger, central name), not a collaborator whose absence stops a feature",
