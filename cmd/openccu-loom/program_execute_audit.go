@@ -54,7 +54,7 @@ func wireProgramExecuteAudit(
 		Name:         "audit.program_execute",
 		Collaborator: "subscribeProgramExecuteAudit",
 		Phase:        wiring.PhasePerCentral,
-		Why:          "a program run on the central is never recorded, so the audit trail cannot answer who triggered it",
+		Why:          "a program run on the central is neither audited nor logged, so the audit trail cannot answer who triggered it and the log a reader falls back to has no entry either — this subscriber writes both",
 	}, func(u *central.Unit) func() {
 		return subscribeProgramExecuteAudit(u, rec, logger)
 	})

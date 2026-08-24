@@ -112,7 +112,7 @@ func wireSecurityIndexRefresh(m *wiring.Manifest, alarmSvc *alarm.Service, secur
 		Name:         "security.index_refresh",
 		Collaborator: "config-changed hook on *alarm.Service",
 		Phase:        wiring.PhaseOnce,
-		Why:          "the hazard-classification index is never rebuilt after an alarm-config change, so a sensor the operator just re-assigned keeps its old class and opens faults on the wrong one",
+		Why:          "the hazard-classification index is never rebuilt after any alarm-config write — enrollment, zone edit or class override alike — so a sensor the operator just re-assigned keeps its old class and opens faults on the wrong one until the daemon restarts",
 	}, func() { wireSecurityIndexRefreshHook(alarmSvc, securitySvc, logger) })
 }
 

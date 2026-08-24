@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 378.
+Guards without a doc comment: 7 of 379.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -377,6 +377,7 @@ Guards without a doc comment: 7 of 378.
 | TestMatterSessionListerIsWiredFromBothManagers | wiring_pins/matter_session_diagnostics_test.go | TestMatterSessionListerIsWiredFromBothManagers pins the composition root's half of the session-diagnostics surface. |
 | TestPin_MCPFleetSeams_WiredInDaemon | wiring_pins/mcp_fleet_seams_test.go | TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every fleet read seam to the MCP server. |
 | TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
+| TestEverySeamAttachWrapsItsHandover | wiring_pins/seam_attach_wraps_work_test.go | TestEverySeamAttachWrapsItsHandover pins that a wiring seam's Attach closure actually performs the handover it declares. |
 | TestPin_SectionApplier_WiredIntoTheRESTRouter | wiring_pins/section_applier_test.go | TestPin_SectionApplier_WiredIntoTheRESTRouter pins that the daemon gives the config-save path something to apply a section with. |
 | TestCSRFDefaultEnabled | wiring_pins/security_csrf_origin_test.go | TestCSRFDefaultEnabled pins that the config default has CSRFEnabled set to true. |
 | TestCSRFExplicitFalseOptOut | wiring_pins/security_csrf_origin_test.go | TestCSRFExplicitFalseOptOut pins that setting CSRFEnabled to false in the config (opt-out path for API-token deployments) is honoured by CSRFIsEnabled. |

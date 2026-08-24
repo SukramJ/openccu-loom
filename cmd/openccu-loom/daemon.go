@@ -205,7 +205,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		Collaborator: "registerStandardJobsFor",
 		Phase:        wiring.PhaseOrdered,
 		Before:       []wiring.Mark{wiring.MarkCentralsStarted},
-		Why:          "central.health_heartbeat and central.check_connection never run, so the per-central health component decays to UNKNOWN a minute and a half after boot and no interface's circuit breaker ever recovers",
+		Why:          "central.health_heartbeat never runs, so the per-central health component is written once at boot and then decays to UNKNOWN ninety seconds later. Interface circuit breakers still recover: a per-interface ticker probes availability independently of this seam",
 	}, func() { registerStandardJobs(reg, cfg, logger) })
 
 	if err := reg.StartAll(ctx); err != nil {

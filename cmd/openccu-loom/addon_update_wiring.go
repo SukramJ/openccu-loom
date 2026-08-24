@@ -78,7 +78,7 @@ func wireAddonUpdateWS(m *wiring.Manifest, updater *addonupdate.Updater, hub *ws
 		Name:         "ws.addon_update_status",
 		Collaborator: "*ws.Hub, listening on addonupdate.Updater.OnChange",
 		Phase:        wiring.PhaseOnce,
-		Why:          "an add-on update's progress never reaches a WebSocket client, so the SPA shows the state it had when the page loaded for the whole install",
+		Why:          "an add-on update's progress never reaches a WebSocket client. The SPA shows the state it had when the page loaded for the whole install, and because it arms its completion toast on the transition into installing, the operator is never told the update finished either",
 	}, func() {
 		unsub = updater.OnChange(func(st addonupdate.Status) {
 			hub.PublishAddonUpdateStateChanged(addonUpdateWSPayload(st), time.Now())
