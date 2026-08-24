@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.9.0
+  version: 7.10.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -227,20 +227,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name: { type: string }
-                include_channels:
-                  type: boolean
-                  description: >-
-                    Also rename each channel to "<name>:<channelNo>".
-                    Only consulted together with name. Defaults to false.
-                rooms:
-                  type: array
-                  items: { type: string }
-                functions:
-                  type: array
-                  items: { type: string }
+              $ref: "#/components/schemas/PatchDeviceRequest"
       responses:
         "202":
           description: Update accepted
@@ -331,21 +318,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name: { type: string }
-                rooms:
-                  type: array
-                  items: { type: string }
-                  description: |
-                    Replaces the channel's room assignments. Room names
-                    unknown to the CCU are silently skipped.
-                functions:
-                  type: array
-                  items: { type: string }
-                  description: |
-                    Replaces the channel's function (Gewerk)
-                    assignments. Unknown names are silently skipped.
+              $ref: "#/components/schemas/PatchChannelRequest"
       responses:
         "202":
           description: Update accepted
@@ -624,12 +597,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [entries]
-                properties:
-                  entries:
-                    type: array
-                    items: { $ref: "#/components/schemas/GroupCentralEntry" }
+                $ref: "#/components/schemas/ListGroupsResponse"
         "404":
           $ref: "#/components/responses/NotFound"
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -691,12 +659,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [types]
-                properties:
-                  types:
-                    type: array
-                    items: { $ref: "#/components/schemas/GroupTypeEntry" }
+                $ref: "#/components/schemas/ListGroupTypesResponse"
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -807,12 +770,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [diagrams]
-                properties:
-                  diagrams:
-                    type: array
-                    items: { $ref: "#/components/schemas/DiagramConfig" }
+                $ref: "#/components/schemas/ListDiagramsResponse"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
@@ -933,12 +891,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/ScheduleDeviceSummary" }
+                $ref: "#/components/schemas/ListSchedulesResponse"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /links:
@@ -983,12 +936,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [links]
-                properties:
-                  links:
-                    type: array
-                    items: { $ref: "#/components/schemas/Link" }
+                $ref: "#/components/schemas/ListAllLinksResponse"
         "404":
           $ref: "#/components/responses/NotFound"
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -1153,57 +1101,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name, value_type]
-              properties:
-                name:
-                  type: string
-                  description: Name of the new system variable.
-                value_type:
-                  type: string
-                  enum: [BOOL, INTEGER, FLOAT, STRING, ENUM, ALARM]
-                  description: >
-                    Value kind of the new variable. ALARM provisions a
-                    binary, acknowledgeable alarm line (backed by an
-                    OT_ALARMDP on the CCU) and always routes through the
-                    Rega create script.
-                unit:
-                  type: string
-                  description: Physical unit string (e.g. "°C", "%").
-                min:
-                  type: string
-                  description: Minimum value (as string, CCU convention).
-                max:
-                  type: string
-                  description: Maximum value (as string, CCU convention).
-                description:
-                  type: string
-                  description: >
-                    Human-readable label shown in the CCU UI. When set,
-                    creation routes through the Rega script (the native
-                    JSON-RPC create methods carry no description parameter).
-                value_list:
-                  type: array
-                  items: { type: string }
-                  description: Ordered list of enum labels for ENUM-type sysvars.
-                value_name_0:
-                  type: string
-                  description: >
-                    False-state label for a binary (BOOL/ALARM) variable.
-                    Empty adopts the CCU's own "false" default. Setting a
-                    custom label routes creation through the Rega script.
-                value_name_1:
-                  type: string
-                  description: >
-                    True-state label for a binary (BOOL/ALARM) variable.
-                    Empty adopts the CCU's own "true" default.
-                channel_address:
-                  type: string
-                  description: >
-                    Bind the new variable to a device channel ("ADDR:idx",
-                    the CCU "Kanalzuordnung"). Empty leaves it unassigned.
-                    The address is resolved to the channel's ReGa ise id;
-                    an address the CCU cannot resolve is rejected with 422.
+              $ref: "#/components/schemas/CreateSysvarRequest"
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1300,59 +1198,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  description: >
-                    New name for the variable. When present and non-empty
-                    the sysvar is renamed in place (the path {name} stays
-                    the current name). Omit or leave empty to keep the name.
-                description:
-                  type: string
-                  description: Human-readable label shown in the CCU UI.
-                unit:
-                  type: string
-                  description: Physical unit string (e.g. "°C", "%").
-                min:
-                  type: string
-                  description: Minimum value (as string, CCU convention).
-                max:
-                  type: string
-                  description: Maximum value (as string, CCU convention).
-                value_list:
-                  type: array
-                  items: { type: string }
-                  description: Ordered list of enum labels for LIST/ENUM-type sysvars.
-                value_name_0:
-                  type: string
-                  description: >
-                    New false-state label for a binary (LOGIC/ALARM)
-                    variable. An empty string leaves the label untouched.
-                value_name_1:
-                  type: string
-                  description: >
-                    New true-state label for a binary (LOGIC/ALARM)
-                    variable. An empty string leaves the label untouched.
-                is_visible:
-                  type: boolean
-                  description: >
-                    Toggle the CCU WebUI-visibility flag. Omit to leave it
-                    unchanged.
-                is_logged:
-                  type: boolean
-                  description: >
-                    Toggle the archive flag (CCU DPArchive) that records
-                    value changes to the measurement history. Omit to leave
-                    it unchanged.
-                channel_address:
-                  type: string
-                  description: >
-                    Reassign the CCU "Kanalzuordnung". Tri-state: omit to
-                    leave the assignment untouched, send an empty string to
-                    clear it, or a channel address ("ADDR:idx") to assign it.
-                    The address is resolved to the channel's ReGa ise id; an
-                    address the CCU cannot resolve is rejected with 422.
+              $ref: "#/components/schemas/PatchSysvarRequest"
       responses:
         "202":
           description: Accepted — Rega script dispatched asynchronously.
@@ -1505,23 +1351,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [interface]
-              properties:
-                interface: { type: string, description: The BidCos-Wired interface to scan. }
-                central: { type: string, description: Disambiguates the CCU; optional for single-CCU setups. }
+              $ref: "#/components/schemas/InstallModeSearchRequest"
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                required: [interface, found]
-                properties:
-                  central: { type: string }
-                  interface: { type: string }
-                  found: { type: integer, description: Number of devices the bus scan found. }
+                $ref: "#/components/schemas/InstallModeSearchResponse"
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -1617,14 +1454,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                backup_first:
-                  type: boolean
-                  default: false
-                  description: >
-                    Take a full backup of the target central before
-                    starting the update.
+              $ref: "#/components/schemas/InstallSystemUpdateRequest"
       responses:
         "202":
           description: Accepted
@@ -1762,12 +1592,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [entries]
-                properties:
-                  entries:
-                    type: array
-                    items: { $ref: "#/components/schemas/SystemCCUEntry" }
+                $ref: "#/components/schemas/ListSystemCCUResponse"
 
   /system/ccu/{central}/reboot:
     post:
@@ -1832,17 +1657,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [longitude, latitude]
-              properties:
-                longitude:
-                  type: number
-                  minimum: -180
-                  maximum: 180
-                latitude:
-                  type: number
-                  minimum: -90
-                  maximum: 90
+              $ref: "#/components/schemas/SetSystemCCUPositionRequest"
       responses:
         "204":
           description: Position written and confirmed by read-back
@@ -1973,13 +1788,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [pending, fields]
-                properties:
-                  pending: { type: boolean }
-                  fields:
-                    type: array
-                    items: { type: string }
+                $ref: "#/components/schemas/GetRestartPendingResponse"
 
   /system/config-changes:
     get:
@@ -1998,12 +1807,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [fields]
-                properties:
-                  fields:
-                    type: array
-                    items: { type: string }
+                $ref: "#/components/schemas/GetConfigChangesResponse"
 
   /system/status:
     get:
@@ -2025,30 +1829,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [events]
-                properties:
-                  events:
-                    type: array
-                    items:
-                      type: object
-                      required: [central, component, healthy, event_at]
-                      properties:
-                        central: { type: string }
-                        component: { type: string }
-                        healthy: { type: boolean }
-                        reason: { type: string }
-                        interface_id: { type: string }
-                        error_code: { type: integer }
-                        central_state: { type: string }
-                        connection_state: { type: string }
-                        degraded_interfaces:
-                          type: array
-                          items: { type: string }
-                        issues:
-                          type: array
-                          items: { type: string }
-                        event_at: { type: string, format: date-time }
+                $ref: "#/components/schemas/ListSystemStatusResponse"
 
   /snapshot:
     get:
@@ -2171,10 +1952,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [required]
-                properties:
-                  required: { type: boolean }
+                $ref: "#/components/schemas/SetupStatusResponse"
   /setup:
     post:
       operationId: setup
@@ -2195,42 +1973,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [admin, locale]
-              properties:
-                admin:
-                  type: object
-                  required: [username, password]
-                  properties:
-                    username: { type: string, minLength: 1 }
-                    password: { type: string, minLength: 8 }
-                locale:
-                  type: object
-                  required: [locale, theme]
-                  properties:
-                    locale: { type: string, enum: [de, en] }
-                    theme: { type: string, enum: [light, dark, system] }
-                ccu:
-                  type: object
-                  description: Optional first CCU. Omit to skip.
-                  required: [name, host, interfaces]
-                  properties:
-                    name: { type: string, minLength: 1 }
-                    host: { type: string, minLength: 1 }
-                    username: { type: string }
-                    password: { type: string }
-                    interfaces:
-                      type: array
-                      minItems: 1
-                      items: { type: string }
-                mqtt:
-                  type: object
-                  description: Optional MQTT broker. Omit to skip.
-                  required: [broker_url]
-                  properties:
-                    broker_url: { type: string, minLength: 1 }
-                    username: { type: string }
-                    password: { type: string }
+              $ref: "#/components/schemas/SetupRequest"
       responses:
         "204": { description: Onboarding completed }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -2256,11 +1999,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [username, password]
-              properties:
-                username: { type: string }
-                password: { type: string }
+              $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
           description: Session issued
@@ -2318,11 +2057,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [current_password, new_password]
-              properties:
-                current_password: { type: string }
-                new_password: { type: string }
+              $ref: "#/components/schemas/ChangeOwnPasswordRequest"
       responses:
         "204": { description: Password changed }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -2352,13 +2087,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  key: { type: string }
-                  # Opaque SPA-owned JSON; null when the key is unset.
-                  # An empty schema already admits every type including
-                  # null — OpenAPI 3.1 has no `nullable` keyword.
-                  value: {}
+                $ref: "#/components/schemas/GetPreferenceResponse"
         "401": { $ref: "#/components/responses/Unauthorized" }
     put:
       operationId: putPreference
@@ -2458,15 +2187,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [subject, role]
-              properties:
-                subject:
-                  type: string
-                  description: Logical owner of the token (e.g. "homeassistant", "ci-runner").
-                role:
-                  type: string
-                  enum: [viewer, operator, admin]
+              $ref: "#/components/schemas/CreateTokenRequest"
       responses:
         "201":
           description: Token created — raw value visible exactly once
@@ -2670,20 +2391,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name: { type: string }
-                include_channels:
-                  type: boolean
-                  description: >-
-                    Also rename each channel to "<name>:<channelNo>".
-                    Only consulted together with name. Defaults to false.
-                rooms:
-                  type: array
-                  items: { type: string }
-                functions:
-                  type: array
-                  items: { type: string }
+              $ref: "#/components/schemas/AcceptInboxDeviceRequest"
       responses:
         "202":
           description: Accept dispatched
@@ -2741,20 +2449,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [status]
-                properties:
-                  status:
-                    type: string
-                    example: scheduled
-                  duty_cycle_warning:
-                    type: integer
-                    minimum: 0
-                    maximum: 100
-                    description: >
-                      Transmit duty cycle in percent of the device's radio
-                      interface, present only when it is at or above the
-                      warning threshold (80%). Absent when unknown or below.
+                $ref: "#/components/schemas/UpdateFirmwareResponse"
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/config/restore:
@@ -2841,12 +2536,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [candidates]
-                properties:
-                  candidates:
-                    type: array
-                    items: { $ref: "#/components/schemas/TeamCandidate" }
+                $ref: "#/components/schemas/GetDeviceTeamCandidatesResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -2872,11 +2562,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                team:
-                  type: ["string", "null"]
-                  description: The team channel address to join; null/empty resets to the default team.
+              $ref: "#/components/schemas/SetDeviceChannelTeamRequest"
       responses:
         "202":
           description: Team assignment accepted
@@ -2906,12 +2592,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [candidates]
-                properties:
-                  candidates:
-                    type: array
-                    items: { $ref: "#/components/schemas/ReplaceCandidate" }
+                $ref: "#/components/schemas/ListDeviceReplaceCandidatesResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -2940,15 +2621,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [old_address]
-              properties:
-                old_address:
-                  type: string
-                  description: The paired device the new device replaces.
-                central:
-                  type: string
-                  description: Disambiguates the CCU; optional for single-CCU setups.
+              $ref: "#/components/schemas/ReplaceDeviceRequest"
       responses:
         "202":
           description: |
@@ -2957,13 +2630,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [status, old_address, new_address]
-                properties:
-                  status: { type: string, example: replacing }
-                  old_address: { type: string }
-                  new_address: { type: string }
-                  central: { type: string }
+                $ref: "#/components/schemas/ReplaceDeviceResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -2989,16 +2656,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [url]
-              properties:
-                url:
-                  type: string
-                  format: uri
-                  description: http/https firmware image the CCU should fetch.
-                central:
-                  type: string
-                  description: Target central (optional for single-CCU deployments).
+              $ref: "#/components/schemas/DownloadSystemFirmwareRequest"
       responses:
         "202":
           description: Download triggered
@@ -3027,9 +2685,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                seconds: { type: integer, minimum: 0, default: 60 }
+              $ref: "#/components/schemas/DeviceInstallModeRequest"
       responses:
         "202":
           description: Pairing window opened
@@ -3058,26 +2714,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [parameter]
-              properties:
-                parameter:
-                  type: string
-                  description: Name of the parameter to determine (e.g. "TEMPERATURE").
+              $ref: "#/components/schemas/DetermineParameterRequest"
       responses:
         "200":
           description: The value the device reported for the parameter.
           content:
             application/json:
               schema:
-                type: object
-                required: [value]
-                properties:
-                  value:
-                    description: |
-                      The determined value. Type follows the parameter's
-                      declared TYPE (bool / number / string); null when the
-                      backend does not support the operation (e.g. CUxD).
+                $ref: "#/components/schemas/DetermineParameterResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
         "502":
           description: CCU read error
@@ -3435,21 +3079,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                current_values:
-                  type: object
-                  additionalProperties: true
+              $ref: "#/components/schemas/MatchMasterProfileRequest"
       responses:
         "200":
           description: Active profile id (0 = no match)
           content:
             application/json:
               schema:
-                type: object
-                required: [active_id]
-                properties:
-                  active_id: { type: integer }
+                $ref: "#/components/schemas/MatchMasterProfileResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -3898,11 +3535,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string }
-                central: { type: string, description: "Target CCU (required when more than one is configured)." }
+              $ref: "#/components/schemas/CreateRoomRequest"
       responses:
         "201": { description: Created }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -3925,11 +3558,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [new_name]
-              properties:
-                new_name: { type: string }
-                central: { type: string }
+              $ref: "#/components/schemas/RenameRoomRequest"
       responses:
         "204": { description: Renamed }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -3975,11 +3604,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string }
-                central: { type: string }
+              $ref: "#/components/schemas/CreateFunctionRequest"
       responses:
         "201": { description: Created }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -4002,11 +3627,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [new_name]
-              properties:
-                new_name: { type: string }
-                central: { type: string }
+              $ref: "#/components/schemas/RenameFunctionRequest"
       responses:
         "204": { description: Renamed }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -4145,10 +3766,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [active]
-              properties:
-                active: { type: boolean }
+              $ref: "#/components/schemas/SetProgramEnabledRequest"
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -4335,24 +3953,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [channel]
-              properties:
-                interface:
-                  type: string
-                  description: >
-                    CCU interface the channel lives on (e.g. "HmIP-RF").
-                    Optional — resolved from the stored suppression when
-                    omitted.
-                channel:
-                  type: string
-                  description: Channel address ("ADDR:chn").
-                parameter:
-                  type: string
-                  description: >
-                    Service parameter to unsuppress (e.g. "LOWBAT"). Omit
-                    or empty to clear every service parameter of the
-                    channel.
+              $ref: "#/components/schemas/UnsuppressServiceMessageRequest"
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -4381,13 +3982,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                central_name:
-                  type: string
-                  description: >
-                    Name of the central to back up. Omit to back up the
-                    first registered central.
+              $ref: "#/components/schemas/TriggerBackupRequest"
       responses:
         "202": { description: Job id returned }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -4466,13 +4061,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: The `.sbk` archive.
+              $ref: "#/components/schemas/UploadBackupRequest"
       responses:
         "201":
           description: Archive accepted and stored.
@@ -4594,11 +4183,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [key]
-              properties:
-                key: { type: string }
-                subject: { type: string }
+              $ref: "#/components/schemas/OpenEditSessionRequest"
       responses:
         "200":
           description: Lock acquired
@@ -4675,10 +4260,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [key]
-              properties:
-                key: { type: string }
+              $ref: "#/components/schemas/ForceCloseEditSessionRequest"
       responses:
         "204": { description: Lock released }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -5177,13 +4759,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [last_seq, records]
-                properties:
-                  last_seq: { type: integer, format: int64 }
-                  records:
-                    type: array
-                    items: { $ref: "#/components/schemas/LogRecord" }
+                $ref: "#/components/schemas/ListLogsResponse"
             application/x-ndjson:
               schema: { type: string }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -5243,46 +4819,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: object
-                  required: [name, collaborator, phase, why]
-                  properties:
-                    name:
-                      type: string
-                      description: Stable identifier, `<subsystem>.<what>`.
-                      example: history.recorder
-                    collaborator:
-                      type: string
-                      description: The thing that was attached.
-                      example: "*history.Recorder"
-                    phase:
-                      type: string
-                      description: >
-                        `per-central` for an observer replayed over every
-                        central, `ordered` for a once-only attachment whose
-                        position in the boot sequence matters.
-                      enum: [per-central, ordered]
-                    before:
-                      type: array
-                      description: >
-                        Boot marks this seam must be attached before. Only an
-                        `ordered` seam carries them.
-                      items: { type: string }
-                    after:
-                      type: array
-                      description: Boot marks this seam must be attached after.
-                      items: { type: string }
-                    why:
-                      type: string
-                      description: What stops working when the seam is absent.
-                    violations:
-                      type: array
-                      description: >
-                        Ordering constraints that were already broken when the
-                        seam was attached. Empty is the normal case; a
-                        non-empty list is a wiring defect the daemon reports
-                        about itself — the collaborator IS wired, so nothing
-                        else about the daemon looks wrong.
-                      items: { type: string }
+                  $ref: "#/components/schemas/WiringSeam"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /diagnostics/rssi:
@@ -5307,32 +4844,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  devices:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        address: { type: string }
-                        name: { type: string }
-                        interface_id: { type: string }
-                        central: { type: string }
-                        rssi_device:
-                          type: [integer, "null"]
-                          description: RSSI_DEVICE in dBm (device's view); null when absent.
-                        rssi_peer:
-                          type: [integer, "null"]
-                          description: RSSI_PEER in dBm (partner's view); null when absent.
-                        battery_level:
-                          type: [integer, "null"]
-                          description: Battery level 0-100 (%); null for mains-powered devices.
-                        low_battery:
-                          type: [boolean, "null"]
-                          description: LOW_BAT flag; null when the device has no battery indicator.
-                        reachable:
-                          type: boolean
-                          description: Whether the device is currently reachable.
+                $ref: "#/components/schemas/GetDiagnosticsRSSIResponse"
   /diagnostics/reliability:
     get:
       operationId: getDiagnosticsReliability
@@ -5358,38 +4870,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: object
-                  properties:
-                    central: { type: string }
-                    interface: { type: string }
-                    circuit_state:
-                      type: integer
-                      description: >
-                        Circuit-breaker state code: 0 = closed, 1 = open,
-                        2 = half-open.
-                    state:
-                      type: object
-                      description: >
-                        Live InterfaceClient state. Omitted when the client
-                        exposes none.
-                      properties:
-                        state:
-                          type: string
-                          description: State-machine bucket (e.g. connected, degraded, disconnected).
-                        closed:
-                          type: boolean
-                          description: True once the client has been shut down.
-                        total_requests: { type: integer, format: int64 }
-                        executed_requests: { type: integer, format: int64 }
-                        pending_requests: { type: integer, format: int64 }
-                        last_failure_at:
-                          type: string
-                          format: date-time
-                          description: RFC3339 timestamp of the last request failure.
-                        last_callback_at:
-                          type: string
-                          format: date-time
-                          description: RFC3339 timestamp of the last received callback.
+                  $ref: "#/components/schemas/ReliabilityState"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /diagnostics/eventbus/tap:
@@ -5560,11 +5041,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              required: [cert, key]
-              properties:
-                cert: { type: string, format: binary }
-                key: { type: string, format: binary }
+              $ref: "#/components/schemas/UploadTLSCertificateRequest"
       responses:
         "204": { description: Certificate replaced and reloaded }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -5867,17 +5344,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    enum: [shutdown_signalled, shutdown_in_progress]
-                    description: >-
-                      `shutdown_signalled` — this request sent the shutdown
-                      signal. `shutdown_in_progress` — a shutdown signalled
-                      less than 30 s ago is still running, so no second signal
-                      was sent; retry later if it did not complete.
-                  at: { type: string, format: date-time }
+                $ref: "#/components/schemas/SystemRestartResponse"
 
   /matter/status:
     get:
@@ -6078,12 +5545,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [confirm]
-              properties:
-                confirm:
-                  type: string
-                  enum: ["remove-all-fabrics"]
+              $ref: "#/components/schemas/MatterFactoryResetRequest"
       responses:
         "204": { description: Every fabric removed }
         "400":
@@ -6272,10 +5734,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [applied]
-                properties:
-                  applied: { type: integer }
+                $ref: "#/components/schemas/BulkUpdateMatterExposableResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "204":
@@ -6502,28 +5961,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [section, version, updated_at, restart_required, applied]
-                properties:
-                  section: { type: string }
-                  version: { type: integer, format: int64 }
-                  updated_at: { type: string, format: date-time }
-                  restart_required: { type: boolean }
-                  applied:
-                    type: boolean
-                    description: >
-                      Whether the running daemon took the change without a
-                      restart. False is not an error on its own: most sections
-                      have no subsystem that can rebuild itself, and the value
-                      simply takes effect at the next restart. It is false with
-                      an `apply_error` when a subsystem that could have taken it
-                      refused.
-                  apply_error:
-                    type: string
-                    description: >
-                      Present only when a live apply was attempted and failed.
-                      The section is persisted regardless and takes effect at the
-                      next restart.
+                $ref: "#/components/schemas/PutConfigSectionResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500": { $ref: "#/components/responses/InternalError" }
@@ -6902,24 +6340,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: object
-                  required: [serial, name, host, suggested_host, last_seen, already_configured]
-                  properties:
-                    serial: { type: string }
-                    name: { type: string }
-                    host: { type: string }
-                    suggested_host:
-                      type: string
-                      description: >-
-                        Address the SPA pre-fills on adoption. Differs from host
-                        when a stabler value applies — "localhost" for a CCU on
-                        the daemon's own host, or a reverse-resolved docker
-                        hostname for a co-located HA add-on. Equals host
-                        otherwise.
-                    manufacturer: { type: string }
-                    model: { type: string }
-                    last_seen: { type: string, format: date-time }
-                    already_configured: { type: boolean }
+                  $ref: "#/components/schemas/DiscoveredCentral"
   /centrals/discovered/ignored:
     get:
       operationId: listIgnoredCentrals
@@ -6937,14 +6358,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: object
-                  required: [serial, ignored_at]
-                  properties:
-                    serial: { type: string }
-                    name: { type: string }
-                    host: { type: string }
-                    ignored_at: { type: string, format: date-time }
-                    ignored_by: { type: string }
+                  $ref: "#/components/schemas/IgnoredCentral"
   /centrals/discovered/{serial}/ignore:
     parameters:
       - { in: path, name: serial, required: true, schema: { type: string } }
@@ -7051,12 +6465,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [zones]
-                properties:
-                  zones:
-                    type: array
-                    items: { $ref: "#/components/schemas/AlarmZoneStatus" }
+                $ref: "#/components/schemas/GetAlarmStateResponse"
 
   /alarm/zones:
     get:
@@ -14060,3 +13469,716 @@ components:
             Fire only the output's optical/visual indication,
             suppressing sound. Ignored for outputs with no audible
             element.
+
+    # Response and request bodies promoted out of the path items they were
+    # written into. A schema that lives inline in a path reaches no generated
+    # client: the Python types package is produced from components/schemas
+    # alone, so an inline body is invisible to every consumer however
+    # faithfully the daemon sends it.
+    AcceptInboxDeviceRequest:
+      type: object
+      properties:
+        name: { type: string }
+        include_channels:
+          type: boolean
+          description: >-
+            Also rename each channel to "<name>:<channelNo>".
+            Only consulted together with name. Defaults to false.
+        rooms:
+          type: array
+          items: { type: string }
+        functions:
+          type: array
+          items: { type: string }
+    BulkUpdateMatterExposableResponse:
+      type: object
+      required: [applied]
+      properties:
+        applied: { type: integer }
+    ChangeOwnPasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string }
+        new_password: { type: string }
+    CreateFunctionRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        central: { type: string }
+    CreateRoomRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        central: { type: string, description: "Target CCU (required when more than one is configured)." }
+    CreateSysvarRequest:
+      type: object
+      required: [name, value_type]
+      properties:
+        name:
+          type: string
+          description: Name of the new system variable.
+        value_type:
+          type: string
+          enum: [BOOL, INTEGER, FLOAT, STRING, ENUM, ALARM]
+          description: >
+            Value kind of the new variable. ALARM provisions a
+            binary, acknowledgeable alarm line (backed by an
+            OT_ALARMDP on the CCU) and always routes through the
+            Rega create script.
+        unit:
+          type: string
+          description: Physical unit string (e.g. "°C", "%").
+        min:
+          type: string
+          description: Minimum value (as string, CCU convention).
+        max:
+          type: string
+          description: Maximum value (as string, CCU convention).
+        description:
+          type: string
+          description: >
+            Human-readable label shown in the CCU UI. When set,
+            creation routes through the Rega script (the native
+            JSON-RPC create methods carry no description parameter).
+        value_list:
+          type: array
+          items: { type: string }
+          description: Ordered list of enum labels for ENUM-type sysvars.
+        value_name_0:
+          type: string
+          description: >
+            False-state label for a binary (BOOL/ALARM) variable.
+            Empty adopts the CCU's own "false" default. Setting a
+            custom label routes creation through the Rega script.
+        value_name_1:
+          type: string
+          description: >
+            True-state label for a binary (BOOL/ALARM) variable.
+            Empty adopts the CCU's own "true" default.
+        channel_address:
+          type: string
+          description: >
+            Bind the new variable to a device channel ("ADDR:idx",
+            the CCU "Kanalzuordnung"). Empty leaves it unassigned.
+            The address is resolved to the channel's ReGa ise id;
+            an address the CCU cannot resolve is rejected with 422.
+    CreateTokenRequest:
+      type: object
+      required: [subject, role]
+      properties:
+        subject:
+          type: string
+          description: Logical owner of the token (e.g. "homeassistant", "ci-runner").
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+    DetermineParameterRequest:
+      type: object
+      required: [parameter]
+      properties:
+        parameter:
+          type: string
+          description: Name of the parameter to determine (e.g. "TEMPERATURE").
+    DetermineParameterResponse:
+      type: object
+      required: [value]
+      properties:
+        value:
+          description: |
+            The determined value. Type follows the parameter's
+            declared TYPE (bool / number / string); null when the
+            backend does not support the operation (e.g. CUxD).
+    DeviceInstallModeRequest:
+      type: object
+      properties:
+        seconds: { type: integer, minimum: 0, default: 60 }
+    DiscoveredCentral:
+      type: object
+      required: [serial, name, host, suggested_host, last_seen, already_configured]
+      properties:
+        serial: { type: string }
+        name: { type: string }
+        host: { type: string }
+        suggested_host:
+          type: string
+          description: >-
+            Address the SPA pre-fills on adoption. Differs from host
+            when a stabler value applies — "localhost" for a CCU on
+            the daemon's own host, or a reverse-resolved docker
+            hostname for a co-located HA add-on. Equals host
+            otherwise.
+        manufacturer: { type: string }
+        model: { type: string }
+        last_seen: { type: string, format: date-time }
+        already_configured: { type: boolean }
+    DownloadSystemFirmwareRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: http/https firmware image the CCU should fetch.
+        central:
+          type: string
+          description: Target central (optional for single-CCU deployments).
+    ForceCloseEditSessionRequest:
+      type: object
+      required: [key]
+      properties:
+        key: { type: string }
+    GetAlarmStateResponse:
+      type: object
+      required: [zones]
+      properties:
+        zones:
+          type: array
+          items: { $ref: "#/components/schemas/AlarmZoneStatus" }
+    GetConfigChangesResponse:
+      type: object
+      required: [fields]
+      properties:
+        fields:
+          type: array
+          items: { type: string }
+    GetDeviceTeamCandidatesResponse:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/TeamCandidate" }
+    GetDiagnosticsRSSIResponse:
+      type: object
+      properties:
+        devices:
+          type: array
+          items:
+            type: object
+            properties:
+              address: { type: string }
+              name: { type: string }
+              interface_id: { type: string }
+              central: { type: string }
+              rssi_device:
+                type: [integer, "null"]
+                description: RSSI_DEVICE in dBm (device's view); null when absent.
+              rssi_peer:
+                type: [integer, "null"]
+                description: RSSI_PEER in dBm (partner's view); null when absent.
+              battery_level:
+                type: [integer, "null"]
+                description: Battery level 0-100 (%); null for mains-powered devices.
+              low_battery:
+                type: [boolean, "null"]
+                description: LOW_BAT flag; null when the device has no battery indicator.
+              reachable:
+                type: boolean
+                description: Whether the device is currently reachable.
+    GetPreferenceResponse:
+      type: object
+      properties:
+        key: { type: string }
+        # Opaque SPA-owned JSON; null when the key is unset.
+        # An empty schema already admits every type including
+        # null — OpenAPI 3.1 has no `nullable` keyword.
+        value: {}
+    GetRestartPendingResponse:
+      type: object
+      required: [pending, fields]
+      properties:
+        pending: { type: boolean }
+        fields:
+          type: array
+          items: { type: string }
+    IgnoredCentral:
+      type: object
+      required: [serial, ignored_at]
+      properties:
+        serial: { type: string }
+        name: { type: string }
+        host: { type: string }
+        ignored_at: { type: string, format: date-time }
+        ignored_by: { type: string }
+    InstallModeSearchRequest:
+      type: object
+      required: [interface]
+      properties:
+        interface: { type: string, description: The BidCos-Wired interface to scan. }
+        central: { type: string, description: Disambiguates the CCU; optional for single-CCU setups. }
+    InstallModeSearchResponse:
+      type: object
+      required: [interface, found]
+      properties:
+        central: { type: string }
+        interface: { type: string }
+        found: { type: integer, description: Number of devices the bus scan found. }
+    InstallSystemUpdateRequest:
+      type: object
+      properties:
+        backup_first:
+          type: boolean
+          default: false
+          description: >
+            Take a full backup of the target central before
+            starting the update.
+    ListAllLinksResponse:
+      type: object
+      required: [links]
+      properties:
+        links:
+          type: array
+          items: { $ref: "#/components/schemas/Link" }
+    ListDeviceReplaceCandidatesResponse:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/ReplaceCandidate" }
+    ListDiagramsResponse:
+      type: object
+      required: [diagrams]
+      properties:
+        diagrams:
+          type: array
+          items: { $ref: "#/components/schemas/DiagramConfig" }
+    ListGroupTypesResponse:
+      type: object
+      required: [types]
+      properties:
+        types:
+          type: array
+          items: { $ref: "#/components/schemas/GroupTypeEntry" }
+    ListGroupsResponse:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/GroupCentralEntry" }
+    ListLogsResponse:
+      type: object
+      required: [last_seq, records]
+      properties:
+        last_seq: { type: integer, format: int64 }
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/LogRecord" }
+    ListSchedulesResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ScheduleDeviceSummary" }
+    ListSystemCCUResponse:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/SystemCCUEntry" }
+    ListSystemStatusResponse:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            type: object
+            required: [central, component, healthy, event_at]
+            properties:
+              central: { type: string }
+              component: { type: string }
+              healthy: { type: boolean }
+              reason: { type: string }
+              interface_id: { type: string }
+              error_code: { type: integer }
+              central_state: { type: string }
+              connection_state: { type: string }
+              degraded_interfaces:
+                type: array
+                items: { type: string }
+              issues:
+                type: array
+                items: { type: string }
+              event_at: { type: string, format: date-time }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+    MatchMasterProfileRequest:
+      type: object
+      properties:
+        current_values:
+          type: object
+          additionalProperties: true
+    MatchMasterProfileResponse:
+      type: object
+      required: [active_id]
+      properties:
+        active_id: { type: integer }
+    MatterFactoryResetRequest:
+      type: object
+      required: [confirm]
+      properties:
+        confirm:
+          type: string
+          enum: ["remove-all-fabrics"]
+    OpenEditSessionRequest:
+      type: object
+      required: [key]
+      properties:
+        key: { type: string }
+        subject: { type: string }
+    PatchChannelRequest:
+      type: object
+      properties:
+        name: { type: string }
+        rooms:
+          type: array
+          items: { type: string }
+          description: |
+            Replaces the channel's room assignments. Room names
+            unknown to the CCU are silently skipped.
+        functions:
+          type: array
+          items: { type: string }
+          description: |
+            Replaces the channel's function (Gewerk)
+            assignments. Unknown names are silently skipped.
+    PatchDeviceRequest:
+      type: object
+      properties:
+        name: { type: string }
+        include_channels:
+          type: boolean
+          description: >-
+            Also rename each channel to "<name>:<channelNo>".
+            Only consulted together with name. Defaults to false.
+        rooms:
+          type: array
+          items: { type: string }
+        functions:
+          type: array
+          items: { type: string }
+    PatchSysvarRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: >
+            New name for the variable. When present and non-empty
+            the sysvar is renamed in place (the path {name} stays
+            the current name). Omit or leave empty to keep the name.
+        description:
+          type: string
+          description: Human-readable label shown in the CCU UI.
+        unit:
+          type: string
+          description: Physical unit string (e.g. "°C", "%").
+        min:
+          type: string
+          description: Minimum value (as string, CCU convention).
+        max:
+          type: string
+          description: Maximum value (as string, CCU convention).
+        value_list:
+          type: array
+          items: { type: string }
+          description: Ordered list of enum labels for LIST/ENUM-type sysvars.
+        value_name_0:
+          type: string
+          description: >
+            New false-state label for a binary (LOGIC/ALARM)
+            variable. An empty string leaves the label untouched.
+        value_name_1:
+          type: string
+          description: >
+            New true-state label for a binary (LOGIC/ALARM)
+            variable. An empty string leaves the label untouched.
+        is_visible:
+          type: boolean
+          description: >
+            Toggle the CCU WebUI-visibility flag. Omit to leave it
+            unchanged.
+        is_logged:
+          type: boolean
+          description: >
+            Toggle the archive flag (CCU DPArchive) that records
+            value changes to the measurement history. Omit to leave
+            it unchanged.
+        channel_address:
+          type: string
+          description: >
+            Reassign the CCU "Kanalzuordnung". Tri-state: omit to
+            leave the assignment untouched, send an empty string to
+            clear it, or a channel address ("ADDR:idx") to assign it.
+            The address is resolved to the channel's ReGa ise id; an
+            address the CCU cannot resolve is rejected with 422.
+    PutConfigSectionResponse:
+      type: object
+      required: [section, version, updated_at, restart_required, applied]
+      properties:
+        section: { type: string }
+        version: { type: integer, format: int64 }
+        updated_at: { type: string, format: date-time }
+        restart_required: { type: boolean }
+        applied:
+          type: boolean
+          description: >
+            Whether the running daemon took the change without a
+            restart. False is not an error on its own: most sections
+            have no subsystem that can rebuild itself, and the value
+            simply takes effect at the next restart. It is false with
+            an `apply_error` when a subsystem that could have taken it
+            refused.
+        apply_error:
+          type: string
+          description: >
+            Present only when a live apply was attempted and failed.
+            The section is persisted regardless and takes effect at the
+            next restart.
+    ReliabilityState:
+      type: object
+      properties:
+        central: { type: string }
+        interface: { type: string }
+        circuit_state:
+          type: integer
+          description: >
+            Circuit-breaker state code: 0 = closed, 1 = open,
+            2 = half-open.
+        state:
+          type: object
+          description: >
+            Live InterfaceClient state. Omitted when the client
+            exposes none.
+          properties:
+            state:
+              type: string
+              description: State-machine bucket (e.g. connected, degraded, disconnected).
+            closed:
+              type: boolean
+              description: True once the client has been shut down.
+            total_requests: { type: integer, format: int64 }
+            executed_requests: { type: integer, format: int64 }
+            pending_requests: { type: integer, format: int64 }
+            last_failure_at:
+              type: string
+              format: date-time
+              description: RFC3339 timestamp of the last request failure.
+            last_callback_at:
+              type: string
+              format: date-time
+              description: RFC3339 timestamp of the last received callback.
+    RenameFunctionRequest:
+      type: object
+      required: [new_name]
+      properties:
+        new_name: { type: string }
+        central: { type: string }
+    RenameRoomRequest:
+      type: object
+      required: [new_name]
+      properties:
+        new_name: { type: string }
+        central: { type: string }
+    ReplaceDeviceRequest:
+      type: object
+      required: [old_address]
+      properties:
+        old_address:
+          type: string
+          description: The paired device the new device replaces.
+        central:
+          type: string
+          description: Disambiguates the CCU; optional for single-CCU setups.
+    ReplaceDeviceResponse:
+      type: object
+      required: [status, old_address, new_address]
+      properties:
+        status: { type: string, example: replacing }
+        old_address: { type: string }
+        new_address: { type: string }
+        central: { type: string }
+    SetDeviceChannelTeamRequest:
+      type: object
+      properties:
+        team:
+          type: ["string", "null"]
+          description: The team channel address to join; null/empty resets to the default team.
+    SetProgramEnabledRequest:
+      type: object
+      required: [active]
+      properties:
+        active: { type: boolean }
+    SetSystemCCUPositionRequest:
+      type: object
+      required: [longitude, latitude]
+      properties:
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+    SetupRequest:
+      type: object
+      required: [admin, locale]
+      properties:
+        admin:
+          type: object
+          required: [username, password]
+          properties:
+            username: { type: string, minLength: 1 }
+            password: { type: string, minLength: 8 }
+        locale:
+          type: object
+          required: [locale, theme]
+          properties:
+            locale: { type: string, enum: [de, en] }
+            theme: { type: string, enum: [light, dark, system] }
+        ccu:
+          type: object
+          description: Optional first CCU. Omit to skip.
+          required: [name, host, interfaces]
+          properties:
+            name: { type: string, minLength: 1 }
+            host: { type: string, minLength: 1 }
+            username: { type: string }
+            password: { type: string }
+            interfaces:
+              type: array
+              minItems: 1
+              items: { type: string }
+        mqtt:
+          type: object
+          description: Optional MQTT broker. Omit to skip.
+          required: [broker_url]
+          properties:
+            broker_url: { type: string, minLength: 1 }
+            username: { type: string }
+            password: { type: string }
+    SetupStatusResponse:
+      type: object
+      required: [required]
+      properties:
+        required: { type: boolean }
+    SystemRestartResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [shutdown_signalled, shutdown_in_progress]
+          description: >-
+            `shutdown_signalled` — this request sent the shutdown
+            signal. `shutdown_in_progress` — a shutdown signalled
+            less than 30 s ago is still running, so no second signal
+            was sent; retry later if it did not complete.
+        at: { type: string, format: date-time }
+    TriggerBackupRequest:
+      type: object
+      properties:
+        central_name:
+          type: string
+          description: >
+            Name of the central to back up. Omit to back up the
+            first registered central.
+    UnsuppressServiceMessageRequest:
+      type: object
+      required: [channel]
+      properties:
+        interface:
+          type: string
+          description: >
+            CCU interface the channel lives on (e.g. "HmIP-RF").
+            Optional — resolved from the stored suppression when
+            omitted.
+        channel:
+          type: string
+          description: Channel address ("ADDR:chn").
+        parameter:
+          type: string
+          description: >
+            Service parameter to unsuppress (e.g. "LOWBAT"). Omit
+            or empty to clear every service parameter of the
+            channel.
+    UpdateFirmwareResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: scheduled
+        duty_cycle_warning:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: >
+            Transmit duty cycle in percent of the device's radio
+            interface, present only when it is at or above the
+            warning threshold (80%). Absent when unknown or below.
+    UploadBackupRequest:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: The `.sbk` archive.
+    UploadTLSCertificateRequest:
+      type: object
+      required: [cert, key]
+      properties:
+        cert: { type: string, format: binary }
+        key: { type: string, format: binary }
+    WiringSeam:
+      type: object
+      required: [name, collaborator, phase, why]
+      properties:
+        name:
+          type: string
+          description: Stable identifier, `<subsystem>.<what>`.
+          example: history.recorder
+        collaborator:
+          type: string
+          description: The thing that was attached.
+          example: "*history.Recorder"
+        phase:
+          type: string
+          description: >
+            `per-central` for an observer replayed over every
+            central, `ordered` for a once-only attachment whose
+            position in the boot sequence matters.
+          enum: [per-central, ordered]
+        before:
+          type: array
+          description: >
+            Boot marks this seam must be attached before. Only an
+            `ordered` seam carries them.
+          items: { type: string }
+        after:
+          type: array
+          description: Boot marks this seam must be attached after.
+          items: { type: string }
+        why:
+          type: string
+          description: What stops working when the seam is absent.
+        violations:
+          type: array
+          description: >
+            Ordering constraints that were already broken when the
+            seam was attached. Empty is the normal case; a
+            non-empty list is a wiring defect the daemon reports
+            about itself — the collaborator IS wired, so nothing
+            else about the daemon looks wrong.
+          items: { type: string }

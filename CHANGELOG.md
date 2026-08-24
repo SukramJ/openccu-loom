@@ -4,7 +4,33 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.64.2]
+## [Unreleased]
+
+### Fixed
+
+- **58 request and response bodies were written inline in the OpenAPI paths,
+  so no generated client could see them.** Every client produced from this
+  document — `openccu-loom-types` among them — is generated from
+  `components/schemas` alone, so an inline body reaches none of them: the
+  endpoint works, the JSON is right, and the typed client simply has no model.
+  It is the same shape as the `display_value` gap types 0.5.2 closed, and it
+  had grown to 28 of 146 responses and 30 request bodies.
+
+  All 58 are now named components reached by `$ref`. **The wire is unchanged** —
+  verified by dereferencing both specs and comparing the path trees, which are
+  identical. What changes is that a client can finally hold a type for them:
+  `WiringSeam`, `ReliabilityState`, `DiscoveredCentral`, `IgnoredCentral` and 54
+  request/response models named after their operation.
+
+  A guard now fails on a body that declares properties inline, so the gap
+  cannot grow a third time. Free-form bodies (`additionalProperties` with no
+  properties), scalars and file uploads are deliberately not covered: there is
+  nothing to generate, and forcing them into components would mint an empty
+  type per endpoint.
+
+  API **7.10.0** — additive: 58 schemas, no path or operation changed.
+
+
 
 The round-5 measures, finished. The composition root now states its wiring as
 data a test can read, the MCP/REST parity backlog is empty, and the seventeen

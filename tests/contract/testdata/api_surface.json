@@ -1,5 +1,5 @@
 {
- "api_version": "7.9.0",
+ "api_version": "7.10.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -297,6 +297,12 @@
   "PUT /visibility/unignore": "updateVisibilityUnIgnore"
  },
  "schemas": {
+  "AcceptInboxDeviceRequest": [
+   "functions:array\u003cstring\u003e",
+   "include_channels:boolean",
+   "name:string",
+   "rooms:array\u003cstring\u003e"
+  ],
   "AckAllResult": [
    "acknowledged:integer"
   ],
@@ -657,6 +663,9 @@
    "count:integer",
    "dir:string"
   ],
+  "BulkUpdateMatterExposableResponse": [
+   "applied:integer"
+  ],
   "CacheClearReport": [
    "centrals_reinit:array\u003cstring\u003e",
    "devices:integer",
@@ -742,6 +751,10 @@
    "new_state:string",
    "old_state:string"
   ],
+  "ChangeOwnPasswordRequest": [
+   "current_password:string",
+   "new_password:string"
+  ],
   "ChannelFlags": [
    "hidden:boolean",
    "locked:boolean"
@@ -814,11 +827,35 @@
   "CopyScheduleRequest": [
    "target_device_address:string"
   ],
+  "CreateFunctionRequest": [
+   "central:string",
+   "name:string"
+  ],
   "CreateGroupRequest": [
    "forbid_single_operation:boolean",
    "members:array\u003cstring\u003e",
    "name:string",
    "type_id:string"
+  ],
+  "CreateRoomRequest": [
+   "central:string",
+   "name:string"
+  ],
+  "CreateSysvarRequest": [
+   "channel_address:string",
+   "description:string",
+   "max:string",
+   "min:string",
+   "name:string",
+   "unit:string",
+   "value_list:array\u003cstring\u003e",
+   "value_name_0:string",
+   "value_name_1:string",
+   "value_type:string"
+  ],
+  "CreateTokenRequest": [
+   "role:string",
+   "subject:string"
   ],
   "CreateTokenResponse": [
    "fingerprint:string",
@@ -905,6 +942,12 @@
    "unique_id:string",
    "value:unknown"
   ],
+  "DetermineParameterRequest": [
+   "parameter:string"
+  ],
+  "DetermineParameterResponse": [
+   "value:unknown"
+  ],
   "DeviceAvailabilityChangedPayload": [
    "available:boolean",
    "central:string",
@@ -919,6 +962,9 @@
    "source:string"
   ],
   "DeviceDetail": [],
+  "DeviceInstallModeRequest": [
+   "seconds:integer"
+  ],
   "DeviceList": [
    "items:array\u003c$ref:DeviceSummary\u003e",
    "page:integer",
@@ -986,6 +1032,20 @@
    "name:string",
    "visibility:string"
   ],
+  "DiscoveredCentral": [
+   "already_configured:boolean",
+   "host:string",
+   "last_seen:string",
+   "manufacturer:string",
+   "model:string",
+   "name:string",
+   "serial:string",
+   "suggested_host:string"
+  ],
+  "DownloadSystemFirmwareRequest": [
+   "central:string",
+   "url:string"
+  ],
   "EditSessionRequest": [
    "key:string",
    "token:string"
@@ -1045,9 +1105,32 @@
    "values:object",
    "version:string"
   ],
+  "ForceCloseEditSessionRequest": [
+   "key:string"
+  ],
   "FunctionEntry": [
    "device_count:integer",
    "name:string"
+  ],
+  "GetAlarmStateResponse": [
+   "zones:array\u003c$ref:AlarmZoneStatus\u003e"
+  ],
+  "GetConfigChangesResponse": [
+   "fields:array\u003cstring\u003e"
+  ],
+  "GetDeviceTeamCandidatesResponse": [
+   "candidates:array\u003c$ref:TeamCandidate\u003e"
+  ],
+  "GetDiagnosticsRSSIResponse": [
+   "devices:array\u003cobject\u003e"
+  ],
+  "GetPreferenceResponse": [
+   "key:string",
+   "value:unknown"
+  ],
+  "GetRestartPendingResponse": [
+   "fields:array\u003cstring\u003e",
+   "pending:boolean"
   ],
   "GroupCentralEntry": [
    "central:string",
@@ -1159,6 +1242,13 @@
    "scheme:string",
    "subject:string"
   ],
+  "IgnoredCentral": [
+   "host:string",
+   "ignored_at:string",
+   "ignored_by:string",
+   "name:string",
+   "serial:string"
+  ],
   "InboxDevice": [
    "address:string",
    "central:string",
@@ -1210,6 +1300,18 @@
    "seconds:integer",
    "sgtin:string"
   ],
+  "InstallModeSearchRequest": [
+   "central:string",
+   "interface:string"
+  ],
+  "InstallModeSearchResponse": [
+   "central:string",
+   "found:integer",
+   "interface:string"
+  ],
+  "InstallSystemUpdateRequest": [
+   "backup_first:boolean"
+  ],
   "InterfaceSpec": [
    "name:string",
    "port:integer",
@@ -1259,6 +1361,34 @@
    "device_model:string",
    "device_name:string"
   ],
+  "ListAllLinksResponse": [
+   "links:array\u003c$ref:Link\u003e"
+  ],
+  "ListDeviceReplaceCandidatesResponse": [
+   "candidates:array\u003c$ref:ReplaceCandidate\u003e"
+  ],
+  "ListDiagramsResponse": [
+   "diagrams:array\u003c$ref:DiagramConfig\u003e"
+  ],
+  "ListGroupTypesResponse": [
+   "types:array\u003c$ref:GroupTypeEntry\u003e"
+  ],
+  "ListGroupsResponse": [
+   "entries:array\u003c$ref:GroupCentralEntry\u003e"
+  ],
+  "ListLogsResponse": [
+   "last_seq:integer",
+   "records:array\u003c$ref:LogRecord\u003e"
+  ],
+  "ListSchedulesResponse": [
+   "items:array\u003c$ref:ScheduleDeviceSummary\u003e"
+  ],
+  "ListSystemCCUResponse": [
+   "entries:array\u003c$ref:SystemCCUEntry\u003e"
+  ],
+  "ListSystemStatusResponse": [
+   "events:array\u003cobject\u003e"
+  ],
   "LogRecord": [
    "attrs:object",
    "level:string",
@@ -1266,6 +1396,10 @@
    "msg:string",
    "seq:integer",
    "time:string"
+  ],
+  "LoginRequest": [
+   "password:string",
+   "username:string"
   ],
   "MQTTReloadResponse": [
    "reloaded:boolean",
@@ -1282,6 +1416,12 @@
    "id:integer",
    "name:string",
    "param_count:integer"
+  ],
+  "MatchMasterProfileRequest": [
+   "current_values:object"
+  ],
+  "MatchMasterProfileResponse": [
+   "active_id:integer"
   ],
   "MatterCommissioningProgressPayload": [
    "message:string",
@@ -1396,6 +1536,9 @@
   "MatterFabricRemovedPayload": [
    "fabric_index:integer"
   ],
+  "MatterFactoryResetRequest": [
+   "confirm:string"
+  ],
   "MatterMdnsDiagnostics": [
    "advertising:boolean",
    "findings:array\u003c$ref:MatterMdnsFinding\u003e",
@@ -1457,6 +1600,10 @@
    "listen_addr:string",
    "listening:boolean"
   ],
+  "OpenEditSessionRequest": [
+   "key:string",
+   "subject:string"
+  ],
   "OptimisticRollbackPayload": [
    "central:string",
    "channel:integer",
@@ -1467,6 +1614,30 @@
    "reason:string",
    "sent:unknown",
    "unique_id:string"
+  ],
+  "PatchChannelRequest": [
+   "functions:array\u003cstring\u003e",
+   "name:string",
+   "rooms:array\u003cstring\u003e"
+  ],
+  "PatchDeviceRequest": [
+   "functions:array\u003cstring\u003e",
+   "include_channels:boolean",
+   "name:string",
+   "rooms:array\u003cstring\u003e"
+  ],
+  "PatchSysvarRequest": [
+   "channel_address:string",
+   "description:string",
+   "is_logged:boolean",
+   "is_visible:boolean",
+   "max:string",
+   "min:string",
+   "name:string",
+   "unit:string",
+   "value_list:array\u003cstring\u003e",
+   "value_name_0:string",
+   "value_name_1:string"
   ],
   "Problem": [
    "code:string",
@@ -1517,6 +1688,14 @@
    "name:string",
    "unique_id:string"
   ],
+  "PutConfigSectionResponse": [
+   "applied:boolean",
+   "apply_error:string",
+   "restart_required:boolean",
+   "section:string",
+   "updated_at:string",
+   "version:integer"
+  ],
   "RPCRecordingStatus": [
    "active:boolean",
    "central:string",
@@ -1535,6 +1714,20 @@
    "parameter:string",
    "record:boolean|null"
   ],
+  "ReliabilityState": [
+   "central:string",
+   "circuit_state:integer",
+   "interface:string",
+   "state:object"
+  ],
+  "RenameFunctionRequest": [
+   "central:string",
+   "new_name:string"
+  ],
+  "RenameRoomRequest": [
+   "central:string",
+   "new_name:string"
+  ],
   "ReplaceCandidate": [
    "address:string",
    "central:string",
@@ -1542,6 +1735,16 @@
    "model:string",
    "model_matches:boolean",
    "name:string"
+  ],
+  "ReplaceDeviceRequest": [
+   "central:string",
+   "old_address:string"
+  ],
+  "ReplaceDeviceResponse": [
+   "central:string",
+   "new_address:string",
+   "old_address:string",
+   "status:string"
   ],
   "RoomEntry": [
    "device_count:integer",
@@ -1743,9 +1946,28 @@
   "SetActiveProfileRequest": [
    "profile:string"
   ],
+  "SetDeviceChannelTeamRequest": [
+   "team:null|string"
+  ],
+  "SetProgramEnabledRequest": [
+   "active:boolean"
+  ],
+  "SetSystemCCUPositionRequest": [
+   "latitude:number",
+   "longitude:number"
+  ],
   "SetValueRequest": [
    "priority:string",
    "value:unknown"
+  ],
+  "SetupRequest": [
+   "admin:object",
+   "ccu:object",
+   "locale:object",
+   "mqtt:object"
+  ],
+  "SetupStatusResponse": [
+   "required:boolean"
   ],
   "SimpleScheduleEntry": [
    "astro_offset_minutes:integer",
@@ -1860,6 +2082,10 @@
    "url:string",
    "version:string"
   ],
+  "SystemRestartResponse": [
+   "at:string",
+   "status:string"
+  ],
   "SystemStatusChangedPayload": [
    "callback_state:string",
    "central:string",
@@ -1973,6 +2199,9 @@
    "role:string",
    "subject:string"
   ],
+  "TriggerBackupRequest": [
+   "central_name:string"
+  ],
   "TriggeredEventSummary": [
    "parameter:string",
    "triggered_at:string",
@@ -2029,6 +2258,15 @@
    "parse_errors:array\u003cstring\u003e",
    "patterns:array\u003c$ref:UnIgnoreEntry\u003e"
   ],
+  "UnsuppressServiceMessageRequest": [
+   "channel:string",
+   "interface:string",
+   "parameter:string"
+  ],
+  "UpdateFirmwareResponse": [
+   "duty_cycle_warning:integer",
+   "status:string"
+  ],
   "UpdateGroupRequest": [
    "forbid_single_operation:boolean",
    "members:array\u003cstring\u003e",
@@ -2039,6 +2277,13 @@
    "name:string",
    "receiver_address:string",
    "sender_address:string"
+  ],
+  "UploadBackupRequest": [
+   "file:string"
+  ],
+  "UploadTLSCertificateRequest": [
+   "cert:string",
+   "key:string"
   ],
   "UserCreate": [
    "password:string",
@@ -2100,6 +2345,15 @@
    "schedule_enabled:object",
    "schedule_type:string",
    "unique_id:string"
+  ],
+  "WiringSeam": [
+   "after:array\u003cstring\u003e",
+   "before:array\u003cstring\u003e",
+   "collaborator:string",
+   "name:string",
+   "phase:string",
+   "violations:array\u003cstring\u003e",
+   "why:string"
   ],
   "WsEnvelope": [
    "kind:string",

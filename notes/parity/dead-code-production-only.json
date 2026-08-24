@@ -1,6 +1,6 @@
 {
-  "generated": "1c9e7aea",
-  "head": "1c9e7aea",
+  "generated": "4d823bc6",
+  "head": "4d823bc6",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29928,
+    "total_exported": 29929,
     "reachable": 4983,
-    "whitelisted": 21766,
+    "whitelisted": 21767,
     "unreachable": 3179
   },
   "by_package": [
@@ -173598,6 +173598,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/multi_ccu_scope_test.go",
       "line": 344
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestNoRequestOrResponseBodyIsWrittenInline",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/openapi_inline_schema_test.go",
+      "line": 31
     },
     {
       "package": "tests/contract",

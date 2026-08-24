@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 1c9e7aea
-HEAD: 1c9e7aea
+Generated: 4d823bc6
+HEAD: 4d823bc6
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29928 |
+| Total Exported | 29929 |
 | Reachable | 5145 |
-| Whitelisted | 21766 |
+| Whitelisted | 21767 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code
