@@ -386,3 +386,74 @@ this is the recurring failure and not a one-off:
   each `Why` names is still one test per seam.
 - **`webhook` has no health component.** What counts as unhealthy for a
   fire-and-forget sender needs deciding before it can be recorded.
+
+---
+
+## Follow-up 2: the four decisions
+
+### 1. A capability token means CONFIGURED
+
+Decided and written into the contract at three places: the `Info.capabilities`
+description in `assets/openapi.yaml`, the constant block in `info.go`, and
+`TestCapabilityDetectorsReportConfigurationNotLiveness`, which fails if a
+detector getter calls out instead of returning a bool captured once. Prose
+alone would not have held — the question comes back every time someone wants
+`matter.bridge.v1` to mean "the bridge is up".
+
+The reasoning: a client asks "may I use this path at all", and a briefly
+unreachable broker is not a missing capability. A token that came and went with
+connectivity would force every client to re-derive its feature set on each
+poll. Liveness is `/health`'s answer, and after this round it has the
+components for it.
+
+### 2. Four tokens added — API 7.12.0
+
+`mqtt.raw.v1`, `webhook.inbound.v1`, `diagrams.v1`, `admin.persistence.v1`.
+Each detector reads the condition that mounts **its own** surface, even where
+two resolve to the same opened database today: deriving one from the other
+would make them agree by construction and hide the release where they stop
+being the same question.
+
+`TestEveryCapabilityTokenIsEmittedAndDocumented` found a pre-existing gap on
+its first run — `auth.ccu.v1`, `history.v1`, `mcp.write.v1` and
+`addon_self_update` reached every client and appeared in no spec at all. Now
+documented.
+
+The SPA's diagram panel gated on `history.v1` as a stand-in. That reads as
+correct and fails in one direction: with recording on and no database the view
+renders, the editor opens, and every save is refused. It now requires both.
+
+### 3. All nine effect tests — the thorough option, not the recommended one
+
+The recommendation was three; the answer was nine, and nine is what landed.
+Seven carry a paired negative control. Two per-central seams register their
+central **after** the wiring runs, which is the only ordering that separates a
+seam from one that walked the registry once at boot.
+
+`central.devices_created_gate` needed its loop extracted into a named function
+so the seam wraps exactly the handover — the shape half the seams already use,
+and the one that makes them testable at all.
+
+**Three bite proofs lied before they were fixed**, and each is a rule:
+
+1. A `cp`-based revert whose replacement string does not match reports green
+   and looks like a passing bite. Assert the anchor before editing.
+2. `runHubDiscoveryRestart` recovers panics, so a nil publisher in the fixture
+   made the hub-ready test fail for a reason unrelated to the seam. A swallowed
+   panic looks exactly like a seam that never fired.
+3. The alarm engine must be started before `Reload` reaches the config-changed
+   hook; an unstarted one returns early and the seam looks broken.
+
+That is now six instruments this round corrected by their own controls — three
+on the DTO guard, two on health coverage and mDNS, and these three. The pattern
+is stable enough to state as a finding in its own right: **the instrument is
+wrong about as often as the code is**, and the only thing that separates the
+two is a control that can produce the other answer.
+
+### Still open
+
+- **Surface-registry gate and role mismatches** (4). Not touched: they are SPA
+  navigation role/gate details, and nothing in this round's work went near that
+  surface.
+- **`webhook` has no health component.** What counts as unhealthy for a
+  fire-and-forget sender is still undecided.
