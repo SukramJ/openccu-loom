@@ -8,15 +8,25 @@
 // address, and a save persists a series whose parameter belongs to a
 // different device (and central) than its channel address.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, screen, fireEvent } from "@testing-library/svelte";
+import {
+  render,
+  cleanup,
+  waitFor,
+  screen,
+  fireEvent,
+} from "@testing-library/svelte";
 
-const { mockListDiagrams, mockListChannels, mockListDataPoints, mockUpdateDiagram } =
-  vi.hoisted(() => ({
-    mockListDiagrams: vi.fn(),
-    mockListChannels: vi.fn(),
-    mockListDataPoints: vi.fn(),
-    mockUpdateDiagram: vi.fn(),
-  }));
+const {
+  mockListDiagrams,
+  mockListChannels,
+  mockListDataPoints,
+  mockUpdateDiagram,
+} = vi.hoisted(() => ({
+  mockListDiagrams: vi.fn(),
+  mockListChannels: vi.fn(),
+  mockListDataPoints: vi.fn(),
+  mockUpdateDiagram: vi.fn(),
+}));
 
 vi.mock("$lib/api/client", () => ({
   api: {
@@ -41,7 +51,7 @@ vi.mock("$lib/api/client", () => ({
 vi.mock("$lib/stores/info.svelte", () => ({
   infoStore: {
     get info() {
-      return { capabilities: ["history.v1"] };
+      return { capabilities: ["history.v1", "diagrams.v1"] };
     },
     ensure: vi.fn().mockResolvedValue(undefined),
   },
@@ -56,12 +66,32 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
 vi.mock("$lib/i18n", () => ({ t: (k: string) => k }));
 
 // The saved diagrams below render a chart each; it only needs to exist.
-vi.mock("$lib/components/MultiSeriesChart.svelte", () => ({ default: () => {} }));
+vi.mock("$lib/components/MultiSeriesChart.svelte", () => ({
+  default: () => {},
+}));
 
 const DEVICES = [
-  { address: "AAA0000001", name: "Dev A", model: "HmIP-A", central: "ccu-a", interface_id: "ccu-a-HmIP-RF" },
-  { address: "BBB0000002", name: "Dev B", model: "HmIP-B", central: "ccu-b", interface_id: "ccu-b-HmIP-RF" },
-  { address: "CCC0000003", name: "Dev C", model: "HmIP-C", central: "ccu-c", interface_id: "ccu-c-HmIP-RF" },
+  {
+    address: "AAA0000001",
+    name: "Dev A",
+    model: "HmIP-A",
+    central: "ccu-a",
+    interface_id: "ccu-a-HmIP-RF",
+  },
+  {
+    address: "BBB0000002",
+    name: "Dev B",
+    model: "HmIP-B",
+    central: "ccu-b",
+    interface_id: "ccu-b-HmIP-RF",
+  },
+  {
+    address: "CCC0000003",
+    name: "Dev C",
+    model: "HmIP-C",
+    central: "ccu-c",
+    interface_id: "ccu-c-HmIP-RF",
+  },
 ];
 
 vi.mock("$lib/stores/devices.svelte", () => ({
@@ -107,11 +137,18 @@ beforeEach(() => {
   // GET /devices/{addr}/channels answers a bare array, like listDataPoints
   // below — see the array schema in assets/openapi.yaml.
   mockListChannels.mockImplementation((addr: string) =>
-    Promise.resolve([{ address: `${addr}:1`, number: 1, name: `Chan ${tag(addr)}` }]),
+    Promise.resolve([
+      { address: `${addr}:1`, number: 1, name: `Chan ${tag(addr)}` },
+    ]),
   );
   mockListDataPoints.mockImplementation((addr: string) =>
     Promise.resolve([
-      { parameter: `P_${tag(addr)}`, type: "FLOAT", parameter_label: `Label ${tag(addr)}`, unit: "" },
+      {
+        parameter: `P_${tag(addr)}`,
+        type: "FLOAT",
+        parameter_label: `Label ${tag(addr)}`,
+        unit: "",
+      },
     ]),
   );
 });
@@ -120,7 +157,9 @@ afterEach(() => cleanup());
 
 async function openEditorWithThreeSeries() {
   render(Diagrams);
-  await waitFor(() => expect(screen.getByText(DIAGRAM.name)).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByText(DIAGRAM.name)).toBeInTheDocument(),
+  );
   await fireEvent.click(screen.getByText("common.edit"));
   await waitFor(() =>
     expect(screen.getAllByLabelText("diagrams.picker.channel")).toHaveLength(3),
@@ -139,10 +178,16 @@ describe("Diagrams — series editor identity", () => {
     await fireEvent.click(screen.getAllByText("diagrams.series.remove")[0]);
 
     await waitFor(() =>
-      expect(screen.getAllByLabelText("diagrams.picker.channel")).toHaveLength(2),
+      expect(screen.getAllByLabelText("diagrams.picker.channel")).toHaveLength(
+        2,
+      ),
     );
-    const channels = screen.getAllByLabelText("diagrams.picker.channel") as HTMLSelectElement[];
-    const values = screen.getAllByLabelText("diagrams.picker.value") as HTMLSelectElement[];
+    const channels = screen.getAllByLabelText(
+      "diagrams.picker.channel",
+    ) as HTMLSelectElement[];
+    const values = screen.getAllByLabelText(
+      "diagrams.picker.value",
+    ) as HTMLSelectElement[];
 
     // The two survivors are series B and C — the channel dropdown must offer
     // their own device's channel, and the picked value must stay selected.
@@ -166,13 +211,18 @@ describe("Diagrams — series editor identity", () => {
 
     // Re-pick the value on the first survivor: its dropdown must only be able
     // to emit a parameter belonging to the device its address points at.
-    const values = screen.getAllByLabelText("diagrams.picker.value") as HTMLSelectElement[];
+    const values = screen.getAllByLabelText(
+      "diagrams.picker.value",
+    ) as HTMLSelectElement[];
     await fireEvent.change(values[0], { target: { value: "P_B" } });
 
     await fireEvent.click(screen.getByText("common.save"));
     await waitFor(() => expect(mockUpdateDiagram).toHaveBeenCalledTimes(1));
 
-    const [, body] = mockUpdateDiagram.mock.calls[0] as [string, { config: { series: unknown[] } }];
+    const [, body] = mockUpdateDiagram.mock.calls[0] as [
+      string,
+      { config: { series: unknown[] } },
+    ];
     expect(body.config.series).toEqual([
       expect.objectContaining({
         central: "ccu-b",

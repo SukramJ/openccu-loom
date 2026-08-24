@@ -89,10 +89,13 @@
   }
 
   const matterEnabled = $derived(matterStore.status?.enabled === true);
-  // The Diagrams view charts measurement history — only surface it when
-  // the opt-in history-recording feature is enabled (SV03).
+  // The Diagrams view charts measurement history and stores its definitions
+  // in the app database, and it refuses to render without both. The nav item
+  // has to ask the same question, or it offers a destination the view then
+  // blocks.
   const historyEnabled = $derived(
-    infoStore.info?.capabilities?.includes("history.v1") ?? false,
+    (infoStore.info?.capabilities?.includes("history.v1") ?? false) &&
+      (infoStore.info?.capabilities?.includes("diagrams.v1") ?? false),
   );
 
   const clusters = $derived(

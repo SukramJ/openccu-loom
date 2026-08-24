@@ -138,7 +138,12 @@
   const startRouteOptions = $derived(
     landingTargets({
       matterEnabled: matterStore.status?.enabled === true,
-      historyEnabled: infoStore.info?.capabilities?.includes("history.v1") ?? false,
+      // Same pair the nav and the view itself require: a landing target the
+      // operator can pick and then cannot reach is worse than one absent
+      // from the list.
+      historyEnabled:
+        (infoStore.info?.capabilities?.includes("history.v1") ?? false) &&
+        (infoStore.info?.capabilities?.includes("diagrams.v1") ?? false),
       isAdmin: authStore.identity?.role === "admin",
     }),
   );
