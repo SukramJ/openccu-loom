@@ -128,3 +128,131 @@ falling.
 **Stop condition.** If a measure yields only findings a sweep would also have
 produced, the thesis is wrong for that measure and this document says so. That
 is a legitimate outcome and a more useful one than a padded total.
+
+---
+
+## Done — M1: capability surfaces against what actually happens
+
+Six surfaces measured. Each instrument had to produce a positive control, a
+negative control and a stated blind spot **before** reporting; all six
+qualified, and one (surface-registry) established its negative control
+experimentally by deleting a member from scratchpad copies and confirming the
+comparison named it.
+
+Thirty-two candidate gaps went through an adversarial refute pass: **21
+survived, 11 were refuted**. The refutations were not noise — they were the
+instrument's blind spots showing, which is why the pass exists.
+
+Closed from M1 in this round:
+
+- **`hmapi.ConfigSnapshot.Extras` and `hmapi.InterfaceState.Note`** are declared
+  in `assets/openapi.yaml` and written by nothing, so every generated client
+  carries an attribute that can never hold a value.
+  `TestEveryPublishedDTOFieldHasAWriter` now pins the whole 492-field surface.
+  `Note` additionally has a privacy scrub — `anonymiseDiagnostics` redacts a
+  field nothing fills — which is why it is kept rather than removed.
+
+Left open, recorded rather than closed: the remaining 19 confirmed gaps sit in
+three groups — health-component coverage (5 subsystems that can fail with no
+`/health` component: security, rest, webhook, mDNS, config.overlay), capability
+tokens that report configuration rather than liveness (5), and surface-registry
+gate/role mismatches (4). Each needs a decision about what the surface *should*
+promise, not a patch.
+
+### The instrument corrections are the reusable result
+
+The DTO guard needed three corrections, each found by disagreeing with a hand
+check, and together they are a catalogue of how a write hides from a reader:
+
+1. **Name-based matching** missed `InterfaceState.Note` — six unrelated types
+   also have a `Note`, and one of them is assigned. Only `types.Info` separates
+   them.
+2. **Direction.** Twenty-four false positives were inbound request fields: the
+   client sends an `AlarmArmRequest` and the handler reads it, so nothing on
+   this side writes it. Scoping by "does the daemon ever build a literal of this
+   type" is right; scoping by a `Request` name suffix would have missed
+   `SecuritySourceOverride`.
+3. **Write shape.** `json.Unmarshal(&out.Perms)` and `report.Touched++` are
+   writes that neither a composite literal nor an assignment statement can see.
+   Six more false positives, all real code.
+
+## Done — M2: the consumer's view
+
+Regenerated `openccu-loom-types` from the current daemon assets. Round 6's M4
+fix materialises exactly as intended: 559 new lines in `rest.py`, the 58
+promoted schemas arriving as real models.
+
+**The finding is the check standing between the daemon and Prometheus.** The
+daemon hand-writes the text exposition format, and `TestPrometheusMetricsExposed`
+returned early on an empty body ("acceptable for a fresh registry") and, when a
+body was present, accepted any line containing a space as a sample — `%%%bad{{{ 1`
+passed. It could not fail for the reason it existed. Replaced by a
+text-format 0.0.4 parser with twelve negative controls beside it and two bite
+proofs against the real renderer through the HTTP path.
+
+The escaping half is the one that matters going forward: `internal/metrics`
+renders label values with Go's `%q`, which also emits `\t`, `\r` and `\xNN` —
+none of which Prometheus defines. Nothing escapes today because the only label
+value in the repo is a central name and those are `^[A-Za-z0-9_-]+$`. The
+parser is what stands between that and the first label sourced from a device
+name.
+
+Also measured, and refuted as findings: the WS command vocabulary is already
+guarded (`TestWSSchemaArgsResultUseTypedVocabulary` covers all 347 values across
+12 tokens), and the SPA's generated types are fresh. One stale comment
+corrected: it conflated the 104 commands that declare no `result` with the 82
+whose handler actually publishes one.
+
+### An e2e bite proof measures the last build, not the tree
+
+`tests/e2e` execs a prebuilt `./bin/openccu-loom`. Two bite proofs against
+`internal/metrics/registry.go` reported green with the file demonstrably
+broken, because the test ran the previous binary — the untethered check this
+round exists to find, performed while auditing for it. `make build` belongs
+between the break and the run, and again after the restore.
+
+## Done — M3: runtime self-report against runtime behaviour
+
+Twenty wiring seams, each carrying a `Why` that states what stops working
+without it. Every `Why` is a testable claim, and half of them are wrong:
+
+| | Count |
+|---|---|
+| `Why` accurate | 9 |
+| overstated | 5 |
+| understated | 5 |
+| **false** | 1 |
+| asserts the effect | 11 |
+| asserts only that the manifest declares the seam | 6 |
+| asserts only that a setter appears — the decorative pin | 3 |
+| bracketing tests | 8 |
+
+The false one, verified by hand: `client.value_writer_hooks` claimed "publishes
+no event … so every north-bound plane keeps showing the value the device held
+before the write". Neither clause holds. An absent hook skips the
+CommandTracker record and the wait-for-callback path; nothing there publishes
+events at all, and the tracked value has no north-bound reader —
+`GetLastSentValue` and `HasInFlight` have zero production callers, while the
+same type's `ClearForKey` and `Size()` have several, so the search finds callers
+that exist. North-bound planes show the new value through the model's own
+optimistic layer, independently of this seam. Corrected, and the resolver half
+— which no production site can reach, since `WaitForCallback` is set only in
+tests — is now written down rather than left to be inferred.
+
+The other ten inaccurate `Why` texts and the nine seams without an effect test
+are **recorded, not closed**. Correcting ten prose claims on agent evidence
+would repeat exactly the error this round is about, and the durable fix is an
+effect test per seam rather than better prose.
+
+## Where the thesis stands
+
+M2's finding could not have come from a sweep: no line of `prometheus_test.go`
+is wrong, and the file passes. M3's could not either: every seam is declared,
+the manifest is honest about what it wired, and the endpoint answers correctly —
+the defect is that half the declarations describe a consequence that does not
+follow. Both live in a relationship rather than at a site.
+
+M1 is more mixed. Its DTO finding is genuine and the guard is durable, but a
+third of its candidates were the instrument's own blind spots, and the surviving
+19 are decisions rather than defects. On its own M1 would be a weaker case for
+the thesis than M2 or M3.
