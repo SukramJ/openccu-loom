@@ -6313,9 +6313,27 @@ export interface components {
              * @description Runtime feature set. Always-on entries:
              *     `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
              *     Conditional entries surface only when configured:
-             *     `mqtt.discovery.v1`, `matter.bridge.v1`, `auth.oidc.v1`,
-             *     `alarm.v1` (the `/alarm` surface is mounted — absent, the
-             *     alarm subsystem is off and every `/alarm` route answers 404).
+             *     `mqtt.discovery.v1`, `mqtt.raw.v1`, `matter.bridge.v1`,
+             *     `auth.oidc.v1`, `auth.ccu.v1`, `webhook.inbound.v1`,
+             *     `diagrams.v1`, `admin.persistence.v1`, `history.v1`,
+             *     `mcp.v1`, `mcp.write.v1`, `system.restart.supervised.v1`,
+             *     `addon_self_update`, `alarm.v1` (the `/alarm` surface is
+             *     mounted — absent, the alarm subsystem is off and every
+             *     `/alarm` route answers 404).
+             *
+             *     `mcp.write.v1` implies `mcp.v1`; `addon_self_update` predates
+             *     the `<area>.<feature>.v<n>` convention and keeps its spelling
+             *     because renaming a token a client already matches on is a
+             *     breaking change.
+             *
+             *     A token means the daemon is CONFIGURED for that capability,
+             *     not that the subsystem is working at this instant. It answers
+             *     "may I use this path at all", which is what a client needs to
+             *     build its feature set; a broker that is briefly unreachable is
+             *     not a missing capability, and a token that came and went with
+             *     connectivity would force every client to re-derive its
+             *     surface on each poll. For what is running right now, read
+             *     `/health`, whose components report liveness.
              *
              *     Open-ended on purpose: the daemon may advertise additional
              *     capabilities (e.g. `system.restart.supervised.v1`, `mcp.v1`)
