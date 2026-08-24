@@ -24,7 +24,7 @@ func (f fakeConnectivityProbe) Probe(context.Context) ([]coordinators.InterfaceR
 // TestObserveProbeLatencyStampsWireInterfaceID pins the fix for the permanently
 // "disconnected" per-interface connectivity sensors: the probe reports bare
 // interface names (HmIP-RF), but the client keys its sensors on GET
-// /interfaces.id — the wire form <central>-<interface>. observeProbeLatency
+// /interfaces.id — the wire form <central>-<interface>. stampWireInterfaceIDs
 // must rewrite each entry's InterfaceID to exactly that wire id (and keep the
 // bare enum), so connectivity lines up with /interfaces.
 func TestObserveProbeLatencyStampsWireInterfaceID(t *testing.T) {
@@ -37,7 +37,7 @@ func TestObserveProbeLatencyStampsWireInterfaceID(t *testing.T) {
 
 	// h is nil: the latency-metric side is exercised elsewhere; here we only
 	// assert the interface-id rewrite, which must not depend on a hub.
-	wrapped := observeProbeLatency(probe, nil, "ccu-a")
+	wrapped := stampWireInterfaceIDs(probe, "ccu-a")
 	got, err := wrapped(context.Background())
 	if err != nil {
 		t.Fatalf("wrapped probe: %v", err)

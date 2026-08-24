@@ -290,13 +290,24 @@ func TestWireHubStaleRefreshHooksStopTouchingTheCCU(t *testing.T) {
 	}
 }
 
-// TestWireHubFeedsConnectionLatencyMetric pins a producer for the
-// connection-latency hub metric through the path a running daemon takes:
-// WireHub installs the probe, the reconcile job runs it, and the sample lands
-// on the aggregate the MQTT sensor, the hub data-point list and /system/ccu
-// read. Without a producer the sensor is declared to Home Assistant and stays
-// value-less forever.
-func TestWireHubFeedsConnectionLatencyMetric(t *testing.T) {
+// TestReconcileDoesNotFeedConnectionLatencyMetric is the negative control for
+// the split between the two latency measurements.
+//
+// The connectivity probe's own duration is the time of one JSON-RPC
+// `Interface.listInterfaces` call — a single one-way surface on the
+// reconciler's slow cadence. It used to be published as the hub's
+// connection-latency metric, so a sensor named for the round-trip to the CCU
+// reported a fraction of that path and read as 0 ms on any LAN, because the
+// duration was truncated to whole milliseconds.
+//
+// The producer is now the matched PING→PONG pair
+// (TestWirePingPongBusFeedsLatencyFromMatchedPong). This test pins the other
+// half of that move: a reconcile still runs the probe and still stamps the
+// wire interface ids every connectivity surface keys on, and it leaves the
+// latency metric alone. Without it, restoring the old observation would go
+// unnoticed — the positive guard would stay green either way, since it never
+// runs a reconcile.
+func TestReconcileDoesNotFeedConnectionLatencyMetric(t *testing.T) {
 	t.Parallel()
 
 	srv := newJSONRPCFake(t, map[string]func(map[string]any) any{
@@ -328,7 +339,19 @@ func TestWireHubFeedsConnectionLatencyMetric(t *testing.T) {
 	if err := c.Reconciler.Reconcile(context.Background()); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
-	if _, ok := c.HubModel.Metrics.Value(hubmodel.MetricConnectionLatMs); !ok {
-		t.Error("connection-latency metric has no value after a reconcile — the declared sensor has no producer")
+	if sample, ok := c.HubModel.Metrics.Value(hubmodel.MetricConnectionLatMs); ok {
+		t.Errorf("a reconcile observed the connection-latency metric (%v ms): the JSON-RPC probe duration is "+
+			"a one-way surface and must not be published under a name that means the full round-trip", sample.Value)
+	}
+	// The probe still had to run — otherwise this test would pass against a
+	// WireHub that installs no probe at all, which is the same green for a
+	// completely different reason. The connectivity aggregate is what the
+	// reconcile writes, and it carries the stamped wire id.
+	conn := c.HubModel.ConnectivityDataPoints()
+	if conn == nil || len(conn.List()) == 0 {
+		t.Fatal("the reconcile produced no connectivity entries — the probe never ran, so this test proves nothing")
+	}
+	if got := conn.List()[0].InterfaceID; got != "ccu-01-HmIP-RF" {
+		t.Errorf("connectivity interface id = %q, want the stamped wire id %q", got, "ccu-01-HmIP-RF")
 	}
 }

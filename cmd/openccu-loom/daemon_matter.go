@@ -279,6 +279,18 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// row each. Best-effort: a nil tracker disables the probe.
 	if healthTracker != nil {
 		_ = matterbridge.StartHealthProbe(ctx, bridge, healthTracker, matterbridge.DefaultProbeInterval)
+		// Controller round-trip: how long a paired Apple/Google hub takes to
+		// ACK a reliable message this bridge sent. It separates a controller
+		// that has gone unreachable from one that is merely slow — both look
+		// like "subscriptions alive" everywhere else. Zero samples is the
+		// correct steady state of a bridge nobody has paired yet, which is
+		// why the sample count is a gauge of its own rather than left to be
+		// inferred from a median of zero.
+		mb := bridge
+		healthTracker.RegisterGauge("matter.controller_rtt_ms",
+			func() float64 { return mb.ControllerRTT().MedianMs })
+		healthTracker.RegisterGauge("matter.controller_rtt_samples",
+			func() float64 { return float64(mb.ControllerRTT().Samples) })
 	}
 
 	// Boot-time fabric announce: if a fabric is already persisted

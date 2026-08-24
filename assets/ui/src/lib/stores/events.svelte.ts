@@ -32,10 +32,22 @@ const counters = $state<{
   received: number;
   lastType: string;
   resyncs: number;
+  // Round-trip time to the daemon in ms, as the daemon measured it from the
+  // heartbeat this client echoes. Null until the first ping interval (30s)
+  // elapses on an open socket, and again on every disconnect: the next
+  // socket may take a different route, so the old figure would describe a
+  // connection that no longer exists.
+  //
+  // This is the browser→daemon leg only. It is NOT the daemon→CCU latency
+  // the hub reports as `connection_latency_ms`; behind an Ingress tunnel or
+  // a remote host this leg can be the larger of the two while the CCU link
+  // is healthy, so the two are never summed or shown as one figure.
+  latencyMs: number | null;
 }>({
   received: 0,
   lastType: "",
   resyncs: 0,
+  latencyMs: null,
 });
 
 function ensure(): EventStream {
@@ -47,11 +59,17 @@ function ensure(): EventStream {
       // A live socket means the daemon is back; whatever it announced
       // before the last disconnect no longer describes the present.
       daemonStopping.current = false;
+    } else {
+      counters.latencyMs = null;
     }
   });
   // Sync the initial state emitted during connect() before this
-  // onStateChange registration could fire.
+  // onStateChange registration could fire. The latency reading gets the same
+  // treatment: a component mounting into an already-running pump would
+  // otherwise show no latency until the next heartbeat, up to a ping interval
+  // away, even though the stream has been measuring all along.
   connectionState.current = stream.state();
+  counters.latencyMs = stream.latencyMs();
   stream.onMessage((ev) => {
     counters.received += 1;
     counters.lastType = ev.type ?? "";
@@ -64,6 +82,9 @@ function ensure(): EventStream {
   stream.onResync(() => {
     counters.resyncs += 1;
     for (const h of resyncHandlers) h();
+  });
+  stream.onLatency((rttMs) => {
+    counters.latencyMs = rttMs;
   });
   return stream;
 }
@@ -156,6 +177,7 @@ export function diagnostics(): {
   received: number;
   lastType: string;
   resyncs: number;
+  latencyMs: number | null;
 } {
   return counters;
 }

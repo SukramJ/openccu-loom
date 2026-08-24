@@ -13,6 +13,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
+	"github.com/SukramJ/openccu-loom/internal/clock"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
+	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -283,4 +286,102 @@ func TestWirePingPongBusNilSafe(t *testing.T) {
 	WirePingPongBus(c, nil, "HmIP-RF", nil)
 	WirePingPongBus(c, ic, "", nil)
 	WirePingPongBus(c, ic, "HmIP-RF", nil) // nil recovery is valid
+}
+
+// TestWirePingPongBusFeedsLatencyFromMatchedPong pins the producer of both
+// connection-latency surfaces to the one measurement that actually covers the
+// path they are named after: a matched PING→PONG pair. The PING leaves over
+// the interface's own transport and the PONG returns on the callback server,
+// so the sample includes the reply leg — which the JSON-RPC probe that used to
+// feed the hub metric never touched.
+//
+// Both assertions carry their negative control: nothing is observed before the
+// PONG arrives, and an unmatched PONG (one whose token was never pinged) leaves
+// both surfaces exactly as they were. Without those, a test that only checks
+// "a value is present afterwards" would pass against a producer that files a
+// sample for every frame it sees, matched or not.
+//
+// The tracker runs on a fake clock so the asserted round-trip is the injected
+// interval rather than however long the test machine took between two lines.
+func TestWirePingPongBusFeedsLatencyFromMatchedPong(t *testing.T) {
+	t.Parallel()
+
+	const (
+		centralName = "ccu-01"
+		ifaceID     = "ccu-01-HmIP-RF"
+		rtt         = 250 * time.Millisecond
+	)
+
+	fake := clock.NewFake(time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC))
+	c := newTestCentralNamed(t, centralName)
+	obs := metrics.NewObserver()
+	c.SetAggregator(metrics.NewAggregator(centralName, obs))
+
+	ic, err := clientpkg.New(clientpkg.Config{
+		CentralName: centralName,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Caller: clientpkg.CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) {
+			return nil, nil
+		}),
+		PingPong: reliability.NewPingPongTracker(reliability.PingPongConfig{
+			MismatchThreshold: 5,
+			PendingTTL:        30 * time.Second,
+			UnknownTTL:        30 * time.Second,
+			Clock:             fake,
+		}),
+	})
+	if err != nil {
+		t.Fatalf("clientpkg.New: %v", err)
+	}
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: ifaceID,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+	WirePingPongBus(c, ic, ifaceID, nil)
+
+	deliver := func(callerID string) {
+		c.Events.HandleRawEventNormalized(
+			context.Background(), ifaceID, "CENTRAL", "PONG",
+			hmtypes.StringValue(callerID),
+		)
+	}
+	prefix := ic.WireBoundaryID()
+
+	// Negative control 1 — nothing measured before a round-trip completes.
+	if _, ok := c.HubModel.Metrics.Value(hubmodel.MetricConnectionLatMs); ok {
+		t.Fatal("pre-condition: the hub latency metric must be unobserved before the first PONG")
+	}
+	if got := c.Aggregator.RPC().AvgLatencyMs; got != 0 {
+		t.Fatalf("pre-condition: rpc avg_latency_ms = %v, want 0 before the first PONG", got)
+	}
+
+	// Negative control 2 — a PONG that matches no outstanding PING is not a
+	// round-trip and must leave both surfaces untouched.
+	deliver(prefix + "#no-such-ping")
+	if _, ok := c.HubModel.Metrics.Value(hubmodel.MetricConnectionLatMs); ok {
+		t.Error("an unmatched PONG produced a latency sample — the producer is not gated on a matched pair")
+	}
+	if got := c.Aggregator.RPC().AvgLatencyMs; got != 0 {
+		t.Errorf("an unmatched PONG produced rpc avg_latency_ms = %v, want 0", got)
+	}
+
+	// The real thing: ping, let the clock advance by a known interval, pong.
+	ic.RecordPing("7")
+	fake.Advance(rtt)
+	deliver(prefix + "#7")
+
+	want := float64(rtt.Nanoseconds()) / float64(time.Millisecond)
+	sample, ok := c.HubModel.Metrics.Value(hubmodel.MetricConnectionLatMs)
+	if !ok {
+		t.Fatal("a matched PONG left the hub latency metric unobserved — the declared sensor has no producer")
+	}
+	if sample.Value != want {
+		t.Errorf("hub connection latency = %v ms, want %v ms (the injected round-trip)", sample.Value, want)
+	}
+	if got := c.Aggregator.RPC().AvgLatencyMs; got != want {
+		t.Errorf("rpc avg_latency_ms = %v, want %v — the ping_pong.rtt key has no producer", got, want)
+	}
 }

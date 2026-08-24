@@ -1,5 +1,5 @@
 {
- "version": "1.1",
+ "version": "1.2",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -16,9 +16,11 @@
   "replay_buffer_capacity": 1024
  },
  "heartbeat": {
-  "description": "The daemon sends a `{\"op\":\"ping\"}` frame every ping_interval_seconds. Clients MUST respond with `{\"op\":\"pong\"}` within read_timeout_seconds or the connection is closed. Clients behind NAT or mobile-data proxies that drop idle connections faster than read_timeout_seconds should additionally issue their own `{\"op\":\"pong\"}` frames pre-emptively — the daemon accepts unsolicited pongs.",
+  "description": "The daemon sends a `{\"op\":\"ping\",\"echo\":\"<token>\"}` frame every ping_interval_seconds. Clients MUST respond with `{\"op\":\"pong\"}` within read_timeout_seconds or the connection is closed. Clients behind NAT or mobile-data proxies that drop idle connections faster than read_timeout_seconds should additionally issue their own `{\"op\":\"pong\"}` frames pre-emptively — the daemon accepts unsolicited pongs.",
   "ping_interval_seconds": 30,
-  "read_timeout_seconds": 60
+  "read_timeout_seconds": 60,
+  "echo": "Opaque token on every server `ping`. A client that copies it verbatim into its `pong` (`{\"op\":\"pong\",\"echo\":\"<token>\"}`) lets the daemon time the round-trip against its own clock alone; the two ends need no clock agreement. Echoing is OPTIONAL \u2014 a bare `{\"op\":\"pong\"}` is still a valid heartbeat, it just cannot be timed. Never parse the token; its encoding is not part of this contract.",
+  "rtt_ms": "Round-trip time in milliseconds of the PREVIOUS heartbeat on this connection, carried on the next `ping`. Lets a client display its own latency to the daemon without measuring anything itself. Absent on the first ping and whenever the preceding pong carried no echo. This is the client\u2192daemon distance only \u2014 it says nothing about the daemon\u2192CCU path, which the `connection_latency_ms` hub metric reports separately."
  },
  "subscription_ack": {
   "description": "After a `{op:\"subscribe\", topics:[...]}` or `{op:\"unsubscribe\", topics:[...]}` is processed, the daemon echoes one `{op:\"subscribed\"|\"unsubscribed\", topics:[...]}` frame carrying the topics the client just requested. Reconnect-after-failure logic can use this ACK to confirm the subscription set survived the round trip without needing to inspect daemon-side state. An empty topics array suppresses the ACK to keep no-op subscribes quiet."

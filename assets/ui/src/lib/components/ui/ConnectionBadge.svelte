@@ -66,8 +66,20 @@
   );
 
   const diag = $derived(diagnostics());
+
+  // Round-trip to the daemon, measured by the daemon from the heartbeat this
+  // browser echoes back. It describes THIS connection — a tab on the LAN and
+  // one behind an Ingress tunnel read different numbers from the same daemon
+  // — which is why it belongs on this badge and not on any CCU surface. Sub-
+  // millisecond readings are shown with one decimal so a local connection
+  // does not collapse to a bare "0 ms".
+  const latency = $derived(
+    diag.latencyMs === null
+      ? ""
+      : ` · ${diag.latencyMs < 10 ? diag.latencyMs.toFixed(1) : Math.round(diag.latencyMs)} ${t("connection.rtt_unit")}`,
+  );
   const tooltip = $derived(
-    `${explain}${diag.received ? ` · ${diag.received} ${t("connection.events")}` : ""}${diag.lastType ? ` · ${t("connection.last")}: ${diag.lastType}` : ""}`,
+    `${explain}${latency}${diag.received ? ` · ${diag.received} ${t("connection.events")}` : ""}${diag.lastType ? ` · ${t("connection.last")}: ${diag.lastType}` : ""}`,
   );
   const ariaLabel = $derived(`${label} — ${explain}`);
 </script>
