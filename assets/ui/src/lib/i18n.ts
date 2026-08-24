@@ -1309,6 +1309,8 @@ const EN: Catalog = {
   "config.field.north.matter.prefer_ipv4": "Force IPv4",
   "config.field.north.matter.expose_secondary_channels":
     "Expose secondary channels",
+  "config.field.north.matter.include_measurements":
+    "Expose derived sensors",
   "config.field.north.matter.mdns_advertise": "mDNS advertiser",
   "config.field.north.matter.dev_rotate_unique_ids":
     "Rotate unique IDs each boot (dev)",
@@ -1523,6 +1525,8 @@ const EN: Catalog = {
     "Force the Matter UDP socket to bind IPv4-only. Default false opens an IPv6 dual-stack socket that also accepts IPv4 traffic — the standard choice.",
   "config.help.north.matter.expose_secondary_channels":
     "Off by default: a multi-channel device (switch, dimmer, cover, lock, siren, valve) projects a single Matter endpoint from its primary channel. Enable to also expose its secondary virtual-receiver actor channels as separate endpoints. Matter only — MQTT, HA-Discovery and REST always carry every channel.",
+  "config.help.north.matter.include_measurements":
+    "Off by default: sensors the daemon calculates rather than reads — apparent temperature, dew point, dew-point spread, enthalpy, frost point, vapor concentration, operating-voltage level and derived binary state — are not sent to Matter. Enable to expose them as measurement endpoints alongside the device itself. The exposure list offers these data points either way, because it reports what the model can project; one you allowlisted while this was off starts appearing the moment you turn it on. Matter only — MQTT, HA-Discovery and REST always carry derived sensors.",
   "config.help.north.matter.mdns_advertise":
     "mDNS advertiser implementation. Unset defaults to `zeroconf`, which publishes the operational + commissionable records on the network — required for pairing by QR code. `noop` keeps the records in-memory only (tests / out-of-band discovery); commissioners cannot discover the bridge in that mode.",
   "config.help.north.matter.dev_rotate_unique_ids":
@@ -5202,6 +5206,8 @@ const DE: Catalog = {
   "config.field.north.matter.prefer_ipv4": "IPv4 erzwingen",
   "config.field.north.matter.expose_secondary_channels":
     "Sekundärkanäle exponieren",
+  "config.field.north.matter.include_measurements":
+    "Berechnete Sensoren exponieren",
   "config.field.north.matter.mdns_advertise": "mDNS-Advertiser",
   "config.field.north.matter.dev_rotate_unique_ids":
     "UniqueID pro Boot rotieren (Dev)",
@@ -5420,6 +5426,8 @@ const DE: Catalog = {
     "Erzwingt IPv4-only auf dem Matter-UDP-Socket. Default aus = IPv6-Dual-Stack-Socket, der auch IPv4 akzeptiert (Standardwahl).",
   "config.help.north.matter.expose_secondary_channels":
     "Standardmäßig aus: Ein Mehrkanalgerät (Schalter, Dimmer, Rollladen, Schloss, Sirene, Ventil) projiziert einen einzelnen Matter-Endpoint aus seinem Primärkanal. Aktivieren, um auch die sekundären Aktor-Kanäle als eigene Endpoints zu exponieren. Nur Matter — MQTT, HA-Discovery und REST führen immer alle Kanäle.",
+  "config.help.north.matter.include_measurements":
+    "Standardmäßig aus: Sensoren, die der Daemon berechnet statt ausliest — gefühlte Temperatur, Taupunkt, Taupunktdifferenz, Enthalpie, Frostpunkt, Wasserdampfkonzentration, Betriebsspannungspegel und abgeleiteter Binärzustand — gehen nicht an Matter. Aktivieren, um sie als Messwert-Endpoints neben dem Gerät selbst zu exponieren. Die Freigabeliste bietet diese Datenpunkte ohnehin an, denn sie zeigt, was das Modell projizieren kann; ein bei ausgeschaltetem Schalter freigegebener Datenpunkt erscheint, sobald Sie ihn einschalten. Nur Matter — MQTT, HA-Discovery und REST führen berechnete Sensoren immer.",
   "config.help.north.matter.mdns_advertise":
     "mDNS-Advertiser-Implementierung. Ohne Wert gilt `zeroconf`: operational + commissionable Records werden im Netz veröffentlicht — Voraussetzung für das Koppeln per QR-Code. `noop` hält die Records nur in-memory (Tests / Out-of-band-Discovery); Commissioner finden die Bridge dann nicht.",
   "config.help.north.matter.dev_rotate_unique_ids":

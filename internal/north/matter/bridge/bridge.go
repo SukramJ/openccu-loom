@@ -106,8 +106,15 @@ type Config struct {
 	// IncludeMeasurements passes [endpoint.Config.IncludeMeasurements]
 	// through to the assembler so standalone sensor endpoints (Temperature,
 	// Humidity, …) are created from [interfaces.MatterMeasurementSource]
-	// DPs. Off by default; operators enable it via the config UI or
-	// daemon config flag.
+	// DPs. Off by default; operators turn it on with
+	// `north.matter.include_measurements`.
+	//
+	// The eligibility surface reports these DPs as mappable whatever this
+	// flag says, because it answers what the model can project rather than
+	// what the current configuration assembles. The two must not be
+	// conflated: for one release the flag had no config key at all, so
+	// every derived sensor an operator allowlisted was offered, accepted
+	// and then silently dropped here.
 	IncludeMeasurements bool
 
 	// ExposeSecondaryChannels passes [endpoint.Config.ExposeSecondaryChannels]

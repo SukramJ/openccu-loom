@@ -8,6 +8,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Derived sensors were offered to Matter and then dropped.** Eight
+  calculated sensor types — apparent temperature, dew point, dew-point spread,
+  enthalpy, frost point, vapor concentration, operating-voltage level and
+  derived binary state — are reported as mappable by `GET /api/v1/matter/exposable`,
+  so the SPA listed them and an operator could allowlist them. The assembler
+  then skipped every one, because the flag that admits them was never handed
+  to the bridge and no config key existed to set it — while the field's own
+  comment claimed operators enable it "via the config UI or daemon config
+  flag". The new `north.matter.include_measurements` is that flag (off by
+  default, Matter-only); a data point allowlisted while it was off starts
+  materialising the moment it is switched on. The assembler had tests for both
+  values of the flag, which is why nothing caught this: they set the flag
+  themselves, proving the assembler could honour a value and never that the
+  daemon supplied one.
+
+- **`mqtt.BridgeConfig.DiscoveryObjectIDFmt` was a dead field with a false
+  comment.** Its declaration was the only occurrence in the repo — no reader,
+  and nothing applied the default its comment advertised. Discovery object IDs
+  are built by dedicated code instead. Removed.
+
 - **The exported schemas had no freshness gate**, so 71 of the 73 enums the
   Python types package is generated from could drift silently: a new wire value
   reached neither `assets/schemas/*.json` nor any client until somebody ran
@@ -83,6 +103,14 @@ endpoint, two fields on the config-section save response, and four on a
 diagnostics payload.
 
 ### Added
+
+- **`north.matter.include_measurements`** — exposes the daemon's calculated
+  sensors as Matter measurement endpoints alongside the device's own
+  projection. Off by default: these are derived from data the CCU already
+  reports rather than read from the device, so a controller showing all of
+  them turns one wall thermostat into a row of sensors most users did not ask
+  for. Matter-only — MQTT, HA-Discovery and REST have always carried derived
+  sensors. See Fixed: until now there was no way to turn this on at all.
 
 - **`GET /api/v1/diagnostics/wiring`** (admin-only) — the seams the running
   daemon declared as it wired them (ADR 0065). Each entry names the seam, the

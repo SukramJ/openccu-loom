@@ -228,6 +228,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		NodeLabel:               mc.NodeLabel,
 		Discriminator:           mc.Discriminator,
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
+		IncludeMeasurements:     mc.IncludeMeasurements,
 		Labels:                  labels,
 		Locale:                  cfg.Locale,
 	}, logger)
