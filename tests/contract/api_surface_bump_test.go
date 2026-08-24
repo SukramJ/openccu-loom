@@ -32,11 +32,16 @@ type apiSurface struct {
 	Schemas    map[string][]string `json:"schemas"`    // schema name -> ["field:type", …] sorted
 }
 
-// valueSemanticsChanges records fields whose *meaning* changed while their
-// name and type stayed the same. No schema diff can detect that — the shape is
-// identical on both sides — so the only honest mechanism is a list somebody
-// has to write by hand, and a review rule that says a semantics change is a
-// major bump.
+// valueSemanticsChanges records contract changes no schema diff can see:
+// the shape is identical on both sides, so the only honest mechanism is a
+// list somebody writes by hand.
+//
+// Two kinds qualify, and an entry says which. A field whose *meaning*
+// changed while its name and type stayed the same is the original case and
+// a major bump. A field whose *vocabulary* grew — a new value in an
+// open-ended set, a reference that became a declared type — is additive and
+// a minor bump, but it belongs here for the same reason: a client that
+// hardcoded the old set has no other way to learn it moved.
 //
 // The entry format is "<major-version-that-carried-it> <schema>.<field>: what
 // changed". Entries are never deleted: the list is the answer to "why did this
@@ -46,6 +51,8 @@ var valueSemanticsChanges = []string{
 	"7.0.0 CaptureIndex: the diagnostics capture response became an array, having been declared an object",
 	"7.1.0 DataPoint.value: unchanged, but display_value was added beside it — value stays the raw CCU wire value",
 	"7.7.0 DataPointValueChangedPayload.display_value: documented, not introduced — the daemon has emitted it on the push since 7.2.0, so a client can observe the field from a 7.2.0..7.6.0 daemon whose spec does not declare it",
+	"7.11.0 DataPointKey.interface/parameter/paramset_key: vocabulary — three properties in assets/schemas/types.json carried a $ref into #/definitions/ for targets the file never held, so no generator could resolve them; they are declared strings now, each naming the enum in enums.json that supplies its values",
+	"7.12.0 Info.capabilities: vocabulary — four tokens added to the open set (mqtt.raw.v1, webhook.inbound.v1, diagrams.v1, admin.persistence.v1). The field is an array of strings either way, so no diff sees it; a client that hardcoded the token list learns of them only from here",
 }
 
 // TestAPISurfaceChangesCarryTheRightBump pins the two halves of this project's

@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Four capability tokens for surfaces a client could not discover** —
+  `mqtt.raw.v1`, `webhook.inbound.v1`, `diagrams.v1` and
+  `admin.persistence.v1`. Each mirrors the condition that mounts its own
+  surface. The SPA had been gating its diagram panel on `history.v1` as a
+  stand-in, which reads as correct and fails in one direction: with recording
+  on and no database the view renders, the editor opens, and every save is
+  refused. It now requires both tokens, because it needs both things.
+
+  The `Info.capabilities` description also gained the four tokens that already
+  reached every client and appeared in no spec at all — `auth.ccu.v1`,
+  `history.v1`, `mcp.write.v1` and `addon_self_update`.
+
+  API **7.12.0** — additive: the field is an array of strings either way, so
+  no schema diff sees this. A client that hardcoded the token set learns of
+  the additions from the value-vocabulary register.
+
+  What a token means is now written into the contract: **configured**, not
+  running. A briefly unreachable broker is not a missing capability, and a
+  token that came and went with connectivity would force every client to
+  re-derive its feature set on each poll. Liveness is `/health`'s answer.
+
 ### Fixed
 
 - **The Security & Safety domain could be absent for a whole daemon lifetime

@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 380.
+Guards without a doc comment: 7 of 382.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -42,6 +42,8 @@ Guards without a doc comment: 7 of 380.
 | TestCacheresetGuardNoOperatorStateTouched | cachereset_guard_test.go | TestCacheresetGuardNoOperatorStateTouched enforces ADR 0042: the cache-reset service must never reference operator or system state tables. |
 | TestKeepaliveContract_AnyEventRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_AnyEventRefreshesLiveness pins that an ordinary (non-PONG) inbound callback also refreshes liveness — even for a device the daemon does not mirror. |
 | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness | callback_liveness_contract_test.go | TestKeepaliveContract_PongClosesPendingAndRefreshesLiveness pins the full keepalive round-trip: a recorded outbound PING (as the check_connection job records it) is closed by a PONG delivered through the production callback handler, and that PONG also marks the channel alive. |
+| TestCapabilityDetectorsReportConfigurationNotLiveness | capability_surface_test.go | TestCapabilityDetectorsReportConfigurationNotLiveness pins the decision that a token means "the daemon is configured for this", not "this is working right now". |
+| TestEveryCapabilityTokenIsEmittedAndDocumented | capability_surface_test.go | TestEveryCapabilityTokenIsEmittedAndDocumented pins the three sets that make up the capability surface against each other: the tokens the handlers package declares, the tokens capabilities() can actually append, and the tokens assets/openapi.yaml tells a client to expect. |
 | TestContractCatalogueIsComplete | catalogue_test.go | TestContractCatalogueIsComplete holds that tests/contract/README.md lists exactly the exported TestXxx functions that exist under tests/contract/ — no guard undocumented in the catalogue, no catalogue entry pointing at a guard that no longer exists. |
 | TestCCUAddonRegistersControlPanelEntry | ccu_addon_control_panel_entry_test.go | TestCCUAddonRegistersControlPanelEntry pins how the add-on claims its tile in the CCU's "Systemsteuerung": the platform helper by its real name, plus the underlying HomeMatic Tcl API as the fallback for firmware that predates the helper. |
 | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper | ccu_addon_control_panel_entry_test.go | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper verifies the miss is LOUD: on firmware that offers neither the helper nor a Tcl interpreter the install still succeeds (the daemon does not need the tile), but it says so rather than leaving the operator with a silently tile-less install — the exact failure mode that hid the wrong helper name. |

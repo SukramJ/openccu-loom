@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, screen, fireEvent } from "@testing-library/svelte";
+import {
+  render,
+  cleanup,
+  waitFor,
+  screen,
+  fireEvent,
+} from "@testing-library/svelte";
 
 const mockList = vi.fn();
 const mockUpdate = vi.fn();
@@ -58,7 +64,7 @@ afterEach(() => cleanup());
 
 describe("Diagrams — editing an existing diagram", () => {
   it("carries default_range_hours through to the save body unchanged", async () => {
-    capabilities = ["history.v1"];
+    capabilities = ["history.v1", "diagrams.v1"];
     mockList.mockResolvedValue([
       {
         id: "1",
@@ -67,21 +73,32 @@ describe("Diagrams — editing an existing diagram", () => {
         owner: "alice",
         config: {
           series: [
-            { central: "ccu-a", channel_address: "AAA0000001:1", parameter: "TEMPERATURE" },
+            {
+              central: "ccu-a",
+              channel_address: "AAA0000001:1",
+              parameter: "TEMPERATURE",
+            },
           ],
           default_range_hours: 168,
         },
       },
     ]);
     render(Diagrams);
-    await waitFor(() => expect(screen.getByText("Climate")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Climate")).toBeInTheDocument(),
+    );
 
     await fireEvent.click(screen.getByText("common.edit"));
-    await waitFor(() => expect(screen.getByText("common.save")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("common.save")).toBeInTheDocument(),
+    );
     await fireEvent.click(screen.getByText("common.save"));
 
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
-    const [, body] = mockUpdate.mock.calls[0] as [string, { config: { default_range_hours?: number } }];
+    const [, body] = mockUpdate.mock.calls[0] as [
+      string,
+      { config: { default_range_hours?: number } },
+    ];
     // Before the fix this was dropped: save() rebuilt config from scratch
     // as `{ series }`, discarding the stored 7-day default range.
     expect(body.config.default_range_hours).toBe(168);
@@ -100,15 +117,23 @@ describe("Diagrams — history gating (SV03)", () => {
   });
 
   it("renders the diagrams surface when history recording is on", async () => {
-    capabilities = ["history.v1"];
+    capabilities = ["history.v1", "diagrams.v1"];
     mockList.mockResolvedValue([
-      { id: "1", name: "Climate", visibility: "private", owner: "alice", config: { series: [] } },
+      {
+        id: "1",
+        name: "Climate",
+        visibility: "private",
+        owner: "alice",
+        config: { series: [] },
+      },
     ]);
     render(Diagrams);
     await waitFor(() => {
       expect(screen.getByText("Climate")).toBeInTheDocument();
     });
-    expect(screen.queryByText("diagrams.history_required")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("diagrams.history_required"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("diagrams.new")).toBeInTheDocument();
   });
 });

@@ -430,6 +430,19 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// History is enabled when the recorder store was wired (the
 			// same opt-in flag that mounts /history and /history/recording).
 			history: d.historyStore != nil,
+			// Each of the four below mirrors the condition that mounts the
+			// surface it names, read from the same value the mount reads —
+			// not from a second source that could drift away from it.
+			mqttRaw:        cfg.North.MQTT.Enabled && cfg.North.MQTT.RawEnabled,
+			webhookInbound: cfg.North.Webhook.Inbound.Enabled,
+			diagrams:       d.diagramSvc != nil,
+			// Each token reads the condition that mounts ITS OWN surface,
+			// even though both resolve to the same opened database today:
+			// /diagrams mounts on the diagram service, the admin routes on
+			// the stored-user store. Deriving one from the other would make
+			// the tokens agree by construction and hide the day they stop
+			// being the same question.
+			adminPersistence: d.sqUsers != nil,
 			// addonSelfUpdate mirrors wireAddonUpdate's capability gate
 			// (add-on build + firmware installer present) — d.addonUpdater
 			// is only non-nil when that check passed.

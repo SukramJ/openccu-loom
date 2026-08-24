@@ -785,6 +785,10 @@ type runtimeCapabilityDetector struct {
 	alarm             bool
 	history           bool
 	addonSelfUpdate   bool
+	mqttRaw           bool
+	webhookInbound    bool
+	diagrams          bool
+	adminPersistence  bool
 }
 
 func (r runtimeCapabilityDetector) HasMQTTDiscovery() bool     { return r.mqtt }
@@ -795,6 +799,10 @@ func (r runtimeCapabilityDetector) HasSupervisedRestart() bool { return r.superv
 func (r runtimeCapabilityDetector) HasMCP() bool               { return r.mcp }
 func (r runtimeCapabilityDetector) HasMCPWrite() bool          { return r.mcp && r.mcpWrite }
 func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm }
+func (r runtimeCapabilityDetector) HasMQTTRaw() bool           { return r.mqttRaw }
+func (r runtimeCapabilityDetector) HasWebhookInbound() bool    { return r.webhookInbound }
+func (r runtimeCapabilityDetector) HasDiagrams() bool          { return r.diagrams }
+func (r runtimeCapabilityDetector) HasAdminPersistence() bool  { return r.adminPersistence }
 func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
 func (r runtimeCapabilityDetector) HasAddonSelfUpdate() bool   { return r.addonSelfUpdate }
 
