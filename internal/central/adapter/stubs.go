@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -74,6 +75,12 @@ type BackupAdapter struct {
 	// the installation has CCUs plus concurrent readers.
 	restorersMu sync.RWMutex
 
+	// cacheInvalidator clears the restored central's CCU-derivable caches
+	// once the archive is on its way to the CCU. Nil disables the step —
+	// the restore still runs, and the daemon then serves the pre-restore
+	// configuration until an operator clears the caches by hand.
+	cacheInvalidator CacheInvalidator
+
 	logger *slog.Logger
 
 	// locksMu guards locks; locks holds one mutex per central so that a
@@ -108,6 +115,19 @@ func (a *BackupAdapter) centralLock(name string) *sync.Mutex {
 		a.locks[name] = m
 	}
 	return m
+}
+
+// CacheInvalidator clears the CCU-derivable caches of a scope and
+// re-pulls them from the CCU (ADR 0042). *cachereset.Service satisfies
+// it; the restore path needs only the one method.
+type CacheInvalidator interface {
+	Clear(ctx context.Context, scope cachereset.Scope) (cachereset.Report, error)
+}
+
+// SetCacheInvalidator wires the cache-reset service a restore uses to
+// discard the configuration the CCU is about to replace.
+func (a *BackupAdapter) SetCacheInvalidator(c CacheInvalidator) {
+	a.cacheInvalidator = c
 }
 
 // SetLogger sets the logger used for the asynchronous backup goroutine.
@@ -450,29 +470,56 @@ func (a *BackupAdapter) ownerCentralName(id string) string {
 // central count would otherwise produce a verdict that matches neither state.
 // The owning-central lookup is done before the lock because it only reads the
 // registry, which has its own.
-func (a *BackupAdapter) resolveRestorer(id string) (BackupRestorer, error) {
+func (a *BackupAdapter) resolveRestorer(id string) (r BackupRestorer, targetCentral string, err error) {
 	owner := a.ownerCentralName(id)
 
 	a.restorersMu.RLock()
 	defer a.restorersMu.RUnlock()
 
 	if owner != "" {
-		return a.restorers[owner], nil
+		return a.restorers[owner], owner, nil
 	}
 	// An explicitly installed single restorer wins over everything below:
-	// somebody chose it, and this code has no better information.
+	// somebody chose it, and this code has no better information. It says
+	// nothing about which central it belongs to, though, so the target
+	// name comes from the sole-central case below or stays empty.
 	if a.restorer != nil {
-		return a.restorer, nil
+		return a.restorer, a.soleCentralNameLocked(), nil
 	}
 	if r := a.soleRestorerLocked(); r != nil {
-		return r, nil
+		return r, a.soleRestorerCentralLocked(), nil
 	}
 	if n := a.countCentralsLocked(); n > 1 {
-		return nil, fmt.Errorf("%w: an uploaded backup names no central and %d are configured; "+
+		return nil, "", fmt.Errorf("%w: an uploaded backup names no central and %d are configured; "+
 			"restore it from that central's own backup list",
 			hmerr.ErrRestoreTargetAmbiguous, n)
 	}
-	return nil, nil
+	return nil, "", nil
+}
+
+// soleCentralNameLocked returns the name of the only registered central,
+// or "" when zero or several are registered. Caller holds restorersMu.
+func (a *BackupAdapter) soleCentralNameLocked() string {
+	if a.registry == nil {
+		return ""
+	}
+	units := a.registry.List()
+	if len(units) != 1 || units[0] == nil {
+		return ""
+	}
+	return units[0].Name()
+}
+
+// soleRestorerCentralLocked returns the name the only registered
+// restorer is keyed by. Caller holds restorersMu.
+func (a *BackupAdapter) soleRestorerCentralLocked() string {
+	if len(a.restorers) != 1 {
+		return ""
+	}
+	for name := range a.restorers {
+		return name
+	}
+	return ""
 }
 
 // soleRestorerLocked returns the restorer of the only configured central, or
@@ -600,7 +647,7 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 	if a.storage == nil {
 		return "", ErrRestoreUnsupported
 	}
-	restorer, err := a.resolveRestorer(id)
+	restorer, target, err := a.resolveRestorer(id)
 	if err != nil {
 		return "", err
 	}
@@ -615,7 +662,66 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 		return "", err
 	}
 	defer func() { _ = rc.Close() }()
-	return restorer.Restore(ctx, id, rc)
+	jobID, err := restorer.Restore(ctx, id, rc)
+	if err != nil {
+		return "", err
+	}
+	a.invalidateAfterRestore(ctx, id, target)
+	return jobID, nil
+}
+
+// invalidateAfterRestore discards the CCU-derivable caches of the central
+// whose configuration the CCU is about to replace.
+//
+// It is not an optimisation. The persisted MASTER values are read
+// cache-first with an unconditional early return on a hit, so without
+// this they outlive the CCU's own post-restore reboot AND every later
+// daemon start: an operator who restores an older backup to roll a
+// device configuration back is shown the values they just rolled away,
+// forever, with no error and no restart-based recovery. The description
+// caches do not have the problem — they are re-pulled and upserted
+// unconditionally on every bring-up.
+//
+// The clear is scoped to the restored central, never global: one CCU's
+// restore must not throw away another CCU's caches. The re-pull it
+// triggers is readiness-gated (BringUpManager.ReinitCentral), which is
+// what makes it safe to run while the CCU is still rebooting.
+//
+// A failure here never fails the restore. The archive has already
+// reached the CCU by this point, so reporting "Backup restore failed"
+// would name the wrong party and hide the one thing that did happen —
+// the log names the manual recovery instead.
+func (a *BackupAdapter) invalidateAfterRestore(ctx context.Context, id, target string) {
+	log := a.logger
+	if log == nil {
+		log = slog.Default()
+	}
+	if a.cacheInvalidator == nil {
+		return
+	}
+	if target == "" {
+		log.Warn("backup.restore.cache_clear_skipped",
+			slog.String("backup", id),
+			slog.String("reason", "restore target central could not be resolved"),
+			slog.String("recovery", "POST /api/v1/admin/cache/clear for the restored CCU"))
+		return
+	}
+	scope := cachereset.Scope{Kind: cachereset.ScopeCentral, Central: target}
+	rep, err := a.cacheInvalidator.Clear(ctx, scope)
+	if err != nil {
+		log.Warn("backup.restore.cache_clear_failed",
+			slog.String("backup", id),
+			slog.String("central", target),
+			slog.String("error", err.Error()),
+			slog.String("consequence", "the daemon keeps serving the pre-restore MASTER values"),
+			slog.String("recovery", "POST /api/v1/admin/cache/clear for this CCU"))
+		return
+	}
+	log.Info("backup.restore.cache_cleared",
+		slog.String("backup", id),
+		slog.String("central", target),
+		slog.Int64("master_rows", rep.Master),
+		slog.Int64("values_rows", rep.Values))
 }
 
 // inspectStored streams the stored archive through [sbk.Inspect] and

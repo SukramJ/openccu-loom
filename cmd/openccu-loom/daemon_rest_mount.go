@@ -293,6 +293,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if d.authMw != nil {
 		d.authMw.BasicThrottle = loginLimiter
 	}
+	// One reloader, two callers: the admin endpoint an operator can hit
+	// directly, and the config-section save below.
+	mqttReload := newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger)
+
 	deps := rest.Deps{
 		Logger:                  logger,
 		StartedAt:               time.Now(),
@@ -360,10 +364,16 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		TokenAdmin:        d.tokenSvc,
 		CentralAdmin:      d.centSvc,
 		Discovery:         d.discovery,
-		MQTTReload:        newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger),
-		OIDC:              buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
-		SPAHandler:        ui.SPAHandler(),
-		Bootstrap:         d.bootstrap,
+		MQTTReload:        mqttReload,
+		// Same reloader the admin endpoint drives, reached from the config
+		// save instead: a section the operator edits in the SPA never
+		// produces a file-watcher event, so without this the only way to
+		// make a north.mqtt edit real was to restart or to know about
+		// POST /admin/mqtt/reload.
+		SectionApplier: newSectionApplier(mqttReload, logger),
+		OIDC:           buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
+		SPAHandler:     ui.SPAHandler(),
+		Bootstrap:      d.bootstrap,
 		Setup: &handlers.SetupService{
 			Users: d.sqUsers,
 			// The live-adopt decorator, not the raw store: the wizard's CCU

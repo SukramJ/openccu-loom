@@ -761,6 +761,17 @@ func newMQTTReloadAdapter(sup *mqttSupervisor, deps *reloadDeps, bootCfg *config
 	return a
 }
 
+// Available reports whether there is a supervisor to reload.
+//
+// It exists because [newMQTTReloadAdapter] always returns a non-nil
+// adapter — a nil supervisor becomes an adapter that answers every
+// Reload with "supervisor unavailable". That is the right answer for an
+// operator who asked for a reload explicitly, and the wrong one for the
+// config-section save, where "this daemon has no MQTT stack" is not a
+// failure to report but a section that simply takes effect at the next
+// restart.
+func (a *mqttReloadAdapter) Available() bool { return a != nil && a.sup != nil }
+
 // Reload re-derives the effective config and asks the supervisor to swap,
 // returning the wall-clock duration of the swap.
 //

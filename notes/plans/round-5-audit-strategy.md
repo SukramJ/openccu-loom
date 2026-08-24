@@ -364,11 +364,29 @@ it later cost twelve read-only agents whose entire yield was information that
 already existed. A cliff must leave a partial but truthful record, not a
 complete silence.
 
-## Carried over from round 4
+## Carried over from round 4 — both closed
 
-Both recorded with `status: open` and a reason in the findings file:
+- **F1-cache-coherency-3** — a CCU backup restore never invalidated the
+  persisted MASTER cache. `BackupAdapter.Restore` now clears the restored
+  central's CCU-derivable caches, scoped to that central; the re-pull it
+  triggers is readiness-gated, which is what makes it safe to run while the
+  CCU is still rebooting. A failed clear never fails the restore — the archive
+  is already on the CCU by then — but it is logged with the manual recovery
+  rather than swallowed.
 
-- **F1-cache-coherency-3** — a CCU backup restore never invalidates the
-  persisted MASTER cache.
-- **G3-lifecycle-chaos-5** — a `north.mqtt` section save reports success and
-  reaches no running bridge.
+- **G3-lifecycle-chaos-5** — a `north.mqtt` section save reported success and
+  reached no running bridge. The fix is the save becoming real, not the fields
+  being relabelled restart-required: the hot-swap machinery already existed
+  (`mqttSupervisor.Swap`, connect-new-before-tear-down-old) and was reachable
+  only from the file watcher and an admin endpoint, never from a section save,
+  because `north.mqtt` is a DB-tier section the SPA writes with no file event
+  behind it. `PUT /config/sections/{section}` now takes a `SectionApplier` and
+  reports `applied` — a caller could not previously tell "took effect now"
+  from "stored for the next restart", which is the same conflation one level
+  up.
+
+**Where the per-finding status lives.** Not in this branch: the write-back for
+all 245 round-4 findings sits on `docs/round4-audit-status` (commit
+`13a4ab5d`), pushed and unmerged. The two entries above still read
+`status: open` there and need flipping when that branch lands — noting it here
+rather than duplicating the file, which would only guarantee a conflict.

@@ -631,9 +631,17 @@
           setDeep(payload, rel, v.trim() === "" ? null : JSON.parse(v));
         }
       }
-      await api.putConfigSection(section, payload);
+      const saved = await api.putConfigSection(section, payload);
       original = deepClone(working);
-      toastStore.success(t("settings.saved"));
+      if (saved.apply_error) {
+        // The section IS stored; what failed is the running subsystem
+        // taking it. Reporting only "saved" here would repeat the defect
+        // this response field exists to close — an operator told the
+        // change is live while the daemon keeps doing the old thing.
+        toastStore.warn(t("settings.saved_not_applied", { err: saved.apply_error }));
+      } else {
+        toastStore.success(t("settings.saved"));
+      }
       usingDefaults = false;
       // Saving only persists. A restart-required field surfaces in the
       // app-wide restart-pending banner and the Changed-settings

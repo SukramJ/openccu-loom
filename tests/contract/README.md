@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 365.
+Guards without a doc comment: 7 of 367.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -300,6 +300,7 @@ Guards without a doc comment: 7 of 365.
 | TestLogoutClosesTheCallersOpenSocket | wiring_pins/auth_credential_lifecycle_test.go | TestLogoutClosesTheCallersOpenSocket pins the second half: the connection gates every later command on the identity it captured at the upgrade, so a logout that stops at the session map leaves the logged-out principal's command plane running. |
 | TestLogoutRevokesTheSessionItWasPresentedWith | wiring_pins/auth_credential_lifecycle_test.go | TestLogoutRevokesTheSessionItWasPresentedWith pins the one revocation logout cannot delegate. |
 | TestVerifiedBasicCredentialIsNotReThrottled | wiring_pins/auth_credential_lifecycle_test.go | TestVerifiedBasicCredentialIsNotReThrottled is the counterpart: a valid credential must cost nothing, or an operator using HTTP Basic for automation would be rate-limited by their own successful requests. |
+| TestPin_BackupRestoreCacheInvalidator_WiredInDaemon | wiring_pins/backup_restore_cache_test.go | TestPin_BackupRestoreCacheInvalidator_WiredInDaemon pins that the daemon hands the cache-reset service to the backup adapter. |
 | TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring pins that the rename hook resolves the ReGa ISE-ID before calling setName. |
 | TestPin_CcuBackend_SetDownloadFirmwareTransport_CalledInWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_SetDownloadFirmwareTransport_CalledInWiring pins that ccu_wiring.go calls SetDownloadFirmwareTransport on the CcuBackend after construction. |
 | TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring pins that ccu_wiring.go wires the per-central rename hook via SetRenameDeviceFn. |
@@ -369,6 +370,7 @@ Guards without a doc comment: 7 of 365.
 | TestMatterSessionListerIsWiredFromBothManagers | wiring_pins/matter_session_diagnostics_test.go | TestMatterSessionListerIsWiredFromBothManagers pins the composition root's half of the session-diagnostics surface. |
 | TestPin_MCPFleetSeams_WiredInDaemon | wiring_pins/mcp_fleet_seams_test.go | TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every fleet read seam to the MCP server. |
 | TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
+| TestPin_SectionApplier_WiredIntoTheRESTRouter | wiring_pins/section_applier_test.go | TestPin_SectionApplier_WiredIntoTheRESTRouter pins that the daemon gives the config-save path something to apply a section with. |
 | TestCSRFDefaultEnabled | wiring_pins/security_csrf_origin_test.go | TestCSRFDefaultEnabled pins that the config default has CSRFEnabled set to true. |
 | TestCSRFExplicitFalseOptOut | wiring_pins/security_csrf_origin_test.go | TestCSRFExplicitFalseOptOut pins that setting CSRFEnabled to false in the config (opt-out path for API-token deployments) is honoured by CSRFIsEnabled. |
 | TestWSHandlerAcceptsAllowedOrigins | wiring_pins/security_csrf_origin_test.go | TestWSHandlerAcceptsAllowedOrigins pins that ws.Handler takes an allowedOrigins parameter (the third argument). |

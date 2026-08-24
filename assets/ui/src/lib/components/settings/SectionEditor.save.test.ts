@@ -11,6 +11,8 @@ const mockPutConfigSection = vi.fn();
 const mockGetConfigSection = vi.fn();
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
+const mockToastWarn = vi.fn();
+const mockT = vi.fn((key: string, _params?: unknown) => key);
 
 // ---------------------------------------------------------------------------
 // Mocks — registered before any component import
@@ -37,6 +39,7 @@ vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: {
     error: (...args: unknown[]) => mockToastError(...args),
     success: (...args: unknown[]) => mockToastSuccess(...args),
+    warn: (...args: unknown[]) => mockToastWarn(...args),
   },
 }));
 
@@ -70,7 +73,7 @@ vi.mock("$lib/stores/restartPending.svelte", () => ({
 }));
 
 vi.mock("$lib/i18n", () => ({
-  t: (key: string, _params?: unknown) => key,
+  t: (key: string, params?: unknown) => mockT(key, params),
 }));
 
 // ---------------------------------------------------------------------------
@@ -137,6 +140,7 @@ beforeEach(() => {
     version: 1,
     updated_at: "",
     restart_required: false,
+    applied: true,
   });
 });
 
@@ -753,5 +757,61 @@ describe("SectionEditor.save — secret payload contract", () => {
     const auth = (payload.auth ?? {}) as Record<string, unknown>;
     expect("users" in auth).toBe(false);
     expect("tokens" in auth).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The save reports whether the running daemon took the change
+//
+// `north.mqtt` carries no restart-required field, so the schema and the
+// save response both tell the operator the change is live. It was not:
+// the running bridge bakes the topic base and the plane toggles in at
+// construction, and the section a save writes is only re-read at boot.
+// The daemon applies the section now; when that apply fails the operator
+// has to be told, or the save looks exactly like the defect it fixes.
+// ---------------------------------------------------------------------------
+
+describe("SectionEditor.save — live apply feedback", () => {
+  it("reports a plain success when the daemon took the change", async () => {
+    await renderAndSave([PUBLIC_URL_FIELD], async (container) => {
+      const urlInput = container.querySelector(
+        'input[type="text"]',
+      ) as HTMLInputElement;
+      await fireEvent.input(urlInput, {
+        target: { value: "https://new.example.com" },
+      });
+    });
+
+    expect(mockToastSuccess).toHaveBeenCalledWith("settings.saved");
+    expect(mockToastWarn).not.toHaveBeenCalled();
+  });
+
+  it("warns instead of claiming success when the live apply failed", async () => {
+    mockPutConfigSection.mockResolvedValue({
+      section: "north.rest",
+      version: 2,
+      updated_at: "",
+      restart_required: false,
+      applied: false,
+      apply_error: "broker refused the connection",
+    });
+
+    await renderAndSave([PUBLIC_URL_FIELD], async (container) => {
+      const urlInput = container.querySelector(
+        'input[type="text"]',
+      ) as HTMLInputElement;
+      await fireEvent.input(urlInput, {
+        target: { value: "https://new.example.com" },
+      });
+    });
+
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(mockToastWarn).toHaveBeenCalledWith("settings.saved_not_applied");
+    // The reason has to reach the message, not just the message key: an
+    // operator told only "not applied" cannot tell a refused broker from
+    // a section nothing can take live.
+    expect(mockT).toHaveBeenCalledWith("settings.saved_not_applied", {
+      err: "broker refused the connection",
+    });
   });
 });

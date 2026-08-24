@@ -69,7 +69,7 @@ func putSection(svc ConfigAdminService, section, body string) *httptest.Response
 	rctx.URLParams.Add("section", section)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
-	PutConfigSection(svc, nil).ServeHTTP(w, req)
+	PutConfigSection(svc, nil, nil).ServeHTTP(w, req)
 	return w
 }
 

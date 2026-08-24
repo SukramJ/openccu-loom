@@ -49,32 +49,6 @@ func TestDBReturnsNilWhenNotWired(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AcceptDeviceInbox
-// ---------------------------------------------------------------------------
-
-func TestAcceptDeviceInboxUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	if err := c.AcceptDeviceInbox(context.Background(), "addr"); err == nil {
-		t.Fatal("expected error when fn not wired")
-	}
-}
-
-func TestAcceptDeviceInboxCallsWiredFn(t *testing.T) {
-	c := newTestCentral(t)
-	var called string
-	c.SetAcceptInboxFn(func(_ context.Context, addr string) error {
-		called = addr
-		return nil
-	})
-	if err := c.AcceptDeviceInbox(context.Background(), "DEV0001"); err != nil {
-		t.Fatal(err)
-	}
-	if called != "DEV0001" {
-		t.Fatalf("expected DEV0001, got %q", called)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // CreateBackup
 // ---------------------------------------------------------------------------
 
@@ -387,22 +361,6 @@ func TestRegisterCentralServiceRenameDeviceSucceeds(t *testing.T) {
 	}, hmenum.CommandPriorityHigh)
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestRegisterCentralServiceAcceptDeviceInboxMissingAddressErrors(t *testing.T) {
-	c := newTestCentral(t)
-	err := c.Invoke(context.Background(), "accept_device_inbox", map[string]any{}, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Fatal("expected error for missing address")
-	}
-}
-
-func TestRegisterCentralServiceAcceptDeviceInboxUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	err := c.Invoke(context.Background(), "accept_device_inbox", map[string]any{"address": "DEV0001"}, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Fatal("expected error when AcceptInboxFn is not wired")
 	}
 }
 

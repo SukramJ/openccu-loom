@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.7.0
+  version: 7.8.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6481,12 +6481,27 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [section, version, updated_at, restart_required]
+                required: [section, version, updated_at, restart_required, applied]
                 properties:
                   section: { type: string }
                   version: { type: integer, format: int64 }
                   updated_at: { type: string, format: date-time }
                   restart_required: { type: boolean }
+                  applied:
+                    type: boolean
+                    description: >
+                      Whether the running daemon took the change without a
+                      restart. False is not an error on its own: most sections
+                      have no subsystem that can rebuild itself, and the value
+                      simply takes effect at the next restart. It is false with
+                      an `apply_error` when a subsystem that could have taken it
+                      refused.
+                  apply_error:
+                    type: string
+                    description: >
+                      Present only when a live apply was attempted and failed.
+                      The section is persisted regardless and takes effect at the
+                      next restart.
         "400":
           $ref: "#/components/responses/BadRequest"
         "500": { $ref: "#/components/responses/InternalError" }

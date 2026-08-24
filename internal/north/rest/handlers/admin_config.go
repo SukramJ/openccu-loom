@@ -617,8 +617,45 @@ func GetConfigSection(svc ConfigAdminService) http.HandlerFunc {
 	}
 }
 
-// PutConfigSection validates and persists a section.
-func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFunc {
+// SectionApplier hands a freshly persisted section to the subsystem it
+// configures, so a save takes effect without a restart. It reports
+// whether the running daemon actually took the change.
+//
+// It exists because "persisted" and "in effect" are two different facts
+// and the config surface used to report only the first. `north.mqtt`
+// carries no restart-required field, so the schema and the PUT response
+// both told an operator the change was live — while the running bridge
+// kept the topic base and plane toggles it was constructed with, and the
+// only path that rebuilds it (the file watcher's hot reload) never fires
+// for a section the SPA writes straight into the database.
+//
+// A section no subsystem can take live is not an error: ApplySection
+// returns (false, nil) and the caller is told the value waits for a
+// restart.
+type SectionApplier interface {
+	ApplySection(ctx context.Context, section configstore.Section) (applied bool, err error)
+}
+
+// applySaved runs the live-apply step for a section that was just
+// persisted, and renders the two fields the response reports it with.
+//
+// A failure here never fails the save. The value is stored and will
+// apply at the next restart either way; what changes is whether the
+// operator is told that is what happened.
+func applySaved(ctx context.Context, applier SectionApplier, section configstore.Section) (applied bool, applyErr string) {
+	if applier == nil {
+		return false, ""
+	}
+	ok, err := applier.ApplySection(ctx, section)
+	if err != nil {
+		return false, err.Error()
+	}
+	return ok, ""
+}
+
+// PutConfigSection validates and persists a section, then applies it to
+// the running daemon when a subsystem can take it live.
+func PutConfigSection(svc ConfigAdminService, rec audit.Recorder, applier SectionApplier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -734,12 +771,18 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 				Note:      "section=" + string(section) + " version=" + itoa(row.Version),
 			})
 		}
-		JSON(w, http.StatusOK, map[string]any{
+		applied, applyErr := applySaved(r.Context(), applier, section)
+		out := map[string]any{
 			"section":          string(section),
 			"version":          row.Version,
 			"updated_at":       row.UpdatedAt,
 			"restart_required": restartRequired,
-		})
+			"applied":          applied,
+		}
+		if applyErr != "" {
+			out["apply_error"] = applyErr
+		}
+		JSON(w, http.StatusOK, out)
 	}
 }
 

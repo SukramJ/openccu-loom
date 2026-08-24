@@ -20,7 +20,6 @@ import (
 type serviceBundle struct {
 	mu sync.RWMutex
 
-	acceptInboxFn  func(ctx context.Context, address string) error
 	createBackupFn func(ctx context.Context) ([]byte, error)
 	renameDeviceFn func(ctx context.Context, address, name string) error
 	// deviceIngestFn materialises announced device descriptions into the

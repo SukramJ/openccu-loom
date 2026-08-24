@@ -8,9 +8,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The round-5 measures, finished. The composition root now states its wiring as
 data a test can read, the MCP/REST parity backlog is empty, and the seventeen
-contract guards that stayed green when what they protect was removed either
-bite or are gone. The north-bound API contract moves to **7.7.0** — additive
-only: one admin-only diagnostics endpoint.
+contract guards that stayed green when what they protect was removed now
+either bite or are gone. The two findings round 4 carried forward are closed
+too — a backup restore that left the daemon serving the old configuration, and
+an MQTT save that reported success and changed nothing. The
+north-bound API contract moves to **7.8.0** — additive only: one admin-only
+diagnostics endpoint, and two fields on the config-section save response.
 
 ### Added
 
@@ -48,6 +51,14 @@ only: one admin-only diagnostics endpoint.
 - The `hub` REST domain is now recorded as a deliberate MCP exemption rather
   than a backlog item: it is a single-fetch aggregate for clients building hub
   singleton entities, and every part of it is already projected individually.
+
+- `central.Unit` no longer registers an `accept_device_inbox` service method.
+  The hook behind it had no production caller, so the only path that could
+  reach it answered "not wired"; the live accept runs through
+  `DeviceAdminDomain.AcceptInboxDevice`. The central's remaining
+  `payload.Source` implementation stays — ADR 0007 makes it mandatory — and now
+  says plainly that nothing dispatches central-level services yet, instead of
+  naming adapters that do not read it.
 
 ### Fixed
 

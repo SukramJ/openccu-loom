@@ -957,29 +957,6 @@ func (u *Unit) removeDevice(address string, teardown bool) bool {
 
 // --- Service Methods ---
 
-// AcceptDeviceInbox dispatches an "accept device from inbox" command to the
-// configured hub-side handler. The caller wires `AcceptInboxFn` from the
-// corresponding REST/WS adapter once the JSON-RPC session is up.
-//
-// Returns an error when no handler is wired yet (e.g. before Start).
-func (u *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
-	u.services.mu.RLock()
-	fn := u.services.acceptInboxFn
-	u.services.mu.RUnlock()
-	if fn == nil {
-		return errors.New("central: AcceptDeviceInbox not wired")
-	}
-	return fn(ctx, address)
-}
-
-// SetAcceptInboxFn wires the inbox-accept handler. Pass nil to
-// detach.
-func (u *Unit) SetAcceptInboxFn(fn func(ctx context.Context, address string) error) {
-	u.services.mu.Lock()
-	u.services.acceptInboxFn = fn
-	u.services.mu.Unlock()
-}
-
 // SetDeviceIngestFn wires the materialiser that turns announced device
 // descriptions into domain devices. The wiring installs it once the
 // device pipeline and the per-interface backends exist. Pass nil to

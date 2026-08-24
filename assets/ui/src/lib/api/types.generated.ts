@@ -16357,6 +16357,10 @@ export interface operations {
                         /** Format: date-time */
                         updated_at: string;
                         restart_required: boolean;
+                        /** @description Whether the running daemon took the change without a restart. False is not an error on its own: most sections have no subsystem that can rebuild itself, and the value simply takes effect at the next restart. It is false with an `apply_error` when a subsystem that could have taken it refused. */
+                        applied: boolean;
+                        /** @description Present only when a live apply was attempted and failed. The section is persisted regardless and takes effect at the next restart. */
+                        apply_error?: string;
                     };
                 };
             };

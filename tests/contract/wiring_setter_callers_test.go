@@ -33,7 +33,6 @@ var wiringSettersWithoutCaller = map[string]string{
 
 	// Verified: the surface around the seam has no caller either, so the
 	// seam is dead along with the feature it would have fed.
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetAcceptInboxFn":                                       "reached only through ServiceRegistry.Invoke, which production never calls; the real accept-inbox path is DeviceAdminDomain.AcceptInboxDevice",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetDeviceNameOverrideChecker": "RenameNewDeviceFromOverride has no production caller either; documented in by_design.md as not wired for 0.1.0",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetRecorder":                  "its three consumers — InitialPull, RefreshAfterPair, RefreshAfterUnpair — have no production caller either, so the telemetry gap has no live effect",
 	"github.com/SukramJ/openccu-loom/internal/central/adapter.BackupAdapter.SetRestorer":                           "restore resolves per central via SetRestorerForCentral, and an ownerless archive now resolves to the sole configured central; this legacy field is only an explicit override",

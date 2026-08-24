@@ -1763,6 +1763,12 @@ export const api = {
       version: number;
       updated_at: string;
       restart_required: boolean;
+      // Whether the running daemon took the change without a restart.
+      // False on its own is not a failure — most sections have no
+      // subsystem that can rebuild itself. It is false with an
+      // apply_error when one that could have refused.
+      applied: boolean;
+      apply_error?: string;
     }>(`/config/sections/${encodeURIComponent(section)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
