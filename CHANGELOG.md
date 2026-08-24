@@ -8,6 +8,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The exported schemas had no freshness gate**, so 71 of the 73 enums the
+  Python types package is generated from could drift silently: a new wire value
+  reached neither `assets/schemas/*.json` nor any client until somebody ran
+  `make export-schemas` by hand, and nothing failed meanwhile. CI now
+  regenerates and fails on a diff — the SPA's own generated types have carried
+  that gate since they drifted a whole feature behind.
+
+- **Three wiring pins were satisfied by `Field: nil`** — the field spelled out
+  and the collaborator not handed over, which is exactly the state a pin exists
+  to rule out. They asserted that a key appeared, not that anything arrived.
+
+- **`AllChannelKeys` and `channelKeyBitmask` were two hand-maintained copies of
+  the same twenty-four schedule channel keys**, with nothing connecting them. A
+  ninth actor in the loop, or one renamed key, and the daemon offers a channel
+  it cannot lock — with no failure anywhere; the schedule just stops locking
+  one channel. Now pinned in both directions.
+
+- Two exemptions in the contract ledgers were hiding missing wiring seams
+  rather than describing absent ones: an add-on update's progress never reached
+  a WebSocket client, and no central polled the CCU for device firmware. Both
+  declare a seam now.
+
 - **58 request and response bodies were written inline in the OpenAPI paths,
   so no generated client could see them.** Every client produced from this
   document — `openccu-loom-types` among them — is generated from

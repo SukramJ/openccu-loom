@@ -70,7 +70,11 @@ const (
 	ReasonReadOnly HiddenReason = "read_only"
 	// ReasonUnknown — no known rule matched. A candidate carrying this
 	// reason means the classifier has drifted from the suppression
-	// passes; TestEveryHiddenCandidateHasAKnownReason fails on it.
+	// passes. The check that fails on it is the
+	// `every_candidate_has_a_known_reason` subtest of
+	// TestVisibilityCandidateGroups (tests/integration), which runs only
+	// under `-tags=integration` — so a unit run stays green while the
+	// drift is present.
 	ReasonUnknown HiddenReason = "unknown"
 )
 

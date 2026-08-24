@@ -130,6 +130,27 @@ client hold it".
 the pass reports it. If it does not, the pass is measuring the spec rather than
 the consumer, which is the mistake being audited.
 
+#### Done — the transform that drops silently is the enum export
+
+Four surfaces traced end to end. REST, WS payloads and the SPA types arrive;
+the enums do too, but **nothing keeps them arriving**. `assets/schemas/*.json`
+is what the Python types package is generated from, and only two of the 73
+exported enums have a parity test. For the other 71 a new wire value reached
+neither the JSON nor any client until somebody ran `make export-schemas` by
+hand, and nothing failed in the meantime — the SPA's own generated types carry
+exactly this gate, added after they had drifted a whole feature behind.
+
+A CI step now regenerates and fails on a diff. Negative control: adding one
+`RegaScript` constant makes `enums.json` diverge, and the step catches it.
+
+Three smaller holes, recorded rather than closed: the `display_value` field-
+drift mechanism is closed for 35 of 43 broadcast payloads and eight are
+documented exceptions; 104 of 136 WS commands declare no result while their
+handler publishes one, and the contract test justifies that vocabulary by
+naming "clients that want to generate type-safe wrappers" that do not exist;
+and `assets/schemas/types.json` carries dangling `$ref`s to definitions the
+document does not contain — decorative and broken, with no consumer today.
+
 ### M3 — measure the names that claim completeness
 
 `fullyWiredRouterDeps` filled 68 of 140 fields, and a test built on it was
@@ -145,6 +166,26 @@ in an afternoon.
 **Negative control.** Include one identifier whose name is known to be accurate;
 a method that flags everything is measuring its own suspicion.
 
+#### Done — eleven names, and the plan's own count was wrong
+
+The plan said 45. That number counted test helpers and local variables; in
+production code there are eleven, and four of those turned out to live in
+`_test.go` files after all. The estimate was made from a grep and never
+checked — the same failing this measure exists to find, in the document
+proposing it.
+
+Of the seven real ones, six hold and are guarded. **`AllChannelKeys` rested on
+nothing:** it generates twenty-four keys from a loop while `channelKeyBitmask`
+writes the same twenty-four out by hand next to their bits, with nothing
+connecting them. A ninth actor in the loop, or one renamed key, and the daemon
+offers a channel it cannot lock — no failure anywhere, the schedule just stops
+locking one channel. Now pinned in both directions.
+
+Also found: `reason.go` names `TestEveryHiddenCandidateHasAKnownReason` as the
+check that fails on a drifted classifier. No such test exists; the real one is
+a subtest that runs only under `-tags=integration`, so a unit run stays green
+while the drift is present. The comment says that now.
+
 ### M4 — mutation-test the guards round 5 added
 
 Round 5's M1 mutation-tested all 359 contract guards: **17 did not bite**. The
@@ -157,6 +198,23 @@ distrust the round-5 work; it is the reason the measurement exists.
 **Method.** As M1 did — remove the production line each guard names, observe,
 restore with `cp`, confirm byte-identical. The bite proof is the artefact, not a
 green run.
+
+#### Done — 13 of 13 bite, and one bites less than it looked
+
+Better than the base rate predicted: none of the new cohort is decorative. One
+guard (`TestValueSemanticsChangesAreWellFormed`) was not measured and is
+recorded as unmeasured rather than as passing.
+
+The finding is a limitation the mutation pass surfaced rather than a dead
+guard. **The three wiring pins were satisfied by `Field: nil`** — the field
+spelled out, the collaborator not handed over, which is precisely the state a
+pin exists to rule out. `MustFindStructLiteralField` checked that the key
+appeared, not that anything arrived. Fixed, and the pins now fail on a nil
+value.
+
+One methodological note worth keeping: a mutation that breaks the build prints
+`[build failed]`, which reads as red and measures nothing. A bite proof has to
+compile.
 
 ## What this plan deliberately does not do
 

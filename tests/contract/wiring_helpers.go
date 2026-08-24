@@ -665,6 +665,7 @@ func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName 
 	// caller that writes "Deps" still matches "rest.Deps".
 	qualified := strings.Contains(structName, ".")
 	found := false
+	nilled := false
 	for _, f := range parseFiles(t, callerFile) {
 		ast.Inspect(f, func(n ast.Node) bool {
 			if found {
@@ -687,10 +688,22 @@ func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName 
 				if !ok {
 					continue
 				}
-				if id, ok := kv.Key.(*ast.Ident); ok && id.Name == fieldName {
-					found = true
+				id, ok := kv.Key.(*ast.Ident)
+				if !ok || id.Name != fieldName {
+					continue
+				}
+				// `Field: nil` is the field being present and the
+				// collaborator not being handed over — the exact state a
+				// pin exists to rule out. Counting it as found makes the
+				// pin assert the spelling of a key rather than a wiring
+				// fact, and all three MCP/backup/section pins were
+				// satisfiable that way until this check existed.
+				if v, isIdent := kv.Value.(*ast.Ident); isIdent && v.Name == "nil" {
+					nilled = true
 					return false
 				}
+				found = true
+				return false
 			}
 			return true
 		})
@@ -698,7 +711,14 @@ func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName 
 			break
 		}
 	}
-	if !found {
+	switch {
+	case nilled:
+		t.Errorf(
+			"wiring pin: %s{%s: nil} in %s — the field is spelled out and the collaborator is "+
+				"not handed over, which is the state the pin exists to rule out",
+			structName, fieldName, callerFile,
+		)
+	case !found:
 		t.Errorf(
 			"wiring pin: struct literal %s{%s: ...} not found in %s",
 			structName, fieldName, callerFile,
