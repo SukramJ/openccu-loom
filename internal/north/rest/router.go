@@ -195,6 +195,10 @@ type Deps struct {
 	// (`GET /config/schema`, `GET|PUT|DELETE /config/{section}`).
 	// Nil disables all of them with 503.
 	ConfigAdmin handlers.ConfigAdminService
+	// SectionApplier hands a saved section to the subsystem it configures
+	// so the change takes effect without a restart. Nil means every save
+	// answers `applied: false` — honest, and the pre-existing behaviour.
+	SectionApplier handlers.SectionApplier
 	// CentralCounter reports how many CCUs the daemon serves. Two shipped
 	// surface defaults depend on it: Home Assistant addresses one CCU per
 	// config entry, so on a multi-CCU daemon it cannot own the config
@@ -509,6 +513,10 @@ type Deps struct {
 	// (`GET /diagnostics/reliability`, `GET /diagnostics/eventbus/tap`).
 	// Read-only; nil disables them.
 	Introspect handlers.DiagnosticsIntrospectService
+	// WiringManifest backs `GET /diagnostics/wiring` — the seams the
+	// running daemon declared as it wired them (ADR 0065).
+	// *central.Registry satisfies it through Manifest().
+	WiringManifest handlers.WiringManifestReader
 	// RSSIInfo backs `GET /diagnostics/rssi` — the CCU's pairwise RF
 	// reception matrix. Read-only; nil disables the endpoint.
 	RSSIInfo handlers.RSSIMatrixService
@@ -1156,6 +1164,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.RSSIInfo != nil {
 				pr.With(admin).Get("/diagnostics/rssi", handlers.DiagnosticsRSSI(d.RSSIInfo))
 			}
+			// Mounted unconditionally: an empty list is the answer this
+			// endpoint exists to be able to give (ADR 0065), so a nil
+			// reader must not turn into a 404 that reads as "this daemon
+			// does not have the feature".
+			pr.With(admin).Get("/diagnostics/wiring", handlers.DiagnosticsWiring(d.WiringManifest))
 			// Composite diagnostics dump — single artefact for support /
 			// agent escalation. Anonymises by default; pass
 			// ?anonymize=0 explicitly for raw output.
@@ -1339,7 +1352,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// topology they describe is not.
 				pr.With(admin).Get("/config/effective", handlers.GetEffectiveConfig(d.ConfigAdmin))
 				pr.With(admin).Get("/config/sections/{section}", handlers.GetConfigSection(d.ConfigAdmin))
-				pr.With(admin).Put("/config/sections/{section}", handlers.PutConfigSection(d.ConfigAdmin, d.AuditRecorder))
+				pr.With(admin).Put("/config/sections/{section}", handlers.PutConfigSection(d.ConfigAdmin, d.AuditRecorder, d.SectionApplier))
 				pr.With(admin).Delete("/config/sections/{section}", handlers.DeleteConfigSection(d.ConfigAdmin, d.AuditRecorder))
 				// Per-field reset: revert a single config field to its default.
 				pr.With(admin).Delete("/config/fields/{path}", handlers.ResetConfigField(d.ConfigAdmin, d.AuditRecorder))

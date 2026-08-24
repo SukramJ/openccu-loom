@@ -11,45 +11,55 @@ import (
 
 // TestPin_BuildHubUpdateDiscovery_CalledInPublisher pins that
 // hub_mqtt_publisher.go calls BuildHubUpdateDiscovery when publishing hub
-// firmware-update discovery.
+// firmware-update discovery. This is a method call on the discovery
+// builder (disco.BuildHubUpdateDiscovery), not a package function, so it
+// is pinned by receiver + method name.
 func TestPin_BuildHubUpdateDiscovery_CalledInPublisher(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_mqtt_publisher.go",
-		"internal/north/mqtt", "BuildHubUpdateDiscovery",
-	)
-}
-
-// TestPin_PublishHubUpdate_CalledInPublisher pins that hub_mqtt_publisher.go
-// calls PublishHubUpdate to push the CCU firmware-update state to MQTT.
-func TestPin_PublishHubUpdate_CalledInPublisher(t *testing.T) {
-	contract.MustFindCallerInFile(
-		t,
-		"internal/central/adapter/hub_mqtt_publisher.go",
-		"internal/north/mqtt", "PublishHubUpdate",
+		"disco", "BuildHubUpdateDiscovery",
 	)
 }
 
 // TestPin_BuildInboxDiscovery_CalledInPublisher pins that
 // hub_mqtt_publisher.go calls BuildInboxDiscovery when publishing hub
 // discovery messages.  Without this call the inbox-count sensor would
-// disappear from Home Assistant discovery.
+// disappear from Home Assistant discovery. This is a method call on the
+// discovery builder (disco.BuildInboxDiscovery), not a package function,
+// so it is pinned by receiver + method name.
 func TestPin_BuildInboxDiscovery_CalledInPublisher(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_mqtt_publisher.go",
-		"internal/north/mqtt", "BuildInboxDiscovery",
+		"disco", "BuildInboxDiscovery",
+	)
+}
+
+// TestPin_PublishHubUpdate_CalledInPublisher pins that hub_mqtt_publisher.go
+// calls PublishHubUpdate to push the CCU firmware-update state to MQTT.
+//
+// A method call on the Bridge, so it pins the receiver rather than a package:
+// `b` is the Bridge throughout this file, and the receiver matcher compares
+// whole expression segments, so the pin cannot be satisfied by some other
+// variable whose name merely ends in b.
+func TestPin_PublishHubUpdate_CalledInPublisher(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/hub_mqtt_publisher.go",
+		"b", "PublishHubUpdate",
 	)
 }
 
 // TestPin_PublishHubConnectionLatency_CalledInPublisher pins that
 // hub_mqtt_publisher.go calls PublishHubConnectionLatency on latency events.
 // Removing the call would silently drop per-interface latency metrics from
-// the MQTT plane.
+// the MQTT plane. Method call on the Bridge — see the note above on why the
+// short receiver still discriminates.
 func TestPin_PublishHubConnectionLatency_CalledInPublisher(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_mqtt_publisher.go",
-		"internal/north/mqtt", "PublishHubConnectionLatency",
+		"b", "PublishHubConnectionLatency",
 	)
 }

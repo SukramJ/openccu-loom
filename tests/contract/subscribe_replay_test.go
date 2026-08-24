@@ -16,6 +16,7 @@
 package contract
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -261,20 +262,52 @@ func TestSubscribeReplay_Climate_ValveState(t *testing.T) {
 
 // ─── Lock ────────────────────────────────────────────────────────────────────
 
-// TestSubscribeReplay_Lock_BoolState verifies that after Subscribe() an RF lock
-// whose channel already carries an observed STATE has IsRefreshed() == true.
-// Lock's hot-path fields are read directly from the shared wire DP; the
-// contract is that at least one OnAnyUpdate hook is registered per slot and
-// ReplayCurrentValue is called — making IsRefreshed() true is the observable
-// outcome.
+// updateCallbackCount reports how many update callbacks are currently
+// registered on a *generic.DataPoint[T] (reached through its exported
+// DataPoint field on the concrete wire-DP wrapper). Lock and Siren keep no
+// aggregate cache of their own — State()/IsActive() read the wire DP
+// directly — so Subscribe's only observable contract is that it registers
+// an OnAnyUpdate hook on the wire DP (the EventBridge relies on that
+// registration existing to re-fire publishCustomDPState on every wire-side
+// change). The callback slice is unexported, but reflection over its
+// length and element kind does not require CanInterface/CanSet, so this
+// reads the live count without touching production code.
+//
+// Nil slots are skipped deliberately: unsubscribing nils a slot in place
+// rather than shortening the slice (internal/model/generic/datapoint.go,
+// the unsubscribe closure OnUpdate returns), so a plain Len() would count a hook that has
+// already been cancelled and report a registration that can never fire.
+func updateCallbackCount(t *testing.T, dataPoint any) int {
+	t.Helper()
+	v := reflect.ValueOf(dataPoint)
+	if v.Kind() != reflect.Pointer || v.IsNil() {
+		t.Fatalf("updateCallbackCount: want non-nil pointer, got %T", dataPoint)
+	}
+	f := v.Elem().FieldByName("updateCallbacks")
+	if !f.IsValid() {
+		t.Fatalf("updateCallbackCount: %T has no updateCallbacks field", dataPoint)
+	}
+	live := 0
+	for i := range f.Len() {
+		if !f.Index(i).IsNil() {
+			live++
+		}
+	}
+	return live
+}
+
+// TestSubscribeReplay_Lock_RFRefreshed verifies that Lock.Subscribe registers
+// an OnAnyUpdate hook on the RF lock's bool STATE wire DP. Lock keeps no
+// aggregate cache of its own — State()/IsRefreshed() read the wire DP
+// directly — so the replay-on-subscribe invariant the other custom DPs pin
+// does not apply here; what Subscribe actually promises is the callback
+// registration the EventBridge depends on to re-fire on every wire-side
+// change (see Lock.Subscribe's doc comment).
 func TestSubscribeReplay_Lock_RFRefreshed(t *testing.T) {
 	t.Parallel()
 
 	ch := makeCh("LOCK0001:1", "KEYMATIC")
 	stateDP := putBoolDP2(ch, hmenum.ParameterState)
-
-	// Pre-populate STATE (false = locked, true = unlocked).
-	stateDP.OnEvent(true)
 
 	l := lock.New(lock.Config{
 		Channel:      ch,
@@ -282,24 +315,27 @@ func TestSubscribeReplay_Lock_RFRefreshed(t *testing.T) {
 		Capabilities: custom.LockCapabilities{},
 	})
 
-	// Before Subscribe no hook has been registered; IsRefreshed reports via
-	// the underlying wire DP's observed flag — which is true because we called
-	// OnEvent. But the contract is that Subscribe still calls ReplayCurrentValue
-	// without panicking and returns a valid unsub closure.
+	before := updateCallbackCount(t, stateDP.DataPoint)
+
 	unsub := subscribeAndUnsub(t, l, ch)
 	defer unsub()
 
-	// The wire DP was already observed; IsRefreshed must be true after Subscribe.
-	if !l.IsRefreshed() {
-		t.Error("Lock.IsRefreshed must be true after Subscribe when STATE was pre-populated")
+	after := updateCallbackCount(t, stateDP.DataPoint)
+	if after != before+1 {
+		t.Errorf("Lock.Subscribe must register one OnAnyUpdate hook on the STATE wire DP; callback count %d -> %d", before, after)
 	}
 }
 
 // ─── Siren ───────────────────────────────────────────────────────────────────
 
-// TestSubscribeReplay_Siren_AcousticActive verifies that a Siren whose channel
-// already carries observed ACOUSTIC_ALARM_ACTIVE has IsRefreshed() == true
-// after Subscribe — confirming the replay path fired without panic.
+// TestSubscribeReplay_Siren_AcousticActive verifies that Siren.Subscribe
+// registers an OnAnyUpdate hook on the ACOUSTIC_ALARM_ACTIVE wire DP. Siren
+// keeps no aggregate cache either — IsActive()'s observed flag comes
+// straight from the wire DP, and Siren.Subscribe never calls
+// ReplayCurrentValue for any field — so, like Lock, the replay-on-subscribe
+// invariant does not apply; what Subscribe actually promises is the
+// callback registration its own doc comment names (the OnAnyUpdate hooks
+// exist "so the channel records an OnAnyUpdate registration").
 func TestSubscribeReplay_Siren_AcousticActive(t *testing.T) {
 	t.Parallel()
 
@@ -308,20 +344,19 @@ func TestSubscribeReplay_Siren_AcousticActive(t *testing.T) {
 
 	acousticDP := putBinDP(ch, hmenum.ParameterAcousticAlarmActive)
 
-	// Pre-populate — alarm active.
-	acousticDP.OnEvent(true)
-
 	s := siren.New(siren.Config{
 		Channel:      ch,
 		Capabilities: custom.SirenCapabilities{SupportsAcoustic: true},
 	})
 
+	before := updateCallbackCount(t, acousticDP.DataPoint)
+
 	unsub := subscribeAndUnsub(t, s, ch)
 	defer unsub()
 
-	_, observed := s.IsActive()
-	if !observed {
-		t.Error("Siren.IsActive observed must be true after Subscribe when ACOUSTIC_ALARM_ACTIVE was pre-populated")
+	after := updateCallbackCount(t, acousticDP.DataPoint)
+	if after != before+1 {
+		t.Errorf("Siren.Subscribe must register one OnAnyUpdate hook on the ACOUSTIC_ALARM_ACTIVE wire DP; callback count %d -> %d", before, after)
 	}
 }
 

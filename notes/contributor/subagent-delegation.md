@@ -141,3 +141,44 @@ wiring](./engineering-rules.md#a-test-that-constructs-the-collaboration-proves-n
 
 ---
 
+
+## A fix wave is a change wave, and nothing measures it
+
+Audits measure the codebase. Between audits, the thing that changes the
+codebase most is the fix wave that follows the previous audit — and nothing
+measures *that*.
+
+The numbers are not comfortable. The round-4 tail put six significant defects
+into 43 fixes, two of them worse than the finding they closed: a light that no
+longer turned on at all, and a rename that emptied the name out of every
+HA-Discovery device block. The round before it left 13 half-applied fixes —
+the sibling call site forgotten while the named one was repaired.
+
+Every one of those six was caught before merge, and always by the same thing:
+an independent agent whose job was to refute the fix, not to confirm it. None
+was caught by the implementer, and none by a green test run.
+
+So a fix batch carries three obligations beyond the ordinary brief:
+
+**An adversarial verifier per batch.** Not a reviewer — a refuter. Its brief
+says the fix is a claim and asks it to find the case where the claim fails. It
+re-runs the bite proof itself rather than reading the implementer's, because a
+bite proof is exactly the artefact an implementer is motivated to describe
+generously. Six for six is the record so far.
+
+**A sibling-site check.** "Does this same shape exist anywhere else?" is one
+grep, and it is the question the 13 half-applied fixes did not ask. A fix that
+repairs the reported line and leaves its twin is worse than none: the class now
+looks addressed.
+
+**"What could your fix make worse?" in the brief.** A batch optimises for its
+own finding unless asked not to. One agent, told to stop a scoped cache clear
+from wiping the whole central's cache, achieved exactly that by suppressing the
+removal event — and silenced the seven other consumers that need it. It met its
+brief perfectly.
+
+None of this is free, and it should not be accounted as optional QA. Verifying
+a fix costs roughly what making it costs, and the alternative is paying it later
+at the price of a defect that shipped.
+
+---

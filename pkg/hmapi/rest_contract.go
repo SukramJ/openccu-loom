@@ -180,6 +180,28 @@ type ReliabilityState struct {
 	State        any    `json:"state,omitempty"`
 }
 
+// WiringSeam is one seam the running daemon declared while it wired it
+// (ADR 0065). It is the composition root's own account of what it
+// attached, served so an operator — and a test — can ask the daemon
+// what it wired instead of asking the source code what it looks like.
+//
+// Absence is the interesting case: a seam that is not in the list was
+// not wired by this process, whether the call was deleted, skipped by a
+// nil guard, or never reached.
+//
+// loom:reachable:reason="constructed by handlers.DiagnosticsWiring, the GET /diagnostics/wiring handler the router mounts; a DTO reached only through a chi route registration, which the analyzer cannot follow (its REST siblings sit in the same inventory)"
+type WiringSeam struct {
+	// Name is the stable identifier, `<subsystem>.<what>`.
+	Name string `json:"name"`
+	// Collaborator names the thing that was attached.
+	Collaborator string `json:"collaborator"`
+	// Phase is the ordering constraint relative to south-bound bring-up:
+	// `per-central`, `before-southbound` or `after-southbound`.
+	Phase string `json:"phase"`
+	// Why states what stops working when the seam is absent.
+	Why string `json:"why"`
+}
+
 // DiagnosticsEvent is one tapped event-bus record.
 //
 // Use of `any` for Event is justified here: the recorder taps every event

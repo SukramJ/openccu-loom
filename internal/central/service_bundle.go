@@ -7,7 +7,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -21,25 +20,12 @@ import (
 type serviceBundle struct {
 	mu sync.RWMutex
 
-	acceptInboxFn  func(ctx context.Context, address string) error
 	createBackupFn func(ctx context.Context) ([]byte, error)
 	renameDeviceFn func(ctx context.Context, address, name string) error
 	// deviceIngestFn materialises announced device descriptions into the
 	// domain model (channels, data points, custom data points, values).
 	// Both paths that turn an announcement into a device use it: the
 	// hot-plug callback and the operator accepting a deferred device.
-	deviceIngestFn func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error
-	// loadAndRefreshForInterfaceFn is the extended hook that scopes the
-	// reload to a single interface + paramset. When nil,
-	// [Unit.LoadAndRefreshDataPointDataForInterface] falls back to
-	// [Unit.LoadAndRefreshDataPointData].
-	loadAndRefreshForInterfaceFn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error
-	loadAndRefreshFn             func(ctx context.Context) error
-	saveFilesFn                  func(ctx context.Context) error
-	validateConfigFn             func(ctx context.Context) (SystemInfo, error)
-	// hubLogoutFn is the optional hook that performs the hub-side JSON-RPC
-	// logout during [Unit.Stop]. When nil the step is skipped (e.g. in tests
-	// or when the hub session was never established). Wire it via
-	// [Unit.SetHubLogoutFn] from the hub-wiring adapter after Login succeeds.
-	hubLogoutFn func(ctx context.Context) error
+	deviceIngestFn   func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error
+	loadAndRefreshFn func(ctx context.Context) error
 }

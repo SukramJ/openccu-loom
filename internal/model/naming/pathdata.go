@@ -26,10 +26,6 @@ const (
 	VirtDevSetPathRoot = "virtdev/set"
 	// VirtDevStatePathRoot is the read-side counterpart.
 	VirtDevStatePathRoot = "virtdev/status"
-	// ProgramSetPathRoot is the first segment for CCU-program DPs.
-	ProgramSetPathRoot = "program/set"
-	// ProgramStatePathRoot is the read-side counterpart.
-	ProgramStatePathRoot = "program/status"
 	// SysvarSetPathRoot is the first segment for system-variable DPs.
 	SysvarSetPathRoot = "sysvar/set"
 	// SysvarStatePathRoot is the read-side counterpart.
@@ -615,18 +611,6 @@ func NewDataPointPathData(centralName string, iface hmtypes.WireInterfaceID, add
 		ChannelNo: channelNo,
 		Bucket:    bucket,
 		Kind:      upperKind,
-	}
-}
-
-// NewProgramPathData builds the path data for a CCU-program data point.
-func NewProgramPathData(pid string) PathData {
-	if pid == "" {
-		return EmptyPathData
-	}
-	return PathData{
-		SetPath:   ProgramSetPathRoot + "/" + pid,
-		StatePath: ProgramStatePathRoot + "/" + pid,
-		Kind:      pid,
 	}
 }
 

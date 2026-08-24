@@ -368,17 +368,29 @@ func TestSecurityPlane_AttributePayloadsAreObjects(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
-	for _, topic := range []string{
-		securityPlaneBase + "/security/state",
-		securityPlaneBase + "/security/alarm",
-		securityPlaneBase + "/security/problem",
-		securityPlaneBase + "/security/class/smoke",
-		securityPlaneBase + "/security/zone/eg",
+	// enqueueJSON (security_reconcile.go) always injects a "state" key on
+	// top of whatever the builder returns, so `len(body) == 0` cannot
+	// distinguish a gutted builder from a working one — both payloads
+	// carry that one key. Assert the fields each builder actually owns
+	// instead: systemAttributes / hazardAttributes / faultAttributes /
+	// classAttributes / zoneAttributes in internal/north/mqtt/
+	// security_reconcile.go.
+	for _, tc := range []struct {
+		topic    string
+		wantKeys []string
+	}{
+		{securityPlaneBase + "/security/state", []string{"classes", "zones", "open_faults", "engine_healthy"}},
+		{securityPlaneBase + "/security/alarm", []string{"sources", "source_names", "count", "truncated", "total", "by_class"}},
+		{securityPlaneBase + "/security/problem", []string{"faults", "count", "truncated", "total"}},
+		{securityPlaneBase + "/security/class/smoke", []string{"sources", "source_names", "count", "truncated", "total", "known", "centrals", "since_ms", "severity"}},
+		{securityPlaneBase + "/security/zone/eg", []string{"sources", "source_names", "count", "truncated", "total", "by_class", "zone_id", "zone_name", "zone_state", "mode", "incident_id"}},
 	} {
-		rec := waitForSecurityTopic(t, pub, topic, nil)
-		body := securityPlaneJSONObject(t, topic, rec.payload)
-		if len(body) == 0 {
-			t.Errorf("%s: attribute payload unmarshalled to an empty object: %s", topic, rec.payload)
+		rec := waitForSecurityTopic(t, pub, tc.topic, nil)
+		body := securityPlaneJSONObject(t, tc.topic, rec.payload)
+		for _, key := range tc.wantKeys {
+			if _, ok := body[key]; !ok {
+				t.Errorf("%s: attribute payload missing key %q (builder dropped it): %s", tc.topic, key, rec.payload)
+			}
 		}
 	}
 }

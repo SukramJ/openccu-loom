@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -115,22 +116,51 @@ func TestMCPExemptionsAreStillReal(t *testing.T) {
 // has not been done yet does NOT belong here — it belongs in the
 // failure list until a tool exists.
 var restDomainsWithoutMCPTools = map[string]string{
-	"auth":     "credential exchange; an assistant authenticates through its own token, never by driving the login flow",
-	"me":       "the caller's own session identity; MCP callers are tokens, not sessions",
-	"sessions": "browser session lifecycle, meaningless to a token-authenticated client",
+	"auth": "credential exchange; an assistant authenticates through its own token, never by driving the login flow",
+	// Not session identity — /auth/me lives in the auth domain. This one is
+	// the per-user preferences store (GET/PUT/DELETE /me/preferences/{key}),
+	// which records how one operator arranged their own UI. An assistant has
+	// no UI to arrange and no user whose preferences are its own.
+	"me": "per-user UI preferences; an assistant has no UI state of its own",
+	// Not browser sessions: all four routes are the concurrent-edit lock, and
+	// MCP already projects it as open_edit_session / close_edit_session. The
+	// entry stays only because this guard matches domains by their REST noun
+	// and the MCP tools carry a different one; it is covered, not excluded.
+	"sessions": "the concurrent-edit lock, already projected as open_edit_session / close_edit_session",
 	"config":   "daemon configuration editing is an operator action with a secret-masking round trip (see CLAUDE.md); an assistant that can rewrite config can lock the operator out of the daemon",
 	"metrics":  "Prometheus scrape endpoint; a text exposition format is not a tool surface",
 	"ui":       "surface-profile registry for the SPA's own navigation, not a fleet capability",
-	"snapshot": "bulk state dump for backup tooling; the per-domain read tools cover the same ground in a shape an assistant can reason about",
+	// The per-domain tools cover most of it, but not all: the snapshot
+	// aggregates devices, hub AND interfaces, and interfaces has no read tool
+	// at all — it sits in restDomainsAwaitingMCPTools below. This entry is
+	// therefore only fully true once that backlog item lands.
+	"snapshot": "bulk state dump; the per-domain tools cover devices, hub and interfaces individually",
+	// A single-fetch convenience aggregate, so a client can build its hub
+	// singleton entities without orchestrating six requests. Every part of
+	// it is projected on its own — list_alarm_messages, list_service_messages,
+	// list_inbox, get_health — except install-mode, which is deliberately
+	// off the surface (see the `install-mode` entry). An assistant makes
+	// one call per thing it wants; the saving this endpoint exists for is
+	// a client's, not an assistant's.
+	"hub":      "single-fetch aggregate for clients building hub singleton entities; every part of it is already projected individually",
 	"diagrams": "SPA-side floor-plan editor state, not a fleet capability",
 	"install-mode": "pairing window control actuates the radio; deliberately kept off the assistant surface " +
 		"until the write posture for physical pairing is designed",
 	"users": "account administration; an assistant that can create or delete accounts can lock the operator " +
 		"out of the daemon, the same argument that keeps `config` off the surface",
-	"setup":   "one-time first-run wizard; there is no fleet to reason about before it completes",
-	"admin":   "daemon-level maintenance actions (reload, cache clear) whose blast radius is the daemon itself, not the fleet",
-	"i18n":    "translation catalogue for the SPA; static content, not a capability",
-	"webhook": "outbound notification configuration — config-shaped, and covered by the `config` argument",
+	"setup": "one-time first-run wizard; there is no fleet to reason about before it completes",
+	"admin": "daemon-level maintenance actions (reload, cache clear) whose blast radius is the daemon itself, not the fleet",
+	// Not an SPA catalogue: /i18n/entities exists precisely for non-SPA REST
+	// and WebSocket consumers, and the SPA-chrome namespaces are deliberately
+	// excluded from it (ADR 0046). It stays out of MCP because an assistant
+	// reads an entity's name off the entity itself rather than resolving a
+	// catalogue key.
+	"i18n": "entity-name catalogue for non-SPA consumers; an assistant reads names off the entities",
+	// Inbound, not outbound: both routes ingest — one writes a data point,
+	// the other triggers a program. That is a write capability, and an
+	// assistant already has it through set_datapoint and trigger_program;
+	// the webhook shape exists for header-only callers such as a doorbell.
+	"webhook": "inbound ingestion for header-only callers; the same writes are set_datapoint / trigger_program",
 }
 
 // restDomainsAwaitingMCPTools is the declared backlog: domains that
@@ -146,17 +176,7 @@ var restDomainsWithoutMCPTools = map[string]string{
 // Entries here are expected to disappear. A new domain that lands in
 // neither map fails the test, so the backlog can shrink but never grow
 // unnoticed.
-var restDomainsAwaitingMCPTools = map[string]string{
-	"groups":     "6 routes: heating-group roster and administration",
-	"areas":      "5 routes: operator-defined room groupings",
-	"interfaces": "3 routes: per-interface state and reconnect",
-	"history":    "3 routes: recorded measurement series",
-	"visibility": "3 routes: the hidden-parameter picker",
-	"energy":     "1 route: energy aggregation",
-	"hub":        "1 route: hub-level aggregate",
-	"links":      "1 route: direct device-to-device links",
-	"schedules":  "1 route: the fleet-wide schedule overview",
-}
+var restDomainsAwaitingMCPTools = map[string]string{}
 
 // restDomain is one path prefix of the REST router and how many routes
 // it carries.
@@ -222,7 +242,7 @@ func domainHasTool(d restDomain, tools []string) bool {
 var mcpDomainAliases = map[string][]string{
 	"devices":          {"device", "channel", "paramset", "datapoint"},
 	"security":         {"security_status", "fault", "hazard"},
-	"history":          {"measurement"},
+	"history":          {"measurement", "measurements"},
 	"energy":           {"measurement", "power"},
 	"system":           {"system_info", "health"},
 	"info":             {"system_info"},
@@ -234,7 +254,7 @@ var mcpDomainAliases = map[string][]string{
 	"functions":        {"function"},
 	"areas":            {"area"},
 	"centrals":         {"central"},
-	"visibility":       {"hidden_parameter", "unignore"},
+	"visibility":       {"hidden_parameter", "hidden_parameters", "unignore"},
 	"alarm":            {"alarm_zone", "alarm_zones", "alarm_state", "triggered_motion"},
 	"programs":         {"program"},
 	"sysvars":          {"sysvar"},
@@ -280,8 +300,58 @@ func fullyWiredMCPDeps() mcp.Deps {
 		Matter:       mcpParityMatterStatus{},
 		Backups:      mcpParityBackups{},
 		AddonUpdate:  mcpParityAddonUpdate{},
+		Groups:       mcpParityFleet{},
+		Areas:        mcpParityFleet{},
+		Interfaces:   mcpParityFleet{},
+		History:      mcpParityFleet{},
+		Visibility:   mcpParityVisibility{},
+		Energy:       mcpParityFleet{},
+		Links:        mcpParityFleet{},
+		Schedules:    mcpParityFleet{},
 		AllowWrites:  true,
 	}
+}
+
+// mcpParityFleet satisfies the eight fleet read seams at once. They were
+// the declared MCP/REST parity backlog until the tools landed; one type
+// serves all of them because this builder only needs each seam to be
+// non-nil, not to answer anything.
+type mcpParityFleet struct{}
+
+func (mcpParityFleet) List(context.Context, string) ([]handlers.GroupCentralEntry, error) {
+	return nil, nil
+}
+
+func (mcpParityFleet) GetAll(context.Context) ([]sqlitestore.AreaRow, error) { return nil, nil }
+
+func (mcpParityFleet) ListAssignments(context.Context) ([]sqlitestore.RoomAreaRow, error) {
+	return nil, nil
+}
+
+func (mcpParityFleet) Interfaces() []hmapi.InterfaceState { return nil }
+
+func (mcpParityFleet) Query(context.Context, handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error) {
+	return nil, "", nil
+}
+
+func (mcpParityFleet) Energy(context.Context, handlers.EnergyQuery) (handlers.EnergyResponse, error) {
+	return handlers.EnergyResponse{}, nil
+}
+
+func (mcpParityFleet) ListAllLinks(context.Context, string, string) ([]hmapi.Link, error) {
+	return nil, nil
+}
+
+func (mcpParityFleet) ListScheduleDevices(context.Context) ([]hmapi.ScheduleDeviceSummary, error) {
+	return nil, nil
+}
+
+// mcpParityVisibility is separate from [mcpParityFleet] only because its
+// List collides with the groups reader's List on the same receiver.
+type mcpParityVisibility struct{}
+
+func (mcpParityVisibility) List(context.Context, string) ([]sqlitestore.UnIgnoreEntry, error) {
+	return nil, nil
 }
 
 // The three read-only status seams. Present here for the same reason every

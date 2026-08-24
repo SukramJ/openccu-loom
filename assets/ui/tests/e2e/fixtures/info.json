@@ -7,5 +7,10 @@
   "started_at": "2026-01-01T00:00:00Z",
   "api_version": "2.15.0",
   "schema_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-  "capabilities": ["rest.v1", "ws.broadcasts.v1", "errors.problem_details.v1"]
+  "capabilities": [
+    "rest.v1",
+    "ws.broadcasts.v1",
+    "errors.problem_details.v1"
+  ],
+  "config_ui_url": "http://172.18.4.29/config"
 }

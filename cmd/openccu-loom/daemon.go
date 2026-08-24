@@ -519,6 +519,16 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Nil when south-bound never came up (no re-init manager); the route
 	// then stays unmounted.
 	cacheResetSvc := buildCacheResetService(cfg, reg, valuesCacheStore, masterValuesStore, si.descriptorStores, sb.bringUpManager, auditBuf, logger)
+	// A restore replaces the CCU's whole configuration, so the caches
+	// derived from the old one have to go with it. Without this the
+	// persisted MASTER values — read cache-first — outlive the CCU's own
+	// reboot and every later daemon start, and an operator who restored a
+	// backup to roll a device setting back keeps being shown the setting
+	// they rolled away. A nil service (south-bound never came up) leaves
+	// the step out; the restore still runs.
+	if cacheResetSvc != nil && backupAdapter != nil {
+		backupAdapter.SetCacheInvalidator(cacheResetSvc)
+	}
 
 	// Live CCU adopt: the orchestrator
 	// that lets POST/DELETE /admin/centrals bring a CCU's southbound + model

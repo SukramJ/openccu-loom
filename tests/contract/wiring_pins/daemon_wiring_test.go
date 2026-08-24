@@ -12,12 +12,16 @@ import (
 // TestPin_AddOnStopHook_CalledInDaemon pins that daemon.go registers at
 // least one AddOnStopHook on a Unit.  Stop hooks are the only
 // mechanism for graceful CCU teardown (unsubscribe, close connections);
-// losing them leaves the CCU with orphaned callbacks after a restart.
+// losing them leaves the CCU with orphaned callbacks after a restart. This
+// is a method call on a *central.Unit value, so it is pinned by receiver +
+// method name, not by package function. The receiver parameter is named
+// "u" throughout the composition root with no more specific alternative;
+// the distinctive method name keeps the match meaningful.
 func TestPin_AddOnStopHook_CalledInDaemon(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"cmd/openccu-loom",
-		"internal/central", "AddOnStopHook",
+		"u", "AddOnStopHook",
 	)
 }
 
@@ -59,11 +63,12 @@ func TestPin_NewMqttCollector_CalledInDaemon(t *testing.T) {
 // TestPin_SetCollector_CalledInDaemon pins that daemon.go hands the
 // mqttCollector to the MQTT supervisor via SetCollector.  The two-step
 // pattern (construct then wire) is intentional; this pin ensures neither
-// step is accidentally dropped.
+// step is accidentally dropped. This is a method call on the mqttSupervisor
+// field, so it is pinned by receiver + method name, not by package function.
 func TestPin_SetCollector_CalledInDaemon(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/mqtt", "SetCollector",
+		"mqttSup", "SetCollector",
 	)
 }

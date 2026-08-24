@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -214,7 +215,12 @@ func (s *HubEventsSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	s.remove = s.reg.OnRegister(s.StartCentral)
+	s.remove = s.reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "ws.hub_events",
+		Collaborator: "*ws.HubEventSubscriber",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "sysvar, program and service-message changes are never broadcast, so the SPA's hub views only update on a manual reload",
+	}, s.StartCentral)
 }
 
 // StartCentral attaches this subscriber's hub-model and event-bus

@@ -17,9 +17,12 @@ import (
 // occupied, causing FabricConflict on the next pair attempt.
 // Mirrors chip CommissioningWindowManager::OnFailSafeTimerExpired.
 func TestPin_FailSafeExpiry_RollsBackHalfPairedFabric(t *testing.T) {
-	contract.MustFindCallerInFile(
+	// OnFailSafeExpiry is a method on OperationalCredentials (the local
+	// `gcOpCreds` value), not a package-level function — pin the method
+	// call directly.
+	contract.MustFindMethodCall(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/matter/cluster/core", "OnFailSafeExpiry",
+		"gcOpCreds", "OnFailSafeExpiry",
 	)
 }

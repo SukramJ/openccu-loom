@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -49,7 +50,12 @@ func wireProgramExecuteAudit(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return reg.OnRegister(func(u *central.Unit) func() {
+	return reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "audit.program_execute",
+		Collaborator: "subscribeProgramExecuteAudit",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "a program run on the central is never recorded, so the audit trail cannot answer who triggered it",
+	}, func(u *central.Unit) func() {
 		return subscribeProgramExecuteAudit(u, rec, logger)
 	})
 }

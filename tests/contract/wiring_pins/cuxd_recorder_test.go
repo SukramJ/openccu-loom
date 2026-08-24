@@ -29,7 +29,7 @@ func TestPin_CUxDWiring_RecordsAsBINRPC(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
 		"internal/central/adapter/cuxd_wiring.go",
-		"session", "RPCTypeBIN",
+		"internal/store/session", "RPCTypeBIN",
 	)
 }
 

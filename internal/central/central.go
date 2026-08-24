@@ -696,51 +696,28 @@ func (u *Unit) Stop() {
 	// coordinator is still live (final availability=offline, command flush).
 	u.fireStopTier(StopTierNorthbound)
 
-	// 1. Persist cached state. Errors are logged but do not abort teardown.
-	u.services.mu.RLock()
-	saveFn := u.services.saveFilesFn
-	u.services.mu.RUnlock()
-	if saveFn != nil {
-		if err := saveFn(ctx); err != nil && u.logger != nil {
-			u.logger.Warn("stop: save_files failed", "error", err)
-		}
-	}
-
-	// 2. Scheduler — bounded drain so a stuck job cannot block daemon
+	// 1. Scheduler — bounded drain so a stuck job cannot block daemon
 	// shutdown indefinitely.
 	if u.Scheduler != nil {
 		u.Scheduler.StopWithTimeout(5 * time.Second)
 	}
 
-	// 3. ConnectionRecovery coordinator.
+	// 2. ConnectionRecovery coordinator.
 	if u.Recovery != nil {
 		u.Recovery.Stop()
 	}
 
-	// 4. Client coordinator — stops all InterfaceClients.
+	// 3. Client coordinator — stops all InterfaceClients.
 	if u.Clients != nil {
 		if err := u.Clients.StopClients(ctx); err != nil && u.logger != nil {
 			u.logger.Warn("stop: stop_clients failed", "error", err)
 		}
 	}
 
-	// 5. Device coordinator — drains any in-flight goroutine spawned by
+	// 4. Device coordinator — drains any in-flight goroutine spawned by
 	// ScheduleParamsetConsistencyCheck so it cannot outlive the coordinator.
 	if u.Devices != nil {
 		u.Devices.Stop()
-	}
-
-	// 6. Hub JSON-RPC logout (optional). A bounded timeout guards against a
-	// stale connection blocking the entire shutdown sequence.
-	u.services.mu.RLock()
-	logoutFn := u.services.hubLogoutFn
-	u.services.mu.RUnlock()
-	if logoutFn != nil {
-		logoutCtx, logoutCancel := context.WithTimeout(ctx, 5*time.Second)
-		defer logoutCancel()
-		if err := logoutFn(logoutCtx); err != nil && u.logger != nil {
-			u.logger.Warn("stop: hub_logout failed", "error", err)
-		}
 	}
 
 	// 7. Hub coordinator clear.
@@ -783,17 +760,6 @@ func (u *Unit) Stop() {
 	// StopTierExternal: pure external cleanup after STOPPED (registry
 	// unregister, tracker cleanup). Back-compat AddOnStopHook lands here.
 	u.fireStopTier(StopTierExternal)
-}
-
-// SetHubLogoutFn wires the hub JSON-RPC logout hook called during [Stop].
-// Pass nil to detach (the logout step is then skipped during teardown).
-// The hook should perform the `logout` call on the JSON-RPC session and
-// is called with a background context — the CCU session may already be
-// degraded at this point so errors are logged and ignored.
-func (u *Unit) SetHubLogoutFn(fn func(ctx context.Context) error) {
-	u.services.mu.Lock()
-	u.services.hubLogoutFn = fn
-	u.services.mu.Unlock()
 }
 
 // SystemInformation returns the cached CCU-side metadata. The hub- wiring
@@ -991,29 +957,6 @@ func (u *Unit) removeDevice(address string, teardown bool) bool {
 
 // --- Service Methods ---
 
-// AcceptDeviceInbox dispatches an "accept device from inbox" command to the
-// configured hub-side handler. The caller wires `AcceptInboxFn` from the
-// corresponding REST/WS adapter once the JSON-RPC session is up.
-//
-// Returns an error when no handler is wired yet (e.g. before Start).
-func (u *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
-	u.services.mu.RLock()
-	fn := u.services.acceptInboxFn
-	u.services.mu.RUnlock()
-	if fn == nil {
-		return errors.New("central: AcceptDeviceInbox not wired")
-	}
-	return fn(ctx, address)
-}
-
-// SetAcceptInboxFn wires the inbox-accept handler. Pass nil to
-// detach.
-func (u *Unit) SetAcceptInboxFn(fn func(ctx context.Context, address string) error) {
-	u.services.mu.Lock()
-	u.services.acceptInboxFn = fn
-	u.services.mu.Unlock()
-}
-
 // SetDeviceIngestFn wires the materialiser that turns announced device
 // descriptions into domain devices. The wiring installs it once the
 // device pipeline and the per-interface backends exist. Pass nil to
@@ -1055,15 +998,6 @@ func (u *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
 func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
 	u.services.mu.Lock()
 	u.services.createBackupFn = fn
-	u.services.mu.Unlock()
-}
-
-// SetLoadAndRefreshForInterfaceFn wires the per-interface reload handler.
-// When wired, [LoadAndRefreshDataPointDataForInterface] uses this instead of
-// the plain handler so interfaceID and paramset are actually forwarded.
-func (u *Unit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error) {
-	u.services.mu.Lock()
-	u.services.loadAndRefreshForInterfaceFn = fn
 	u.services.mu.Unlock()
 }
 
@@ -1204,50 +1138,11 @@ func (u *Unit) SetLoadAndRefreshFn(fn func(ctx context.Context) error) {
 	u.services.mu.Unlock()
 }
 
-// SaveFiles persists the in-memory descriptors and paramsets to the
-// configured store. Implementation is delegated through the `SaveFilesFn`
-// hook; for the SQLite backend the hook batches DB writes.
-func (u *Unit) SaveFiles(ctx context.Context) error {
-	u.services.mu.RLock()
-	fn := u.services.saveFilesFn
-	u.services.mu.RUnlock()
-	if fn == nil {
-		return errors.New("central: SaveFiles not wired")
-	}
-	return fn(ctx)
-}
-
-// SetSaveFilesFn wires the persistence handler.
-func (u *Unit) SetSaveFilesFn(fn func(ctx context.Context) error) {
-	u.services.mu.Lock()
-	u.services.saveFilesFn = fn
-	u.services.mu.Unlock()
-}
-
-// ValidateConfigAndGetSystemInformation runs a config-validation pass against
-// the configured hub backend and returns the discovered SystemInfo.
-func (u *Unit) ValidateConfigAndGetSystemInformation(ctx context.Context) (SystemInfo, error) {
-	u.services.mu.RLock()
-	fn := u.services.validateConfigFn
-	u.services.mu.RUnlock()
-	if fn == nil {
-		return SystemInfo{}, errors.New("central: ValidateConfig not wired")
-	}
-	return fn(ctx)
-}
-
-// SetValidateConfigFn wires the config-validation handler.
-func (u *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, error)) {
-	u.services.mu.Lock()
-	u.services.validateConfigFn = fn
-	u.services.mu.Unlock()
-}
-
 // ServiceWiringStatus reports, for each service-method hook on the
-// central, whether the hub-wiring adapter has populated it. Diagnostic
-// surface for admin endpoints, health probes, and integration tests
-// that want to assert "the southbound wiring completed" without
-// hammering every service method individually.
+// central, whether the hub-wiring adapter has populated it. Its readers
+// today are tests that want to assert "the southbound wiring completed"
+// without hammering every service method individually; it is shaped to
+// be servable from a diagnostics endpoint, but nothing serves it yet.
 //
 // Service methods are wired asynchronously after Start() — the JSON-RPC
 // session must come up first. A status snapshot taken immediately
@@ -1255,16 +1150,22 @@ func (u *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, err
 // adapter has run the entries flip to true. Each service method
 // already returns a clean "not wired" error when invoked early, so
 // this map is purely informational.
+//
+// Only hooks something in production actually wires belong here.
+// `accept_inbox` is deliberately absent: it is reachable solely through
+// the [payload.ServiceRegistry] registration in [registerCentralServices],
+// which no production caller invokes — the live accept path is
+// DeviceAdminDomain.AcceptInboxDevice. Listing it would make
+// [Unit.ServiceWiringComplete] permanently false, which is what it was
+// until the never-wired persistence and config-validation hooks were
+// removed.
 func (u *Unit) ServiceWiringStatus() map[string]bool {
 	u.services.mu.RLock()
 	defer u.services.mu.RUnlock()
 	return map[string]bool{
-		"accept_inbox":     u.services.acceptInboxFn != nil,
 		"create_backup":    u.services.createBackupFn != nil,
 		"rename_device":    u.services.renameDeviceFn != nil,
 		"load_and_refresh": u.services.loadAndRefreshFn != nil,
-		"save_files":       u.services.saveFilesFn != nil,
-		"validate_config":  u.services.validateConfigFn != nil,
 	}
 }
 
@@ -1441,28 +1342,6 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 			DegradedInterfaceReasons: degradedReasons,
 		})
 	}
-}
-
-// LoadAndRefreshDataPointDataForInterface triggers a data-point reload for a
-// specific interface and paramset. When directCall is true the reload is
-// executed synchronously in the caller's goroutine; when false it is
-// dispatched through the wired loadAndRefreshFn (which may batch or
-// coalesce calls). Wire the per-interface hook via
-// [SetLoadAndRefreshForInterfaceFn] to forward the full scope to the backend;
-// without it the call falls back to the global [LoadAndRefreshDataPointData].
-func (u *Unit) LoadAndRefreshDataPointDataForInterface(
-	ctx context.Context,
-	interfaceID string,
-	paramset hmenum.ParamsetKey,
-	directCall bool,
-) error {
-	u.services.mu.RLock()
-	fn := u.services.loadAndRefreshForInterfaceFn
-	u.services.mu.RUnlock()
-	if fn != nil {
-		return fn(ctx, interfaceID, paramset, directCall)
-	}
-	return u.LoadAndRefreshDataPointData(ctx)
 }
 
 // ReadableGenericDataPoints returns every VALUES-paramset data point across

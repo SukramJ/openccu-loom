@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
@@ -50,8 +49,8 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 	attrsTopic := d.TopicBuilder.ScheduleEntityAttrs(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
 
 	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
-	objectID := fmt.Sprintf("openccu-loom_%s_%d_schedule",
-		strings.ToLower(ev.DeviceAddress), ev.ChannelNo)
+	objectID := fmt.Sprintf("%s_%d_schedule",
+		physicalDeviceIdentifier(centralName, ev.DeviceAddress), ev.ChannelNo)
 
 	mockEv := Event{
 		Central:       centralName,
@@ -207,8 +206,13 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 	commandTopic := d.TopicBuilder.ScheduleSwitchCommand(centralName, ev.Interface, ev.DeviceAddress, ev.ScheduleChannelNo, ev.Key)
 
 	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
-	objectID := fmt.Sprintf("openccu-loom_%s_%d_schedule_%s",
-		strings.ToLower(ev.DeviceAddress), ev.ScheduleChannelNo, ev.Key)
+	// The object id is built from the same identifier the device card uses, so
+	// an address class that repeats across CCUs — INT000*, CUxD, the virtual
+	// remotes — carries its central here too. Spelling it by hand from the bare
+	// address produced byte-identical ids for two CCUs' heating groups, and
+	// Home Assistant keeps whichever discovery config arrived first.
+	objectID := fmt.Sprintf("%s_%d_schedule_%s",
+		physicalDeviceIdentifier(centralName, ev.DeviceAddress), ev.ScheduleChannelNo, ev.Key)
 
 	mockEv := Event{
 		Central:       centralName,
@@ -303,7 +307,12 @@ func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, centralName
 // suggested_area is also inherited so the sub-device falls into the
 // same room.
 func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) map[string]any {
-	parentID := "openccu-loom_" + strings.ToLower(ev.DeviceAddress)
+	// Through the same helper the parent card declares its own identifier with:
+	// a hand-built "openccu-loom_<addr>" misses the central prefix that helper
+	// adds for the repeating address classes, so via_device pointed at an
+	// identifier no device declares and the schedule sub-device floated
+	// unparented in Home Assistant — visible on a single CCU too.
+	parentID := physicalDeviceIdentifier(ev.Central, ev.DeviceAddress)
 	subID := parentID + "_schedule"
 	parentName := ev.DeviceName
 	if parentName == "" {

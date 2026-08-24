@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -97,6 +98,11 @@ func WireValuesCacheEviction(
 		return nil
 	}
 	e := &ValuesCacheEvictor{store: store, logger: logger}
-	e.removeObserver = reg.OnRegister(e.StartCentral)
+	e.removeObserver = reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "store.values_cache_eviction",
+		Collaborator: "*adapter.ValuesCacheEvictor",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "an unpaired device leaves its values-cache rows behind indefinitely; nothing else on the removal path touches the store",
+	}, e.StartCentral)
 	return e
 }

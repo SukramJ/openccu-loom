@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // auditReadService combines the in-memory audit buffer (List, for the
@@ -94,7 +95,12 @@ func wireSessionRecorderPersistence(
 	}
 	store := sqlite.NewSessionRecorderStore(db)
 	var centrals atomic.Int64
-	remove := reg.OnRegister(func(u *central.Unit) func() {
+	remove := reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "audit.session_recorder_persistence",
+		Collaborator: "*sqlite.SessionRecorderStore",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "the central's recorded session is never written to disk, so a support bundle taken after a restart has no trace of what the CCU said",
+	}, func(u *central.Unit) func() {
 		if u == nil || u.Recorder == nil {
 			return nil
 		}
@@ -140,7 +146,12 @@ func wireIncidentRecorder(
 	// The recorder is a single shared instance, so attaching is just the
 	// install; there is nothing per-central to unwire (the slot dies with the
 	// unit), hence the nil unwire.
-	remove := reg.OnRegister(func(u *central.Unit) func() {
+	remove := reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "audit.incident_recorder",
+		Collaborator: "*adapter.PublishingIncidentRecorder",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "the central records no reliability incident, so GET /incidents stays empty and no IncidentRecordedEvent reaches the webhook bridge",
+	}, func(u *central.Unit) func() {
 		if u == nil || u.Cache == nil {
 			return nil
 		}

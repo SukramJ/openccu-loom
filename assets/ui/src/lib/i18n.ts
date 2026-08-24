@@ -1266,6 +1266,8 @@ const EN: Catalog = {
   "settings.save": "Save",
   "settings.save_and_restart": "Save and restart",
   "settings.saved": "Saved.",
+  "settings.saved_not_applied":
+    "Saved, but the running daemon did not take the change: {err}. It takes effect after a restart.",
   "settings.save_failed": "Save failed: {err}",
   "settings.reset": "Reset to default",
   "settings.section_unset": "Currently using built-in defaults.",
@@ -5157,6 +5159,8 @@ const DE: Catalog = {
   "settings.save": "Speichern",
   "settings.save_and_restart": "Speichern und neu starten",
   "settings.saved": "Gespeichert.",
+  "settings.saved_not_applied":
+    "Gespeichert, aber der laufende Daemon hat die Änderung nicht übernommen: {err}. Sie wird nach einem Neustart wirksam.",
   "settings.save_failed": "Speichern fehlgeschlagen: {err}",
   "settings.reset": "Auf Standard zurücksetzen",
   "settings.section_unset": "Aktuell aktive eingebaute Standardwerte.",

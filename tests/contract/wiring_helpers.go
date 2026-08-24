@@ -91,10 +91,20 @@ func parseFiles(t *testing.T, callerPath string) []*ast.File {
 	return parseUnit(t, callerPath).files
 }
 
-// MustFindCallerInFile asserts that callerFile (repo-root-relative) contains
-// a call-expression or argument whose selector name equals calleeIdent.
-// calleePackage is used only in the failure message to give context; the AST
-// search is purely name-based to survive import-alias changes.
+// MustFindCallerInFile asserts that callerFile (repo-root-relative) contains a
+// use of calleeIdent that really belongs to calleePackage — resolved through
+// the caller file's own import list, so an import alias changing does not
+// break the pin.
+//
+// The name-only search this replaced was a documented trade-off ("purely
+// name-based to survive import-alias changes"), and it was a false dilemma:
+// reading the alias out of the file gives both properties. Its cost is not
+// hypothetical: a pin asserting that the daemon verifies a Matter NOC
+// certificate chain was satisfied by `spake2.NewVerifier`, which
+// shares nothing with certificate verification but the word `NewVerifier`, so
+// deleting all three real calls would have left the pin green. The same
+// blindness hid a stale argument: that pin names a package
+// (`internal/north/matter/cert`) that does not exist.
 //
 // The check skips any occurrence of calleeIdent that is the name of a
 // top-level FuncDecl in callerFile (i.e. the definition itself), so passing
@@ -115,19 +125,142 @@ func MustFindCallerInFile(t *testing.T, callerFile, calleePackage, calleeIdent s
 	t.Helper()
 	unit := parseUnit(t, callerFile)
 	var matches []matchedCall
+	importedAnywhere := false
 	for _, f := range unit.files {
-		for _, use := range identUsesNotDefinition(f, calleeIdent) {
-			matches = append(matches, matchedCall{file: f, node: use})
+		if calleePackage == "" {
+			// No package named: the callee is unqualified — an unexported
+			// helper of the caller's own package. There is no import to
+			// resolve and no qualifier to check.
+			importedAnywhere = true
+			for _, use := range identUsesNotDefinition(f, calleeIdent) {
+				matches = append(matches, matchedCall{file: f, node: use})
+			}
+			continue
 		}
+		local, imported := importLocalName(f, calleePackage)
+		switch {
+		case imported:
+			importedAnywhere = true
+			for _, sel := range qualifiedUses(f, local, calleeIdent) {
+				matches = append(matches, matchedCall{file: f, node: sel})
+			}
+		case samePackage(unit, calleePackage):
+			// The caller lives in the callee's own package, so the call
+			// carries no qualifier and there is no import to resolve.
+			importedAnywhere = true
+			for _, use := range identUsesNotDefinition(f, calleeIdent) {
+				matches = append(matches, matchedCall{file: f, node: use})
+			}
+		}
+	}
+	if !importedAnywhere {
+		t.Errorf(
+			"wiring pin: %s does not import %s at all, so it cannot call %s.%s.\n"+
+				"  Either the wiring is gone, or this pin names the wrong package — check\n"+
+				"  the import path before assuming the first.",
+			callerFile, calleePackage, calleePackage, calleeIdent,
+		)
+		return
 	}
 	if len(matches) == 0 {
 		t.Errorf(
-			"wiring pin: %s not found in %s\n  expected a call to %s.%s",
-			calleeIdent, callerFile, calleePackage, calleeIdent,
+			"wiring pin: %s imports %s but calls nothing named %s from it\n"+
+				"  expected a call to %s.%s",
+			callerFile, calleePackage, calleeIdent, calleePackage, calleeIdent,
 		)
 		return
 	}
 	assertAnyCallExecutable(t, unit, matches, calleeIdent, callerFile)
+}
+
+// helperModulePath is this module's import prefix. It is spelled here rather
+// than borrowed from a _test.go file so this non-test source keeps compiling
+// on its own.
+const helperModulePath = "github.com/SukramJ/openccu-loom"
+
+// importLocalName reports the name f refers to pkgPath by — the explicit
+// alias when there is one, otherwise the path's last segment — and whether f
+// imports it at all. pkgPath is module-relative ("internal/model/hub").
+//
+// Reading the alias out of the file is what lets the pin survive an import
+// being renamed while still refusing a same-named identifier from somewhere
+// else entirely.
+func importLocalName(f *ast.File, pkgPath string) (string, bool) {
+	want := helperModulePath + "/" + pkgPath
+	for _, spec := range f.Imports {
+		if spec.Path == nil {
+			continue
+		}
+		got := strings.Trim(spec.Path.Value, `"`)
+		if got != want && got != pkgPath {
+			continue
+		}
+		if spec.Name != nil {
+			if spec.Name.Name == "_" || spec.Name.Name == "." {
+				// A blank import calls nothing; a dot import erases the
+				// qualifier this check depends on. Neither can be pinned.
+				return "", false
+			}
+			return spec.Name.Name, true
+		}
+		return got[strings.LastIndex(got, "/")+1:], true
+	}
+	return "", false
+}
+
+// samePackage reports whether the parsed unit is itself the callee package,
+// in which case calls to it carry no qualifier.
+func samePackage(unit parsedUnit, pkgPath string) bool {
+	if unit.pkgName == "" {
+		return false
+	}
+	return pkgPath[strings.LastIndex(pkgPath, "/")+1:] == unit.pkgName
+}
+
+// qualifiedUses returns every use of ident in f that provably belongs to the
+// package imported as local. Unlike a bare identifier search it cannot be
+// satisfied by a same-named function from somewhere else.
+//
+// Two shapes count, because this codebase wires with both:
+//
+//   - a qualified reference, `local.Ident` — an ordinary call or value;
+//   - a field key in a composite literal whose TYPE is qualified,
+//     `local.Config{Ident: fn}` — the functional-config shape a good deal of
+//     the Matter and MQTT wiring uses. The key itself is a bare identifier, so
+//     only the literal's type tells you which package's field it is.
+func qualifiedUses(f *ast.File, local, ident string) []ast.Node {
+	var found []ast.Node
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.SelectorExpr:
+			if node.Sel == nil || node.Sel.Name != ident {
+				return true
+			}
+			if x, ok := node.X.(*ast.Ident); ok && x.Name == local {
+				found = append(found, node)
+			}
+		case *ast.CompositeLit:
+			sel, ok := node.Type.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			x, ok := sel.X.(*ast.Ident)
+			if !ok || x.Name != local {
+				return true
+			}
+			for _, elt := range node.Elts {
+				kv, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if key, ok := kv.Key.(*ast.Ident); ok && key.Name == ident {
+					found = append(found, kv)
+				}
+			}
+		}
+		return true
+	})
+	return found
 }
 
 // matchedCall is one occurrence a pin's name search found.
@@ -163,9 +296,12 @@ func MustFindMethodCall(t *testing.T, callerFile, receiverIdent, methodName stri
 			if !ok || sel.Sel.Name != methodName {
 				return true
 			}
-			// Accept any expression whose string representation ends with receiverIdent.
-			xStr := exprString(sel.X)
-			if strings.HasSuffix(xStr, receiverIdent) || strings.Contains(xStr, receiverIdent+".") {
+			// The receiver must appear as a WHOLE segment of the expression,
+			// not as a suffix of one. Suffix matching accepted `ccu` for a
+			// pin written against `u`, and `dispatch` for one written against
+			// `ch` — which is how a pin on a short receiver came to prove
+			// nothing and was mistaken for unpinnable.
+			if receiverSegmentMatches(exprString(sel.X), receiverIdent) {
 				matches = append(matches, matchedCall{file: f, node: sel})
 			}
 			return true
@@ -180,6 +316,73 @@ func MustFindMethodCall(t *testing.T, callerFile, receiverIdent, methodName stri
 	}
 	assertAnyCallExecutable(t, unit, matches,
 		fmt.Sprintf("%s.%s", receiverIdent, methodName), callerFile)
+}
+
+// MustFindMethodCallInFunc is [MustFindMethodCall] narrowed to a single
+// top-level function's body, for a call that is legitimately made more than
+// once in the same file for different purposes. Without the narrowing, a
+// mutation that deletes the call from funcName specifically is invisible
+// whenever the same receiver-and-method pair still appears at an unrelated
+// call site elsewhere in the file — the pin matches the file, not the
+// function it names.
+func MustFindMethodCallInFunc(t *testing.T, callerFile, funcName, receiverIdent, methodName string) {
+	t.Helper()
+	unit := parseUnit(t, callerFile)
+	var fn *ast.FuncDecl
+	var fnFile *ast.File
+	for _, f := range unit.files {
+		for _, d := range f.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if ok && fd.Name != nil && fd.Name.Name == funcName {
+				fn = fd
+				fnFile = f
+				break
+			}
+		}
+		if fn != nil {
+			break
+		}
+	}
+	if fn == nil || fn.Body == nil {
+		t.Errorf("wiring pin: function %s not found in %s", funcName, callerFile)
+		return
+	}
+	var matches []matchedCall
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != methodName {
+			return true
+		}
+		if receiverSegmentMatches(exprString(sel.X), receiverIdent) {
+			matches = append(matches, matchedCall{file: fnFile, node: sel})
+		}
+		return true
+	})
+	if len(matches) == 0 {
+		t.Errorf(
+			"wiring pin: method call %s.%s not found inside func %s in %s",
+			receiverIdent, methodName, funcName, callerFile,
+		)
+		return
+	}
+	assertAnyCallExecutable(t, unit, matches,
+		fmt.Sprintf("%s.%s in %s", receiverIdent, methodName, funcName), callerFile)
+}
+
+// receiverSegmentMatches reports whether want is one of the dot-separated
+// segments of the receiver expression — `b` matches `b` and `p.b`, but not
+// `sb` or `web`. A short receiver is then as discriminating as the code makes
+// it: within one file `b` is one variable, and pinning it says something.
+func receiverSegmentMatches(expr, want string) bool {
+	if want == "" {
+		return false
+	}
+	for _, seg := range strings.Split(expr, ".") {
+		if seg == want {
+			return true
+		}
+	}
+	return false
 }
 
 // assertAnyCallExecutable passes when at least one of the occurrences the
@@ -240,6 +443,11 @@ func callIsExecutable(unit parsedUnit, m matchedCall, reachable map[string]bool)
 			unit.fset.Position(lit.Pos()),
 		)
 	}
+	if discardedWithoutCall(path) {
+		return false,
+			"is assigned to the blank identifier and never called — the reference to it is in the " +
+				"source and is never invoked, which is the exact shape this pin exists to reject"
+	}
 	if reachable == nil {
 		// A single file, or a library package: this unit does not contain
 		// the entry point, so reachability cannot be decided here.
@@ -296,6 +504,44 @@ func deadFuncLiteral(path []ast.Node) (*ast.FuncLit, bool) {
 		return outermost, allBlank(names)
 	default:
 		return nil, false
+	}
+}
+
+// discardedWithoutCall reports whether the matched node itself — path[0],
+// the identifier or selector the pin found — is the direct right-hand side
+// of an assignment or declaration whose every target is the blank
+// identifier, without being invoked there.
+//
+// deadFuncLiteral catches a call wrapped in a function literal that is
+// itself discarded (`_ = func() { real.Call() }`); this catches the
+// simpler and easier-to-miss sibling shape, a bare reference to the named
+// function or method discarded the same way (`_ = wireCUxDInterface`). Both
+// keep the identifier greppable in the file while guaranteeing it never
+// runs. A node that is actually called has a *ast.CallExpr as its
+// immediate parent instead, which this check does not match, so a real
+// invocation is never rejected by it.
+//
+// What it cannot decide is a reference bound to a *named* variable
+// (`var keep = wireCUxDInterface`): that variable may legitimately be
+// invoked from another file, and this scan sees one. The blank
+// identifier is the only discard that is provably terminal from a single
+// file, so the check stops there rather than guessing — the pin's claim
+// is "no live call in this file", not "this function is unreachable".
+func discardedWithoutCall(path []ast.Node) bool {
+	if len(path) < 2 {
+		return false
+	}
+	switch p := path[1].(type) {
+	case *ast.AssignStmt:
+		return allBlank(p.Lhs)
+	case *ast.ValueSpec:
+		names := make([]ast.Expr, 0, len(p.Names))
+		for _, n := range p.Names {
+			names = append(names, n)
+		}
+		return allBlank(names)
+	default:
+		return false
 	}
 }
 
@@ -406,8 +652,18 @@ func identsIn(n ast.Node) []string {
 
 // MustFindStructLiteralField asserts that callerFile contains a composite
 // literal whose type ends with structName and that sets fieldName.
+//
+// The suffix match is deliberate for a bare type name, but it is also
+// its trap: two packages routinely name their wiring struct the same
+// thing, and `rest.Deps` and `mcp.Deps` both end in `Deps` and share
+// most of their field names. Pass the qualified type
+// ("mcp.Deps") whenever the file constructs more than one — an exact
+// match then applies, because a qualified name identifies the type.
 func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName string) {
 	t.Helper()
+	// A qualified name is matched exactly; a bare one by suffix, so a
+	// caller that writes "Deps" still matches "rest.Deps".
+	qualified := strings.Contains(structName, ".")
 	found := false
 	for _, f := range parseFiles(t, callerFile) {
 		ast.Inspect(f, func(n ast.Node) bool {
@@ -419,7 +675,11 @@ func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName 
 				return true
 			}
 			typeName := exprString(cl.Type)
-			if !strings.HasSuffix(typeName, structName) {
+			if qualified {
+				if typeName != structName {
+					return true
+				}
+			} else if !strings.HasSuffix(typeName, structName) {
 				return true
 			}
 			for _, elt := range cl.Elts {
@@ -442,6 +702,113 @@ func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName 
 		t.Errorf(
 			"wiring pin: struct literal %s{%s: ...} not found in %s",
 			structName, fieldName, callerFile,
+		)
+	}
+}
+
+// MustFindStructFieldDecl asserts that callerFile declares a struct type
+// named structName with a field named fieldName.
+//
+// This is not [MustFindCallerInFile]: a struct field is not a call, and
+// searching for the bare identifier fieldName in the file — what
+// MustFindCallerInFile's same-package fallback does — matches any other
+// field of the same name on any other struct in the file just as readily as
+// the one this pin names. Scoping to the enclosing TypeSpec is what makes
+// the pin about this struct's field rather than about the identifier
+// existing somewhere in the source.
+func MustFindStructFieldDecl(t *testing.T, callerFile, structName, fieldName string) {
+	t.Helper()
+	found := false
+	for _, f := range parseFiles(t, callerFile) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if found {
+				return false
+			}
+			ts, ok := n.(*ast.TypeSpec)
+			if !ok || ts.Name == nil || ts.Name.Name != structName {
+				return true
+			}
+			st, ok := ts.Type.(*ast.StructType)
+			if !ok || st.Fields == nil {
+				return true
+			}
+			for _, field := range st.Fields.List {
+				for _, name := range field.Names {
+					if name.Name == fieldName {
+						found = true
+						return false
+					}
+				}
+			}
+			return true
+		})
+		if found {
+			break
+		}
+	}
+	if !found {
+		t.Errorf(
+			"wiring pin: struct %s has no field %s in %s",
+			structName, fieldName, callerFile,
+		)
+	}
+}
+
+// MustFindStructFieldTag asserts that structName.fieldName in callerFile
+// carries wantTag as its full struct tag literal.
+//
+// It exists because a field declaration and the tag that binds it to the
+// wire are two different facts, and only the second one fails silently:
+// deleting the field breaks the build at every reader, while renaming
+// `json:"label_key"` to anything else compiles, passes a
+// field-declaration pin, and simply decodes nothing — which is precisely
+// the defect such a pin's doc comment usually claims to prevent.
+//
+// wantTag is the whole back-quoted tag content, so a partial match
+// cannot pass: `json:"label_key"` and `json:"label_key,omitempty"` are
+// different bindings and the pin names which one it means.
+func MustFindStructFieldTag(t *testing.T, callerFile, structName, fieldName, wantTag string) {
+	t.Helper()
+	var got string
+	declared := false
+	for _, f := range parseFiles(t, callerFile) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if declared {
+				return false
+			}
+			ts, ok := n.(*ast.TypeSpec)
+			if !ok || ts.Name == nil || ts.Name.Name != structName {
+				return true
+			}
+			st, ok := ts.Type.(*ast.StructType)
+			if !ok || st.Fields == nil {
+				return true
+			}
+			for _, field := range st.Fields.List {
+				for _, name := range field.Names {
+					if name.Name != fieldName {
+						continue
+					}
+					declared = true
+					if field.Tag != nil {
+						got = strings.Trim(field.Tag.Value, "`")
+					}
+					return false
+				}
+			}
+			return true
+		})
+		if declared {
+			break
+		}
+	}
+	switch {
+	case !declared:
+		t.Errorf("wiring pin: struct %s has no field %s in %s", structName, fieldName, callerFile)
+	case got != wantTag:
+		t.Errorf(
+			"wiring pin: %s.%s in %s carries tag `%s`, want `%s` — the field is declared but bound to a different wire name, so the value decodes as empty",
+			structName, fieldName, callerFile, got, wantTag,
 		)
 	}
 }

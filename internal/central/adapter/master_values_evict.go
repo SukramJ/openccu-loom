@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -102,6 +103,11 @@ func WireMasterValuesEviction(
 		return nil
 	}
 	e := &MasterValuesEvictor{store: store, logger: logger}
-	e.removeObserver = reg.OnRegister(e.StartCentral)
+	e.removeObserver = reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "store.master_values_eviction",
+		Collaborator: "*adapter.MasterValuesEvictor",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "an unpaired device keeps its cached MASTER paramset, and a re-pair at the same address hydrates cache-first from the stale rows",
+	}, e.StartCentral)
 	return e
 }

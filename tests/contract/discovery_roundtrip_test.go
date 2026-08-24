@@ -750,39 +750,47 @@ func TestDiscoveryRoundTrip_Event_NoValueTemplate(t *testing.T) {
 // mode, and then assert the fix (no template) avoids it.
 func TestDiscoveryRoundTrip_Event_JSONPayloadNotBroken(t *testing.T) {
 	t.Parallel()
-	// The raw state-topic payload for an event entity looks like:
-	// {"event_type":"press_short"} — a JSON object HA can parse.
+
+	// Real production event payload — drives the actual builder, not a
+	// hand-typed stand-in, so a regression here fails this test directly.
+	eventPayload := buildDiscovery(t, mqtt.Event{
+		Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
+		Parameter: "PRESS_SHORT", Category: hmenum.DataPointCategoryEvent,
+	})
+	if vt, has := eventPayload["value_template"]; has {
+		t.Fatalf("event entity carries value_template %q — HA's mqtt.event JSON parser breaks on it", vt)
+	}
+
+	// The default scalar-extracting template production applies to every
+	// other per-parameter category — pulled from a REAL sensor discovery
+	// build (not hand-typed) so drift in the production template text is
+	// caught here too.
+	sensorPayload := buildDiscovery(t, mqtt.Event{
+		Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
+		Parameter: "ACTUAL_TEMPERATURE", Category: hmenum.DataPointCategorySensor, Descriptor: &pload.GenericConfig{Unit: "°C"},
+	})
+	genericTemplate := mustStringField(t, sensorPayload, "value_template")
+
+	// The raw state-topic payload an event entity publishes.
 	rawEnvelope := `{"event_type":"press_short"}`
 
-	// If a scalar-extracting template were applied:
-	brokenTemplate := `{{ value_json.event_type }}`
-	brokenResult := renderJinja(t, brokenTemplate, rawEnvelope)
-	// brokenResult would be "press_short" — a plain string, not JSON.
-	// HA would fail to parse it as JSON.
-	var js any
-	if err := json.Unmarshal([]byte(brokenResult), &js); err == nil {
-		// If it happened to be valid JSON (e.g. a number or "true"), that
-		// would be unexpected — document it.
-		t.Logf("note: brokenResult %q is valid JSON — unexpected but not a failure here", brokenResult)
+	// Applying the generic scalar template to an event envelope — the bug
+	// this test pins — must NOT produce a JSON object: that scalar output
+	// is exactly what broke HA's mqtt.event parser in production.
+	broken := renderJinja(t, genericTemplate, rawEnvelope)
+	var brokenObj map[string]any
+	if err := json.Unmarshal([]byte(broken), &brokenObj); err == nil {
+		t.Fatalf("scalar template render %q unexpectedly parsed as a JSON object — the demonstrated failure mode no longer applies", broken)
 	}
-	// The correct fix is to have NO value_template so HA receives rawEnvelope intact.
-	// Verify rawEnvelope IS valid JSON and contains event_type.
-	var eventPayload map[string]any
-	if err := json.Unmarshal([]byte(rawEnvelope), &eventPayload); err != nil {
+
+	// Because production drops value_template for events, HA receives
+	// rawEnvelope untouched and event_type parses out cleanly.
+	var eventJSON map[string]any
+	if err := json.Unmarshal([]byte(rawEnvelope), &eventJSON); err != nil {
 		t.Fatalf("raw event envelope is not valid JSON: %v", err)
 	}
-	if eventPayload["event_type"] != "press_short" {
-		t.Errorf("event_type = %v, want %q", eventPayload["event_type"], "press_short")
-	}
-	// Document the bug: brokenResult is NOT valid JSON for the event parser.
-	var brokenMap map[string]any
-	if err := json.Unmarshal([]byte(brokenResult), &brokenMap); err == nil {
-		// It is valid JSON — this would only happen if event_type value happened
-		// to be a JSON expression itself (e.g. "null", "1"). For "press_short" it
-		// must fail.
-		if brokenResult != "null" && brokenResult != "true" && brokenResult != "false" {
-			t.Logf("note: brokenResult %q parsed as map — unexpected for string event_type", brokenResult)
-		}
+	if eventJSON["event_type"] != "press_short" {
+		t.Errorf("event_type = %v, want %q", eventJSON["event_type"], "press_short")
 	}
 }
 
@@ -819,7 +827,22 @@ func TestDiscoveryRoundTrip_Button(t *testing.T) {
 // guard. The template must render empty ("") for an empty input, not panic.
 func TestDiscoveryRoundTrip_GuardEmptyEnvelope(t *testing.T) {
 	t.Parallel()
-	guardedTemplate := `{% if value_json is defined %}{{ value_json.value | lower }}{% endif %}`
+
+	// Pull the REAL production template off a switch entity rather than
+	// a hand-typed literal, so drift in either the guard clause or the
+	// `| lower` filter is caught here.
+	payload := buildDiscovery(t, mqtt.Event{
+		Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
+		Parameter: "STATE", Category: hmenum.DataPointCategorySwitch, Writable: true,
+	})
+	guardedTemplate := mustStringField(t, payload, "value_template")
+
+	if !strings.Contains(guardedTemplate, "is defined") {
+		t.Fatalf("production value_template %q lost its 'is defined' guard", guardedTemplate)
+	}
+	if !strings.Contains(guardedTemplate, "| lower") {
+		t.Fatalf("production value_template %q lost its '| lower' filter", guardedTemplate)
+	}
 
 	// Empty input → guard fires → empty output → HA marks entity unavailable.
 	rendered := renderJinja(t, guardedTemplate, "")
@@ -837,6 +860,17 @@ func TestDiscoveryRoundTrip_GuardEmptyEnvelope(t *testing.T) {
 	renderedValid := renderJinja(t, guardedTemplate, `{"value":true}`)
 	if renderedValid != "true" {
 		t.Errorf("guard with valid input rendered %q, want %q", renderedValid, "true")
+	}
+
+	// Valid JSON whose value is explicitly null — the second half of the
+	// guard, and the one the `is defined` clause does not cover. Without
+	// `value_json.value is not none` the expression reaches the filter with
+	// a Python None and `none | lower` renders the literal string "none",
+	// which HA then compares against payload_on/payload_off and matches
+	// neither: the entity shows a value it was never sent.
+	renderedNull := renderJinja(t, guardedTemplate, `{"value":null}`)
+	if renderedNull != "" {
+		t.Errorf("guard rendered %q for an explicit null value, want empty string", renderedNull)
 	}
 }
 
@@ -868,8 +902,17 @@ func TestDiscoveryRoundTrip_BoolCapitalisation(t *testing.T) {
 		t.Fatalf("Go json.Marshal(true) did not produce lowercase 'true'; got %q — fundamental encoding assumption violated", envelopeJSON)
 	}
 
-	// Apply valueJSONValueLowerTemplate (the actual template in the discovery payload).
-	template := `{% if value_json is defined %}{{ value_json.value | lower }}{% endif %}`
+	// Pull the REAL production template off a switch entity (the actual
+	// template in the discovery payload) rather than a hand-typed copy.
+	payload := buildDiscovery(t, mqtt.Event{
+		Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
+		Parameter: "STATE", Category: hmenum.DataPointCategorySwitch, Writable: true,
+	})
+	template := mustStringField(t, payload, "value_template")
+	if !strings.Contains(template, "| lower") {
+		t.Fatalf("production switch value_template %q lost its '| lower' filter", template)
+	}
+
 	rendered := renderJinja(t, template, envelopeJSON)
 
 	if rendered != "true" {
@@ -879,6 +922,9 @@ func TestDiscoveryRoundTrip_BoolCapitalisation(t *testing.T) {
 				"  This means switch/lock/binary_sensor would stay 'unknown' in HA.",
 			rendered, "true", envelopeJSON,
 		)
+	}
+	if stateOn := mustStringField(t, payload, "state_on"); rendered != stateOn {
+		t.Errorf("rendered %q does not match state_on %q — switch would stay 'unknown' in HA", rendered, stateOn)
 	}
 }
 
@@ -974,10 +1020,11 @@ func TestDiscoveryRoundTrip_Select(t *testing.T) {
 	}
 }
 
-// TestDiscoveryRoundTrip_Text verifies the writable HubValueTypeString
-// path now classifies as sensor (text caps at 255 chars; the recent
-// commit 5720923 routed strings to sensor) AND that the value_template
-// passes a multi-line payload through intact.
+// TestDiscoveryRoundTrip_Text verifies that the writable
+// HubValueTypeString path classifies as sensor rather than text — a
+// Home Assistant `text` entity caps at 255 characters, which silently
+// truncates a longer sysvar — AND that the value_template passes a
+// multi-line payload through intact.
 func TestDiscoveryRoundTrip_Text(t *testing.T) {
 	t.Parallel()
 	payload := buildDiscovery(t, mqtt.Event{

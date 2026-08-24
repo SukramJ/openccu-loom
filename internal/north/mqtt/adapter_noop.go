@@ -55,6 +55,20 @@ func (c *NoopClient) Unsubscribe(_ context.Context, filter string) error {
 	return nil
 }
 
+// SubscribedFilters returns the filter strings currently registered, in no
+// particular order. Tests use it to read a subscriber's actual registered
+// wildcard shapes off a real [NoopClient] it was started with, instead of
+// restating them by hand.
+func (c *NoopClient) SubscribedFilters() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]string, 0, len(c.subscribers))
+	for f := range c.subscribers {
+		out = append(out, f)
+	}
+	return out
+}
+
 // Published returns a copy of every recorded publication.
 func (c *NoopClient) Published() []Publication {
 	c.mu.RLock()

@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 3a648134
-HEAD: 3a648134
+Generated: 84b3000c
+HEAD: 84b3000c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29868 |
-| Reachable | 5133 |
-| Whitelisted | 21712 |
-| **Unreachable** | **3023** |
+| Total Exported | 29896 |
+| Reachable | 5132 |
+| Whitelisted | 21747 |
+| **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code
 
@@ -87,10 +87,10 @@ HEAD: 3a648134
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 106 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 106 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 103 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 103 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 107 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 107 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 104 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 104 |
 
 ## Full By-Package Breakdown
 
@@ -127,9 +127,9 @@ HEAD: 3a648134
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/backup/sbk | 0 | 2 | 4 |
 | internal/build | 0 | 0 | 8 |
-| internal/central | 0 | 26 | 2 |
+| internal/central | 0 | 22 | 2 |
 | internal/central/cachereset | 0 | 18 | 0 |
-| internal/central/coordinators | 0 | 107 | 6 |
+| internal/central/coordinators | 0 | 105 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 14 | 4 |
 | internal/channelflags | 0 | 2 | 0 |

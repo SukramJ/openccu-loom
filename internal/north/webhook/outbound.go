@@ -30,6 +30,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/httpx"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -191,7 +192,12 @@ func (o *Outbound) Start(_ context.Context) error {
 	// The observer is registered without o.mu held: AttachCentral takes the
 	// same mutex for every central it wires.
 	var centrals atomic.Int64
-	remove := o.reg.OnRegister(func(u *central.Unit) func() {
+	remove := o.reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "webhook.outbound",
+		Collaborator: "*webhook.Outbound",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "no outbound webhook is ever sent for the central, and the operator's endpoint stays silent with nothing on this side reporting a failure",
+	}, func(u *central.Unit) func() {
 		unwire := o.AttachCentral(u)
 		if unwire != nil {
 			centrals.Add(1)

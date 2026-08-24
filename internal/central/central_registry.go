@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // Registry holds every configured [*Unit] keyed by name.
@@ -39,6 +40,13 @@ type Registry struct {
 	// unwires is the ledger of what each observer attached to each central,
 	// keyed by central name and kept in attach order.
 	unwires map[string][]attachedUnwire
+
+	// manifest records what each observer *claims* to wire, declared by
+	// the wiring code as it attaches (ADR 0065). unwires answers "what is
+	// currently attached"; manifest answers "what was ever meant to be" —
+	// and the difference is the whole point, because a wire call that is
+	// deleted, skipped by a nil guard or never reached leaves neither.
+	manifest *wiring.Manifest
 }
 
 // Observer is wired for every unit that enters the registry: the ones
@@ -68,7 +76,39 @@ type attachedUnwire struct {
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
-	return &Registry{items: make(map[string]*Unit), unwires: make(map[string][]attachedUnwire)}
+	return &Registry{
+		items:    make(map[string]*Unit),
+		unwires:  make(map[string][]attachedUnwire),
+		manifest: wiring.NewManifest(),
+	}
+}
+
+// Manifest returns the ledger of declared per-central seams. Never nil
+// for a registry built by [NewRegistry]; a nil *Registry returns nil,
+// which [wiring.Manifest] handles.
+func (r *Registry) Manifest() *wiring.Manifest {
+	if r == nil {
+		return nil
+	}
+	return r.manifest
+}
+
+// OnRegisterDeclared is [Registry.OnRegister] with the seam written
+// down: it declares s in the registry's manifest, then attaches observe.
+//
+// Prefer it everywhere. Plain OnRegister wires just as correctly; what
+// it cannot do is leave a trace, and a seam that declares nothing can
+// only be looked for by name. Name matching is what let a whole
+// eviction subsystem — store method, overlay method, unit tests, a doc
+// comment naming its trigger — reach production with no line anywhere
+// calling it, and no guard able to see the gap (ADR 0065).
+//
+// The declaration happens first, so a seam whose observer panics on
+// some central still shows in the ledger as attempted rather than
+// silently absent.
+func (r *Registry) OnRegisterDeclared(s wiring.Seam, observe Observer) (remove func()) {
+	r.Manifest().Declare(s)
+	return r.OnRegister(observe)
 }
 
 // OnRegister registers observe for every central in the registry — those

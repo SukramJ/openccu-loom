@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -369,7 +370,12 @@ func WireValuesCacheFlusher(
 	// Attach before the loop starts so the very first value a central reports
 	// — a boot-time one or one adopted at runtime — already marks the cache
 	// dirty in time for the next flush tick, instead of only at shutdown.
-	f.removeObserver = reg.OnRegister(f.StartCentral)
+	f.removeObserver = reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "store.values_cache_flush",
+		Collaborator: "*adapter.ValuesCacheFlusher",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "no central marks itself dirty, so the flusher writes nothing and a restart loses every value observed since the last write",
+	}, f.StartCentral)
 
 	go func() {
 		defer close(f.done)

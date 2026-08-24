@@ -4,6 +4,10 @@
 package contract
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -24,12 +28,21 @@ func TestI18nCatalogParity(t *testing.T) {
 		t.Fatalf("need at least two locales, got %v", locales)
 	}
 
-	// Use the first locale as the reference key set.
+	// Read the actual embedded catalogue files rather than probing a
+	// hand-maintained key list: a real key that lands in one locale's
+	// JSON and never gets translated in the other must be visible here,
+	// whether or not anyone remembered to add it to a separate table.
+	catalogDir := i18nCatalogDir(t)
+	keySets := make(map[string]map[string]struct{}, len(locales))
+	for _, loc := range locales {
+		keySets[loc] = readCatalogKeys(t, filepath.Join(catalogDir, loc+".json"))
+	}
+
 	refLocale := locales[0]
-	refKeys := keysForLocale(cats, refLocale)
+	refKeys := keySets[refLocale]
 
 	for _, loc := range locales[1:] {
-		got := keysForLocale(cats, loc)
+		got := keySets[loc]
 		if missing := diff(refKeys, got); len(missing) > 0 {
 			sort.Strings(missing)
 			t.Errorf("locale %q missing keys vs %q: %s",
@@ -43,45 +56,35 @@ func TestI18nCatalogParity(t *testing.T) {
 	}
 }
 
-// keysForLocale extracts the key set of one locale by probing every
-// reference key. Catalogs does not expose its internal map; we use
-// T() with a sentinel and treat key == value as "missing".
-//
-// The helper is only valid when the reference locale is guaranteed
-// to carry every documented key.
-func keysForLocale(cats *i18n.Catalogs, loc string) map[string]struct{} {
-	out := map[string]struct{}{}
-	for _, k := range documentedKeys() {
-		if cats.T(loc, k) != k {
-			out[k] = struct{}{}
-		}
+// i18nCatalogDir resolves the embedded catalogue directory
+// (internal/i18n/catalogs, the same directory [i18n.NewCatalogs] embeds
+// via go:embed) relative to this test file's own location.
+func i18nCatalogDir(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed to resolve this test file's path")
 	}
-	return out
+	return filepath.Join(filepath.Dir(file), "..", "..", "internal", "i18n", "catalogs")
 }
 
-// documentedKeys is the union of every key we know about. Updating
-// this list is the opt-in signal that a new translation is
-// expected. Keeping it explicit is deliberate — it.
-func documentedKeys() []string {
-	return []string{
-		"nav.dashboard", "nav.devices", "nav.programs", "nav.sysvars",
-		"nav.health", "nav.config", "nav.incidents", "nav.users",
-		"nav.tokens", "nav.settings", "nav.about", "nav.login", "nav.logout",
-		"dashboard.title", "dashboard.devices", "dashboard.programs",
-		"dashboard.sysvars", "dashboard.health", "dashboard.active_alarms",
-		"devices.title", "devices.address", "devices.name", "devices.model",
-		"devices.interface", "devices.available", "devices.yes", "devices.no",
-		"channel.title", "channel.parameter", "channel.value",
-		"channel.observed", "channel.modified",
-		"programs.title", "programs.run",
-		"sysvars.title",
-		"health.title", "health.overall", "health.component", "health.status",
-		"config.title", "config.locale", "config.centrals",
-		"login.title", "login.username", "login.password",
-		"login.submit", "login.invalid", "login.oidc",
-		"setup.title", "setup.intro", "setup.username",
-		"setup.password", "setup.confirm", "setup.submit",
+// readCatalogKeys parses one production catalogue JSON file and returns
+// its full key set.
+func readCatalogKeys(t *testing.T, path string) map[string]struct{} {
+	t.Helper()
+	buf, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
 	}
+	var msgs map[string]string
+	if err := json.Unmarshal(buf, &msgs); err != nil {
+		t.Fatalf("unmarshal %s: %v", path, err)
+	}
+	out := make(map[string]struct{}, len(msgs))
+	for k := range msgs {
+		out[k] = struct{}{}
+	}
+	return out
 }
 
 func diff(a, b map[string]struct{}) []string {

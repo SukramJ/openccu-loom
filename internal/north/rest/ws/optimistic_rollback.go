@@ -7,6 +7,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -60,7 +61,12 @@ func (s *OptimisticRollbackSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	s.remove = s.reg.OnRegister(s.StartCentral)
+	s.remove = s.reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "ws.optimistic_rollback",
+		Collaborator: "*ws.OptimisticRollbackSubscriber",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "a failed write is never rolled back on the client, so the SPA keeps showing the value the operator asked for rather than the one the device holds",
+	}, s.StartCentral)
 }
 
 // StartCentral attaches this subscriber to a single central's event bus and

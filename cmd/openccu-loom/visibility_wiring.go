@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // wireVisibilityUnIgnoreStore opens the SQLite DB and returns the
@@ -83,7 +84,12 @@ func wireVisibilityUnIgnore(
 		return func() {}
 	}
 	apply := func() { applyVisibilityUnIgnore(ctx, cfg, reg, store, visReg, logger) }
-	return reg.OnRegister(func(_ *central.Unit) func() {
+	return reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "visibility.un_ignore",
+		Collaborator: "applyVisibilityUnIgnore",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "the operator's un-ignore list is never applied, so every parameter they deliberately unhid stays hidden on every surface",
+	}, func(_ *central.Unit) func() {
 		apply()
 		return apply
 	})

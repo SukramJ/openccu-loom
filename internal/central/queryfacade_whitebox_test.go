@@ -84,15 +84,6 @@ func (d *minimalDP) ForcedUsage() (hmenum.DataPointUsage, bool) {
 	return *d.forcedUsage, true
 }
 
-// pathDP is like minimalDP but also implements statePather so that
-// GetStatePaths / GetStatePathEntries pick it up.
-type pathDP struct {
-	minimalDP
-	path string
-}
-
-func (d *pathDP) StatePath() string { return d.path }
-
 // fakeEvent satisfies device.AttachableEvent.
 type fakeEvent struct {
 	key  hmtypes.DataPointKey
@@ -101,13 +92,6 @@ type fakeEvent struct {
 
 func (e *fakeEvent) DataPointKey() hmtypes.DataPointKey { return e.key }
 func (e *fakeEvent) EventKind() string                  { return e.kind }
-
-// stubHubStatePaths implements HubStatePathProvider.
-type stubHubStatePaths struct {
-	paths []string
-}
-
-func (s *stubHubStatePaths) HubStatePaths() []string { return s.paths }
 
 // newModelWithDP builds a device + channel with dp attached.
 func newModelWithDP(addr string, dp device.ParameterDataPoint) *device.Device {
@@ -300,98 +284,6 @@ func TestGetEventGroup_NoMatchParameter(t *testing.T) {
 	got := qf.GetEventGroup(addr+":1", "NONEXISTENT")
 	if got != nil {
 		t.Error("GetEventGroup with non-matching param must return nil")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// GetStatePaths / GetStatePathEntries — DPs implementing statePather
-// ---------------------------------------------------------------------------
-
-func TestGetStatePaths_WithPathDP(t *testing.T) {
-	addr := "SP0001"
-	dp := &pathDP{
-		minimalDP: minimalDP{
-			key:  hmtypes.DataPointKey{ChannelAddress: addr + ":1", Parameter: "LEVEL"},
-			data: hmproto.ParameterData{Operations: hmenum.OperationsRead},
-		},
-		path: "hm/SP0001/1/LEVEL",
-	}
-	d := newModelWithDP(addr, dp)
-	qf := buildQFWithDevice(d)
-
-	paths := qf.GetStatePaths(nil)
-	if len(paths) == 0 {
-		t.Error("GetStatePaths must include path from statePather DP")
-	}
-}
-
-func TestGetStatePaths_WithHub(t *testing.T) {
-	qf := NewQueryFacade("test", registry.NewDeviceRegistry(), registry.NewModelRegistry(), nil)
-	qf.SetHubStatePathProvider(&stubHubStatePaths{paths: []string{"hm/hub/sysvar1"}})
-
-	paths := qf.GetStatePaths(nil)
-	found := false
-	for _, p := range paths {
-		if p == "hm/hub/sysvar1" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("GetStatePaths must include hub paths when provider is wired")
-	}
-}
-
-func TestGetStatePaths_EmptyPath_Excluded(t *testing.T) {
-	addr := "SP0002"
-	dp := &pathDP{
-		minimalDP: minimalDP{
-			key:  hmtypes.DataPointKey{ChannelAddress: addr + ":1", Parameter: "LEVEL"},
-			data: hmproto.ParameterData{},
-		},
-		path: "",
-	}
-	d := newModelWithDP(addr, dp)
-	qf := buildQFWithDevice(d)
-	paths := qf.GetStatePaths(nil)
-	if len(paths) != 0 {
-		t.Errorf("empty StatePath must be excluded, got %v", paths)
-	}
-}
-
-func TestGetStatePathEntries_WithPathDP(t *testing.T) {
-	addr := "SPE001"
-	dp := &pathDP{
-		minimalDP: minimalDP{
-			key:  hmtypes.DataPointKey{ChannelAddress: addr + ":1", Parameter: "STATE"},
-			data: hmproto.ParameterData{Operations: hmenum.OperationsRead},
-		},
-		path: "hm/SPE001/1/STATE",
-	}
-	d := newModelWithDP(addr, dp)
-	qf := buildQFWithDevice(d)
-
-	entries := qf.GetStatePathEntries()
-	if len(entries) == 0 {
-		t.Error("GetStatePathEntries must return entries for statePather DP")
-	}
-	if entries[0].Topic != "hm/SPE001/1/STATE" {
-		t.Errorf("entry.Topic = %q, want hm/SPE001/1/STATE", entries[0].Topic)
-	}
-}
-
-func TestGetStatePathEntries_WithHub(t *testing.T) {
-	qf := NewQueryFacade("test", registry.NewDeviceRegistry(), registry.NewModelRegistry(), nil)
-	qf.SetHubStatePathProvider(&stubHubStatePaths{paths: []string{"hm/sysvar/X"}})
-
-	entries := qf.GetStatePathEntries()
-	found := false
-	for _, e := range entries {
-		if e.Topic == "hm/sysvar/X" && e.Address == "" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("GetStatePathEntries must add hub paths as Topic-only entries")
 	}
 }
 

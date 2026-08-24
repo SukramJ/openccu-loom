@@ -433,8 +433,11 @@ export async function mockAllApis(page: Page): Promise<void> {
   );
 
   // Auth users and tokens
+  // /auth/users and /users answer DIFFERENT schemas — UserListEntry names the
+  // login `username`, UserSummary names it `subject` and adds created_at — so
+  // they cannot share one fixture. They did, and it satisfied neither.
   await page.route('**/api/v1/auth/users', (route) =>
-    route.fulfill({ json: fixture('users.json') }),
+    route.fulfill({ json: fixture('auth-users.json') }),
   );
   await page.route('**/api/v1/auth/tokens', (route) =>
     route.fulfill({ json: fixture('tokens.json') }),

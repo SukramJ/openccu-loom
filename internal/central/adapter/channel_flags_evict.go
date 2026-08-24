@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -101,6 +102,11 @@ func WireChannelFlagsEviction(
 		return nil
 	}
 	e := &ChannelFlagsEvictor{store: store, overlay: overlay, logger: logger}
-	e.removeObserver = reg.OnRegister(e.StartCentral)
+	e.removeObserver = reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "store.channel_flags_eviction",
+		Collaborator: "*adapter.ChannelFlagsEvictor",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "an unpaired device keeps its Hidden/Locked overrides in the store and the overlay, and they reapply to whatever is paired at that address next",
+	}, e.StartCentral)
 	return e
 }

@@ -35,16 +35,23 @@ func TestCSRFExplicitFalseOptOut(t *testing.T) {
 	}
 }
 
-// TestWSHandlerOriginCheckWiredInDaemon pins that cmd/openccu-loom/daemon.go
-// passes a non-nil origin list to ws.Handler via the wsAllowedOrigins helper.
-// Without this wiring the WebSocket upgrade path has no Origin check even when
-// CSRF is active, leaving a CSRF vector on the WebSocket surface.
+// TestWSHandlerOriginCheckWiredInDaemon pins that cmd/openccu-loom passes a
+// non-nil origin list to ws.Handler via the wsAllowedOrigins helper. Without
+// this wiring the WebSocket upgrade path has no Origin check even when CSRF
+// is active, leaving a CSRF vector on the WebSocket surface.
+//
+// wsAllowedOrigins is not a method and not a member of package
+// internal/north/rest/ws — it is an unexported helper defined and called
+// within cmd/openccu-loom itself (daemon_north.go / daemon_infra.go), so the
+// call carries no package qualifier. calleePackage is therefore "": the
+// same shape MustFindCallerInFile uses for any unqualified same-package
+// call.
 func TestWSHandlerOriginCheckWiredInDaemon(t *testing.T) {
 	t.Parallel()
 	contract.MustFindCallerInFile(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/rest/ws",
+		"",
 		"wsAllowedOrigins",
 	)
 }

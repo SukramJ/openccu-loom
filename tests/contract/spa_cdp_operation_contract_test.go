@@ -4,9 +4,13 @@
 package contract
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -23,12 +27,37 @@ import (
 // does not read is a silent no-op or a 4xx at best — this test turns that
 // class of drift into a build failure by extracting every literal
 // invoke(...) call from the widget source and checking it against a
-// dispatcher-derived whitelist.
+// whitelist built by parsing the dispatcher's own switch statements
+// (see [dispatcherOperations]), not by restating them.
 func TestSPACDPOperationsMatchDispatcher(t *testing.T) {
 	dir := filepath.Join("..", "..", "assets", "ui", "src", "lib", "cdp", "widgets")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("read widgets dir: %v", err)
+	}
+
+	dispatchOps := dispatcherOperations(t)
+	acceptedOperations := make(map[string]widgetContract, len(widgetDispatchFuncs))
+	for widget, funcs := range widgetDispatchFuncs {
+		contract := widgetContract{}
+		for _, fn := range funcs {
+			ops, ok := dispatchOps[fn]
+			if !ok {
+				t.Fatalf("widgetDispatchFuncs references %q for %s, but no such dispatch* function "+
+					"was found in custom_dp_dispatcher.go — update the mapping", fn, widget)
+			}
+			for op, keys := range ops {
+				merged := contract[op]
+				if merged == nil {
+					merged = opKeys{}
+					contract[op] = merged
+				}
+				for k := range keys {
+					merged[k] = struct{}{}
+				}
+			}
+		}
+		acceptedOperations[widget] = contract
 	}
 
 	// Every acceptedOperations entry must correspond to a real widget file —
@@ -41,7 +70,7 @@ func TestSPACDPOperationsMatchDispatcher(t *testing.T) {
 	}
 	for name := range acceptedOperations {
 		if !onDisk[name] {
-			t.Errorf("acceptedOperations has an entry for %q but no such widget file exists under %s", name, dir)
+			t.Errorf("widgetDispatchFuncs has an entry for %q but no such widget file exists under %s", name, dir)
 		}
 	}
 
@@ -103,15 +132,6 @@ func TestSPACDPOperationsMatchDispatcher(t *testing.T) {
 // opKeys is the set of param keys the dispatcher accepts for one operation.
 type opKeys map[string]struct{}
 
-// keySet builds an [opKeys] from a literal list of accepted key names.
-func keySet(names ...string) opKeys {
-	m := make(opKeys, len(names))
-	for _, n := range names {
-		m[n] = struct{}{}
-	}
-	return m
-}
-
 // widgetContract maps operation name -> accepted param keys for one widget
 // file. It is a superset contract: a key must be valid for at least one of
 // the custom-DP kinds the widget can render (several widgets render more
@@ -121,82 +141,198 @@ func keySet(names ...string) opKeys {
 // recognise at all.
 type widgetContract map[string]opKeys
 
-// acceptedOperations mirrors the accepted (operation, key) surface of
-// internal/central/adapter/custom_dp_dispatcher.go, one entry per CDP widget
-// file under assets/ui/src/lib/cdp/widgets/. Keep it in sync with the
-// dispatch* functions named in the comment on each entry.
-var acceptedOperations = map[string]widgetContract{
-	// dispatchSwitch (switchdev.Switch).
-	"SwitchTile.svelte": {
-		"turn_on":     keySet(),
-		"turn_off":    keySet(),
-		"toggle":      keySet(),
-		"turn_on_for": keySet("seconds", "duration"),
-		"set_on_time": keySet("seconds", "duration"),
-	},
-	// dispatchIrrigation (valve.Irrigation) union dispatchModulatingValve
-	// (valve.Modulating) — ValveTile.svelte renders both kinds via
-	// `cdp.kind === "valve_modulating"`.
-	"ValveTile.svelte": {
-		"open":        keySet("seconds", "duration"),
-		"close":       keySet(),
-		"set_on_time": keySet("seconds", "duration"),
-		"set_level":   keySet("level"),
-	},
-	// dispatchLight (light.Light) union dispatchColorLight,
-	// dispatchColorTempLight, dispatchFixedColorLight, dispatchEffectLight,
-	// dispatchRGBWLight — LightTile.svelte renders any of these depending on
+// widgetDispatchFuncs maps each CDP widget file to the dispatch* function(s)
+// in custom_dp_dispatcher.go it can route through, depending on the
+// concrete custom-DP kind the widget renders (`cdp.kind` /
+// `cdp.capabilities`). This mapping is architectural (which model kinds a
+// widget can represent) and is not restated from the dispatcher's op/key
+// content — that content is parsed out of the dispatcher source itself by
+// [dispatcherOperations].
+var widgetDispatchFuncs = map[string][]string{
+	"SwitchTile.svelte": {"dispatchSwitch"},
+	// ValveTile.svelte renders both valve kinds via `cdp.kind === "valve_modulating"`.
+	"ValveTile.svelte": {"dispatchIrrigation", "dispatchModulatingValve"},
+	// LightTile.svelte renders any Light subtype depending on
 	// cdp.capabilities / cdp.kind, and every subtype falls back to
 	// dispatchLight for the operations it does not override.
+	// dispatchDRGDaliLight is excluded: it has no `switch op` of its own
+	// (it delegates to dispatchColorTempLight and special-cases
+	// "set_effect" via an if-statement), and its set_effect/label surface
+	// is already covered by dispatchEffectLight / dispatchRGBWLight below.
 	"LightTile.svelte": {
-		"turn_on":               keySet(),
-		"turn_off":              keySet(),
-		"set_brightness":        keySet("brightness"),
-		"set_level":             keySet("state", "brightness", "level"),
-		"set_on_time":           keySet("seconds", "duration"),
-		"set_color":             keySet("hue", "saturation", "slot", "label"),
-		"set_color_temperature": keySet("kelvin"),
-		"set_effect":            keySet("label", "index"),
+		"dispatchLight", "dispatchColorLight", "dispatchColorTempLight",
+		"dispatchFixedColorLight", "dispatchSoundPlayerLED",
+		"dispatchEffectLight", "dispatchRGBWLight",
 	},
-	// dispatchClimate (climate.Climate).
-	"ClimateTile.svelte": {
-		"set_temperature":         keySet("temperature"),
-		"enable_boost":            keySet(),
-		"disable_boost":           keySet(),
-		"set_mode":                keySet("mode"),
-		"set_profile":             keySet("profile"),
-		"enable_away":             keySet("until", "temperature"),
-		"enable_away_by_calendar": keySet("end", "away_temperature"),
-		"enable_away_by_duration": keySet("hours", "duration_seconds", "away_temperature"),
-		"disable_away":            keySet(),
-	},
-	// dispatchCover (cover.Cover) union dispatchGarage (cover.Garage) union
-	// dispatchBlind (cover.Blind) — CoverTile.svelte renders `cover`,
-	// `cover_blind`, and `cover_garage` from the same file.
-	"CoverTile.svelte": {
-		"open":         keySet(),
-		"close":        keySet(),
-		"stop":         keySet(),
-		"ventilate":    keySet(),
-		"set_position": keySet("position"),
-		"set_tilt":     keySet("tilt"),
-		"set_combined": keySet("level", "tilt"),
-		"open_tilt":    keySet(),
-		"close_tilt":   keySet(),
-		"stop_tilt":    keySet(),
-	},
-	// dispatchLock (lock.Lock).
-	"LockTile.svelte": {
-		"lock":   keySet(),
-		"unlock": keySet(),
-		"open":   keySet(),
-	},
-	// dispatchSiren (siren.Siren).
-	"SirenTile.svelte": {
-		"turn_on":  keySet("duration", "duration_seconds", "acoustic", "optical"),
-		"turn_off": keySet(),
-		"stop":     keySet(),
-	},
+	"ClimateTile.svelte": {"dispatchClimate"},
+	// CoverTile.svelte renders `cover`, `cover_blind`, and `cover_garage`
+	// from the same file.
+	"CoverTile.svelte": {"dispatchCover", "dispatchGarage", "dispatchBlind"},
+	"LockTile.svelte":  {"dispatchLock"},
+	"SirenTile.svelte": {"dispatchSiren"},
+}
+
+// dispatcherOperations parses internal/central/adapter/custom_dp_dispatcher.go
+// and, for every `func (d *CustomDPDispatcher) dispatchXxx(...)` method,
+// returns the operation names its `switch op { case "...": }` accepts and,
+// per operation, the param keys its case body reads — via direct
+// `p["key"]` / `params["key"]` indexing, `paramXxx(p, "key", ...)` helper
+// calls, and one level of resolution through local helper functions
+// (onTimeParam / requireOnTime / awayDuration) that read params
+// themselves. This is the dispatcher's actual accepted surface, read from
+// its source rather than retyped by hand — a case removed from the switch,
+// or a key no longer read, changes what this returns.
+func dispatcherOperations(t *testing.T) map[string]widgetContract {
+	t.Helper()
+
+	path := filepath.Join("..", "..", "internal", "central", "adapter", "custom_dp_dispatcher.go")
+	src, err := os.ReadFile(path) //nolint:gosec // contract test, fixed relative path
+	if err != nil {
+		t.Fatalf("read dispatcher source: %v", err)
+	}
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, src, 0)
+	if err != nil {
+		t.Fatalf("parse dispatcher source: %v", err)
+	}
+
+	// Pass 1: every top-level function's raw source text, keyed by name —
+	// used both to find dispatch* switches and to resolve helper calls
+	// like requireOnTime(p) back to the params[...] keys they read.
+	funcSrc := make(map[string]string)
+	funcDecl := make(map[string]*ast.FuncDecl)
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		funcSrc[fn.Name.Name] = string(src[fn.Pos()-1 : fn.End()-1])
+		funcDecl[fn.Name.Name] = fn
+	}
+	if len(funcDecl) == 0 {
+		t.Fatal("no function declarations found in dispatcher source — parser broken or file moved")
+	}
+
+	// Pass 2: direct params[...] / paramXxx(p, "key") keys per function,
+	// resolved one level through same-file helper calls (requireOnTime ->
+	// onTimeParam, etc.) so a case that only calls a shared extractor still
+	// gets credited with the keys that extractor reads.
+	directKeys := make(map[string][]string, len(funcSrc))
+	for name, body := range funcSrc {
+		directKeys[name] = extractParamKeys(body)
+	}
+	resolvedKeys := make(map[string]map[string]struct{}, len(funcSrc))
+	for name := range funcSrc {
+		resolvedKeys[name] = keysOf(directKeys[name])
+	}
+	for name, body := range funcSrc {
+		for calleeName, calleeKeys := range directKeys {
+			if calleeName == name || len(calleeKeys) == 0 {
+				continue
+			}
+			if regexp.MustCompile(`\b` + regexp.QuoteMeta(calleeName) + `\(\s*(?:params|p)\s*[,)]`).MatchString(body) {
+				for _, k := range calleeKeys {
+					resolvedKeys[name][k] = struct{}{}
+				}
+			}
+		}
+	}
+
+	out := make(map[string]widgetContract, len(funcDecl))
+	for name, fn := range funcDecl {
+		if !strings.HasPrefix(name, "dispatch") {
+			continue
+		}
+		sw := findOpSwitch(fn)
+		if sw == nil {
+			continue
+		}
+		contract := widgetContract{}
+		for _, stmt := range sw.Body.List {
+			cc, ok := stmt.(*ast.CaseClause)
+			if !ok || cc.List == nil {
+				continue // default:
+			}
+			caseStart := cc.Pos()
+			caseEnd := cc.End()
+			caseSrc := string(src[caseStart-1 : caseEnd-1])
+			keys := keysOf(extractParamKeys(caseSrc))
+			for calleeName := range directKeys {
+				if regexp.MustCompile(`\b` + regexp.QuoteMeta(calleeName) + `\(\s*(?:params|p)\s*[,)]`).MatchString(caseSrc) {
+					for k := range resolvedKeys[calleeName] {
+						keys[k] = struct{}{}
+					}
+				}
+			}
+			for _, expr := range cc.List {
+				lit, ok := expr.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				op, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					continue
+				}
+				contract[op] = keys
+			}
+		}
+		out[name] = contract
+	}
+	return out
+}
+
+// findOpSwitch returns the switch statement inside fn whose tag is the
+// bare identifier "op" — every dispatch* function's operation switch uses
+// that name — or nil if fn has none.
+func findOpSwitch(fn *ast.FuncDecl) *ast.SwitchStmt {
+	var found *ast.SwitchStmt
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if found != nil {
+			return false
+		}
+		sw, ok := n.(*ast.SwitchStmt)
+		if !ok {
+			return true
+		}
+		if id, ok := sw.Tag.(*ast.Ident); ok && id.Name == "op" {
+			found = sw
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// paramKeyRe matches the ways dispatcher code reads one named key out of
+// its params map: direct indexing (`p["key"]` / `params["key"]`) and the
+// paramFloat/paramString/paramStringOptional/paramInt32/paramTime helper
+// calls, whose second argument is always the literal key.
+var paramKeyRe = regexp.MustCompile(
+	`(?:params|p)\[\s*"([A-Za-z0-9_]+)"\s*\]` +
+		`|\bparam(?:Float|String|StringOptional|Int32|Time|Bool)\(\s*(?:params|p)\s*,\s*"([A-Za-z0-9_]+)"`,
+)
+
+// extractParamKeys returns every param key literal referenced in src.
+func extractParamKeys(src string) []string {
+	matches := paramKeyRe.FindAllStringSubmatch(src, -1)
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		if m[1] != "" {
+			out = append(out, m[1])
+		} else if m[2] != "" {
+			out = append(out, m[2])
+		}
+	}
+	return out
+}
+
+func keysOf(names []string) opKeys {
+	m := make(opKeys, len(names))
+	for _, n := range names {
+		m[n] = struct{}{}
+	}
+	return m
 }
 
 // skippedWidgetFiles documents CDP widget files intentionally excluded from

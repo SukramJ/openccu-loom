@@ -156,6 +156,7 @@ nav:
           - ADR 0062 — Suppression reasons are recomputed: adr/0062-suppression-reasons-are-recomputed.md
           - ADR 0063 — Self-maintained device profiles: adr/0063-self-maintained-device-profiles.md
           - ADR 0064 — Garage projects as a Matter Closure: adr/0064-garage-projects-as-matter-closure.md
+          - ADR 0065 — Composition-root wiring is checkable: adr/0065-composition-root-wiring-is-checkable.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

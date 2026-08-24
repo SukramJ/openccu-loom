@@ -8,6 +8,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -71,7 +72,12 @@ func (s *SystemStatusSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	s.remove = s.reg.OnRegister(s.StartCentral)
+	s.remove = s.reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "ws.system_status",
+		Collaborator: "*ws.SystemStatusSubscriber",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "system-status changes are never broadcast, so a connected client keeps the status it had when it subscribed",
+	}, s.StartCentral)
 }
 
 // StartCentral attaches this subscriber to a single central's event bus and

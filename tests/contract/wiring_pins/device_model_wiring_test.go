@@ -11,12 +11,14 @@ import (
 
 // TestPin_FinalizeInit_CalledInDevicePipeline pins that device_pipeline.go
 // calls Channel.FinalizeInit.  Removing that call would silently leave
-// channels without their post-init computed fields populated.
+// channels without their post-init computed fields populated. This is a
+// method call on the per-device channel loop variable, so it is pinned by
+// receiver + method name, not by package function.
 func TestPin_FinalizeInit_CalledInDevicePipeline(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/device_pipeline.go",
-		"internal/model/device", "FinalizeInit",
+		"ch", "FinalizeInit",
 	)
 }
 
@@ -35,10 +37,12 @@ func TestPin_OnConfigChanged_CalledInReloadDeviceConfig(t *testing.T) {
 // TestPin_RemoveChannel_CalledInCentral pins that central.go calls
 // Device.RemoveChannel during RemoveDevice.  This ensures channel teardown
 // (observer unsubscribe, custom-DP cleanup) is not accidentally dropped.
+// This is a method call on the removed-device local variable, so it is
+// pinned by receiver + method name, not by package function.
 func TestPin_RemoveChannel_CalledInCentral(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/central.go",
-		"internal/model/device", "RemoveChannel",
+		"dev", "RemoveChannel",
 	)
 }

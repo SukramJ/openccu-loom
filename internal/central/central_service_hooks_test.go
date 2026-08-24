@@ -49,32 +49,6 @@ func TestDBReturnsNilWhenNotWired(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AcceptDeviceInbox
-// ---------------------------------------------------------------------------
-
-func TestAcceptDeviceInboxUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	if err := c.AcceptDeviceInbox(context.Background(), "addr"); err == nil {
-		t.Fatal("expected error when fn not wired")
-	}
-}
-
-func TestAcceptDeviceInboxCallsWiredFn(t *testing.T) {
-	c := newTestCentral(t)
-	var called string
-	c.SetAcceptInboxFn(func(_ context.Context, addr string) error {
-		called = addr
-		return nil
-	})
-	if err := c.AcceptDeviceInbox(context.Background(), "DEV0001"); err != nil {
-		t.Fatal(err)
-	}
-	if called != "DEV0001" {
-		t.Fatalf("expected DEV0001, got %q", called)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // CreateBackup
 // ---------------------------------------------------------------------------
 
@@ -121,59 +95,6 @@ func TestSetLoadAndRefreshFnCallsWiredFn(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SaveFiles
-// ---------------------------------------------------------------------------
-
-func TestSaveFilesUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	if err := c.SaveFiles(context.Background()); err == nil {
-		t.Fatal("expected error when fn not wired")
-	}
-}
-
-func TestSaveFilesCallsWiredFn(t *testing.T) {
-	c := newTestCentral(t)
-	called := false
-	c.SetSaveFilesFn(func(_ context.Context) error {
-		called = true
-		return nil
-	})
-	if err := c.SaveFiles(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if !called {
-		t.Fatal("save fn not called")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ValidateConfigAndGetSystemInformation
-// ---------------------------------------------------------------------------
-
-func TestValidateConfigUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	_, err := c.ValidateConfigAndGetSystemInformation(context.Background())
-	if err == nil {
-		t.Fatal("expected error when fn not wired")
-	}
-}
-
-func TestValidateConfigCallsWiredFn(t *testing.T) {
-	c := newTestCentral(t)
-	want := SystemInfo{Model: "HM-RCV-50", Version: "3.69.9"}
-	c.SetValidateConfigFn(func(_ context.Context) (SystemInfo, error) {
-		return want, nil
-	})
-	got, err := c.ValidateConfigAndGetSystemInformation(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != want {
-		t.Fatalf("got %+v want %+v", got, want)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // ServiceWiringStatus / ServiceWiringComplete
 // ---------------------------------------------------------------------------
 
@@ -191,13 +112,9 @@ func TestServiceWiringCompleteOnlyAfterAllWired(t *testing.T) {
 	if c.ServiceWiringComplete() {
 		t.Fatal("should not be complete with nothing wired")
 	}
-	noop := func(_ context.Context) error { return nil }
-	c.SetAcceptInboxFn(func(_ context.Context, _ string) error { return nil })
 	c.SetCreateBackupFn(func(_ context.Context) ([]byte, error) { return nil, nil })
 	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error { return nil })
-	c.SetLoadAndRefreshFn(noop)
-	c.SetSaveFilesFn(noop)
-	c.SetValidateConfigFn(func(_ context.Context) (SystemInfo, error) { return SystemInfo{}, nil })
+	c.SetLoadAndRefreshFn(func(_ context.Context) error { return nil })
 	if !c.ServiceWiringComplete() {
 		t.Fatal("should be complete when all hooks are wired")
 	}
@@ -299,22 +216,6 @@ func TestQueryFacadeGetEventsNilModel(t *testing.T) {
 	}
 	if q.GetEventGroups("addr", "") != nil {
 		t.Fatal("expected nil with nil model")
-	}
-}
-
-func TestQueryFacadeGetStatePathsNilModel(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil, nil)
-	paths := q.GetStatePaths(nil)
-	if len(paths) != 0 {
-		t.Fatalf("expected empty, got %v", paths)
-	}
-}
-
-func TestQueryFacadeGetStatePathEntriesNilModel(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil, nil)
-	entries := q.GetStatePathEntries()
-	if len(entries) != 0 {
-		t.Fatalf("expected empty entries, got %v", entries)
 	}
 }
 
@@ -460,22 +361,6 @@ func TestRegisterCentralServiceRenameDeviceSucceeds(t *testing.T) {
 	}, hmenum.CommandPriorityHigh)
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestRegisterCentralServiceAcceptDeviceInboxMissingAddressErrors(t *testing.T) {
-	c := newTestCentral(t)
-	err := c.Invoke(context.Background(), "accept_device_inbox", map[string]any{}, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Fatal("expected error for missing address")
-	}
-}
-
-func TestRegisterCentralServiceAcceptDeviceInboxUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	err := c.Invoke(context.Background(), "accept_device_inbox", map[string]any{"address": "DEV0001"}, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Fatal("expected error when AcceptInboxFn is not wired")
 	}
 }
 

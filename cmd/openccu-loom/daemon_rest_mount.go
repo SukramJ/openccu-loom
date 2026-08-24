@@ -293,6 +293,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if d.authMw != nil {
 		d.authMw.BasicThrottle = loginLimiter
 	}
+	// One reloader, two callers: the admin endpoint an operator can hit
+	// directly, and the config-section save below.
+	mqttReload := newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger)
+
 	deps := rest.Deps{
 		Logger:                  logger,
 		StartedAt:               time.Now(),
@@ -360,10 +364,16 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		TokenAdmin:        d.tokenSvc,
 		CentralAdmin:      d.centSvc,
 		Discovery:         d.discovery,
-		MQTTReload:        newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger),
-		OIDC:              buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
-		SPAHandler:        ui.SPAHandler(),
-		Bootstrap:         d.bootstrap,
+		MQTTReload:        mqttReload,
+		// Same reloader the admin endpoint drives, reached from the config
+		// save instead: a section the operator edits in the SPA never
+		// produces a file-watcher event, so without this the only way to
+		// make a north.mqtt edit real was to restart or to know about
+		// POST /admin/mqtt/reload.
+		SectionApplier: newSectionApplier(mqttReload, logger),
+		OIDC:           buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
+		SPAHandler:     ui.SPAHandler(),
+		Bootstrap:      d.bootstrap,
 		Setup: &handlers.SetupService{
 			Users: d.sqUsers,
 			// The live-adopt decorator, not the raw store: the wizard's CCU
@@ -508,6 +518,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ChannelFlagsOverlay:   d.channelFlagsOverlay,
 		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg, cfg.Persistence.History.EnergyPricePerKWh, cfg.Persistence.History.EnergyCurrency),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
+		WiringManifest:        d.reg.Manifest(),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
 		CSRFSecure:            cfg.North.REST.CSRFSecure,
 	}
@@ -735,6 +746,25 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		Matter:      d.matter.statusReader,
 		Backups:     d.backupAdapter,
 		AddonUpdate: addonUpdateServiceFrom(d.addonUpdater),
+		// The eight fleet read seams, built from the same daemon values the
+		// REST router receives. Each was a declared MCP/REST parity gap:
+		// the domain existed on REST and an assistant had no way to read
+		// it. The three constructed here are stateless wrappers over the
+		// store or domain the router also wraps, so a second instance
+		// projects identical data. Reconnect, un-ignore writes and
+		// schedule writes stay out — only the read half of each facade is
+		// handed over.
+		Groups:     newGroupsAdapter(d.groupsDomain),
+		Areas:      d.areaSvc,
+		Interfaces: d.ifaceAdapter,
+		History:    newHistoryHandlerAdapter(d.historyStore),
+		Visibility: d.visibilityUnIgnoreStore,
+		Energy: newEnergyHandlerAdapter(
+			d.historyStore, d.reg,
+			cfg.Persistence.History.EnergyPricePerKWh, cfg.Persistence.History.EnergyCurrency,
+		),
+		Links:     d.linksDomain,
+		Schedules: d.schedulesDomain,
 	}))
 	// Rebuild the same two request-volume guards rest.NewRouter mounts —
 	// see the doc comment above for why the MCP path needs its own copy.

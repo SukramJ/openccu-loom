@@ -1,5 +1,5 @@
 {
- "api_version": "7.7.0",
+ "api_version": "7.8.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -105,6 +105,7 @@
   "GET /diagnostics/rpc-recording": "listRpcRecordings",
   "GET /diagnostics/rpc-recording/{central}/download": "downloadRpcRecording",
   "GET /diagnostics/rssi": "getDiagnosticsRSSI",
+  "GET /diagnostics/wiring": "getDiagnosticsWiring",
   "GET /diagrams": "listDiagrams",
   "GET /diagrams/{id}": "getDiagram",
   "GET /energy": "getEnergy",

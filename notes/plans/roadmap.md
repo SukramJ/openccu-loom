@@ -16,7 +16,40 @@ cover a different scope and are not alternatives to this one:
 the findings of the subsystem deep-audit passes. When in doubt about what is
 still open, trust this file plus `CHANGELOG.md`.
 
+**Round 5 of the full-codebase audit has its own strategy document.**
+[`round-5-audit-strategy.md`](./round-5-audit-strategy.md) records why a fifth
+instance sweep is not the plan — the density data, the six measures that
+replace it, and the metrics that say whether it worked.
+
 ## Open development items
+
+### Composition root
+
+- **Widen the wiring manifest to setter and struct-field seams**
+  ([ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md),
+  accepted 2026-08-23).
+
+  The first adoption is done and covers one seam class: every per-central
+  registry observer attaches through `Registry.OnRegisterDeclared`, eighteen
+  call sites across `cmd/` and five `internal/` packages. It carries the guard
+  the manifest needed to be a check rather than documentation — three of them,
+  in fact: a raw `OnRegister` fails statically, a duplicated seam name fails
+  statically, and `GET /diagnostics/wiring` lets an end-to-end test ask a
+  running daemon what it wired, so deleting one wiring line from the
+  composition root turns it red.
+
+  What is left is the class the audits actually keep hitting: a setter or
+  struct field whose caller exists but runs at the wrong moment. `Seam` already
+  declares `before-southbound` and `after-southbound`; nothing uses them,
+  because the observer class is ordering-free by construction. The next
+  adoption should be a `wire*` function whose order relative to south-bound
+  bring-up is load-bearing, and it should make that ordering a declared
+  constraint a test can check rather than a property of line order in a
+  900-line function.
+
+  Ordering by defect density still applies, and `wiringSettersWithoutCaller`
+  (20 entries) should shrink toward deletion as each seam becomes exactly
+  checkable.
 
 ### Matter
 

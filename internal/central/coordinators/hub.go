@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/observability"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -841,32 +840,6 @@ func (h *HubCoordinator) GetSuppressedServiceMessages(ctx context.Context, inter
 		return nil, nil
 	}
 	return r.GetSuppressedServiceMessages(ctx, interfaceID, channelAddress)
-}
-
-// HubStatePaths returns the state-path strings for all registered sysvar and
-// program data points. Used by [QueryFacade.GetStatePaths] to include hub
-// entity paths in the full subscription path list.
-func (h *HubCoordinator) HubStatePaths() []string {
-	h.mu.RLock()
-	m := h.hubModel
-	h.mu.RUnlock()
-	if m == nil {
-		return nil
-	}
-	var out []string
-	for _, s := range m.Sysvars() {
-		if sp := s.PathData().StatePath; sp != "" {
-			out = append(out, sp)
-		}
-	}
-	for _, p := range m.Programs() {
-		// Program state path mirrors
-		// "program/status/<pid>" (model/naming/pathdata.go:113).
-		if p.ID != "" {
-			out = append(out, naming.NewProgramPathData(p.ID).StatePath)
-		}
-	}
-	return out
 }
 
 // --- CreateSysvar* typed creators --------------------------------

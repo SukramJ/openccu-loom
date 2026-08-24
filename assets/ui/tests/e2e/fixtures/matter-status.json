@@ -1,1 +1,11 @@
-{ "enabled": false, "commissioned": false, "fabrics": [] }
+{
+  "enabled": false,
+  "commissioned": false,
+  "fabrics": [],
+  "listening": false,
+  "endpoint_count": 0,
+  "fabric_count": 0,
+  "enabled_count": 0,
+  "advertising": false,
+  "commissioning_window_open": false
+}

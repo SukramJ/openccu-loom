@@ -16,13 +16,14 @@ import (
 // operational-credentials-server.cpp HandleAddNOC needRevert step 3:
 // accessControl.DeleteAllEntriesForFabric.
 func TestPin_RevertAddNOC_ACLCleanup(t *testing.T) {
-	// ReplaceACL must appear in the revertAddNOC function. The identifier
-	// appears in both the StoreFacade interface declaration and the call
-	// site inside revertAddNOC; MustFindCallerInFile checks identifier
-	// presence which is sufficient to pin the call site.
-	contract.MustFindCallerInFile(
+	// ReplaceACL is called more than once in this file — once to install the
+	// AddNOC default ACL entry, once here to clear it on revert — so the
+	// pin must be scoped to revertAddNOC's own body; a file-wide identifier
+	// search would stay green even with this specific call deleted, because
+	// the unrelated insertion call site still carries the same name.
+	contract.MustFindMethodCallInFunc(
 		t,
 		"internal/north/matter/cluster/core/operational_credentials.go",
-		"internal/north/matter/cluster/core", "ReplaceACL",
+		"revertAddNOC", "store", "ReplaceACL",
 	)
 }

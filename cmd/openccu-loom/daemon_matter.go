@@ -55,6 +55,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -3271,7 +3272,12 @@ func wireMatterCentralReadiness(reg *central.Registry) (readiness *matterCentral
 	if reg == nil {
 		return readiness, func() {}
 	}
-	return readiness, reg.OnRegister(func(u *central.Unit) func() {
+	return readiness, reg.OnRegisterDeclared(wiring.Seam{
+		Name:         "matter.central_readiness",
+		Collaborator: "*matterCentralReadiness",
+		Phase:        wiring.PhasePerCentral,
+		Why:          "no central is ever latched model-complete, so every bridge snapshot stays incomplete and endpoint garbage collection never runs",
+	}, func(u *central.Unit) func() {
 		unsub := wireMatterCentralReadinessForUnit(readiness, u)
 		name := u.Name()
 		return func() {
@@ -3405,8 +3411,15 @@ func newMatterCentralHook(
 // closures to register, and a teardown to defer. Returns a zero
 // matterWiring + nil closers + a no-op teardown when the bridge is off.
 //
+// The named return shadows the internal/wiring package this file imports
+// for the seam declaration in [wireMatterCentralReadiness]. The shadow is
+// confined to this function, which does not declare a seam; renaming the
+// return instead would rename an identifier four wiring pins and a
+// WebSocket-emitter guard address by name, which is a worse trade than
+// the shadow.
+//
 //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential Matter bridge setup
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) { //nolint:gocritic // importShadow: see the note above
 	teardown = func() {}
 	if bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger); bundle != nil {
 		// Defaulted view of the Matter config — the identical view
