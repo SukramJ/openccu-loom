@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 64feab93
-HEAD: 64feab93
+Generated: 36231ed0
+HEAD: 36231ed0
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29917 |
-| Reachable | 5139 |
+| Total Exported | 29919 |
+| Reachable | 5141 |
 | Whitelisted | 21761 |
 | **Unreachable** | **3017** |
 

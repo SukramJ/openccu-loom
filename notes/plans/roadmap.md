@@ -35,7 +35,7 @@ replace it, and the metrics that say whether it worked.
   collaborator handed over after the thing that reads it has already started.
   `wiring.Mark` names a boot boundary, an ordered seam declares which marks it
   must precede and follow, and `Manifest.Attach` evaluates that at the moment
-  the seam attaches. Four seams are declared today, and moving one across its
+  the seam attaches. Six seams are declared today, and moving one across its
   boundary turns the end-to-end test red with the consequence spelled out.
 
   What is left is volume, not mechanism: `cmd/openccu-loom` carries more
@@ -47,6 +47,13 @@ replace it, and the metrics that say whether it worked.
   Also still open: struct-field seams, where a collaborator arrives as a field
   of a deps literal rather than through a call. Those need a shape decision
   first — a literal has no attach point to hang a declaration on.
+
+  And one named gap: a mark has to be an unconditional boot boundary, so a
+  constraint relative to an optional subsystem's start is not expressible. The
+  Matter bridge's per-central readiness latch, which must precede its first
+  assembly, is the instance. Closing it means marks that may be absent, and
+  then a third answer beside satisfied and violated — see the ADR's
+  consequences for why that is a shape to avoid rather than reach for.
 
   `wiringSettersWithoutCaller` (19 entries) should keep shrinking toward
   deletion as each seam becomes exactly checkable.

@@ -88,7 +88,7 @@ Three checks come with it, and each fails for a different reason:
   this.
 
 The endpoint that makes the third one possible is `GET /diagnostics/wiring`
-(admin-only, API 7.7.0). It answers with an empty list rather than a 503 when
+(admin-only). It answers with an empty list rather than a 503 when
 nothing is wired: "the daemon wired none of these" and "the daemon cannot tell
 you" must not be the same status, because only one of them is checkable.
 
@@ -106,6 +106,37 @@ That buys three things no current guard can express:
   property of line order in a 900-line function;
 - the manifest is the same artefact a `/diagnostics` surface could serve, so an
   operator can see what a running daemon actually wired.
+
+### What the second adoption covers
+
+Ordering — the class the audits actually keep hitting, and the reason this ADR
+exists. It is expressed as **marks** rather than as the two phase constants the
+first adoption declared and never used, because "before south-bound bring-up"
+turned out to be the wrong axis: what these constraints are relative to is the
+moment something *reads* its collaborator, which is usually its own `Start`.
+
+`wiring.Mark` names a point the daemon passes; `Manifest.Mark` records the
+passage; an ordered seam declares `Before` and `After` marks; and
+`Manifest.Attach` evaluates them **at the moment the seam attaches** — the only
+moment at which the answer is a fact rather than a reading of the source. A
+broken constraint does not stop the wiring: refusing to attach would turn a
+reporting problem into an outage, and the point of the manifest is that a
+running daemon can be asked. The violation is recorded on the seam, served by
+the endpoint, and failed on by the end-to-end test.
+
+Four marks, six seams. The worked example is `webhook.alarm_bus`:
+`Outbound.Start` reads the alarm bus once and subscribes, so a bus handed over
+after the north bridges start is stored and never read. The setter returns
+nothing, the daemon reports healthy, every static guard and pin stays green, and
+no alarm or security event is ever forwarded. That constraint used to live in a
+comment five hundred lines from the `StartAll` it talked about. Moving the call
+across the boundary now turns the end-to-end test red with the consequence
+spelled out — verified by doing exactly that.
+
+The `PhaseBeforeSouthbound` / `PhaseAfterSouthbound` constants are gone. They
+were a guess at the shape of the ordering problem, made before a single instance
+had been expressed in them; keeping them beside the marks would have offered two
+ways to say one thing, one of which no seam had ever used.
 
 ### Options considered
 
@@ -146,6 +177,26 @@ genuinely depends on, and a guard asserts every declared mark is passed exactly
 once: a mark nothing passes makes every `Before` naming it hold vacuously and
 every `After` naming it fail, at which point the constraint has stopped
 measuring the boot sequence and started measuring a typo.
+
+That exactly-once rule is also the mechanism's one real limitation, and it is
+worth naming because there is an instance. **A mark has to be an unconditional
+boundary**, so a constraint relative to an *optional* subsystem's start cannot
+be expressed: the Matter bridge latches per-central readiness before its first
+assembly, and on a daemon with Matter switched off there is no assembly to
+mark. The MQTT supervisor is the near miss that shows where the line falls —
+its `Start` runs even with MQTT disabled, taking its own skip branch, so it is
+a boundary of the boot sequence rather than of a feature and does qualify.
+
+Lifting that would mean marks that may be absent, and then every `After`
+constraint naming one needs a third answer beside satisfied and violated —
+"could not be evaluated" — which is exactly the shape that lets an unchecked
+claim read as a checked one. Better to have the gap named than papered over.
+
+The live-CCU adopt path (`central_adopt.go`) is out of scope for the same
+reason from the other direction: it runs once per adopted central, so its
+orderings are relative to that central's own bring-up rather than to the
+daemon's boot, and marks that fire repeatedly are not something this ledger can
+reason about.
 
 **The alternative that was rejected by accepting this.** Leaving the composition
 root as it is would have kept it at roughly twice the average defect density,

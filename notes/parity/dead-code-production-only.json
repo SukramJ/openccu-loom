@@ -1,6 +1,6 @@
 {
-  "generated": "64feab93",
-  "head": "64feab93",
+  "generated": "36231ed0",
+  "head": "36231ed0",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,8 +10,8 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29917,
-    "reachable": 4977,
+    "total_exported": 29919,
+    "reachable": 4979,
     "whitelisted": 21761,
     "unreachable": 3179
   },
@@ -167787,14 +167787,14 @@
       "identifier": "Manifest",
       "reason": "held as central.Registry.manifest, built by NewManifest there and served through Registry.Manifest() to the GET /diagnostics/wiring handler; a type reached only through a struct field and a constructor, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 125
+      "line": 133
     },
     {
       "package": "internal/wiring",
       "identifier": "Manifest",
       "reason": "held as central.Registry.manifest, built by NewManifest there and served through Registry.Manifest() to the GET /diagnostics/wiring handler; a type reached only through a struct field and a constructor, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 125
+      "line": 133
     },
     {
       "package": "internal/wiring",
@@ -167829,14 +167829,14 @@
       "identifier": "Seam",
       "reason": "constructed as a composite literal at all eighteen OnRegisterDeclared call sites across cmd/ and five internal/ packages, and returned by Manifest.Seams; a type reached only through literals, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 88
+      "line": 96
     },
     {
       "package": "internal/wiring",
       "identifier": "Seam",
       "reason": "constructed as a composite literal at all eighteen OnRegisterDeclared call sites across cmd/ and five internal/ packages, and returned by Manifest.Seams; a type reached only through literals, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 88
+      "line": 96
     },
     {
       "package": "internal/wiring",

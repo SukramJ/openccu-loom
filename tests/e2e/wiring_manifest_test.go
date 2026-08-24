@@ -77,6 +77,8 @@ var expectedOrderedSeams = map[string]struct{ before, after []string }{
 	"webhook.security_bus":         {before: []string{"northbridges.started"}},
 	"backup.cache_invalidator":     {after: []string{"southbound.wired"}},
 	"central.devices_created_gate": {before: []string{"centrals.started"}},
+	"jobs.standard_per_central":    {before: []string{"centrals.started"}},
+	"mqtt.channel_hidden_gate":     {before: []string{"mqtt.supervisor.started"}},
 }
 
 // wiringSeam mirrors the GET /diagnostics/wiring element shape.

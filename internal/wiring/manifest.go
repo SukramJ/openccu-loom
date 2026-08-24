@@ -76,6 +76,14 @@ const (
 	// has been started. A bridge reads its collaborators at Start, so a
 	// collaborator handed over after this mark is stored and never used.
 	MarkNorthBridgesStarted Mark = "northbridges.started"
+	// MarkMQTTSupervisorStarted is passed once the MQTT supervisor's
+	// Start has returned. It builds the first bridge from the gates it
+	// holds at that moment, and a bridge captures them for its lifetime,
+	// so a gate installed afterwards reaches no bridge until the next
+	// rebuild. Start runs unconditionally — with MQTT disabled it takes
+	// its own skip branch — so the mark is a boundary of the boot
+	// sequence rather than of a feature.
+	MarkMQTTSupervisorStarted Mark = "mqtt.supervisor.started"
 )
 
 // Seam is one declared piece of wiring.

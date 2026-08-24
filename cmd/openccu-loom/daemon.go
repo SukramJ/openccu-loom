@@ -189,7 +189,18 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		}
 	})
 
-	registerStandardJobs(reg, cfg, logger)
+	// The per-central background jobs have to be registered before the
+	// scheduler starts. Registering them afterwards compiles and logs
+	// nothing: `central.health_heartbeat` never runs, and the per-central
+	// "central" health component decays to UNKNOWN about ninety seconds
+	// into every boot through the tracker's StaleAfter rule.
+	reg.Manifest().Attach(wiring.Seam{
+		Name:         "jobs.standard_per_central",
+		Collaborator: "registerStandardJobsFor",
+		Phase:        wiring.PhaseOrdered,
+		Before:       []wiring.Mark{wiring.MarkCentralsStarted},
+		Why:          "central.health_heartbeat and central.check_connection never run, so the per-central health component decays to UNKNOWN a minute and a half after boot and no interface's circuit breaker ever recovers",
+	}, func() { registerStandardJobs(reg, cfg, logger) })
 
 	if err := reg.StartAll(ctx); err != nil {
 		return fmt.Errorf("central start: %w", err)

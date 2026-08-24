@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/observability"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 )
 
 // sharedInfra bundles the daemon-global stores, registries and adapters
@@ -175,25 +176,7 @@ func wireSharedInfrastructure(
 	// The bridge/health payload names the live fleet, not the boot config: a
 	// CCU adopted through the SPA joins the registry without ever reaching
 	// cfg.Centrals.
-	si.mqttSup = newMQTTSupervisor(logger, si.healthTracker, func() []string {
-		return liveCentralNames(cfg, reg)
-	})
-	si.mqttSup.SetCollector(si.mqttCollector)
-	// G12: let every (re)built MQTT bridge skip operator-hidden channels, so a
-	// hidden channel disappears from the MQTT plane like it does from the REST
-	// operation list and Matter. Installed BEFORE Start, which builds the first
-	// bridge — the gate is captured at build time and has no setter afterwards.
-	// The overlay is keyed on (central, address).
-	si.mqttSup.SetChannelHidden(channelHiddenGate(channelFlags))
-	// A failed first connect is not fatal and not final: the supervisor keeps
-	// the stable Wiring every consumer below binds to and retries the connect
-	// in the background, so a broker that is still booting beside the daemon
-	// costs a delay rather than the whole MQTT plane until the next restart.
-	if err := si.mqttSup.Start(ctx, cfg); err != nil {
-		logger.Warn("mqtt.supervisor.start",
-			slog.String("err", err.Error()),
-			slog.String("effect", "MQTT publishes are dropped until a background retry connects"))
-	}
+	wireMQTTSupervisor(ctx, cfg, logger, reg, si, channelFlags)
 	// Late-bind the supervisor + the live config snapshot into the
 	// reload deps bag so the config-watcher's hot-reload handler can
 	// issue an MQTT Swap when north.mqtt.* changes and the REST
@@ -262,5 +245,58 @@ func channelHiddenGate(overlay *channelflags.Overlay) func(centralName, channelA
 	}
 	return func(centralName, channelAddress string) bool {
 		return overlay.Get(centralName, channelAddress).Hidden
+	}
+}
+
+// wireMQTTSupervisor builds the MQTT supervisor, installs the gates a
+// bridge captures at build time, and starts it.
+//
+// Extracted from [wireSharedInfrastructure] so the one ordering
+// constraint here has room to be stated: the channel-hidden gate has no
+// setter once a bridge holds it, so it must be installed before Start
+// builds the first one.
+func wireMQTTSupervisor(
+	ctx context.Context,
+	cfg *config.Config,
+	logger *slog.Logger,
+	reg *central.Registry,
+	si *sharedInfra,
+	channelFlags *channelflags.Overlay,
+) {
+	// The bridge/health payload names the live fleet, not the boot config: a
+	// CCU adopted through the SPA joins the registry without ever reaching
+	// cfg.Centrals.
+	si.mqttSup = newMQTTSupervisor(logger, si.healthTracker, func() []string {
+		return liveCentralNames(cfg, reg)
+	})
+	si.mqttSup.SetCollector(si.mqttCollector)
+	// Let every (re)built MQTT bridge skip operator-hidden channels, so a
+	// hidden channel disappears from the MQTT plane like it does from the
+	// REST operation list and Matter. The overlay is keyed on
+	// (central, address).
+	//
+	// The gate is captured at bridge-build time and has no setter
+	// afterwards, so it has to be installed before Start builds the first
+	// bridge. That is a declared constraint rather than a comment now:
+	// installing it later compiles, returns nothing, and leaves every
+	// hidden channel publishing until the next rebuild.
+	reg.Manifest().Attach(wiring.Seam{
+		Name:         "mqtt.channel_hidden_gate",
+		Collaborator: "channelHiddenGate over *channelflags.Overlay",
+		Phase:        wiring.PhaseOrdered,
+		Before:       []wiring.Mark{wiring.MarkMQTTSupervisorStarted},
+		Why:          "channels the operator hid keep publishing on the MQTT plane, so they reappear in Home Assistant while staying hidden everywhere else",
+	}, func() { si.mqttSup.SetChannelHidden(channelHiddenGate(channelFlags)) })
+	// A failed first connect is not fatal and not final: the supervisor
+	// keeps the stable Wiring every consumer binds to and retries the
+	// connect in the background, so a broker that is still booting beside
+	// the daemon costs a delay rather than the whole MQTT plane until the
+	// next restart.
+	startErr := si.mqttSup.Start(ctx, cfg)
+	reg.Manifest().Mark(wiring.MarkMQTTSupervisorStarted)
+	if startErr != nil {
+		logger.Warn("mqtt.supervisor.start",
+			slog.String("err", startErr.Error()),
+			slog.String("effect", "MQTT publishes are dropped until a background retry connects"))
 	}
 }
