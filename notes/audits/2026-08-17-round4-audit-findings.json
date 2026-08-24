@@ -1792,9 +1792,10 @@
    "verdict": "PARTIAL",
    "verify_reasoning": "Mechanism confirmed: BackupAdapter.Restore (stubs.go:497-516) inspects the archive and delegates to HTTPBackupRestorer.Restore (backup_restorer.go:71-118), which does the multipart POST and nothing else; a repo-wide grep shows cachereset.Service.Clear has exactly two callers, the REST admin handler (admin_cache.go:67) and the WS command (ws_adapters.go:1358) — neither on the restore path. Combined with the cache-first early return, the pre-restore MASTER snapshot survives the CCU reboot and any number of daemon restarts. Consequence over-stated the same way as F1-2: description caches self-heal (hydrateParamset calls b.GetParamsetDescription against the CCU on every boot, device_pipeline.go:1746; IngestFromBackend re-runs ListDevices, :617), VALUES are re-seeded from the CCU, and any post-restore CCU→device config push repairs the MASTER rows through the CONFIG_PENDING settle hook / MasterPoller. So the stale surface is the MASTER paramset view only, and only for channels whose configuration the restore actually changed without triggering a device re-sync. Rated medium: real invalidation gap, narrow blast radius, documented operator workaround (admin cache clear).",
    "verify_batch": "V3",
-   "status": "open",
-   "resolution": "not worked in #606: a CCU backup restore still never invalidates the persisted MASTER cache. internal/central/adapter/stubs.go and internal/north/rest/handlers/backup.go are untouched.",
-   "status_verified_at": "dea785a1 (pre-#606 HEAD); the open two re-checked on 4eecb1e6"
+   "status": "fixed",
+   "resolution": "BackupAdapter.Restore now clears the restored central's CCU-derivable caches once the archive is on its way to the CCU. Scoped to that central and never global: one CCU's restore must not discard another's. resolveRestorer additionally returns the resolved target so the scope can name it, and a target it cannot resolve is logged with the manual recovery rather than guessed at. The re-pull the clear triggers is readiness-gated (BringUpManager.ReinitCentral), which is what makes it safe to run while the CCU is still rebooting. A failed clear never fails the restore \u2014 the archive is already on the CCU by then. Seam: BackupAdapter.SetCacheInvalidator, wired in cmd/openccu-loom/daemon.go and pinned by TestPin_BackupRestoreCacheInvalidator_WiredInDaemon.",
+   "closed_in": "#608 (round 5 follow-up)",
+   "status_verified_at": "c51c131e; test-first, and the guard was proved to bite by removing the invalidate call"
   },
   {
    "id": "F1-cache-coherency-5",
@@ -2406,9 +2407,10 @@
    "fix_sketch": "Either propagate a north.mqtt section save into the live bridge (rebuild BridgeConfig + TopicBuilder and re-announce), or mark these three fields `restart_required: true` in `config.ClassifyFields` so the schema, the SPA and the PUT response all tell the operator the truth.",
    "unit": "G3-lifecycle-chaos",
    "verdict": "unverified",
-   "status": "open",
-   "resolution": "not worked in #606: a north.mqtt section save still reports restart_required:false and reaches no running bridge. cmd/openccu-loom/reload.go and internal/north/rest/handlers/admin_config.go are untouched.",
-   "status_verified_at": "dea785a1 (pre-#606 HEAD); the open two re-checked on 4eecb1e6"
+   "status": "fixed",
+   "resolution": "Fixed by making the save real rather than by relabelling the fields restart-required. The MQTT hot-swap machinery already existed (mqttSupervisor.Swap, which connects the new stack before tearing the old one down) and was reachable only from the file watcher and POST /admin/mqtt/reload \u2014 never from a section save, because north.mqtt is a DB-tier section the SPA writes with no file event behind it. PUT /config/sections/{section} now takes a SectionApplier that maps north.mqtt onto that reloader, and answers with `applied` plus an optional `apply_error`: a caller could not previously tell \"took effect now\" from \"stored for the next restart\", which is the same conflation the defect was made of. A section no subsystem can take live answers (false, nil) \u2014 not an error. The SPA warns instead of reporting plain success when an apply fails. API 7.8.0.",
+   "closed_in": "#608 (round 5 follow-up)",
+   "status_verified_at": "c51c131e; test-first at both levels (handler and applier), each guard proved to bite"
   },
   {
    "id": "G3-lifecycle-chaos-6",
@@ -4844,11 +4846,11 @@
   }
  ],
  "status_summary": {
-  "as_of": "4eecb1e6 (PR #606 merged)",
-  "method": "every one of the 245 findings was re-checked against the tree by a read-only pass before any of the remaining work started, each with a stated negative control; the 43 that were still open were then worked in PR #606 and re-checked against the merge",
+  "as_of": "c51c131e (PR #608 merged)",
+  "method": "every one of the 245 findings was re-checked against the tree by a read-only pass before any of the remaining work started, each with a stated negative control; the 43 that were still open were then worked in PR #606 and re-checked against the merge; the last two, carried into round 5, were closed in PR #608",
   "counts": {
-   "fixed": 240,
-   "open": 2,
+   "fixed": 242,
+   "open": 0,
    "by_design": 1,
    "refuted": 2
   },
