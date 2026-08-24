@@ -8,6 +8,62 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Derived sensors were offered to Matter and then dropped.** Eight
+  calculated sensor types — apparent temperature, dew point, dew-point spread,
+  enthalpy, frost point, vapor concentration, operating-voltage level and
+  derived binary state — are reported as mappable by `GET /api/v1/matter/exposable`,
+  so the SPA listed them and an operator could allowlist them. The assembler
+  then skipped every one, because the flag that admits them was never handed
+  to the bridge and no config key existed to set it — while the field's own
+  comment claimed operators enable it "via the config UI or daemon config
+  flag". The new `north.matter.include_measurements` is that flag (off by
+  default, Matter-only); a data point allowlisted while it was off starts
+  materialising the moment it is switched on. The assembler had tests for both
+  values of the flag, which is why nothing caught this: they set the flag
+  themselves, proving the assembler could honour a value and never that the
+  daemon supplied one.
+
+- **`mqtt.BridgeConfig.DiscoveryObjectIDFmt` was a dead field with a false
+  comment.** Its declaration was the only occurrence in the repo — no reader,
+  and nothing applied the default its comment advertised. Discovery object IDs
+  are built by dedicated code instead. Removed.
+
+- **The exported schemas had no freshness gate**, so 71 of the 73 enums the
+  Python types package is generated from could drift silently: a new wire value
+  reached neither `assets/schemas/*.json` nor any client until somebody ran
+  `make export-schemas` by hand, and nothing failed meanwhile. CI now
+  regenerates and fails on a diff — the SPA's own generated types have carried
+  that gate since they drifted a whole feature behind.
+
+- **Three wiring pins were satisfied by `Field: nil`** — the field spelled out
+  and the collaborator not handed over, which is exactly the state a pin exists
+  to rule out. They asserted that a key appeared, not that anything arrived.
+
+- **`AllChannelKeys` and `channelKeyBitmask` were two hand-maintained copies of
+  the same twenty-four schedule channel keys**, with nothing connecting them. A
+  ninth actor in the loop, or one renamed key, and the daemon offers a channel
+  it cannot lock — with no failure anywhere; the schedule just stops locking
+  one channel. Now pinned in both directions.
+
+- **`assets/schemas/types.json` referenced three definitions it does not
+  contain.** Its one composite type pointed at `Interface`, `ParamsetKey` and
+  `Parameter`, which are enums published in a different document with a
+  different shape that no same-document `$ref` can reach. A strict JSON-Schema
+  consumer would have failed to resolve the type; nothing said so because
+  there is no such consumer yet. The fields now declare their wire type and
+  name the vocabulary, and a guard fails on any local `$ref` that does not
+  resolve.
+
+- A reason the visibility classifier can match but its precedence list cannot
+  order was matched and then silently dropped, leaving the operator told the
+  daemon does not know why a parameter is hidden. Nothing at unit level caught
+  that; now something does.
+
+- Two exemptions in the contract ledgers were hiding missing wiring seams
+  rather than describing absent ones: an add-on update's progress never reached
+  a WebSocket client, and no central polled the CCU for device firmware. Both
+  declare a seam now.
+
 - **58 request and response bodies were written inline in the OpenAPI paths,
   so no generated client could see them.** Every client produced from this
   document — `openccu-loom-types` among them — is generated from
@@ -30,6 +86,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   API **7.10.0** — additive: 58 schemas, no path or operation changed.
 
+- **Three `DataPointKey` properties in `assets/schemas/types.json` pointed at
+  definitions that were not there.** `interface`, `parameter` and `paramset_key`
+  each carried a `$ref` into `#/definitions/`, which holds only `DataPointKey`,
+  `ParamValue` and `ValueKind` — so no generator could resolve them and the
+  Python types package saw three unusable properties. They are plain strings
+  now, each naming the enum in `enums.json` that supplies its vocabulary.
+
+  API **7.11.0** — additive: an unresolvable reference becoming a resolvable
+  type takes nothing away from a consumer that could not resolve it.
+
 
 
 The round-5 measures, finished. The composition root now states its wiring as
@@ -47,6 +113,14 @@ endpoint, two fields on the config-section save response, and four on a
 diagnostics payload.
 
 ### Added
+
+- **`north.matter.include_measurements`** — exposes the daemon's calculated
+  sensors as Matter measurement endpoints alongside the device's own
+  projection. Off by default: these are derived from data the CCU already
+  reports rather than read from the device, so a controller showing all of
+  them turns one wall thermostat into a row of sensors most users did not ask
+  for. Matter-only — MQTT, HA-Discovery and REST have always carried derived
+  sensors. See Fixed: until now there was no way to turn this on at all.
 
 - **`GET /api/v1/diagnostics/wiring`** (admin-only) — the seams the running
   daemon declared as it wired them (ADR 0065). Each entry names the seam, the

@@ -166,9 +166,25 @@ func registerFirmwareJobs(reg *central.Registry, valueWriter *clientpkg.ValueWri
 	if valueWriter == nil {
 		return
 	}
-	for _, u := range reg.List() {
-		registerFirmwareJobsFor(u, valueWriter, logger)
-	}
+	// Declared for the same reason its standard-jobs sibling is, and it
+	// was missed the first time round: the two functions have the same
+	// shape, and only one of them said so.
+	//
+	// Unlike the standard jobs this one carries no ordering constraint.
+	// It runs after the schedulers are already going, and a firmware
+	// check that starts one interval late costs a delay rather than a
+	// gap — where a health heartbeat registered late leaves the central
+	// component decaying to UNKNOWN.
+	reg.Manifest().Attach(wiring.Seam{
+		Name:         "jobs.firmware_per_central",
+		Collaborator: "registerFirmwareJobsFor",
+		Phase:        wiring.PhaseOnce,
+		Why:          "no central ever polls the CCU for available device firmware, so the update surface reports nothing to install however long a new version has been out",
+	}, func() {
+		for _, u := range reg.List() {
+			registerFirmwareJobsFor(u, valueWriter, logger)
+		}
+	})
 }
 
 // firmwareDeliveringStates / firmwareUpdatingStates are the lifecycle

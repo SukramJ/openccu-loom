@@ -130,10 +130,10 @@ var restDomainsWithoutMCPTools = map[string]string{
 	"config":   "daemon configuration editing is an operator action with a secret-masking round trip (see CLAUDE.md); an assistant that can rewrite config can lock the operator out of the daemon",
 	"metrics":  "Prometheus scrape endpoint; a text exposition format is not a tool surface",
 	"ui":       "surface-profile registry for the SPA's own navigation, not a fleet capability",
-	// The per-domain tools cover most of it, but not all: the snapshot
-	// aggregates devices, hub AND interfaces, and interfaces has no read tool
-	// at all — it sits in restDomainsAwaitingMCPTools below. This entry is
-	// therefore only fully true once that backlog item lands.
+	// The snapshot aggregates devices, hub and interfaces, and each of the
+	// three now has its own read tool — list_devices, the hub family, and
+	// list_interfaces. The entry was written while the third was still
+	// missing and said so; it no longer is.
 	"snapshot": "bulk state dump; the per-domain tools cover devices, hub and interfaces individually",
 	// A single-fetch convenience aggregate, so a client can build its hub
 	// singleton entities without orchestrating six requests. Every part of

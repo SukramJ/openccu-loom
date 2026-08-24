@@ -320,6 +320,16 @@ func matterEndpointRestartRules() []RestartRule {
 			},
 		},
 		{
+			// Read once when the bridge is constructed and forwarded into
+			// the endpoint assembler, which builds the endpoint set at that
+			// moment; a controller's view of the fleet only changes when
+			// the assembler runs again.
+			Path: "north.matter.include_measurements",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.IncludeMeasurements != e.North.Matter.IncludeMeasurements
+			},
+		},
+		{
 			Path: "north.matter.enable_time_sync",
 			Differs: func(b, e *Config) bool {
 				return b.North.Matter.TimeSyncEnabled() != e.North.Matter.TimeSyncEnabled()

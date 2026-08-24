@@ -12,13 +12,16 @@
           "type": "string"
         },
         "interface": {
-          "$ref": "#/definitions/Interface"
+          "description": "Wire interface id. Vocabulary: the Interface enum in enums.json.",
+          "type": "string"
         },
         "parameter": {
-          "$ref": "#/definitions/Parameter"
+          "description": "Wire parameter name. Vocabulary: the Parameter enum in enums.json.",
+          "type": "string"
         },
         "paramset_key": {
-          "$ref": "#/definitions/ParamsetKey"
+          "description": "Paramset selector. Vocabulary: the ParamsetKey enum in enums.json.",
+          "type": "string"
         }
       },
       "required": [

@@ -843,6 +843,28 @@ type NorthMatter struct {
 	// every channel regardless of this flag.
 	ExposeSecondaryChannels bool `yaml:"expose_secondary_channels" json:"expose_secondary_channels" cfg:"expert"`
 
+	// IncludeMeasurements exposes derived sensors — apparent temperature,
+	// dew point, dew-point spread, enthalpy, frost point, vapor
+	// concentration, operating-voltage level and derived binary state —
+	// as Matter measurement endpoints alongside the device's primary
+	// projection.
+	//
+	// Off by default because these are calculated from data the CCU
+	// already reports rather than read from the device: a controller that
+	// shows every one of them turns a single wall thermostat into a row
+	// of sensors most users did not ask for. ADR 0049 keeps genuine extra
+	// sensors visible, and this flag is how an operator opts into the
+	// derived ones.
+	//
+	// The exposure surface offers these data points regardless of this
+	// flag — it reports what the model *can* project — so a data point
+	// allowlisted while the flag is off stays allowlisted and starts
+	// materialising the moment it is turned on.
+	//
+	// Matter-only: MQTT, HA-Discovery and the REST/WS surfaces always
+	// carry derived sensors regardless of this flag.
+	IncludeMeasurements bool `yaml:"include_measurements" json:"include_measurements" cfg:"expert"`
+
 	// VendorID is the bridge's IANA-assigned vendor identifier.
 	// Defaults to 0xFFF1 (the test/development vendor block) when unset
 	// — never ship that value in production.

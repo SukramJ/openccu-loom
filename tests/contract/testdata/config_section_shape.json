@@ -36,6 +36,7 @@
   "north.matter.enable_time_sync": "*bool,omitempty",
   "north.matter.enabled": "bool",
   "north.matter.expose_secondary_channels": "bool",
+  "north.matter.include_measurements": "bool",
   "north.matter.listen": "string",
   "north.matter.mdns_advertise": "string",
   "north.matter.node_label": "string",

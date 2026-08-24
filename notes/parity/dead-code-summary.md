@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 4d823bc6
-HEAD: 4d823bc6
+Generated: b8836652
+HEAD: b8836652
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29929 |
+| Total Exported | 29932 |
 | Reachable | 5145 |
-| Whitelisted | 21767 |
+| Whitelisted | 21770 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

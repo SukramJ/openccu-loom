@@ -39,7 +39,6 @@ var discoveryIdentifierBuilders = map[string]struct{}{
 // claim someone checked.
 var discoveryIdentifierExemptions = map[string]string{
 	"discovery_week_profile.go": "reads the prefix to test whether an id already carries it, and prepends only when it does not; the id itself arrives from a builder",
-	"retain_cleanup.go":         "matches retained payloads left by earlier builds, whose ids this build no longer produces — a parser, not a producer",
 	// The alarm and security planes are daemon-level, not per-CCU: their
 	// identifiers key on a zone or a hazard class, both of which are concepts
 	// of this daemon rather than of any one CCU, and alarmDeviceBlock takes no

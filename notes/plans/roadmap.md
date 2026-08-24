@@ -23,6 +23,13 @@ replace it, and the metrics that say whether it worked.
 
 ## Open development items
 
+- **Round 6 of the audit programme** —
+  [`round-6-audit-strategy.md`](./round-6-audit-strategy.md), proposed. Audits
+  what everyone trusts rather than searching the code again: the 191 exemption
+  entries across sixteen ledgers, the contract surfaces followed downstream to a
+  generated consumer, the identifiers whose names claim completeness, and the
+  guards round 5 added.
+
 ### Composition root
 
 - **Declare the remaining ordered seams in `cmd/openccu-loom`**

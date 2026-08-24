@@ -1,5 +1,5 @@
 {
- "api_version": "7.10.0",
+ "api_version": "7.11.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -2362,6 +2362,22 @@
    "topic:string",
    "ts:string",
    "type:string"
-  ]
+  ],
+  "types.json:DataPointKey": [
+   "channel_no:integer",
+   "device_address:string",
+   "interface:string",
+   "parameter:string",
+   "paramset_key:string"
+  ],
+  "types.json:ParamValue": [
+   "bool:boolean",
+   "float:number",
+   "int:integer",
+   "kind:$ref:ValueKind",
+   "list:array",
+   "string:string"
+  ],
+  "types.json:ValueKind": []
  }
 }

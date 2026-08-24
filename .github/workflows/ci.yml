@@ -86,6 +86,22 @@ jobs:
           cache: true
       - name: check APIVersion bump
         run: script/check_api_version_bump.sh "origin/${{ github.base_ref }}"
+      # assets/schemas/*.json are what the Python types package is generated
+      # from, and nothing forced them to stay in step with pkg/hmenum. Only
+      # two of the 73 exported enums are covered by a parity test; for the
+      # other 71 a new wire value reached neither the JSON nor any generated
+      # client until somebody happened to run `make export-schemas`, and
+      # nothing failed in the meantime. The SPA's own generated types carry
+      # the same gate for the same reason — they had drifted a whole feature
+      # behind before it existed.
+      - name: exported schemas are fresh
+        run: |
+          make export-schemas
+          if ! git diff --quiet -- assets/schemas internal/north/rest/handlers/schema_digest_gen.go; then
+            echo "::error::assets/schemas is stale — run 'make export-schemas' and commit the result."
+            git --no-pager diff --stat -- assets/schemas internal/north/rest/handlers/schema_digest_gen.go
+            exit 1
+          fi
 
   security:
     name: security (vuln + licenses)

@@ -80,11 +80,10 @@ type BridgeConfig struct {
 	// nothing, falls back to the snapshot.
 	CentralNamesSupplier func() []string
 
-	RawEnabled           bool
-	HADiscoveryEnabled   bool
-	QoS                  QoSProfile
-	DiscoveryBuilder     DiscoveryBuilder // optional, may be nil
-	DiscoveryObjectIDFmt string           // defaults to "{addr}_{channel}_{parameter}"
+	RawEnabled         bool
+	HADiscoveryEnabled bool
+	QoS                QoSProfile
+	DiscoveryBuilder   DiscoveryBuilder // optional, may be nil
 
 	// SubDevicesEnabled toggles the per-channel-group sub-device split
 	// in the HA discovery `device` block. When true, multi-channel-group

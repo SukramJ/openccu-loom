@@ -1,6 +1,6 @@
 {
-  "generated": "4d823bc6",
-  "head": "4d823bc6",
+  "generated": "b8836652",
+  "head": "b8836652",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29929,
+    "total_exported": 29932,
     "reachable": 4983,
-    "whitelisted": 21767,
+    "whitelisted": 21770,
     "unreachable": 3179
   },
   "by_package": [
@@ -105764,6 +105764,13 @@
     },
     {
       "package": "internal/model/weekprofile",
+      "identifier": "TestChannelKeySetsAgree",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/weekprofile/channel_keys_test.go",
+      "line": 24
+    },
+    {
+      "package": "internal/model/weekprofile",
       "identifier": "TestChannelSwitchCategoryAndSignature",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/weekprofile/data_point_schedule_enabled_test.go",
@@ -165575,14 +165582,14 @@
       "identifier": "AllHiddenReasons",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 107
+      "line": 111
     },
     {
       "package": "internal/store/visibility",
       "identifier": "AllHiddenReasons",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 107
+      "line": 111
     },
     {
       "package": "internal/store/visibility",
@@ -165799,42 +165806,42 @@
       "identifier": "Classify",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 148
+      "line": 152
     },
     {
       "package": "internal/store/visibility",
       "identifier": "Classify",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 148
+      "line": 152
     },
     {
       "package": "internal/store/visibility",
       "identifier": "ClassifyInput",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 118
+      "line": 122
     },
     {
       "package": "internal/store/visibility",
       "identifier": "ClassifyInput",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 118
+      "line": 122
     },
     {
       "package": "internal/store/visibility",
       "identifier": "ClassifyPrimary",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 221
+      "line": 225
     },
     {
       "package": "internal/store/visibility",
       "identifier": "ClassifyPrimary",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 221
+      "line": 225
     },
     {
       "package": "internal/store/visibility",
@@ -166009,14 +166016,14 @@
       "identifier": "MergeReasons",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 257
+      "line": 261
     },
     {
       "package": "internal/store/visibility",
       "identifier": "MergeReasons",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 257
+      "line": 261
     },
     {
       "package": "internal/store/visibility",
@@ -166275,14 +166282,14 @@
       "identifier": "ReasonDetail",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 241
+      "line": 245
     },
     {
       "package": "internal/store/visibility",
       "identifier": "ReasonDetail",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 241
+      "line": 245
     },
     {
       "package": "internal/store/visibility",
@@ -166401,14 +166408,14 @@
       "identifier": "ReasonUnknown",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 74
+      "line": 78
     },
     {
       "package": "internal/store/visibility",
       "identifier": "ReasonUnknown",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 74
+      "line": 78
     },
     {
       "package": "internal/store/visibility",
@@ -166499,14 +166506,14 @@
       "identifier": "SortReasons",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 281
+      "line": 285
     },
     {
       "package": "internal/store/visibility",
       "identifier": "SortReasons",
       "reason": "auto-whitelist:pattern=visibility-rules-registry",
       "file": "internal/store/visibility/reason.go",
-      "line": 281
+      "line": 285
     },
     {
       "package": "internal/store/visibility",
@@ -166738,6 +166745,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/visibility/required_whitelist_test.go",
       "line": 79
+    },
+    {
+      "package": "internal/store/visibility",
+      "identifier": "TestEveryReasonHasAPrecedenceEntry",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/visibility/reason_precedence_test.go",
+      "line": 27
     },
     {
       "package": "internal/store/visibility",
@@ -172477,14 +172491,14 @@
       "identifier": "MustFindInterfaceImpl",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 828
+      "line": 848
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindInterfaceImpl",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 828
+      "line": 848
     },
     {
       "package": "tests/contract",
@@ -172519,42 +172533,42 @@
       "identifier": "MustFindStringLiteralInFile",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 891
+      "line": 911
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStringLiteralInFile",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 891
+      "line": 911
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStructFieldDecl",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 719
+      "line": 739
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStructFieldDecl",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 719
+      "line": 739
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStructFieldTag",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 770
+      "line": 790
     },
     {
       "package": "tests/contract",
       "identifier": "MustFindStructFieldTag",
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wiring_helpers.go",
-      "line": 770
+      "line": 790
     },
     {
       "package": "tests/contract",
@@ -173247,7 +173261,7 @@
       "identifier": "TestEveryWiringFunctionDeclaresOrExplainsItself",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_function_coverage_test.go",
-      "line": 79
+      "line": 77
     },
     {
       "package": "tests/contract",
@@ -173255,6 +173269,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_setter_callers_test.go",
       "line": 103
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestExportedSchemasResolveTheirOwnRefs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/schema_export_refs_test.go",
+      "line": 33
     },
     {
       "package": "tests/contract",
@@ -173275,7 +173296,7 @@
       "identifier": "TestFullyWiredRouterDepsCoversEveryDep",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/router_deps_coverage_test.go",
-      "line": 124
+      "line": 129
     },
     {
       "package": "tests/contract",
@@ -173289,7 +173310,7 @@
       "identifier": "TestHADiscoveryIdentifiersComeFromOneBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/discovery_identifier_single_source_test.go",
-      "line": 75
+      "line": 74
     },
     {
       "package": "tests/contract",
@@ -174458,7 +174479,7 @@
       "identifier": "TestWSSchemaArgsResultUseTypedVocabulary",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wsapi_schema_test.go",
-      "line": 418
+      "line": 426
     },
     {
       "package": "tests/contract",
