@@ -63,12 +63,31 @@ var configGatedWiringSeams = map[string]string{
 	"webhook.outbound": "north.webhook.outbound",
 }
 
+// expectedOrderedSeams are the once-only seams whose position in the
+// boot sequence is load-bearing, with the marks they declare.
+//
+// These are the constraints that used to live in prose hundreds of lines
+// from the step they talk about. `webhook.alarm_bus` is the worked
+// example: Outbound.Start reads the bus once and subscribes, so a bus
+// handed over after the north bridges start is stored and never read —
+// the setter reports nothing, the daemon looks healthy, and no alarm
+// event is ever forwarded.
+var expectedOrderedSeams = map[string]struct{ before, after []string }{
+	"webhook.alarm_bus":            {before: []string{"northbridges.started"}},
+	"webhook.security_bus":         {before: []string{"northbridges.started"}},
+	"backup.cache_invalidator":     {after: []string{"southbound.wired"}},
+	"central.devices_created_gate": {before: []string{"centrals.started"}},
+}
+
 // wiringSeam mirrors the GET /diagnostics/wiring element shape.
 type wiringSeam struct {
-	Name         string `json:"name"`
-	Collaborator string `json:"collaborator"`
-	Phase        string `json:"phase"`
-	Why          string `json:"why"`
+	Name         string   `json:"name"`
+	Collaborator string   `json:"collaborator"`
+	Phase        string   `json:"phase"`
+	Before       []string `json:"before"`
+	After        []string `json:"after"`
+	Why          string   `json:"why"`
+	Violations   []string `json:"violations"`
 }
 
 // TestE2EDaemonDeclaresEverySeamItWires asks a running daemon what it
@@ -136,6 +155,38 @@ func TestE2EDaemonDeclaresEverySeamItWires(t *testing.T) {
 		}
 	}
 
+	// No seam may report a broken ordering constraint. This is the
+	// assertion the ordered seams exist for, and the only one that can
+	// see the defect at all: the collaborator IS wired in the broken
+	// case, the setter returns nothing, and every other check — the
+	// static guards, the pins, health, the route surface — stays green.
+	for _, s := range seams {
+		if len(s.Violations) > 0 {
+			t.Errorf("seam %q was attached in the wrong order:\n  %s\n\n%s",
+				s.Name, strings.Join(s.Violations, "\n  "), s.Why)
+		}
+	}
+
+	// The ordered seams are named, because a constraint that quietly
+	// stopped being declared reports no violation either.
+	for name, want := range expectedOrderedSeams {
+		got, ok := declared[name]
+		if !ok {
+			t.Errorf("ordered seam %q is not declared by the running daemon; its ordering is "+
+				"back to being a property of line order in a 900-line function", name)
+			continue
+		}
+		if got.Phase != "ordered" {
+			t.Errorf("seam %q reports phase %q, want ordered", name, got.Phase)
+		}
+		if !sameStrings(got.Before, want.before) {
+			t.Errorf("seam %q declares before=%v, want %v", name, got.Before, want.before)
+		}
+		if !sameStrings(got.After, want.after) {
+			t.Errorf("seam %q declares after=%v, want %v", name, got.After, want.after)
+		}
+	}
+
 	// Every entry must carry its four fields. The manifest's value to an
 	// operator reading /diagnostics/wiring is the reason, not the name.
 	for _, s := range seams {
@@ -197,4 +248,21 @@ func getWiringSeamsOnce(h *harness.Harness) ([]wiringSeam, error) {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return out, nil
+}
+
+// sameStrings compares two mark lists, treating nil and empty as equal:
+// the wire omits an observer seam's mark fields entirely.
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	x, y := append([]string(nil), a...), append([]string(nil), b...)
+	sort.Strings(x)
+	sort.Strings(y)
+	for i := range x {
+		if x[i] != y[i] {
+			return false
+		}
+	}
+	return true
 }

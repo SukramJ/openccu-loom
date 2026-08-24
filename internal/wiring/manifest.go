@@ -33,25 +33,49 @@ import (
 	"sync"
 )
 
-// Phase says when a seam's collaborator is attached relative to
-// south-bound bring-up. It is the property the audits keep finding
-// broken: a caller that exists but runs before the value it needs.
+// Phase says what kind of seam this is, which decides how its ordering
+// is expressed.
 //
-// loom:reachable:reason="the type of Seam.Phase, set from the PhasePerCentral constant at every declaration site"
+// loom:reachable:reason="the type of Seam.Phase, set from the PhasePerCentral or PhaseOrdered constant at every declaration site"
 type Phase string
 
 const (
 	// PhasePerCentral is attached once per central, replayed over the
 	// centrals already registered and run again for every later one.
-	// Ordering relative to south-bound bring-up is therefore not a
-	// property of the call site — that is the point of the observer.
+	// Ordering is not a property of such a call site — that is the point
+	// of the observer, and why these seams carry no marks.
 	PhasePerCentral Phase = "per-central"
-	// PhaseBeforeSouthbound must be attached before south-bound
-	// bring-up starts, because it observes something bring-up emits.
-	PhaseBeforeSouthbound Phase = "before-southbound"
-	// PhaseAfterSouthbound must be attached after south-bound bring-up
-	// completes, because it reads state bring-up produces.
-	PhaseAfterSouthbound Phase = "after-southbound"
+	// PhaseOrdered is attached once, at a point in the boot sequence
+	// that matters. Its constraints are the [Seam.Before] and
+	// [Seam.After] marks.
+	PhaseOrdered Phase = "ordered"
+)
+
+// Mark names a point the daemon passes during boot. An ordered seam
+// states which marks it must precede and which it must follow, and the
+// manifest records which had already been passed when the seam was
+// actually attached — so "does this run before Y" stops being a property
+// of line order in a 900-line function and becomes a comparison.
+//
+// The marks are few on purpose. Each one is a boundary something
+// downstream genuinely depends on, not a convenient label for a place in
+// the file.
+//
+// loom:reachable:reason="the element type of Seam.Before and Seam.After, set from the Mark* constants at the ordered declaration sites and passed to Manifest.Mark from cmd/openccu-loom/daemon.go"
+type Mark string
+
+const (
+	// MarkCentralsStarted is passed once Registry.StartAll has returned,
+	// so every configured central's scheduler and event bus are live.
+	MarkCentralsStarted Mark = "centrals.started"
+	// MarkSouthboundWired is passed once wireSouthbound has returned:
+	// the per-central clients, device pipeline and paramset hydration
+	// exist, and the values it produces can be read.
+	MarkSouthboundWired Mark = "southbound.wired"
+	// MarkNorthBridgesStarted is passed once every north-bound bridge
+	// has been started. A bridge reads its collaborators at Start, so a
+	// collaborator handed over after this mark is stored and never used.
+	MarkNorthBridgesStarted Mark = "northbridges.started"
 )
 
 // Seam is one declared piece of wiring.
@@ -69,11 +93,24 @@ type Seam struct {
 	Name string `json:"name"`
 	// Collaborator names the thing being attached, for a reader.
 	Collaborator string `json:"collaborator"`
-	// Phase is the ordering constraint.
+	// Phase says whether this is a per-central observer or a once-only
+	// ordered attachment.
 	Phase Phase `json:"phase"`
+	// Before are the marks this seam must be attached before. Handing a
+	// collaborator over after such a mark compiles and runs; what it
+	// does not do is take effect.
+	Before []Mark `json:"before,omitempty"`
+	// After are the marks this seam must be attached after, because it
+	// reads something the marked step produces.
+	After []Mark `json:"after,omitempty"`
 	// Why states, in one sentence, what stops working when this seam
 	// is absent.
 	Why string `json:"why"`
+	// Violations are the constraints that were already broken when the
+	// seam was attached, in the manifest's own words. Empty is the
+	// normal case; a non-empty list is a wiring defect a running daemon
+	// reports about itself.
+	Violations []string `json:"violations,omitempty"`
 }
 
 // Manifest is the ledger of seams a daemon has actually wired.
@@ -83,14 +120,110 @@ type Seam struct {
 // constructed without one (tests, the CLI) wires normally instead of
 // panicking — the daemon always has one, and the guard that reads it
 // reads the daemon's.
+//
+// loom:reachable:reason="held as central.Registry.manifest, built by NewManifest there and served through Registry.Manifest() to the GET /diagnostics/wiring handler; a type reached only through a struct field and a constructor, which the analyzer's heuristic does not follow"
 type Manifest struct {
 	mu    sync.RWMutex
 	seams map[string]Seam
+	// passed holds the marks the daemon has gone by, in order. An
+	// ordered seam's constraints are evaluated against this set at the
+	// moment it attaches, which is the only moment at which the answer
+	// is a fact rather than a reading of the source.
+	passed []Mark
 }
 
 // NewManifest returns an empty manifest.
 func NewManifest() *Manifest {
 	return &Manifest{seams: make(map[string]Seam)}
+}
+
+// Mark records that the daemon has passed m.
+//
+// It panics when the same mark is passed twice: a boot sequence that
+// crosses one of these boundaries again is not a mark this package can
+// reason about, and silently accepting it would make every constraint
+// evaluated afterwards meaningless.
+//
+// invariant: each mark is passed at most once per manifest.
+func (m *Manifest) Mark(mark Mark) {
+	if m == nil {
+		return
+	}
+	if mark == "" {
+		panic("wiring: empty mark")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, p := range m.passed {
+		if p == mark {
+			panic(fmt.Sprintf("wiring: mark %q passed twice", mark))
+		}
+	}
+	m.passed = append(m.passed, mark)
+}
+
+// Passed reports the marks the daemon has gone by, in order.
+func (m *Manifest) Passed() []Mark {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]Mark(nil), m.passed...)
+}
+
+// Attach declares s, checks its ordering constraints against the marks
+// passed so far, and then runs attach.
+//
+// This is the ordered counterpart of the per-central observer seam. The
+// constraint it checks is the one the audits keep finding broken and
+// which no name-matching guard can express: a collaborator handed over
+// after the thing that reads it has already started. That compiles, it
+// runs, the setter reports nothing — and the feature behind the seam is
+// simply off. The webhook bridge is the worked example: it reads its
+// alarm and security buses once, at Start, so a bus set afterwards is
+// stored and never subscribed, and no alarm event is ever forwarded.
+//
+// A violation does not stop the wiring. Refusing to attach would turn a
+// reporting problem into an outage, and the value of the manifest is
+// that a running daemon can be asked; the violation is recorded on the
+// seam, served by the diagnostics surface, and failed on by a test.
+func (m *Manifest) Attach(s Seam, attach func()) {
+	if m != nil {
+		s.Violations = m.violations(s)
+	}
+	m.Declare(s)
+	if attach != nil {
+		attach()
+	}
+}
+
+// violations reports the constraints of s that are already broken.
+func (m *Manifest) violations(s Seam) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	passed := make(map[Mark]struct{}, len(m.passed))
+	for _, p := range m.passed {
+		passed[p] = struct{}{}
+	}
+	var out []string
+	for _, mark := range s.Before {
+		if _, gone := passed[mark]; gone {
+			out = append(out, fmt.Sprintf(
+				"attached after %q, which it must precede; the collaborator is stored but whatever reads it has already run",
+				mark,
+			))
+		}
+	}
+	for _, mark := range s.After {
+		if _, gone := passed[mark]; !gone {
+			out = append(out, fmt.Sprintf(
+				"attached before %q, which it must follow; it reads something that step has not produced yet",
+				mark,
+			))
+		}
+	}
+	return out
 }
 
 // Declare records s.
@@ -114,6 +247,10 @@ func (m *Manifest) Declare(s Seam) {
 		panic(fmt.Sprintf("wiring: seam %q declared without a phase", s.Name))
 	case s.Why == "":
 		panic(fmt.Sprintf("wiring: seam %q declared without a reason; a seam whose absence has no consequence is a seam nobody needs", s.Name))
+	case s.Phase == PhasePerCentral && (len(s.Before) > 0 || len(s.After) > 0):
+		panic(fmt.Sprintf("wiring: per-central seam %q carries ordering marks; the observer replays over the centrals already registered, so its call site has no order to constrain", s.Name))
+	case s.Phase == PhaseOrdered && len(s.Before) == 0 && len(s.After) == 0:
+		panic(fmt.Sprintf("wiring: ordered seam %q names no mark; an ordered seam with no constraint is a per-central seam with the wrong phase, or a seam whose order does not matter and should say so", s.Name))
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -131,8 +268,8 @@ func (m *Manifest) Seams() []Seam {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	out := make([]Seam, 0, len(m.seams))
-	for _, s := range m.seams {
-		out = append(out, s)
+	for name := range m.seams {
+		out = append(out, m.seams[name])
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

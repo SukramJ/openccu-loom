@@ -195,11 +195,24 @@ type WiringSeam struct {
 	Name string `json:"name"`
 	// Collaborator names the thing that was attached.
 	Collaborator string `json:"collaborator"`
-	// Phase is the ordering constraint relative to south-bound bring-up:
-	// `per-central`, `before-southbound` or `after-southbound`.
+	// Phase is `per-central` for an observer replayed over every central,
+	// or `ordered` for a once-only attachment whose position in the boot
+	// sequence matters.
 	Phase string `json:"phase"`
+	// Before are the boot marks this seam must be attached before, and
+	// After the marks it must follow. Only an `ordered` seam carries
+	// them.
+	Before []string `json:"before,omitempty"`
+	After  []string `json:"after,omitempty"`
 	// Why states what stops working when the seam is absent.
 	Why string `json:"why"`
+	// Violations are the constraints that were already broken when the
+	// seam was attached. Empty is the normal case; a non-empty list is a
+	// wiring defect the daemon is reporting about itself, and it is the
+	// reason this endpoint reports more than a list of names — the
+	// collaborator IS wired, so nothing else about the daemon looks
+	// wrong.
+	Violations []string `json:"violations,omitempty"`
 }
 
 // DiagnosticsEvent is one tapped event-bus record.

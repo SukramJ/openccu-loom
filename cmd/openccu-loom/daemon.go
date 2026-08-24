@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/webhook"
+	"github.com/SukramJ/openccu-loom/internal/wiring"
 
 	// Side-effect import: aggregator package whose blank-imports
 	// trigger every custom-DP sub-package's `init()` so the global
@@ -167,21 +168,33 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 	defer teardown()
 
-	// Wire the devices-created gate BEFORE StartAll so the
-	// `gatedRunWithDevicesCreatedGate`-protected hub jobs registered
-	// during scheduler bring-up have a working gate from t=0.
-	// `IsDevicesCreated()` returns true automatically once the first
+	// The gate has to exist before the schedulers start, so the hub jobs
+	// registered during bring-up are protected from t=0.
+	// `IsDevicesCreated()` flips on its own once the first
 	// `DeviceCreatedEvent` lands on the bus during WireCentrals.
-	// follow-up.
-	for _, u := range reg.List() {
-		u.WireDevicesCreatedGate()
-	}
+	//
+	// A boot walk over the registry rather than an OnRegister observer
+	// precisely because of that ordering: an observer's replay is not
+	// guaranteed to precede StartAll. Runtime-added centrals get their
+	// gate from the adopt path instead.
+	reg.Manifest().Attach(wiring.Seam{
+		Name:         "central.devices_created_gate",
+		Collaborator: "Unit.WireDevicesCreatedGate",
+		Phase:        wiring.PhaseOrdered,
+		Before:       []wiring.Mark{wiring.MarkCentralsStarted},
+		Why:          "the gated hub jobs run against a model that has no gate to wait on, so a job scheduled at boot fires before any device exists",
+	}, func() {
+		for _, u := range reg.List() {
+			u.WireDevicesCreatedGate()
+		}
+	})
 
 	registerStandardJobs(reg, cfg, logger)
 
 	if err := reg.StartAll(ctx); err != nil {
 		return fmt.Errorf("central start: %w", err)
 	}
+	reg.Manifest().Mark(wiring.MarkCentralsStarted)
 
 	// Wire SQLite-backed disk-persistence for every central's
 	// SessionRecorder. The recorder itself stays inactive until an
@@ -386,10 +399,21 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		_, stopAlarmCollector := metrics.NewAlarmCollector(metricsReg, alarmSvc.Bus())
 		defer stopAlarmCollector()
 		// Forward alarm-panel events (state, trigger, journal, health,
-		// reminder, duress) through the outbound webhook. Set before the
-		// PhaseLate StartAll so the bridge subscribes the alarm bus on
-		// start (notes/concepts/alarm-concept.md §13.4).
-		webhookOutbound.SetAlarmBus(alarmSvc.Bus())
+		// reminder, duress) through the outbound webhook
+		// (notes/concepts/alarm-concept.md §13.4).
+		//
+		// The "before StartAll" part used to live in this comment alone,
+		// five hundred lines from the StartAll it talks about. It is a
+		// declared constraint now: Outbound.Start reads the bus once and
+		// subscribes, so a bus handed over afterwards is stored and never
+		// read, and the setter says nothing about it either way.
+		reg.Manifest().Attach(wiring.Seam{
+			Name:         "webhook.alarm_bus",
+			Collaborator: "*engine.Service alarm bus",
+			Phase:        wiring.PhaseOrdered,
+			Before:       []wiring.Mark{wiring.MarkNorthBridgesStarted},
+			Why:          "no alarm-panel event is ever forwarded to the operator's webhook endpoint, and the endpoint stays silent with nothing on this side reporting a failure",
+		}, func() { webhookOutbound.SetAlarmBus(alarmSvc.Bus()) })
 	}
 
 	// The Security & Safety domain aggregates above the alarm engine but
@@ -400,9 +424,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if securitySvc != nil {
 		northBridges.Register(securitySvc)
 		// Forward the rendered reports and fault transitions through the
-		// outbound webhook. Set before the PhaseLate StartAll so the
-		// bridge subscribes on start, mirroring SetAlarmBus.
-		webhookOutbound.SetSecurityBus(securitySvc.Bus())
+		// outbound webhook, on the same declared constraint as the alarm
+		// bus above and for the same reason.
+		reg.Manifest().Attach(wiring.Seam{
+			Name:         "webhook.security_bus",
+			Collaborator: "*security.Service bus",
+			Phase:        wiring.PhaseOrdered,
+			Before:       []wiring.Mark{wiring.MarkNorthBridgesStarted},
+			Why:          "no fault transition or rendered security report reaches the operator's webhook endpoint",
+		}, func() { webhookOutbound.SetSecurityBus(securitySvc.Bus()) })
 		wireSecurityIndexRefresh(alarmSvc, securitySvc, logger)
 		_, stopSecurityCollector := metrics.NewSecurityCollector(metricsReg, securitySvc.Bus())
 		defer stopSecurityCollector()
@@ -509,6 +539,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 	sb, southboundTeardown := wireSouthbound(ctx, sbDeps, &availClosers)
 	defer southboundTeardown()
+	reg.Manifest().Mark(wiring.MarkSouthboundWired)
 	backupAdapter := sb.backupAdapter
 	// Automatic scheduled CCU backups (opt-in via cfg.Backup.Schedule). Wired
 	// here, after the storage-backed backupAdapter exists; the scheduler is
@@ -527,7 +558,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// they rolled away. A nil service (south-bound never came up) leaves
 	// the step out; the restore still runs.
 	if cacheResetSvc != nil && backupAdapter != nil {
-		backupAdapter.SetCacheInvalidator(cacheResetSvc)
+		reg.Manifest().Attach(wiring.Seam{
+			Name:         "backup.cache_invalidator",
+			Collaborator: "*cachereset.Service",
+			Phase:        wiring.PhaseOrdered,
+			After:        []wiring.Mark{wiring.MarkSouthboundWired},
+			Why:          "a restore leaves the persisted MASTER values in place, and being cache-first they outlive the CCU's own reboot and every later daemon start",
+		}, func() { backupAdapter.SetCacheInvalidator(cacheResetSvc) })
 	}
 
 	// Live CCU adopt: the orchestrator
@@ -901,6 +938,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if err := northBridges.StartAll(ctx); err != nil {
 		return fmt.Errorf("north bridge start: %w", err)
 	}
+	reg.Manifest().Mark(wiring.MarkNorthBridgesStarted)
 
 	// --- shutdown wait ---------------------------------------
 	// Block until ctx is cancelled, then run the graceful shutdown

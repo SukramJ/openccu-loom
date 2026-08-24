@@ -11,9 +11,14 @@ data a test can read, the MCP/REST parity backlog is empty, and the seventeen
 contract guards that stayed green when what they protect was removed now
 either bite or are gone. The two findings round 4 carried forward are closed
 too — a backup restore that left the daemon serving the old configuration, and
-an MQTT save that reported success and changed nothing. The
-north-bound API contract moves to **7.8.0** — additive only: one admin-only
-diagnostics endpoint, and two fields on the config-section save response.
+an MQTT save that reported success and changed nothing.
+
+The manifest now covers ordering, which is the class two audits kept hitting: a
+collaborator handed over after the thing that reads it has already started. That
+compiles, runs, reports nothing, and leaves the feature off. The north-bound API
+contract moves to **7.9.0** — additive only: one admin-only diagnostics
+endpoint, two fields on the config-section save response, and four on a
+diagnostics payload.
 
 ### Added
 
@@ -38,6 +43,21 @@ diagnostics endpoint, and two fields on the config-section save response.
   all; every one is read-only, and the write halves of those facades
   (interface reconnect, un-ignore edits, schedule writes) are deliberately not
   projected. The declared backlog they were tracked in is now empty.
+
+- **Ordered wiring seams.** A once-only seam can now declare which boot
+  boundaries it must be attached before and after, and the manifest evaluates
+  that at the moment it attaches — the only moment at which the answer is a
+  fact rather than a reading of the source. `GET /diagnostics/wiring` reports
+  the constraints and any that were already broken.
+
+  Four seams are declared. The one to know about is the webhook's alarm bus:
+  `Outbound.Start` reads it once and subscribes, so a bus handed over after the
+  north bridges start is stored and never read. No alarm or security event
+  would ever be forwarded, the setter returns nothing, the daemon reports
+  healthy, and every static guard stays green. That constraint used to live in
+  a comment five hundred lines from the `StartAll` it talked about; moving the
+  call across the boundary now turns an end-to-end test red with the
+  consequence spelled out.
 
 ### Changed
 

@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 84b3000c
-HEAD: 84b3000c
+Generated: 64feab93
+HEAD: 64feab93
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29896 |
-| Reachable | 5132 |
-| Whitelisted | 21747 |
+| Total Exported | 29917 |
+| Reachable | 5139 |
+| Whitelisted | 21761 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

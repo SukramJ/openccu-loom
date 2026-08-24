@@ -1,6 +1,6 @@
 {
-  "generated": "84b3000c",
-  "head": "84b3000c",
+  "generated": "64feab93",
+  "head": "64feab93",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29896,
-    "reachable": 5132,
-    "whitelisted": 21747,
+    "total_exported": 29917,
+    "reachable": 5139,
+    "whitelisted": 21761,
     "unreachable": 3017
   },
   "by_package": [
@@ -18784,13 +18784,20 @@
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 481,
+      "line": 494,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
+      "line": 494,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "ClimateProfile",
+      "file": "pkg/hmapi/rest_contract.go",
       "line": 481,
       "kind": "type"
     },
@@ -18798,56 +18805,49 @@
       "package": "pkg/hmapi",
       "identifier": "ClimateProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 468,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "ClimateProfile",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 468,
+      "line": 481,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateSchedule",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 324,
+      "line": 337,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateSchedule",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 324,
+      "line": 337,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 475,
+      "line": 488,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 475,
+      "line": 488,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CommunicationTestResult",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 739,
+      "line": 752,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CommunicationTestResult",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 739,
+      "line": 752,
       "kind": "type"
     },
     {
@@ -18896,14 +18896,14 @@
       "package": "pkg/hmapi",
       "identifier": "DiagnosticsEvent",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 211,
+      "line": 224,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "DiagnosticsEvent",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 211,
+      "line": 224,
       "kind": "type"
     },
     {
@@ -19008,14 +19008,14 @@
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 490,
+      "line": 503,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 490,
+      "line": 503,
       "kind": "var"
     },
     {
@@ -19043,70 +19043,70 @@
       "package": "pkg/hmapi",
       "identifier": "Incident",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 234,
+      "line": 247,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Incident",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 234,
+      "line": 247,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "InterfaceState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 246,
+      "line": 259,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "InterfaceState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 246,
+      "line": 259,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Link",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 269,
+      "line": 282,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Link",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 269,
+      "line": 282,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "LinkableChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 299,
+      "line": 312,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "LinkableChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 299,
+      "line": 312,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "RPCRecordingStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 218,
+      "line": 231,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "RPCRecordingStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 218,
+      "line": 231,
       "kind": "type"
     },
     {
@@ -19127,42 +19127,42 @@
       "package": "pkg/hmapi",
       "identifier": "ReplaceCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 723,
+      "line": 736,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ReplaceCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 723,
+      "line": 736,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleChannelRef",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 434,
+      "line": 447,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleChannelRef",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 434,
+      "line": 447,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleDeviceSummary",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 449,
+      "line": 462,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleDeviceSummary",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 449,
+      "line": 462,
       "kind": "type"
     },
     {
@@ -19267,238 +19267,238 @@
       "package": "pkg/hmapi",
       "identifier": "SimpleScheduleEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 362,
+      "line": 375,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "SimpleScheduleEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 362,
+      "line": 375,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "TeamCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 753,
+      "line": 766,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "TeamCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 753,
+      "line": 766,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 509,
+      "line": 522,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
+      "line": 522,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaChannel",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 564,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaChannel",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 564,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaCrossValidation",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 700,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaCrossValidation",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 700,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaGroup",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 575,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaGroup",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 575,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameter",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 590,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameter",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 590,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterFlags",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 677,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterFlags",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 677,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterOps",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 665,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterOps",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 665,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaPreset",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 643,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaPreset",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 643,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaProfile",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 721,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaProfile",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 721,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaRequest",
+      "file": "pkg/hmapi/rest_contract.go",
       "line": 509,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
-      "identifier": "UISchemaChannel",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 551,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaChannel",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 551,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaCrossValidation",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 687,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaCrossValidation",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 687,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaGroup",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 562,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaGroup",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 562,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameter",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 577,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameter",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 577,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterFlags",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 664,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterFlags",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 664,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterOps",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 652,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterOps",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 652,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaPreset",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 630,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaPreset",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 630,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaProfile",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 708,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaProfile",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 708,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
       "identifier": "UISchemaRequest",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 496,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaRequest",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 496,
+      "line": 509,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 534,
+      "line": 547,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 534,
+      "line": 547,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 543,
+      "line": 556,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 543,
+      "line": 556,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 637,
+      "line": 650,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 637,
+      "line": 650,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 645,
+      "line": 658,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 645,
+      "line": 658,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 673,
+      "line": 686,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 673,
+      "line": 686,
       "kind": "type"
     },
     {
@@ -166638,17 +166638,108 @@
     },
     {
       "package": "internal/wiring",
-      "identifier": "Phase",
-      "reason": "the type of Seam.Phase, set from the PhasePerCentral constant at every declaration site",
+      "identifier": "Manifest",
+      "reason": "held as central.Registry.manifest, built by NewManifest there and served through Registry.Manifest() to the GET /diagnostics/wiring handler; a type reached only through a struct field and a constructor, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 41
+      "line": 125
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "Manifest",
+      "reason": "held as central.Registry.manifest, built by NewManifest there and served through Registry.Manifest() to the GET /diagnostics/wiring handler; a type reached only through a struct field and a constructor, which the analyzer's heuristic does not follow",
+      "file": "internal/wiring/manifest.go",
+      "line": 125
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "Mark",
+      "reason": "the element type of Seam.Before and Seam.After, set from the Mark* constants at the ordered declaration sites and passed to Manifest.Mark from cmd/openccu-loom/daemon.go",
+      "file": "internal/wiring/manifest.go",
+      "line": 65
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "Mark",
+      "reason": "the element type of Seam.Before and Seam.After, set from the Mark* constants at the ordered declaration sites and passed to Manifest.Mark from cmd/openccu-loom/daemon.go",
+      "file": "internal/wiring/manifest.go",
+      "line": 65
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "Phase",
+      "reason": "the type of Seam.Phase, set from the PhasePerCentral or PhaseOrdered constant at every declaration site",
+      "file": "internal/wiring/manifest.go",
+      "line": 40
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "Phase",
+      "reason": "the type of Seam.Phase, set from the PhasePerCentral or PhaseOrdered constant at every declaration site",
+      "file": "internal/wiring/manifest.go",
+      "line": 40
     },
     {
       "package": "internal/wiring",
       "identifier": "Seam",
       "reason": "constructed as a composite literal at all eighteen OnRegisterDeclared call sites across cmd/ and five internal/ packages, and returned by Manifest.Seams; a type reached only through literals, which the analyzer's heuristic does not follow",
       "file": "internal/wiring/manifest.go",
-      "line": 64
+      "line": 88
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "Seam",
+      "reason": "constructed as a composite literal at all eighteen OnRegisterDeclared call sites across cmd/ and five internal/ packages, and returned by Manifest.Seams; a type reached only through literals, which the analyzer's heuristic does not follow",
+      "file": "internal/wiring/manifest.go",
+      "line": 88
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestAttachInTheRightOrderReportsNoViolation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 59
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestAttachRecordsAViolationWhenAPrerequisiteHasNotRun",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 75
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestAttachRecordsAViolationWhenTheSeamMissedItsMark",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 29
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestMarkPassedTwicePanics",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 94
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestNilManifestAttaches",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 147
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestOrderedSeamWithoutMarksPanics",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 132
+    },
+    {
+      "package": "internal/wiring",
+      "identifier": "TestPerCentralSeamWithMarksPanics",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/wiring/manifest_test.go",
+      "line": 115
     },
     {
       "package": "pkg/hmapi",
@@ -171843,6 +171934,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/event_catalogue_test.go",
       "line": 14
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestEveryBootMarkIsPassedExactlyOnce",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_manifest_test.go",
+      "line": 200
     },
     {
       "package": "tests/contract",

@@ -25,31 +25,31 @@ replace it, and the metrics that say whether it worked.
 
 ### Composition root
 
-- **Widen the wiring manifest to setter and struct-field seams**
+- **Declare the remaining ordered seams in `cmd/openccu-loom`**
   ([ADR 0065](../../docs/adr/0065-composition-root-wiring-is-checkable.md),
   accepted 2026-08-23).
 
-  The first adoption is done and covers one seam class: every per-central
-  registry observer attaches through `Registry.OnRegisterDeclared`, eighteen
-  call sites across `cmd/` and five `internal/` packages. It carries the guard
-  the manifest needed to be a check rather than documentation — three of them,
-  in fact: a raw `OnRegister` fails statically, a duplicated seam name fails
-  statically, and `GET /diagnostics/wiring` lets an end-to-end test ask a
-  running daemon what it wired, so deleting one wiring line from the
-  composition root turns it red.
+  Two adoptions are done. The first covers the per-central registry observer:
+  eighteen call sites attach through `Registry.OnRegisterDeclared`. The second
+  covers ordering, which is the class the audits actually keep hitting — a
+  collaborator handed over after the thing that reads it has already started.
+  `wiring.Mark` names a boot boundary, an ordered seam declares which marks it
+  must precede and follow, and `Manifest.Attach` evaluates that at the moment
+  the seam attaches. Four seams are declared today, and moving one across its
+  boundary turns the end-to-end test red with the consequence spelled out.
 
-  What is left is the class the audits actually keep hitting: a setter or
-  struct field whose caller exists but runs at the wrong moment. `Seam` already
-  declares `before-southbound` and `after-southbound`; nothing uses them,
-  because the observer class is ordering-free by construction. The next
-  adoption should be a `wire*` function whose order relative to south-bound
-  bring-up is load-bearing, and it should make that ordering a declared
-  constraint a test can check rather than a property of line order in a
-  900-line function.
+  What is left is volume, not mechanism: `cmd/openccu-loom` carries more
+  constraints of exactly this shape, each currently a comment some distance
+  from the step it talks about. `webhook.alarm_bus` is the pattern — a setter
+  whose prose said "before the PhaseLate StartAll" five hundred lines from the
+  `StartAll` in question.
 
-  Ordering by defect density still applies, and `wiringSettersWithoutCaller`
-  (20 entries) should shrink toward deletion as each seam becomes exactly
-  checkable.
+  Also still open: struct-field seams, where a collaborator arrives as a field
+  of a deps literal rather than through a call. Those need a shape decision
+  first — a literal has no attach point to hang a declaration on.
+
+  `wiringSettersWithoutCaller` (19 entries) should keep shrinking toward
+  deletion as each seam becomes exactly checkable.
 
 ### Matter
 

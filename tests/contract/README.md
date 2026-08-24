@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 370.
+Guards without a doc comment: 7 of 371.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -289,6 +289,7 @@ Guards without a doc comment: 7 of 370.
 | TestWireSnapshots | wire_snapshots/snapshot_pin_test.go | TestWireSnapshots loads every golden snapshot and verifies that re-running the same setter with the same inputs produces identical wire calls. |
 | TestEveryWireFunctionHasAProductionCaller | wiring_free_functions_test.go | TestEveryWireFunctionHasAProductionCaller closes the hole its sibling TestEveryWiringSetterHasAProductionCaller cannot reach. |
 | TestDeclaredSeamNamesAreDistinctAndScoped | wiring_manifest_test.go | TestDeclaredSeamNamesAreDistinctAndScoped pins the shape of the seam names the manifest reports, because they are the identifiers guards and the diagnostics surface address a seam by — they outlive the Go function that declares them, so a rename must not silently become a new seam. |
+| TestEveryBootMarkIsPassedExactlyOnce | wiring_manifest_test.go | TestEveryBootMarkIsPassedExactlyOnce pins the other half of the ordered-seam mechanism. |
 | TestEveryRegistryObserverDeclaresItsSeam | wiring_manifest_test.go | TestEveryRegistryObserverDeclaresItsSeam is the guard that makes ADR 0065's wiring manifest a check rather than documentation. |
 | TestPin_AlarmCentralHook_Installed | wiring_pins/alarm_wiring_test.go | TestPin_AlarmCentralHook_Installed pins that runtime-adopted centrals are subscribed onto the alarm service — otherwise sensors on a live-adopted CCU silently never reach the engine. |
 | TestPin_AlarmMotionReset_Wired | wiring_pins/alarm_wiring_test.go | TestPin_AlarmMotionReset_Wired pins that the alarm service passes a motion-reset port into the engine. |

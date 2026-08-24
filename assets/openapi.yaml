@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.8.0
+  version: 7.9.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5256,11 +5256,33 @@ paths:
                       example: "*history.Recorder"
                     phase:
                       type: string
-                      description: Ordering constraint relative to south-bound bring-up.
-                      enum: [per-central, before-southbound, after-southbound]
+                      description: >
+                        `per-central` for an observer replayed over every
+                        central, `ordered` for a once-only attachment whose
+                        position in the boot sequence matters.
+                      enum: [per-central, ordered]
+                    before:
+                      type: array
+                      description: >
+                        Boot marks this seam must be attached before. Only an
+                        `ordered` seam carries them.
+                      items: { type: string }
+                    after:
+                      type: array
+                      description: Boot marks this seam must be attached after.
+                      items: { type: string }
                     why:
                       type: string
                       description: What stops working when the seam is absent.
+                    violations:
+                      type: array
+                      description: >
+                        Ordering constraints that were already broken when the
+                        seam was attached. Empty is the normal case; a
+                        non-empty list is a wiring defect the daemon reports
+                        about itself — the collaborator IS wired, so nothing
+                        else about the daemon looks wrong.
+                      items: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /diagnostics/rssi:

@@ -14982,12 +14982,18 @@ export interface operations {
                          */
                         collaborator: string;
                         /**
-                         * @description Ordering constraint relative to south-bound bring-up.
+                         * @description `per-central` for an observer replayed over every central, `ordered` for a once-only attachment whose position in the boot sequence matters.
                          * @enum {string}
                          */
-                        phase: "per-central" | "before-southbound" | "after-southbound";
+                        phase: "per-central" | "ordered";
+                        /** @description Boot marks this seam must be attached before. Only an `ordered` seam carries them. */
+                        before?: string[];
+                        /** @description Boot marks this seam must be attached after. */
+                        after?: string[];
                         /** @description What stops working when the seam is absent. */
                         why: string;
+                        /** @description Ordering constraints that were already broken when the seam was attached. Empty is the normal case; a non-empty list is a wiring defect the daemon reports about itself — the collaborator IS wired, so nothing else about the daemon looks wrong. */
+                        violations?: string[];
                     }[];
                 };
             };

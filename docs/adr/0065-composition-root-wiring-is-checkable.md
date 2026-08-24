@@ -134,12 +134,18 @@ replaces. `TestEveryWiringSetterHasAProductionCaller` and its ratchet can then
 shrink toward deletion rather than being frozen, which is what the round-5 M2
 audit found they currently are.
 
-**What is not covered yet.** Setter and struct-field seams, and the two
-ordering phases `Seam` declares but no adoption uses. `PhaseBeforeSouthbound`
-and `PhaseAfterSouthbound` exist because the ordering class is the one the
-audits keep hitting; the observer class is ordering-free by construction, so
-the first adoption cannot exercise them. They are the shape the next adoption
-is expected to fill, not a claim that ordering is checked today.
+**What is not covered yet.** Struct-field seams — a collaborator handed over as
+a field of a deps literal rather than through a call — and the ordered seams
+that exist but have not been declared. Four are declared; `cmd/openccu-loom`
+carries more constraints of the same shape, and each one adopted is one more
+comment that becomes a check. Nothing about the mechanism needs to change for
+them.
+
+The marks stay deliberately few. A mark is a boundary something downstream
+genuinely depends on, and a guard asserts every declared mark is passed exactly
+once: a mark nothing passes makes every `Before` naming it hold vacuously and
+every `After` naming it fail, at which point the constraint has stopped
+measuring the boot sequence and started measuring a typo.
 
 **The alternative that was rejected by accepting this.** Leaving the composition
 root as it is would have kept it at roughly twice the average defect density,
