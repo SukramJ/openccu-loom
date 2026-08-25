@@ -12,5 +12,5 @@
     "ws.broadcasts.v1",
     "errors.problem_details.v1"
   ],
-  "config_ui_url": "http://172.18.4.29/config"
+  "config_ui_url": "http://192.0.2.29/config"
 }

@@ -49,7 +49,7 @@ func TestSystemCCU_HappyPath(t *testing.T) {
 	t.Parallel()
 	reader := fakeSystemCCUReader{entries: []SystemCCUEntry{
 		{
-			Name: "home", Host: "172.18.4.29", Available: true,
+			Name: "home", Host: "192.0.2.29", Available: true,
 			Model: "RaspberryMatic", Version: "3.79.6.20240803",
 			Hostname: "homematic-raspi", Serial: "OEQ1234567",
 			URL: "http://homematic-raspi", IsHaApp: false,

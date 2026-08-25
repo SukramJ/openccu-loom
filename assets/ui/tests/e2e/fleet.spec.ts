@@ -32,7 +32,7 @@ test.describe('Fleet', () => {
     await expect(page.getByText('BidCos-RF', { exact: true })).toBeVisible();
 
     // ccu1 host + model surface.
-    await expect(page.getByText('172.18.4.29')).toBeVisible();
+    await expect(page.getByText('192.0.2.29')).toBeVisible();
     await expect(page.getByText('CCU3')).toBeVisible();
 
     // CCU-reported security posture: ccu1 requires auth, neither CCU
@@ -66,7 +66,7 @@ test.describe('Fleet - readiness initializing state', () => {
           entries: [
             {
               name: 'ccu1',
-              host: '172.18.4.29',
+              host: '192.0.2.29',
               available: true,
               model: 'CCU3',
               version: '3.75.7',

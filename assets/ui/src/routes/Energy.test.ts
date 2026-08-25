@@ -46,7 +46,7 @@ import Energy from "./Energy.svelte";
 // Test data
 // ---------------------------------------------------------------------------
 
-const CENTRALS = [{ name: "ccu1", host: "172.18.4.29", enabled: true, interfaces: [] }];
+const CENTRALS = [{ name: "ccu1", host: "192.0.2.29", enabled: true, interfaces: [] }];
 
 // Figures are chosen so every rendered "<n> kWh" string is unique across the
 // whole view (device rows + range totals) — otherwise Testing Library's

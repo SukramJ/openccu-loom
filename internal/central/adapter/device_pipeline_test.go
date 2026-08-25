@@ -885,7 +885,7 @@ func TestHydrateStoresParamsetDescriptionsInRegistry(t *testing.T) {
 // (see internal/client/rega/scripts/fetch_all_device_data.fn) wraps every
 // STRING-typed data point's value in UriEncode() so an embedded quote or
 // control character cannot break the script's hand-rolled JSON envelope —
-// "172.18.4.40" is written as "172%2E18%2E4%2E40". seedValues already
+// "192.0.2.40" is written as "192%2E0%2E2%2E40". seedValues already
 // url.QueryUnescape's the *key*; the value must go through the same
 // decoding, or the percent-encoded literal lands straight in the model. The
 // value below carries both a space and a dot, mirroring the class of value
@@ -913,11 +913,11 @@ func TestDevicePipeline_SeedValues_DecodesURLEncodedStringValue(t *testing.T) {
 	})
 	ch.Put(dp)
 
-	// UriEncode("172.18.4.40 room") — both the dots and the space are
+	// UriEncode("192.0.2.40 room") — both the dots and the space are
 	// percent-escaped, matching the CCU-observed encoding of a live
-	// IP_ADDRESS data point ("172%2E18%2E4%2E40").
-	const encoded = "172%2E18%2E4%2E40%20room"
-	const want = "172.18.4.40 room"
+	// IP_ADDRESS data point ("192%2E0%2E2%2E40").
+	const encoded = "192%2E0%2E2%2E40%20room"
+	const want = "192.0.2.40 room"
 	payload := `{"HmIP-RF.DEV002%3A0.IP_ADDRESS": "` + encoded + `"}`
 
 	srv := newBoost6JSONRPCServerAlwaysOK(t, payload)

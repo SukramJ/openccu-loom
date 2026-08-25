@@ -258,7 +258,7 @@ func TestVirtualRemotePressPublishesEventAndButton(t *testing.T) {
 	// builder deliberately publishes nothing rather than let two CCUs
 	// collide. In production the serial is resolved by the hub bring-up
 	// before the device snapshot runs.
-	b.SetHubInfoFor("ccu", HubInfo{Name: "ccu", Serial: "3014F711A0001F5A4993D962"})
+	b.SetHubInfoFor("ccu", HubInfo{Name: "ccu", Serial: "3014F711A0001F0123456789"})
 
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
 		if err := b.PublishState(context.Background(), pressEvent(param, hmenum.DataPointUsageDataPoint)); err != nil {

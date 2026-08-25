@@ -67,13 +67,13 @@ import { deviceStore } from "$lib/stores/devices.svelte";
 const CCUS = [
   {
     name: "ccu-online",
-    host: "172.18.4.10",
+    host: "192.0.2.10",
     available: true,
     model: "CCU3",
     version: "3.75.7",
     hostname: "ccu-online.local",
     serial: "SERIAL0001",
-    url: "https://172.18.4.10",
+    url: "https://192.0.2.10",
     is_ha_app: false,
     configured_interfaces: ["HmIP-RF", "BidCos-RF"],
     auth_enabled: true,
@@ -85,7 +85,7 @@ const CCUS = [
         type: "HmIP-RF",
         address: "HmIP-RF",
         port: 2010,
-        url: "http://172.18.4.10:2010",
+        url: "http://192.0.2.10:2010",
       },
       { type: "BidCos-RF", address: "BidCos-RF", port: 2001 },
       { type: "CUxD", address: "CUxD", port: 8701 },
@@ -100,7 +100,7 @@ const CCUS = [
   {
     // No CCU-sourced facts at all — the pre-first-connect shape.
     name: "ccu-offline",
-    host: "172.18.4.11",
+    host: "192.0.2.11",
     available: false,
     is_ha_app: false,
     configured_interfaces: ["HmIP-RF"],
@@ -334,7 +334,7 @@ describe("Fleet — CCU-reported interface list", () => {
       "fleet.field.ccu_interfaces.unmanaged",
     );
     const hmip = screen.getByText("HmIP-RF:2010");
-    expect(hmip.getAttribute("title")).toBe("http://172.18.4.10:2010");
+    expect(hmip.getAttribute("title")).toBe("http://192.0.2.10:2010");
 
     // The daemon's own configured list stays a separate row.
     expect(screen.getByText("fleet.field.interfaces")).toBeInTheDocument();

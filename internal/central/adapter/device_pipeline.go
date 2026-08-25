@@ -1244,7 +1244,7 @@ func (p *DevicePipeline) seedValues(
 		// survives json.Unmarshal untouched (it is just the string's
 		// content), so a string value must be decoded here the same way
 		// the key already is above; skipping it left values such as an
-		// IP_ADDRESS data point's "172.18.4.40" seeded into the model as
+		// IP_ADDRESS data point's "192.0.2.40" seeded into the model as
 		// the literal "172%2E18%2E4%2E40".
 		//
 		// Decoding goes through the package's canonical ReGa decoder, not a

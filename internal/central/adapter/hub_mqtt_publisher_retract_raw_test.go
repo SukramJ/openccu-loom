@@ -33,7 +33,7 @@ func TestRetractCentralClearsRawPlaneHubState(t *testing.T) {
 	c.SetSystemInformation(central.SystemInfo{
 		Model:   "HomeMatic Central",
 		Version: "3.79.6",
-		Serial:  "3014F711A0001F5A4993D962",
+		Serial:  "3014F711A0001F0123456789",
 	})
 
 	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic}

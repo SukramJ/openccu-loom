@@ -73,7 +73,7 @@ func hubFanoutFixture(t *testing.T, pub mqtt.Publisher) (*central.Unit, *HubMQTT
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F5A4993D962"})
+	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
 	reg := central.NewRegistry()
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)

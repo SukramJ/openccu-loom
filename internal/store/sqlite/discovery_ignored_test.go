@@ -23,9 +23,9 @@ func TestDiscoveryIgnoreStore_AddAndList(t *testing.T) {
 	ctx := context.Background()
 
 	entry := IgnoredCCU{
-		Serial:    "3014F711A0001F5A4993D962",
+		Serial:    "3014F711A0001F0123456789",
 		Name:      "Otto",
-		Host:      "172.18.4.29",
+		Host:      "192.0.2.29",
 		IgnoredBy: "admin",
 	}
 	if err := s.Add(ctx, entry); err != nil {

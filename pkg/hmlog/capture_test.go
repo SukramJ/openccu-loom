@@ -435,7 +435,7 @@ func TestTeeHandler_Anonymise_SubjectAndUsername(t *testing.T) {
 		"remote", "10.0.0.5",
 		// Operations data — must stay in clear text.
 		"device_address", "HEQ123",
-		"host", "172.18.4.29",
+		"host", "192.0.2.29",
 		"other", "keep",
 	)
 
@@ -459,8 +459,8 @@ func TestTeeHandler_Anonymise_SubjectAndUsername(t *testing.T) {
 	if m["device_address"] != "HEQ123" {
 		t.Errorf("device_address = %v, want clear text HEQ123", m["device_address"])
 	}
-	if m["host"] != "172.18.4.29" {
-		t.Errorf("host = %v, want clear text 172.18.4.29", m["host"])
+	if m["host"] != "192.0.2.29" {
+		t.Errorf("host = %v, want clear text 192.0.2.29", m["host"])
 	}
 	if m["other"] != "keep" {
 		t.Errorf("other attr = %q, want %q", m["other"], "keep")

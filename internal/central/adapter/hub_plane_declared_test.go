@@ -28,7 +28,7 @@ func sweepRetainedConfig(t *testing.T, b *mqtt.Bridge, pub *mqtt.NoopClient, cen
 		done <- err
 	}()
 	deadline := time.Now().Add(5 * time.Second)
-	for !pub.DeliverInboundRetained("homeassistant/#", topic, []byte(`{"unique_id":"loom_5a4993d962_sysvar_gone"}`)) {
+	for !pub.DeliverInboundRetained("homeassistant/#", topic, []byte(`{"unique_id":"loom_0123456789_sysvar_gone"}`)) {
 		if time.Now().After(deadline) {
 			t.Fatal("the sweep never installed its homeassistant/# subscription")
 		}
@@ -80,7 +80,7 @@ func TestHubPublisherDeclaresItsPlaneToTheOrphanSweep(t *testing.T) {
 
 	// The serial resolves during the readiness-gated bring-up; it gates every
 	// hub payload, so the plane declares nothing before it lands.
-	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F5A4993D962"})
+	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
 	c.HubModel.PutSysvar(&hub.Sysvar{
 		HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"},
 		ValueType:    hmenum.HubValueTypeLogic,

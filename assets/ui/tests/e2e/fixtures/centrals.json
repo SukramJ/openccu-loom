@@ -1,7 +1,7 @@
 [
   {
     "name": "ccu1",
-    "host": "172.18.4.29",
+    "host": "192.0.2.29",
     "enabled": true,
     "interfaces": [
       {
