@@ -188,7 +188,7 @@ describe("FirmwareList reload", () => {
 // next to 4.4.22 → 0.0.0 contradicts the version columns.
 describe("FirmwareList zero-version placeholder", () => {
   const rfMod = {
-    address: "001F5A4993D962",
+    address: "001F0123456789",
     name: "Otto-Funkmodul",
     model: "RPI-RF-MOD",
     interface_id: "ccu-HmIP-RF",

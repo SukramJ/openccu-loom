@@ -101,7 +101,7 @@ func TestListDiscoveredCCUs_FiltersIgnoredAndMarksConfigured(t *testing.T) {
 	now := time.Now().UTC()
 	discoverer := &fakeDiscoveredLister{
 		ccus: []ssdp.DiscoveredCCU{
-			{Serial: "SER001", Name: "Otto", Host: "172.18.4.29", LastSeen: now},
+			{Serial: "SER001", Name: "Otto", Host: "192.0.2.29", LastSeen: now},
 			{Serial: "SER002", Name: "Keller", Host: "192.168.1.5", LastSeen: now},
 			{Serial: "SER003", Name: "Ignored", Host: "10.0.0.99", LastSeen: now},
 		},
@@ -111,7 +111,7 @@ func TestListDiscoveredCCUs_FiltersIgnoredAndMarksConfigured(t *testing.T) {
 	_ = ignoreStore.Add(context.Background(), sqlite.IgnoredCCU{Serial: "SER003"})
 
 	// SER001's host is already configured.
-	cfgLister := &fakeConfiguredLister{hosts: []string{"172.18.4.29"}}
+	cfgLister := &fakeConfiguredLister{hosts: []string{"192.0.2.29"}}
 
 	deps := &DiscoveryDeps{
 		Discoverer: discoverer,
@@ -183,7 +183,7 @@ func TestIgnoreDiscoveredCCU_HappyPath(t *testing.T) {
 
 	discoverer := &fakeDiscoveredLister{
 		ccus: []ssdp.DiscoveredCCU{
-			{Serial: "SER001", Name: "Otto", Host: "172.18.4.29"},
+			{Serial: "SER001", Name: "Otto", Host: "192.0.2.29"},
 		},
 	}
 	ignoreStore := newFakeIgnoreStore()
@@ -269,7 +269,7 @@ func TestListDiscoveredCCUs_MatchesBySerial(t *testing.T) {
 	now := time.Now().UTC()
 	discoverer := &fakeDiscoveredLister{
 		ccus: []ssdp.DiscoveredCCU{
-			{Serial: "SER-X", Name: "Kellerbox", Host: "172.18.9.9", LastSeen: now},
+			{Serial: "SER-X", Name: "Kellerbox", Host: "192.0.2.99", LastSeen: now},
 		},
 	}
 	// Configured central has the same serial but a completely different host.
@@ -311,7 +311,7 @@ func TestListDiscoveredCCUs_SuggestedHostFromDep(t *testing.T) {
 	now := time.Now().UTC()
 	discoverer := &fakeDiscoveredLister{
 		ccus: []ssdp.DiscoveredCCU{
-			{Serial: "S1", Name: "Local", Host: "172.18.4.29", LastSeen: now},
+			{Serial: "S1", Name: "Local", Host: "192.0.2.29", LastSeen: now},
 			{Serial: "S2", Name: "Remote", Host: "192.168.1.99", LastSeen: now},
 		},
 	}
@@ -321,7 +321,7 @@ func TestListDiscoveredCCUs_SuggestedHostFromDep(t *testing.T) {
 		deps := &DiscoveryDeps{
 			Discoverer: discoverer,
 			SuggestHost: func(_ context.Context, raw string) string {
-				if raw == "172.18.4.29" {
+				if raw == "192.0.2.29" {
 					return "localhost"
 				}
 				return raw

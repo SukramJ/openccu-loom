@@ -101,14 +101,14 @@ func TestTwoCentralsWithoutSerialsDoNotShareUniqueIDs(t *testing.T) {
 func TestDeviceDiscoveryScopesUniqueIDsOnceTheSerialIsKnown(t *testing.T) {
 	t.Parallel()
 
-	first := publishVirtualRemoteDiscovery(t, "kearneygo", "BidCoS-RF", "3014F711A0001F5A4993D962")
-	second := publishVirtualRemoteDiscovery(t, "kearney-loc", "BidCoS-RF", "3014F711A0001F5A4993AAAA")
+	first := publishVirtualRemoteDiscovery(t, "kearneygo", "BidCoS-RF", "3014F711A0001F0123456789")
+	second := publishVirtualRemoteDiscovery(t, "kearney-loc", "BidCoS-RF", "3014F711A0001F9876543210")
 
 	if len(first) == 0 || len(second) == 0 {
 		t.Fatal("no discovery payloads were published with a serial present — the fixture proves nothing")
 	}
 	for _, id := range first {
-		if !strings.Contains(id, "4993d962") {
+		if !strings.Contains(id, "23456789") {
 			t.Errorf("unique_id %q does not carry the CCU's serial discriminator", id)
 		}
 	}

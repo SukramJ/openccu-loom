@@ -2211,7 +2211,7 @@ func buildInterfacesAdapterWithClient(t *testing.T) (adapter *InterfacesAdapter,
 	entry := &coordinators.ClientEntry{
 		InterfaceID: "iface-ccu-iface-HmIP-RF",
 		Interface:   hmenum.InterfaceHmIPRF,
-		Host:        "172.18.4.29",
+		Host:        "192.0.2.29",
 	}
 	if err := c.Clients.Register(entry); err != nil {
 		t.Fatalf("Clients.Register: %v", err)

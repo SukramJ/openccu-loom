@@ -31,9 +31,9 @@ func TestHostSuggesterSuggest(t *testing.T) {
 		{
 			name:       "local_ip_returns_localhost",
 			supervised: false,
-			localIPs:   []netip.Addr{netip.MustParseAddr("172.18.4.29")},
+			localIPs:   []netip.Addr{netip.MustParseAddr("192.0.2.29")},
 			lookupAddr: neverCalled,
-			rawHost:    "172.18.4.29",
+			rawHost:    "192.0.2.29",
 			want:       "localhost",
 		},
 		{

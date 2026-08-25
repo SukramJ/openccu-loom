@@ -76,13 +76,13 @@ function daemonInfo(overrides: Partial<DaemonInfo> = {}): DaemonInfo {
 
 const CCU = {
   name: "ccu-main",
-  host: "172.18.4.29",
+  host: "192.0.2.29",
   available: true,
   model: "CCU3",
   version: "3.75.7",
   hostname: "ccu-main.local",
   serial: "SERIAL0042",
-  url: "https://172.18.4.29",
+  url: "https://192.0.2.29",
   is_ha_app: false,
   configured_interfaces: ["HmIP-RF"],
 };

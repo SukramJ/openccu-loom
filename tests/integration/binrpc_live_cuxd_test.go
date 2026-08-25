@@ -57,7 +57,7 @@ func liveCuxdAddr(t *testing.T) string {
 	t.Helper()
 	addr := os.Getenv("OPENCCU_LOOM_LIVE_CUXD_ADDR")
 	if addr == "" {
-		t.Skip("set OPENCCU_LOOM_LIVE_CUXD_ADDR (e.g. 172.18.4.39:8701) to enable live-CUxD smoke")
+		t.Skip("set OPENCCU_LOOM_LIVE_CUXD_ADDR (e.g. 192.0.2.39:8701) to enable live-CUxD smoke")
 	}
 	return addr
 }

@@ -64,8 +64,8 @@ func TestDiscovererFetch(t *testing.T) {
 		if !ok {
 			t.Fatal("fetch: expected ok=true for a valid CCU description")
 		}
-		if ccu.Name != "Otto" {
-			t.Errorf("Name = %q, want Otto", ccu.Name)
+		if ccu.Name != "Hausanlage" {
+			t.Errorf("Name = %q, want Hausanlage", ccu.Name)
 		}
 	})
 

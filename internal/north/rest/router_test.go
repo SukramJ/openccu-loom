@@ -1660,7 +1660,7 @@ func TestRouter_SystemCCU(t *testing.T) {
 		SystemCCU: fakeSystemCCUReader{entries: []handlers.SystemCCUEntry{
 			{
 				Name:                 "home",
-				Host:                 "172.18.4.29",
+				Host:                 "192.0.2.29",
 				Available:            true,
 				Model:                "RaspberryMatic",
 				Version:              "3.79.6.20240803",

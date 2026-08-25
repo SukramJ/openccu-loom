@@ -28,7 +28,7 @@ type DiscoveredCCU struct {
 	// modelDescription tail. Used to dedupe responses and to key the ignore list.
 	Serial string `json:"serial"`
 	// Name is the human-friendly central name (friendlyName with the
-	// manufacturer prefix stripped, e.g. "OpenCCU - Otto" → "Otto").
+	// manufacturer prefix stripped, e.g. "OpenCCU - Hausanlage" → "Hausanlage").
 	Name string `json:"name"`
 	// Host is the CCU's IP / hostname, taken from the device-description URL.
 	Host string `json:"host"`
@@ -122,7 +122,7 @@ func isCentralManufacturer(manufacturer, modelName, friendlyName string) bool {
 }
 
 // centralName strips the manufacturer prefix from the friendlyName, as the
-// reference instance-name handling does. "OpenCCU - Otto" → "Otto";
+// reference instance-name handling does. "OpenCCU - Hausanlage" → "Hausanlage";
 // "HomeMatic Central - 0001ABC" keeps its (less friendly) tail. Falls back to
 // the manufacturer, then a generic "CCU".
 func centralName(friendlyName, manufacturer string) string {

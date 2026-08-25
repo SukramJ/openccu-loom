@@ -346,15 +346,15 @@ func TestCentralsStoreBackfillSerial(t *testing.T) {
 	}
 
 	// Backfill fills the empty serial and reports the update.
-	updated, err := s.BackfillSerial(ctx, "kearney", "5A4993D962")
+	updated, err := s.BackfillSerial(ctx, "kearney", "0123456789")
 	if err != nil {
 		t.Fatalf("BackfillSerial: %v", err)
 	}
 	if !updated {
 		t.Fatal("want updated=true for an empty serial")
 	}
-	if got, _ := s.Get(ctx, "kearney"); got.Serial != "5A4993D962" {
-		t.Errorf("Serial=%q, want %q", got.Serial, "5A4993D962")
+	if got, _ := s.Get(ctx, "kearney"); got.Serial != "0123456789" {
+		t.Errorf("Serial=%q, want %q", got.Serial, "0123456789")
 	}
 
 	// A second backfill is a no-op: a serial already exists, value preserved.
@@ -365,8 +365,8 @@ func TestCentralsStoreBackfillSerial(t *testing.T) {
 	if updated {
 		t.Error("want updated=false when a serial already exists")
 	}
-	if got, _ := s.Get(ctx, "kearney"); got.Serial != "5A4993D962" {
-		t.Errorf("serial overwritten: got %q, want %q", got.Serial, "5A4993D962")
+	if got, _ := s.Get(ctx, "kearney"); got.Serial != "0123456789" {
+		t.Errorf("serial overwritten: got %q, want %q", got.Serial, "0123456789")
 	}
 
 	// Unknown central and empty-serial argument are both no-ops, no error.

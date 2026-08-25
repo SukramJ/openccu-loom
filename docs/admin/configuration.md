@@ -74,7 +74,7 @@ locale: en
 
 centrals:
   - name: home
-    host: 172.18.4.29
+    host: 192.0.2.29
     username: Admin
     password: "your-ccu-password"
     interfaces: [HmIP-RF, BidCos-RF]
@@ -540,7 +540,7 @@ interface overrides:
 ```yaml
 centrals:
   - name: home
-    host: 172.18.4.29
+    host: 192.0.2.29
     username: Admin
     password: "your-ccu-password"
     interfaces:

@@ -54,10 +54,10 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
 
 import BackupList from "./BackupList.svelte";
 
-const ONE_CENTRAL = [{ name: "alpha", host: "172.18.4.29", interfaces: [] }];
+const ONE_CENTRAL = [{ name: "alpha", host: "192.0.2.29", interfaces: [] }];
 const TWO_CENTRALS = [
-  { name: "alpha", host: "172.18.4.29", interfaces: [] },
-  { name: "beta", host: "172.18.4.30", interfaces: [] },
+  { name: "alpha", host: "192.0.2.29", interfaces: [] },
+  { name: "beta", host: "192.0.2.30", interfaces: [] },
 ];
 
 beforeEach(() => {

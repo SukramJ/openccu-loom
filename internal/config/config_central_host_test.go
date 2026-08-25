@@ -35,7 +35,7 @@ func TestValidate_CentralHostAcceptsHostnamesAndIPs(t *testing.T) {
 	t.Parallel()
 	valid := []string{
 		"192.168.1.1",
-		"172.18.4.29",
+		"192.0.2.29",
 		"ccu.local",
 		"otto.mm-jankowski.de",
 		"CCU3",

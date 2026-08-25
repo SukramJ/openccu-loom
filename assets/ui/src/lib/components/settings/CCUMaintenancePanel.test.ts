@@ -67,7 +67,7 @@ import CCUMaintenancePanel from "./CCUMaintenancePanel.svelte";
 const CCUS = [
   {
     name: "ccu-home",
-    host: "172.18.4.29",
+    host: "192.0.2.29",
     available: true,
     is_ha_app: false,
     configured_interfaces: ["HmIP-RF"],

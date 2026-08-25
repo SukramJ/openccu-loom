@@ -159,7 +159,7 @@ license the single-central antipattern.
 ### The live-CCU-write rule is unchanged
 
 `CLAUDE.md`'s live-write rule overrides dev-mode convenience. Tools
-that can reach the real CCU at `172.18.4.29` — forced reconnect,
+that can reach the real CCU at `192.0.2.29` — forced reconnect,
 fault injection that triggers a wire write, anything that lands a
 `setValue` — default their target to godevccu and require explicit
 user approval *plus* a named target device before touching the real

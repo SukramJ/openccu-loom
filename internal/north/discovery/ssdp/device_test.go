@@ -9,7 +9,7 @@ import (
 
 // realOpenCCUXML is the XML fixture from a real OpenCCU device-description response.
 const realOpenCCUXML = `<?xml version="1.0" encoding="UTF-8"?>
-<root xmlns="urn:schemas-upnp-org:device-1-0"><specVersion><major>1</major><minor>0</minor></specVersion><URLBase>http://172.18.4.29</URLBase><device><deviceType>urn:schemas-upnp-org:device:Basic:1</deviceType><friendlyName>OpenCCU - Otto</friendlyName><manufacturer>OpenCCU</manufacturer><manufacturerURL>https://openccu.de</manufacturerURL><modelDescription>OpenCCU 3014F711A0001F5A4993D962</modelDescription><modelName>OpenCCU</modelName><UDN>uuid:upnp-BasicDevice-1_0-3014F711A0001F5A4993D962</UDN></device></root>`
+<root xmlns="urn:schemas-upnp-org:device-1-0"><specVersion><major>1</major><minor>0</minor></specVersion><URLBase>http://192.0.2.29</URLBase><device><deviceType>urn:schemas-upnp-org:device:Basic:1</deviceType><friendlyName>OpenCCU - Hausanlage</friendlyName><manufacturer>OpenCCU</manufacturer><manufacturerURL>https://openccu.de</manufacturerURL><modelDescription>OpenCCU 3014F711A0001F0123456789</modelDescription><modelName>OpenCCU</modelName><UDN>uuid:upnp-BasicDevice-1_0-3014F711A0001F0123456789</UDN></device></root>`
 
 const classicCCUXML = `<?xml version="1.0" encoding="UTF-8"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0"><URLBase>http://192.168.1.5</URLBase><device><friendlyName>HomeMatic Central - 0001ABCDEF12</friendlyName><manufacturer>eq-3</manufacturer><modelName>CCU3</modelName><modelDescription>HomeMatic Central 0001ABCDEF12</modelDescription><UDN>uuid:upnp-BasicDevice-1_0-0001ABCDEF12</UDN></device></root>`
@@ -34,12 +34,12 @@ func TestParseDeviceDescription(t *testing.T) {
 		{
 			name:        "real OpenCCU device",
 			body:        realOpenCCUXML,
-			locationURL: "http://172.18.4.29/upnp/basic_dev.cgi",
+			locationURL: "http://192.0.2.29/upnp/basic_dev.cgi",
 			wantOK:      true,
-			// UDN tail 3014F711A0001F5A4993D962 canonicalised to its last 10.
-			wantSerial: "5A4993D962",
-			wantName:   "Otto",
-			wantHost:   "172.18.4.29",
+			// UDN tail 3014F711A0001F0123456789 canonicalised to its last 10.
+			wantSerial: "0123456789",
+			wantName:   "Hausanlage",
+			wantHost:   "192.0.2.29",
 			wantMfr:    "OpenCCU",
 		},
 		{
@@ -144,7 +144,7 @@ func TestParseDeviceDescriptionIgnoresBodySuppliedHost(t *testing.T) {
 
 	body := `<?xml version="1.0" encoding="UTF-8"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0"><URLBase>http://attacker.example/</URLBase><device>
-<friendlyName>OpenCCU - Otto</friendlyName><manufacturer>eQ-3</manufacturer>
+<friendlyName>OpenCCU - Hausanlage</friendlyName><manufacturer>eQ-3</manufacturer>
 <modelName>CCU3</modelName><modelDescription>HomeMatic Central 0001ABCDEF12</modelDescription>
 <presentationURL>http://also-attacker.example/</presentationURL>
 <UDN>uuid:upnp-BasicDevice-1_0-0001ABCDEF12</UDN></device></root>`
@@ -167,7 +167,7 @@ func TestCentralName(t *testing.T) {
 		manufacturer string
 		want         string
 	}{
-		{"OpenCCU - Otto", "OpenCCU", "Otto"},
+		{"OpenCCU - Hausanlage", "OpenCCU", "Hausanlage"},
 		{"HomeMatic Central - 0001ABC", "eq-3", "0001ABC"},
 		{"OpenCCU - ", "OpenCCU", "-"}, // " - " found but empty tail → strips "OpenCCU " prefix, leaving "-"
 		{"RaspberryMatic", "RaspberryMatic", "RaspberryMatic"},
@@ -193,7 +193,7 @@ func TestSerialFrom(t *testing.T) {
 		modelDesc string
 		want      string
 	}{
-		{"uuid:upnp-BasicDevice-1_0-3014F711A0001F5A4993D962", "", "3014F711A0001F5A4993D962"},
+		{"uuid:upnp-BasicDevice-1_0-3014F711A0001F0123456789", "", "3014F711A0001F0123456789"},
 		{"uuid:upnp-BasicDevice-1_0-0001ABCDEF12", "HomeMatic 0001ABCDEF12", "0001ABCDEF12"},
 		// UDN without "-": strip uuid: prefix
 		{"uuid:nodashhere", "ignored", "nodashhere"},
@@ -223,7 +223,7 @@ func TestIsCentralManufacturer(t *testing.T) {
 		friendlyName string
 		want         bool
 	}{
-		{"OpenCCU", "OpenCCU", "OpenCCU - Otto", true},
+		{"OpenCCU", "OpenCCU", "OpenCCU - Hausanlage", true},
 		{"eq-3", "CCU3", "HomeMatic Central", true},
 		{"EQ3", "CCU3", "", true},
 		{"", "", "HomeMatic Central - Test", true},

@@ -97,7 +97,7 @@ func TestHubDiscoveryUsesSerialFromCentralSystemInfo(t *testing.T) {
 	c.SetSystemInformation(central.SystemInfo{
 		Model:   "HomeMatic Central",
 		Version: "3.79.6",
-		Serial:  "3014F711A0001F5A4993D962", // canonical last-10 -> 5a4993d962
+		Serial:  "3014F711A0001F0123456789", // canonical last-10 -> 0123456789
 	})
 
 	// One unlinked read-only LOGIC sysvar -> read-only binary_sensor whose
@@ -118,7 +118,7 @@ func TestHubDiscoveryUsesSerialFromCentralSystemInfo(t *testing.T) {
 
 	// unique_id must embed the canonical serial suffix (loom_<serial10>_sysvar_…).
 	uid, _ := body["unique_id"].(string)
-	if !strings.Contains(uid, "5a4993d962") {
+	if !strings.Contains(uid, "0123456789") {
 		t.Fatalf("sysvar unique_id missing serial discriminator: %q", uid)
 	}
 
@@ -165,7 +165,7 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 	publisher.Stop()
 
 	// Serial resolves during bring-up; the ready-driven re-Start re-wires.
-	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F5A4993D962"})
+	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
 	publisher.Start(context.Background())
 	defer publisher.Stop()
 	publisher.Flush()
@@ -174,7 +174,7 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 	if body == nil {
 		t.Fatalf("hub discovery still absent after the serial resolved + re-Start; topics=%v", publishedTopics(pub))
 	}
-	if uid, _ := body["unique_id"].(string); !strings.Contains(uid, "5a4993d962") {
+	if uid, _ := body["unique_id"].(string); !strings.Contains(uid, "0123456789") {
 		t.Fatalf("sysvar unique_id missing serial after re-Start: %q", uid)
 	}
 }
@@ -194,7 +194,7 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 	t.Parallel()
 	c, pub, publisher := hubDiscoveryFixture(t)
-	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F5A4993D962"})
+	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
 
 	// Registered exactly as the southbound wiring does it (ccu_wiring.go):
 	// the wire id is the registry key, the bare enum rides alongside.
@@ -264,7 +264,7 @@ func TestRemovedProgramDiscoveryIsRetracted(t *testing.T) {
 	c.SetSystemInformation(central.SystemInfo{
 		Model:   "HomeMatic Central",
 		Version: "3.79.6",
-		Serial:  "3014F711A0001F5A4993D962",
+		Serial:  "3014F711A0001F0123456789",
 	})
 
 	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-9"}
@@ -319,7 +319,7 @@ func TestRetractCentralClearsEveryHubDiscoveryConfig(t *testing.T) {
 	c.SetSystemInformation(central.SystemInfo{
 		Model:   "HomeMatic Central",
 		Version: "3.79.6",
-		Serial:  "3014F711A0001F5A4993D962",
+		Serial:  "3014F711A0001F0123456789",
 	})
 
 	// A sysvar, a program and a registered interface exercise the per-entity
@@ -380,7 +380,7 @@ func TestRetractCentralClearsConnectivityFromSnapshotEvenAfterClientsDrained(t *
 	c.SetSystemInformation(central.SystemInfo{
 		Model:   "HomeMatic Central",
 		Version: "3.79.6",
-		Serial:  "3014F711A0001F5A4993D962",
+		Serial:  "3014F711A0001F0123456789",
 	})
 	if err := c.Clients.Register(&coordinators.ClientEntry{
 		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),

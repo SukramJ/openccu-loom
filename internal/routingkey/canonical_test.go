@@ -54,7 +54,7 @@ func TestCanonicalSerial(t *testing.T) {
 		serial string
 		want   string
 	}{
-		{"3014F711A0001F5A4993D962", "5A4993D962"}, // long UDN tail → last 10, case kept
+		{"3014F711A0001F0123456789", "0123456789"}, // long UDN tail → last 10, case kept
 		{"0001ABCDEF12", "01ABCDEF12"},
 		{"MEQ1234567", "MEQ1234567"}, // exactly 10 → verbatim
 		{"SHORT", "SHORT"},           // shorter than 10 → verbatim
@@ -109,7 +109,7 @@ func TestCanonicalUniqueID(t *testing.T) {
 // call sites.
 func TestCalculatedUniqueIDMatchesConsumerMigration(t *testing.T) {
 	t.Parallel()
-	const serial = "5a4993d962"
+	const serial = "0123456789"
 	cases := []struct {
 		name    string
 		address string
@@ -130,7 +130,7 @@ func TestCalculatedUniqueIDMatchesConsumerMigration(t *testing.T) {
 			name:    "internal device carries the central slot first",
 			address: "INT0000012:1",
 			param:   "DEW_POINT",
-			want:    "loom_5a4993d962_calculated_int0000012_1_dew_point",
+			want:    "loom_0123456789_calculated_int0000012_1_dew_point",
 		},
 		{
 			name:    "maintenance channel",
@@ -154,7 +154,7 @@ func TestCalculatedUniqueIDMatchesConsumerMigration(t *testing.T) {
 // on the same channel must not collide.
 func TestCalculatedUniqueIDDiffersFromPlainKey(t *testing.T) {
 	t.Parallel()
-	const serial = "5a4993d962"
+	const serial = "0123456789"
 	plain := CanonicalUniqueID(serial, "000A5928583F0F:1", "SMOKE_ALARM", "")
 	calc := CalculatedUniqueID(serial, "000A5928583F0F:1", "SMOKE_ALARM")
 	if plain == calc {

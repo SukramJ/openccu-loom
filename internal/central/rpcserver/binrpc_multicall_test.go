@@ -88,7 +88,7 @@ func subCall(method string, params ...xmlrpc.Value) xmlrpc.StructValue {
 }
 
 // cuxdPongEnvelope reproduces a callback captured from a live CUxD
-// (172.18.4.39:8701) after an outbound `ping`:
+// (192.0.2.39:8701) after an outbound `ping`:
 //
 //	system.multicall([{methodName: "event",
 //	                   params: [<interface_id>, "CENTRAL", "PONG", <token>]}])

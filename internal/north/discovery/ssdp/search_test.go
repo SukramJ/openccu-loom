@@ -20,8 +20,8 @@ func TestLocationHeader(t *testing.T) {
 	}{
 		{
 			name: "uppercase LOCATION",
-			resp: "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nLOCATION: http://172.18.4.29/upnp/basic_dev.cgi\r\nST: ssdp:all\r\n\r\n",
-			want: "http://172.18.4.29/upnp/basic_dev.cgi",
+			resp: "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nLOCATION: http://192.0.2.29/upnp/basic_dev.cgi\r\nST: ssdp:all\r\n\r\n",
+			want: "http://192.0.2.29/upnp/basic_dev.cgi",
 		},
 		{
 			name: "title-case Location",
