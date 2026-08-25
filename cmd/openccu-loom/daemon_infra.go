@@ -174,6 +174,8 @@ func wireSharedInfrastructure(
 		// neither is summed into the other.
 		si.healthTracker.RegisterGauge("ws.heartbeat_rtt_ms",
 			func() float64 { return hub.HeartbeatRTTs().MedianMs })
+		si.healthTracker.RegisterGauge("ws.heartbeat_rtt_max_ms",
+			func() float64 { return hub.HeartbeatRTTs().MaxMs })
 		si.healthTracker.RegisterGauge("ws.heartbeat_rtt_samples",
 			func() float64 { return float64(hub.HeartbeatRTTs().Samples) })
 	}
@@ -322,6 +324,8 @@ func wireMQTTSupervisor(
 		sup := si.mqttSup
 		si.healthTracker.RegisterGauge("mqtt.publish_ack_ms",
 			func() float64 { return sup.PublishLatency().MedianMs })
+		si.healthTracker.RegisterGauge("mqtt.publish_ack_max_ms",
+			func() float64 { return sup.PublishLatency().MaxMs })
 		si.healthTracker.RegisterGauge("mqtt.publish_ack_total",
 			func() float64 { return float64(sup.PublishLatency().Total) })
 	}

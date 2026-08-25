@@ -292,6 +292,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		mb := bridge
 		healthTracker.RegisterGauge("matter.controller_rtt_ms",
 			func() float64 { return mb.ControllerRTT().MedianMs })
+		healthTracker.RegisterGauge("matter.controller_rtt_max_ms",
+			func() float64 { return mb.ControllerRTT().MaxMs })
 		healthTracker.RegisterGauge("matter.controller_rtt_total",
 			func() float64 { return float64(mb.ControllerRTT().Total) })
 	}

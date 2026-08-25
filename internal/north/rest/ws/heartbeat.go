@@ -113,11 +113,13 @@ type HeartbeatRTT struct {
 	// connected but unmeasured, and reporting it as a zero-latency sample
 	// would drag every aggregate below the truth.
 	Samples int
-	// MinMs, MedianMs and MaxMs summarise the contributing connections'
-	// most recent round-trips.
-	MinMs    float64
+	// MedianMs is the middle of the contributing connections' most recent
+	// round-trips.
 	MedianMs float64
-	MaxMs    float64
+	// MaxMs is the slowest of them. Reported beside the median because the
+	// gap between the two is what says "one client is on a bad link" rather
+	// than "the daemon is slow for everyone".
+	MaxMs float64
 }
 
 // HeartbeatRTTs summarises the last measured round-trip of every connected
@@ -144,7 +146,6 @@ func (h *Hub) HeartbeatRTTs() HeartbeatRTT {
 	}
 	return HeartbeatRTT{
 		Samples:  len(samples),
-		MinMs:    samples[0],
 		MedianMs: median,
 		MaxMs:    samples[len(samples)-1],
 	}

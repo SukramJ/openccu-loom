@@ -181,9 +181,6 @@ func TestHeartbeatRTTsReportsOnlyMeasuredConnections(t *testing.T) {
 	if got.Samples != 2 {
 		t.Errorf("Samples = %d, want 2 — the never-timed connection must not contribute", got.Samples)
 	}
-	if got.MinMs != 40 {
-		t.Errorf("MinMs = %v, want 40 — a zero from the unmeasured client leaked into the aggregate", got.MinMs)
-	}
 	if got.MaxMs != 300 {
 		t.Errorf("MaxMs = %v, want 300", got.MaxMs)
 	}

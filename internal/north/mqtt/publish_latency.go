@@ -31,12 +31,12 @@ import (
 // held the packet back. That last part means a saturated publish queue shows up
 // here as latency — which is what an operator wants to see, but it is why this
 // is reported as acknowledgement time rather than as a network round-trip.
+// loom:reachable:reason="wrapped around the breaker in buildMQTT and held by mqttSwap; the composition root passes it as a Publisher, so the analyzer sees the interface and never the concrete type"
 type LatencyProbe struct {
 	pub Publisher
 
 	mu      sync.Mutex
 	samples []time.Duration
-	last    time.Duration
 	total   uint64
 }
 
@@ -78,7 +78,6 @@ func (p *LatencyProbe) record(d time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.total++
-	p.last = d
 	if len(p.samples) < latencyWindow {
 		p.samples = append(p.samples, d)
 		return
@@ -88,18 +87,26 @@ func (p *LatencyProbe) record(d time.Duration) {
 }
 
 // LatencyStats summarises the recent acknowledged publishes.
+//
+// Every field here is published as a gauge. Window occupancy and the single
+// most recent sample were dropped rather than carried: occupancy saturates
+// within seconds of bring-up and then cannot distinguish a live median from a
+// stale one (which is what Total is for), and one sample is noise next to the
+// median beside it.
+// loom:reachable:reason="returned by LatencyProbe.Stats through mqttSupervisor.PublishLatency and read field-by-field by the mqtt.publish_ack_* diagnostics gauges; the analyzer sees the accessor, not the struct behind it"
 type LatencyStats struct {
-	// Samples is how many timed publishes the current window holds — never
-	// more than [latencyWindow]. Zero means nothing has been measured, which
-	// on a QoS 0 deployment is the permanent and correct answer.
-	Samples int
-	// Total counts every timed publish since start, so a consumer can tell
-	// "no traffic yet" from "the window has rolled many times".
+	// Total counts every timed publish since start. A total that advances
+	// says the median is current, one that stops says it is stale, and zero
+	// says nothing has ever been measured — which on a QoS 0 deployment is
+	// the permanent and correct answer.
 	Total uint64
-	// LastMs, MedianMs and MaxMs summarise the window, in milliseconds.
-	LastMs   float64
+	// MedianMs is the middle of the window: the latency a typical publish
+	// sees, unmoved by a single stalled one.
 	MedianMs float64
-	MaxMs    float64
+	// MaxMs is the worst in the window. It is reported beside the median
+	// because the two disagreeing is the signal — a broker that is fine on
+	// average but occasionally stalls looks healthy on the median alone.
+	MaxMs float64
 }
 
 // Stats summarises the current window. Safe on a nil probe (an MQTT-less
@@ -130,9 +137,7 @@ func (p *LatencyProbe) Stats() LatencyStats {
 		median = (sorted[mid-1] + sorted[mid]) / 2
 	}
 	return LatencyStats{
-		Samples:  len(sorted),
 		Total:    p.total,
-		LastMs:   ms(p.last),
 		MedianMs: ms(median),
 		MaxMs:    ms(sorted[len(sorted)-1]),
 	}

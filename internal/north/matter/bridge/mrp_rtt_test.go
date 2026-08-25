@@ -35,8 +35,8 @@ func TestMRPRTTMeasuresFirstTryOnly(t *testing.T) {
 		}
 
 		got := tr.RTTStats()
-		if got.Samples != 1 || got.Total != 1 {
-			t.Errorf("RTTStats() = %+v, want one sample for a first-try ACK", got)
+		if got.Total != 1 {
+			t.Errorf("RTTStats() = %+v, want one measurement for a first-try ACK", got)
 		}
 	})
 
@@ -54,7 +54,7 @@ func TestMRPRTTMeasuresFirstTryOnly(t *testing.T) {
 			t.Fatal("Ack reported no pending entry after the retransmit")
 		}
 
-		if got := tr.RTTStats(); got.Samples != 0 {
+		if got := tr.RTTStats(); got.Total != 0 {
 			t.Errorf("RTTStats() = %+v after an ACK that followed a retransmit, want no samples: the ACK "+
 				"cannot be attributed to either transmission", got)
 		}
@@ -69,11 +69,11 @@ func TestMRPRTTStatsEmptyWithoutPairing(t *testing.T) {
 	t.Parallel()
 
 	tr := newOutboundReliableTracker(nil)
-	if got := tr.RTTStats(); got.Samples != 0 || got.Total != 0 || got.MedianMs != 0 {
+	if got := tr.RTTStats(); got.Total != 0 || got.MedianMs != 0 {
 		t.Errorf("RTTStats() = %+v on an untouched tracker, want the zero value", got)
 	}
 	var nilTracker *outboundReliableTracker
-	if got := nilTracker.RTTStats(); got.Samples != 0 {
+	if got := nilTracker.RTTStats(); got.Total != 0 {
 		t.Errorf("nil tracker RTTStats() = %+v, want the zero value", got)
 	}
 }
@@ -87,7 +87,7 @@ func TestMRPRTTWindowRollsAndSummarises(t *testing.T) {
 	// A non-positive sample is not a round-trip; it would drag the median.
 	w.record(0)
 	w.record(-time.Millisecond)
-	if got := w.stats(); got.Samples != 0 || got.Total != 0 {
+	if got := w.stats(); got.Total != 0 {
 		t.Fatalf("stats() = %+v after only non-positive samples, want the zero value", got)
 	}
 
@@ -96,9 +96,6 @@ func TestMRPRTTWindowRollsAndSummarises(t *testing.T) {
 	}
 
 	got := w.stats()
-	if got.Samples != mrpRTTWindowSize {
-		t.Errorf("Samples = %d, want the window cap %d", got.Samples, mrpRTTWindowSize)
-	}
 	if got.Total != uint64(mrpRTTWindowSize+4) {
 		t.Errorf("Total = %d, want %d", got.Total, mrpRTTWindowSize+4)
 	}

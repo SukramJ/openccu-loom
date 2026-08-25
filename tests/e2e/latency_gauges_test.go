@@ -56,10 +56,16 @@ func TestE2ELatencyGaugesReachTheDiagnosticsSurface(t *testing.T) {
 			"HealthAdapter consults. Gauges present: %v", keysOf(gauges))
 	}
 
+	// Every field on the three stats structs must appear here. A field with no
+	// gauge is a measurement nobody can read — the exact shape of the defect
+	// this whole change set exists to fix, and one the dead-code ratchet does
+	// not catch because it counts exported types, not their fields.
 	for _, name := range []string{
 		"ws.heartbeat_rtt_ms",
+		"ws.heartbeat_rtt_max_ms",
 		"ws.heartbeat_rtt_samples",
 		"mqtt.publish_ack_ms",
+		"mqtt.publish_ack_max_ms",
 		"mqtt.publish_ack_total",
 	} {
 		if _, ok := gauges[name]; !ok {

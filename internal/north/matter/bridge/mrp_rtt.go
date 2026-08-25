@@ -27,7 +27,6 @@ const mrpRTTWindowSize = 64
 // mutex held.
 type mrpRTTWindow struct {
 	samples []time.Duration
-	last    time.Duration
 	total   uint64
 }
 
@@ -37,7 +36,6 @@ func (w *mrpRTTWindow) record(d time.Duration) {
 		return
 	}
 	w.total++
-	w.last = d
 	if len(w.samples) < mrpRTTWindowSize {
 		w.samples = append(w.samples, d)
 		return
@@ -47,18 +45,21 @@ func (w *mrpRTTWindow) record(d time.Duration) {
 }
 
 // MRPRTTStats summarises recent first-try round-trips to Matter controllers.
+//
+// Every field is published as a gauge; see [mqtt.LatencyStats] for why window
+// occupancy and the single most recent sample are not among them.
+// loom:reachable:reason="returned by Bridge.ControllerRTT and read field-by-field by the matter.controller_rtt_* diagnostics gauges; the analyzer sees the accessor, not the struct behind it"
 type MRPRTTStats struct {
-	// Samples is how many measurements the window holds. Zero means no
-	// controller has ACKed a first-try reliable message yet — which is the
-	// steady state of a bridge nobody has paired.
-	Samples int
-	// Total counts every measurement since start, so "quiet" and "the window
-	// has rolled many times" stay distinguishable.
+	// Total counts every measurement since start. Zero is the steady state of
+	// a bridge nobody has paired; a total that stops advancing says the
+	// median describes the last exchange rather than the present.
 	Total uint64
-	// LastMs, MedianMs and MaxMs summarise the window, in milliseconds.
-	LastMs   float64
+	// MedianMs is the middle of the window.
 	MedianMs float64
-	MaxMs    float64
+	// MaxMs is the worst in the window. A controller that is usually prompt
+	// but occasionally takes seconds is the retransmit-storm signature, and
+	// the median alone hides it.
+	MaxMs float64
 }
 
 // stats summarises the window.
@@ -80,9 +81,7 @@ func (w *mrpRTTWindow) stats() MRPRTTStats {
 		median = (sorted[mid-1] + sorted[mid]) / 2
 	}
 	return MRPRTTStats{
-		Samples:  len(sorted),
 		Total:    w.total,
-		LastMs:   ms(w.last),
 		MedianMs: ms(median),
 		MaxMs:    ms(sorted[len(sorted)-1]),
 	}

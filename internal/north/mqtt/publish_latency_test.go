@@ -47,7 +47,7 @@ func TestLatencyProbeTimesOnlyAcknowledgedPublishes(t *testing.T) {
 		if inner.calls != 1 {
 			t.Errorf("inner publisher called %d times, want 1 — the probe must forward every publish", inner.calls)
 		}
-		if got := p.Stats(); got.Samples != 0 || got.Total != 0 {
+		if got := p.Stats(); got.Total != 0 {
 			t.Errorf("Stats() = %+v after a QoS 0 publish, want no samples: the broker never acknowledges one, "+
 				"so the duration measures this process's own socket buffer", got)
 		}
@@ -63,11 +63,11 @@ func TestLatencyProbeTimesOnlyAcknowledgedPublishes(t *testing.T) {
 		}
 
 		got := p.Stats()
-		if got.Samples != 1 || got.Total != 1 {
-			t.Fatalf("Stats() = %+v after a QoS 1 publish, want one sample", got)
+		if got.Total != 1 {
+			t.Fatalf("Stats() = %+v after a QoS 1 publish, want one measurement", got)
 		}
-		if got.LastMs < 15 {
-			t.Errorf("LastMs = %v, want at least the publisher's 20ms delay (allowing for timer slack)", got.LastMs)
+		if got.MedianMs < 15 {
+			t.Errorf("MedianMs = %v, want at least the publisher's 20ms delay (allowing for timer slack)", got.MedianMs)
 		}
 	})
 }
@@ -85,7 +85,7 @@ func TestLatencyProbeIgnoresFailedPublishes(t *testing.T) {
 	if err := p.Publish(context.Background(), "t", nil, QoS1, false); err == nil {
 		t.Fatal("Publish returned nil, want the inner publisher's error passed through")
 	}
-	if got := p.Stats(); got.Samples != 0 {
+	if got := p.Stats(); got.Total != 0 {
 		t.Errorf("Stats() = %+v after a failed publish, want no samples", got)
 	}
 }
@@ -104,18 +104,12 @@ func TestLatencyProbeWindowRollsAndSummarises(t *testing.T) {
 	}
 
 	got := p.Stats()
-	if got.Samples != latencyWindow {
-		t.Errorf("Samples = %d, want the window cap %d", got.Samples, latencyWindow)
-	}
 	if got.Total != uint64(latencyWindow+10) {
 		t.Errorf("Total = %d, want %d — Total must count past the window", got.Total, latencyWindow+10)
 	}
 	// The retained window is the last latencyWindow samples: 11ms … 138ms.
 	if got.MaxMs != float64(latencyWindow+10) {
 		t.Errorf("MaxMs = %v, want %v", got.MaxMs, float64(latencyWindow+10))
-	}
-	if got.LastMs != float64(latencyWindow+10) {
-		t.Errorf("LastMs = %v, want %v", got.LastMs, float64(latencyWindow+10))
 	}
 	// Even count → mean of the two middle samples of 11..138.
 	if want := 74.5; got.MedianMs != want {
@@ -132,7 +126,7 @@ func TestLatencyProbeNilIsInert(t *testing.T) {
 		t.Fatal("NewLatencyProbe(nil) returned a decorator around nothing")
 	}
 	var p *LatencyProbe
-	if got := p.Stats(); got.Samples != 0 {
+	if got := p.Stats(); got.Total != 0 {
 		t.Errorf("nil probe Stats() = %+v, want the zero value", got)
 	}
 }
