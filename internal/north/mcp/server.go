@@ -74,6 +74,12 @@ type ParamsetService interface {
 type HealthReader interface {
 	Overall() health.Status
 	Snapshot() []health.Component
+	// Gauges returns the daemon's pull-gauge readings — the numeric side of
+	// health that component status cannot express. An assistant diagnosing
+	// "the UI feels slow" needs to tell the three latency legs apart
+	// (ws.heartbeat_rtt_ms, mqtt.publish_ack_ms, the CCU's own), and a
+	// component that is merely "available" says nothing about any of them.
+	Gauges() map[string]float64
 }
 
 // EditLockVerifier reports whether `token` currently holds the edit

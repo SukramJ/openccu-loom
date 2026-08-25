@@ -198,6 +198,7 @@ type mcpNoopHealth struct{}
 
 func (mcpNoopHealth) Overall() health.Status       { return health.StatusHealthy }
 func (mcpNoopHealth) Snapshot() []health.Component { return nil }
+func (mcpNoopHealth) Gauges() map[string]float64   { return nil }
 
 type mcpNoopHubs struct{}
 
