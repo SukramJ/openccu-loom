@@ -67,10 +67,12 @@ func (f *fakeParamsets) PutParamset(_ context.Context, address string, key hmenu
 type fakeHealth struct {
 	overall    health.Status
 	components []health.Component
+	gauges     map[string]float64
 }
 
 func (f *fakeHealth) Overall() health.Status       { return f.overall }
 func (f *fakeHealth) Snapshot() []health.Component { return f.components }
+func (f *fakeHealth) Gauges() map[string]float64   { return f.gauges }
 
 // fakeHubs resolves a central name to a pre-built *hub.Hub.
 type fakeHubs struct {
@@ -1071,4 +1073,80 @@ func TestHandlerRetainsNoSession(t *testing.T) {
 	if id := resp.Header.Get("Mcp-Session-Id"); id != "" {
 		t.Errorf("handler handed out session id %q — the session outlives the request that made it", id)
 	}
+}
+
+// TestGetHealthCarriesTheGauges pins the numeric half of the health tool.
+//
+// An assistant driving the daemon over MCP is the caller most likely to be
+// asked "why is this slow", and the three latency legs are the only thing that
+// can answer it. Component status cannot: every subsystem reads "available"
+// while a client sits behind a saturated tunnel. The gauges were registered on
+// the health tracker and reachable over REST, but `get_health` returned only
+// the component list — measurable everywhere except the surface built for the
+// caller who would ask.
+//
+// The empty case is the negative control: a daemon with no gauges must omit
+// the field rather than send an empty object, so a consumer can tell "none
+// registered" from "all reading zero".
+func TestGetHealthCarriesTheGauges(t *testing.T) {
+	t.Parallel()
+
+	t.Run("registered gauges reach the caller", func(t *testing.T) {
+		t.Parallel()
+		fh := &fakeHealth{
+			overall:    health.StatusHealthy,
+			components: []health.Component{{Name: "central", Status: health.StatusHealthy}},
+			gauges: map[string]float64{
+				"ws.heartbeat_rtt_ms": 0.79,
+				"mqtt.publish_ack_ms": 3.9,
+			},
+		}
+		out := callGetHealth(t, fh)
+
+		if len(out.Gauges) != 2 {
+			t.Fatalf("gauges = %v, want the two registered readings", out.Gauges)
+		}
+		if got := out.Gauges["ws.heartbeat_rtt_ms"]; got != 0.79 {
+			t.Errorf("ws.heartbeat_rtt_ms = %v, want 0.79", got)
+		}
+		if got := out.Gauges["mqtt.publish_ack_ms"]; got != 3.9 {
+			t.Errorf("mqtt.publish_ack_ms = %v, want 3.9", got)
+		}
+	})
+
+	t.Run("no gauges omits the field", func(t *testing.T) {
+		t.Parallel()
+		fh := &fakeHealth{overall: health.StatusHealthy}
+		out := callGetHealth(t, fh)
+
+		if out.Gauges != nil {
+			t.Errorf("gauges = %v for a daemon with none registered, want omitted: an empty object reads as "+
+				"\"all zero\" rather than \"nothing to report\"", out.Gauges)
+		}
+	})
+}
+
+// callGetHealth invokes the get_health tool against fh and decodes the gauge
+// half of its answer.
+func callGetHealth(t *testing.T, fh *fakeHealth) struct {
+	Gauges map[string]float64 `json:"gauges,omitempty"`
+} {
+	t.Helper()
+	devs, _, _ := makeDeviceFixture()
+	cs := connect(t, mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1"}},
+		Devices:  devs,
+		Health:   fh,
+	})
+	defer cs.Close()
+
+	res := callTool(t, cs, "get_health", map[string]any{})
+	if res.IsError {
+		t.Fatalf("get_health returned error: %v", res.Content)
+	}
+	var out struct {
+		Gauges map[string]float64 `json:"gauges,omitempty"`
+	}
+	unmarshalStructured(t, res, &out)
+	return out
 }

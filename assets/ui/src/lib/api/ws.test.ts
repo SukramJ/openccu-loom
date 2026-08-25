@@ -46,6 +46,56 @@ describe("connectEvents heartbeat", () => {
     stream.close();
   });
 
+  it("echoes the ping token back so the daemon can time this connection", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    sock.emit("open");
+    sock.sent.length = 0;
+
+    sock.emit("message", { data: JSON.stringify({ op: "ping", echo: "4711" }) });
+
+    expect(sock.sent).toContain(JSON.stringify({ op: "pong", echo: "4711" }));
+    stream.close();
+  });
+
+  it("reports the round-trip the daemon measured, and nothing before it", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    const seen: number[] = [];
+    stream.onLatency((ms) => seen.push(ms));
+    sock.emit("open");
+
+    // A daemon older than wsapi 1.2 sends no rtt_ms at all — the client must
+    // report nothing rather than inventing a figure. Without this control the
+    // next assertion would pass against a client that emits on every ping.
+    sock.emit("message", { data: JSON.stringify({ op: "ping", echo: "1" }) });
+    expect(seen).toEqual([]);
+    expect(stream.latencyMs()).toBeNull();
+
+    sock.emit("message", {
+      data: JSON.stringify({ op: "ping", echo: "2", rtt_ms: 12.5 }),
+    });
+
+    expect(seen).toEqual([12.5]);
+    expect(stream.latencyMs()).toBe(12.5);
+    stream.close();
+  });
+
+  it("forgets the round-trip on disconnect, because the next socket is a new route", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    sock.emit("open");
+    sock.emit("message", {
+      data: JSON.stringify({ op: "ping", echo: "1", rtt_ms: 40 }),
+    });
+    expect(stream.latencyMs()).toBe(40);
+
+    sock.emit("close");
+
+    expect(stream.latencyMs()).toBeNull();
+    stream.close();
+  });
+
   it("does not surface a ping frame as a data event", () => {
     const stream = connectEvents();
     const sock = MockWebSocket.instances[0];

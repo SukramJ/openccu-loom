@@ -5,11 +5,14 @@ package adapter
 
 import (
 	"strings"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -88,7 +91,46 @@ func WirePingPongBus(
 			if !hasToken || prefix != entry.Client.WireBoundaryID() {
 				return
 			}
-			entry.Client.RecordPong(token)
+			matched, rtt := entry.Client.RecordPong(token)
+			if matched {
+				observePingPongRTT(unit, ifID, rtt)
+			}
 		})
+	}
+}
+
+// observePingPongRTT files a matched PING→PONG round-trip on the two surfaces
+// that report connection latency.
+//
+// This is the only full round-trip the daemon can measure: the PING leaves
+// over the interface's own transport (XML-RPC for the CCU interfaces, BIN-RPC
+// for CUxD) and the PONG returns as an event on our callback server, so the
+// sample covers the reply path a one-way RPC timing never sees.
+//
+//   - The metrics observer keyed by interface. [metrics.Aggregator.RPC] reads
+//     the `ping_pong.rtt` prefix back for the `avg_latency_ms` / `max_latency_ms`
+//     fields of the diagnostics `rpc` section, which had no producer at all
+//     and therefore reported a constant zero.
+//   - The hub's central-wide connection-latency metric, which backs the sensor
+//     MQTT discovery declares, the hub data-point list enumerates and
+//     /system/ccu reports. It previously carried the duration of one JSON-RPC
+//     `Interface.listInterfaces` call — a different, one-way path measured on
+//     the reconciler's slow cadence.
+//
+// The hub metric is central-wide by contract (one sensor per CCU, not one per
+// interface), so each interface's sample overwrites the last: the sensor reads
+// as the latency of the most recently confirmed round-trip. Every backend that
+// declares [backends.Capabilities.PingPong] contributes, so the reading spans
+// both transports rather than the JSON-RPC surface alone.
+func observePingPongRTT(unit *central.Unit, interfaceID string, rtt time.Duration) {
+	if unit == nil || rtt <= 0 {
+		return
+	}
+	ms := float64(rtt.Nanoseconds()) / float64(time.Millisecond)
+	if obs := unitObserver(unit); obs != nil {
+		obs.ObserveLatency(metrics.MetricKeys.PingPongRTT(interfaceID).String(), ms)
+	}
+	if unit.HubModel != nil && unit.HubModel.Metrics != nil {
+		unit.HubModel.Metrics.Observe(hub.MetricConnectionLatMs, ms)
 	}
 }

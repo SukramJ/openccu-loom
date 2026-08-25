@@ -95,6 +95,39 @@ type client struct {
 	// until the writer has drained the queue. Without it a single flood
 	// produces one warning and one resync frame per dropped event.
 	gapSignalled atomic.Bool
+
+	// born anchors the monotonic reading the heartbeat echo carries. Using
+	// an elapsed duration rather than a wall-clock stamp keeps the round-trip
+	// immune to an NTP step landing inside the 30s window.
+	born time.Time
+
+	// elapsed reads the connection age. Production leaves it nil and takes
+	// time.Since(born); a test overrides it to pin both ends of a round-trip
+	// to chosen readings. It exists because the sub-tick case — pong and ping
+	// landing in the same monotonic tick, which is what the one-nanosecond
+	// floor in noteHeartbeat is for — cannot be scheduled from outside, and a
+	// guard that cannot reach the case it names proves nothing.
+	elapsed func() time.Duration
+
+	// pingSeq issues the heartbeat echo tokens. It starts at 0 and is
+	// pre-incremented, so the first live token is 1 and 0 stays available as
+	// the "no ping outstanding" sentinel.
+	pingSeq atomic.Uint64
+
+	// pendingMu guards the outstanding ping's token and send time as a pair.
+	// writePump arms them together; readPump clears the token and reads the
+	// time under the same lock, so a pong can never be timed against the send
+	// of a different ping. pendingEcho is 0 when nothing is outstanding, which
+	// is why the counter above never issues that value.
+	pendingMu     sync.Mutex
+	pendingEcho   uint64
+	pendingSentAt time.Duration
+
+	// lastRTT is the most recently measured heartbeat round-trip, in
+	// nanoseconds. Zero until the first pong carrying an echo arrives —
+	// a client that answers the heartbeat without echoing stays unmeasured
+	// rather than reporting a wrong number.
+	lastRTT atomic.Int64
 }
 
 // wireMsg is one pre-serialised control-plane frame queued for the
@@ -111,6 +144,7 @@ func newClient(conn net.Conn, br *bufio.Reader, bw *bufio.Writer, hub *Hub, logg
 		bw:     bw,
 		hub:    hub,
 		logger: logger,
+		born:   time.Now(),
 		out:    make(chan Event, clientBufferSize),
 		ctrl:   make(chan wireMsg, clientBufferSize),
 		closed: make(chan struct{}),
@@ -470,6 +504,10 @@ type inboundMessage struct {
 	// client. Pointer so an absent field leaves the current preference
 	// untouched across re-subscribes.
 	Classify *bool `json:"classify,omitempty"`
+	// Echo carries back the opaque token the server put on its `ping`
+	// frame. Optional: a client that answers the heartbeat without it
+	// still keeps the connection alive, it just cannot be timed.
+	Echo string `json:"echo,omitempty"`
 }
 
 // outboundEvent is the envelope every server→client event uses.
@@ -495,6 +533,15 @@ type outboundOp struct {
 	OldestSeq uint64        `json:"oldest_seq,omitempty"`
 	Topics    []string      `json:"topics,omitempty"`
 	Error     *CommandError `json:"error,omitempty"`
+	// Echo is the opaque heartbeat token on a `ping` frame. Clients echo it
+	// back on their `pong` so the server can time the round-trip against its
+	// own clock alone — no clock agreement between the two ends is required.
+	Echo string `json:"echo,omitempty"`
+	// RTTMs reports the previous heartbeat's round-trip in milliseconds, so a
+	// client can display its own latency to the daemon without measuring
+	// anything itself. Absent on the first ping and whenever the last pong
+	// carried no echo.
+	RTTMs *float64 `json:"rtt_ms,omitempty"`
 }
 
 // readPump reads inbound frames, assembles fragmented messages and updates
@@ -610,7 +657,7 @@ func (c *client) dispatchMessage(opcode byte, payload []byte) bool {
 		c.unsubscribe(msg.Topics)
 		c.sendAck("unsubscribed", msg.Topics)
 	case "pong":
-		// heartbeat ack — nothing to do
+		c.noteHeartbeat(msg.Echo)
 	case "reauth":
 		c.reauth(msg.Token)
 	case "call":
@@ -735,8 +782,7 @@ func (c *client) writePump() {
 				return
 			}
 		case <-ticker.C:
-			buf, _ := json.Marshal(outboundOp{Op: "ping"})
-			if err := c.rawWrite(opText, buf); err != nil {
+			if err := c.rawWrite(opText, c.buildPing()); err != nil {
 				return
 			}
 		}

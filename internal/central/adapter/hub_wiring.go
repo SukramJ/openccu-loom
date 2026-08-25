@@ -202,7 +202,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// reconcile job can run. Reconciler is nil in WireHub-only tests that
 	// run without the daemon bootstrap, hence the guard.
 	if unit.Reconciler != nil {
-		unit.Reconciler.SetConnect(observeProbeLatency(NewJSONRPCConnectivityProbe(jc), unit.HubModel, unit.Name()))
+		unit.Reconciler.SetConnect(stampWireInterfaceIDs(NewJSONRPCConnectivityProbe(jc), unit.Name()))
 	}
 
 	// Stamp the CCU-side metadata on the central's SystemInfo:
@@ -480,17 +480,8 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	return runner, HubData{Names: names, Rooms: rooms, Functions: functions}, closer, nil
 }
 
-// observeProbeLatency wraps a connectivity probe so every answer feeds its
-// measured round-trip into the hub's connection-latency metric AND carries the
+// stampWireInterfaceIDs wraps a connectivity probe so every answer carries the
 // interface id every consuming surface keys on.
-//
-// The latency metric backs one central-wide sensor which MQTT discovery
-// declares, the hub data-point list enumerates and /system/ccu reports — and
-// which nothing ever observed: the probe's round-trip only rode
-// [hmevent.ConnectivityChangedEvent], which the reconciler publishes on a
-// reachability change alone, so the declared sensor stayed permanently empty.
-// The reconcile pass that measures the latency is the natural producer, and
-// wrapping the probe keeps the sample on exactly its cadence.
 //
 // The probe reports the bare interface name (`HmIP-RF`) from
 // Interface.listInterfaces, but GET /interfaces — the surface the client
@@ -499,7 +490,16 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 // that id, so a bare name never matches and every sensor reads disconnected.
 // Stamp the wire id here (keeping the bare enum for rendering) so connectivity
 // lines up with /interfaces on both the REST snapshot and the WS push.
-func observeProbeLatency(probe coordinators.ConnectivityProbe, h *hub.Hub, centralName string) coordinators.ProbeFunc {
+//
+// The probe's own round-trip stays on [coordinators.InterfaceReachability]
+// (and from there on [hmevent.ConnectivityChangedEvent]) but no longer feeds
+// the hub's connection-latency metric. That metric names the round-trip to the
+// CCU and back; one JSON-RPC `Interface.listInterfaces` call measures a single
+// one-way surface on the reconciler's slow cadence, and reporting it under
+// that name made a partial reading look like the whole path. The producer is
+// now the matched PING→PONG pair in observePingPongRTT (pingpong_wiring.go),
+// which covers both transports and the callback leg.
+func stampWireInterfaceIDs(probe coordinators.ConnectivityProbe, centralName string) coordinators.ProbeFunc {
 	return func(ctx context.Context) ([]coordinators.InterfaceReachability, error) {
 		reachability, err := probe.Probe(ctx)
 		if err != nil {
@@ -509,11 +509,6 @@ func observeProbeLatency(probe coordinators.ConnectivityProbe, h *hub.Hub, centr
 			iface := hmenum.Interface(reachability[i].InterfaceID)
 			reachability[i].Interface = iface
 			reachability[i].InterfaceID = WireInterfaceID(centralName, iface)
-		}
-		// One JSON-RPC call answers for the whole interface list, so every
-		// entry carries the same round-trip: the metric is central-wide.
-		if h != nil && h.Metrics != nil && len(reachability) > 0 {
-			h.Metrics.Observe(hub.MetricConnectionLatMs, reachability[0].LatencyMs)
 		}
 		return reachability, nil
 	}

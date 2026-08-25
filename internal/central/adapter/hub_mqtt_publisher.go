@@ -712,7 +712,7 @@ func (p *HubMQTTPublisher) wireInstallMode(
 //
 // The seed keys on the `<central>-<iface>` wire id, exactly as the state half
 // does: ConnectivityChangedEvent.InterfaceID carries the wire id because
-// observeProbeLatency (hub_wiring.go) stamps it there before the reconciler
+// stampWireInterfaceIDs (hub_wiring.go) stamps it there before the reconciler
 // publishes — the same id GET /interfaces reports and the client looks each
 // sensor's value up by. Seeding under the bare interface name instead declared
 // a state topic nothing ever writes (a permanently unavailable entity per
@@ -741,7 +741,7 @@ func seedConnectivityDiscovery(
 		if iface == "" {
 			continue
 		}
-		// The wire id, built the same way observeProbeLatency builds the id it
+		// The wire id, built the same way stampWireInterfaceIDs builds the id it
 		// stamps onto ConnectivityChangedEvent, so the seed's discovery topic
 		// and unique_id match the state the event path later publishes.
 		wireID := WireInterfaceID(centralName, iface)

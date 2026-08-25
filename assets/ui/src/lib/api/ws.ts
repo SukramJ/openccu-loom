@@ -32,8 +32,27 @@ export type EventStream = {
    * Returns an unsubscribe function.
    */
   onResync(handler: () => void): () => void;
+  /**
+   * Register a callback for the round-trip time between this client and the
+   * daemon, in milliseconds. The daemon measures it from the heartbeat this
+   * client echoes and reports it on the following `ping`, so the first value
+   * arrives one ping interval (30s) after connecting and updates once per
+   * interval after that.
+   *
+   * This is the browser→daemon distance alone. It is unrelated to the
+   * daemon→CCU latency the hub's `connection_latency_ms` metric reports, and
+   * the two must never be shown as one number: over an Ingress tunnel or a
+   * remote host this leg can dwarf the CCU's while the CCU is perfectly
+   * healthy.
+   *
+   * Returns an unsubscribe function.
+   */
+  onLatency(handler: (rttMs: number) => void): () => void;
   close(): void;
   readonly state: () => "connecting" | "open" | "closed";
+  /** Last measured round-trip to the daemon in ms, or null before the first
+   * heartbeat completed. */
+  readonly latencyMs: () => number | null;
 };
 
 // Wire shape the daemon sends. Distinct from the SPA-facing
@@ -48,6 +67,11 @@ type WireEnvelope = {
   payload?: unknown;
   // Control frames (`{op:"ping"}`) reuse the same channel.
   op?: string;
+  // On a `ping`: the opaque token to echo back, and the round-trip the
+  // daemon measured for the preceding heartbeat. Both are optional — a
+  // daemon older than wsapi 1.2 sends neither.
+  echo?: string;
+  rtt_ms?: number;
 };
 
 type WireDataPointPayload = {
@@ -63,13 +87,22 @@ type WireDataPointPayload = {
   display_value?: number;
 };
 
-/** True for the server heartbeat frame `{op:"ping"}` the client must pong. */
-function isControlPing(raw: unknown): boolean {
-  return (
-    typeof raw === "object" &&
-    raw !== null &&
-    (raw as { op?: unknown }).op === "ping"
-  );
+/**
+ * The server heartbeat frame `{op:"ping"}` the client must pong, or null when
+ * raw is any other frame. Returns the frame rather than a boolean because the
+ * pong has to carry its `echo` back verbatim for the daemon to time the
+ * round-trip.
+ */
+function asControlPing(
+  raw: unknown,
+): { echo?: string; rtt_ms?: number } | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const frame = raw as { op?: unknown; echo?: unknown; rtt_ms?: unknown };
+  if (frame.op !== "ping") return null;
+  return {
+    echo: typeof frame.echo === "string" ? frame.echo : undefined,
+    rtt_ms: typeof frame.rtt_ms === "number" ? frame.rtt_ms : undefined,
+  };
 }
 
 /**
@@ -202,6 +235,12 @@ export function connectEvents(): EventStream {
     (s: "connecting" | "open" | "closed") => void
   >();
   const resyncHandlers = new Set<() => void>();
+  const latencyHandlers = new Set<(rttMs: number) => void>();
+  // Last round-trip the daemon reported for this connection. Reset on
+  // reconnect: the new socket may take a different path (a laptop that moved
+  // from WiFi to mobile data), so the old reading describes a route that no
+  // longer exists.
+  let lastLatencyMs: number | null = null;
   let current: "connecting" | "open" | "closed" = "connecting";
   // Highest cursor this stream has seen. The daemon stamps every event
   // with a monotonic `seq` and replays buffered events above the `since`
@@ -284,11 +323,21 @@ export function connectEvents(): EventStream {
       // down and re-established every minute — the live indicator flickers.
       // (Browsers do not auto-answer application-level pings, only protocol
       // PING control frames, which this server does not use.)
-      if (isControlPing(parsed)) {
+      const ping = asControlPing(parsed);
+      if (ping) {
+        // Echo the daemon's token back verbatim so it can time this
+        // connection. A daemon that sends no token gets the bare pong the
+        // heartbeat has always been.
+        const pong: { op: string; echo?: string } = { op: "pong" };
+        if (ping.echo !== undefined) pong.echo = ping.echo;
         try {
-          socket?.send(JSON.stringify({ op: "pong" }));
+          socket?.send(JSON.stringify(pong));
         } catch {
           // A transient send failure is recovered by the close→reconnect path.
+        }
+        if (ping.rtt_ms !== undefined && Number.isFinite(ping.rtt_ms)) {
+          lastLatencyMs = ping.rtt_ms;
+          for (const h of latencyHandlers) h(ping.rtt_ms);
         }
         return;
       }
@@ -317,6 +366,9 @@ export function connectEvents(): EventStream {
     });
     socket.addEventListener("close", () => {
       setState("closed");
+      // The next socket measures a fresh route; keeping the old figure would
+      // display a latency for a connection that no longer exists.
+      lastLatencyMs = null;
       if (closed) return;
       // Exponential backoff capped at 15 s.
       const delay = Math.min(15000, 500 * 2 ** Math.min(attempt, 5));
@@ -343,6 +395,10 @@ export function connectEvents(): EventStream {
       resyncHandlers.add(handler);
       return () => resyncHandlers.delete(handler);
     },
+    onLatency(handler) {
+      latencyHandlers.add(handler);
+      return () => latencyHandlers.delete(handler);
+    },
     close() {
       closed = true;
       if (resyncTimer !== null) {
@@ -352,5 +408,6 @@ export function connectEvents(): EventStream {
       socket?.close();
     },
     state: () => current,
+    latencyMs: () => lastLatencyMs,
   };
 }

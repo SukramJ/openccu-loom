@@ -119,6 +119,11 @@ type mqttSwap struct {
 	bridge       *mqtt.Bridge
 	cancelHealth func() // nil when no probe attached
 	stopSubs     func() // nil when no subscribers attached
+	// publishLatency times this generation's broker acknowledgements. Each
+	// swap builds its own — a reading taken from the predecessor would
+	// describe a broker connection that no longer exists, which is exactly
+	// the case an operator swaps the config to investigate.
+	publishLatency *mqtt.LatencyProbe
 	// hooksAttached is set by [mqttSupervisor.announceConnected] once it has
 	// forwarded the supervisor's connect callbacks to this generation's
 	// lifecycle. Until then [mqttSupervisor.OnConnect] must NOT forward a
@@ -620,8 +625,9 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 		// constructed — we discard that wiring and re-use the
 		// supervisor's stable one. The bridge object itself is
 		// fine to retain.
-		bridge:    stack.wiring.Bridge(),
-		lifecycle: stack.lifecycle,
+		bridge:         stack.wiring.Bridge(),
+		lifecycle:      stack.lifecycle,
+		publishLatency: stack.publishLatency,
 	}
 	if sw.lifecycle != nil {
 		// The supervisor's OnConnect callbacks are deliberately NOT forwarded
@@ -989,4 +995,19 @@ func redactBrokerURL(rawURL string) string {
 		return rawURL
 	}
 	return rawURL[:scheme] + "***@" + rawURL[at+1:]
+}
+
+// PublishLatency summarises how long the live broker connection is taking to
+// acknowledge publishes. An empty summary means one of three things, and the
+// Samples/Total pair tells them apart: no stack is active, the deployment
+// publishes at QoS 0 (nothing is measurable), or nothing has been published
+// yet. None of them is an error.
+func (s *mqttSupervisor) PublishLatency() mqtt.LatencyStats {
+	s.mu.Lock()
+	cur := s.current
+	s.mu.Unlock()
+	if cur == nil {
+		return mqtt.LatencyStats{}
+	}
+	return cur.publishLatency.Stats()
 }

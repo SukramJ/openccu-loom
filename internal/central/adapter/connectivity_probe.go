@@ -44,8 +44,12 @@ func NewJSONRPCConnectivityProbe(client *jsonrpc.Client) *JSONRPCConnectivityPro
 // is `[{"name": "BidCos-RF", ...}, ...]` — only the `name` and the
 // optional `connected` field are inspected. The round-trip duration is
 // measured and reported in [coordinators.InterfaceReachability.LatencyMs]
-// so the Reconciler can forward it via [hmevent.ConnectivityChangedEvent]
-// to the MQTT bridge for the per-interface latency sensor.
+// so the Reconciler can forward it via [hmevent.ConnectivityChangedEvent].
+//
+// The duration is kept in fractional milliseconds. Truncating to whole
+// milliseconds read as 0 for every answer a CCU on the same LAN returns in
+// under a millisecond, which is indistinguishable from "never measured" and
+// defeats the value-equality dedup on any aggregate that stores it.
 func (p *JSONRPCConnectivityProbe) Probe(ctx context.Context) ([]coordinators.InterfaceReachability, error) {
 	if p == nil || p.client == nil {
 		return nil, errors.New("connectivity_probe: client is nil")
@@ -55,7 +59,7 @@ func (p *JSONRPCConnectivityProbe) Probe(ctx context.Context) ([]coordinators.In
 	if err := p.client.Call(ctx, "Interface.listInterfaces", nil, &raw); err != nil {
 		return nil, fmt.Errorf("connectivity_probe: %w", err)
 	}
-	latencyMs := float64(time.Since(start).Milliseconds())
+	latencyMs := float64(time.Since(start).Nanoseconds()) / float64(time.Millisecond)
 	out := make([]coordinators.InterfaceReachability, 0, len(raw))
 	for _, entry := range raw {
 		name, _ := entry["name"].(string)

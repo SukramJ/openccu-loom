@@ -37,7 +37,7 @@ const (
 // speaks.
 //
 // ConnectivityChangedEvent.InterfaceID already carries the wire id
-// ("<central>-BidCos-RF") that observeProbeLatency stamps before the
+// ("<central>-BidCos-RF") that stampWireInterfaceIDs stamps before the
 // reconciler publishes, and every routing key in this package is keyed
 // by that same wire id. Re-wrapping it a second time doubled the id
 // ("<central>-<central>-BidCos-RF"), so no sensor was ever degraded
@@ -76,7 +76,7 @@ func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 //
 // The CCU's interface list carries a lost radio by dropping it from the
 // answer, and the reconciler is what turns that absence into a
-// ConnectivityChangedEvent — carrying the wire id observeProbeLatency
+// ConnectivityChangedEvent — carrying the wire id stampWireInterfaceIDs
 // stamped onto the reachability answer, which this domain uses
 // directly. Publishing the event by hand — as the test above does —
 // proves this domain reacts, never that a radio which genuinely
@@ -99,7 +99,7 @@ func TestVanishedInterfaceEscalatesThroughTheReconciler(t *testing.T) {
 	}
 	// VirtualDevices carries no enrolled sensor and never leaves the
 	// answer: an empty answer is the CCU-is-away case the reconciler
-	// deliberately reads as "no information". observeProbeLatency
+	// deliberately reads as "no information". stampWireInterfaceIDs
 	// stamps every InterfaceReachability with the wire id before the
 	// reconciler ever publishes, so this helper mirrors that.
 	serves := func(ids ...string) []coordinators.InterfaceReachability {

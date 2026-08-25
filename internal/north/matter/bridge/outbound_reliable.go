@@ -56,6 +56,8 @@ type outboundReliableTracker struct {
 	// StatusResponse(SUCCESS) → next ReportData). Closed by [Ack] /
 	// [Tick] when the entry is resolved or abandoned.
 	waiters map[outboundKey]chan error
+	// rtt holds the recent first-try round-trips for diagnostics.
+	rtt mrpRTTWindow
 	// baseIntervalFor resolves the peer-appropriate MRP base interval
 	// for the session (peer-advertised active/idle interval selected
 	// by peer activity — matter.js MRP.ts:129). nil, or a session the
@@ -79,6 +81,12 @@ type outboundEntry struct {
 	dest       *net.UDPAddr
 	retries    int
 	nextSendAt time.Time
+	// sentWall is the wall-clock reading when the datagram first left, used
+	// only to report the peer's round-trip in diagnostics. It is deliberately
+	// NOT the injected `now` the retransmit schedule runs on: that clock is a
+	// test seam and may be a fixed instant, which would make every reported
+	// round-trip zero. Nothing in the MRP state machine reads this field.
+	sentWall time.Time
 }
 
 // newOutboundReliableTracker returns a fresh, empty tracker.
@@ -127,6 +135,7 @@ func (t *outboundReliableTracker) Track(counter uint32, sessionID, exchangeID ui
 		datagram:   cp,
 		dest:       dest,
 		nextSendAt: now.Add(delay),
+		sentWall:   time.Now(),
 	}
 }
 
@@ -193,7 +202,17 @@ func (t *outboundReliableTracker) Ack(sessionID uint16, acked uint32) bool {
 		t.mu.Unlock()
 		return false
 	}
+	entry := t.pending[key]
 	delete(t.pending, key)
+	// Only a first-try datagram yields a usable round-trip. After a
+	// retransmit there is no way to tell whether the ACK answers the original
+	// or the resend, so timing it from the first send overstates the peer's
+	// latency by whole backoff intervals — Karn's algorithm, and the same
+	// reason MRP itself never adapts its interval from a retransmitted
+	// exchange.
+	if entry != nil && entry.retries == 0 && !entry.sentWall.IsZero() {
+		t.rtt.record(time.Since(entry.sentWall))
+	}
 	ch, has := t.waiters[key]
 	if has {
 		delete(t.waiters, key)
@@ -203,6 +222,17 @@ func (t *outboundReliableTracker) Ack(sessionID uint16, acked uint32) bool {
 		close(ch)
 	}
 	return true
+}
+
+// RTTStats summarises the recent first-try round-trips to Matter controllers.
+// Safe on a nil tracker (Matter disabled), which reports an empty summary.
+func (t *outboundReliableTracker) RTTStats() MRPRTTStats {
+	if t == nil {
+		return MRPRTTStats{}
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.rtt.stats()
 }
 
 // WaitForAck blocks until the peer ACKs `counter`, the context is

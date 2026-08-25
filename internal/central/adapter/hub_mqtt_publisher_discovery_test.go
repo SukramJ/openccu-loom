@@ -185,7 +185,7 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 // actually writes.
 //
 // ConnectivityChangedEvent.InterfaceID already carries the `<central>-<iface>`
-// wire id that observeProbeLatency stamps before the reconciler publishes,
+// wire id that stampWireInterfaceIDs stamps before the reconciler publishes,
 // the same id the client coordinator is keyed by. The seed used to key off
 // the bare interface name instead, so it declared `.../HmIP-RF` while the
 // event path published `.../ccu-01-HmIP-RF`: the entity HA created at boot
@@ -218,7 +218,7 @@ func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 		t.Fatalf("connectivity discovery has no state_topic: %v", body)
 	}
 
-	// The reachability path: observeProbeLatency stamps the wire id onto the
+	// The reachability path: stampWireInterfaceIDs stamps the wire id onto the
 	// event before the reconciler publishes it — never the CCU's bare
 	// interface name.
 	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
