@@ -1522,3 +1522,15 @@ func (b *Bridge) DiagnosticEvents() []diagevent.Event {
 func (b *Bridge) diagRing() *diagevent.Ring {
 	return b.diagEvents.Load()
 }
+
+// ControllerRTT summarises how long paired Matter controllers are taking to
+// acknowledge this bridge's reliable messages. Diagnostic only — see
+// [mrpRTTWindow] for why this stays off the cluster surface.
+//
+// Safe on a nil bridge (Matter disabled), which reports an empty summary.
+func (b *Bridge) ControllerRTT() MRPRTTStats {
+	if b == nil {
+		return MRPRTTStats{}
+	}
+	return b.outboundReliable.RTTStats()
+}

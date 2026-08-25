@@ -180,7 +180,9 @@ type HubMetricsEntry struct {
 	Central string `json:"central,omitempty"`
 	// SystemHealth is the aggregate health score in percent (0-100).
 	SystemHealth *float64 `json:"system_health,omitempty"`
-	// ConnectionLatencyMs is the average CCU round-trip latency.
+	// ConnectionLatencyMs is the round-trip latency of the most recently
+	// confirmed PING/PONG pair with the CCU, including the callback reply leg.
+	// One value per CCU, not per interface.
 	ConnectionLatencyMs *float64 `json:"connection_latency_ms,omitempty"`
 	// LastEventAgeSeconds is the age of the newest backend event.
 	LastEventAgeSeconds *float64 `json:"last_event_age_seconds,omitempty"`

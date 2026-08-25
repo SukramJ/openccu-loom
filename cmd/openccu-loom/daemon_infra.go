@@ -162,6 +162,22 @@ func wireSharedInfrastructure(
 		hub := si.wsHub
 		si.healthTracker.RegisterGauge("ws.subscribers",
 			func() float64 { return float64(hub.ClientCount()) })
+		// Client→daemon round-trip, as the daemon measures it from the
+		// heartbeat each connection echoes. The median, not the mean: one
+		// tab on a slow tunnel is normal and must not move the figure that
+		// describes everyone else.
+		//
+		// This leg is unrelated to the CCU's. A daemon reached through HA
+		// Ingress or a public host can show tens of milliseconds here while
+		// the CCU link is sub-millisecond, and the reverse on a LAN with an
+		// overloaded CCU — which is the whole reason both are reported and
+		// neither is summed into the other.
+		si.healthTracker.RegisterGauge("ws.heartbeat_rtt_ms",
+			func() float64 { return hub.HeartbeatRTTs().MedianMs })
+		si.healthTracker.RegisterGauge("ws.heartbeat_rtt_max_ms",
+			func() float64 { return hub.HeartbeatRTTs().MaxMs })
+		si.healthTracker.RegisterGauge("ws.heartbeat_rtt_samples",
+			func() float64 { return float64(hub.HeartbeatRTTs().Samples) })
 	}
 
 	si.valueWriter = clientpkg.NewValueWriter()
@@ -292,6 +308,27 @@ func wireMQTTSupervisor(
 	// connect in the background, so a broker that is still booting beside
 	// the daemon costs a delay rather than the whole MQTT plane until the
 	// next restart.
+	// Broker acknowledgement time, read from whichever stack generation is
+	// live — a config swap replaces the probe, and a gauge holding the
+	// predecessor would report a broker connection that no longer exists.
+	//
+	// The companion gauge is the cumulative count, not the window occupancy.
+	// Occupancy pins to the window size after the first burst of acknowledged
+	// publishes and stays there, so it cannot distinguish a median describing
+	// the last minute from one describing the bring-up of a daemon that has
+	// been running for days. A total that stops advancing says plainly that
+	// the median is stale — and a total of zero says the deployment publishes
+	// state at QoS 0, where the broker acknowledges nothing and there is
+	// nothing to measure.
+	if si.healthTracker != nil {
+		sup := si.mqttSup
+		si.healthTracker.RegisterGauge("mqtt.publish_ack_ms",
+			func() float64 { return sup.PublishLatency().MedianMs })
+		si.healthTracker.RegisterGauge("mqtt.publish_ack_max_ms",
+			func() float64 { return sup.PublishLatency().MaxMs })
+		si.healthTracker.RegisterGauge("mqtt.publish_ack_total",
+			func() float64 { return float64(sup.PublishLatency().Total) })
+	}
 	startErr := si.mqttSup.Start(ctx, cfg)
 	reg.Manifest().Mark(wiring.MarkMQTTSupervisorStarted)
 	if startErr != nil {

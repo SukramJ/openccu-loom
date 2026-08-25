@@ -2774,6 +2774,7 @@ const EN: Catalog = {
     "The daemon announced that it is shutting down. This is not a network problem — live updates return once it is running again.",
   "connection.events": "events",
   "connection.last": "last",
+  "connection.rtt_unit": "ms to daemon",
   "session.unsaved": "Unsaved changes",
   "session.idle":
     "Idle for a while. Save within {time} or your edits will be lost on reload.",
@@ -6693,6 +6694,7 @@ const DE: Catalog = {
     "Der Daemon hat sein Herunterfahren angekündigt. Das ist kein Netzwerkproblem — die Live-Aktualisierung kehrt zurück, sobald er wieder läuft.",
   "connection.events": "Ereignisse",
   "connection.last": "zuletzt",
+  "connection.rtt_unit": "ms zum Daemon",
   "session.unsaved": "Ungespeicherte Änderungen",
   "session.idle":
     "Inaktiv seit einer Weile. Speichern in {time} fällig — sonst gehen Änderungen beim Neuladen verloren.",

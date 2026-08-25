@@ -119,6 +119,13 @@ type healthComponentSummary struct {
 type getHealthOut struct {
 	Overall    string                   `json:"overall"`
 	Components []healthComponentSummary `json:"components"`
+	// Gauges carries the daemon's numeric health readings, keyed by gauge
+	// name. Omitted when none are registered. It is where the latency legs
+	// live: `ws.heartbeat_rtt_ms` is the distance to the client asking,
+	// `mqtt.publish_ack_ms` the distance to the broker, and the CCU's own
+	// round-trip surfaces per central as `connection_latency_ms` on the hub
+	// metrics rather than here.
+	Gauges map[string]float64 `json:"gauges,omitempty"`
 }
 
 // parseParamsetKey accepts the two operator-facing paramset keys. LINK
@@ -437,7 +444,7 @@ func registerReadParamset(s *mcpsdk.Server, d Deps) {
 func registerGetHealth(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "get_health",
-		Description: "Report the daemon's health: an overall status plus per-component status (CCU connectivity, subsystems).",
+		Description: "Report the daemon's health: an overall status, per-component status (CCU connectivity, subsystems), and the numeric gauges — including the client, broker and controller latency legs.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ getHealthIn) (*mcpsdk.CallToolResult, getHealthOut, error) {
 		out := getHealthOut{
 			Overall:    string(d.Health.Overall()),
@@ -448,6 +455,9 @@ func registerGetHealth(s *mcpsdk.Server, d Deps) {
 				Name:   c.Name,
 				Status: string(c.Status),
 			})
+		}
+		if g := d.Health.Gauges(); len(g) > 0 {
+			out.Gauges = g
 		}
 		return nil, out, nil
 	})

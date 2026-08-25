@@ -6,6 +6,64 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Connection latency measured a fraction of the path it was named after.**
+  The hub's `connection_latency_ms` metric — the sensor MQTT discovery
+  declares, the hub data-point list enumerates and `/system/ccu` reports —
+  carried the duration of one JSON-RPC `Interface.listInterfaces` call taken on
+  the reconciler's five-minute cadence. That is a single one-way surface: it
+  covers neither XML-RPC, nor BIN-RPC (CUxD), nor the callback leg on which
+  every event actually returns. It is now fed by the matched PING→PONG pair,
+  which leaves over each interface's own transport and returns as an event on
+  the callback server, on the 30-second connection-check cadence. Every backend
+  that declares the ping/pong capability contributes, so the reading spans both
+  transports.
+- **The measurement that did cover the full round-trip was never recorded.**
+  `metrics.MetricKeys.PingPongRTT` existed and `Aggregator.RPC()` read the
+  `ping_pong.rtt` prefix back for its `avg_latency_ms` / `max_latency_ms`
+  fields, but no production code ever wrote that key — the ping/pong tracker
+  computed the round-trip and kept it to itself. Both fields therefore reported
+  a constant zero in the diagnostics `rpc` section for every deployment. The
+  matched-PONG path now files the sample per interface.
+- **Probe durations were truncated to whole milliseconds.** A CCU answering in
+  under a millisecond on the same LAN read as `0`, which is indistinguishable
+  from "never measured" and defeats the value-equality dedup on any aggregate
+  storing it. Connectivity-probe durations are now fractional milliseconds.
+
+### Added
+
+- **Client→daemon latency over the WebSocket.** The heartbeat now carries an
+  opaque `echo` token; a client that copies it into its `pong` gets the
+  measured round-trip back on the following `ping` as `rtt_ms`, and the SPA
+  shows it in the connection badge's tooltip. Echoing is optional — a bare
+  `{"op":"pong"}` remains a valid heartbeat and simply stays untimed, so
+  clients written against wsapi 1.1 are unaffected. This leg is deliberately
+  not a hub data point or an MQTT sensor: the distance belongs to the viewer,
+  not to the CCU, and one daemon serves a LAN tab, an Ingress-tunnelled add-on
+  and a public host at once.
+- **Broker and controller latency in diagnostics.** New gauges
+  `ws.heartbeat_rtt_ms`, `mqtt.publish_ack_ms` and `matter.controller_rtt_ms`.
+  Each is paired with a companion so "nothing measured" stays distinguishable
+  from "measured as zero": a connection count for the WebSocket, and a
+  cumulative `*_total` for the two windowed probes — window occupancy
+  saturates after the first burst and then reads identically whether the
+  median describes the last minute or the bring-up of a daemon that has been
+  running for days. The MQTT probe times only acknowledged (QoS ≥ 1)
+  publishes — a QoS 0 publish is never answered by the broker, so timing one
+  would report near-zero however sick the broker is. Note that state topics
+  default to QoS 0, so on a stock configuration this gauge reports the
+  discovery plane rather than the state plane. The Matter probe times only
+  first-try acknowledgements (Karn's algorithm): after a retransmit the ACK
+  cannot be attributed to either transmission.
+
+### Changed
+
+- The north-bound API contract moves to **7.13.0** and the WebSocket contract
+  to **1.2** — additive only. `connection_latency_ms` keeps its shape and name
+  but now documents the round-trip it actually measures; `heartbeat.echo` and
+  `heartbeat.rtt_ms` are new and optional on both ends.
+
 ## [0.65.0] - 2026-08-24
 
 Round 7 of the defect audit, and the round-8 live verification that followed

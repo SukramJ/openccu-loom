@@ -292,7 +292,7 @@ func (s *Service) updateDeviceHealth(ctx context.Context, centralName string, ke
 //
 // ConnectivityChangedEvent.InterfaceID already carries the wire id the
 // ingest pipeline stamps onto a data point ("<central>-BidCos-RF"): the
-// reconciler publishes what observeProbeLatency stamped, never the bare
+// reconciler publishes what stampWireInterfaceIDs stamped, never the bare
 // enum. It is the same space every routing entry in this package is keyed
 // by, so it is used directly. Re-wrapping it in WireInterfaceID produced a
 // doubled id ("<central>-<central>-BidCos-RF") that matched no enrolled

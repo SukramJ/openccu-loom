@@ -458,6 +458,10 @@ type mqttStack struct {
 	wiring    *mqtt.Wiring
 	lifecycle *mqtt.Lifecycle
 	client    mqtt.Client
+	// publishLatency times broker acknowledgements. Nil when MQTT is
+	// disabled, which the gauge registration handles rather than the
+	// probe pretending to have data.
+	publishLatency *mqtt.LatencyProbe
 }
 
 // scheduleWeekProfileSink adapts [adapter.SchedulesDomain] to the
@@ -694,6 +698,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		connector = tcp
 	}
 
+	stack := &mqttStack{}
 	startedAt := time.Now().UTC()
 	// Circuit breaker between the bridge and the broker: during a
 	// degraded-broker phase (link up, acks missing) publishes fail
@@ -710,6 +715,14 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 			}
 		},
 	})
+	// Time the broker's acknowledgements on the way through, so the
+	// diagnostics gauges can separate "the broker is slow" from "the CCU is
+	// slow" — two failure modes that look identical from a stalled north-bound
+	// surface. The probe sits outside the breaker deliberately: a publish the
+	// breaker refuses never reached the broker and must not be timed as if it
+	// had. See [mqtt.LatencyProbe] for what the number does and does not cover.
+	probe := mqtt.NewLatencyProbe(pub)
+	stack.publishLatency = probe
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base:        cfg.North.MQTT.TopicBase,
 		CentralName: pickFirstCentral(cfg),
@@ -730,10 +743,11 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		HealthSupplier:       bridgeHealthSupplier(centralNames, startedAt),
 		Collector:            collector,
 		ChannelHidden:        channelHidden,
-	}, pub).WithSubscriber(client)
+	}, probe).WithSubscriber(client)
 	wiring := mqtt.NewWiring(bridge, logger)
 
-	stack := &mqttStack{wiring: wiring, client: client}
+	stack.wiring = wiring
+	stack.client = client
 	if connector != nil {
 		lc := mqtt.NewLifecycle(mqtt.DefaultLifecycle(), connector)
 		lc.OnConnect(func(ctx context.Context) {

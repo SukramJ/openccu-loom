@@ -7656,7 +7656,7 @@ export interface components {
             central?: string;
             /** @description Aggregate health score in percent (0-100); omitted until observed. */
             system_health?: number;
-            /** @description Average CCU round-trip latency; omitted until observed. */
+            /** @description Round-trip latency in milliseconds of the most recently confirmed PING/PONG pair with the CCU, measured over the interface's own transport (XML-RPC or BIN-RPC) including the callback reply leg. One value per CCU, not per interface. Omitted until observed. */
             connection_latency_ms?: number;
             /** @description Age of the newest backend event; omitted until observed. */
             last_event_age_seconds?: number;

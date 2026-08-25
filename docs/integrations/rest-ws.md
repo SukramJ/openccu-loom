@@ -111,7 +111,26 @@ To resume after a reconnect, append `since: N` (your last seen `seq`). The daemo
 - `{"op":"replay_done", "seq":N}` — replay finished; `seq` is the last replayed value.
 - `{"op":"replay_lost", "oldest_seq":M}` — `since` precedes the oldest buffered event; take a fresh `GET /api/v1/snapshot` to resync.
 
-The replay buffer holds up to ~1024 events. The daemon also sends `{"op":"ping"}` heartbeats; respond with `{"op":"pong"}` to keep the connection open. Resume cursor and `kind` semantics are specified in [ADR 0022](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0022-ws-resume-and-kind.md).
+The replay buffer holds up to ~1024 events. Resume cursor and `kind` semantics are specified in [ADR 0022](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0022-ws-resume-and-kind.md).
+
+### Heartbeat and round-trip time
+
+The daemon sends `{"op":"ping", "echo":"<token>"}` every 30 seconds and closes the connection if no frame arrives from you within 60. Respond with `{"op":"pong"}` to stay connected.
+
+Copy the `echo` token back verbatim — `{"op":"pong", "echo":"<token>"}` — and the daemon times the round trip, reporting it on the following ping as `rtt_ms`:
+
+```json
+{"op":"ping", "echo":"7", "rtt_ms":12.4}
+```
+
+That figure lets a client display its own latency to the daemon without measuring anything itself. It is absent on the first ping of a connection, and on every ping after a pong that carried no echo.
+
+Two things to keep in mind:
+
+- **Echoing is optional.** A bare `{"op":"pong"}` remains a valid heartbeat; the connection simply stays untimed. Clients written before this was added keep working unchanged.
+- **Treat the token as opaque.** Its encoding is not part of the contract and will change without notice.
+
+`rtt_ms` measures the distance between *your client* and the daemon — nothing else. It says nothing about the daemon's own link to the CCU, which is reported separately as the `connection_latency_ms` hub metric. The two are routinely orders of magnitude apart: a browser on the same LAN sees well under a millisecond here while the CCU round trip runs to several, and a client reached through a tunnel or a public host can invert that while the CCU link stays perfectly healthy. Never add them or present them as one number.
 
 ### Example
 
