@@ -71,6 +71,8 @@ var hostRiddenMeasurementClasses = map[interfaces.MatterMeasurementClass]string{
 	interfaces.MatterMeasurementPower: "folded into a generic.ElectricalGroup by the assembler, which projects one " +
 		"ElectricalSensor (0x0510) endpoint per channel; the per-parameter class never builds an endpoint",
 	interfaces.MatterMeasurementEnergy: "folded into the same generic.ElectricalGroup as Power",
+	interfaces.MatterMeasurementBattery: "endpoint.attachPowerSource mounts 0x002F on one of the device's own " +
+		"endpoints, which BridgedNode (0x0013) specifies as a server cluster; the class never builds an endpoint",
 }
 
 // measurementClassesUnderInvestigation are known defects, not exemptions.
@@ -81,15 +83,7 @@ var hostRiddenMeasurementClasses = map[interfaces.MatterMeasurementClass]string{
 //
 // Emptying this map is the goal. An entry states what is wrong and what the
 // fix has to establish.
-var measurementClassesUnderInvestigation = map[interfaces.MatterMeasurementClass]string{
-	interfaces.MatterMeasurementBattery: "LOWBAT/LOW_BAT and the derived battery percentage classify as Battery, " +
-		"which maps to device type 0, but no seam mounts PowerSource on the host endpoint the way " +
-		"AttachPowerSource does for 0x0090. eligibility.Classify still returns StateMappable, so the DP " +
-		"is offerable in /api/v1/matter/exposable and materialises as its own endpoint whose " +
-		"DeviceTypeList is [BridgedNode] alone. Fix: mount PowerSource on the device's primary endpoint " +
-		"(matter.js packages/node/src/devices/*.ts place PowerSource on the device endpoint, never on " +
-		"one of its own), then delete this entry",
-}
+var measurementClassesUnderInvestigation = map[interfaces.MatterMeasurementClass]string{}
 
 // TestMeasurementClassProjectsOntoAConformantDeviceType asserts that every
 // measurement class names a device type whose Device Library entry permits

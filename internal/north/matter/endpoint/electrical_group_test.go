@@ -244,3 +244,50 @@ func clusterIDSet(ep *endpoint.Endpoint) map[uint32]bool {
 	}
 	return out
 }
+
+// TestBatteryRidesOnADeviceEndpointRatherThanItsOwn asserts that a
+// battery-powered device serves PowerSource (0x002F) on one of its function
+// endpoints instead of spawning an endpoint for it.
+//
+// A battery has no device type of its own. Letting the LOWBAT data point
+// materialise as a measurement endpoint produced one whose
+// Descriptor.DeviceTypeList was [BridgedNode] alone — no primary type, which
+// Apple files under its "Other" fallback. BridgedNode (0x0013) is the
+// secondary device type every bridged endpoint carries and it specifies
+// PowerSource as a server cluster, so mounting it on a function endpoint is
+// both conformant and what a bridge is supposed to do with power-source info.
+func TestBatteryRidesOnADeviceEndpointRatherThanItsOwn(t *testing.T) {
+	dev := buildMeteringPlug(t)
+	// LOWBAT sits on the maintenance channel, as it does on a real device.
+	ch0 := dev.Channel("0001PSM01:0")
+	ch0.Put(generic.NewBinarySensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "iface",
+			ChannelAddress: ch0.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterLowBat),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	}))
+
+	top := assembleTopology(t, dev)
+
+	carriers := 0
+	for _, ep := range top.Bridged() {
+		if ep.DeviceType == 0 {
+			t.Errorf("EP %d has device type 0; its DeviceTypeList would be [BridgedNode] alone", ep.ID)
+		}
+		if clusterIDSet(ep)[0x002F] {
+			carriers++
+		}
+	}
+
+	// Exactly one: a device has one battery, and advertising it on every
+	// endpoint would show the operator several battery levels for one device.
+	if carriers != 1 {
+		t.Errorf("PowerSource (0x002F) is served on %d endpoints, want exactly 1", carriers)
+	}
+}

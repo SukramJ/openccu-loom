@@ -257,6 +257,7 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 		if dev == nil {
 			continue
 		}
+		deviceEndpoints := make([]*Endpoint, 0, 4)
 		for _, ch := range dev.Channels() {
 			if ch == nil {
 				continue
@@ -265,10 +266,69 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, eps...)
+			deviceEndpoints = append(deviceEndpoints, eps...)
 		}
+		attachPowerSource(dev, deviceEndpoints)
+		out = append(out, deviceEndpoints...)
 	}
 	return out, nil
+}
+
+// attachPowerSource binds the device's battery reading to exactly one of its
+// endpoints, so the PowerSource cluster (0x002F) is served where the Device
+// Library puts it.
+//
+// PowerSource is a property of the physical device, not of any one function it
+// exposes, and BridgedNode (0x0013) — the secondary device type every bridged
+// endpoint carries — specifies it as a server cluster. Mounting it on a
+// bridged endpoint is therefore conformant whatever that endpoint's primary
+// type is, and it is what matter.js's ecosystem notes prescribe for a bridge:
+// power-source information belongs at the bridged-node level, not on an
+// endpoint whose device type does not specify it.
+//
+// The alternative — letting the battery data point materialise as an endpoint
+// of its own — produced an endpoint with device type 0, whose DeviceTypeList
+// was [BridgedNode] alone and which Apple files under its "Other" fallback.
+//
+// Exactly one endpoint gets it. A device with a switch and a metering channel
+// has one battery, and advertising it twice would have controllers show two
+// battery levels for one device. The target is the lowest-numbered channel's
+// first endpoint, which is the device's primary function: channel order is the
+// CCU's own, and assembleChannel appends in a stable order within a channel.
+func attachPowerSource(dev *device.Device, eps []*Endpoint) {
+	if dev == nil || len(eps) == 0 {
+		return
+	}
+	var battery interfaces.MatterMeasurementSource
+	for _, ch := range dev.Channels() {
+		if ch == nil {
+			continue
+		}
+		for _, gdp := range ch.DataPoints() {
+			meas, ok := gdp.(interfaces.MatterMeasurementSource)
+			if !ok || meas.MatterMeasurementClass() != interfaces.MatterMeasurementBattery {
+				continue
+			}
+			battery = meas
+			break
+		}
+		if battery != nil {
+			break
+		}
+	}
+	if battery == nil {
+		return
+	}
+	target := eps[0]
+	for _, ep := range eps[1:] {
+		if ep.Channel == nil || target.Channel == nil {
+			continue
+		}
+		if ep.Channel.Number < target.Channel.Number {
+			target = ep
+		}
+	}
+	target.PowerSource = battery
 }
 
 func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
@@ -477,6 +537,13 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			// join the group, so an operator can e.g. expose the short
 			// press while keeping the long-press events private.
 			pressMembers = append(pressMembers, gdp)
+			continue
+		}
+		if meas.MatterMeasurementClass() == interfaces.MatterMeasurementBattery {
+			// PowerSource is mounted on one of the device's endpoints by
+			// attachPowerSource, never as an endpoint of its own — it has no
+			// device type, and an endpoint without one advertises
+			// DeviceTypeList=[BridgedNode] alone.
 			continue
 		}
 		switch meas.MatterMeasurementClass() {

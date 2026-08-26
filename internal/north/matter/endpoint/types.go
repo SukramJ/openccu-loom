@@ -98,6 +98,12 @@ type Endpoint struct {
 	// Measurement is set on standalone sensor endpoints assembled
 	// from MatterMeasurementSource implementers. nil otherwise.
 	Measurement interfaces.MatterMeasurementSource
+	// PowerSource carries the device's battery reading on exactly one of
+	// the device's endpoints, so the PowerSource cluster (0x002F) is served
+	// where BridgedNode (0x0013) specifies it rather than on an endpoint of
+	// its own with no device type. nil on every other endpoint, and on
+	// mains-powered devices. Set by [attachPowerSource].
+	PowerSource interfaces.MatterMeasurementSource
 	// SourceKey is the persisted endpoint identity. Empty for the
 	// root endpoint.
 	SourceKey store.EndpointKey
