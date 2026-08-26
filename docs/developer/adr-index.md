@@ -71,6 +71,10 @@ The table below catalogues every ADR. Each entry links to the record itself.
 | [0060](../adr/0060-loom-prefixed-interface-ids.md) | `loom`-prefixed CCU-facing interface ids | Partially supersedes ADR 0024: the wire-boundary `InitInterfaceID` carries a `loom` prefix and drops the repeated central name. |
 | [0061](../adr/0061-migration-down-path-unsupported.md) | The migration Down path is unsupported | `goose` Down blocks exist to satisfy the tool; they are destructive and must never run in production. |
 | [0062](../adr/0062-suppression-reasons-are-recomputed.md) | Suppression reasons are recomputed, not recorded | Extends ADR 0015: the `Ignored` mark says *that* a parameter is hidden, never which rule hid it, so the reason is re-derived from the same rule sets. |
+| [0063](../adr/0063-self-maintained-device-profiles.md) | Device profiles are maintained here, not generated | `script/generate_profiles.py` is removed and the catalogue becomes ordinary hand-maintained source; every deviation from the fork point is recorded in `notes/parity/by_design.md`. |
+| [0064](../adr/0064-garage-projects-as-matter-closure.md) | A garage drive projects as a Matter Closure, not a WindowCovering | Refines ADR 0049: the drive carries ClosureControl with named stops, so the WindowCovering projection and its lift-percentage machinery are removed. |
+| [0065](../adr/0065-composition-root-wiring-is-checkable.md) | The composition root states its wiring, so a machine can check it | Each `wire*` function declares its seam into a manifest the daemon builds at start-up, turning "is X wired, and does it run before Y" from an approximate question into an exact one. |
+| [0066](../adr/0066-relicense-agpl-commercial-exception.md) | Relicense to AGPL-3.0-only with a commercial exception | **Proposed.** MIT gives commercial reuse of the code away; AGPL plus a written exception makes monetisation ask first, while the licence stays OSI-approved. Supersedes ADR 0001 from v0.66.0. |
 
 ## Related reading
 
