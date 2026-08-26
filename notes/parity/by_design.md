@@ -3261,9 +3261,12 @@ The same reasoning covers the sibling MRP keys **SII and SAI** on both the opera
 
 **Python reference:** `openccu-data` changelog version 2026.5.0 (2026-05-10) — translations and easymodes regenerated.
 
-**Go path:** `internal/ccudata/embedded/MANIFEST.json` — `snapshot_date: 2026-04-27`.
+**Go path:** the `SnapshotVersion` constant of the
+`github.com/SukramJ/go-openccu-data` module, pinned in `go.mod`.
 
-**Rationale:** The embedded snapshot is updated deliberately, not on every upstream release. Translation updates only affect labels for new OCCU firmware parameters and do not change any data-path logic. Schema is unchanged; custom overlay files in `translation_custom/` are unaffected. The snapshot will be refreshed before 0.1.0 final. Regeneration is documented in `docs/contributor/regenerate-openccu-data.md`.
+**Rationale:** The snapshot follows the module version, not every upstream release. Translation updates only affect labels for new OCCU firmware parameters and do not change any data-path logic; the schema is unchanged and the curated overlays are unaffected. Since [ADR 0053](../../docs/adr/0053-go-openccu-data-module.md) the module regenerates itself on an upstream release and arrives here as a dependabot bump, so the lag is now bounded by that bump rather than by a manual refresh.
+
+> **Review this entry.** With regeneration automated, it is no longer clear that this divergence still needs a by-design tolerance. Nothing in the code or the tooling references `BD-CCUDATA-SnapshotDate`. It is kept for now because removing a parity tolerance is not a side effect of a documentation fix.
 
 ---
 

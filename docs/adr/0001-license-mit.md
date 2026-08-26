@@ -67,13 +67,16 @@ so the DCO chain stays explicit as the contributor list grows.
 
 ## Implementation notes
 
-- `LICENSE` carries the MIT text plus a short pointer to
-  `internal/ccudata/embedded/NOTICE` for the eQ-3 data layer.
+- `LICENSE` carries the MIT text plus a short pointer to the `NOTICE.md` of
+  the `github.com/SukramJ/go-openccu-data` module for the eQ-3 data layer.
 - Every Go, Markdown, YAML, HTML, and script file with an SPDX
   header uses `SPDX-License-Identifier: MIT`.
 - `go.mod` and module-level docs reflect MIT.
-- The `/api/v1/info` payload and the UI About page surface both
-  licenses so users of commercial binaries see both.
+- The UI About page surfaces both licences, in English and German, so users
+  of commercial binaries see both. The `/api/v1/info` payload does **not** —
+  it carries version, build and capability fields only. Adding a licence field
+  there is an open item; it is an API-contract change and needs
+  `assets/openapi.yaml` plus an `APIVersion` bump.
 
 ## History
 
