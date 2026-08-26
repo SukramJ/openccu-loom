@@ -193,14 +193,25 @@ is deferred rather than forgotten:
    exposure and the price of a later switch rise together, and the window
    that is wide today narrows from then on.
 
-**What must not wait for any of them.** The trigger with a real deadline is
-not the licence but a **contributor licence agreement**: the ability to
-relicense at all ends the first time an outside contribution is merged
-without one, and no later decision can undo that. The DCO sign-off does not
-substitute — it certifies where code came from, it grants no rights. Such an
-agreement therefore belongs under MIT, ahead of and independently of this
-ADR; it is not in place yet, and the projects currently have no outside
-contributors.
+**What the second trigger costs.** Relicensing, and selling a commercial
+exception, both require holding the rights to all the code. That ability ends
+the first time an outside contribution is merged without a contributor licence
+agreement, and no later decision can undo it — the DCO sign-off does not
+substitute, it certifies where code came from and grants no rights.
+
+Such an agreement was drafted for all eight repositories in August 2026 and
+**deliberately not adopted**: there is no plan to sell commercial licences, and
+without that it secures an option nobody intends to exercise, at the price of a
+contribution barrier on projects whose scarcer resource is contributors. The
+reasoning and both drafts are kept in
+[`notes/reference/contributor-agreements-declined.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/reference/contributor-agreements-declined.md).
+
+The consequence for this ADR is specific and accepted: **trigger 2 stops being
+actionable once outside contributions arrive.** Triggers 1 and 3 — a fork or a
+commercial appropriation, and growth in adoption — remain fully actionable,
+because a move to AGPL for the maintainer's own code needs nobody's consent
+where the project is otherwise permissively licensed. What is lost is the
+commercial-exception model, not the ability to change licence.
 
 ## Implementation notes
 
