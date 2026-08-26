@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // unignore_parser_test.go tests the ParseUnIgnoreLine / ParseUnIgnoreRules
 // parsing surface, the UnIgnoreEntry.ChannelNo field, the exported

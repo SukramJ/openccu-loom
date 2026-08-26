@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package integration hosts end-to-end tests that exercise the daemon
 // against a godevccu-based mock CCU started in-process. godevccu is a

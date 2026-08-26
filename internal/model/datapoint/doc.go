@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package datapoint hosts the shared parent layer for every data
 // point family in the daemon: generic / parameter, custom, calculated,

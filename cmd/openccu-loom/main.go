@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Command openccu-loom is the daemon entrypoint.
 // It recognises `version`, `run --version`, and `run`.

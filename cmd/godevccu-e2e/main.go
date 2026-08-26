@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Command godevccu-e2e is a thin driver around the godevccu CCU
 // simulator for end-to-end tests of external clients (e.g. the Python

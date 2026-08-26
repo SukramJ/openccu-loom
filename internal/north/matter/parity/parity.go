@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package parity provides the matter.js HEAD schema snapshot to all
 // matter-side parity tests in one embed location. Mirrors matter.js

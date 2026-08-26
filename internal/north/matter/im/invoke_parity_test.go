@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Mirrors chip src/app/tests/TestCommandInteraction.cpp — selected
 // TEST_F cases from the command-invocation interaction model.

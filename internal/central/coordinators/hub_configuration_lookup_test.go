@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_configuration_lookup_test.go covers:
 // HubCoordinator lookup methods (GetProgramDataPoint, GetSysvarDataPoint,

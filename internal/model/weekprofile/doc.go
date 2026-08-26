@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package weekprofile wraps a device's weekly schedule. Concrete
 // profile types compose a domain-specific schedule model from

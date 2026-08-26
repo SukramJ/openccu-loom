@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Behavior tests for the four hub-message aggregates
 // (Alarm / Service / Inbox / Connectivity) covering:

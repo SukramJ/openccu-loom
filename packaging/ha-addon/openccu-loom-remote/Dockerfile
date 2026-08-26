@@ -3,7 +3,7 @@
 # always supplied as --build-args by the HA builder and script/build_ha_addon.sh;
 # the FROM lines are never actually empty. Silences the static-analysis warning.)
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 OpenCCU-Loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # Same thin-image strategy as the main add-on: copy the pre-built static
 # proxy binary out of the upstream release image instead of rebuilding

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package secure_test exercises the public surface of the sigma sub-package
 // against the matter.js HEAD reference vectors.

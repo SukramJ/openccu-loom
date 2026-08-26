@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // interfaces_test.go covers InterfacesAdapter's enrichment of InterfaceState
 // with the HubCoordinator's cached BidCos duty-cycle / carrier-sense snapshot.

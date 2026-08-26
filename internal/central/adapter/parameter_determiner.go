@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // parameter_determiner.go — ParameterDeterminerAdapter wires the
 // ws.ParameterDeterminer interface onto the backend's DetermineParameter

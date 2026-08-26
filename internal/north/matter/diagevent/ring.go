@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package diagevent keeps a bounded, in-memory trace of the Matter
 // events that explain a failed pairing.

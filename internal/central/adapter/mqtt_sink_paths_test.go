@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // mqtt_sink_paths_test.go covers additional nil-guard and error branches in
 // MQTTCommandSink: SetSysvar unknown-sysvar, TriggerProgram unknown-program,

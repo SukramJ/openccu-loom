@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // datapoint.go — ProfileDataPoint: the device-level descriptor that
 // couples a week profile to its CCU metadata (schedule type, entry limits,

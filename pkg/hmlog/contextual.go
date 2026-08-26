@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package hmlog provides a contextual logger wrapper that enriches
 // [log/slog] output with request-scoped fields.

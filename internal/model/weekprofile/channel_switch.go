@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // channel_switch.go — ChannelSwitch is a per-channel boolean DP that
 // exposes the schedule-enabled flag of one schedule target channel.

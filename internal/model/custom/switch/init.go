@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // init.go registers Constructor functions for every switch
 // DeviceProfile in the process-wide custom registry ( D.12).

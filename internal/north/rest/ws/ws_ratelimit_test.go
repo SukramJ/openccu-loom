@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests the per-identity WS command rate gate: a burst is allowed, the next
 // call is throttled with CommandErrorRateLimited, and distinct identities have

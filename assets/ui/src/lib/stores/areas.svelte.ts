@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Operator-defined Areas: room groupings ABOVE CCU rooms (a floor, a
 // shed, a terrace roof) — distinct from alarm zones. One shared,

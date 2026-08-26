@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for parity-audit item L-7015: paramset.copy WS-command.
 // Generic paramset-to-paramset mirror — reads a paramset from the

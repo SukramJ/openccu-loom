@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package eligibility walks the model and produces the candidate list
 // the operator-facing allowlist UI consumes. It does *not* classify

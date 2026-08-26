@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for the JSON-RPC extended operations on CcuBackend defined in ccu.go
 // (GetAllPrograms, SetProgramState, GetSystemUpdateInfo, GetInboxDevices,

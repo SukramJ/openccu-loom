@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // NoPushUpdates pipeline invariant: when the backend reports
 // Capabilities.RPCCallback==false the pipeline must stamp

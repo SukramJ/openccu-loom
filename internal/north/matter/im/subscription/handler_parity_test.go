@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // handler_parity_test.go locks Subscribe lifecycle semantics against
 // matter.js HEAD ebe091744.

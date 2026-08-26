@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for GroupsDomain's write surface (Create / Update / Delete / Types /
 // SuitableMembers) and writerFor's capability gate, in groups_write.go.

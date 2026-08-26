@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package hmtypes holds primitive value types shared across the daemon.
 // It is deliberately small — only cross-cutting types that do not

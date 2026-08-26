@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package mattercert decodes and verifies Matter Operational
 // Certificates (NOC, ICAC, RCAC) per Matter Core Specification §6.5.

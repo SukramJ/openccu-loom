@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package hmui carries the data-point UI classification catalogue
 // the daemon serves through `DataPointSummary.UIHint`. The SPA's

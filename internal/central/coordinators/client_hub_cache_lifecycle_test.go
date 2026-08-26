@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // client_hub_cache_lifecycle_test.go covers:
 // ClientCoordinator lifecycle (start/stop/restart/error collection),

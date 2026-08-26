@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // leak_test.go installs goroutine-leak detection for the central package.
 // CentralUnit, the callback servers, and the scheduler spawn background

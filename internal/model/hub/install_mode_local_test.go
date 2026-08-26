@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // install_mode_local_test.go — tests for InstallMode.EnableLocal: the
 // keyserver-less HmIP LOCAL teach-in (SGTIN + device-key whitelist).

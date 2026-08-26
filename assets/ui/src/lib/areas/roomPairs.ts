@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Pure helper for the Areas admin section's room-assignment picker
 // (RoomsFunctionsAdmin.svelte). No DOM, no Svelte imports — kept

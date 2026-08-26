@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // incidents_a4_l17_test.go — end-to-end tests for the parity item:
 // IncidentStore.RecordIncident satisfies reliability.IncidentRecorder and

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // callback_handlers_nil_channel_test.go covers the nil-channel and
 // non-string-combined paths in CallbackHandlers.Event and

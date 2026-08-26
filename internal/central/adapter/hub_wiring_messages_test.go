@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_wiring_messages_test.go covers messageDisplayName and the DisplayName
 // population in loadAlarmMessages / loadServiceMessages.

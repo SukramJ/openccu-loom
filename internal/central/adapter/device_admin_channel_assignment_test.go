@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // device_admin_channel_assignment_test.go covers DeviceAdminDomain's
 // per-channel room/function assignment surface: SetChannelRooms,

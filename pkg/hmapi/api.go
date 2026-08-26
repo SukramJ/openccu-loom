@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package hmapi provides a high-level HomematicAPI facade that is the
 // single convenience entry-point into the openccu-loom daemon.

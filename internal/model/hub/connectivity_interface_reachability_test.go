@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for InterfaceReachability field semantics and the Connectivity
 // state-machine contract that maps ClientState transitions to reachable/unreachable.

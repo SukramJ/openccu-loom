@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // The tests in this file validate the SHAPE of the committed
 // notes/parity/dead-code-inventory.json snapshot: that it exists, that

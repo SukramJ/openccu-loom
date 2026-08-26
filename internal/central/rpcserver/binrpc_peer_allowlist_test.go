@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Integration-level coverage for BINRPCServer.Serve's peer-allowlist
 // enforcement: a disallowed source IP must be closed inside the accept

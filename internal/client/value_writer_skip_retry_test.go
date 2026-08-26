@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for ValueWriter.SetValueWithOptions and PutParamsetWithOptions
 // with WriteOptions.SkipRetry=true: verifies that the IC's reliability stack

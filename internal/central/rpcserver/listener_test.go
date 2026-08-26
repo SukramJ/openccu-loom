@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Unit coverage for listener.go's two connection-cap primitives:
 //   - peerAllowed: the source-IP allowlist check shared by the BIN-RPC

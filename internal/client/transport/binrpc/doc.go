@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package binrpc is the southbound BIN-RPC transport used to talk to
 // CUxD. BIN-RPC is semantically identical to XML-RPC — same value

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // status_value_validity_contract_test.go locks the invariant that the
 // north-bound `available` flag is gated on the full IsValid() chain:

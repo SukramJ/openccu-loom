@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 openccu-loom authors.
+// Copyright (C) 2026 SukramJ.
 //
 // Converts the live `<text>` in assets/logo/wordmark*.svg to vector
 // <path> elements derived from Inter Bold (OFL via @fontsource/inter).

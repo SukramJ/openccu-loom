@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package light implements the dimmable-light custom data point. The
 // LEVEL value is held as a typed reference to the channel's existing

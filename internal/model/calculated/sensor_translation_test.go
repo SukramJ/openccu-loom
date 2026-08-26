@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package calculated tests Translation() promotion from generic.Sensor[float64]
 // and OperatingVoltageLevelSensor.AdditionalInformation().

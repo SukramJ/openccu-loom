@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package safety classifies device data points into the Security &
 // Safety hazard/fault taxonomy ([hmenum.SecurityClass]).

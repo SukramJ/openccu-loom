@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // system_hub.go — hub-singleton endpoints: CCU system-update info,
 // hub metrics, and per-interface install-mode state. They expose the

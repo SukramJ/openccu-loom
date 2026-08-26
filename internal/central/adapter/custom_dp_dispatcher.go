@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package adapter provides the concrete CustomDPDispatcher that bridges
 // the abstract (device address, name, operation, params) tuple from the

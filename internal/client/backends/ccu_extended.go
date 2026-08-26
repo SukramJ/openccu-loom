@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Extended Operations implementations for CcuBackend — install mode,
 // service/alarm messages, rooms, functions, renaming, inbox, programs,

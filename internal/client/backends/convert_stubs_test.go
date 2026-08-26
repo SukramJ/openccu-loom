@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for convert.go (ParseDeviceDescriptions, normaliseStringSlice,
 // normaliseBoolFields, toDeviceDescription) and for the ErrUnsupported stubs

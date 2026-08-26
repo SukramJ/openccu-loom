@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package tlv implements the Matter TLV (Type-Length-Value) codec
 // per Matter Core Specification §A.7.

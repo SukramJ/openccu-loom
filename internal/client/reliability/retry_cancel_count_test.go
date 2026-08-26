@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests that a cancellation increments CancelledRetries exactly once — at the
 // cancelling call site — and is not double-counted when the superseded chain

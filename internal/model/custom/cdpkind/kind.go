@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package cdpkind resolves a stable, user-facing kind string for any
 // custom data point — `light`, `light_color`, `cover_blind`,

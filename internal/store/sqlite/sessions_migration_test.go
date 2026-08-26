@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // sessions_migration_test.go — Item 1: schema verification for
 // migration 005_session_recorder.sql.

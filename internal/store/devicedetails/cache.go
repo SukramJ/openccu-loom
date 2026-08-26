@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package devicedetails carries the per-CCU runtime metadata that
 // enriches devices and channels with operator-assigned names, room

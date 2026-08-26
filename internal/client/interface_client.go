@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package client orchestrates one reliable southbound channel per
 // (central, interface) pair: it composes the transport-level clients

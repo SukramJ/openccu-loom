@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package adapter wires the central domain into the north-bound
 // handler interfaces. Every adapter is a thin pointer-wrap around a

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package security is the daemon-level Security & Safety domain: the
 // aggregation and reporting plane above the alarm engine.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // routing_test.go covers XML-RPC and BIN-RPC routing invariants:
 // health endpoint shape, multi-CCU URL routing, legacy bare-root

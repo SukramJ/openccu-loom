@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package mcp exposes the OpenCCU-Loom domain to LLM agents over the
 // Model Context Protocol, as a north-bound adapter (ADR 0025). It is a

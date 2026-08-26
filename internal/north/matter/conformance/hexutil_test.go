@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package-internal tests that exercise unexported helpers (hexDump,
 // hexNibble, hexParse) used by the conformance vector runner.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package filter provides outbound adapter filters that gate what the
 // north-bound layer exposes to clients. Visibility is the primary concern:

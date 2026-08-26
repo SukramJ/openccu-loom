@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package measurement contains generic, Source-driven cluster server
 // implementations for the read-only Matter measurement clusters

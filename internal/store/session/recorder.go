@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package session provides the SessionRecorder, which captures RPC
 // method calls and their responses for deterministic golden-file

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_refresh_lifecycle_test.go covers HubCoordinator refresh hooks, full
 // program/sysvar lifecycles, state-path reflection, and Clear — scenarios

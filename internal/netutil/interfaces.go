@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package netutil holds small network-introspection helpers shared by
 // the daemon's mDNS advertisers (client auto-discovery and the Matter

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package remoteproxy implements the OpenCCU-Loom Remote ingress proxy:
 // a small, self-contained reverse proxy that surfaces one or more remote

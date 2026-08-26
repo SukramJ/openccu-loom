@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for the resolution of the operator-config parameters that live on the
 // device-root MASTER paramset of classic RF thermostats — TEMPERATURE_OFFSET

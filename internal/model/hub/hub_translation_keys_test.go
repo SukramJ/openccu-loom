@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for Update.VersionBeforeUpdate and MonitorProgress; translation keys
 // and data types on AlarmMessages, ServiceMessages, Inbox, InstallMode, and

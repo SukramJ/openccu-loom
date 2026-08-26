@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // uischema_pure_test.go covers the pure-logic helpers in
 // uischema_adapter.go and uischema_link.go that need no registry or

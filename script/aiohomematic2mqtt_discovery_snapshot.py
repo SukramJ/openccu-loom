@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # aiohomematic2mqtt_discovery_snapshot.py — produces the
 # aiohomematic2mqtt side of the cross-stack HA-Discovery snapshot diff.

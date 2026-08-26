@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package closure contains the Matter ClosureControl cluster server
 // (0x0104) for the Positioning + Ventilation feature profile. It is

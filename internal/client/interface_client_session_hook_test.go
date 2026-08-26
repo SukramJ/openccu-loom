@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // interface_client_session_hook_test.go — tests for the Item-2 parity gap:
 // Config.SessionRecorderHook is called after successful SetValue / PutParamset

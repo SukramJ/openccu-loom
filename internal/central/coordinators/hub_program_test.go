@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // HubCoordinator tests covering Program.Execute behaviour without a
 // writer, GetHubDataPoints aggregation, and the IsRegistered/Marked

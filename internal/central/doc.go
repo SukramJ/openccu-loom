@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package central implements the daemon-internal orchestration shell
 // from SPECIFICATION §11 — the Unit, its state machine, the

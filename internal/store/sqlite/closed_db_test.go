@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // closed_db_test.go exercises error-return branches in every store type by
 // calling store methods against a closed *sql.DB. The pattern is:

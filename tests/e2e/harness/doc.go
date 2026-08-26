@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package harness assembles a complete openccu-loom daemon in-process
 // for end-to-end black-box tests under tests/e2e/.

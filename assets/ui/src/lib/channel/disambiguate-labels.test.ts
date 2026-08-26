@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 import { describe, it, expect } from "vitest";
 import { disambiguateLabels } from "./disambiguate-labels";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package sqlite — SessionRecorderStore persists and loads session.Recorder
 // entries to/from the session_recorder table. This enables production-replay

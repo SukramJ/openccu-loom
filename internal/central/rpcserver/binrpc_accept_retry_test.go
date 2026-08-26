@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Coverage for BINRPCServer.Serve's accept-loop resilience: a recoverable
 // Accept failure must not end the loop, because nothing restarts it — the

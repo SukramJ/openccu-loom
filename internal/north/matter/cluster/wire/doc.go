@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package wire holds the TLV codecs for Matter application-cluster
 // command payloads. The IM dispatcher calls these to decode inbound

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package rpcserver hosts the two callback listeners a central runs:
 // an HTTP XML-RPC endpoint (port 8120 by default, path

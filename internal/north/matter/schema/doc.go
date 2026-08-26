@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package schema exposes typed Go lookups for Matter cluster and device-type
 // metadata extracted from matter.js HEAD. The primary data lives in the

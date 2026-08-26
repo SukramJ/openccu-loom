@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_wiring_message_ack_test.go covers hubMessageAck in hub_wiring.go: the
 // adapter that wires the ReGa runner's single- and bulk-message acknowledge

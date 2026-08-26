@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // heartbeat_job_test.go pins the scheduler mechanics required by the
 // C-SCHED-1 heartbeat job: the job must be invoked on every tick, errors

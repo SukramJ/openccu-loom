@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 OpenCCU-Loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # CCU / RaspberryMatic add-on install + update hook. The CCU's
 # "Additional Software" page unpacks the tarball and runs this script

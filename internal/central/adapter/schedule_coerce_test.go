@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // schedule_coerce_test.go covers coerceInt, coerceFloat,
 // scheduleToMap, splitChannelAddress, ScheduleQueryAdapter nil guards,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package spake2 implements SPAKE2+ over P-256 per Matter Core
 // Specification §3.10 (which itself profiles RFC 9383). SPAKE2+ is

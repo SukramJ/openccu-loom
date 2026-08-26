@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package codes is the domain facade over the alarm_codes store
 // (notes/concepts/alarm-concept.md §11, migration 028): argon2id PIN hashing,

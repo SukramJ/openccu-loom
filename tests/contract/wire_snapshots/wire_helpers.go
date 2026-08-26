@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package wire_snapshots provides helpers for capturing and pinning the
 // wire calls emitted by Custom-DP setters. Each test exercises a setter

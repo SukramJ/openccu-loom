@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // infra_nil_guards_test.go covers nil-guard branches and pure-logic
 // helpers in eventbridge.go, interfaces.go, links.go, mqtt_sink.go,

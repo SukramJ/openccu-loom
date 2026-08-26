@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package ssdp implements active SSDP (UPnP) discovery of Homematic /
 // OpenCCU central units on the local network. It periodically multicasts an

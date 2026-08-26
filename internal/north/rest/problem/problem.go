@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package problem implements RFC 9457 problem+json responses. Every
 // error the REST surface returns travels through [Write] so clients

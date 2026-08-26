@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // link_coordinator_crud_test.go covers LinkCoordinator CRUD operations:
 // AddLink, RemoveLink, GetLinks, SetLinkInfo, GetLinkInfo, and the

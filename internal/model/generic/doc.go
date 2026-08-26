@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package generic implements Level 4 of the data-point hierarchy from
 // SPECIFICATION §6.1: one concrete Go type per functional parameter

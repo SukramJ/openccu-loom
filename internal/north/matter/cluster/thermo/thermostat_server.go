@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package thermo provides the Matter Thermostat cluster server (0x0201).
 // The server supports HEAT-only, COOL-only, and HEAT+COOL (with optional

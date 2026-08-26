@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 //
 // ENUM value captions: the SPA catalogue owns the curated generic
 // tokens, the daemon's per-value `value_translations` cover the long

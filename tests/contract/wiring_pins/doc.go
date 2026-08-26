@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package wiring_pins contains AST-based pin tests that assert the wiring
 // of critical production callers.  Each test fails when a method, constructor,

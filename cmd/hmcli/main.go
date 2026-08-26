@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Command hmcli is the admin CLI counterpart to the openccu-loom daemon.
 // It offers `version`, `config validate`, `cache clear`, `devices`, and

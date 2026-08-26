@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_wiring_bidcos_test.go covers loadBidcosInterfaces and its gateway
 // aggregation: the periodic BidCos radio-utilisation poll that fills the

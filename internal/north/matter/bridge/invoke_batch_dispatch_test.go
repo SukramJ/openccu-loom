@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for two InvokeRequest conformance rules wired into
 // dispatchInvokeRequest in receive_dispatch.go:

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for the HmIP-LSC colorTempCombined branch of RGBWLight: hs colour
 // and colour temperature are both wired at once (no DEVICE_OPERATION_MODE),

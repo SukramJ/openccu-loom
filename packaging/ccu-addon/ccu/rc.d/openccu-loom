@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 OpenCCU-Loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # CCU / RaspberryMatic rc.d service script for OpenCCU-Loom. Started by
 # the CCU at boot via `init`, supervised by monit (see
@@ -8,7 +8,7 @@
 
 ADDON_ID=openccu-loom
 ADDON_NAME="OpenCCU-Loom"
-ADDON_COPYRIGHT="(c) 2026 OpenCCU-Loom authors"
+ADDON_COPYRIGHT="(c) 2026 SukramJ"
 ADDON_WWW='<a href="https://github.com/SukramJ/openccu-loom" target="_blank">https://github.com/SukramJ/openccu-loom</a>'
 
 ADDON_DIR=/usr/local/addons/${ADDON_ID}

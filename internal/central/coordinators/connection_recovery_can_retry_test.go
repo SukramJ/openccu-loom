@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // connection_recovery_can_retry_test.go — CanRetry / AttemptCount /
 // default-backoff constants.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_bidcos_interfaces_test.go covers the HubCoordinator's per-interface
 // BidCos radio-utilisation cache and its refresh hook: the SetBidcosInterfaces

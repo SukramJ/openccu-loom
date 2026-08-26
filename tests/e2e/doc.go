@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package e2e hosts black-box, end-to-end tests that exercise every
 // externally offered surface of the daemon — REST, WebSocket, MQTT,

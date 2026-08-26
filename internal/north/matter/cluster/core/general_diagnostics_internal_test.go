@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for unexported helpers in general_diagnostics.go and
 // basic_information.go. Uses package core (not core_test) to access

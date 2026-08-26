@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // model_rules_test.go covers the ChannelParamsetRules and ModelRules data
 // structures, the HiddenParameters / IgnoreParametersByDeviceLower /

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package-level helpers that support the optimistic-update logic in
 // DataPoint[T]. These were previously bundled with the inline

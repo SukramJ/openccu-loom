@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package hmerr defines the domain-wide error taxonomy used by every
 // transport, backend, and coordinator in openccu-loom.

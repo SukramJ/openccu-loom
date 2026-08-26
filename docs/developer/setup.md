@@ -94,7 +94,7 @@ A few rules are non-negotiable and are enforced mechanically:
     - **License header** on every new `.go` file:
       ```go
       // SPDX-License-Identifier: MIT
-      // Copyright (C) 2026 OpenCCU-Loom authors.
+      // Copyright (C) 2026 SukramJ.
       ```
     - **No CGo** in the default build — `CGO_ENABLED=0` at all times. SQLite is `modernc.org/sqlite` (pure Go).
     - **No copyleft dependencies** — MIT / Apache-2.0 / BSD are fine; GPL / LGPL / MPL / AGPL are blocked by `make licenses`.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package cachereset implements the "clear CCU-derivable caches + readiness-
 // gated re-pull" operation (ADR 0042). It clears only CCU-derivable persisted

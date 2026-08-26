@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package handlers is the per-resource REST handler set. Each
 // handler file declares a narrow facade interface for the domain it

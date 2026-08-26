@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for Update firmware-tracking: MonitorProgress tolerates transient
 // poll errors and recovers on version change; Install sets VersionBeforeUpdate

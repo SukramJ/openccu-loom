@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for the sigma marshal/unmarshal helpers and low-level
 // TLV decoder error paths that are not exercised by the full CASE exchange

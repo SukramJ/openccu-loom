@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package alarm wires the alarm engine, its output-driver layer, and
 // the per-central event subscriptions into one daemon-level service

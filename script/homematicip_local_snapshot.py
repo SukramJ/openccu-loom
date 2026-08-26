@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # homematicip_local_snapshot.py — produces the canonical
 # HA-Entity-attribute snapshot from `homematicip_local` (the Home

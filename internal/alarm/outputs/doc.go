@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package outputs implements the alarm output-driver layer
 // (notes/concepts/alarm-concept.md §7/§8): it turns the engine's abstract

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // uischema_call_test.go covers UISchemaAdapter.UISchema with a real device +
 // channel to exercise the main code path through the function body

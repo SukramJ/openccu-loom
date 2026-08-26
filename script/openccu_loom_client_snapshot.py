@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 OpenCCU-Loom authors.
+# Copyright (C) 2026 SukramJ.
 """Pull a model snapshot from a running openccu-loom daemon via the REST surface.
 
 Closes asks.md C4 (Drei-Wege-Diff) at the daemon-vs-py-client wiring

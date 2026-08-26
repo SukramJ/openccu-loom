@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package reliability holds the cross-cutting resilience primitives
 // the daemon wraps around every southbound call: circuit breaker,

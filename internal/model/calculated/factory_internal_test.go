@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package calculated tests factory.go and climate.go internal branches:
 // nil channel guard, DerivedBinary channel/parameter mismatch paths,

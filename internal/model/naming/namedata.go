@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package naming holds the cached presentation strings every data
 // point exposes to north-bound consumers (MQTT, REST, WS, UI). It is

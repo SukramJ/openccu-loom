@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 //
 // The default data points every custom data point marks for creation.
 // Hand-maintained — see ADR 0063.

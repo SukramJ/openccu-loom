@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package store persists the Matter bridge's operational state:
 // fabrics, node identities (NOC chain + private key + IPK), group

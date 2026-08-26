@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 OpenCCU-Loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # Assemble the CCU / RaspberryMatic add-on tarball:
 #   openccu-loom-ccu-<version>.tar.gz

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package calculated tests internal subscribe helpers: composeUnsubs,
 // feedSink edge paths, and channelSubscribe nil-channel short-circuit.

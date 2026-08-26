@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // ClientCoordinator lifecycle tests covering started/poll/primary
 // client semantics, manual create/init/de-init paths, and the

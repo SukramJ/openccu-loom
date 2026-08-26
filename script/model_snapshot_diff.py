@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # model_snapshot_diff.py — diff the openccu-loom and aiohomematic
 # model-snapshot JSON files (produced by

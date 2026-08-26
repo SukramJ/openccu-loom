@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package alarmpanel models the alarm-control-panel entity: the
 // HA-facing projection of an alarm zone (and of the aggregate master

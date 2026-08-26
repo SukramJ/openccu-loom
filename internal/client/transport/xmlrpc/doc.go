@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package xmlrpc is the southbound XML-RPC transport used to talk to
 // every HTTP-based CCU interface (HmIP-RF, BidCos-RF, BidCos-Wired,

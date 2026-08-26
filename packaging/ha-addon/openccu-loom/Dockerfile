@@ -3,7 +3,7 @@
 # always supplied as --build-args by the HA builder and script/build_ha_addon.sh;
 # the FROM lines are never actually empty. Silences the static-analysis warning.)
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 OpenCCU-Loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # Strategy: copy the pre-built static binary and the OpenAPI spec directly
 # from the upstream release image (ghcr.io/sukramj/openccu-loom:<version>)

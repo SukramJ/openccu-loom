@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Parity-round-1 regression tests. Each section pins one of the
 // MQTT-discovery parity fixes against the reference stack:

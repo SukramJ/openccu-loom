@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // scheduler_job_lifecycle_test.go covers Scheduler and Job lifecycle
 // scenarios not covered by scheduler_test.go, scheduler_deep_test.go,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package device is the Device/Channel runtime model. A [Device]
 // aggregates channels, tracks firmware state, and derives an

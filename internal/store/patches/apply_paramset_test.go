@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for ChannelNo field scoping, ApplyParamset behaviour,
 // device-type pre-filter, and built-in HM-CC-VG-1 patch correctness.

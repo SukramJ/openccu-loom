@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package endpoint walks the device model and produces the Matter
 // endpoint topology the bridge advertises to commissioners.

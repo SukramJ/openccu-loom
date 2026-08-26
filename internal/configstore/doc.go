@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package configstore is the higher-level facade over the
 // SQLite-backed config tables. It marries the bootstrap-tier YAML

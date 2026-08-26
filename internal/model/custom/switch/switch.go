@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package switchdev implements the Switch custom data point — a thin
 // wrapper around [generic.Switch] that keeps the pre-refactor API for

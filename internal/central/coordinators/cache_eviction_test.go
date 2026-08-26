@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests covering CacheCoordinator eviction semantics, ClearAll counter
 // reset, ClearAll event emission, and LoadAll persister handling.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package journal is the domain facade over the alarm-journal store:
 // it stamps and serializes engine journal entries, persists them, and

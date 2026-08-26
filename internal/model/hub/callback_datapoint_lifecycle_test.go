@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests that AlarmMessages, ServiceMessages, and Inbox embed BaseDataPointFields
 // and expose the CallbackDataPoint lifecycle surface (UniqueID, IsRegistered,

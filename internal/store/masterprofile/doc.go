@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package masterprofile hosts the embedded master-profile catalogue
 // Extracted. Each profile bundles a set of pre-

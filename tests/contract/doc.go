@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package contract hosts contract tests — assertions that pin down
 // behaviour we explicitly refuse to change. Each test states a hard
