@@ -28,6 +28,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   recognises a bridged endpoint only by the clusters its device type
   specifies, so each of these cost visibility there.
 
+  Controllers re-learn the affected devices once: a metering plug gains an
+  ElectricalSensor endpoint whose readings used to sit on its switch endpoint,
+  and a battery device loses the typeless endpoint its battery level used to
+  occupy. Existing exposure allowlist rows keep working — the electrical
+  parameters are still gated individually, they now feed one shared endpoint.
+
 ### Added
 
 - **Voltage, current and frequency reach the electrical cluster.** They were
