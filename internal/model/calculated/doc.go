@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package calculated hosts data points the daemon derives from one or
 // more wire-level parameters: climate-comfort sensors (dew point,

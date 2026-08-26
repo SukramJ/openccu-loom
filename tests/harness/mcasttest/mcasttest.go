@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package mcasttest provides lightweight helpers for unit tests that need to
 // exercise UDP-multicast send/receive paths without requiring raw-socket

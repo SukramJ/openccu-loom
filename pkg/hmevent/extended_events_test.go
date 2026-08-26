@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // extended_events_test.go covers additional event types:
 // DataPointValueReceivedEvent,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_wiring_refresh_hooks_test.go verifies that WireHub's SetRefreshHooks
 // call installs all seven refresh closures and that each load function

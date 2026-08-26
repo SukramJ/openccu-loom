@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // device_admin_paths_test.go covers the device-found paths in
 // DeviceAdminDomain: RenameDevice success, resolve with device-found

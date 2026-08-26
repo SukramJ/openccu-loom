@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // TestNamingContract is a parametrised table-test that asserts the
 // naming-contract for custom-DP channels across the axes that caused

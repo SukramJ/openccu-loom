@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // dispatcher_converters_test.go covers toFloat64, toInt32, paramTime,
 // dispatchLight set_level branches, and dispatchSiren / dispatchTextDisplay.

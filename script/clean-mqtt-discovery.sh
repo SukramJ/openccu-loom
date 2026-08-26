@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # Clears retained MQTT topics published by openccu-loom in two
 # scopes:

@@ -375,7 +375,7 @@ one are rejected (`CLAUDE.md`, `matter-parity-contract.md`).
 ## 6. Project-rule checklist (per file / per PR)
 
 - [ ] SPDX header on every new `.go` file:
-      `// SPDX-License-Identifier: MIT` + `// Copyright (C) 2026 OpenCCU-Loom authors.`
+      `// SPDX-License-Identifier: MIT` + `// Copyright (C) 2026 SukramJ.`
 - [ ] `CGO_ENABLED=0` preserved; no new CGo, no new GPL/LGPL/MPL/AGPL deps.
 - [ ] Pure-Go SQLite only (`modernc.org/sqlite`); migrations via goose.
 - [ ] Multi-CCU / multi-fabric safe; no hard-coded single fabric.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package definitionexport reproduces the Python reference's
 // `Device.export_device_definition`: it fetches a device's raw description and

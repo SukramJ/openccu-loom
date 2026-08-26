@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // device_virtual_remotes_test.go covers DeviceCoordinator public-API scenarios
 // not exercised by device_deep_test.go, device_pull_test.go, or

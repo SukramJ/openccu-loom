@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package jsonrpc is the HTTP JSON-RPC client for the CCU (and, post-0.1.0,
 // CCU-Jack).

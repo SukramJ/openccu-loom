@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // mqtt_sink_writer_test.go covers the non-nil writer path in
 // MQTTCommandSink.SetValue and the non-nil cdpDispatch path in

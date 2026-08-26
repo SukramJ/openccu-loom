@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // link_profiles_adapter.go — bridges the linkprofile.Store onto the
 // ws.LinkProfilesProvider interface declared in

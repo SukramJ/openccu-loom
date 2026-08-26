@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package security holds the projection types of the Security & Safety
 // domain: the shapes REST, WebSocket and MQTT render.

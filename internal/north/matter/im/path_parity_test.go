@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Primary source: matter.js packages/protocol/test/action/request/ReadAttributePathsTest.ts
 // (all 6 cases).

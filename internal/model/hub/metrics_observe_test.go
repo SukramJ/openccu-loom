@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // metrics_observe_test.go covers the hub-package Metrics aggregate and
 // MetricHubSensor view not covered by hub_aggregate_test.go.

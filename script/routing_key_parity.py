@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # routing_key_parity.py — automatic Go↔Python routing-key parity gate.
 #

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for readFrame's bounded incremental payload read (io.CopyN into a
 // bytes.Buffer seeded with initialPayloadCap) — see wire.go's

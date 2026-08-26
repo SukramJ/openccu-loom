@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Command openccu-loom-remote is the OpenCCU-Loom Remote ingress proxy:
 // it surfaces one or more remote OpenCCU-Loom instances through a single

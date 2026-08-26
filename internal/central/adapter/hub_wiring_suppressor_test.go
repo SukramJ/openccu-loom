@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for the pure service-message helpers (serviceMessageParameter,
 // interfaceForChannel) and the durable-suppression wiring

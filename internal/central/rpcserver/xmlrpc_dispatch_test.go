@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // xmlrpc_dispatch_test.go exercises the XML-RPC and BIN-RPC callback
 // method dispatch layer: bindXMLRPCMethods (newDevices, deleteDevices,

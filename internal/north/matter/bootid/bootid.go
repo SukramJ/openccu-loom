@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package bootid exposes a process-lifetime 16-byte random value that
 // can optionally be mixed into Matter UniqueID derivations. The dev /

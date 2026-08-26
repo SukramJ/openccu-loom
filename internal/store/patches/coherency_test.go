@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for ordering and cache-coherency invariants of the patch Registry:
 // patches must widen Min/Max before parameter.Validate reads them, and

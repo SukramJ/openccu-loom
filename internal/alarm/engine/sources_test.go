@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // This file covers the per-incident source ledger (sources.go): the
 // in-memory accumulator that lets a zone still triggered by one sensor

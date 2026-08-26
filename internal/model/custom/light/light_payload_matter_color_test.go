@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for payload assembly (Info/Config/State) across all light types and
 // for the color cluster servers in matter_color.go (ctColorServer,

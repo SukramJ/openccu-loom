@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package restapi holds REST-layer DI contracts whose definitions
 // reference internal model types. These interfaces cannot live in

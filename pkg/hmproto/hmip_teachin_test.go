@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hmip_teachin_test.go — tests for NormalizeSGTIN and NormalizeHmIPKey: the
 // keyserver-less HmIP LOCAL teach-in input normalisation (operator-entered

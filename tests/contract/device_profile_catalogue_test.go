@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // device_profile_catalogue_test.go holds the invariants of the
 // hand-maintained device-profile catalogue (ADR 0063).

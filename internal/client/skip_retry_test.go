@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // skip_retry_test.go — skipRetry behaviour:
 // IC.SetValue with skipRetry=true must call the backend exactly once even

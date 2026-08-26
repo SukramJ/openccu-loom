@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package channelflags holds the in-memory overlay of operator-set
 // per-channel overrides (G12): hidden (drop the channel from operation

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // DeviceCoordinator edge-case tests covering manual add-device guards,
 // firmware-state-driven refresh, and the factory-reset scenario where a

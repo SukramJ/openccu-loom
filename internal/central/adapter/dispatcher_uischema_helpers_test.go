@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // dispatcher_uischema_helpers_test.go covers pure helpers in
 // custom_dp_dispatcher.go (extractRow, paramString, paramStringOptional)

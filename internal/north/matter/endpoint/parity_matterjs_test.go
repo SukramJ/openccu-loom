@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Parity tests for the three-tier topology produced by [Assembler.Assemble]
 // against matter.js HEAD.

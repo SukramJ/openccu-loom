@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package cluster contains Matter cluster server implementations that
 // the bridge attaches to assembled endpoints. It is split into:

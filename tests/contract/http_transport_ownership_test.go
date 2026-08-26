@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // http_transport_ownership_test.go enforces that every http.Client the
 // daemon builds owns its transport.

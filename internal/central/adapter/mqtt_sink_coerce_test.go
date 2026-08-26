@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // mqtt_sink_coerce_test.go pins that MQTTCommandSink coerces a
 // descriptor-blind topic payload against the resolved parameter's

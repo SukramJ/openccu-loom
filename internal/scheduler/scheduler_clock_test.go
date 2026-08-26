@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // P1-2 follow-up: Scheduler honours the injected clock. Tests can
 // advance virtual time instead of sleeping — the entire tick cycle

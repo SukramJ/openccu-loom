@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package lock contains the standalone DoorLock cluster server for the
 // Matter bridge. The server wraps a [StateSource] that the rich model

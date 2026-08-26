@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // custom_profile_constructor_resolves_test.go closes three gaps in the
 // device-profile coverage:

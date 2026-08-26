@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package golden hosts session-replay tests: recorded CCU
 // interactions are fed into the daemon and the emitted events are

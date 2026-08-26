@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package audit records user-initiated configuration changes so the SPA can
 // render a change history. Persistence to SQLite can be layered on top later

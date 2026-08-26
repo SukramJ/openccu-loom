@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # datasource_diff.py — compare the embedded CCU dataset between
 # pydevccu (Python reference) and godevccu (Go simulator).

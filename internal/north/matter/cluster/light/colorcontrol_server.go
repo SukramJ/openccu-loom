@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package light provides standalone Matter cluster-server implementations
 // for light device types (OnOffLight, DimmableLight, ColorTemperatureLight,

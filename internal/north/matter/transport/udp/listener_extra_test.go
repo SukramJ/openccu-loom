@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Extra coverage tests targeting the addr == "" default-address
 // branches in listener.go. These assert the pure bindAddr resolution

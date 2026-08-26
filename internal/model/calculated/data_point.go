@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package calculated adds the P2 parity surface for CalculatedDataPoint
 // Sensors. The methods mirror

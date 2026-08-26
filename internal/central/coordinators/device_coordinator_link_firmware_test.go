@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // device_coordinator_link_firmware_test.go — tests for
 // DeviceCoordinator.RefreshDeviceLinkPeers and

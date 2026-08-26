@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for subtype_responder.go unexported helpers.
 // These run in package mdns so they can reach the unexported functions.

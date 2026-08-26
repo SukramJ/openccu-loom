@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Regression tests for the struct/array/param member-count hardening in
 // decode.go: a crafted huge element count paired with a truncated payload

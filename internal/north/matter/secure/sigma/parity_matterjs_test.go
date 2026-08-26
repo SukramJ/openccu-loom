@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Mirrors matter.js packages/protocol/test/session/secure/CasePairingTest.ts.
 // Each test case loads a vector from testdata/matterjs-vectors.json and

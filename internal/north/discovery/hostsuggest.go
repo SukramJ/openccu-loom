@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package discovery holds cross-cutting helpers shared by the LAN-discovery
 // surfaces (SSDP/UPnP, mDNS). HostSuggester turns the raw address SSDP reports

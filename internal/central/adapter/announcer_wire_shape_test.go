@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // announcer_wire_shape_test.go pins the exact init/deinit calls the daemon
 // puts on the wire, for both transports.

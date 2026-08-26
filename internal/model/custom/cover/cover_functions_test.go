@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // cover_functions_test.go — unit tests for internal helpers and unexported
 // functions across cover.go, blind.go, garage.go, payload.go, topology.go,

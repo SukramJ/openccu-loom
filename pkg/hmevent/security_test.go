@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests covering the Security & Safety domain's identity currency:
 // SecuritySourceRef construction/derivation and the AlarmBlockerReason

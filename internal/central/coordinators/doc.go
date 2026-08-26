@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package coordinators hosts the per-central coordinators from
 // SPECIFICATION §11.3. Each coordinator is a small, focused actor that

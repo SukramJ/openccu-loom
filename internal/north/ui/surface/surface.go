@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package surface holds the registry of addressable Config-UI surfaces
 // and resolves which of them a given configuration serves.

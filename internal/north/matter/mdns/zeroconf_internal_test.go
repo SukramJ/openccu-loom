@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for zeroconf.go paths that require internal access.
 // We use package mdns so we can call newTestResponder() and primaryHostIPs().

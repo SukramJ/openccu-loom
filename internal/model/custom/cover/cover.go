@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package cover implements the position-based cover (shutter / blind)
 // custom data point. LEVEL is held as a typed reference to the

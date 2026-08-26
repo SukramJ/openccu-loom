@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Pure grouping/filtering helper for the fleet-wide Overview route
 // (roadmap B8). No DOM, no Svelte imports — kept unit-testable without

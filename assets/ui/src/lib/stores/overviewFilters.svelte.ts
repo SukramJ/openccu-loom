@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Fleet Overview filter/group-mode state (roadmap B8). Held at module
 // scope so it survives the route unmounting/remounting, and persisted

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Mirrors chip src/app/tests/TestWriteInteraction.cpp — selected
 // TEST_F cases from the Write-side interaction model.

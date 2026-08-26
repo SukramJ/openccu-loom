@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Edge cases of the projection seam: the shapes a wire value can arrive
 // in, the state renderings that need clamping, and the guards that stop a

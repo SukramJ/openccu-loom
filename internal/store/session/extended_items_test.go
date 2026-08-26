@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // wave8_new_items_test.go — tests for A6 SessionRecorder items:
 // Delete, PeekTS, GetLatestResponseByParams

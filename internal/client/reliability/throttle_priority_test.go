@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // priority_parity_test.go pins the CommandThrottle priority-queue ordering
 // Invariants from py)

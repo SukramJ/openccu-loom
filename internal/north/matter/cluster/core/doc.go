@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package core hosts the Matter cluster servers that every bridge
 // endpoint (or the root endpoint specifically) mandates per Matter

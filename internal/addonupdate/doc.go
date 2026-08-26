@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package addonupdate implements the CCU add-on self-update feature
 // described in ADR 0057: a daemon-driven check/download/verify/install

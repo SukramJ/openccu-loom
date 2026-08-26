@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // hub_wiring_serial_test.go covers resolveCCUSerial in hub_wiring.go:
 // immediate success, exhausted attempts on a permanently-empty serial

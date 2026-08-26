@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // rawconvert.go — round-trip helpers between the CCU flat paramset format
 // and the in-memory [schedule.Climate] / [schedule.Simple] models.

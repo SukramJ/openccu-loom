@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package orderedjson models a JSON value whose object member order is
 // preserved, and serialises it byte-for-byte the way Python's orjson

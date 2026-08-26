@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // weekprofile_deep_test.go covers the Profile[T] generic wrapper and the
 // underlying schedule model (Climate / Simple) in depth. It is

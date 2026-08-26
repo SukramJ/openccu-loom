@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // client_query_methods_test.go covers ClientCoordinator query methods:
 // HasClient, HasClients, InterfaceIDs, and Interfaces.

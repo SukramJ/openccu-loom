@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // eventbridge_press_snapshot_test.go covers the press-channel and
 // week-profile snapshot paths in EventBridge that were below threshold:

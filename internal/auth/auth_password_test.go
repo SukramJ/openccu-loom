@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for in-memory password hashing: HashPassword produces an idempotent
 // bcrypt hash, and MemoryUserStore.AuthenticateBasic verifies both bcrypt-hashed

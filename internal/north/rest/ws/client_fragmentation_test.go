@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // client_fragmentation_test.go pins RFC 6455 §5.4 message assembly on the
 // inbound path: a client library that splits a large `call` across several

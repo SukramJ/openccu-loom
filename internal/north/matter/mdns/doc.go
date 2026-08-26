@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package mdns advertises the Matter bridge over mDNS / DNS-SD per
 // Matter Core Spec §4.3.

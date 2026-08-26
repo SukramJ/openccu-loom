@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for Matter §5.1 Manual Pairing Code and §5.7 QR Onboarding Payload
 // per the Matter Core Specification 1.5.1.

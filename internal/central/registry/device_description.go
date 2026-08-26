@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package registry hosts the in-memory registries every central keeps:
 // device descriptions, paramsets, and the map of active devices. All

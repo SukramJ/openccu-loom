@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // uischema_determine_test.go covers the OPERATIONS DETERMINE bit
 // (hmenum.OperationsDetermine) making it through to

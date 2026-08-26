@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // tools_write_guards_test.go pins the two write-path guards the MCP tools
 // share with their REST/WS siblings: set_datapoint coerces the incoming

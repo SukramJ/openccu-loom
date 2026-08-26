@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // recorder_disk_test.go — tests for Recorder.Persist, Recorder.Load,
 // and Recorder.SetAutoPersist (, P2).

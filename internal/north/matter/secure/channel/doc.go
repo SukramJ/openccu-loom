@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package channel implements the Matter Secure Channel session
 // wrapper per Matter Core Specification §4.4.3.

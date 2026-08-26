@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // cache_error_lifecycle_test.go covers CacheCoordinator error-propagation
 // and lifecycle scenarios not covered by cache_deep_test.go or

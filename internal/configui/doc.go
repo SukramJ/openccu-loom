@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package configui implements the configuration-UI session logic so
 // the openccu-loom REST/WebSocket layer can expose safe MASTER/LINK

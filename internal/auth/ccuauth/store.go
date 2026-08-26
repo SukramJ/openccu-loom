@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package ccuauth provides an [auth.UserStore] that validates logins
 // against a CCU's own user database and maps the CCU permission level

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package hub hosts the daemon's model of CCU "hub" entities:
 // programs, system variables, install-mode, alarm and service

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // paramsets_bench_test.go — Performance benchmarks for the
 // address-parameter cache in ParamsetStore.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // registry_cache_test.go covers Registry.ClearMemoizationCaches,
 // Registry.InvalidateAllCaches, ParameterDecider.ShouldSkipParameter,

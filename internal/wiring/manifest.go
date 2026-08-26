@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package wiring lets the composition root declare its wiring as data
 // while it performs it, so that "is X wired" becomes a question a test

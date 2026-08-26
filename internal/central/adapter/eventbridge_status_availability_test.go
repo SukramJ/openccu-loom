@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // eventbridge_status_availability_test.go covers the republishBaseForStatusPair
 // helper and the end-to-end event-bus path that calls it when a _STATUS

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package ui is the server-rendered, no-JS diagnostic surface that
 // complements the Svelte 5 SPA at /app/.

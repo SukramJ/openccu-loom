@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 """
 test_migration_inventory.py — cross-stack test-migration tracking tool.
 

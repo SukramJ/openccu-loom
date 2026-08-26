@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests that the circuit-recovery waiter appends its state-change hook rather
 // than replacing the breaker's primary listener, so multiple waiters on one

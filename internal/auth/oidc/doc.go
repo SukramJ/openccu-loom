@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package oidc implements the OpenID Connect login flow with PKCE
 // (RFC 7636 + RFC 8252):

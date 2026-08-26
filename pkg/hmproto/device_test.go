@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // device_test.go — tests for DeviceDescription fields, helpers, and
 // JSON serialisation: Subtype, ParentType, Direction, IsDevice/IsChannel,

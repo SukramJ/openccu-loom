@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Parity test: verifies that each Go MarshalTLV encoder produces the same wire
 // bytes as the matter.js HEAD reference encoder for the same logical input.

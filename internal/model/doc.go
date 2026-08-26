@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package model hosts the daemon's domain model: devices, channels,
 // data points, custom device profiles, and the mixins they share.

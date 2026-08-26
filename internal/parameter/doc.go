@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package parameter contains the parameter-tools used across the data
 // plane: validation against a [hmproto.ParameterData] description,

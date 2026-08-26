@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package attestation builds the Device Attestation chain (PAA → PAI →
 // DAC) and the Certification Declaration (CD) the bridge presents to

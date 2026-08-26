@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // messages_acknowledge_all_test.go covers ServiceMessages.AcknowledgeAll,
 // AlarmMessages.AcknowledgeAll and the shared SetAcknowledgers wiring.

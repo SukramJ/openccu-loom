@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // uischema_expand_lookup_test.go covers the success paths in
 // UISchemaAdapter.expandPresets (preset found with options) and

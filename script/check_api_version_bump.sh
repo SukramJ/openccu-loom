@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 OpenCCU-Loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # check_api_version_bump — CI guard for the north-bound contract
 # version (ADR 0028). When any contract asset (openapi.yaml,

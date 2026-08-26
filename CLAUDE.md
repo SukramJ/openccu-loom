@@ -99,7 +99,7 @@ Non-negotiable. Each one is followed by the guard that enforces it, or by
 ### Licensing and build
 
 - **License header** on every Go file:
-  `// SPDX-License-Identifier: MIT` + `// Copyright (C) 2026 OpenCCU-Loom authors.`
+  `// SPDX-License-Identifier: MIT` + `// Copyright (C) 2026 SukramJ.`
   No stray GPL / Apache / BSD headers in `pkg/` or `internal/`; vendored code
   keeps its upstream notice plus a modification line.
 - **No CGo.** `CGO_ENABLED=0` at all times. If you think you need it (crypto,

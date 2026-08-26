@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for the chunked-write InvalidAction rules added to
 // dispatchWriteRequest in receive_dispatch.go: a WriteRequest that

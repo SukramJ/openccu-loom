@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package mdns advertises the daemon's REST surface on the local
 // network so zeroconf-aware clients (Home Assistant, mDNS browsers,

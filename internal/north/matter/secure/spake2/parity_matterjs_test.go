@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Mirrors matter.js packages/general/test/crypto/Spake2pTest.ts and
 // packages/protocol/test/session/secure/PasePairingTest.ts.

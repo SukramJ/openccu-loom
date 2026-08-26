@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package wiring connects the production providers in `internal/client`,
 // `internal/central/coordinators`, `internal/health`, and the bus in

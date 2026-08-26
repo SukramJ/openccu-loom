@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package engine implements the alarm-panel arm-state machine: one
 // machine per alarm zone, driven by normalized sensor activations and

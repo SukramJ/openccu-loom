@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package bridge defines the uniform lifecycle contract for north-bound
 // adapters (MQTT, Matter, MCP, REST, webhook, …). MQTT, webhook, Matter

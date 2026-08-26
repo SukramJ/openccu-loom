@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // connection_recovery_failover_scenarios_test.go — coordinator recovery /
 // failover scenario tests that close genuine gaps in the existing suite.

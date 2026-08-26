@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package backends holds the capability matrix and the backend
 // strategy implementations (CcuBackend, CuxdBackend, HomegearBackend).

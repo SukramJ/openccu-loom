@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests the xmlrpc-wire → hmtypes.ParamValue conversion the adapter performs on
 // behalf of the (now transport-agnostic) EventCoordinator.

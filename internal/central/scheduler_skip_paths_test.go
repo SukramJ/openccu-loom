@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Skip-path tests for the central-scheduler jobs: each refresh slot
 // (firmware, client-data, program, sysvar) must be a no-op when its

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // recorder_test.go — unit tests for session.Recorder
 // Covers (SessionRecorder parity items):

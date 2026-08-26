@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // schedules_pure_test.go covers the pure-logic helpers in schedules.go
 // (no registry / CCU required).

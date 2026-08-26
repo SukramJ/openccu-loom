@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Shared wire-call logic for the six Operations methods that are
 // identical (modulo the underlying [Caller] and the backend name used

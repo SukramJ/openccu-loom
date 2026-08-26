@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package event models the transient "fire-and-forget" side of a
 // Homematic device — button presses, impulse markers, and device

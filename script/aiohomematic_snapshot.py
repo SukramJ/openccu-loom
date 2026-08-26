@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (C) 2026 openccu-loom authors.
+# Copyright (C) 2026 SukramJ.
 #
 # aiohomematic_snapshot.py — produces the aiohomematic side of the
 # cross-stack model-snapshot diff.

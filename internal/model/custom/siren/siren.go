@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package siren implements the siren custom data point. The
 // per-channel state DPs (ACOUSTIC_ALARM_ACTIVE / SELECTION,

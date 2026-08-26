@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // log_stream_resume_contract_test.go asserts the invariant that a resuming
 // SSE log stream never delivers records that the client has already seen.

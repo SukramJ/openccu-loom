@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // failures_test.go covers the per-job and aggregate failure counters
 // exposed by Scheduler.JobFailures and Scheduler.TotalFailures.

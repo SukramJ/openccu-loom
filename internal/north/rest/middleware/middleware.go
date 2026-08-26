@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package middleware collects the cross-cutting chi middlewares
 // applied by the REST router: request ID, structured logging,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package bridge orchestrates the Matter bridge runtime: endpoint
 // topology assembly, IM dispatcher wiring, UDP listener, and mDNS

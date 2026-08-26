@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package rega runs HomeMatic Script (.fn) snippets on the CCU through
 // the ReGa.runScript JSON-RPC method.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // live_test.go exercises the WebSocket round-trip stack end-to-end:
 // Handler → client.readPump → client.handleCommand → Router.Dispatch →

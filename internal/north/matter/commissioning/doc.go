@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package commissioning orchestrates Matter on-network commissioning
 // from the PASE handshake through NOC installation.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package cover contains the Matter WindowCovering cluster server (0x0102)
 // for the position-aware lift feature profile. It is instantiated by the

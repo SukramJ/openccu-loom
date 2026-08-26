@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package client provides IC-level orchestration methods: Reconnect, SetValue, PutParamset,
 // fetch helpers, bulk-data discovery, and IC-level wrappers for backend

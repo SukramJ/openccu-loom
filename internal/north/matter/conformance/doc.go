@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package conformance houses the Matter conformance suite for
 // openccu-loom — golden-vector regression tests, load tests, and the

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for the Subscribe-matched-path gate added to
 // handleSubscribeRequest (subscribe.go): a Subscribe naming no paths at

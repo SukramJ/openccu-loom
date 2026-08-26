@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // White-box tests for Bridge.authorizedEventReports (subscribe.go) — the
 // ongoing event fan-out ACL + fabric-sensitive gate. Uses the same real

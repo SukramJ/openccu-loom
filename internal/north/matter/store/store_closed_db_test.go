@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Error-injection tests: every Store method called against a closed *sql.DB must
 // return a non-nil error. closedStore opens a fresh DB, closes it immediately,

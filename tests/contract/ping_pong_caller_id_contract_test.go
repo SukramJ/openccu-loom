@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // ping_pong_caller_id_contract_test.go locks the invariant that two OpenCCU-Loom
 // daemons targeting the same CCU must produce distinguishable ping caller_id

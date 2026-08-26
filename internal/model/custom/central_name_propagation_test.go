@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // central_name_propagation_test.go verifies that custom-DP constructors
 // (switch, valve) and the mixin helpers (NewStateSwitch, NewLevelFloat)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package builtins blank-imports every built-in custom data-point
 // sub-package so each package's `init()` block runs against the

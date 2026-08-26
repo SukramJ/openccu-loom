@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // week_profile_channel_test.go covers climateChannelLoader.Load and
 // climateChannelSaver.Save with un-wired channels (nil refresher and

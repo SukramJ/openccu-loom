@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package hmevent defines the domain events the daemon publishes on
 // its internal EventBus. The bus is generic — each event type is a

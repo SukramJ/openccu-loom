@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package routingkey is the Go side of the cross-backend routing-key
 // contract: the algorithm that turns a (central, address, parameter)

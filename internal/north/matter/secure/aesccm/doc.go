@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package aesccm implements AES-CCM-128 with a 13-byte nonce and a
 // 16-byte tag — the AEAD primitive Matter uses for Secure Channel

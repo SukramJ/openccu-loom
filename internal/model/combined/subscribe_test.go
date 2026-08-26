@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // The wire bindings of the combined data points: Subscribe is what
 // attaches each one to the generic data points it aggregates, and until

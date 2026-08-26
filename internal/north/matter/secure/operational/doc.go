@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package operational wires the CASE handshake (Sigma) into the
 // secure-channel session layer. It is the bridge-side glue that turns

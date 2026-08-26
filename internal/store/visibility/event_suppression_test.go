@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // event_suppression_test.go covers event-suppression and channel-restriction
 // behaviour: IsParameterIgnoredForDataPointEvent, IgnoreDevicesForDataPointEventsLower,

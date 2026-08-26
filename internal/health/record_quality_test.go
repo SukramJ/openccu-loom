@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // record_quality_test.go — tests for RecordQuality, ServiceAvailability
 // ping/pong component exclusion, and PrimaryClientHealthy ping/pong skipping.

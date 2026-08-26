@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // This file exercises the real production naming methods on [device.Channel]
 // that decide the multi-channel name suffix — specifically the

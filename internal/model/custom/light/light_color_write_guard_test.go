@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Tests for the color/kelvin/effect write-guard logic (suppressing redundant
 // writes when the commanded state matches the current state), for

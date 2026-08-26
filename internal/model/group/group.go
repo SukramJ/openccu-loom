@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2026 OpenCCU-Loom authors.
+// Copyright (C) 2026 SukramJ.
 
 // Package group models Homematic heating groups (HmIP / BidCos
 // "Heizungsgruppen") for the read-only group surface.
