@@ -45,3 +45,32 @@ func DeviceTypeName(id uint32) (string, bool) {
 	name, ok := DeviceTypeNames[id]
 	return name, ok
 }
+
+// DeviceTypeAllowsServerCluster reports whether the Matter Device Library
+// permits clusterID to be mounted as a SERVER cluster on an endpoint whose
+// primary device type is deviceType, and whether deviceType is known at all.
+//
+// A cluster the device type specifies only as a CLIENT requirement is NOT
+// permitted: a client requirement means the type consumes that cluster from
+// another endpoint. Thermostat (0x0301) is the canonical case — it names
+// TemperatureMeasurement and RelativeHumidityMeasurement as clientCluster, so
+// a thermostat that serves either is non-conformant even though the cluster
+// appears in its requirement list.
+//
+// Callers must distinguish the two return values: an unknown device type
+// (known=false) means the snapshot cannot answer the question, which is not
+// the same as a definite "no".
+//
+// loom:reachable:reason="conformance oracle for tests/contract/matter_devicetype_conformance_test.go; the bridge itself mounts clusters from the model layer"
+func DeviceTypeAllowsServerCluster(deviceType, clusterID uint32) (allowed, known bool) {
+	ids, ok := DeviceTypeServerClusters[deviceType]
+	if !ok {
+		return false, false
+	}
+	for _, id := range ids {
+		if id == clusterID {
+			return true, true
+		}
+	}
+	return false, true
+}

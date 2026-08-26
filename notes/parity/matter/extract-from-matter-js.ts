@@ -1,16 +1,30 @@
 // Walks @matter/model's MatterDefinition tree and emits a parity-friendly
-// snapshot for openccu-loom's matter-side code: device types with revisions,
+// snapshot for openccu-loom's matter-side code: device types with revisions
+// and their cluster requirements (server/client + conformance),
 // clusters with revisions + featureMap + per-attribute IDs/types/conformance/
 // constraints + commands + events. Output is JSON on stdout — pipe to
 // notes/parity/matter/matter-schema-snapshot.json for in-repo persistence.
 import { MatterDefinition, Specification } from "@matter/model";
 import { execSync } from "node:child_process";
 
+// ReqOut is one cluster requirement of a device type: which cluster the
+// Device Library specifies for the type, on which side (server/client), and
+// under which conformance. openccu-loom's device-type conformance guard
+// (tests/contract/matter_devicetype_conformance_test.go) reads these to
+// decide whether a bridged endpoint may mount a given cluster as a server.
+interface ReqOut {
+    id: number;
+    name: string;
+    element: string;
+    conformance?: string;
+}
+
 interface DeviceTypeOut {
     id: number;
     name: string;
     classification?: string;
     revision: number;
+    requirements: ReqOut[];
 }
 
 interface AttrOut {
@@ -121,12 +135,27 @@ function resolvedChildren(node: any, seen: Set<string> = new Set()): any[] {
 for (const c of children) {
     if (c.tag === "deviceType" && typeof c.id === "number") {
         let rev = 1;
-        const desc = resolvedChildren(c).find((ch: any) => ch.tag === "requirement" && ch.name === "Descriptor");
+        const kids = resolvedChildren(c);
+        const desc = kids.find((ch: any) => ch.tag === "requirement" && ch.name === "Descriptor");
         if (desc) {
             const dtList = desc.children?.find((ch: any) => ch.name === "DeviceTypeList");
             if (dtList?.default?.[0]?.revision) rev = dtList.default[0].revision;
         }
-        out.deviceTypes.push({ id: c.id, name: c.name, classification: c.classification, revision: rev });
+        // Cluster requirements carry a numeric id; the nested per-attribute /
+        // per-command / per-feature requirements do not and are skipped.
+        const requirements: ReqOut[] = [];
+        for (const ch of kids) {
+            if (ch.tag !== "requirement" || typeof ch.id !== "number" || !ch.element) continue;
+            requirements.push({ id: ch.id, name: ch.name, element: ch.element, conformance: ch.conformance });
+        }
+        requirements.sort((a, b) => a.id - b.id || a.element.localeCompare(b.element));
+        out.deviceTypes.push({
+            id: c.id,
+            name: c.name,
+            classification: c.classification,
+            revision: rev,
+            requirements,
+        });
     } else if (c.tag === "cluster" && typeof c.id === "number") {
         let rev = 1;
         let featureMap = 0;

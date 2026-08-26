@@ -4,554 +4,4221 @@
     "specificationVersion": 17170432,
     "interactionModelRevision": 12,
     "dataModelRevision": 21,
-    "sourceCommit": "a688a47b5ec3d35dca66d14fe1232c32b97f8407"
+    "sourceCommit": "c6b188fe00bc7d1b97fe22c63cd3a553ad8efd8f"
   },
   "deviceTypes": [
     {
       "id": 10,
       "name": "DoorLock",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 257,
+          "name": "DoorLock",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 11,
       "name": "DoorLockController",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 257,
+          "name": "DoorLock",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 14,
       "name": "Aggregator",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 37,
+          "name": "Actions",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1873,
+          "name": "CommissionerControl",
+          "element": "serverCluster",
+          "conformance": "FabricSynchronization"
+        }
+      ]
     },
     {
       "id": 15,
       "name": "GenericSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 59,
+          "name": "Switch",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 17,
       "name": "PowerSource",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 47,
+          "name": "PowerSource",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 18,
       "name": "OtaRequestor",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 41,
+          "name": "OtaSoftwareUpdateProvider",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 42,
+          "name": "OtaSoftwareUpdateRequestor",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 19,
       "name": "BridgedNode",
       "classification": "utility",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 46,
+          "name": "PowerSourceConfiguration",
+          "element": "serverCluster",
+          "conformance": "BridgedPowerSourceInfo, D"
+        },
+        {
+          "id": 47,
+          "name": "PowerSource",
+          "element": "serverCluster",
+          "conformance": "BridgedPowerSourceInfo"
+        },
+        {
+          "id": 57,
+          "name": "BridgedDeviceBasicInformation",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 60,
+          "name": "AdministratorCommissioning",
+          "element": "serverCluster",
+          "conformance": "FabricSynchronizedNode"
+        },
+        {
+          "id": 1872,
+          "name": "EcosystemInformation",
+          "element": "serverCluster",
+          "conformance": "FabricSynchronizedNode, O"
+        }
+      ]
     },
     {
       "id": 20,
       "name": "OtaProvider",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 41,
+          "name": "OtaSoftwareUpdateProvider",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 42,
+          "name": "OtaSoftwareUpdateRequestor",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 21,
       "name": "ContactSensor",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 22,
       "name": "RootNode",
       "classification": "node",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "PowerSourceCond, O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 31,
+          "name": "AccessControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 40,
+          "name": "BasicInformation",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 43,
+          "name": "LocalizationConfiguration",
+          "element": "serverCluster",
+          "conformance": "LanguageLocale"
+        },
+        {
+          "id": 44,
+          "name": "TimeFormatLocalization",
+          "element": "serverCluster",
+          "conformance": "TimeLocale"
+        },
+        {
+          "id": 45,
+          "name": "UnitLocalization",
+          "element": "serverCluster",
+          "conformance": "UnitLocale"
+        },
+        {
+          "id": 46,
+          "name": "PowerSourceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O, D"
+        },
+        {
+          "id": 48,
+          "name": "GeneralCommissioning",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 49,
+          "name": "NetworkCommissioning",
+          "element": "serverCluster",
+          "conformance": "!CustomNetworkConfig"
+        },
+        {
+          "id": 50,
+          "name": "DiagnosticLogs",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 51,
+          "name": "GeneralDiagnostics",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 52,
+          "name": "SoftwareDiagnostics",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Thread]"
+        },
+        {
+          "id": 54,
+          "name": "WiFiNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[WiFi]"
+        },
+        {
+          "id": 55,
+          "name": "EthernetNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Ethernet]"
+        },
+        {
+          "id": 56,
+          "name": "TimeSynchronization",
+          "element": "clientCluster",
+          "conformance": "TimeSyncWithClientCond, O"
+        },
+        {
+          "id": 60,
+          "name": "AdministratorCommissioning",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 62,
+          "name": "OperationalCredentials",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 63,
+          "name": "GroupKeyManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 70,
+          "name": "IcdManagement",
+          "element": "serverCluster",
+          "conformance": "SIT | LIT"
+        },
+        {
+          "id": 2049,
+          "name": "TlsCertificateManagement",
+          "element": "serverCluster",
+          "conformance": "TLSCertificatesCond, O"
+        },
+        {
+          "id": 2050,
+          "name": "TlsClientManagement",
+          "element": "serverCluster",
+          "conformance": "TLSClientCond, O"
+        }
+      ]
     },
     {
       "id": 23,
       "name": "SolarPower",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "desc"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 24,
       "name": "BatteryStorage",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 23,
+          "name": "SolarPower",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 25,
       "name": "SecondaryNetworkInterface",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 49,
+          "name": "NetworkCommissioning",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Thread]"
+        },
+        {
+          "id": 54,
+          "name": "WiFiNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[WiFi]"
+        },
+        {
+          "id": 55,
+          "name": "EthernetNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Ethernet]"
+        }
+      ]
     },
     {
       "id": 34,
       "name": "Speaker",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        }
+      ]
     },
     {
       "id": 35,
       "name": "CastingVideoPlayer",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 151,
+          "name": "Messages",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "serverCluster",
+          "conformance": "PhysicalInputs"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "serverCluster",
+          "conformance": "ContentAppPlatform"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "serverCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 36,
       "name": "ContentApp",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1293,
+          "name": "ApplicationBasic",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ContentAppObserver",
+          "element": "clientCluster",
+          "conformance": "ObserverClient"
+        }
+      ]
     },
     {
       "id": 39,
       "name": "ModeSelect",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 80,
+          "name": "ModeSelect",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 40,
       "name": "BasicVideoPlayer",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 151,
+          "name": "Messages",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "serverCluster",
+          "conformance": "PhysicalInputs"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "serverCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 41,
       "name": "CastingVideoClient",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 151,
+          "name": "Messages",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "ApplicationBasic",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "clientCluster",
+          "conformance": "P, O"
+        },
+        {
+          "id": 1296,
+          "name": "ContentAppObserver",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 42,
       "name": "VideoRemoteControl",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "clientCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 43,
       "name": "Fan",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 769,
+          "name": "Thermostat",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 44,
       "name": "AirQualitySensor",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 91,
+          "name": "AirQuality",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1036,
+          "name": "CarbonMonoxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1037,
+          "name": "CarbonDioxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1043,
+          "name": "NitrogenDioxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1045,
+          "name": "OzoneConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1066,
+          "name": "Pm25ConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1067,
+          "name": "FormaldehydeConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1068,
+          "name": "Pm1ConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1069,
+          "name": "Pm10ConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1070,
+          "name": "TotalVolatileOrganicCompoundsConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1071,
+          "name": "RadonConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 45,
       "name": "AirPurifier",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 44,
+          "name": "AirQualitySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 113,
+          "name": "HepaFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 769,
+          "name": "Thermostat",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 775,
+          "name": "HumiditySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 64,
       "name": "IrrigationSystem",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 66,
+          "name": "WaterValve",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 65,
       "name": "WaterFreezeDetector",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 66,
       "name": "WaterValve",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 129,
+          "name": "ValveConfigurationAndControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 67,
       "name": "WaterLeakDetector",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 68,
       "name": "RainSensor",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 69,
       "name": "SoilSensor",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1072,
+          "name": "SoilMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 112,
       "name": "Refrigerator",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 82,
+          "name": "RefrigeratorAndTemperatureControlledCabinetMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 87,
+          "name": "RefrigeratorAlarm",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 113,
+          "name": "TemperatureControlledCabinet",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "[Rev >= v3]"
+        }
+      ]
     },
     {
       "id": 113,
       "name": "TemperatureControlledCabinet",
       "classification": "simple",
-      "revision": 6
+      "revision": 6,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 72,
+          "name": "OvenCavityOperationalState",
+          "element": "serverCluster",
+          "conformance": "[Heater]"
+        },
+        {
+          "id": 73,
+          "name": "OvenMode",
+          "element": "serverCluster",
+          "conformance": "[Heater]"
+        },
+        {
+          "id": 82,
+          "name": "RefrigeratorAndTemperatureControlledCabinetMode",
+          "element": "serverCluster",
+          "conformance": "[Cooler]"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 100,
+          "name": "TemperatureAlarm",
+          "element": "serverCluster",
+          "conformance": "P, O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 114,
       "name": "RoomAirConditioner",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 113,
+          "name": "HepaFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 516,
+          "name": "ThermostatUserInterfaceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 775,
+          "name": "HumiditySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 115,
       "name": "LaundryWasher",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 81,
+          "name": "LaundryWasherMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 83,
+          "name": "LaundryWasherControls",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 116,
       "name": "RoboticVacuumCleaner",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 84,
+          "name": "RvcRunMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 85,
+          "name": "RvcCleanMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 97,
+          "name": "RvcOperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 336,
+          "name": "ServiceArea",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 117,
       "name": "Dishwasher",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 89,
+          "name": "DishwasherMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 93,
+          "name": "DishwasherAlarm",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 118,
       "name": "SmokeCoAlarm",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 92,
+          "name": "SmokeCoAlarm",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1036,
+          "name": "CarbonMonoxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 119,
       "name": "CookSurface",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        }
+      ]
     },
     {
       "id": 120,
       "name": "Cooktop",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 119,
+          "name": "CookSurface",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 121,
       "name": "MicrowaveOven",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 94,
+          "name": "MicrowaveOvenMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 95,
+          "name": "MicrowaveOvenControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 122,
       "name": "ExtractorHood",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 113,
+          "name": "HepaFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 123,
       "name": "Oven",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 113,
+          "name": "TemperatureControlledCabinet",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 120,
+          "name": "Cooktop",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 124,
       "name": "LaundryDryer",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 74,
+          "name": "LaundryDryerControls",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 81,
+          "name": "LaundryWasherMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 144,
       "name": "NetworkInfrastructureManager",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1105,
+          "name": "WiFiNetworkManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1106,
+          "name": "ThreadBorderRouterManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1107,
+          "name": "ThreadNetworkDirectory",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 145,
       "name": "ThreadBorderRouter",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 25,
+          "name": "SecondaryNetworkInterface",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1106,
+          "name": "ThreadBorderRouterManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1107,
+          "name": "ThreadNetworkDirectory",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 256,
       "name": "OnOffLight",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 257,
       "name": "DimmableLight",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 259,
       "name": "OnOffLightSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 260,
       "name": "DimmerSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 261,
       "name": "ColorDimmerSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 262,
       "name": "LightSensor",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1024,
+          "name": "IlluminanceMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 263,
       "name": "OccupancySensor",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 266,
       "name": "OnOffPlugInUnit",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 267,
       "name": "DimmablePlugInUnit",
       "classification": "simple",
-      "revision": 5
+      "revision": 5,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 268,
       "name": "ColorTemperatureLight",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 269,
       "name": "ExtendedColorLight",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 271,
       "name": "MountedOnOffControl",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 272,
       "name": "MountedDimmableLoadControl",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 304,
       "name": "JointFabricAdministrator",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1874,
+          "name": "JointFabricDatastore",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1875,
+          "name": "JointFabricAdministrator",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 320,
       "name": "Intercom",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 15,
+          "name": "GenericSwitch",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 321,
       "name": "AudioDoorbell",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 59,
+          "name": "Switch",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1365,
+          "name": "PushAvStreamTransport",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 322,
       "name": "Camera",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 263,
+          "name": "OccupancySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1360,
+          "name": "ZoneManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1365,
+          "name": "PushAvStreamTransport",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 323,
       "name": "VideoDoorbell",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 322,
+          "name": "Camera",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 328,
+          "name": "Doorbell",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 324,
       "name": "FloodlightCamera",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 322,
+          "name": "Camera",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 325,
       "name": "SnapshotCamera",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 263,
+          "name": "OccupancySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1360,
+          "name": "ZoneManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 326,
       "name": "Chime",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 327,
       "name": "CameraController",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 47,
+          "name": "PowerSource",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1360,
+          "name": "ZoneManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1365,
+          "name": "PushAvStreamTransport",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 2049,
+          "name": "TlsCertificateManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 2050,
+          "name": "TlsClientManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 328,
       "name": "Doorbell",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 59,
+          "name": "Switch",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 514,
       "name": "WindowCovering",
       "classification": "simple",
-      "revision": 6
+      "revision": 6,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "Active, O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "serverCluster",
+          "conformance": "X"
+        }
+      ]
     },
     {
       "id": 515,
       "name": "WindowCoveringController",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "Active, O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 560,
       "name": "Closure",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 10,
+          "name": "DoorLock",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 561,
+          "name": "ClosurePanel",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 561,
       "name": "ClosurePanel",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 574,
       "name": "ClosureController",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 769,
       "name": "Thermostat",
       "classification": "simple",
-      "revision": 6
+      "revision": 6,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "Active"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 155,
+          "name": "EnergyPreference",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 516,
+          "name": "ThermostatUserInterfaceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1073,
+          "name": "AmbientContextSensing",
+          "element": "clientCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 770,
       "name": "TemperatureSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 516,
+          "name": "ThermostatUserInterfaceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 771,
       "name": "Pump",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 512,
+          "name": "PumpConfigurationAndControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1027,
+          "name": "PressureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 772,
       "name": "PumpController",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 512,
+          "name": "PumpConfigurationAndControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1027,
+          "name": "PressureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 773,
       "name": "PressureSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1027,
+          "name": "PressureMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 774,
       "name": "FlowSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 775,
       "name": "HumiditySensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 777,
       "name": "HeatPump",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 769,
+          "name": "Thermostat",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1295,
+          "name": "WaterHeater",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 778,
       "name": "ThermostatController",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1292,
       "name": "EnergyEvse",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 153,
+          "name": "EnergyEvse",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 157,
+          "name": "EnergyEvseMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1293,
       "name": "DeviceEnergyManagement",
       "classification": "utility",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 152,
+          "name": "DeviceEnergyManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 159,
+          "name": "DeviceEnergyManagementMode",
+          "element": "serverCluster",
+          "conformance": "ControllableESA, O"
+        },
+        {
+          "id": 160,
+          "name": "ElectricalGridConditions",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 1295,
       "name": "WaterHeater",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 148,
+          "name": "WaterHeaterManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 158,
+          "name": "WaterHeaterMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "desc"
+        }
+      ]
     },
     {
       "id": 1296,
       "name": "ElectricalSensor",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 144,
+          "name": "ElectricalPowerMeasurement",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 145,
+          "name": "ElectricalEnergyMeasurement",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 156,
+          "name": "PowerTopology",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1297,
       "name": "ElectricalUtilityMeter",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1299,
+          "name": "ElectricalEnergyTariff",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        },
+        {
+          "id": 1300,
+          "name": "ElectricalMeter",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        },
+        {
+          "id": 2822,
+          "name": "MeterIdentification",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1298,
       "name": "MeterReferencePoint",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1299,
+          "name": "ElectricalEnergyTariff",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        },
+        {
+          "id": 1300,
+          "name": "ElectricalMeter",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        }
+      ]
     },
     {
       "id": 1299,
       "name": "ElectricalEnergyTariff",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 149,
+          "name": "CommodityPrice",
+          "element": "serverCluster",
+          "conformance": "[ActiveTariff].a+"
+        },
+        {
+          "id": 160,
+          "name": "ElectricalGridConditions",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1792,
+          "name": "CommodityTariff",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        }
+      ]
     },
     {
       "id": 1300,
       "name": "ElectricalMeter",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 144,
+          "name": "ElectricalPowerMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 145,
+          "name": "ElectricalEnergyMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 149,
+          "name": "CommodityPrice",
+          "element": "serverCluster",
+          "conformance": "[ActiveTariff].a+"
+        },
+        {
+          "id": 160,
+          "name": "ElectricalGridConditions",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1792,
+          "name": "CommodityTariff",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 2823,
+          "name": "CommodityMetering",
+          "element": "serverCluster",
+          "conformance": "P, M"
+        }
+      ]
     },
     {
       "id": 2112,
       "name": "ControlBridge",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1024,
+          "name": "IlluminanceMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 2128,
       "name": "OnOffSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     }
   ],
   "clusters": [

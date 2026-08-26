@@ -198,3 +198,608 @@ var DeviceTypeNames = map[uint32]string{
 	0x0840: "ControlBridge",
 	0x0850: "OnOffSensor",
 }
+
+// DeviceTypeServerClusters maps every device-type ID to the cluster IDs the
+// Matter Device Library specifies for it as a SERVER cluster, excluding
+// those whose conformance is X (disallowed). A cluster absent from a type's
+// set may not be mounted as a server on an endpoint of that type: the
+// device would be non-conformant, and ecosystems reject it in ways that
+// range from ignoring the extra cluster to mis-categorising the whole
+// accessory. Clusters the type specifies only as a CLIENT are deliberately
+// absent here — a client requirement means the type CONSUMES that cluster
+// from another endpoint, not that it may serve it.
+//
+// Generated from notes/parity/matter/matter-schema-snapshot.json.
+var DeviceTypeServerClusters = map[uint32][]uint32{
+	0x000A: { // DoorLock
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0101, // DoorLock (M)
+	},
+	0x000B: { // DoorLockController
+		0x001D, // Descriptor (-)
+	},
+	0x000E: { // Aggregator
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0025, // Actions (O)
+		0x0751, // CommissionerControl (FabricSynchronization)
+	},
+	0x000F: { // GenericSwitch
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x003B, // Switch (M)
+	},
+	0x0011: { // PowerSource
+		0x001D, // Descriptor (-)
+		0x002F, // PowerSource (M)
+	},
+	0x0012: { // OtaRequestor
+		0x001D, // Descriptor (-)
+		0x002A, // OtaSoftwareUpdateRequestor (M)
+	},
+	0x0013: { // BridgedNode
+		0x001D, // Descriptor (-)
+		0x002E, // PowerSourceConfiguration (BridgedPowerSourceInfo, D)
+		0x002F, // PowerSource (BridgedPowerSourceInfo)
+		0x0039, // BridgedDeviceBasicInformation (M)
+		0x003C, // AdministratorCommissioning (FabricSynchronizedNode)
+		0x0750, // EcosystemInformation (FabricSynchronizedNode, O)
+	},
+	0x0014: { // OtaProvider
+		0x001D, // Descriptor (-)
+		0x0029, // OtaSoftwareUpdateProvider (M)
+	},
+	0x0015: { // ContactSensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0045, // BooleanState (M)
+		0x0080, // BooleanStateConfiguration (O)
+	},
+	0x0016: { // RootNode
+		0x001D, // Descriptor (-)
+		0x001F, // AccessControl (M)
+		0x0028, // BasicInformation (M)
+		0x002B, // LocalizationConfiguration (LanguageLocale)
+		0x002C, // TimeFormatLocalization (TimeLocale)
+		0x002D, // UnitLocalization (UnitLocale)
+		0x002E, // PowerSourceConfiguration (O, D)
+		0x0030, // GeneralCommissioning (M)
+		0x0031, // NetworkCommissioning (!CustomNetworkConfig)
+		0x0032, // DiagnosticLogs (O)
+		0x0033, // GeneralDiagnostics (M)
+		0x0034, // SoftwareDiagnostics (O)
+		0x0035, // ThreadNetworkDiagnostics ([Thread])
+		0x0036, // WiFiNetworkDiagnostics ([WiFi])
+		0x0037, // EthernetNetworkDiagnostics ([Ethernet])
+		0x003C, // AdministratorCommissioning (M)
+		0x003E, // OperationalCredentials (M)
+		0x003F, // GroupKeyManagement (M)
+		0x0046, // IcdManagement (SIT | LIT)
+		0x0801, // TlsCertificateManagement (TLSCertificatesCond, O)
+		0x0802, // TlsClientManagement (TLSClientCond, O)
+	},
+	0x0017: { // SolarPower
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+	},
+	0x0018: { // BatteryStorage
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+	},
+	0x0019: { // SecondaryNetworkInterface
+		0x001D, // Descriptor (-)
+		0x0031, // NetworkCommissioning (M)
+		0x0035, // ThreadNetworkDiagnostics ([Thread])
+		0x0036, // WiFiNetworkDiagnostics ([WiFi])
+		0x0037, // EthernetNetworkDiagnostics ([Ethernet])
+	},
+	0x0022: { // Speaker
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (M)
+		0x001D, // Descriptor (-)
+	},
+	0x0023: { // CastingVideoPlayer
+		0x0006, // OnOff (M)
+		0x001D, // Descriptor (-)
+		0x0097, // Messages (O)
+		0x0503, // WakeOnLan (O)
+		0x0504, // Channel (O)
+		0x0505, // TargetNavigator (O)
+		0x0506, // MediaPlayback (M)
+		0x0507, // MediaInput (PhysicalInputs)
+		0x0508, // LowPower (O)
+		0x0509, // KeypadInput (M)
+		0x050A, // ContentLauncher (M)
+		0x050B, // AudioOutput (O)
+		0x050C, // ApplicationLauncher (ContentAppPlatform)
+		0x050E, // AccountLogin (O)
+		0x050F, // ContentControl (P, O)
+	},
+	0x0024: { // ContentApp
+		0x001D, // Descriptor (-)
+		0x0504, // Channel (O)
+		0x0505, // TargetNavigator (O)
+		0x0506, // MediaPlayback (O)
+		0x0509, // KeypadInput (M)
+		0x050A, // ContentLauncher (O)
+		0x050C, // ApplicationLauncher (M)
+		0x050D, // ApplicationBasic (M)
+		0x050E, // AccountLogin (O)
+	},
+	0x0027: { // ModeSelect
+		0x001D, // Descriptor (-)
+		0x0050, // ModeSelect (M)
+	},
+	0x0028: { // BasicVideoPlayer
+		0x0006, // OnOff (M)
+		0x001D, // Descriptor (-)
+		0x0097, // Messages (O)
+		0x0503, // WakeOnLan (O)
+		0x0504, // Channel (O)
+		0x0505, // TargetNavigator (O)
+		0x0506, // MediaPlayback (M)
+		0x0507, // MediaInput (PhysicalInputs)
+		0x0508, // LowPower (O)
+		0x0509, // KeypadInput (M)
+		0x050B, // AudioOutput (O)
+		0x050F, // ContentControl (P, O)
+	},
+	0x0029: { // CastingVideoClient
+		0x001D, // Descriptor (-)
+		0x0510, // ContentAppObserver (O)
+	},
+	0x002A: { // VideoRemoteControl
+		0x001D, // Descriptor (-)
+	},
+	0x002B: { // Fan
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (O)
+		0x001D, // Descriptor (-)
+		0x0202, // FanControl (M)
+	},
+	0x002C: { // AirQualitySensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x005B, // AirQuality (M)
+		0x0402, // TemperatureMeasurement (O)
+		0x0405, // RelativeHumidityMeasurement (O)
+		0x040C, // CarbonMonoxideConcentrationMeasurement (O)
+		0x040D, // CarbonDioxideConcentrationMeasurement (O)
+		0x0413, // NitrogenDioxideConcentrationMeasurement (O)
+		0x0415, // OzoneConcentrationMeasurement (O)
+		0x042A, // Pm25ConcentrationMeasurement (O)
+		0x042B, // FormaldehydeConcentrationMeasurement (O)
+		0x042C, // Pm1ConcentrationMeasurement (O)
+		0x042D, // Pm10ConcentrationMeasurement (O)
+		0x042E, // TotalVolatileOrganicCompoundsConcentrationMeasurement (O)
+		0x042F, // RadonConcentrationMeasurement (O)
+	},
+	0x002D: { // AirPurifier
+		0x0003, // Identify (M)
+		0x0004, // Groups (O)
+		0x0006, // OnOff (O)
+		0x001D, // Descriptor (-)
+		0x0071, // HepaFilterMonitoring (O)
+		0x0072, // ActivatedCarbonFilterMonitoring (O)
+		0x0202, // FanControl (M)
+	},
+	0x0040: { // IrrigationSystem
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0060, // OperationalState (O)
+	},
+	0x0041: { // WaterFreezeDetector
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0045, // BooleanState (M)
+		0x0080, // BooleanStateConfiguration (O)
+	},
+	0x0042: { // WaterValve
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0081, // ValveConfigurationAndControl (M)
+	},
+	0x0043: { // WaterLeakDetector
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0045, // BooleanState (M)
+		0x0080, // BooleanStateConfiguration (O)
+	},
+	0x0044: { // RainSensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0045, // BooleanState (M)
+		0x0080, // BooleanStateConfiguration (O)
+	},
+	0x0045: { // SoilSensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0402, // TemperatureMeasurement (O)
+		0x0430, // SoilMeasurement (M)
+	},
+	0x0070: { // Refrigerator
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0052, // RefrigeratorAndTemperatureControlledCabinetMode (O)
+		0x0057, // RefrigeratorAlarm (O)
+		0x0072, // ActivatedCarbonFilterMonitoring ([Rev >= v3])
+	},
+	0x0071: { // TemperatureControlledCabinet
+		0x001D, // Descriptor (-)
+		0x0048, // OvenCavityOperationalState ([Heater])
+		0x0049, // OvenMode ([Heater])
+		0x0052, // RefrigeratorAndTemperatureControlledCabinetMode ([Cooler])
+		0x0056, // TemperatureControl (M)
+		0x0064, // TemperatureAlarm (P, O)
+		0x0402, // TemperatureMeasurement (O)
+	},
+	0x0072: { // RoomAirConditioner
+		0x0003, // Identify (M)
+		0x0004, // Groups (O)
+		0x0006, // OnOff (M)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (O)
+		0x0071, // HepaFilterMonitoring (O)
+		0x0072, // ActivatedCarbonFilterMonitoring (O)
+		0x0201, // Thermostat (M)
+		0x0202, // FanControl (O)
+		0x0204, // ThermostatUserInterfaceConfiguration (O)
+		0x0402, // TemperatureMeasurement (O)
+		0x0405, // RelativeHumidityMeasurement (O)
+	},
+	0x0073: { // LaundryWasher
+		0x0003, // Identify (O)
+		0x0006, // OnOff (O)
+		0x001D, // Descriptor (-)
+		0x0051, // LaundryWasherMode (O)
+		0x0053, // LaundryWasherControls (O)
+		0x0056, // TemperatureControl (O)
+		0x0060, // OperationalState (M)
+	},
+	0x0074: { // RoboticVacuumCleaner
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0054, // RvcRunMode (M)
+		0x0055, // RvcCleanMode (O)
+		0x0061, // RvcOperationalState (M)
+		0x0150, // ServiceArea (O)
+	},
+	0x0075: { // Dishwasher
+		0x0003, // Identify (O)
+		0x0006, // OnOff (O)
+		0x001D, // Descriptor (-)
+		0x0056, // TemperatureControl (O)
+		0x0059, // DishwasherMode (O)
+		0x005D, // DishwasherAlarm (O)
+		0x0060, // OperationalState (M)
+	},
+	0x0076: { // SmokeCoAlarm
+		0x0003, // Identify (M)
+		0x0004, // Groups (O)
+		0x001D, // Descriptor (-)
+		0x005C, // SmokeCoAlarm (M)
+		0x0402, // TemperatureMeasurement (O)
+		0x0405, // RelativeHumidityMeasurement (O)
+		0x040C, // CarbonMonoxideConcentrationMeasurement (O)
+	},
+	0x0077: { // CookSurface
+		0x0006, // OnOff (O)
+		0x001D, // Descriptor (-)
+		0x0056, // TemperatureControl (O.a+)
+		0x0402, // TemperatureMeasurement (O.a+)
+	},
+	0x0078: { // Cooktop
+		0x0003, // Identify (O)
+		0x0006, // OnOff (M)
+		0x001D, // Descriptor (-)
+	},
+	0x0079: { // MicrowaveOven
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x005E, // MicrowaveOvenMode (M)
+		0x005F, // MicrowaveOvenControl (M)
+		0x0060, // OperationalState (M)
+		0x0202, // FanControl (O)
+	},
+	0x007A: { // ExtractorHood
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0071, // HepaFilterMonitoring (O)
+		0x0072, // ActivatedCarbonFilterMonitoring (O)
+		0x0202, // FanControl (M)
+	},
+	0x007B: { // Oven
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+	},
+	0x007C: { // LaundryDryer
+		0x0003, // Identify (O)
+		0x0006, // OnOff (O)
+		0x001D, // Descriptor (-)
+		0x004A, // LaundryDryerControls (O)
+		0x0051, // LaundryWasherMode (O)
+		0x0056, // TemperatureControl (O)
+		0x0060, // OperationalState (M)
+	},
+	0x0090: { // NetworkInfrastructureManager
+		0x001D, // Descriptor (-)
+		0x0035, // ThreadNetworkDiagnostics (M)
+		0x0451, // WiFiNetworkManagement (M)
+		0x0452, // ThreadBorderRouterManagement (M)
+		0x0453, // ThreadNetworkDirectory (M)
+	},
+	0x0091: { // ThreadBorderRouter
+		0x001D, // Descriptor (-)
+		0x0035, // ThreadNetworkDiagnostics (M)
+		0x0452, // ThreadBorderRouterManagement (M)
+		0x0453, // ThreadNetworkDirectory (O)
+	},
+	0x0100: { // OnOffLight
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (O)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+	},
+	0x0101: { // DimmableLight
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (M)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+	},
+	0x0103: { // OnOffLightSwitch
+		0x001D, // Descriptor (-)
+	},
+	0x0104: { // DimmerSwitch
+		0x001D, // Descriptor (-)
+	},
+	0x0105: { // ColorDimmerSwitch
+		0x001D, // Descriptor (-)
+	},
+	0x0106: { // LightSensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0400, // IlluminanceMeasurement (M)
+	},
+	0x0107: { // OccupancySensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0080, // BooleanStateConfiguration (O)
+		0x0406, // OccupancySensing (M)
+	},
+	0x010A: { // OnOffPlugInUnit
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (O)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+	},
+	0x010B: { // DimmablePlugInUnit
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (M)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+	},
+	0x010C: { // ColorTemperatureLight
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (M)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+		0x0300, // ColorControl (M)
+	},
+	0x010D: { // ExtendedColorLight
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (M)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+		0x0300, // ColorControl (M)
+	},
+	0x010F: { // MountedOnOffControl
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (O)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+	},
+	0x0110: { // MountedDimmableLoadControl
+		0x0003, // Identify (M)
+		0x0004, // Groups (M)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (M)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (M)
+	},
+	0x0130: { // JointFabricAdministrator
+		0x001D, // Descriptor (-)
+		0x0752, // JointFabricDatastore (M)
+		0x0753, // JointFabricAdministrator (M)
+	},
+	0x0140: { // Intercom
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0551, // CameraAvStreamManagement (M)
+		0x0552, // CameraAvSettingsUserLevelManagement (O)
+	},
+	0x0141: { // AudioDoorbell
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x003B, // Switch (M)
+		0x0551, // CameraAvStreamManagement (M)
+		0x0555, // PushAvStreamTransport (O)
+	},
+	0x0142: { // Camera
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0406, // OccupancySensing (O)
+		0x0550, // ZoneManagement (O)
+		0x0551, // CameraAvStreamManagement (M)
+		0x0552, // CameraAvSettingsUserLevelManagement (O)
+		0x0554, // WebRtcTransportRequestor (O)
+		0x0555, // PushAvStreamTransport (O)
+	},
+	0x0143: { // VideoDoorbell
+		0x001D, // Descriptor (-)
+	},
+	0x0144: { // FloodlightCamera
+		0x001D, // Descriptor (-)
+	},
+	0x0145: { // SnapshotCamera
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0406, // OccupancySensing (O)
+		0x0550, // ZoneManagement (O)
+		0x0551, // CameraAvStreamManagement (M)
+		0x0552, // CameraAvSettingsUserLevelManagement (O)
+	},
+	0x0146: { // Chime
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0556, // Chime (M)
+	},
+	0x0147: { // CameraController
+		0x001D, // Descriptor (-)
+		0x0554, // WebRtcTransportRequestor (M)
+	},
+	0x0148: { // Doorbell
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x003B, // Switch (M)
+	},
+	0x0202: { // WindowCovering
+		0x0003, // Identify (M)
+		0x0004, // Groups (Active, O)
+		0x001D, // Descriptor (-)
+		0x0102, // WindowCovering (M)
+	},
+	0x0203: { // WindowCoveringController
+		0x001D, // Descriptor (-)
+	},
+	0x0230: { // Closure
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0104, // ClosureControl (M)
+	},
+	0x0231: { // ClosurePanel
+		0x001D, // Descriptor (-)
+		0x0105, // ClosureDimension (M)
+	},
+	0x023E: { // ClosureController
+		0x001D, // Descriptor (-)
+	},
+	0x0301: { // Thermostat
+		0x0003, // Identify (M)
+		0x0004, // Groups (Active)
+		0x001D, // Descriptor (-)
+		0x009B, // EnergyPreference (O)
+		0x0201, // Thermostat (M)
+		0x0204, // ThermostatUserInterfaceConfiguration (O)
+	},
+	0x0302: { // TemperatureSensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0204, // ThermostatUserInterfaceConfiguration (O)
+		0x0402, // TemperatureMeasurement (M)
+	},
+	0x0303: { // Pump
+		0x0003, // Identify (M)
+		0x0004, // Groups (O)
+		0x0006, // OnOff (M)
+		0x0008, // LevelControl (O)
+		0x001D, // Descriptor (-)
+		0x0062, // ScenesManagement (O)
+		0x0200, // PumpConfigurationAndControl (M)
+	},
+	0x0304: { // PumpController
+		0x001D, // Descriptor (-)
+	},
+	0x0305: { // PressureSensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0403, // PressureMeasurement (M)
+	},
+	0x0306: { // FlowSensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0404, // FlowMeasurement (M)
+	},
+	0x0307: { // HumiditySensor
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0405, // RelativeHumidityMeasurement (M)
+	},
+	0x0309: { // HeatPump
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+	},
+	0x030A: { // ThermostatController
+		0x001D, // Descriptor (-)
+	},
+	0x050C: { // EnergyEvse
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0099, // EnergyEvse (M)
+		0x009D, // EnergyEvseMode (M)
+		0x0402, // TemperatureMeasurement (O)
+	},
+	0x050D: { // DeviceEnergyManagement
+		0x001D, // Descriptor (-)
+		0x0098, // DeviceEnergyManagement (M)
+		0x009F, // DeviceEnergyManagementMode (ControllableESA, O)
+	},
+	0x050F: { // WaterHeater
+		0x0003, // Identify (O)
+		0x001D, // Descriptor (-)
+		0x0094, // WaterHeaterManagement (M)
+		0x009E, // WaterHeaterMode (M)
+		0x0201, // Thermostat (M)
+	},
+	0x0510: { // ElectricalSensor
+		0x001D, // Descriptor (-)
+		0x0090, // ElectricalPowerMeasurement (O.a+)
+		0x0091, // ElectricalEnergyMeasurement (O.a+)
+		0x009C, // PowerTopology (M)
+	},
+	0x0511: { // ElectricalUtilityMeter
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+		0x0B06, // MeterIdentification (M)
+	},
+	0x0512: { // MeterReferencePoint
+		0x0003, // Identify (M)
+		0x001D, // Descriptor (-)
+	},
+	0x0513: { // ElectricalEnergyTariff
+		0x001D, // Descriptor (-)
+		0x0095, // CommodityPrice ([ActiveTariff].a+)
+		0x00A0, // ElectricalGridConditions (O)
+		0x0700, // CommodityTariff (O.a+)
+	},
+	0x0514: { // ElectricalMeter
+		0x001D, // Descriptor (-)
+		0x0090, // ElectricalPowerMeasurement (M)
+		0x0091, // ElectricalEnergyMeasurement (M)
+		0x0095, // CommodityPrice ([ActiveTariff].a+)
+		0x00A0, // ElectricalGridConditions (O)
+		0x0700, // CommodityTariff (O.a+)
+		0x0B07, // CommodityMetering (P, M)
+	},
+	0x0840: { // ControlBridge
+		0x001D, // Descriptor (-)
+	},
+	0x0850: { // OnOffSensor
+		0x001D, // Descriptor (-)
+	},
+}

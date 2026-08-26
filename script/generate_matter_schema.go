@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 )
 
 const (
@@ -46,11 +47,22 @@ type snapshotCluster struct {
 	FeatureMap uint32 `json:"featureMap"`
 }
 
+// snapshotRequirement mirrors one cluster requirement of a device type in
+// matter-schema-snapshot.json: which cluster the Matter Device Library
+// specifies for the type, on which side, and under which conformance.
+type snapshotRequirement struct {
+	ID          uint32 `json:"id"`
+	Name        string `json:"name"`
+	Element     string `json:"element"`
+	Conformance string `json:"conformance"`
+}
+
 // snapshotDeviceType mirrors the deviceType shape in matter-schema-snapshot.json.
 type snapshotDeviceType struct {
-	ID       uint32 `json:"id"`
-	Name     string `json:"name"`
-	Revision uint16 `json:"revision"`
+	ID           uint32                `json:"id"`
+	Name         string                `json:"name"`
+	Revision     uint16                `json:"revision"`
+	Requirements []snapshotRequirement `json:"requirements"`
 }
 
 // snapshot is the top-level structure of matter-schema-snapshot.json.
@@ -172,6 +184,32 @@ func writeDeviceTypesFile(dts []snapshotDeviceType) error {
 	for _, dt := range dts {
 		fmt.Fprintf(&buf, "\t0x%04X: %q,\n", dt.ID, dt.Name)
 	}
+	buf.WriteString("}\n\n")
+
+	// DeviceTypeServerClusters
+	buf.WriteString("// DeviceTypeServerClusters maps every device-type ID to the cluster IDs the\n")
+	buf.WriteString("// Matter Device Library specifies for it as a SERVER cluster, excluding\n")
+	buf.WriteString("// those whose conformance is X (disallowed). A cluster absent from a type's\n")
+	buf.WriteString("// set may not be mounted as a server on an endpoint of that type: the\n")
+	buf.WriteString("// device would be non-conformant, and ecosystems reject it in ways that\n")
+	buf.WriteString("// range from ignoring the extra cluster to mis-categorising the whole\n")
+	buf.WriteString("// accessory. Clusters the type specifies only as a CLIENT are deliberately\n")
+	buf.WriteString("// absent here — a client requirement means the type CONSUMES that cluster\n")
+	buf.WriteString("// from another endpoint, not that it may serve it.\n")
+	buf.WriteString("//\n")
+	buf.WriteString("// Generated from notes/parity/matter/matter-schema-snapshot.json.\n")
+	buf.WriteString("var DeviceTypeServerClusters = map[uint32][]uint32{\n")
+	for _, dt := range dts {
+		ids := serverClusterIDs(dt)
+		if len(ids) == 0 {
+			continue
+		}
+		fmt.Fprintf(&buf, "\t0x%04X: { // %s\n", dt.ID, dt.Name)
+		for _, r := range ids {
+			fmt.Fprintf(&buf, "\t\t0x%04X, // %s (%s)\n", r.ID, r.Name, conformanceOrNone(r.Conformance))
+		}
+		buf.WriteString("\t},\n")
+	}
 	buf.WriteString("}\n")
 
 	return writeIfChanged(devicetypesFile, buf.Bytes())
@@ -199,4 +237,28 @@ func writeIfChanged(path string, content []byte) error {
 		return nil
 	}
 	return os.WriteFile(path, content, 0o644)
+}
+
+// serverClusterIDs returns dt's server-cluster requirements in ascending ID
+// order, dropping those with conformance X — the Device Library's marker for
+// "this cluster is disallowed on this device type".
+func serverClusterIDs(dt snapshotDeviceType) []snapshotRequirement {
+	out := make([]snapshotRequirement, 0, len(dt.Requirements))
+	for _, r := range dt.Requirements {
+		if r.Element != "serverCluster" || strings.TrimSpace(r.Conformance) == "X" {
+			continue
+		}
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// conformanceOrNone renders a requirement's conformance for the generated
+// comment; the Descriptor requirement carries none.
+func conformanceOrNone(c string) string {
+	if strings.TrimSpace(c) == "" {
+		return "-"
+	}
+	return c
 }

@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 383.
+Guards without a doc comment: 7 of 387.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -157,6 +157,10 @@ Guards without a doc comment: 7 of 383.
 | TestMarkdownLinksValid | markdown_links_test.go | TestMarkdownLinksValid walks every Markdown file in the repository and fails when a Markdown-syntax link `[text] (path.md)` resolves to a non-existent file. |
 | TestMatterEndpointSourcesAreChangeNotifiers | matter_change_notifier_test.go | TestMatterEndpointSourcesAreChangeNotifiers guarantees that every type asserted as an interfaces.MatterEndpointSource also asserts interfaces.MatterChangeNotifier in the same file. |
 | TestMatterEventPrioritiesMatchMatterJS | matter_event_priority_parity_test.go | TestMatterEventPrioritiesMatchMatterJS walks every MatterEmitEvent call in the Matter tree and checks the priority it passes against [matterEventPriority]. |
+| TestHostRiddenMeasurementClassesHaveAHost | matter_measurement_devicetype_conformance_test.go | TestHostRiddenMeasurementClassesHaveAHost checks the claim each hostRiddenMeasurementClasses entry makes: that some device type specifies the class's cluster as a server, so there is a host endpoint the cluster can legitimately be mounted on. |
+| TestMeasurementClassEnumerationIsComplete | matter_measurement_devicetype_conformance_test.go | TestMeasurementClassEnumerationIsComplete fails when a class is added to the iota block without being added to measurementClasses, which would leave it silently unguarded. |
+| TestMeasurementClassProjectsOntoAConformantDeviceType | matter_measurement_devicetype_conformance_test.go | TestMeasurementClassProjectsOntoAConformantDeviceType asserts that every measurement class names a device type whose Device Library entry permits the class's cluster as a server. |
+| TestMeasurementClassesUnderInvestigationAreStillBroken | matter_measurement_devicetype_conformance_test.go | TestMeasurementClassesUnderInvestigationAreStillBroken keeps the known-defect list honest in the other direction: an entry whose defect has been fixed must be deleted, not left behind. |
 | TestScenarioCoverage | matter_scenario_gate_test.go | TestScenarioCoverage enforces that every custom-DP type with a Matter-side integration (a `<type>/matter.go` under internal/model/custom/) has at least one scenario tagged with its type name in notes/parity/matter/scenarios. |
 | TestMatterSchemaSnapshotInSync | matter_schema_sync_test.go | TestMatterSchemaSnapshotInSync asserts the two copies of the matter.js HEAD schema snapshot are byte-identical: the master at notes/parity/matter/matter-schema-snapshot.json (re-extracted by `make generate-matter-schema`) and the embedded copy at internal/north/matter/parity/schema.json that every matter parity test runs against. |
 | TestMCPCatalogueCoversEveryRESTDomain | mcp_rest_parity_test.go | TestMCPCatalogueCoversEveryRESTDomain is the parity guard ADR 0025 requires: "the tool catalogue must track the REST/WS surface". |
