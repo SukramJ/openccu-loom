@@ -1,8 +1,8 @@
 # Troubleshooting
 
 Symptom-driven fixes for the problems operators hit most: missing CCU
-events, degraded health, authentication lockouts, and lost encryption
-keys.
+events, degraded health, latency that is hard to attribute,
+authentication lockouts, and lost encryption keys.
 
 !!! info "Who this page is for"
     Operators diagnosing a running (or failing-to-run) daemon. Each
@@ -81,6 +81,89 @@ primary interface (default: the `HmIP-RF`-matching one) is down.
 - The status states are `healthy`, `degraded`, `unhealthy`. For the
   metrics and probes behind them, see the observability admin page
   (`docs/admin/observability.md`).
+
+## Something is slow — but which leg?
+
+**Symptom.** The UI lags, a switch takes a moment to react, or Home
+Assistant updates late. Every component reports `available`, so health
+says nothing is wrong.
+
+**Cause.** "Slow" is never one distance. Three separate legs sit between
+a click and a relay, and a healthy component says nothing about any of
+them:
+
+| Leg | Reading | Where to find it |
+|---|---|---|
+| Your browser → the daemon | `ws.heartbeat_rtt_ms` | `GET /api/v1/diagnostics` → `health.gauges` |
+| The daemon → the CCU | `connection_latency_ms` | `GET /api/v1/system/metrics`, or the `<base>/<central>/system/latency` MQTT topic |
+| The daemon → the MQTT broker | `mqtt.publish_ack_ms` | `GET /api/v1/diagnostics` → `health.gauges` |
+
+A fourth, `matter.controller_rtt_ms`, reports the distance to a paired
+Matter controller (an Apple TV or HomePod acting as a Home hub, for
+instance) and appears only when the Matter bridge is enabled.
+
+**Fix.** Read all three before changing anything — they routinely differ
+by an order of magnitude, and the largest one is the only one worth
+acting on.
+
+```sh
+curl -s -u admin:PASSWORD http://localhost:8119/api/v1/diagnostics \
+  | jq '.health.gauges | with_entries(select(.key | test("rtt|ack")))'
+```
+
+A daemon on the same LAN as its CCU typically shows well under a
+millisecond to a local browser and a few milliseconds to the CCU. Reached
+through Home Assistant Ingress or a public hostname, the browser leg
+alone can run to tens of milliseconds while the CCU link stays perfectly
+healthy — which is why these figures are never added together or shown
+as one number.
+
+!!! tip "Each reading has a companion that says whether to trust it"
+    `ws.heartbeat_rtt_ms` is paired with `ws.heartbeat_rtt_samples`: the
+    number of connections that have completed a timed heartbeat. A client
+    that answers without echoing the heartbeat token stays connected but
+    unmeasured, so a browser tab can be open while the sample count is 0.
+
+    `mqtt.publish_ack_ms` and `matter.controller_rtt_ms` are paired with a
+    cumulative `*_total`. If the total stops advancing, the median describes
+    the past rather than the present. A total of **0** for MQTT is normal
+    rather than broken — see the note below.
+
+    Each is also paired with a `*_max_ms`. When the maximum sits far above
+    the median, the problem is an occasional stall, not a slow link; the
+    median alone hides exactly that case.
+
+!!! warning "`mqtt.publish_ack_ms` does not cover state topics by default"
+    The probe times only publishes the broker acknowledges, which means
+    QoS 1 and above. State topics ship at QoS 0 by default — the broker
+    never answers them — so on a stock configuration this figure describes
+    the discovery plane, and `mqtt.publish_ack_total` reads 0 on a
+    deployment that publishes nothing else. That is an honest "nothing
+    measurable here", not a fault.
+
+!!! note "These are not in `/metrics`"
+    The Prometheus endpoint renders a different registry. The latency
+    gauges are served by `GET /api/v1/diagnostics` (and by the MCP
+    `get_health` tool); `connection_latency_ms` additionally reaches Home
+    Assistant as a per-CCU diagnostic sensor through MQTT discovery.
+
+**Fixing what you found.**
+
+- **Browser leg high.** A reverse proxy, VPN or Ingress tunnel is in the
+  path. Compare a tab opened directly against the REST listener with one
+  opened through the proxy — the daemon reports each connection
+  separately, so the two readings isolate the hop.
+- **CCU leg high.** The CCU is busy or the radio is congested. Check the
+  duty cycle, and see [No events from the CCU](#no-events-from-the-ccu-state-never-updates)
+  if the figure is missing entirely rather than large.
+- **Broker leg high.** The broker is saturated or its disk is slow. The
+  reading covers the daemon's own in-flight window as well as the network,
+  so a backlog of queued publishes shows up here too.
+
+Clients can read their own leg without polling: the daemon reports it on
+the WebSocket heartbeat as `rtt_ms`. See the
+[REST & WebSocket integration guide](../integrations/rest-ws.md) for the
+frame shape.
 
 ## First run: setting the admin password
 
