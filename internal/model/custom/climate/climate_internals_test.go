@@ -934,95 +934,6 @@ func TestClimateDiscoveryTriggers(t *testing.T) {
 // matter.go – MatterWrite / MatterReportable / MatterAttributes on leaf servers
 // ---------------------------------------------------------------------------
 
-func TestClimateTempMeasServerMatterWrite(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0402)
-	err := srv.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Error("MatterWrite on TemperatureMeasurement should always return error")
-	}
-}
-
-func TestClimateTempMeasServerMatterReportable(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0402)
-	if got := srv.MatterReportable(); len(got) == 0 {
-		t.Error("MatterReportable() returned empty slice for TemperatureMeasurement")
-	}
-}
-
-func TestClimateTempMeasServerMatterAttributes(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0402)
-	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
-	if !ok {
-		t.Fatal("TemperatureMeasurement server does not implement MatterClusterAttributeLister")
-	}
-	if got := lister.MatterAttributes(); len(got) == 0 {
-		t.Error("MatterAttributes() returned empty slice for TemperatureMeasurement")
-	}
-}
-
-func TestClimateHumidityServerMatterWrite(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0405)
-	err := srv.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Error("MatterWrite on RelativeHumidityMeasurement should always return error")
-	}
-}
-
-func TestClimateHumidityServerMatterReportable(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0405)
-	if got := srv.MatterReportable(); len(got) == 0 {
-		t.Error("MatterReportable() returned empty slice for RelativeHumidityMeasurement")
-	}
-}
-
-func TestClimateHumidityServerMatterAttributes(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0405)
-	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
-	if !ok {
-		t.Fatal("RelativeHumidityMeasurement server does not implement MatterClusterAttributeLister")
-	}
-	if got := lister.MatterAttributes(); len(got) == 0 {
-		t.Error("MatterAttributes() returned empty slice for RelativeHumidityMeasurement")
-	}
-}
-
-func TestClimateTempMeasServerReadUnknownAttr(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0402)
-	_, ok := srv.MatterRead(0xFFFF)
-	if ok {
-		t.Error("MatterRead of unknown attr should return ok=false")
-	}
-}
-
-func TestClimateHumidityServerReadUnknownAttr(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0405)
-	_, ok := srv.MatterRead(0xFFFF)
-	if ok {
-		t.Error("MatterRead of unknown attr should return ok=false on humidity server")
-	}
-}
-
-func TestClimateHumidityServerReadUnobserved(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0405)
-	// No humidity observation yet — should return (nil, true) for null-on-unknown.
-	v, ok := srv.MatterRead(0x0000)
-	if !ok {
-		t.Error("MatterRead(0x0000) on unobserved humidity should return ok=true (null)")
-	}
-	if v != nil {
-		t.Errorf("MatterRead(0x0000) on unobserved humidity = %v, want nil", v)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // extractSetpointRaiseLower helper
 // ---------------------------------------------------------------------------
@@ -1994,55 +1905,9 @@ func TestClimateThermostatUIServerMatterInvoke(t *testing.T) {
 // matter.go — TemperatureMeasurement read FeatureMap + ClusterRevision
 // ---------------------------------------------------------------------------
 
-func TestClimateTempMeasServerReadFeatureMap(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0402)
-	v, ok := srv.MatterRead(matterAttrFeatureMap)
-	if !ok || v == nil {
-		t.Errorf("MatterRead(FeatureMap) on TempMeas = (%v, %v), want non-nil/true", v, ok)
-	}
-}
-
-func TestClimateTempMeasServerMatterInvoke(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0402)
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Error("MatterInvoke on TempMeas should always return error")
-	}
-}
-
 // ---------------------------------------------------------------------------
 // matter.go — HumidityMeasurement observed + ClusterRevision
 // ---------------------------------------------------------------------------
-
-func TestClimateHumidityServerReadObserved(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.humidity.OnEvent(62.5)
-	srv := findCluster(t, r.climate, 0x0405)
-	v, ok := srv.MatterRead(matterAttrMeasuredValue)
-	if !ok || v == nil {
-		t.Errorf("observed humidity MatterRead = (%v, %v), want non-nil/true", v, ok)
-	}
-}
-
-func TestClimateHumidityServerReadClusterRevision(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0405)
-	v, ok := srv.MatterRead(matterAttrClusterRevision)
-	if !ok || v == nil {
-		t.Errorf("humidity ClusterRevision = (%v, %v), want non-nil/true", v, ok)
-	}
-}
-
-func TestClimateHumidityServerMatterInvoke(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0405)
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Error("MatterInvoke on humidity cluster should always return error")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // payload.go — StatePayload + ConfigPayload extended coverage

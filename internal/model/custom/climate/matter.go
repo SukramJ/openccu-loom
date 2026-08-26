@@ -256,9 +256,25 @@ func matterToHmMode(m uint8) (Mode, error) {
 func (c *Climate) MatterDeviceType() uint16 { return matterDeviceTypeThermostat }
 
 // MatterClusterServers implements [interfaces.MatterEndpointSource].
-// Thermostat + ThermostatUI + TemperatureMeasurement are always
-// emitted; RelativeHumidityMeasurement is conditional on the channel
-// carrying a HUMIDITY parameter.
+// Thermostat + ThermostatUI, and nothing else.
+//
+// TemperatureMeasurement (0x0402) and RelativeHumidityMeasurement
+// (0x0405) are deliberately NOT emitted here. The Device Library names
+// both for device type 0x0301 as element=clientCluster (matter.js
+// packages/model/src/standard/elements/thermostat-device.element.ts): a
+// thermostat CONSUMES those readings from another endpoint, it does not
+// serve them. Serving them anyway made the endpoint non-conformant, and
+// Alexa recognises a bridged endpoint only by the clusters its device
+// type specifies (matter.js docs/ECOSYSTEMS).
+//
+// Nothing is lost by dropping them. Apple reads the temperature from the
+// Thermostat cluster's own LocalTemperature attribute, and the channel's
+// ACTUAL_TEMPERATURE / HUMIDITY data points already materialise as their
+// own TemperatureSensor (0x0302) and HumiditySensor (0x0307) endpoints
+// through the generic measurement path — which carries a real
+// TemperatureMeasurement cluster for the controllers that prefer one.
+// That path is not gated on north.matter.include_measurements (that flag
+// governs calculated data points), so the sensors appear either way.
 //
 // Schedules cluster (0x0024) is intentionally NOT emitted: matter.js's
 // MatterDefinition (the de-facto reference implementation tracking
@@ -275,15 +291,10 @@ func (c *Climate) MatterDeviceType() uint16 { return matterDeviceTypeThermostat 
 // the wire package for revival once a canonical Matter Schedules cluster
 // ships in matter.js or the spec.
 func (c *Climate) MatterClusterServers() []interfaces.MatterClusterServer {
-	servers := []interfaces.MatterClusterServer{
+	return []interfaces.MatterClusterServer{
 		climateThermostatServer{c: c},
 		climateThermostatUIServer{c: c},
-		climateTempMeasServer{c: c},
 	}
-	if c.HasHumidity() {
-		servers = append(servers, climateHumidityServer{c: c})
-	}
-	return servers
 }
 
 // MatterScheduleEntries implements [wire.SchedulesSource]. It maps
@@ -829,115 +840,6 @@ func (s climateThermostatUIServer) MatterReportable() []uint32 { return nil }
 // HAP service rebuild does not abort on a missing mandatory attribute.
 func (s climateThermostatUIServer) MatterAttributes() []uint32 {
 	return []uint32{matterAttrUITempDisplayMode, matterAttrUIKeypadLockout}
-}
-
-// climateTempMeasServer projects ACTUAL_TEMPERATURE onto the
-// TemperatureMeasurement cluster (0x0402). This duplicates the
-// LocalTemperature attribute on the Thermostat cluster — Matter
-// controllers may consult either; emitting both improves the
-// compatibility profile (HA Matter Server prefers TemperatureMeasurement
-// for chart history while Apple Home reads LocalTemperature).
-type climateTempMeasServer struct{ c *Climate }
-
-func (s climateTempMeasServer) MatterClusterID() uint32 {
-	return matterClusterTemperatureMeasurement
-}
-
-func (s climateTempMeasServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case matterAttrMeasuredValue:
-		// MeasuredValue is mandatory but legitimately null when the
-		// device is unreachable / has no observation yet — return
-		// (nil, true) so the dispatcher emits TLV null + Success
-		// rather than UnsupportedAttribute. Apple Home tolerates null
-		// here but flags UnsupportedAttribute as a structural error.
-		t, ok := s.c.CurrentTemperature()
-		if !ok {
-			return nil, true
-		}
-		return celsiusToMatter(t), true
-	case matterAttrMinMeasuredValue:
-		return int16(-27315), true // -273.15 °C — physical absolute zero
-	case matterAttrMaxMeasuredValue:
-		return int16(32766), true // spec ceiling; 32767 is the NULL sentinel
-	case matterAttrFeatureMap:
-		return uint32(0), true
-	case matterAttrClusterRevision:
-		return matterTempMeasClusterRevision, true
-	default:
-		return nil, false
-	}
-}
-
-func (s climateTempMeasServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-}
-
-func (s climateTempMeasServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-}
-
-func (s climateTempMeasServer) MatterReportable() []uint32 {
-	return []uint32{matterAttrMeasuredValue}
-}
-
-// MatterAttributes covers the TemperatureMeasurement (0x0402) cluster's
-// mandatory surface: MeasuredValue, MinMeasuredValue and MaxMeasuredValue
-// (matches internal/north/matter/cluster/measurement.TemperatureServer);
-// FeatureMap + ClusterRevision are dispatched as globals.
-func (s climateTempMeasServer) MatterAttributes() []uint32 {
-	return []uint32{matterAttrMeasuredValue, matterAttrMinMeasuredValue, matterAttrMaxMeasuredValue}
-}
-
-// climateHumidityServer projects HUMIDITY onto the
-// RelativeHumidityMeasurement cluster (0x0405). Only emitted when
-// Climate's humidity slot is non-nil; see [Climate.MatterClusterServers].
-type climateHumidityServer struct{ c *Climate }
-
-func (s climateHumidityServer) MatterClusterID() uint32 {
-	return matterClusterRelativeHumidityMeasurement
-}
-
-func (s climateHumidityServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case matterAttrMeasuredValue:
-		// Same null-on-unknown rationale as
-		// [climateTempMeasServer.MatterRead].
-		h, ok := s.c.Humidity()
-		if !ok {
-			return nil, true
-		}
-		return humidityToMatter(h), true
-	case matterAttrMinMeasuredValue:
-		return uint16(0), true
-	case matterAttrMaxMeasuredValue:
-		return uint16(10000), true
-	case matterAttrFeatureMap:
-		return uint32(0), true
-	case matterAttrClusterRevision:
-		return matterHumidityClusterRevision, true
-	default:
-		return nil, false
-	}
-}
-
-func (s climateHumidityServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-}
-
-func (s climateHumidityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-}
-
-func (s climateHumidityServer) MatterReportable() []uint32 {
-	return []uint32{matterAttrMeasuredValue}
-}
-
-// MatterAttributes mirrors [climateTempMeasServer.MatterAttributes]'s
-// mandatory-surface rationale for the RelativeHumidityMeasurement (0x0405)
-// cluster (matches internal/north/matter/cluster/measurement.HumidityServer).
-func (s climateHumidityServer) MatterAttributes() []uint32 {
-	return []uint32{matterAttrMeasuredValue, matterAttrMinMeasuredValue, matterAttrMaxMeasuredValue}
 }
 
 // extractSetpointRaiseLower pulls (mode, amount) out of a

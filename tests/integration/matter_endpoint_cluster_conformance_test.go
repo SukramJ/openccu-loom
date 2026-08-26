@@ -34,7 +34,7 @@ import (
 // Ecosystems react to that in ways ranging from ignoring the extra cluster to
 // mis-categorising the whole accessory: Alexa recognises a bridged endpoint
 // only by the clusters its device type specifies and drops the rest
-// (matter.js docs/ECOSYSTEMS.md, "Composed Devices"), and Apple's HAP-service
+// (matter.js docs/ECOSYSTEMS, "Composed Devices"), and Apple's HAP-service
 // mapper keys on the first DeviceTypeList entry.
 //
 // This guard walks the hydrated fleet, takes every custom data point that is
@@ -48,14 +48,35 @@ import (
 // The measurement-source half of the same contract is static and lives in
 // tests/contract/matter_measurement_devicetype_conformance_test.go.
 
+// matterDeviceTypeBridgedNode is the secondary device type every bridged
+// endpoint carries alongside its primary one. endpoint.ClusterServers builds
+// Descriptor.DeviceTypeList as [primary, BridgedNode], and an endpoint's
+// permitted server clusters are the union of BOTH types' requirements — which
+// is what makes PowerSource (0x002F) legitimate on a bridged endpoint: the
+// Device Library names it for BridgedNode, not for the primary type.
+const matterDeviceTypeBridgedNode = 0x0013
+
 // bridgeMountedClusters are mounted by the bridge layer on every bridged
-// endpoint regardless of device type, so an endpoint source is not
-// responsible for them and the Device Library does not list them all per
-// type. endpoint.ClusterServers adds them in materialize.go.
+// endpoint regardless of device type. Only Identify remains here: it is
+// mandatory on every endpoint but Root and NetworkCommissioning (spec §1.4)
+// and materialize.go mounts it unconditionally, yet the utility device types
+// (ElectricalSensor 0x0510, PowerSource 0x0011) carry no Identify requirement
+// of their own. Descriptor and BridgedDeviceBasicInformation are NOT listed —
+// BridgedNode requires both, so the union below already permits them, and
+// whitelisting a cluster the schema can vouch for only hides drift.
 var bridgeMountedClusters = map[uint32]string{
 	0x0003: "Identify — mandatory on every endpoint but Root/NetworkCommissioning (spec §1.4)",
-	0x001D: "Descriptor — mandatory on every endpoint",
-	0x0039: "BridgedDeviceBasicInformation — mandatory on every bridged endpoint (spec §9.13)",
+}
+
+// endpointAllowsServerCluster reports whether a bridged endpoint whose primary
+// device type is deviceType may serve clusterID, taking the BridgedNode
+// secondary type into account.
+func endpointAllowsServerCluster(deviceType, clusterID uint32) bool {
+	if allowed, _ := schema.DeviceTypeAllowsServerCluster(deviceType, clusterID); allowed {
+		return true
+	}
+	allowed, _ := schema.DeviceTypeAllowsServerCluster(matterDeviceTypeBridgedNode, clusterID)
+	return allowed
 }
 
 // nonConformantEndpointClusters records cluster/device-type pairs that are
@@ -72,14 +93,6 @@ var bridgeMountedClusters = map[uint32]string{
 // Emptying this map is the goal. Key format: "0x%04X/0x%04X" (device type,
 // cluster).
 var nonConformantEndpointClusters = map[string]string{
-	"0x0301/0x0402": "Thermostat serves TemperatureMeasurement. The Device Library names 0x0402 for " +
-		"Thermostat as element=clientCluster (matter.js thermostat-device.element.ts) — a thermostat " +
-		"CONSUMES a temperature reading from another endpoint, it does not serve one. Fix: expose the " +
-		"channel's ACTUAL_TEMPERATURE as its own TemperatureSensor (0x0302) endpoint, the way every " +
-		"other measurement class already materialises, and drop climateTempMeasServer",
-	"0x0301/0x0405": "Thermostat serves RelativeHumidityMeasurement. Same shape as 0x0402: the Device " +
-		"Library names 0x0405 for Thermostat as element=clientCluster. Fix: expose HUMIDITY as its own " +
-		"HumiditySensor (0x0307) endpoint and drop climateHumidityServer",
 	"0x010A/0x0090": "OnOffPlugInUnit serves ElectricalPowerMeasurement. The Device Library does not " +
 		"name 0x0090 for 0x010A at all — neither server nor client. Its specified carrier is " +
 		"ElectricalSensor (0x0510), which also makes PowerTopology (0x009C) mandatory. Fix: give the " +
@@ -144,8 +157,7 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 				if _, isBridgeMounted := bridgeMountedClusters[clusterID]; isBridgeMounted {
 					continue
 				}
-				allowed, _ := schema.DeviceTypeAllowsServerCluster(deviceType, clusterID)
-				if allowed {
+				if endpointAllowsServerCluster(deviceType, clusterID) {
 					continue
 				}
 
@@ -190,7 +202,8 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 			"A cluster the type names only as a client is consumed from another endpoint, not served "+
 			"here — expose it as its own endpoint of the type that does specify it",
 			f.deviceType, deviceTypeNameOrUnknown(f.deviceType), f.clusterID,
-			clusterNameOrUnknown(f.clusterID), f.witness, serverClustersOf(f.deviceType))
+			clusterNameOrUnknown(f.clusterID), f.witness,
+			serverClustersOf(f.deviceType)+", plus BridgedNode's: "+serverClustersOf(matterDeviceTypeBridgedNode))
 	}
 
 	// A declared defect that the fleet no longer reaches is either fixed or

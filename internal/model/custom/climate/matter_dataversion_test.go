@@ -109,7 +109,7 @@ func TestParityMatterJS_ClimateDataVersionStableOnRead(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	before := r.climate.MatterDataVersion()
 
-	for _, id := range []uint32{matterClusterThermostat, matterClusterThermostatUI, matterClusterTemperatureMeasurement, matterClusterRelativeHumidityMeasurement} {
+	for _, id := range []uint32{matterClusterThermostat, matterClusterThermostatUI} {
 		srv := findCluster(t, r.climate, id)
 		srv.MatterRead(0x0000)
 		srv.MatterRead(matterAttrClusterRevision)
@@ -136,15 +136,15 @@ func TestParityMatterJS_ClimateDataVersionStableOnUnknownAttrWrite(t *testing.T)
 }
 
 // TestParityMatterJS_ClimateDataVersionStableOnReadOnlyClusterWrite
-// verifies that writes to read-only cluster servers (ThermostatUI,
-// TemperatureMeasurement, RelativeHumidityMeasurement) do not alter
+// verifies that a write to the read-only
+// ThermostatUserInterfaceConfiguration cluster server does not alter
 // MatterDataVersion.
 func TestParityMatterJS_ClimateDataVersionStableOnReadOnlyClusterWrite(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	before := r.climate.MatterDataVersion()
 
-	for _, id := range []uint32{matterClusterThermostatUI, matterClusterTemperatureMeasurement, matterClusterRelativeHumidityMeasurement} {
+	for _, id := range []uint32{matterClusterThermostatUI} {
 		srv := findCluster(t, r.climate, id)
 		_ = srv.MatterWrite(context.Background(), 0x0000, int16(0), hmenum.CommandPriorityHigh)
 	}
