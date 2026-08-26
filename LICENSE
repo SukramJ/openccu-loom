@@ -23,7 +23,9 @@ SOFTWARE.
 ---
 
 Note: the openccu-loom binary aggregates CCU metadata archives distributed
-under the eQ-3 HomeMatic Software License (non-commercial). Those files live
-under `internal/ccudata/embedded/` and are governed by the accompanying
-`NOTICE` file in that directory — they are *not* covered by the MIT license
-above. See `docs/adr/0003-embed-occu-extracts.md` for the full rationale.
+under the eQ-3 HomeMatic Software License (non-commercial). They come from the
+`github.com/SukramJ/go-openccu-data` module and are governed by that module's
+`NOTICE.md` — they are *not* covered by the MIT license above. See
+`docs/adr/0003-embed-occu-extracts.md` for the rationale and
+`docs/adr/0053-go-openccu-data-module.md` for why the data moved into a module
+of its own.

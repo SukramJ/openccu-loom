@@ -4,7 +4,9 @@
 - **Date**: 2026-04-24
 - **Supersedes**: original revision from 2026-04-23 (wrongly assumed
   GPL-2.0-or-later for the upstream data)
-- **Related**: `internal/ccudata/embedded/NOTICE`, `notes/plans/roadmap.md`,
+- **Related**: the `NOTICE.md` of the `github.com/SukramJ/go-openccu-data`
+  module (see [ADR 0053](./0053-go-openccu-data-module.md)),
+  `notes/plans/roadmap.md`,
   [ADR 0001 — License: MIT](./0001-license-mit.md)
 
 ## Context
@@ -30,7 +32,9 @@ the binary** via `go:embed`. openccu-data is the authoritative
 extractor and is also consumed by aiohomematic + aiohomematic-config,
 so the whole ecosystem sees the same data.
 
-File layout under `internal/ccudata/embedded/`:
+File layout under `internal/ccudata/embedded/` *(as decided here; the data
+later moved into a module of its own — see
+[ADR 0053](./0053-go-openccu-data-module.md))*:
 
 - `translation_extract.json.gz` — raw CCU stringtable
 - `easymode_extract.json.gz` — TCL easymode
@@ -75,7 +79,8 @@ RaspberryMatic source material. They inherit the upstream
 
 - Free for **private, non-commercial** use.
 - Redistribution is permitted as long as the upstream notice travels
-  along (we keep `internal/ccudata/embedded/NOTICE` intact).
+  along (the `go-openccu-data` module carries its `NOTICE.md`, and
+  `THIRD-PARTY-NOTICES.md` reproduces the terms here).
 - **Commercial redistribution requires written eQ-3 permission.**
 
 ### Aggregation model
