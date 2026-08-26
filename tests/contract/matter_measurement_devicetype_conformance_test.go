@@ -51,6 +51,7 @@ var measurementClasses = []interfaces.MatterMeasurementClass{
 	interfaces.MatterMeasurementPower,
 	interfaces.MatterMeasurementEnergy,
 	interfaces.MatterMeasurementMomentarySwitch,
+	interfaces.MatterMeasurementElectrical,
 }
 
 // hostRiddenMeasurementClasses are the classes that map to device type 0
@@ -64,12 +65,12 @@ var measurementClasses = []interfaces.MatterMeasurementClass{
 // that a conformant host device type for the cluster exists at all.
 //
 // What an entry does NOT assert is that the seam suppresses the standalone
-// endpoint. Nothing measured here shows the attached DP being dropped from
-// the assembler's candidate walk; that is what the fleet guard in
-// tests/integration/matter_endpoint_cluster_conformance_test.go observes.
+// endpoint. That is what TestMeteringPlugProjectsOneElectricalSensorEndpoint
+// in internal/north/matter/endpoint observes, on an assembled topology.
 var hostRiddenMeasurementClasses = map[interfaces.MatterMeasurementClass]string{
-	interfaces.MatterMeasurementPower:  "switchdev.Switch.AttachPowerSource mounts 0x0090 on the OnOffPlugInUnit endpoint",
-	interfaces.MatterMeasurementEnergy: "switchdev.Switch.AttachEnergySource mounts 0x0091 on the OnOffPlugInUnit endpoint",
+	interfaces.MatterMeasurementPower: "folded into a generic.ElectricalGroup by the assembler, which projects one " +
+		"ElectricalSensor (0x0510) endpoint per channel; the per-parameter class never builds an endpoint",
+	interfaces.MatterMeasurementEnergy: "folded into the same generic.ElectricalGroup as Power",
 }
 
 // measurementClassesUnderInvestigation are known defects, not exemptions.

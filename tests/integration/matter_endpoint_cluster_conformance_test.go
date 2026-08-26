@@ -92,14 +92,7 @@ func endpointAllowsServerCluster(deviceType, clusterID uint32) bool {
 //
 // Emptying this map is the goal. Key format: "0x%04X/0x%04X" (device type,
 // cluster).
-var nonConformantEndpointClusters = map[string]string{
-	"0x010A/0x0090": "OnOffPlugInUnit serves ElectricalPowerMeasurement. The Device Library does not " +
-		"name 0x0090 for 0x010A at all — neither server nor client. Its specified carrier is " +
-		"ElectricalSensor (0x0510), which also makes PowerTopology (0x009C) mandatory. Fix: give the " +
-		"metering plug a second endpoint of type 0x0510 carrying 0x0090 + 0x0091 + 0x009C",
-	"0x010A/0x0091": "OnOffPlugInUnit serves ElectricalEnergyMeasurement. Same shape as 0x0090; the " +
-		"same ElectricalSensor (0x0510) endpoint is the fix for both",
-}
+var nonConformantEndpointClusters = map[string]string{}
 
 // TestBridgedEndpointClustersConformToTheirDeviceType walks the fleet and
 // checks every MatterEndpointSource's cluster set against the Device Library

@@ -63,8 +63,6 @@ func TestParityMatterJS_ClimateClusterRevisions(t *testing.T) {
 	}{
 		{matterClusterThermostat, "Thermostat", matterThermClusterRevision},
 		{matterClusterThermostatUI, "ThermostatUserInterfaceConfiguration", matterThermUIClusterRevision},
-		{matterClusterTemperatureMeasurement, "TemperatureMeasurement", matterTempMeasClusterRevision},
-		{matterClusterRelativeHumidityMeasurement, "RelativeHumidityMeasurement", matterHumidityClusterRevision},
 	}
 
 	for _, c := range cases {

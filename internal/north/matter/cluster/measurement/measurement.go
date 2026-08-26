@@ -935,14 +935,31 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
 			return []interfaces.MatterClusterServer{NewPowerSourceServerFromFloat(f)}
 		}
-	case interfaces.MatterMeasurementPower:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewElectricalPowerServer(f)}
+	case interfaces.MatterMeasurementElectrical:
+		// The ElectricalSensor endpoint's full surface. PowerTopology is
+		// mandatory for the device type, so it ships whether or not the
+		// device has anything topological to say; ElectricalEnergyMeasurement
+		// joins only when the channel actually reports a counter, since
+		// conformance O.a+ requires at least one of the two measurement
+		// clusters, not both.
+		r, ok := src.(ElectricalReadingsSource)
+		if !ok {
+			return nil
 		}
-	case interfaces.MatterMeasurementEnergy:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewElectricalEnergyServer(f)}
+		servers := []interfaces.MatterClusterServer{
+			NewElectricalPowerServerFromReadings(r),
+			NewPowerTopologyServer(),
 		}
+		if r.HasEnergy() {
+			servers = append(servers, NewElectricalEnergyServer(energyOf{r}))
+		}
+		return servers
+	case interfaces.MatterMeasurementPower, interfaces.MatterMeasurementEnergy:
+		// Per-parameter classes never build an endpoint of their own: the
+		// assembler folds them into one [generic.ElectricalGroup] and
+		// dispatches that as MatterMeasurementElectrical above. Reaching here
+		// means a caller bypassed the consolidation.
+		return nil
 	case interfaces.MatterMeasurementNone, interfaces.MatterMeasurementMomentarySwitch:
 		// None has no cluster projection by design; MomentarySwitch
 		// projects via the GenericSwitch event path in
@@ -958,10 +975,10 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 // the wire unit is int64 in milliWatts per Matter §2.13.6 (e.g.
 // 1500.0 W → 1500000 wire units).
 //
-// v1.1 surfaces only ActivePower; Voltage / Current / Frequency
-// would each need their own typed source — they're declared in the
-// attribute table but a per-attribute multi-source projection is
-// future work. Reading those attributes returns null until then.
+// ActivePower always comes from src. Voltage, ActiveCurrent and Frequency
+// come from the optional readings surface, which a consolidated
+// [generic.ElectricalGroup] supplies; without it those three attributes read
+// as null, which is what a single-parameter source can honestly report.
 //
 // ElectricalPowerServer embeds [cluster.DataVersionTracker] and
 // implements [interfaces.MatterClusterDataVersion]. See TemperatureServer
@@ -969,14 +986,34 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 type ElectricalPowerServer struct {
 	cluster.DataVersionTracker
 	src interfaces.MatterFloatMeasurementSource
+	// readings is nil for a single-parameter source; when set it answers
+	// Voltage / ActiveCurrent / Frequency as well.
+	readings interfaces.MatterElectricalReadings
 }
 
 // Compile-time assertion: ElectricalPowerServer satisfies MatterClusterDataVersion.
 var _ interfaces.MatterClusterDataVersion = (*ElectricalPowerServer)(nil)
 
-// NewElectricalPowerServer wraps src.
+// NewElectricalPowerServer wraps src. Voltage / ActiveCurrent / Frequency
+// read as null — use [NewElectricalPowerServerFromReadings] for a source that
+// carries them.
 func NewElectricalPowerServer(src interfaces.MatterFloatMeasurementSource) *ElectricalPowerServer {
 	return &ElectricalPowerServer{src: src}
+}
+
+// NewElectricalPowerServerFromReadings wraps a consolidated electrical group,
+// so all four ElectricalPowerMeasurement readings the CCU provides reach the
+// cluster instead of only ActivePower.
+func NewElectricalPowerServerFromReadings(r ElectricalReadingsSource) *ElectricalPowerServer {
+	return &ElectricalPowerServer{src: r, readings: r}
+}
+
+// ElectricalReadingsSource is a consolidated electrical group: the typed
+// multi-attribute surface plus the single-value surface every measurement
+// source carries (which reports the group's headline reading, active power).
+type ElectricalReadingsSource interface {
+	interfaces.MatterElectricalReadings
+	interfaces.MatterFloatMeasurementSource
 }
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -1029,11 +1066,18 @@ func (s *ElectricalPowerServer) MatterRead(attrID uint32) (any, bool) {
 			return nil, true
 		}
 		return wattsToMilliWatts(v), true
-	case attrElPwrVoltage, attrElPwrActiveCurrnt, attrElPwrFrequency:
-		// Multi-source projection (per-attribute typed source) is
-		// follow-up work; surface as null so controllers parse the
-		// frame structurally even when the data is missing.
-		return nil, true
+	case attrElPwrVoltage:
+		// Null rather than UnsupportedAttribute when the device does not
+		// report the parameter: the attribute is specified for the cluster,
+		// the reading is what is missing. See TemperatureServer.MatterRead.
+		return s.scaled(func() (float64, bool) { return s.readings.Voltage() }, 1000), true
+	case attrElPwrActiveCurrnt:
+		// CURRENT is reported in milliamperes and the attribute is
+		// milliamperes (spec §2.13.6.5), so no scaling. Verified against the
+		// reference stack, which types it UnitOfElectricCurrent.MILLIAMPERE.
+		return s.scaled(func() (float64, bool) { return s.readings.Current() }, 1), true
+	case attrElPwrFrequency:
+		return s.scaled(func() (float64, bool) { return s.readings.Frequency() }, 1000), true
 	case cluster.AttrGlobalFeatureMap:
 		return elPwrFeatureAltC, true
 	case cluster.AttrGlobalClusterRevision:
@@ -1069,6 +1113,32 @@ func (s *ElectricalPowerServer) MatterAttributes() []uint32 {
 		attrElPwrActivePower,
 		attrElPwrFrequency,
 	}
+}
+
+// scaled reads one optional attribute from the readings surface and converts
+// it to the attribute's wire unit. Returns nil — a Matter null — when there is
+// no readings surface or the device does not report the parameter.
+func (s *ElectricalPowerServer) scaled(read func() (float64, bool), factor float64) any {
+	if s.readings == nil {
+		return nil
+	}
+	v, ok := read()
+	if !ok {
+		return nil
+	}
+	return clampToInt64(math.Round(v * factor))
+}
+
+// clampToInt64 saturates instead of wrapping, so an implausible reading
+// cannot flip sign on the wire.
+func clampToInt64(v float64) int64 {
+	if v > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	if v < math.MinInt64 {
+		return math.MinInt64
+	}
+	return int64(v)
 }
 
 func wattsToMilliWatts(w float64) int64 {
@@ -1640,4 +1710,100 @@ func percentToHalfPercent(pct float64) uint8 {
 		half = 200
 	}
 	return uint8(half)
+}
+
+// ClusterPowerTopology is the Matter PowerTopology cluster ID (0x009C).
+const ClusterPowerTopology uint32 = 0x009C
+
+// powerTopologyClusterRevision per matter.js HEAD
+// packages/model/src/standard/elements/power-topology.element.ts (revision 1).
+const powerTopologyClusterRevision uint16 = 1
+
+// powerTopologyFeatureNode is the NODE (NodeTopology) feature, bit 0: the
+// cluster describes the power of the whole node — the endpoint's readings
+// cover everything it reports, with no sub-endpoint breakdown.
+//
+// NODE is deliberate rather than convenient. AvailableEndpoints (0x0000) is
+// conformance SET and ActiveEndpoints (0x0001) is conformance DYPF, so under
+// NODE neither attribute is conformant and the cluster's whole surface is its
+// globals. A metering plug measures one socket; there is no topology to
+// enumerate.
+const powerTopologyFeatureNode uint32 = 1 << 0
+
+// PowerTopologyServer implements the PowerTopology cluster (0x009C), which
+// the Device Library makes MANDATORY on an ElectricalSensor endpoint
+// (matter.js electrical-sensor.element.ts: PowerTopology conformance "M").
+// An ElectricalSensor without it is non-conformant, and a strict commissioner
+// reads the mandatory set during pairing.
+//
+// The cluster is stateless under NODE, so it tracks no DataVersion of its own
+// beyond the embedded tracker's initial value.
+type PowerTopologyServer struct {
+	cluster.DataVersionTracker
+}
+
+// Compile-time assertion: PowerTopologyServer satisfies MatterClusterDataVersion.
+var _ interfaces.MatterClusterDataVersion = (*PowerTopologyServer)(nil)
+
+// NewPowerTopologyServer returns the NODE-topology server.
+func NewPowerTopologyServer() *PowerTopologyServer { return &PowerTopologyServer{} }
+
+// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+func (s *PowerTopologyServer) MatterDataVersion() uint32 { return s.Current() }
+
+// MatterClusterID returns the Matter PowerTopology cluster ID (0x009C).
+func (s *PowerTopologyServer) MatterClusterID() uint32 { return ClusterPowerTopology }
+
+// MatterRead answers the cluster's globals; under NODE it has no other
+// conformant attributes.
+func (s *PowerTopologyServer) MatterRead(attrID uint32) (any, bool) {
+	switch attrID {
+	case cluster.AttrGlobalFeatureMap:
+		return powerTopologyFeatureNode, true
+	case cluster.AttrGlobalClusterRevision:
+		return powerTopologyClusterRevision, true
+	}
+	return nil, false
+}
+
+// MatterWrite returns errReadOnly — PowerTopology is read-only at the wire layer.
+func (s *PowerTopologyServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+	return errReadOnly
+}
+
+// MatterInvoke returns errNoCommands — PowerTopology has no commands.
+func (s *PowerTopologyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
+}
+
+// MatterReportable returns nil — nothing in the NODE surface changes.
+func (s *PowerTopologyServer) MatterReportable() []uint32 { return nil }
+
+// MatterAttributes returns an empty list: under NODE the cluster's only
+// attributes are the globals, which the dispatcher answers itself.
+func (s *PowerTopologyServer) MatterAttributes() []uint32 { return []uint32{} }
+
+// energyOf adapts a consolidated electrical group to the single-value surface
+// ElectricalEnergyServer reads, so the energy cluster sees the counter rather
+// than the group's headline active-power reading.
+type energyOf struct {
+	r interfaces.MatterElectricalReadings
+}
+
+// MatterFloatValue returns the group's energy counter.
+func (e energyOf) MatterFloatValue() (float64, bool) { return e.r.Energy() }
+
+// MatterMeasurementClass reports the group's class; the adapter changes which
+// reading is surfaced, not what the source is.
+func (e energyOf) MatterMeasurementClass() interfaces.MatterMeasurementClass {
+	return interfaces.MatterMeasurementElectrical
+}
+
+// OnMatterValueChanged forwards the group's notifier so the energy cluster is
+// marked dirty when any member updates.
+func (e energyOf) OnMatterValueChanged(cb func()) func() {
+	if n, ok := e.r.(interfaces.MatterChangeNotifier); ok && n != nil {
+		return n.OnMatterValueChanged(cb)
+	}
+	return func() {}
 }

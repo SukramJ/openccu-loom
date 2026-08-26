@@ -77,11 +77,9 @@ func (c *Climate) OnMatterValueChanged(cb func()) func() {
 const (
 	matterDeviceTypeThermostat uint16 = 0x0301
 
-	matterClusterThermostat                  uint32 = 0x0201
-	matterClusterThermostatUI                uint32 = 0x0204
-	matterClusterTemperatureMeasurement      uint32 = 0x0402
-	matterClusterRelativeHumidityMeasurement uint32 = 0x0405
-	matterClusterSchedules                   uint32 = wire.SchedulesClusterID
+	matterClusterThermostat   uint32 = 0x0201
+	matterClusterThermostatUI uint32 = 0x0204
+	matterClusterSchedules    uint32 = wire.SchedulesClusterID
 
 	// Thermostat (0x0201) attribute IDs (subset).
 	matterAttrThermLocalTemperature uint32 = 0x0000
@@ -99,30 +97,16 @@ const (
 	matterAttrUITempDisplayMode uint32 = 0x0000
 	matterAttrUIKeypadLockout   uint32 = 0x0001
 
-	// Generic measurement attributes (TemperatureMeasurement /
-	// RelativeHumidityMeasurement / IlluminanceMeasurement all use the
-	// same conventional IDs). MeasuredValue/MinMeasuredValue/
-	// MaxMeasuredValue are all conformance "M" (mandatory) on both
-	// clusters — matter.js packages/model/src/standard/elements/
-	// temperature-measurement.element.ts:15-26 and
-	// relative-humidity-measurement.element.ts:15-26.
-	matterAttrMeasuredValue    uint32 = 0x0000
-	matterAttrMinMeasuredValue uint32 = 0x0001
-	matterAttrMaxMeasuredValue uint32 = 0x0002
-
 	matterAttrFeatureMap      uint32 = 0xFFFC
 	matterAttrClusterRevision uint32 = 0xFFFD
 
 	// Thermostat command IDs.
 	matterCmdSetpointRaiseLower uint32 = 0x00
 
-	// Cluster revisions: Thermostat 11, ThermostatUI 2,
-	// TemperatureMeasurement 6, RelativeHumidityMeasurement 5.
+	// Cluster revisions: Thermostat 11, ThermostatUI 2.
 	// Pinned via notes/parity/matter/matter-schema-snapshot.json.
-	matterThermClusterRevision    uint16 = 11
-	matterThermUIClusterRevision  uint16 = 2
-	matterTempMeasClusterRevision uint16 = 6
-	matterHumidityClusterRevision uint16 = 5
+	matterThermClusterRevision   uint16 = 11
+	matterThermUIClusterRevision uint16 = 2
 
 	// Matter Thermostat SystemMode enum values (spec 4.3.7.4.4).
 	matterSysModeOff  uint8 = 0

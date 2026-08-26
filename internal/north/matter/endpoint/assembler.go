@@ -417,6 +417,11 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 	// physical button after the loop. See [generic.ButtonGroup] and
 	// [ButtonGroupDPKey].
 	var pressMembers []device.ParameterDataPoint
+	// Electrical DPs (POWER / VOLTAGE / CURRENT / FREQUENCY /
+	// ENERGY_COUNTER) are consolidated the same way: Matter groups them into
+	// the attributes of one ElectricalSensor endpoint, so one metering socket
+	// is one accessory rather than five. See [ElectricalGroupDPKey].
+	var electricalMembers []device.ParameterDataPoint
 	for _, gdp := range ch.DataPoints() {
 		key := genericDPKeyForMeasurement(gdp)
 		if key == "" {
@@ -474,6 +479,15 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			pressMembers = append(pressMembers, gdp)
 			continue
 		}
+		switch meas.MatterMeasurementClass() {
+		case interfaces.MatterMeasurementPower, interfaces.MatterMeasurementEnergy:
+			// Defer to the per-channel consolidation below. The allowlist
+			// stays per-parameter, so an operator can expose consumption
+			// while keeping voltage private.
+			electricalMembers = append(electricalMembers, gdp)
+			continue
+		default:
+		}
 		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindGeneric, key, meas)
 		if err != nil {
 			return nil, err
@@ -493,7 +507,85 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		}
 	}
 
+	if len(electricalMembers) > 0 {
+		ep, err := a.makeElectricalGroupEndpoint(ctx, centralName, dev, ch, electricalMembers)
+		if err != nil {
+			return nil, err
+		}
+		if ep != nil {
+			seen[ep.SourceKey] = struct{}{}
+			out = append(out, ep)
+		}
+	}
+
 	return out, nil
+}
+
+// ElectricalGroupDPKey is the synthetic dp_key persisted for the per-channel
+// consolidated ElectricalSensor endpoint.
+//
+// A metering plug reports POWER, VOLTAGE, CURRENT, FREQUENCY and
+// ENERGY_COUNTER as five parameters; Matter models the first four as
+// attributes of ONE ElectricalPowerMeasurement cluster and the fifth as
+// ElectricalEnergyMeasurement, both on a single ElectricalSensor device type
+// (0x0510, matter.js electrical-sensor.element.ts). No single member
+// parameter can serve as the row key, so the group gets its own — the same
+// reasoning as [ButtonGroupDPKey].
+//
+// These clusters used to be attached to the OnOff endpoint of the switch on
+// the same device instead. The Device Library specifies neither of them for
+// OnOffPlugInUnit (0x010A) in any role, which made that endpoint
+// non-conformant; ElectricalSensor is their specified carrier.
+const ElectricalGroupDPKey = "ELECTRICAL"
+
+// makeElectricalGroupEndpoint builds the single ElectricalSensor endpoint for
+// one channel from its allowed electrical DPs. Returns (nil, nil) when no
+// member survives the group's parameter filter.
+func (a *Assembler) makeElectricalGroupEndpoint(
+	ctx context.Context,
+	centralName string,
+	dev *device.Device,
+	ch *device.Channel,
+	members []device.ParameterDataPoint,
+) (*Endpoint, error) {
+	srcs := make([]generic.ElectricalGroupMember, 0, len(members))
+	for _, m := range members {
+		src, ok := m.(generic.ElectricalGroupMember)
+		if !ok {
+			continue
+		}
+		srcs = append(srcs, src)
+	}
+	group := generic.NewElectricalGroup(srcs...)
+	if group == nil {
+		return nil, nil
+	}
+	sourceKey := store.EndpointKey{
+		CentralName:   centralName,
+		DeviceAddress: dev.Address,
+		ChannelNo:     ch.Number,
+		DPKind:        store.DPKindGeneric,
+		DPKey:         ElectricalGroupDPKey,
+	}
+	deviceType := measurementDeviceType(interfaces.MatterMeasurementElectrical)
+	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
+	if err != nil {
+		return nil, err
+	}
+	return &Endpoint{
+		ID:            id,
+		DeviceType:    deviceType,
+		Reachable:     dev.Available(),
+		FriendlyName:  friendlyName(dev, ch, a.parameterSuffix(ch, ElectricalGroupDPKey), a.channelLabel()),
+		BridgedDevice: dev,
+		Channel:       ch,
+		Measurement:   group,
+		SourceKey:     sourceKey,
+		state:         a.states.stateFor(sourceKey),
+		// Same parent chain as every other bridged endpoint.
+		ParentEndpointID:    1,
+		HasParentEndpointID: true,
+	}, nil
 }
 
 // ButtonGroupDPKey is the synthetic dp_key persisted for the

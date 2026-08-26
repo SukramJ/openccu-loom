@@ -25,7 +25,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	switchdev "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 
 	// Blank-import the builtins aggregator so every custom-DP
 	// sub-package (climate, cover, light, lock, siren, switch,
@@ -1316,13 +1315,6 @@ func (p *DevicePipeline) materialiseCustomDataPoints(interfaceID string, logger 
 			// No hard fail — the device still goes online with whatever
 			// custom DPs landed plus all generic DPs.
 		}
-		// Post-discovery hook: bind cross-channel POWER /
-		// ENERGY_COUNTER sources to any Switch custom DP. Runs after
-		// the materialise loop so every channel's generic DPs are
-		// already live and the sibling lookup succeeds for HmIP-PSM-
-		// style devices where the SWITCH_VIRTUAL_RECEIVER channel and
-		// the energy-counter channel are distinct.
-		switchdev.AttachPowerEnergySources(d)
 	}
 }
 
