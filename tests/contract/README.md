@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 382.
+Guards without a doc comment: 7 of 383.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -199,6 +199,7 @@ Guards without a doc comment: 7 of 382.
 | TestOpenAPIVersion | openapi_test.go | — (no doc comment) |
 | TestPingPongCallerIDDistinguishesDaemons | ping_pong_caller_id_contract_test.go | TestPingPongCallerIDDistinguishesDaemons asserts that two daemons with the same CentralName and Interface but different InitInterfaceID values produce distinct WireBoundaryID values, and that neither degenerates to the bare interface name. |
 | TestProfileArchivesHaveOneSource | profile_archive_single_source_test.go | TestProfileArchivesHaveOneSource asserts that no package carries its own copy of the eQ-3 profile archives. |
+| TestEveryADRIsInTheIndex | published_docs_test.go | The ADR index claims to catalogue every ADR: "The table below catalogues every ADR." Nothing checked that, and it drifted three entries behind — 0063, 0064 and 0065 were all missing while the sentence stayed. |
 | TestEveryPublishedDocIsInTheNav | published_docs_test.go | TestEveryPublishedDocIsInTheNav fails when a Markdown file under `docs/` is missing from `mkdocs.yml`'s nav. |
 | TestPublishedDocsLinksStayInsideDocsDir | published_docs_test.go | TestPublishedDocsLinksStayInsideDocsDir fails when a page under `docs/` links to a file outside `docs/` with a relative path. |
 | TestRatchetReasonsAreNotDeferrals | ratchet_reason_purity_test.go | TestRatchetReasonsAreNotDeferrals enforces textually what the ratchet headers already demand in prose: an entry in a declared-silence list says someone looked and decided the silence is CORRECT — not that the work is pending. |

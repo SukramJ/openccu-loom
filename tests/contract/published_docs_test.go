@@ -201,3 +201,69 @@ func TestEveryPublishedDocIsInTheNav(t *testing.T) {
 
 	t.Fatal(sb.String())
 }
+
+// The ADR index claims to catalogue every ADR: "The table below catalogues
+// every ADR." Nothing checked that, and it drifted three entries behind —
+// 0063, 0064 and 0065 were all missing while the sentence stayed. The nav
+// guard above does not help: a new ADR reaches the nav because it must, to be
+// published at all, and the index is a separate page whose rows nobody has to
+// touch.
+//
+// A reader who trusts the sentence and finds no row concludes the ADR does not
+// exist. That is the failure this guards against.
+func TestEveryADRIsInTheIndex(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("abs repo root: %v", err)
+	}
+
+	indexPath := filepath.Join(repoRoot, "docs", "developer", "adr-index.md")
+	index, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", indexPath, err)
+	}
+
+	adrs, err := filepath.Glob(filepath.Join(repoRoot, "docs", "adr", "[0-9]*.md"))
+	if err != nil {
+		t.Fatalf("glob ADRs: %v", err)
+	}
+	if len(adrs) == 0 {
+		t.Fatal("found no ADRs under docs/adr/ — the glob is wrong, not the index")
+	}
+
+	// A row looks like: | [0042](../adr/0042-clear-ccu-cache-and-repull.md) | … |
+	rowFor := func(number, file string) *regexp.Regexp {
+		return regexp.MustCompile(`(?m)^\|\s*\[` + regexp.QuoteMeta(number) +
+			`\]\(\.\./adr/` + regexp.QuoteMeta(file) + `\)\s*\|`)
+	}
+
+	var missing []string
+	for _, path := range adrs {
+		file := filepath.Base(path)
+		number, _, found := strings.Cut(file, "-")
+		if !found {
+			t.Fatalf("ADR filename %q does not start with a number followed by '-'", file)
+		}
+		if !rowFor(number, file).MatchString(string(index)) {
+			missing = append(missing, file)
+		}
+	}
+
+	if len(missing) == 0 {
+		return
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "ADR index: %d of %d ADR(s) have no row in docs/developer/adr-index.md:\n\n",
+		len(missing), len(adrs))
+	for _, m := range missing {
+		fmt.Fprintf(&sb, "  docs/adr/%s\n", m)
+	}
+	sb.WriteString("\nThe page states that it catalogues every ADR, so a missing row reads as\n")
+	sb.WriteString("\"this decision was never recorded\". Add a row:\n\n")
+	sb.WriteString("  | [NNNN](../adr/NNNN-slug.md) | Title | One sentence on the decision. |\n")
+
+	t.Fatal(sb.String())
+}
