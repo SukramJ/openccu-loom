@@ -1,6 +1,6 @@
 {
-  "generated": "794b110b",
-  "head": "794b110b",
+  "generated": "5eb443a0",
+  "head": "5eb443a0",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 30049,
-    "reachable": 5003,
-    "whitelisted": 21867,
+    "total_exported": 30052,
+    "reachable": 5005,
+    "whitelisted": 21868,
     "unreachable": 3179
   },
   "by_package": [
@@ -36811,6 +36811,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/paramsets_audit_secrets_test.go",
       "line": 17
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestAwaitingReleaseReachesTheInboxSurface",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/awaiting_release_surface_test.go",
+      "line": 22
     },
     {
       "package": "internal/central/adapter",
@@ -131912,70 +131919,70 @@
       "identifier": "AckAlarmMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1179
+      "line": 1187
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAlarmMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1179
+      "line": 1187
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1220
+      "line": 1228
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1220
+      "line": 1228
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllResult",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1213
+      "line": 1221
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllResult",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1213
+      "line": 1221
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1228
+      "line": 1236
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1228
+      "line": 1236
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1196
+      "line": 1204
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1196
+      "line": 1204
     },
     {
       "package": "internal/north/rest/handlers",
@@ -132094,14 +132101,14 @@
       "identifier": "AlarmMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 271
+      "line": 278
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AlarmMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 271
+      "line": 278
     },
     {
       "package": "internal/north/rest/handlers",
@@ -133298,14 +133305,14 @@
       "identifier": "CreateSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 542
+      "line": 549
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CreateSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 542
+      "line": 549
     },
     {
       "package": "internal/north/rest/handlers",
@@ -133704,14 +133711,14 @@
       "identifier": "DeleteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 795
+      "line": 802
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DeleteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 795
+      "line": 802
     },
     {
       "package": "internal/north/rest/handlers",
@@ -133732,14 +133739,14 @@
       "identifier": "DeleteSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 695
+      "line": 702
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DeleteSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 695
+      "line": 702
     },
     {
       "package": "internal/north/rest/handlers",
@@ -134208,14 +134215,14 @@
       "identifier": "DisableServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1280
+      "line": 1288
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DisableServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1280
+      "line": 1288
     },
     {
       "package": "internal/north/rest/handlers",
@@ -134684,14 +134691,14 @@
       "identifier": "ExecuteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 752
+      "line": 759
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ExecuteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 752
+      "line": 759
     },
     {
       "package": "internal/north/rest/handlers",
@@ -134726,14 +134733,14 @@
       "identifier": "FetchSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 714
+      "line": 721
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "FetchSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 714
+      "line": 721
     },
     {
       "package": "internal/north/rest/handlers",
@@ -135244,14 +135251,14 @@
       "identifier": "GetInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1401
+      "line": 1409
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1401
+      "line": 1409
     },
     {
       "package": "internal/north/rest/handlers",
@@ -135314,14 +135321,14 @@
       "identifier": "GetProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 445
+      "line": 452
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 445
+      "line": 452
     },
     {
       "package": "internal/north/rest/handlers",
@@ -135440,28 +135447,28 @@
       "identifier": "GetSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 878
+      "line": 885
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 878
+      "line": 885
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSysvarUsage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 929
+      "line": 936
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSysvarUsage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 929
+      "line": 936
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136028,28 +136035,28 @@
       "identifier": "InterfaceIndex",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1387
+      "line": 1395
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InterfaceIndex",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1387
+      "line": 1395
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InterfaceState",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1384
+      "line": 1392
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InterfaceState",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1384
+      "line": 1392
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136196,14 +136203,14 @@
       "identifier": "ListAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1099
+      "line": 1107
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1099
+      "line": 1107
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136574,14 +136581,14 @@
       "identifier": "ListInbox",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1059
+      "line": 1066
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListInbox",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1059
+      "line": 1066
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136602,14 +136609,14 @@
       "identifier": "ListInterfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1390
+      "line": 1398
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListInterfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1390
+      "line": 1398
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136672,14 +136679,14 @@
       "identifier": "ListPrograms",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 347
+      "line": 354
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListPrograms",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 347
+      "line": 354
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136770,14 +136777,14 @@
       "identifier": "ListServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1138
+      "line": 1146
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1138
+      "line": 1146
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136798,14 +136805,14 @@
       "identifier": "ListSuppressedServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1318
+      "line": 1326
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSuppressedServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1318
+      "line": 1326
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136826,14 +136833,14 @@
       "identifier": "ListSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 848
+      "line": 855
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 848
+      "line": 855
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138324,14 +138331,14 @@
       "identifier": "PatchSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 626
+      "line": 633
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PatchSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 626
+      "line": 633
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138590,42 +138597,42 @@
       "identifier": "ProgramExecuteRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 732
+      "line": 739
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramExecuteRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 732
+      "line": 739
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramExecuteResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 741
+      "line": 748
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramExecuteResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 741
+      "line": 748
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramSetEnabledRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 473
+      "line": 480
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramSetEnabledRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 473
+      "line": 480
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138926,14 +138933,14 @@
       "identifier": "PutSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 986
+      "line": 993
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 986
+      "line": 993
     },
     {
       "package": "internal/north/rest/handlers",
@@ -139024,14 +139031,14 @@
       "identifier": "ReconnectInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1419
+      "line": 1427
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ReconnectInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1419
+      "line": 1427
     },
     {
       "package": "internal/north/rest/handlers",
@@ -139514,14 +139521,14 @@
       "identifier": "ServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 292
+      "line": 299
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 292
+      "line": 299
     },
     {
       "package": "internal/north/rest/handlers",
@@ -139570,14 +139577,14 @@
       "identifier": "SetProgramEnabled",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 478
+      "line": 485
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SetProgramEnabled",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 478
+      "line": 485
     },
     {
       "package": "internal/north/rest/handlers",
@@ -139892,14 +139899,14 @@
       "identifier": "SuppressedServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1297
+      "line": 1305
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SuppressedServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1297
+      "line": 1305
     },
     {
       "package": "internal/north/rest/handlers",
@@ -140074,28 +140081,28 @@
       "identifier": "SysvarCreateRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 506
+      "line": 513
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarCreateRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 506
+      "line": 513
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarPatchRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 600
+      "line": 607
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarPatchRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 600
+      "line": 607
     },
     {
       "package": "internal/north/rest/handlers",
@@ -140144,28 +140151,28 @@
       "identifier": "SysvarUsageProgramDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 907
+      "line": 914
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarUsageProgramDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 907
+      "line": 914
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarUsageResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 920
+      "line": 927
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarUsageResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 920
+      "line": 927
     },
     {
       "package": "internal/north/rest/handlers",
@@ -150266,28 +150273,28 @@
       "identifier": "UnsuppressRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1345
+      "line": 1353
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UnsuppressRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1345
+      "line": 1353
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UnsuppressServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1356
+      "line": 1364
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UnsuppressServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1356
+      "line": 1364
     },
     {
       "package": "internal/north/rest/handlers",

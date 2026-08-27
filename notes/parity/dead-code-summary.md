@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 794b110b
-HEAD: 794b110b
+Generated: 5eb443a0
+HEAD: 5eb443a0
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30049 |
-| Reachable | 5165 |
-| Whitelisted | 21867 |
+| Total Exported | 30052 |
+| Reachable | 5167 |
+| Whitelisted | 21868 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

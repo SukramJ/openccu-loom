@@ -1005,9 +1005,15 @@ const EN: Catalog = {
     "Inbox empty. Enable pairing mode on the device list to see new candidates.",
   "inbox.accept": "Accept",
   "inbox.accepted": "{name} accepted.",
-  "inbox.pending_creation_badge": "Awaiting approval",
+  "inbox.pending_creation_badge": "Awaiting acceptance",
   "inbox.pending_creation_hint":
     "Deferred device creation is enabled: this device exists on the CCU but has no data points here until you accept it.",
+  "inbox.awaiting_release_badge": "Awaiting release",
+  "inbox.awaiting_release_hint":
+    "Accepted and ready to configure: this device has its channels and data points here, and you can name it and assign rooms now. It reaches Home Assistant, Matter and webhooks only once you release it — and an ecosystem that sees it earlier keeps the name it saw first.",
+  "inbox.release": "Release",
+  "inbox.configure": "Configure",
+  "inbox.released": "{name} released — it is now available to Home Assistant, Matter and webhooks.",
   "inbox.accept_dialog.title": "Accept device",
   "inbox.accept_dialog.subtitle":
     "Optionally configure {address} before it joins the registry. Leave everything blank to just accept.",
@@ -4906,9 +4912,15 @@ const DE: Catalog = {
     "Posteingang ist leer. Aktiviere den Anlernmodus auf der Geräte-Seite, um neue Geräte zu sehen.",
   "inbox.accept": "Übernehmen",
   "inbox.accepted": "{name} übernommen.",
-  "inbox.pending_creation_badge": "Wartet auf Freigabe",
+  "inbox.pending_creation_badge": "Wartet auf Übernahme",
   "inbox.pending_creation_hint":
     "Verzögerte Geräteanlage ist aktiv: Das Gerät existiert auf der CCU, hat hier aber erst nach der Übernahme Datenpunkte.",
+  "inbox.awaiting_release_badge": "Wartet auf Freigabe",
+  "inbox.awaiting_release_hint":
+    "Übernommen und bereit zur Einrichtung: Das Gerät hat hier seine Kanäle und Datenpunkte, du kannst ihm jetzt Namen und Räume geben. Zu Home Assistant, Matter und Webhooks gelangt es erst mit der Freigabe — ein Ökosystem, das es vorher sieht, behält den zuerst gesehenen Namen.",
+  "inbox.release": "Freigeben",
+  "inbox.configure": "Einrichten",
+  "inbox.released": "{name} freigegeben — jetzt in Home Assistant, Matter und Webhooks verfügbar.",
   "inbox.accept_dialog.title": "Gerät übernehmen",
   "inbox.accept_dialog.subtitle":
     "Optional {address} konfigurieren, bevor es in die Registry aufgenommen wird. Alles leer lassen, um nur zu übernehmen.",

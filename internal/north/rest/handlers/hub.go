@@ -260,6 +260,13 @@ type InboxDeviceDTO struct {
 	// (`delay_new_device_creation`): the device exists on the CCU but has
 	// no data points here until the accept materialises it.
 	PendingCreation bool `json:"pending_creation,omitempty"`
+	// AwaitingRelease marks an entry that is already accepted and fully
+	// materialised — it can be renamed and assigned rooms right now — but
+	// is still withheld from the ecosystems until the operator finishes
+	// onboarding it (POST /devices/{addr}/release).
+	//
+	// A client must not offer "accept" for such an entry: it is accepted.
+	AwaitingRelease bool `json:"awaiting_release,omitempty"`
 }
 
 // AlarmMessageDTO is one entry in the alarm-messages list.
@@ -1079,6 +1086,7 @@ func ListInbox(idx HubIndex) http.HandlerFunc {
 					Manufacturer:    e.Manufacturer,
 					FirstSeen:       e.FirstSeen,
 					PendingCreation: e.PendingCreation,
+					AwaitingRelease: e.AwaitingRelease,
 				})
 			}
 		}

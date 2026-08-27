@@ -36,6 +36,18 @@ type InboxDevice struct {
 	// FirstSeen is a Unix-second timestamp set by the coordinator on
 	// first detection (Go extension, not in Python model).
 	FirstSeen int64
+	// AwaitingRelease marks an entry that is already accepted and fully
+	// materialised — it has its CCU ise_id, its channels and its data
+	// points, and it can be renamed and assigned rooms right now — but is
+	// still withheld from the ecosystems (MQTT / Home Assistant, Matter,
+	// outbound webhooks) until the operator finishes onboarding it.
+	//
+	// It is the wizard's middle state, and it is a different ask than
+	// PendingCreation: that one means "decide whether this exists", this
+	// one means "you can configure it now, and publishing it is the last
+	// step". A client that shows them as one list tells the operator to
+	// accept a device that is already accepted.
+	AwaitingRelease bool
 	// PendingCreation marks an entry the daemon itself is holding back:
 	// with `delay_new_device_creation` enabled the announced device
 	// descriptions are parked until an operator accepts them, so the
@@ -71,8 +83,13 @@ type Inbox struct {
 	// own deferred-creation queue. They are kept apart so a CCU sweep
 	// never drops a deferred entry the CCU does not know about (and
 	// vice versa).
-	devices   map[string]InboxDevice
-	pending   map[string]InboxDevice
+	devices map[string]InboxDevice
+	pending map[string]InboxDevice
+	// awaiting holds the wizard's middle state, kept apart from the other
+	// two for the same reason they are kept apart from each other: a CCU
+	// sweep must not drop it, and it must not be presented as something
+	// to accept.
+	awaiting  map[string]InboxDevice
 	observed  bool
 	callbacks []func([]InboxDevice)
 }
@@ -90,6 +107,7 @@ func NewInboxWithCentral(centralName string) *Inbox {
 		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", "inbox"),
 		devices:             make(map[string]InboxDevice),
 		pending:             make(map[string]InboxDevice),
+		awaiting:            make(map[string]InboxDevice),
 	}
 }
 
@@ -129,7 +147,10 @@ func (i *Inbox) List() []InboxDevice {
 // PendingCreation marker so the operator sees that accepting the device
 // also has to materialise it here. Callers hold i.mu.
 func (i *Inbox) merged() map[string]InboxDevice {
-	out := make(map[string]InboxDevice, len(i.devices)+len(i.pending))
+	out := make(map[string]InboxDevice, len(i.devices)+len(i.pending)+len(i.awaiting))
+	for addr := range i.awaiting {
+		out[addr] = i.awaiting[addr]
+	}
 	for addr := range i.pending {
 		out[addr] = i.pending[addr]
 	}
@@ -141,6 +162,37 @@ func (i *Inbox) merged() map[string]InboxDevice {
 		out[addr] = d
 	}
 	return out
+}
+
+// SetAwaitingRelease swaps the set of devices that are materialised but
+// still withheld from the ecosystems. Fires subscribers when the merged
+// set actually changed.
+//
+// Kept apart from the CCU-reported set and the deferred-creation queue so
+// a CCU sweep never drops an entry it does not know about, exactly as
+// [Inbox.SetPendingCreation] is.
+func (i *Inbox) SetAwaitingRelease(devices []InboxDevice) {
+	next := make(map[string]InboxDevice, len(devices))
+	for j := range devices {
+		d := devices[j]
+		d.AwaitingRelease = true
+		next[d.Address] = d
+	}
+	i.swap(func() bool {
+		now := time.Now().Unix()
+		for addr := range next {
+			d := next[addr]
+			if prev, existed := i.awaiting[addr]; existed && prev.FirstSeen != 0 {
+				d.FirstSeen = prev.FirstSeen
+			} else if d.FirstSeen == 0 {
+				d.FirstSeen = now
+			}
+			next[addr] = d
+		}
+		changed := !sameInbox(i.awaiting, next)
+		i.awaiting = next
+		return changed
+	})
 }
 
 // Replace swaps the CCU-reported pending-devices set. Fires subscribers

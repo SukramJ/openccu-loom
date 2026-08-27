@@ -698,6 +698,22 @@ export const api = {
       body: JSON.stringify({ old_address: oldAddress, ...(central ? { central } : {}) }),
     });
   },
+  /**
+   * Finish onboarding: the device stops being withheld from the
+   * ecosystems (MQTT / Home Assistant, Matter, outbound webhooks) and is
+   * published to them.
+   *
+   * Deliberately separate from the accept. Between the two the operator
+   * names the device and places it in a room — an ecosystem that sees a
+   * device first and is corrected afterwards keeps the identity it saw,
+   * so releasing last is what makes that naming stick.
+   */
+  releaseDevice(address: string, central: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/devices/${encodeURIComponent(address)}/release${qs}`, {
+      method: "POST",
+    });
+  },
   acceptInboxDevice(
     address: string,
     central: string,

@@ -1,5 +1,5 @@
 {
- "api_version": "7.16.0",
+ "api_version": "7.17.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1253,6 +1253,7 @@
   ],
   "InboxDevice": [
    "address:string",
+   "awaiting_release:boolean",
    "central:string",
    "first_seen:integer",
    "interface:string",

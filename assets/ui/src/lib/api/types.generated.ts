@@ -9913,6 +9913,22 @@ export interface components {
             /** Format: int64 */
             first_seen?: number;
             /**
+             * @description True when the device is already accepted and fully
+             *     materialised — it has its CCU ise_id, its channels and its
+             *     data points, and it can be renamed and assigned rooms right
+             *     now — but is still withheld from the ecosystems (MQTT and
+             *     therefore Home Assistant, the Matter bridge, outbound
+             *     webhooks) until the operator finishes onboarding it with
+             *     POST /devices/{addr}/release.
+             *
+             *     This is the onboarding wizard's middle state and a different
+             *     ask than `pending_creation`: that one means "decide whether
+             *     this device exists", this one means "configure it, then
+             *     publish it". A client must not offer an accept action for an
+             *     entry flagged here — it is already accepted.
+             */
+            awaiting_release?: boolean;
+            /**
              * @description True when the daemon itself is holding the device back:
              *     with `central.behavior.delay_new_device_creation` enabled the
              *     announced descriptions are parked until an operator accepts
