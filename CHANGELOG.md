@@ -42,12 +42,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   CURRENT and FREQUENCY parameters are now consolidated into one measurement
   group behind the single ElectricalSensor endpoint, so all four attributes
   carry live readings instead of one.
-- **Device types carry their cluster requirements.** The matter.js schema
-  snapshot now records, per device type, which clusters the Device Library
-  specifies for it and on which side. Two guards hold the surface against it —
-  one over every measurement class, one walking the whole hydrated device fleet
-  and checking each endpoint source's clusters against its own declared device
-  type — so a cluster mounted where the spec does not put it fails the build.
+- **Device types carry their cluster requirements, and clusters their own
+  surface.** The matter.js schema snapshot now records, per device type, which
+  clusters the Device Library specifies for it and on which side, and per
+  feature its FeatureMap bit position. Guards hold the Matter surface against
+  it at three levels: which clusters an endpoint may mount, whether every
+  mandatory and feature-gated attribute of a mounted cluster answers a read,
+  and whether every mandatory command reaches `AcceptedCommandList`. They walk
+  the whole hydrated device fleet, so a drift fails the build rather than a
+  pairing.
+
+  The attribute levels came up clean across 2772 mandatory and 1965
+  feature-gated reads. The command level found the Groups and ScenesManagement
+  stubs: both clusters are mandatory on the light and plug device types and
+  neither accepts its mandatory commands, because Matter models groups and
+  scenes as node-level tables a bridge keeps itself rather than as anything a
+  CCU provides. Recorded as declared gaps that say so.
 
 - **Connection latency measured a fraction of the path it was named after.**
   The hub's `connection_latency_ms` metric — the sensor MQTT discovery
