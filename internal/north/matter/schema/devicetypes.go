@@ -210,6 +210,8 @@ var DeviceTypeNames = map[uint32]string{
 // from another endpoint, not that it may serve it.
 //
 // Generated from notes/parity/matter/matter-schema-snapshot.json.
+//
+// loom:reachable:reason="conformance oracle read through DeviceTypeAllowsServerCluster and directly by the device-type guards in tests/contract and tests/integration; the bridge mounts clusters from the model layer, so production reads it only through that function"
 var DeviceTypeServerClusters = map[uint32][]uint32{
 	0x000A: { // DoorLock
 		0x0003, // Identify (M)

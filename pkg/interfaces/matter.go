@@ -268,6 +268,8 @@ const (
 //
 // Units are the ones the CCU reports, converted at the cluster boundary:
 // watts, volts, milliamperes, hertz, watt-hours.
+//
+// loom:reachable:reason="held as a struct field type in production — measurement.ElectricalPowerServer.readings and measurement.energyOf.r — which the analyzer's reachability walk does not count as a use of the interface itself"
 type MatterElectricalReadings interface {
 	ActivePower() (value float64, observed bool)
 	Voltage() (value float64, observed bool)

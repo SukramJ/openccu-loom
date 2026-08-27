@@ -198,6 +198,8 @@ func writeDeviceTypesFile(dts []snapshotDeviceType) error {
 	buf.WriteString("// from another endpoint, not that it may serve it.\n")
 	buf.WriteString("//\n")
 	buf.WriteString("// Generated from notes/parity/matter/matter-schema-snapshot.json.\n")
+	buf.WriteString("//\n")
+	buf.WriteString("// loom:reachable:reason=\"conformance oracle read through DeviceTypeAllowsServerCluster and directly by the device-type guards in tests/contract and tests/integration; the bridge mounts clusters from the model layer, so production reads it only through that function\"\n")
 	buf.WriteString("var DeviceTypeServerClusters = map[uint32][]uint32{\n")
 	for _, dt := range dts {
 		ids := serverClusterIDs(dt)
