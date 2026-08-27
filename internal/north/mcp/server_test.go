@@ -138,6 +138,8 @@ func (f *fakeDevices) CentralOf(address string) string {
 	return f.centrals[address]
 }
 
+func (f *fakeDevices) Released(string) bool { return true }
+
 type writeCall struct {
 	address   string
 	parameter hmenum.Parameter

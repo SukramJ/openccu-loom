@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.66.1] - 2026-08-27
 
+### Fixed
+
+- **`delay_new_device_creation` was never applied without a restart, while the
+  config surface said it was.** The field is not classified restart-required,
+  so saving it reported `restart_required: false` — but it was read at exactly
+  two points, both during bring-up. Switching it off changed nothing until the
+  next restart. That was tolerable while the toggle only gated future parking;
+  it stopped being tolerable in 0.66.0, when a persisted queue started hanging
+  off the same path and every already-held device stayed invisible to the
+  ecosystems with nothing to explain why. A config reload now re-applies the
+  setting per central and, when it goes off, releases the whole queue and
+  announces each device — a silent release would leave MQTT, Matter and every
+  connected API consumer withholding them anyway.
+
 ### Added
 
 - **The onboarding release state is visible to REST and WebSocket consumers.**
@@ -35,6 +49,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `released` is `true` for every device that never entered the onboarding
   wizard, so an installation that does not use it reads `true` throughout and
   no existing client needs to change.
+
+- **The MCP surface carries the state too.** `list_devices` entries gain
+  `released` and the inbox listing gains `awaiting_release`. An assistant
+  driving the daemon is a device consumer like any other, and it was seeing a
+  withheld device exactly like one in service.
+- The `datapoint.value_changed` plane is now documented as **not** filtered by
+  release state. It never was, and it should not be — the Config UI needs those
+  values to verify a device before releasing it — but a consumer that filtered
+  only the device list was still receiving them, with nothing saying so.
 
 
 ## [0.66.0] - 2026-08-27

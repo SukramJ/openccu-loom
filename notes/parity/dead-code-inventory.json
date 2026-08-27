@@ -1,6 +1,6 @@
 {
-  "generated": "d4838b4c",
-  "head": "d4838b4c",
+  "generated": "c3f5fe17",
+  "head": "c3f5fe17",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 30057,
+    "total_exported": 30062,
     "reachable": 5167,
-    "whitelisted": 21873,
+    "whitelisted": 21878,
     "unreachable": 3017
   },
   "by_package": [
@@ -2866,7 +2866,7 @@
       "package": "internal/central/adapter",
       "identifier": "CallbackHandlers",
       "file": "internal/central/adapter/callback_handlers.go",
-      "line": 42,
+      "line": 43,
       "kind": "type"
     },
     {
@@ -14374,14 +14374,14 @@
       "package": "internal/north/mcp",
       "identifier": "Deps",
       "file": "internal/north/mcp/server.go",
-      "line": 232,
+      "line": 241,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "Deps",
       "file": "internal/north/mcp/server.go",
-      "line": 232,
+      "line": 241,
       "kind": "type"
     },
     {
@@ -14402,70 +14402,70 @@
       "package": "internal/north/mcp",
       "identifier": "EditLockVerifier",
       "file": "internal/north/mcp/server.go",
-      "line": 93,
+      "line": 102,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "EditLockVerifier",
       "file": "internal/north/mcp/server.go",
-      "line": 93,
+      "line": 102,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HealthReader",
       "file": "internal/north/mcp/server.go",
-      "line": 74,
+      "line": 83,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HealthReader",
       "file": "internal/north/mcp/server.go",
-      "line": 74,
+      "line": 83,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HubResolver",
       "file": "internal/north/mcp/server.go",
-      "line": 124,
+      "line": 133,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HubResolver",
       "file": "internal/north/mcp/server.go",
-      "line": 124,
+      "line": 133,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "IncidentsReader",
       "file": "internal/north/mcp/server.go",
-      "line": 132,
+      "line": 141,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "IncidentsReader",
       "file": "internal/north/mcp/server.go",
-      "line": 132,
+      "line": 141,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "ParamsetService",
       "file": "internal/north/mcp/server.go",
-      "line": 66,
+      "line": 75,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "ParamsetService",
       "file": "internal/north/mcp/server.go",
-      "line": 66,
+      "line": 75,
       "kind": "type"
     },
     {
@@ -14486,14 +14486,14 @@
       "package": "internal/north/mcp",
       "identifier": "ValueWriter",
       "file": "internal/north/mcp/server.go",
-      "line": 53,
+      "line": 62,
       "kind": "type"
     },
     {
       "package": "internal/north/mcp",
       "identifier": "ValueWriter",
       "file": "internal/north/mcp/server.go",
-      "line": 53,
+      "line": 62,
       "kind": "type"
     },
     {
@@ -52118,10 +52118,24 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestTurningTheToggleOffAppliesWithoutARestart",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/deferred_creation_live_toggle_test.go",
+      "line": 65
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestTurningTheToggleOffReleasesTheQueue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/pending_devices_gate_test.go",
       "line": 282
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestTurningTheToggleOnDoesNotReleaseAnything",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/deferred_creation_live_toggle_test.go",
+      "line": 99
     },
     {
       "package": "internal/central/adapter",
@@ -124172,154 +124186,154 @@
       "identifier": "AddonUpdateService",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 147
+      "line": 156
     },
     {
       "package": "internal/north/mcp",
       "identifier": "AddonUpdateService",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 147
+      "line": 156
     },
     {
       "package": "internal/north/mcp",
       "identifier": "AreaLister",
       "reason": "the declared type of Deps.Areas, filled at cmd/openccu-loom/daemon_rest_mount.go with the same area service REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 162
+      "line": 171
     },
     {
       "package": "internal/north/mcp",
       "identifier": "AreaLister",
       "reason": "the declared type of Deps.Areas, filled at cmd/openccu-loom/daemon_rest_mount.go with the same area service REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 162
+      "line": 171
     },
     {
       "package": "internal/north/mcp",
       "identifier": "BackupLister",
       "reason": "the Deps.Backups seam the composition root satisfies with *adapter.BackupAdapter; an interface reached only by assignment, which the analyzer's type heuristic cannot see used",
       "file": "internal/north/mcp/server.go",
-      "line": 225
+      "line": 234
     },
     {
       "package": "internal/north/mcp",
       "identifier": "BackupLister",
       "reason": "the Deps.Backups seam the composition root satisfies with *adapter.BackupAdapter; an interface reached only by assignment, which the analyzer's type heuristic cannot see used",
       "file": "internal/north/mcp/server.go",
-      "line": 225
+      "line": 234
     },
     {
       "package": "internal/north/mcp",
       "identifier": "EditLockManager",
       "reason": "the declared type of Deps.EditLocks, which the composition root fills at cmd/openccu-loom/daemon_rest_mount.go with the shared *handlers.EditSessions registry; an interface reached through its implementation, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 110
+      "line": 119
     },
     {
       "package": "internal/north/mcp",
       "identifier": "EditLockManager",
       "reason": "the declared type of Deps.EditLocks, which the composition root fills at cmd/openccu-loom/daemon_rest_mount.go with the shared *handlers.EditSessions registry; an interface reached through its implementation, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 110
+      "line": 119
     },
     {
       "package": "internal/north/mcp",
       "identifier": "EnergyReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 200
+      "line": 209
     },
     {
       "package": "internal/north/mcp",
       "identifier": "EnergyReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 200
+      "line": 209
     },
     {
       "package": "internal/north/mcp",
       "identifier": "GroupsReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 154
+      "line": 163
     },
     {
       "package": "internal/north/mcp",
       "identifier": "GroupsReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 154
+      "line": 163
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HistoryReader",
       "reason": "the declared type of Deps.History, filled at cmd/openccu-loom/daemon_rest_mount.go with the history handler adapter; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 183
+      "line": 192
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HistoryReader",
       "reason": "the declared type of Deps.History, filled at cmd/openccu-loom/daemon_rest_mount.go with the history handler adapter; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 183
+      "line": 192
     },
     {
       "package": "internal/north/mcp",
       "identifier": "InterfaceLister",
       "reason": "the declared type of Deps.Interfaces, filled at cmd/openccu-loom/daemon_rest_mount.go with the same interface index REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 173
+      "line": 182
     },
     {
       "package": "internal/north/mcp",
       "identifier": "InterfaceLister",
       "reason": "the declared type of Deps.Interfaces, filled at cmd/openccu-loom/daemon_rest_mount.go with the same interface index REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 173
+      "line": 182
     },
     {
       "package": "internal/north/mcp",
       "identifier": "LinkLister",
       "reason": "the declared type of Deps.Links, filled at cmd/openccu-loom/daemon_rest_mount.go with the links domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 206
+      "line": 215
     },
     {
       "package": "internal/north/mcp",
       "identifier": "LinkLister",
       "reason": "the declared type of Deps.Links, filled at cmd/openccu-loom/daemon_rest_mount.go with the links domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 206
+      "line": 215
     },
     {
       "package": "internal/north/mcp",
       "identifier": "MatterStatusReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 141
+      "line": 150
     },
     {
       "package": "internal/north/mcp",
       "identifier": "MatterStatusReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 141
+      "line": 150
     },
     {
       "package": "internal/north/mcp",
       "identifier": "ScheduleLister",
       "reason": "the declared type of Deps.Schedules, filled at cmd/openccu-loom/daemon_rest_mount.go with the schedules domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 215
+      "line": 224
     },
     {
       "package": "internal/north/mcp",
       "identifier": "ScheduleLister",
       "reason": "the declared type of Deps.Schedules, filled at cmd/openccu-loom/daemon_rest_mount.go with the schedules domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 215
+      "line": 224
     },
     {
       "package": "internal/north/mcp",
@@ -124333,14 +124347,14 @@
       "identifier": "VisibilityLister",
       "reason": "the declared type of Deps.Visibility, filled at cmd/openccu-loom/daemon_rest_mount.go with the un-ignore store; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 193
+      "line": 202
     },
     {
       "package": "internal/north/mcp",
       "identifier": "VisibilityLister",
       "reason": "the declared type of Deps.Visibility, filled at cmd/openccu-loom/daemon_rest_mount.go with the un-ignore store; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 193
+      "line": 202
     },
     {
       "package": "internal/north/mqtt",
@@ -174471,6 +174485,20 @@
     },
     {
       "package": "tests/contract/wiring_pins",
+      "identifier": "TestPin_DeferredCreationToggle_AppliedOnReload",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_pins/pending_devices_gate_test.go",
+      "line": 76
+    },
+    {
+      "package": "tests/contract/wiring_pins",
+      "identifier": "TestPin_DeferredCreationToggle_ManagerBound",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_pins/pending_devices_gate_test.go",
+      "line": 86
+    },
+    {
+      "package": "tests/contract/wiring_pins",
       "identifier": "TestPin_Dispatcher_SetACLLister_CalledInBridge",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/dormant_capability_wiring_test.go",
@@ -174664,6 +174692,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/dormant_capability_wiring_test.go",
       "line": 104
+    },
+    {
+      "package": "tests/contract/wiring_pins",
+      "identifier": "TestPin_ReleaseState_OnTheMCPSurface",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_pins/pending_devices_gate_test.go",
+      "line": 99
     },
     {
       "package": "tests/contract/wiring_pins",

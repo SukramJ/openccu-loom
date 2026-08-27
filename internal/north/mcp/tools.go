@@ -28,10 +28,17 @@ type deviceSummary struct {
 	Name      string `json:"name"`
 	Interface string `json:"interface"`
 	Central   string `json:"central"`
+	// Released reports whether the device finished onboarding. False
+	// means an operator accepted it but has not released it yet: it is
+	// listed and configurable, and acting on it as if it were in service
+	// is what the release step exists to prevent. Absent (true) for every
+	// device on an installation that does not use the wizard.
+	Released bool `json:"released"`
 }
 
-func summarize(d *device.Device, central string) deviceSummary {
+func summarize(d *device.Device, central string, released bool) deviceSummary {
 	return deviceSummary{
+		Released:  released,
 		Address:   d.Address,
 		Model:     d.Model,
 		Name:      d.Name(),
@@ -288,7 +295,7 @@ func registerListCentrals(s *mcpsdk.Server, d Deps) {
 func registerListDevices(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_devices",
-		Description: "List devices, optionally scoped to one central via central_name.",
+		Description: "List devices, optionally scoped to one central via central_name. Each entry carries `released`: false means an operator accepted the device but has not finished onboarding it, so it is configurable but not yet in service — do not act on it as if it were.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listDevicesIn) (*mcpsdk.CallToolResult, listDevicesOut, error) {
 		out := listDevicesOut{Devices: []deviceSummary{}}
 		if d.Devices == nil {
@@ -303,7 +310,7 @@ func registerListDevices(s *mcpsdk.Server, d Deps) {
 			if want != "" && central != want {
 				continue
 			}
-			out.Devices = append(out.Devices, summarize(dev, central))
+			out.Devices = append(out.Devices, summarize(dev, central, d.Devices.Released(dev.Address)))
 		}
 		return nil, out, nil
 	})
@@ -321,7 +328,7 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 		if !ok {
 			return nil, getDeviceOut{Found: false}, nil
 		}
-		return nil, getDeviceOut{Found: true, Device: summarize(dev, d.Devices.CentralOf(dev.Address))}, nil
+		return nil, getDeviceOut{Found: true, Device: summarize(dev, d.Devices.CentralOf(dev.Address), d.Devices.Released(dev.Address))}, nil
 	})
 }
 

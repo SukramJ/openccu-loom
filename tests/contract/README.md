@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 391.
+Guards without a doc comment: 7 of 394.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -384,10 +384,13 @@ Guards without a doc comment: 7 of 391.
 | TestMatterDiagnosticsSurfacesAreWired | wiring_pins/matter_session_diagnostics_test.go | TestMatterDiagnosticsSurfacesAreWired pins the other three diagnostic surfaces the same way, for the same reason: each answers 503 "Matter bridge not enabled" on a running bridge when its port is unset, which reads as a configuration problem rather than a wiring one. |
 | TestMatterSessionListerIsWiredFromBothManagers | wiring_pins/matter_session_diagnostics_test.go | TestMatterSessionListerIsWiredFromBothManagers pins the composition root's half of the session-diagnostics surface. |
 | TestPin_MCPFleetSeams_WiredInDaemon | wiring_pins/mcp_fleet_seams_test.go | TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every fleet read seam to the MCP server. |
+| TestPin_DeferredCreationToggle_AppliedOnReload | wiring_pins/pending_devices_gate_test.go | TestPin_DeferredCreationToggle_AppliedOnReload pins that a live config edit actually reaches the per-central handler. |
+| TestPin_DeferredCreationToggle_ManagerBound | wiring_pins/pending_devices_gate_test.go | TestPin_DeferredCreationToggle_ManagerBound pins the other half: the reload path can only reach the handles if the composition root hands them over. |
 | TestPin_PendingDevices_GateConsultedByThePull | wiring_pins/pending_devices_gate_test.go | TestPin_PendingDevices_GateConsultedByThePull pins that the boot pull asks whether a device is held back. |
 | TestPin_PendingDevices_RestoredBeforeBringUp | wiring_pins/pending_devices_gate_test.go | TestPin_PendingDevices_RestoredBeforeBringUp pins that the queue is restored from the composition root's bring-up path. |
 | TestPin_PendingDevices_SinkWiredIntoCoordinator | wiring_pins/pending_devices_gate_test.go | TestPin_PendingDevices_SinkWiredIntoCoordinator pins that the wiring helper reaches the coordinator's seam. |
 | TestPin_PendingDevices_StoreConstructedInDaemon | wiring_pins/pending_devices_gate_test.go | TestPin_PendingDevices_StoreConstructedInDaemon pins that the composition root actually builds the durable deferred-creation queue. |
+| TestPin_ReleaseState_OnTheMCPSurface | wiring_pins/pending_devices_gate_test.go | TestPin_ReleaseState_OnTheMCPSurface pins that an assistant driving the daemon sees the onboarding state too. |
 | TestPin_EveryRecoveryPipelineWiringArmsItsInterface | wiring_pins/recovery_bringup_gate_test.go | TestPin_EveryRecoveryPipelineWiringArmsItsInterface pins the other side of the recovery coordinator's bring-up gate. |
 | TestEverySeamAttachWrapsItsHandover | wiring_pins/seam_attach_wraps_work_test.go | TestEverySeamAttachWrapsItsHandover pins that a wiring seam's Attach closure actually performs the handover it declares. |
 | TestPin_SectionApplier_WiredIntoTheRESTRouter | wiring_pins/section_applier_test.go | TestPin_SectionApplier_WiredIntoTheRESTRouter pins that the daemon gives the config-save path something to apply a section with. |

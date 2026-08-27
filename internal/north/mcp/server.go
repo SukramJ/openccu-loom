@@ -46,6 +46,15 @@ type DeviceLister interface {
 	// CentralOf returns the owning CCU name, or "" when the device is
 	// unknown.
 	CentralOf(address string) string
+	// Released reports whether a device has finished onboarding.
+	//
+	// An assistant driving the daemon is a device consumer like any
+	// other: a device the operator has accepted but not yet released is
+	// listed here — it has to be, or there would be nothing to configure
+	// — and acting on it as if it were in service is the mistake the
+	// release step exists to prevent. True for a device that never
+	// entered the onboarding wizard.
+	Released(address string) bool
 }
 
 // ValueWriter pushes a value to the CCU. Same contract as the REST

@@ -8217,6 +8217,14 @@ export interface components {
         /**
          * @description Payload of a `datapoint.value_changed` broadcast. Topic
          *     pattern `device.{address}.channels.{channel}.data_points.{parameter}`.
+         *
+         *     This plane is NOT filtered by onboarding release state. A device
+         *     an operator accepted but has not released yet streams values here
+         *     like any other, because the Config UI needs them to verify the
+         *     device before releasing it. A consumer that adopts devices must
+         *     drop these frames for a device whose `released` is false —
+         *     filtering the device list alone is not enough. The state arrives
+         *     on `device.created` and is lifted by `device.released`.
          */
         DataPointValueChangedPayload: {
             central: string;

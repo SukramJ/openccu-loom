@@ -7,6 +7,7 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 )
@@ -42,6 +43,13 @@ type reloadDeps struct {
 	// fires on serial resolution and live adopt. Atomic because the
 	// southbound wiring subscribes before the advertiser exists.
 	mdnsTXTRefresh atomic.Pointer[func()]
+
+	// bringUp exposes the per-central bring-up handles so a config reload
+	// can re-apply the settings that are read during wiring rather than
+	// on every use. `delay_new_device_creation` is one: it is not
+	// classified restart-required, so the config surface reports the edit
+	// as applied — and before this it was not.
+	bringUp atomic.Pointer[adapter.BringUpManager]
 
 	// onNorthBridges is a test-only observation hook invoked once during
 	// boot, after every north-bound surface has been registered on the
@@ -176,6 +184,24 @@ func (d *reloadDeps) SetMQTTSupervisor(s *mqttSupervisor) {
 		return
 	}
 	d.mqttSup.Store(s)
+}
+
+// SetBringUpManager binds the per-central bring-up handles. Called once
+// the south-bound wiring has produced them.
+func (d *reloadDeps) SetBringUpManager(m *adapter.BringUpManager) {
+	if d == nil {
+		return
+	}
+	d.bringUp.Store(m)
+}
+
+// BringUpManager returns the bound manager, or nil before the south-bound
+// wiring has run.
+func (d *reloadDeps) BringUpManager() *adapter.BringUpManager {
+	if d == nil {
+		return nil
+	}
+	return d.bringUp.Load()
 }
 
 // MQTTSupervisor returns the currently-installed MQTT supervisor,
