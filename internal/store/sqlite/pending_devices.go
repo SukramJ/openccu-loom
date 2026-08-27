@@ -19,6 +19,8 @@ import (
 // stale — and would let a device unpaired while the daemon was down
 // reappear on the inbox surface with nothing behind it. Model is kept
 // only so the inbox can name the device before the pull has run.
+//
+// loom:reachable:reason="argument and result type of PendingDeviceStore's Put/ListByCentral, which adapter.pendingSink calls on every park, accept and restore; a method-less row struct the analyzer's type heuristic cannot see used"
 type PendingDevice struct {
 	CentralName string
 	InterfaceID string
@@ -32,6 +34,8 @@ type PendingDevice struct {
 
 // PendingDeviceStore persists the deferred-creation queue in the main
 // application database.
+//
+// loom:reachable:reason="constructed in cmd/openccu-loom/daemon.go and reached through adapter.pendingSink, which the coordinator holds as a coordinators.PendingDeviceSink; the analyzer loses the trail at the interface boundary"
 type PendingDeviceStore struct {
 	db *sql.DB
 }

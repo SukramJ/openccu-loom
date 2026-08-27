@@ -14,6 +14,8 @@ import (
 
 // PendingDeviceStores carries the durable half of the deferred-creation
 // queue into the wiring. A nil store leaves the queue in memory only.
+//
+// loom:reachable:reason="field type of WireDeps.PendingDevices, which daemon_southbound.go fills from the composition root and central_bringup.go reads in buildAndStart; a method-less config struct the analyzer's type heuristic (reachable only via its methods) cannot see used"
 type PendingDeviceStores struct {
 	Pending *sqlite.PendingDeviceStore
 }

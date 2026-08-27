@@ -139,6 +139,7 @@ func NewDeviceCoordinator(
 // point of view: a failing store must not stop a device from being
 // parked in memory, because dropping the decision would materialise a
 // device the operator has not accepted.
+// loom:reachable:reason="port satisfied by adapter.pendingSink and passed to SetPendingDeviceSink from WirePendingDevices; an interface the analyzer resolves only through its concrete implementor, which lives in another package"
 type PendingDeviceSink interface {
 	// Load returns the held-back addresses of this central, keyed by
 	// canonical wire interface id.
