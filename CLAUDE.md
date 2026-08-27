@@ -511,6 +511,13 @@ idioms, Pydantic validation, HA-specific shims, the MQTT workaround for CUxD
 **matter.js** (`../matter.js/`) is the gold standard for the **Matter side**.
 The two reference layers do not overlap; where a feature spans both, the
 boundary is `internal/model/custom/<dp>/matter.go`.
+[`connectedhomeip`](https://github.com/project-chip/connectedhomeip) ("chip",
+`../connectedhomeip/`) is checked out alongside it. It is not a second gold
+standard, but it is the authority on what matter.js does not model — chip-tool's
+own behaviour, and the controller-side semantics already cited by `path:line`
+across `internal/north/matter/`. When a chip-derived tool rejects an
+invocation, its source is in that tree; read it rather than inferring the
+contract from the tool's output.
 [`home-assistant-matter-bridge`](https://github.com/Nabu-Casa/home-assistant-matter-bridge)
 (`../home-assistant-matter-bridge/`) is a supplementary read for end-to-end
 bridge composition, never a gold standard.
