@@ -216,7 +216,13 @@ jobs:
         run: |
           set -o pipefail
           cd "$HOME/chip-control"
+          # chip-tool does not create its KVS root: ExamplePersistentStorage
+          # fails Init with 0x000000AF against a missing directory. The suite's
+          # controller creates it (harness/chiptool.go:132, os.MkdirAll before
+          # any chip-tool call); the app's --KVS is a file path and needs no
+          # directory of its own.
           rm -rf ./kvs-app ./kvs-tool
+          mkdir -p ./kvs-tool
           # Passcode and discriminator match the suite's constants
           # (harness/chiptool.go ChipDefaultPasscode, ChipDefaultDiscriminator),
           # so the control leg and the suite differ in what they drive, never in
