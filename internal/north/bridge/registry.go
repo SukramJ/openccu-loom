@@ -161,17 +161,20 @@ func (r *Registry) stopStarted(ctx context.Context) {
 //
 // Nothing in the daemon calls this. Said plainly because the paragraph above
 // describes a design rather than a running path, and a reader has no way to
-// tell the two apart: [HealthReporter] has exactly one implementor,
-// rest.Service, and its verdict is unobservable by construction — it reports
-// unhealthy only while the REST surface is not serving, which is also when
-// nobody can reach /health to read it. The webhook the comment cites as an
-// example never implemented the interface at all.
+// tell the two apart. Two Services implement [HealthReporter], and neither can
+// make the aggregate say anything useful:
 //
-// So this is not a seam waiting to be wired; it is an aggregate whose only
-// member cannot usefully report through it. Left in place rather than deleted
-// because a second bridge with a meaningful liveness verdict would make it
-// worth calling, and the shape is right. What is not left in place is the
-// impression that it already runs.
+//   - rest.Service reports unhealthy only while the REST surface is not
+//     serving, which is also when nobody can reach /health to read the verdict.
+//   - webhook.Outbound always returns ok=true; its dropped/failed counters
+//     ride along as detail, and detail from a healthy reporter is deliberately
+//     dropped here (see the paragraph above).
+//
+// So this is not a seam waiting to be wired; it is an aggregate none of whose
+// members can report a red through it. Left in place rather than deleted
+// because a bridge with a meaningful liveness verdict would make it worth
+// calling, and the shape is right. What is not left in place is the impression
+// that it already runs.
 func (r *Registry) Health() (ok bool, detail string) {
 	r.mu.Lock()
 	svcs := make([]Service, len(r.entries))

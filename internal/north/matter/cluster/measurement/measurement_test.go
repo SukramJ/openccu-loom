@@ -1493,9 +1493,12 @@ func TestElectricalPowerServerUnobserved(t *testing.T) {
 
 // TestElectricalPowerServerNullAttributes verifies that Voltage (0x0004),
 // ActiveCurrent (0x0005), and Frequency (0x000E) return (nil, true) — null
-// per spec; multi-source projection is future work. (Attribute IDs
-// previously mis-encoded as 0x0005/0x0006/0x000A which collide with spec
-// slots; corrected to spec-compliant values.)
+// per spec — for a server built from a SINGLE-parameter source, which is what
+// [NewElectricalPowerServer] wraps: one float, and no way to answer the other
+// three. A consolidated source answers all four; that path is
+// [NewElectricalPowerServerFromReadings], covered separately.
+// (Attribute IDs previously mis-encoded as 0x0005/0x0006/0x000A which collide
+// with spec slots; corrected to spec-compliant values.)
 func TestElectricalPowerServerNullAttributes(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewElectricalPowerServer(fakeFloat{val: 1500.0, obs: true})
