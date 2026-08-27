@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.65.3] - 2026-08-27
+
+### Fixed
+
+- **`DeviceCreatedPayload` in `assets/openapi.yaml` still described the
+  pre-0.65.2 behaviour, and named a `source` value that does not exist.** The
+  schema said the broadcast fires on "cache reload or initial-snapshot import"
+  and listed `NEW_DEVICE` among the sources; the enum has `CACHE`, `INIT`,
+  `MANUAL`, `NEW` and `REFRESH`, and 0.65.2 had already stopped announcing the
+  CCU's full re-announcement. `assets/wsapi.json` was corrected in that release
+  and this schema was not, so the two contract assets disagreed — on exactly
+  the field a client filters on, and the OpenAPI half is the one generated
+  client type packages carry as documentation. Both now describe the same
+  behaviour and the same five values, `INIT` marked as having no producer on
+  this broadcast. No field, status or schema shape changed — but ADR 0028 ties
+  the contract version to the assets rather than to their semantics, so any
+  edit to `openapi.yaml` is a minor bump: `api_version` 7.14.0 → 7.15.0, and
+  the schema digest is regenerated with it.
+
 ## [0.65.2] - 2026-08-27
 
 ### Fixed

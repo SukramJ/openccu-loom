@@ -8964,17 +8964,22 @@ export interface components {
         };
         /**
          * @description Payload of a `device.created` broadcast. Topic pattern
-         *     `device.{address}.lifecycle`. Fires when the registry
-         *     observes a new device (CCU pairing, cache reload, or
-         *     initial-snapshot import). The `source` field discriminates
-         *     which path created the entry — see hmenum.SourceOfDeviceCreation.
+         *     `device.{address}.lifecycle`. Fires when a device the daemon
+         *     did not know before is observed in the registry. It is NOT
+         *     sent for the full-inventory announcement the CCU repeats
+         *     after every reconnect — the daemon answers `listDevices` with
+         *     an empty array, so the CCU re-announces everything it has, and
+         *     only an address the device registry does not already hold is
+         *     news. A subscriber may therefore treat this payload as a
+         *     genuine arrival rather than filtering the fleet out of it.
+         *     The `source` field discriminates which path created the entry.
          */
         DeviceCreatedPayload: {
             central: string;
             interface_id: string;
             device_address: string;
             model: string;
-            /** @description hmenum.SourceOfDeviceCreation (CACHE, INIT, NEW_DEVICE, …). */
+            /** @description Which kind of arrival this is, from `hmenum.SourceOfDeviceCreation`: `NEW` a CCU pairing, `REFRESH` a factory-reset re-pair (the device kept its address but rebuilt its channels), `MANUAL` an operator accepting a device out of the deferred-creation inbox, `CACHE` a device restored from the persisted description cache at boot. `INIT` is defined by the enum but has no producer on this broadcast. Treat the set as forward-compatible and ignore values you do not know. */
             source?: string;
         };
         /**

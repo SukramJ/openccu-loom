@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.65.3
+
+- Version alignment with OpenCCU-Loom 0.65.3. The proxy itself is unchanged;
+  the release corrects the published API description of the device-created
+  event.
+
 # 0.65.2
 
 - Version alignment with OpenCCU-Loom 0.65.2. The proxy itself is unchanged;
