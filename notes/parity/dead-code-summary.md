@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: b13b5a14
-HEAD: b13b5a14
+Generated: 794b110b
+HEAD: 794b110b
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30027 |
-| Reachable | 5153 |
-| Whitelisted | 21857 |
+| Total Exported | 30049 |
+| Reachable | 5165 |
+| Whitelisted | 21867 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code
@@ -87,10 +87,10 @@ HEAD: b13b5a14
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 107 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 107 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 104 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 104 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 109 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 109 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 106 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 106 |
 
 ## Full By-Package Breakdown
 

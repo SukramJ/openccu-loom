@@ -68,6 +68,8 @@ func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.
 	f.accepts++
 	return nil
 }
+
+func (*fakeAdmin) ReleaseDevice(context.Context, string) error                  { return nil }
 func (f *fakeAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
 func (f *fakeAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (f *fakeAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
@@ -378,6 +380,8 @@ func (fakeDeviceAdmin) RenameChannel(_ context.Context, _ string, _ int, _ strin
 func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.AcceptInboxOptions) error {
 	return nil
 }
+
+func (fakeDeviceAdmin) ReleaseDevice(context.Context, string) error                { return nil }
 func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
 func (fakeDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }

@@ -8,6 +8,36 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.66.0] - 2026-08-27
 
+### Added
+
+- **Onboarding is a wizard now, and a device reaches the ecosystems only at
+  its end.** Pairing a device on the CCU no longer makes it appear in Home
+  Assistant, on a Matter controller or on an outbound webhook the moment the
+  daemon notices it. The device walks three states instead:
+
+  1. **Waiting** — announced by the CCU, held out of the model entirely. It has
+     no ise_id and no channels, so there is nothing to configure yet.
+  2. **Accepted, not released** — the operator confirms it with a name, it
+     leaves the CCU inbox and is materialised here. Now it has its ise_id, its
+     channels and its data points, and it is fully visible and configurable in
+     this daemon's own REST / WebSocket surfaces — which is where the name,
+     rooms and functions are set. The ecosystems still do not see it.
+  3. **Released** — `POST /devices/{addr}/release` ends the hold, and MQTT,
+     Matter and the webhook publish it.
+
+  The order is what makes the naming stick. An ecosystem that sees a device
+  first and is corrected afterwards keeps the identity it saw: Home Assistant
+  its entity ids, a Matter controller its endpoint number — endpoint ids are
+  assigned in assembly order and persisted, so a rename does not take them
+  back.
+
+  Only a device that entered through the wizard is ever withheld
+  (`central.behavior.delay_new_device_creation`). Absence of a hold means
+  released, so an existing installation publishes exactly what it published
+  before and nothing disappears from Home Assistant on upgrade.
+
+### Changed
+
 ### Changed
 
 - **`delay_new_device_creation` is a gate now, not a notice.** The toggle

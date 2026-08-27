@@ -362,6 +362,13 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		// without this the HA-Discovery device name / suggested_area kept
 		// whatever [publishDeviceSnapshot] last observed until a broker
 		// reconnect or daemon restart re-walked the whole model.
+		// The release is the first moment a fully-built device may be
+		// published. Nothing on the wire changed and the creation event
+		// fired long ago, so without this the device stays invisible to
+		// Home Assistant until the next daemon restart.
+		events.Subscribe(bus, func(e hmevent.DeviceReleasedEvent) {
+			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceReleased(jobCtx, u, e) })
+		}),
 		events.Subscribe(bus, func(e hmevent.DeviceMetadataChangedEvent) {
 			b.publishDeviceMetadataChangedWS(u.Name(), e)
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceMetadataChanged(jobCtx, u, e) })
@@ -427,6 +434,25 @@ func (b *EventBridge) enqueueDurable(job func(context.Context)) {
 // re-announces its whole inventory on every reconnect), so a repeat for
 // an already-published device only re-emits retained topics.
 func (b *EventBridge) onDeviceCreated(ctx context.Context, u *central.Unit, e hmevent.DeviceCreatedEvent) {
+	if b == nil || b.mqtt == nil || u == nil {
+		return
+	}
+	if !u.IsSouthboundReady() {
+		return
+	}
+	d, ok := u.ModelRegistry.Get(e.Address)
+	if !ok || d == nil {
+		return
+	}
+	b.publishDeviceSnapshot(ctx, u.Name(), d)
+}
+
+// onDeviceReleased publishes a device's full MQTT footprint the moment
+// the operator finishes onboarding it. It is the same walk a snapshot
+// pass does for one device — publishDeviceSnapshot is retained-topic
+// idempotent — but it is the FIRST one this device gets, because every
+// earlier attempt returned at the release gate.
+func (b *EventBridge) onDeviceReleased(ctx context.Context, u *central.Unit, e hmevent.DeviceReleasedEvent) {
 	if b == nil || b.mqtt == nil || u == nil {
 		return
 	}
@@ -817,6 +843,15 @@ func (b *EventBridge) publishEvent(ctx context.Context, ev mqtt.Event) {
 // already-published device is safe.
 func (b *EventBridge) publishDeviceSnapshot(ctx context.Context, centralName string, d *device.Device) {
 	ifaceID := d.InterfaceID
+	// A device the onboarding wizard has not released yet is materialised
+	// and configurable here, but must not reach Home Assistant: the whole
+	// point of the release step is that the operator names and places it
+	// BEFORE it shows up in the ecosystem. Publishing first and renaming
+	// after would leave HA with the entity ids of the unnamed device.
+	if u, ok := b.registry.Get(centralName); ok && u.Devices != nil &&
+		!u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(ifaceID), d.Address) {
+		return
+	}
 	// Publish per-device availability FIRST. The HA Discovery
 	// payload references the device-availability topic (with
 	// `availability_mode: all`) — without an explicit publish

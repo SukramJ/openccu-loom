@@ -20,6 +20,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // schemaVersion tags every payload so receivers can branch on shape.
@@ -404,11 +406,41 @@ func (o *Outbound) Failed() int64 { return o.failed.Load() }
 
 // ---- event handlers (run on the bus goroutine — must not block) ----
 
+// deviceReleased reports whether a device may reach outbound consumers.
+//
+// A device the onboarding wizard has not released yet is materialised and
+// reporting values, so its events flow on the bus exactly like any
+// other's. Forwarding them would hand a downstream system a device the
+// operator has not finished naming — the same leak the MQTT and Matter
+// gates close, on the one plane that carries raw values rather than a
+// device model.
+//
+// An unknown central or a coordinator-less unit releases: this gate
+// withholds only what it can positively identify as held.
+func (o *Outbound) deviceReleased(centralName, interfaceID, channelAddress string) bool {
+	if o.reg == nil {
+		return true
+	}
+	u, ok := o.reg.Get(centralName)
+	if !ok || u == nil || u.Devices == nil {
+		return true
+	}
+	// The event carries a CHANNEL address; the hold is on the device.
+	address := channelAddress
+	if root, _, isChannel := strings.Cut(channelAddress, ":"); isChannel {
+		address = root
+	}
+	return u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(interfaceID), address)
+}
+
 func (o *Outbound) onDataPoint(centralName string, e hmevent.DataPointValueChangedEvent) {
 	if !o.eventAllowed(string(hmevent.EventTypeDataPointValueChanged)) {
 		return
 	}
 	if !o.parameterAllowed(e.Key.Parameter) {
+		return
+	}
+	if !o.deviceReleased(centralName, e.Key.InterfaceID, e.Key.ChannelAddress) {
 		return
 	}
 	env := envelope{

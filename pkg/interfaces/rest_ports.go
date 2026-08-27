@@ -124,6 +124,20 @@ type DeviceAdmin interface {
 	// fails the accept has already happened, so the returned error wraps
 	// [ErrAcceptConfigIncomplete].
 	AcceptInboxDevice(ctx context.Context, address string, opts AcceptInboxOptions) error
+	// ReleaseDevice finishes onboarding: the device stops being withheld
+	// from the ecosystems (MQTT / Home Assistant, Matter, the outbound
+	// webhook) and is published to them.
+	//
+	// It is the wizard's last step, deliberately separate from the
+	// accept. Between the two the device is materialised and
+	// configurable — that is when its name, rooms and functions are set —
+	// but invisible downstream, because an ecosystem that sees it first
+	// and is corrected afterwards keeps the identity it saw: Home
+	// Assistant its entity ids, a Matter controller its endpoint.
+	//
+	// Returns [ErrInboxDeviceNotFound] when no central withholds the
+	// address, which covers both "already released" and "never held".
+	ReleaseDevice(ctx context.Context, address string) error
 	UpdateFirmware(ctx context.Context, address string) error
 	// RestoreDeviceConfig re-transmits the centrally stored
 	// configuration (all channels' MASTER paramsets + link peerings) to

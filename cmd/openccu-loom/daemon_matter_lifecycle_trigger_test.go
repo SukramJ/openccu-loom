@@ -87,8 +87,8 @@ func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing
 
 	fired := 0
 	unsubs := subscribeMatterDeviceLifecycleTrigger(unit, func() { fired++ })
-	if len(unsubs) != 3 {
-		t.Fatalf("unsubs = %d, want 3 (DeviceCreated + DeviceRemoved + DeviceMetadataChanged)", len(unsubs))
+	if len(unsubs) != 4 {
+		t.Fatalf("unsubs = %d, want 4 (DeviceCreated + DeviceRemoved + DeviceMetadataChanged + DeviceReleased)", len(unsubs))
 	}
 
 	for _, unsub := range unsubs {

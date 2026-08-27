@@ -7,8 +7,9 @@ top-level CHANGELOG.md. Newest version first.
 # 0.66.0
 
 - Version alignment with OpenCCU-Loom 0.66.0. The proxy itself is unchanged;
-  the release makes "delay new device creation" a real gate — a device you
-  have not released stays out of the model across restarts.
+  the release turns new-device onboarding into a wizard — a device reaches
+  Home Assistant, Matter and webhooks only once you have named it and
+  finished.
 
 # 0.65.4
 

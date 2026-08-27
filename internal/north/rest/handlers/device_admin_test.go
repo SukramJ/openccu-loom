@@ -39,6 +39,8 @@ type stubDeviceAdmin struct {
 	lastReset           bool
 	lastForce           bool
 	lastAcceptOpts      interfaces.AcceptInboxOptions
+	releasedAddress     string
+	releaseErr          error
 	dutyCycle           int
 	dutyCycleKnown      bool
 }
@@ -68,6 +70,12 @@ func (s *stubDeviceAdmin) AcceptInboxDevice(_ context.Context, addr string, opts
 	s.lastAddress = addr
 	s.lastAcceptOpts = opts
 	return s.acceptErr
+}
+
+func (s *stubDeviceAdmin) ReleaseDevice(_ context.Context, addr string) error {
+	s.lastAddress = addr
+	s.releasedAddress = addr
+	return s.releaseErr
 }
 
 func (s *stubDeviceAdmin) UpdateFirmware(_ context.Context, addr string) error {

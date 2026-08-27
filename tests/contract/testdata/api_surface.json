@@ -218,6 +218,7 @@
   "POST /devices/{addr}/install-mode": "deviceInstallMode",
   "POST /devices/{addr}/links": "addLink",
   "POST /devices/{addr}/links/test": "testLinkAtDevice",
+  "POST /devices/{addr}/release": "releaseDevice",
   "POST /devices/{addr}/reload": "reloadDevice",
   "POST /devices/{addr}/replace": "replaceDevice",
   "POST /devices/{addr}/schedule/active-profile": "setDeviceActiveProfile",
