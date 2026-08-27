@@ -217,7 +217,11 @@ jobs:
           set -o pipefail
           cd "$HOME/chip-control"
           rm -rf ./kvs-app ./kvs-tool
-          ./app --KVS ./kvs-app --secured-device-port 5560 --discriminator 3841 --passcode 20202021 \
+          # Passcode and discriminator match the suite's constants
+          # (harness/chiptool.go ChipDefaultPasscode, ChipDefaultDiscriminator),
+          # so the control leg and the suite differ in what they drive, never in
+          # how they drive it.
+          ./app --KVS ./kvs-app --secured-device-port 5560 --discriminator 3840 --passcode 20202021 \
             > app.log 2>&1 &
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true' EXIT
@@ -230,18 +234,29 @@ jobs:
             sleep 1
           done
 
-          # Argument order and pairing form both taken from the suite's own
-          # controller (tests/chiptool/harness/chiptool.go: --storage-directory
-          # is APPENDED at :203, and Pair uses `already-discovered` with
-          # --bypass-attestation-verifier at :248). chip-tool parses its first
-          # argument as the cluster/command set, so a leading global flag fails
-          # with "Unknown cluster or command set"; and the reference app carries
-          # test attestation certificates the verifier rejects by default.
-          ./chip-tool pairing already-discovered 4242 20202021 127.0.0.1 5560 \
+          # Every part of this call is taken from the suite's own controller in
+          # tests/chiptool/harness/chiptool.go rather than from convention:
+          #
+          #   --storage-directory is APPENDED after the command arguments
+          #     (:203). chip-tool reads its first argument as the
+          #     cluster/command set, so a leading global flag fails with
+          #     "Unknown cluster or command set".
+          #   ::1, not 127.0.0.1 (PairTargetHost, :48-56). The CSA chip-cert-bins
+          #     builds are ipv6only (INET_CONFIG_ENABLE_IPV4=0) and reject IPv4
+          #     literals while parsing arguments, with CHIP_ERROR_INVALID_ARGUMENT
+          #     (0x2F).
+          #   already-discovered with an explicit address and a hex node id,
+          #     plus --bypass-attestation-verifier (:248). The reference app
+          #     carries test attestation certificates the verifier rejects by
+          #     default, and already-discovered needs no mDNS round trip.
+          #
+          # No --pase-only: the Descriptor read below needs an operational CASE
+          # session, which is the PairFull shape (:260).
+          ./chip-tool pairing already-discovered 0x1234 20202021 ::1 5560 \
             --bypass-attestation-verifier true \
             --storage-directory ./kvs-tool \
             | tee pair.log
-          ./chip-tool descriptor read parts-list 4242 0 \
+          ./chip-tool descriptor read parts-list 0x1234 0 \
             --storage-directory ./kvs-tool \
             | tee read.log
           grep -q "PartsList" read.log \
