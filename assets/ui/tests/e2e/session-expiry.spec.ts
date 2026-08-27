@@ -1,5 +1,5 @@
 import { test, expect } from './helpers/fixtures';
-import { mockAllApis } from './helpers/mock-api';
+import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
 /**
  * The session-expiry banner. A session is an absolute 12h window that
@@ -32,6 +32,28 @@ async function mockIdentityExpiringIn(page: import('@playwright/test').Page, ms:
         expires_at: new Date(FROZEN_NOW + ms).toISOString(),
       },
     }),
+  );
+}
+
+async function setTheme(
+  page: import('@playwright/test').Page,
+  theme: 'light' | 'dark',
+  locale: 'en' | 'de' = 'en',
+) {
+  await page.addInitScript(
+    ([t, l]) => {
+      localStorage.setItem(
+        'openccu-loom.prefs.v1',
+        JSON.stringify({
+          theme: t,
+          locale: l,
+          navCollapsed: false,
+          expertMode: false,
+          deviceView: 'grid',
+        }),
+      );
+    },
+    [theme, locale] as const,
   );
 }
 
@@ -71,18 +93,7 @@ test.describe('Session expiry banner', () => {
   });
 
   test('renders in dark mode', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        'openccu-loom.prefs.v1',
-        JSON.stringify({
-          theme: 'dark',
-          locale: 'en',
-          navCollapsed: false,
-          expertMode: false,
-          deviceView: 'grid',
-        }),
-      );
-    });
+    await setTheme(page, 'dark');
     await mockIdentityExpiringIn(page, 8 * 60 * 1000);
     await page.goto('http://localhost:5173/app/');
     await page.waitForSelector('#main');
@@ -96,18 +107,7 @@ test.describe('Session expiry banner', () => {
   });
 
   test('is localized', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        'openccu-loom.prefs.v1',
-        JSON.stringify({
-          theme: 'light',
-          locale: 'de',
-          navCollapsed: false,
-          expertMode: false,
-          deviceView: 'grid',
-        }),
-      );
-    });
+    await setTheme(page, 'light', 'de');
     await mockIdentityExpiringIn(page, 8 * 60 * 1000);
     await page.goto('http://localhost:5173/app/');
     await page.waitForSelector('#main');
@@ -116,4 +116,29 @@ test.describe('Session expiry banner', () => {
     await expect(banner).toBeVisible({ timeout: 10000 });
     await expect(banner.getByRole('button', { name: 'Neu anmelden' })).toBeVisible();
   });
+});
+
+// ---------------------------------------------------------------------------
+// Visual regression — the banner element itself
+//
+// Scoped to the element rather than the page: the shell around it is already
+// covered by visual.spec.ts, and a full-page baseline here would fail for
+// every unrelated change to the navigation or the device list.
+// ---------------------------------------------------------------------------
+
+test.describe('Session expiry banner - visual', () => {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`banner ${theme}`, async ({ page }) => {
+      await mockAllApis(page);
+      await setTheme(page, theme);
+      await mockIdentityExpiringIn(page, 8 * 60 * 1000);
+      await page.goto('http://localhost:5173/app/');
+      await page.waitForSelector('#main');
+
+      const banner = page.getByRole('status').filter({ hasText: 'session ends in' });
+      await expect(banner).toBeVisible({ timeout: 10000 });
+      await addStylesForStableScreenshots(page);
+      await expect(banner).toHaveScreenshot(`session-expiry-banner-${theme}.png`);
+    });
+  }
 });
