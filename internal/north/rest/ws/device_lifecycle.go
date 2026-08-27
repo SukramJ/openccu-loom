@@ -9,6 +9,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DeviceCreatedPayload is the WebSocket payload published on the
@@ -20,7 +21,35 @@ type DeviceCreatedPayload struct {
 	DeviceAddress string                        `json:"device_address"`
 	Model         string                        `json:"model"`
 	Source        hmenum.SourceOfDeviceCreation `json:"source,omitempty"`
+	// Released reports whether the device has finished onboarding. False
+	// means it is accepted and configurable but not yet published to the
+	// ecosystems — a consumer that adopts devices should wait for the
+	// matching `device.released` frame rather than act on this one.
+	//
+	// Carried on the creation frame because the alternative is a race: a
+	// client that learns the state from a separate snapshot read can
+	// receive this push first and adopt a device it would have filtered.
+	Released bool `json:"released"`
 }
+
+// DeviceReleasedPayload is the WebSocket payload published on the
+// `device.<addr>.lifecycle` topic when an operator finishes onboarding a
+// device and it may be adopted.
+//
+// It is a broadcast, not a reply, because the consumer that needs it is
+// precisely the one that was already connected and filtered the device
+// out: without a push it would never learn the device became adoptable,
+// and would show it only after its next full reload.
+type DeviceReleasedPayload struct {
+	Central       string `json:"central"`
+	InterfaceID   string `json:"interface_id"`
+	DeviceAddress string `json:"device_address"`
+}
+
+// broadcastDeviceReleased is the envelope `type` of the release frame.
+// It rides the device lifecycle topic like the others so one subscription
+// pattern still sees every transition of a device.
+const broadcastDeviceReleased = "device.released"
 
 // DeviceRemovedPayload is the WebSocket payload published on the
 // `device.<addr>.lifecycle` topic when the CCU reports a device
@@ -122,6 +151,24 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 				DeviceAddress: e.Address,
 				Model:         e.Model,
 				Source:        e.Source,
+				// Read live rather than carried on the event: a device
+				// created while the wizard holds it is unreleased, and one
+				// created on an installation that never used the wizard is
+				// released. The coordinator is the only thing that knows.
+				Released: u.Devices == nil ||
+					u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(e.InterfaceID), e.Address),
+			},
+		})
+	})
+	unsubReleased := events.Subscribe(bus, func(e hmevent.DeviceReleasedEvent) {
+		hub.Publish(Event{
+			Topic: DeviceLifecycleTopic(e.Address),
+			Type:  broadcastDeviceReleased,
+			When:  e.Timestamp(),
+			Payload: DeviceReleasedPayload{
+				Central:       centralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.Address,
 			},
 		})
 	})
@@ -158,7 +205,7 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 			},
 		})
 	})
-	return unwireAll([]func(){unsubCreated, unsubRemoved, unsubAvailability})
+	return unwireAll([]func(){unsubCreated, unsubReleased, unsubRemoved, unsubAvailability})
 }
 
 // Stop removes the registry observer and drops every subscription it

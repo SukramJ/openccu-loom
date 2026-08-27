@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The onboarding release state is visible to REST and WebSocket consumers.**
+  0.66.0 enforced the hold on MQTT, Matter and the outbound webhook, and
+  deliberately left this API showing an unreleased device — the Config UI has
+  to see it to configure it. That conflated transport with role: a consumer of
+  this API can be an ecosystem just as much as a configuration client, and one
+  that adopts devices had no way to tell the two states apart. For it the
+  release step did nothing.
+
+  The state now travels with the device instead of being inferred from the
+  channel:
+
+  - `released` on `DeviceSummary` (`GET /devices`, `GET /devices/{addr}`,
+    `GET /snapshot`).
+  - `released` on the `device.created` WebSocket payload — on the frame
+    itself, because looking it up separately is a race the consumer cannot
+    win: the push can arrive before its snapshot read completes.
+  - a new `device.released` broadcast on `device.{address}.lifecycle`. This
+    is the piece a client cannot compensate for: the consumer that needs it
+    is precisely the one that was already connected and filtered the device
+    out, and without a push it would learn nothing until its next full
+    reload.
+
+  `released` is `true` for every device that never entered the onboarding
+  wizard, so an installation that does not use it reads `true` throughout and
+  no existing client needs to change.
+
+
 ## [0.66.0] - 2026-08-27
 
 ### Added

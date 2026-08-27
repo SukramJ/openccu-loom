@@ -59,6 +59,20 @@ type DeviceIndex interface {
 	// stamping `unique_id`s onto data-point / channel / custom-DP summaries.
 	// Empty string when the central is unknown.
 	SerialSuffix(central string) string
+	// Released reports whether a device has finished onboarding.
+	//
+	// This surface does NOT withhold an unreleased device: the Config UI
+	// has to see it to configure it, which is the whole point of the
+	// state. But a consumer of this API can be an ecosystem as much as a
+	// configuration client — the transport does not determine the role —
+	// and an ecosystem that adopts a device before it is named keeps the
+	// identity it saw. So the state travels with the device and each
+	// consumer decides.
+	//
+	// True for an unknown address and for every device that never went
+	// through the onboarding wizard, which is why an existing
+	// installation reads `released: true` throughout and needs no filter.
+	Released(address string) bool
 }
 
 // HealthReader is the narrow facade `GET /api/v1/health` needs.

@@ -158,6 +158,19 @@ func (a *DevicesAdapter) SerialSuffix(centralName string) string {
 	return a.registry.SerialSuffix(centralName)
 }
 
+// Released delegates the onboarding-release state to the registry, so the
+// REST surface can tell an ecosystem consumer which devices are finished.
+//
+// This surface deliberately still LISTS an unreleased device — the Config
+// UI must see it to configure it — so the state travels as a field rather
+// than as a filter. An unknown address reports released.
+func (a *DevicesAdapter) Released(address string) bool {
+	if a.registry == nil {
+		return true
+	}
+	return a.registry.Released(address)
+}
+
 // DataPointWriterAdapter routes SetValue calls to the right
 // central's InterfaceClient via [ValueWriter] per central.
 type DataPointWriterAdapter struct {

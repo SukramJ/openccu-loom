@@ -230,6 +230,8 @@ func (f *fakeIncidentsClearer) ClearIncidents(context.Context) error {
 	return nil
 }
 
+func (stubDeviceIndexForRouter) Released(string) bool { return true }
+
 // fakeMasterProfilesService is a minimal handlers.MasterProfilesService
 // for router-level route-mounting tests.
 type fakeMasterProfilesService struct{}

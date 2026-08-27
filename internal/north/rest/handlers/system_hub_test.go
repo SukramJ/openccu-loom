@@ -488,6 +488,8 @@ func TestPostSystemUpdateInstall_BackupFirstAmbiguousCentral_Returns400(t *testi
 	}
 }
 
+func (a *ambiguousBackupHubIndex) Released(string) bool { return true }
+
 // slowBackupPort implements PreUpdateBackupPort with a backup that takes
 // longer than the request deadline — the realistic case, since a CCU backup
 // polls for minutes. It reports the context error it observed so a test can

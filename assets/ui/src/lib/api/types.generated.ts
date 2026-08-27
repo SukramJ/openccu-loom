@@ -9021,6 +9021,43 @@ export interface components {
             model: string;
             /** @description Which kind of arrival this is, from `hmenum.SourceOfDeviceCreation`: `NEW` a CCU pairing, `REFRESH` a factory-reset re-pair (the device kept its address but rebuilt its channels), `MANUAL` an operator accepting a device out of the deferred-creation inbox, `CACHE` a device restored from the persisted description cache at boot. `INIT` is defined by the enum but has no producer on this broadcast. Treat the set as forward-compatible and ignore values you do not know. */
             source?: string;
+            /**
+             * @description Whether the device has finished onboarding and may be
+             *     adopted. `false` means it is accepted and configurable but
+             *     deliberately not yet published to the ecosystems — a
+             *     consumer that adopts devices should wait for the matching
+             *     `device.released` frame rather than act on this one.
+             *
+             *     Carried on the creation frame rather than left to a
+             *     separate lookup because the alternative is a race: a client
+             *     that reads the state from a snapshot can receive this push
+             *     first and adopt a device it would have filtered.
+             *
+             *     Always `true` on an installation that never used the
+             *     onboarding wizard.
+             */
+            released?: boolean;
+        };
+        /**
+         * @description Payload of a `device.released` broadcast. Topic pattern
+         *     `device.{address}.lifecycle` — the same topic as
+         *     `device.created`; subscribers route by the envelope `type`.
+         *
+         *     Fires when an operator finishes onboarding a device: it stops
+         *     being withheld from the ecosystems (MQTT / Home Assistant, the
+         *     Matter bridge, outbound webhooks) and may now be adopted by a
+         *     consumer of this API too.
+         *
+         *     It is a broadcast rather than a reply because the consumer that
+         *     needs it is precisely the one that was already connected and
+         *     filtered the device out on its `device.created` frame: without
+         *     a push it would never learn the device became adoptable, and
+         *     would surface it only after its next full reload.
+         */
+        DeviceReleasedPayload: {
+            central: string;
+            interface_id: string;
+            device_address: string;
         };
         /**
          * @description Payload of a `device.removed` broadcast. Topic pattern

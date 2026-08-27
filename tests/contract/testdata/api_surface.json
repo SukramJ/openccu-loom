@@ -1,5 +1,5 @@
 {
- "api_version": "7.17.0",
+ "api_version": "7.18.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -960,6 +960,7 @@
    "device_address:string",
    "interface_id:string",
    "model:string",
+   "released:boolean",
    "source:string"
   ],
   "DeviceDetail": [],
@@ -973,6 +974,11 @@
    "total:integer"
   ],
   "DeviceMetadataChangedPayload": [
+   "central:string",
+   "device_address:string",
+   "interface_id:string"
+  ],
+  "DeviceReleasedPayload": [
    "central:string",
    "device_address:string",
    "interface_id:string"
