@@ -4340,7 +4340,8 @@
       "events": [],
       "features": [
         {
-          "name": "GN"
+          "name": "GN",
+          "bit": 0
         }
       ]
     },
@@ -4448,15 +4449,18 @@
       "features": [
         {
           "name": "LT",
-          "conformance": "[!OFFONLY]"
+          "conformance": "[!OFFONLY]",
+          "bit": 0
         },
         {
           "name": "DF",
-          "conformance": "[!OFFONLY]"
+          "conformance": "[!OFFONLY]",
+          "bit": 1
         },
         {
           "name": "OFFONLY",
-          "conformance": "[!(LT | DF)]"
+          "conformance": "[!(LT | DF)]",
+          "bit": 2
         }
       ]
     },
@@ -4669,15 +4673,18 @@
       "features": [
         {
           "name": "OO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "LT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "FQ",
-          "conformance": "P"
+          "conformance": "P",
+          "bit": 2
         }
       ]
     },
@@ -4757,7 +4764,8 @@
       "features": [
         {
           "name": "TAGLIST",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 0
         }
       ]
     },
@@ -4919,15 +4927,18 @@
       "features": [
         {
           "name": "EXTS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "MNGD",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 1
         },
         {
           "name": "AUX",
-          "conformance": "P, desc"
+          "conformance": "P, desc",
+          "bit": 2
         }
       ]
     },
@@ -5544,7 +5555,8 @@
       "events": [],
       "features": [
         {
-          "name": "CALFMT"
+          "name": "CALFMT",
+          "bit": 0
         }
       ]
     },
@@ -5587,7 +5599,8 @@
       "events": [],
       "features": [
         {
-          "name": "TEMP"
+          "name": "TEMP",
+          "bit": 0
         }
       ]
     },
@@ -5918,19 +5931,23 @@
       "features": [
         {
           "name": "WIRED",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "BAT",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "RECHG",
-          "conformance": "[BAT]"
+          "conformance": "[BAT]",
+          "bit": 2
         },
         {
           "name": "REPLC",
-          "conformance": "[BAT]"
+          "conformance": "[BAT]",
+          "bit": 3
         }
       ]
     },
@@ -6127,11 +6144,13 @@
       "features": [
         {
           "name": "TC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "NR",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         }
       ]
     },
@@ -6317,15 +6336,18 @@
       "features": [
         {
           "name": "WI",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "TH",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "ET",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 2
         }
       ]
     },
@@ -6525,7 +6547,8 @@
       "features": [
         {
           "name": "DMTEST",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 0
         }
       ]
     },
@@ -6599,7 +6622,8 @@
       ],
       "features": [
         {
-          "name": "WTRMRK"
+          "name": "WTRMRK",
+          "bit": 0
         }
       ]
     },
@@ -7218,16 +7242,20 @@
       ],
       "features": [
         {
-          "name": "PKTCNT"
+          "name": "PKTCNT",
+          "bit": 0
         },
         {
-          "name": "ERRCNT"
+          "name": "ERRCNT",
+          "bit": 1
         },
         {
-          "name": "MLECNT"
+          "name": "MLECNT",
+          "bit": 2
         },
         {
-          "name": "MACCNT"
+          "name": "MACCNT",
+          "bit": 3
         }
       ]
     },
@@ -7399,10 +7427,12 @@
       ],
       "features": [
         {
-          "name": "PKTCNT"
+          "name": "PKTCNT",
+          "bit": 0
         },
         {
-          "name": "ERRCNT"
+          "name": "ERRCNT",
+          "bit": 1
         }
       ]
     },
@@ -7517,10 +7547,12 @@
       "events": [],
       "features": [
         {
-          "name": "PKTCNT"
+          "name": "PKTCNT",
+          "bit": 0
         },
         {
-          "name": "ERRCNT"
+          "name": "ERRCNT",
+          "bit": 1
         }
       ]
     },
@@ -7745,16 +7777,20 @@
       ],
       "features": [
         {
-          "name": "TZ"
+          "name": "TZ",
+          "bit": 0
         },
         {
-          "name": "NTPC"
+          "name": "NTPC",
+          "bit": 1
         },
         {
-          "name": "NTPS"
+          "name": "NTPS",
+          "bit": 2
         },
         {
-          "name": "TSC"
+          "name": "TSC",
+          "bit": 3
         }
       ]
     },
@@ -7940,7 +7976,8 @@
       "features": [
         {
           "name": "BIS",
-          "conformance": "[Rev >= v4]"
+          "conformance": "[Rev >= v4]",
+          "bit": 20
         }
       ]
     },
@@ -8037,27 +8074,33 @@
       "features": [
         {
           "name": "LS",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "MS",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "MSR",
-          "conformance": "[MS & !AS]"
+          "conformance": "[MS & !AS]",
+          "bit": 2
         },
         {
           "name": "MSL",
-          "conformance": "[MS & (MSR | AS)]"
+          "conformance": "[MS & (MSR | AS)]",
+          "bit": 3
         },
         {
           "name": "MSM",
-          "conformance": "AS, [MS & MSR]"
+          "conformance": "AS, [MS & MSR]",
+          "bit": 4
         },
         {
           "name": "AS",
-          "conformance": "[MS]"
+          "conformance": "[MS]",
+          "bit": 5
         }
       ]
     },
@@ -8128,7 +8171,8 @@
       "events": [],
       "features": [
         {
-          "name": "BC"
+          "name": "BC",
+          "bit": 0
         }
       ]
     },
@@ -8414,11 +8458,13 @@
       "features": [
         {
           "name": "CS",
-          "conformance": "P"
+          "conformance": "P",
+          "bit": 0
         },
         {
           "name": "GCAST",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         }
       ]
     },
@@ -8512,7 +8558,8 @@
       "features": [
         {
           "name": "CHGEVENT",
-          "conformance": "[Rev >= v3]"
+          "conformance": "[Rev >= v3]",
+          "bit": 0
         }
       ]
     },
@@ -8666,19 +8713,23 @@
       "features": [
         {
           "name": "CIP",
-          "conformance": "LITS, O"
+          "conformance": "LITS, O",
+          "bit": 0
         },
         {
           "name": "UAT",
-          "conformance": "LITS, O"
+          "conformance": "LITS, O",
+          "bit": 1
         },
         {
           "name": "LITS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "DSLS",
-          "conformance": "[LITS]"
+          "conformance": "[LITS]",
+          "bit": 3
         }
       ]
     },
@@ -8841,7 +8892,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -8965,7 +9017,8 @@
       "events": [],
       "features": [
         {
-          "name": "DEPONOFF"
+          "name": "DEPONOFF",
+          "bit": 0
         }
       ]
     },
@@ -9026,7 +9079,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -9087,7 +9141,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -9147,11 +9202,13 @@
       "features": [
         {
           "name": "SPIN",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "RINSE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         }
       ]
     },
@@ -9210,11 +9267,13 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         },
         {
           "name": "DIRECTMODECH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 20
         }
       ]
     },
@@ -9273,11 +9332,13 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         },
         {
           "name": "DIRECTMODECH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 20
         }
       ]
     },
@@ -9363,15 +9424,18 @@
       "features": [
         {
           "name": "TN",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "TL",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "STEP",
-          "conformance": "[TN]"
+          "conformance": "[TN]",
+          "bit": 2
         }
       ]
     },
@@ -9448,7 +9512,8 @@
       "features": [
         {
           "name": "RESET",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -9509,7 +9574,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -9544,19 +9610,23 @@
       "features": [
         {
           "name": "FAIR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "MOD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "VPOOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "XPOOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         }
       ]
     },
@@ -9765,11 +9835,13 @@
       "features": [
         {
           "name": "SMOKE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "CO",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         }
       ]
     },
@@ -9847,7 +9919,8 @@
       ],
       "features": [
         {
-          "name": "RESET"
+          "name": "RESET",
+          "bit": 0
         }
       ]
     },
@@ -9903,7 +9976,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -10022,15 +10096,18 @@
       "features": [
         {
           "name": "PWRNUM",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "WATTS",
-          "conformance": "P, O.a"
+          "conformance": "P, O.a",
+          "bit": 1
         },
         {
           "name": "PWRLMTS",
-          "conformance": "[PWRNUM]"
+          "conformance": "[PWRNUM]",
+          "bit": 2
         }
       ]
     },
@@ -10357,7 +10434,8 @@
       "features": [
         {
           "name": "SN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -10491,43 +10569,53 @@
       "features": [
         {
           "name": "OVER",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 20
         },
         {
           "name": "UNDER",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 21
         },
         {
           "name": "MAJOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 22
         },
         {
           "name": "MINOR",
-          "conformance": "[MAJOR]"
+          "conformance": "[MAJOR]",
+          "bit": 23
         },
         {
           "name": "OCRIADJ",
-          "conformance": "[OVER]"
+          "conformance": "[OVER]",
+          "bit": 24
         },
         {
           "name": "OMAJADJ",
-          "conformance": "[OVER & MAJOR]"
+          "conformance": "[OVER & MAJOR]",
+          "bit": 25
         },
         {
           "name": "OMINADJ",
-          "conformance": "[OVER & MINOR]"
+          "conformance": "[OVER & MINOR]",
+          "bit": 26
         },
         {
           "name": "UMINADJ",
-          "conformance": "[UNDER & MINOR]"
+          "conformance": "[UNDER & MINOR]",
+          "bit": 27
         },
         {
           "name": "UMAJADJ",
-          "conformance": "[UNDER & MAJOR]"
+          "conformance": "[UNDER & MAJOR]",
+          "bit": 28
         },
         {
           "name": "UCRIADJ",
-          "conformance": "[UNDER]"
+          "conformance": "[UNDER]",
+          "bit": 29
         }
       ]
     },
@@ -10645,15 +10733,18 @@
       "features": [
         {
           "name": "LN",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 0
         },
         {
           "name": "SD",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 1
         },
         {
           "name": "PGA",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 2
         }
       ]
     },
@@ -10736,15 +10827,18 @@
       "features": [
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "WRN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "REP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         }
       ]
     },
@@ -10827,15 +10921,18 @@
       "features": [
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "WRN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "REP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         }
       ]
     },
@@ -10918,15 +11015,18 @@
       "features": [
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "WRN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "REP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         }
       ]
     },
@@ -11046,23 +11146,28 @@
       "features": [
         {
           "name": "VIS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "AUD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "SPRS",
-          "conformance": "[VIS | AUD]"
+          "conformance": "[VIS | AUD]",
+          "bit": 2
         },
         {
           "name": "SENSLVL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "FAULTEV",
-          "conformance": "[Rev >= v2]"
+          "conformance": "[Rev >= v2]",
+          "bit": 4
         }
       ]
     },
@@ -11211,11 +11316,13 @@
       "features": [
         {
           "name": "TS",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 0
         },
         {
           "name": "LVL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         }
       ]
     },
@@ -11431,23 +11538,28 @@
       "features": [
         {
           "name": "DIRC",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "ALTC",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "POLY",
-          "conformance": "[ALTC]"
+          "conformance": "[ALTC]",
+          "bit": 2
         },
         {
           "name": "HARM",
-          "conformance": "[ALTC]"
+          "conformance": "[ALTC]",
+          "bit": 3
         },
         {
           "name": "PWRQ",
-          "conformance": "[ALTC]"
+          "conformance": "[ALTC]",
+          "bit": 4
         }
       ]
     },
@@ -11536,27 +11648,33 @@
       "features": [
         {
           "name": "IMPE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "EXPE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "CUME",
-          "conformance": "O.b+"
+          "conformance": "O.b+",
+          "bit": 2
         },
         {
           "name": "PERE",
-          "conformance": "O.b+"
+          "conformance": "O.b+",
+          "bit": 3
         },
         {
           "name": "APPE",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 4
         },
         {
           "name": "REAE",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 5
         }
       ]
     },
@@ -11655,11 +11773,13 @@
       "features": [
         {
           "name": "EM",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "TP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         }
       ]
     },
@@ -11751,7 +11871,8 @@
       "features": [
         {
           "name": "FORE",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -11828,19 +11949,23 @@
       "features": [
         {
           "name": "CONF",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "RESP",
-          "conformance": "[CONF]"
+          "conformance": "[CONF]",
+          "bit": 1
         },
         {
           "name": "RPLY",
-          "conformance": "[CONF]"
+          "conformance": "[CONF]",
+          "bit": 2
         },
         {
           "name": "PROT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         }
       ]
     },
@@ -12012,31 +12137,38 @@
       "features": [
         {
           "name": "PA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "PFR",
-          "conformance": "[!PA].a, STA | PAU | FA | CON, O"
+          "conformance": "[!PA].a, STA | PAU | FA | CON, O",
+          "bit": 1
         },
         {
           "name": "SFR",
-          "conformance": "[!PA].a"
+          "conformance": "[!PA].a",
+          "bit": 2
         },
         {
           "name": "STA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "PAU",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "FA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 6
         }
       ]
     },
@@ -12353,23 +12485,28 @@
       "features": [
         {
           "name": "PREF",
-          "conformance": "M"
+          "conformance": "M",
+          "bit": 0
         },
         {
           "name": "SOC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "PNC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "RFID",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "V2X",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         }
       ]
     },
@@ -12439,11 +12576,13 @@
       "features": [
         {
           "name": "BALA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LPMS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         }
       ]
     },
@@ -12488,19 +12627,23 @@
       "features": [
         {
           "name": "NODE",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "TREE",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "SET",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 2
         },
         {
           "name": "DYPF",
-          "conformance": "[SET]"
+          "conformance": "[SET]",
+          "bit": 3
         }
       ]
     },
@@ -12559,7 +12702,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -12618,7 +12762,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -12677,7 +12822,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -12735,7 +12881,8 @@
       "features": [
         {
           "name": "FORE",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -13335,55 +13482,68 @@
       "features": [
         {
           "name": "PIN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "RID",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         },
         {
           "name": "FGP",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 2
         },
         {
           "name": "WDSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "DPS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "FACE",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 6
         },
         {
           "name": "COTA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 7
         },
         {
           "name": "USR",
-          "conformance": "PIN | RID | FGP | FACE | ALIRO"
+          "conformance": "PIN | RID | FGP | FACE | ALIRO",
+          "bit": 8
         },
         {
           "name": "YDSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 10
         },
         {
           "name": "HDSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 11
         },
         {
           "name": "UBOLT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 12
         },
         {
           "name": "ALIRO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 13
         },
         {
           "name": "ALBU",
-          "conformance": "[ALIRO]"
+          "conformance": "[ALIRO]",
+          "bit": 14
         }
       ]
     },
@@ -13577,19 +13737,23 @@
       "features": [
         {
           "name": "LF",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "TL",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "PA_LF",
-          "conformance": "[LF]"
+          "conformance": "[LF]",
+          "bit": 2
         },
         {
           "name": "PA_TL",
-          "conformance": "[TL]"
+          "conformance": "[TL]",
+          "bit": 4
         }
       ]
     },
@@ -13714,39 +13878,48 @@
       "features": [
         {
           "name": "PS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LT",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "IS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "SP",
-          "conformance": "[PS & !IS]"
+          "conformance": "[PS & !IS]",
+          "bit": 3
         },
         {
           "name": "VT",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 4
         },
         {
           "name": "PD",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 5
         },
         {
           "name": "CL",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 6
         },
         {
           "name": "PT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 7
         },
         {
           "name": "MO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 8
         }
       ]
     },
@@ -13900,35 +14073,43 @@
       "features": [
         {
           "name": "PS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LT",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "UT",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 2
         },
         {
           "name": "LM",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 3
         },
         {
           "name": "SP",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 4
         },
         {
           "name": "TR",
-          "conformance": "[PS].b"
+          "conformance": "[PS].b",
+          "bit": 5
         },
         {
           "name": "RO",
-          "conformance": "[PS].b"
+          "conformance": "[PS].b",
+          "bit": 6
         },
         {
           "name": "MD",
-          "conformance": "[PS].b"
+          "conformance": "[PS].b",
+          "bit": 7
         }
       ]
     },
@@ -14034,13 +14215,16 @@
       "events": [],
       "features": [
         {
-          "name": "SELRUN"
+          "name": "SELRUN",
+          "bit": 0
         },
         {
-          "name": "PROG"
+          "name": "PROG",
+          "bit": 1
         },
         {
-          "name": "MAPS"
+          "name": "MAPS",
+          "bit": 2
         }
       ]
     },
@@ -14387,31 +14571,38 @@
       "features": [
         {
           "name": "PRSCONST",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "PRSCOMP",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "FLW",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "SPD",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 3
         },
         {
           "name": "TEMP",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 4
         },
         {
           "name": "AUTO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "LOCAL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 6
         }
       ]
     },
@@ -15106,43 +15297,53 @@
       "features": [
         {
           "name": "HEAT",
-          "conformance": "AUTO, O.a+"
+          "conformance": "AUTO, O.a+",
+          "bit": 0
         },
         {
           "name": "COOL",
-          "conformance": "AUTO, O.a+"
+          "conformance": "AUTO, O.a+",
+          "bit": 1
         },
         {
           "name": "OCC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "SB",
-          "conformance": "D"
+          "conformance": "D",
+          "bit": 4
         },
         {
           "name": "AUTO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "LTNE",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 6
         },
         {
           "name": "MSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 7
         },
         {
           "name": "PRES",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 8
         },
         {
           "name": "TEVT",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 9
         },
         {
           "name": "TSUGGEST",
-          "conformance": "[PRES]"
+          "conformance": "[PRES]",
+          "bit": 10
         }
       ]
     },
@@ -15278,27 +15479,33 @@
       "features": [
         {
           "name": "SPD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "AUT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "RCK",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "WND",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "STEP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "DIR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         }
       ]
     },
@@ -15933,23 +16140,28 @@
       "features": [
         {
           "name": "HS",
-          "conformance": "EHUE, O"
+          "conformance": "EHUE, O",
+          "bit": 0
         },
         {
           "name": "EHUE",
-          "conformance": "CL, O"
+          "conformance": "CL, O",
+          "bit": 1
         },
         {
           "name": "CL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "XY",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "CT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         }
       ]
     },
@@ -16177,7 +16389,8 @@
       "features": [
         {
           "name": "EXT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -16445,39 +16658,48 @@
       "features": [
         {
           "name": "OTHER",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "PIR",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "US",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "PHY",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 3
         },
         {
           "name": "AIR",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 4
         },
         {
           "name": "RAD",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 5
         },
         {
           "name": "RFS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 6
         },
         {
           "name": "VIS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 7
         },
         {
           "name": "OCCEVENT",
-          "conformance": "[Rev >= v7]"
+          "conformance": "[Rev >= v7]",
+          "bit": 9
         }
       ]
     },
@@ -16596,27 +16818,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -16735,27 +16963,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -16874,27 +17108,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -17013,27 +17253,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -17152,27 +17398,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -17291,27 +17543,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -17430,27 +17688,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -17569,27 +17833,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -17708,27 +17978,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -17847,27 +18123,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -18035,23 +18317,28 @@
       "features": [
         {
           "name": "HA",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 0
         },
         {
           "name": "OC",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 1
         },
         {
           "name": "OI",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 2
         },
         {
           "name": "AUD",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 3
         },
         {
           "name": "PRED",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 4
         }
       ]
     },
@@ -18209,7 +18496,8 @@
       "features": [
         {
           "name": "PC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -18425,16 +18713,20 @@
       "events": [],
       "features": [
         {
-          "name": "CL"
+          "name": "CL",
+          "bit": 0
         },
         {
-          "name": "LI"
+          "name": "LI",
+          "bit": 1
         },
         {
-          "name": "EG"
+          "name": "EG",
+          "bit": 2
         },
         {
-          "name": "RP"
+          "name": "RP",
+          "bit": 3
         }
       ]
     },
@@ -18733,19 +19025,24 @@
       ],
       "features": [
         {
-          "name": "AS"
+          "name": "AS",
+          "bit": 0
         },
         {
-          "name": "VS"
+          "name": "VS",
+          "bit": 1
         },
         {
-          "name": "TT"
+          "name": "TT",
+          "bit": 2
         },
         {
-          "name": "AT"
+          "name": "AT",
+          "bit": 3
         },
         {
-          "name": "AA"
+          "name": "AA",
+          "bit": 4
         }
       ]
     },
@@ -18814,7 +19111,8 @@
       "events": [],
       "features": [
         {
-          "name": "NU"
+          "name": "NU",
+          "bit": 0
         }
       ]
     },
@@ -18879,13 +19177,16 @@
       "events": [],
       "features": [
         {
-          "name": "NV"
+          "name": "NV",
+          "bit": 0
         },
         {
-          "name": "LK"
+          "name": "LK",
+          "bit": 1
         },
         {
-          "name": "NK"
+          "name": "NK",
+          "bit": 2
         }
       ]
     },
@@ -18952,23 +19253,28 @@
       "features": [
         {
           "name": "CS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "UP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "AS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "TT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "AT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         }
       ]
     },
@@ -19023,7 +19329,8 @@
       "events": [],
       "features": [
         {
-          "name": "NU"
+          "name": "NU",
+          "bit": 0
         }
       ]
     },
@@ -19095,7 +19402,8 @@
       "events": [],
       "features": [
         {
-          "name": "AP"
+          "name": "AP",
+          "bit": 0
         }
       ]
     },
@@ -19472,28 +19780,36 @@
       ],
       "features": [
         {
-          "name": "ST"
+          "name": "ST",
+          "bit": 0
         },
         {
-          "name": "PM"
+          "name": "PM",
+          "bit": 1
         },
         {
-          "name": "BU"
+          "name": "BU",
+          "bit": 2
         },
         {
-          "name": "OCR"
+          "name": "OCR",
+          "bit": 3
         },
         {
-          "name": "SCR"
+          "name": "SCR",
+          "bit": 4
         },
         {
-          "name": "BC"
+          "name": "BC",
+          "bit": 5
         },
         {
-          "name": "BA"
+          "name": "BA",
+          "bit": 6
         },
         {
-          "name": "BTW"
+          "name": "BTW",
+          "bit": 7
         }
       ]
     },
@@ -19668,19 +19984,23 @@
       "features": [
         {
           "name": "TWODCART",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "PERZONESENS",
-          "conformance": "[TWODCART]"
+          "conformance": "[TWODCART]",
+          "bit": 1
         },
         {
           "name": "USERDEFINED",
-          "conformance": "[TWODCART]"
+          "conformance": "[TWODCART]",
+          "bit": 2
         },
         {
           "name": "FOCUSZONES",
-          "conformance": "[USERDEFINED]"
+          "conformance": "[USERDEFINED]",
+          "bit": 3
         }
       ]
     },
@@ -20146,47 +20466,58 @@
       "features": [
         {
           "name": "ADO",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "VDO",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "SNP",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "PRIV",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "SPKR",
-          "conformance": "[ADO]"
+          "conformance": "[ADO]",
+          "bit": 4
         },
         {
           "name": "ICTL",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 5
         },
         {
           "name": "WMARK",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 6
         },
         {
           "name": "OSD",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 7
         },
         {
           "name": "STOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 8
         },
         {
           "name": "HDR",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 9
         },
         {
           "name": "NV",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 10
         }
       ]
     },
@@ -20343,23 +20674,28 @@
       "features": [
         {
           "name": "DPTZ",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "MPAN",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MTILT",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "MZOOM",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 3
         },
         {
           "name": "MPRESETS",
-          "conformance": "[MPAN | MTILT | MZOOM]"
+          "conformance": "[MPAN | MTILT | MZOOM]",
+          "bit": 4
         }
       ]
     },
@@ -20441,7 +20777,8 @@
       "features": [
         {
           "name": "METADATA",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 0
         }
       ]
     },
@@ -20607,11 +20944,13 @@
       "features": [
         {
           "name": "PERZONESENS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "METADATA",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         }
       ]
     },
@@ -20868,27 +21207,33 @@
       "features": [
         {
           "name": "PRICE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "FCRED",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "AUXLD",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "PEAKP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "PWRTHLD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "RNDM",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         }
       ]
     },
@@ -21633,7 +21978,8 @@
       "features": [
         {
           "name": "PWRTHLD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },

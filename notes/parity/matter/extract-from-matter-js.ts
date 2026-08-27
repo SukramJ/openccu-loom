@@ -61,7 +61,7 @@ interface ClusterOut {
     attributes: AttrOut[];
     commands: CmdOut[];
     events: EvtOut[];
-    features?: { name: string; conformance?: string; description?: string }[];
+    features?: { name: string; conformance?: string; description?: string; bit?: number }[];
 }
 
 const out = {
@@ -162,7 +162,7 @@ for (const c of children) {
         const attributes: AttrOut[] = [];
         const commands: CmdOut[] = [];
         const events: EvtOut[] = [];
-        const features: { name: string; conformance?: string; description?: string }[] = [];
+        const features: { name: string; conformance?: string; description?: string; bit?: number }[] = [];
         for (const ch of resolvedChildren(c)) {
             if (ch.tag === "attribute") {
                 if (ch.id === 0xFFFD || ch.name === "ClusterRevision") {
@@ -171,7 +171,22 @@ for (const c of children) {
                 if (ch.id === 0xFFFC || ch.name === "FeatureMap") {
                     if (typeof ch.default === "number") featureMap = ch.default;
                     for (const f of (ch.children ?? [])) {
-                        if (f.tag === "field") features.push({ name: f.name, conformance: f.conformance, description: f.description });
+                        if (f.tag === "field") {
+                            // `constraint` is the bit POSITION, which is NOT the
+                            // field's index in this list: feature bits are sparse
+                            // (DoorLock has no bit 3 and no bit 9), so deriving a
+                            // bit from array order mislabels every feature after
+                            // the first gap. Recording it is what lets a
+                            // conformance check read the position instead of
+                            // assuming one.
+                            const bit = f.constraint === undefined ? undefined : Number(f.constraint);
+                            features.push({
+                                name: f.name,
+                                conformance: f.conformance,
+                                description: f.description,
+                                bit: Number.isInteger(bit) ? bit : undefined,
+                            });
+                        }
                     }
                 }
                 if (typeof ch.id === "number") {
