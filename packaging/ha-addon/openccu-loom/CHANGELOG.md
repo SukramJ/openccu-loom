@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.66.1
+
+- Fixes a gap in the new device wizard for setups that talk to the daemon
+  over its API rather than over MQTT: those saw a device as soon as it was
+  accepted, before you had released it. The daemon now tells them which
+  devices are still being onboarded, and announces the release when it
+  happens. Nothing changes for MQTT setups, and nothing changes if you do
+  not use the wizard.
+
 ## 0.66.0
 
 - New devices go through a short wizard before they show up in Home

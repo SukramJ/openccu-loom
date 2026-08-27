@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.66.1] - 2026-08-27
+
 ### Added
 
 - **The onboarding release state is visible to REST and WebSocket consumers.**
