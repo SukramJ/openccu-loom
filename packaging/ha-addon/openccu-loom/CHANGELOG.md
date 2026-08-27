@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.65.3
+
+- Documentation fix in the published API description only; the daemon
+  behaves exactly as 0.65.2 did. The device-created event was still
+  described by its old behaviour and listed a status value that does not
+  exist, which could mislead anyone writing a client against it.
+
 ## 0.65.2
 
 - A CCU reconnect no longer reports every paired device as newly created.
