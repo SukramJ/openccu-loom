@@ -241,6 +241,23 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
 }
 
+// ReleaseDevice finishes onboarding on whichever central withholds the
+// address, publishing it to the ecosystems.
+//
+// Walking every central mirrors AcceptInboxDevice: an address is unique
+// per CCU, and the operator surface does not carry which one holds it.
+func (a *DeviceAdminDomain) ReleaseDevice(ctx context.Context, address string) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, u := range a.registry.List() {
+		if ReleaseDevice(ctx, u, address) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: device %s is not withheld", interfaces.ErrInboxDeviceNotFound, address)
+}
+
 // finishAccept runs the two steps that follow a successful promotion on
 // the accepting central: the optional first-time configuration and the
 // materialisation of a deferred device. The materialisation runs even

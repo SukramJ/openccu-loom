@@ -8,7 +8,9 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -72,6 +74,36 @@ func AcceptPendingDevice(ctx context.Context, u *central.Unit, address string) (
 	u.Devices.HandleAcceptedDevices(iface, descs)
 	PublishPendingDevices(u)
 	return true, nil
+}
+
+// ReleaseDevice ends the onboarding hold on a materialised device and
+// reports whether it was held. This is the wizard's last step: up to
+// here the device exists, is configurable and is visible in this
+// daemon's own surfaces, but MQTT, Matter and the outbound webhook have
+// been withholding it.
+//
+// The event is published only for a device that was actually held, so a
+// double-click does not make three ecosystems re-publish a device that
+// was never withheld.
+func ReleaseDevice(ctx context.Context, u *central.Unit, address string) bool {
+	if u == nil || u.Devices == nil || address == "" {
+		return false
+	}
+	d, ok := u.ModelRegistry.Get(address)
+	if !ok || d == nil {
+		return false
+	}
+	iface := hmtypes.ParseWireInterfaceID(d.InterfaceID)
+	if !u.Devices.ReleaseDevice(ctx, iface, address) {
+		return false
+	}
+	events.Publish(u.EventBus, hmevent.DeviceReleasedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: u.Name(),
+		InterfaceID: d.InterfaceID,
+		Address:     address,
+	})
+	return true
 }
 
 // pendingInterfaceOf resolves the interface a parked device was

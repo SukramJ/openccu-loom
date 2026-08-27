@@ -34,18 +34,28 @@ type pendingSink struct {
 	centralName string
 }
 
-// Load returns the held-back addresses of this central, keyed by
-// canonical wire interface id.
-func (s *pendingSink) Load(ctx context.Context) (map[string][]string, error) {
+// Load returns the held devices of this central, keyed by canonical
+// wire interface id, each with the phase it stands at.
+func (s *pendingSink) Load(ctx context.Context) (map[string][]coordinators.HeldDevice, error) {
 	rows, err := s.store.ListByCentral(ctx, s.centralName)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string][]string, len(rows))
+	out := make(map[string][]coordinators.HeldDevice, len(rows))
 	for i := range rows {
-		out[rows[i].InterfaceID] = append(out[rows[i].InterfaceID], rows[i].Address)
+		phase := rows[i].Phase
+		if phase == "" {
+			phase = coordinators.PhasePending
+		}
+		out[rows[i].InterfaceID] = append(out[rows[i].InterfaceID],
+			coordinators.HeldDevice{Address: rows[i].Address, Phase: phase})
 	}
 	return out, nil
+}
+
+// Advance moves one address to a later onboarding phase.
+func (s *pendingSink) Advance(ctx context.Context, interfaceID, address, phase string) error {
+	return s.store.SetPhase(ctx, s.centralName, interfaceID, address, phase)
 }
 
 // Add records one address as held back.

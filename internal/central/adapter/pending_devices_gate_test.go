@@ -10,7 +10,9 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -19,23 +21,24 @@ import (
 // for SQLite so a test can simulate a restart — build a fresh coordinator
 // over the same sink — without a database.
 type memorySink struct {
-	rows    map[string]map[string]struct{}
+	// rows carries the phase per address, mirroring the persisted row.
+	rows    map[string]map[string]string
 	addErr  error
 	loadErr error
 }
 
 func newMemorySink() *memorySink {
-	return &memorySink{rows: map[string]map[string]struct{}{}}
+	return &memorySink{rows: map[string]map[string]string{}}
 }
 
-func (s *memorySink) Load(context.Context) (map[string][]string, error) {
+func (s *memorySink) Load(context.Context) (map[string][]coordinators.HeldDevice, error) {
 	if s.loadErr != nil {
 		return nil, s.loadErr
 	}
-	out := map[string][]string{}
+	out := map[string][]coordinators.HeldDevice{}
 	for iface, set := range s.rows {
-		for a := range set {
-			out[iface] = append(out[iface], a)
+		for a, phase := range set {
+			out[iface] = append(out[iface], coordinators.HeldDevice{Address: a, Phase: phase})
 		}
 	}
 	return out, nil
@@ -46,10 +49,25 @@ func (s *memorySink) Add(_ context.Context, interfaceID, address, _ string) erro
 		return s.addErr
 	}
 	if s.rows[interfaceID] == nil {
-		s.rows[interfaceID] = map[string]struct{}{}
+		s.rows[interfaceID] = map[string]string{}
 	}
-	s.rows[interfaceID][address] = struct{}{}
+	s.rows[interfaceID][address] = coordinators.PhasePending
 	return nil
+}
+
+func (s *memorySink) Advance(_ context.Context, interfaceID, address, phase string) error {
+	if s.rows[interfaceID] == nil {
+		return nil
+	}
+	if _, ok := s.rows[interfaceID][address]; ok {
+		s.rows[interfaceID][address] = phase
+	}
+	return nil
+}
+
+// phaseOf reports the stored phase, or "" when the device is not held.
+func (s *memorySink) phaseOf(interfaceID, address string) string {
+	return s.rows[interfaceID][address]
 }
 
 func (s *memorySink) Remove(_ context.Context, interfaceID, address string) error {
@@ -58,7 +76,7 @@ func (s *memorySink) Remove(_ context.Context, interfaceID, address string) erro
 }
 
 func (s *memorySink) Clear(context.Context) error {
-	s.rows = map[string]map[string]struct{}{}
+	s.rows = map[string]map[string]string{}
 	return nil
 }
 
@@ -167,11 +185,17 @@ func TestUnparkedFleetIsNotWithheld(t *testing.T) {
 	}
 }
 
-// TestAcceptClearsTheDurableDecision pins that accepting a device ends
-// the hold for good. A queue that keeps the row after an accept parks the
-// device again on the next restart — the operator would accept the same
-// device forever.
-func TestAcceptClearsTheDurableDecision(t *testing.T) {
+// TestAcceptAdvancesToUnreleasedRatherThanClearing pins the wizard's
+// middle state.
+//
+// Accepting is not finishing: the device must stop being held out of the
+// MODEL — the wizard needs its ise_id and channels to configure it — and
+// start being held out of the ECOSYSTEMS. Deleting the row here would
+// publish a device to Home Assistant and every Matter controller under
+// whatever name it was paired with, which is precisely what the release
+// step exists to prevent; and re-parking it would strand a device the
+// operator has already accepted.
+func TestAcceptAdvancesToUnreleasedRatherThanClearing(t *testing.T) {
 	t.Parallel()
 	sink := newMemorySink()
 	iface := hmtypes.ParseWireInterfaceID("ccu-accept-HmIP-RF")
@@ -186,10 +210,67 @@ func TestAcceptClearsTheDurableDecision(t *testing.T) {
 		t.Fatalf("took %d description(s), want 2", len(got))
 	}
 	if c.Devices.IsParked(iface, "GATE0001") {
-		t.Error("device is still parked in memory after the accept")
+		t.Error("device is still held out of the model after the accept — the wizard has nothing to configure")
+	}
+	if c.Devices.IsReleased(iface, "GATE0001") {
+		t.Error("device was released by the accept — it reaches Home Assistant before the operator named it")
+	}
+	if got := sink.phaseOf(string(iface), "GATE0001"); got != coordinators.PhaseUnreleased {
+		t.Errorf("stored phase = %q, want %q — the second hold does not survive a restart",
+			got, coordinators.PhaseUnreleased)
+	}
+}
+
+// TestReleaseEndsTheHoldAndAnnouncesIt pins the wizard's last step: the
+// device becomes publishable and the ecosystems are told, because nothing
+// else would tell them. The device was created long ago and nothing on
+// the wire changed, so without the event MQTT, Matter and the webhook
+// keep withholding it until a daemon restart.
+func TestReleaseEndsTheHoldAndAnnouncesIt(t *testing.T) {
+	t.Parallel()
+	sink := newMemorySink()
+	iface := hmtypes.ParseWireInterfaceID("ccu-release-HmIP-RF")
+	c, err := central.New(central.Config{Name: "ccu-release"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	c.Devices.SetPendingDeviceSink(context.Background(), sink)
+	c.Devices.StoreDelayedDeviceDescriptions(context.Background(), iface, gateDescs()[:2])
+	_ = c.Devices.TakeDelayedDeviceDescriptions(context.Background(), iface, "GATE0001")
+
+	// Materialise it, as the accept's ingest does.
+	p := NewDevicePipeline(c)
+	if err := p.Ingest(context.Background(), string(iface), hmenum.InterfaceHmIPRF, gateDescs()[:2]); err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+
+	var announced []hmevent.DeviceReleasedEvent
+	unsub := events.Subscribe(c.EventBus, func(e hmevent.DeviceReleasedEvent) {
+		announced = append(announced, e)
+	})
+	defer unsub()
+
+	if !ReleaseDevice(context.Background(), c, "GATE0001") {
+		t.Fatal("ReleaseDevice reported nothing to release although the device is held")
+	}
+	if !c.Devices.IsReleased(iface, "GATE0001") {
+		t.Error("device is still withheld after the release")
 	}
 	if sink.count() != 0 {
-		t.Errorf("sink still holds %d row(s) after the accept — the next restart re-parks the device", sink.count())
+		t.Errorf("sink holds %d row(s) after the release — a restart withholds it again", sink.count())
+	}
+	if len(announced) != 1 || announced[0].Address != "GATE0001" {
+		t.Fatalf("release events = %+v, want exactly one for GATE0001 — nothing tells the ecosystems", announced)
+	}
+
+	// Releasing twice must stay quiet: three ecosystems re-publishing a
+	// device that was never withheld is noise, not idempotence.
+	announced = nil
+	if ReleaseDevice(context.Background(), c, "GATE0001") {
+		t.Error("a second release reported a hold that no longer exists")
+	}
+	if len(announced) != 0 {
+		t.Errorf("a second release announced %d event(s), want 0", len(announced))
 	}
 }
 
@@ -297,7 +378,7 @@ func TestAStoreFailureHoldsTheDeviceBackAnyway(t *testing.T) {
 func TestALoadFailureHoldsNothingBack(t *testing.T) {
 	t.Parallel()
 	sink := newMemorySink()
-	sink.rows["ccu-loaderr-HmIP-RF"] = map[string]struct{}{"GATE0001": {}}
+	sink.rows["ccu-loaderr-HmIP-RF"] = map[string]string{"GATE0001": coordinators.PhasePending}
 	sink.loadErr = context.DeadlineExceeded
 
 	c, err := central.New(central.Config{Name: "ccu-loaderr"})

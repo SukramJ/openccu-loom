@@ -58,6 +58,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -3202,6 +3203,11 @@ func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func()) []fu
 		// in Apple Home and Google Home until the daemon restarts. MQTT and the
 		// WebSocket already learn about it from the same event.
 		events.Subscribe(u.EventBus, func(hmevent.DeviceMetadataChangedEvent) { fire() }),
+		// A release adds a device to the bridged set without changing the
+		// model: it was materialised long ago and only the wizard's last
+		// step made it publishable. Without this it reaches no controller
+		// until the daemon restarts.
+		events.Subscribe(u.EventBus, func(hmevent.DeviceReleasedEvent) { fire() }),
 	}
 }
 
@@ -3345,12 +3351,40 @@ func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness)
 			}
 			out = append(out, endpoint.Snapshot{
 				CentralName:   u.Name(),
-				Devices:       u.ModelRegistry.List(),
+				Devices:       releasedDevicesOf(u),
 				ModelComplete: readiness != nil && readiness.isReady(u.Name()),
 			})
 		}
 		return out
 	}
+}
+
+// releasedDevicesOf is the central's model minus the devices the
+// onboarding wizard has not released yet.
+//
+// A withheld device is fully materialised — the wizard needs its ise_id
+// and channels to configure it — so it would otherwise be assembled into
+// a bridged endpoint and appear on every commissioned Matter controller
+// under whatever name it was paired with. Endpoint ids are assigned in
+// assembly order and persisted, so publishing early and renaming later
+// is not a cosmetic mistake: the controller keeps the first identity it
+// saw.
+func releasedDevicesOf(u *central.Unit) []*device.Device {
+	all := u.ModelRegistry.List()
+	if u.Devices == nil {
+		return all
+	}
+	out := make([]*device.Device, 0, len(all))
+	for _, d := range all {
+		if d == nil {
+			continue
+		}
+		if !u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(d.InterfaceID), d.Address) {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 // wireMatterDeviceReachableForward forwards one central's device-availability

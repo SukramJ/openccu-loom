@@ -1,5 +1,5 @@
 {
- "api_version": "7.15.0",
+ "api_version": "7.16.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -218,6 +218,7 @@
   "POST /devices/{addr}/install-mode": "deviceInstallMode",
   "POST /devices/{addr}/links": "addLink",
   "POST /devices/{addr}/links/test": "testLinkAtDevice",
+  "POST /devices/{addr}/release": "releaseDevice",
   "POST /devices/{addr}/reload": "reloadDevice",
   "POST /devices/{addr}/replace": "replaceDevice",
   "POST /devices/{addr}/schedule/active-profile": "setDeviceActiveProfile",

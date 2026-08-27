@@ -80,6 +80,13 @@ type DeviceCoordinator struct {
 	mu           sync.Mutex
 	delayedDescs map[string]map[string][]hmproto.DeviceDescription
 	parked       map[string]map[string]struct{}
+	// unreleased holds devices that ARE materialised — the wizard needs
+	// them to be, or there would be no ise_id and no channels to
+	// configure — but are withheld from the ecosystems until the
+	// operator finishes. Absence means released, so every device on an
+	// existing installation is released and nothing disappears from
+	// Home Assistant or a Matter controller on upgrade.
+	unreleased map[string]map[string]struct{}
 
 	// pending persists the parked set. Nil leaves the queue in-memory
 	// only — the pre-0.65.4 behaviour, still the shape every test that
@@ -122,6 +129,7 @@ func NewDeviceCoordinator(
 		recorder:     observability.NoopRecorder{},
 		delayedDescs: make(map[string]map[string][]hmproto.DeviceDescription),
 		parked:       make(map[string]map[string]struct{}),
+		unreleased:   make(map[string]map[string]struct{}),
 	}
 }
 
@@ -141,16 +149,38 @@ func NewDeviceCoordinator(
 // device the operator has not accepted.
 // loom:reachable:reason="port satisfied by adapter.pendingSink and passed to SetPendingDeviceSink from WirePendingDevices; an interface the analyzer resolves only through its concrete implementor, which lives in another package"
 type PendingDeviceSink interface {
-	// Load returns the held-back addresses of this central, keyed by
-	// canonical wire interface id.
-	Load(ctx context.Context) (map[string][]string, error)
+	// Load returns the held devices of this central, keyed by canonical
+	// wire interface id, each with the onboarding phase it stands at.
+	Load(ctx context.Context) (map[string][]HeldDevice, error)
 	// Add records one address as held back.
 	Add(ctx context.Context, interfaceID, address, model string) error
 	// Remove drops one address — accepted, or gone from the CCU.
 	Remove(ctx context.Context, interfaceID, address string) error
 	// Clear drops every held-back address of this central.
 	Clear(ctx context.Context) error
+	// Advance moves one address to a later onboarding phase.
+	Advance(ctx context.Context, interfaceID, address, phase string) error
 }
+
+// HeldDevice is one device the onboarding wizard still holds, and where
+// it stands.
+//
+// loom:reachable:reason="element type of PendingDeviceSink.Load, which SetPendingDeviceSink consumes on every bring-up; a method-less data struct the analyzer's type heuristic cannot see used"
+type HeldDevice struct {
+	Address string
+	// Phase is [PhasePending] or [PhaseUnreleased].
+	Phase string
+}
+
+// Onboarding phases, mirroring the persisted vocabulary.
+const (
+	// PhasePending holds the device out of the model entirely.
+	PhasePending = "pending"
+	// PhaseUnreleased holds it out of the ecosystems only: it is
+	// materialised and configurable, which the wizard needs, but MQTT,
+	// Matter and the outbound webhook do not see it yet.
+	PhaseUnreleased = "unreleased"
+)
 
 // SetPendingDeviceSink wires the durable half of the deferred-creation
 // queue and seeds the in-memory parked set from it. Called by the
@@ -179,24 +209,32 @@ func (c *DeviceCoordinator) SetPendingDeviceSink(ctx context.Context, sink Pendi
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	total := 0
-	for ifaceID, addrs := range byIface {
-		if len(addrs) == 0 {
-			continue
-		}
-		set, ok := c.parked[ifaceID]
-		if !ok {
-			set = make(map[string]struct{}, len(addrs))
-			c.parked[ifaceID] = set
-		}
-		for _, a := range addrs {
-			set[a] = struct{}{}
-			total++
+	var parked, unreleased int
+	for ifaceID, held := range byIface {
+		for _, h := range held {
+			// A device the wizard already advanced past 'pending' must
+			// NOT be re-parked: it has been accepted, it is expected in
+			// the model, and holding it out again would strand a
+			// half-configured device on the inbox surface.
+			target := c.parked
+			if h.Phase == PhaseUnreleased {
+				target = c.unreleased
+				unreleased++
+			} else {
+				parked++
+			}
+			set, ok := target[ifaceID]
+			if !ok {
+				set = make(map[string]struct{})
+				target[ifaceID] = set
+			}
+			set[h.Address] = struct{}{}
 		}
 	}
 	c.logger.Info("device_coordinator.pending.restored",
 		slog.String("central", c.centralName),
-		slog.Int("devices", total))
+		slog.Int("awaiting_accept", parked),
+		slog.Int("awaiting_release", unreleased))
 }
 
 // IsParked reports whether address is held back from the model.
@@ -244,7 +282,11 @@ func (c *DeviceCoordinator) ReleaseAllParked(ctx context.Context) int {
 	for _, set := range c.parked {
 		freed += len(set)
 	}
+	for _, set := range c.unreleased {
+		freed += len(set)
+	}
 	c.parked = make(map[string]map[string]struct{})
+	c.unreleased = make(map[string]map[string]struct{})
 	c.delayedDescs = make(map[string]map[string][]hmproto.DeviceDescription)
 	sink := c.pending
 	c.mu.Unlock()
@@ -1096,26 +1138,101 @@ func (c *DeviceCoordinator) TakeDelayedDeviceDescriptions(
 	if len(byAddress) == 0 {
 		delete(c.delayedDescs, ifaceID)
 	}
-	// The decision goes with the payload: once handed out, the device is
-	// being materialised, so the next boot pull must stop holding it back.
-	// Dropping the durable half here rather than after materialisation is
-	// deliberate — a failed accept puts the descriptions back through
-	// StoreDelayedDeviceDescriptions, which re-records the decision.
+	// Accepted is not released. The device stops being held out of the
+	// model — the pull must materialise it now, or the wizard has no
+	// ise_id and no channels to configure — and starts being held out of
+	// the ecosystems instead. Advancing rather than deleting is what
+	// keeps the second hold across a restart.
+	//
+	// A failed accept puts the descriptions back through
+	// StoreDelayedDeviceDescriptions, which re-records the pending phase.
 	if set, ok := c.parked[ifaceID]; ok {
 		delete(set, address)
 		if len(set) == 0 {
 			delete(c.parked, ifaceID)
 		}
 	}
+	set, ok := c.unreleased[ifaceID]
+	if !ok {
+		set = make(map[string]struct{})
+		c.unreleased[ifaceID] = set
+	}
+	set[address] = struct{}{}
 	if sink := c.pending; sink != nil {
+		if err := sink.Advance(ctx, ifaceID, address, PhaseUnreleased); err != nil {
+			c.logger.Warn("device_coordinator.pending.advance_failed",
+				slog.String("central", c.centralName),
+				slog.String("address", address),
+				slog.String("err", err.Error()),
+				slog.String("detail", "the device is withheld from the ecosystems this run but a restart will publish it"))
+		}
+	}
+	return descs
+}
+
+// IsReleased reports whether a device may reach the ecosystems — MQTT /
+// Home Assistant, Matter, the outbound webhook.
+//
+// Absence of a hold means released, deliberately: every device on an
+// existing installation has no row, so an upgrade publishes exactly what
+// was published before. Only a device that entered through the wizard is
+// ever withheld.
+func (c *DeviceCoordinator) IsReleased(iface hmtypes.WireInterfaceID, address string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	set, ok := c.unreleased[string(iface)]
+	if !ok {
+		return true
+	}
+	_, held := set[address]
+	return !held
+}
+
+// UnreleasedAddresses returns the devices of one interface that are
+// materialised but still withheld from the ecosystems.
+func (c *DeviceCoordinator) UnreleasedAddresses(iface hmtypes.WireInterfaceID) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	set := c.unreleased[string(iface)]
+	out := make([]string, 0, len(set))
+	for a := range set {
+		out = append(out, a)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// ReleaseDevice ends the hold on one device and reports whether it was
+// held. The caller publishes the event that tells the ecosystems to pick
+// it up; this method owns the state alone.
+func (c *DeviceCoordinator) ReleaseDevice(ctx context.Context, iface hmtypes.WireInterfaceID, address string) bool {
+	ifaceID := string(iface)
+	c.mu.Lock()
+	set, ok := c.unreleased[ifaceID]
+	if !ok {
+		c.mu.Unlock()
+		return false
+	}
+	if _, held := set[address]; !held {
+		c.mu.Unlock()
+		return false
+	}
+	delete(set, address)
+	if len(set) == 0 {
+		delete(c.unreleased, ifaceID)
+	}
+	sink := c.pending
+	c.mu.Unlock()
+	if sink != nil {
 		if err := sink.Remove(ctx, ifaceID, address); err != nil {
 			c.logger.Warn("device_coordinator.pending.remove_failed",
 				slog.String("central", c.centralName),
 				slog.String("address", address),
-				slog.String("err", err.Error()))
+				slog.String("err", err.Error()),
+				slog.String("detail", "the device is released this run but a restart will withhold it again"))
 		}
 	}
-	return descs
+	return true
 }
 
 // HandleAcceptedDevices performs the registry bookkeeping and event

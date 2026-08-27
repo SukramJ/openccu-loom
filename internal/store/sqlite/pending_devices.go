@@ -30,7 +30,24 @@ type PendingDevice struct {
 	// It is what lets an operator tell a decision they postponed
 	// yesterday from one that arrived a minute ago.
 	FirstSeen string
+	// Phase is where the device stands in onboarding:
+	// [PhasePending] (held out of the model) or [PhaseUnreleased]
+	// (materialised and configurable, withheld from the ecosystems).
+	// An absent row means fully onboarded.
+	Phase string
 }
+
+// Onboarding phases. A device moves pending → unreleased → (row gone).
+const (
+	// PhasePending holds the device out of the model entirely: no
+	// ise_id, no channels, nothing to configure.
+	PhasePending = "pending"
+	// PhaseUnreleased holds it out of the ecosystems only. It is
+	// materialised, configurable and visible in this daemon's own
+	// surfaces — which it has to be, or the wizard would have nothing
+	// to configure.
+	PhaseUnreleased = "unreleased"
+)
 
 // PendingDeviceStore persists the deferred-creation queue in the main
 // application database.
@@ -51,7 +68,7 @@ func (s *PendingDeviceStore) ListByCentral(ctx context.Context, centralName stri
 		return nil, nil
 	}
 	rows, err := s.db.QueryContext(ctx, `
-        SELECT central_name, interface_id, address, model, first_seen
+        SELECT central_name, interface_id, address, model, first_seen, phase
           FROM pending_devices
          WHERE central_name = ?
          ORDER BY interface_id, address
@@ -64,7 +81,7 @@ func (s *PendingDeviceStore) ListByCentral(ctx context.Context, centralName stri
 	var out []PendingDevice
 	for rows.Next() {
 		var p PendingDevice
-		if err := rows.Scan(&p.CentralName, &p.InterfaceID, &p.Address, &p.Model, &p.FirstSeen); err != nil {
+		if err := rows.Scan(&p.CentralName, &p.InterfaceID, &p.Address, &p.Model, &p.FirstSeen, &p.Phase); err != nil {
 			return nil, fmt.Errorf("pending_devices.ListByCentral scan: %w", err)
 		}
 		out = append(out, p)
@@ -86,12 +103,19 @@ func (s *PendingDeviceStore) Put(ctx context.Context, p PendingDevice) error {
 	if p.FirstSeen == "" {
 		p.FirstSeen = time.Now().UTC().Format(time.RFC3339)
 	}
+	if p.Phase == "" {
+		p.Phase = PhasePending
+	}
+	// The phase is NOT refreshed on conflict: a re-announcement of a
+	// device that has already been accepted must not drag it back to
+	// pending and un-materialise it on the next boot. Phase moves only
+	// through SetPhase, which is the wizard advancing.
 	_, err := s.db.ExecContext(ctx, `
-        INSERT INTO pending_devices (central_name, interface_id, address, model, first_seen)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO pending_devices (central_name, interface_id, address, model, first_seen, phase)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(central_name, interface_id, address) DO UPDATE SET
             model = excluded.model
-    `, p.CentralName, p.InterfaceID, p.Address, p.Model, p.FirstSeen)
+    `, p.CentralName, p.InterfaceID, p.Address, p.Model, p.FirstSeen, p.Phase)
 	if err != nil {
 		return fmt.Errorf("pending_devices.Put: %w", err)
 	}
@@ -126,6 +150,23 @@ func (s *PendingDeviceStore) DeleteByCentral(ctx context.Context, centralName st
 	_, err := s.db.ExecContext(ctx, `DELETE FROM pending_devices WHERE central_name = ?`, centralName)
 	if err != nil {
 		return fmt.Errorf("pending_devices.DeleteByCentral: %w", err)
+	}
+	return nil
+}
+
+// SetPhase advances a held device to the next onboarding phase, keeping
+// its FirstSeen so the age an operator sees stays the age of the
+// original decision. A no-op when the device is not held.
+func (s *PendingDeviceStore) SetPhase(ctx context.Context, centralName, interfaceID, address, phase string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+        UPDATE pending_devices SET phase = ?
+         WHERE central_name = ? AND interface_id = ? AND address = ?
+    `, phase, centralName, interfaceID, address)
+	if err != nil {
+		return fmt.Errorf("pending_devices.SetPhase: %w", err)
 	}
 	return nil
 }

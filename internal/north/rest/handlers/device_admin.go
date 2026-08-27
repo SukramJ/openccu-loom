@@ -327,6 +327,40 @@ type AcceptInboxRequest struct {
 	Functions       *[]string `json:"functions,omitempty"`
 }
 
+// ReleaseDevice finishes onboarding a device: it stops being withheld
+// from the ecosystems and is published to them.
+//
+// Separate from the accept on purpose. Between the two the device is
+// materialised and configurable — which is when the operator names it and
+// places it in a room — but invisible to Home Assistant, Matter and the
+// outbound webhook. An ecosystem that sees a device first and is
+// corrected afterwards keeps the identity it saw, so the order is what
+// makes the naming stick.
+func ReleaseDevice(admin DeviceAdmin) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if admin == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Device admin unavailable", ""))
+			return
+		}
+		if err := admin.ReleaseDevice(r.Context(), chi.URLParam(r, "addr")); err != nil {
+			if errors.Is(err, interfaces.ErrInboxDeviceNotFound) {
+				// Nothing withholds the address: it was released already,
+				// or it never went through the wizard. Either way this is
+				// a stale view, not an upstream failure — 404 so the SPA
+				// refreshes instead of retrying.
+				problem.Write(w, http.StatusNotFound, problem.New(problem.TypeNotFound, r,
+					"Device not awaiting release",
+					"The device is not being withheld; it may already be released."))
+				return
+			}
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Release failed", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // AcceptInboxDevice pairs a device that is waiting in the inbox and,
 // when the optional body carries first-time configuration, applies the
 // name / room / function assignment right after the accept.

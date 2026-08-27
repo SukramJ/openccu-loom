@@ -38,6 +38,7 @@ const (
 	// instead of N per-DP topics.
 	EventTypeCustomDataPointStateChanged EventType = "custom_data_point.state_changed"
 	EventTypeDeviceCreated               EventType = "device.created"
+	EventTypeDeviceReleased              EventType = "device.released"
 	EventTypeDeviceRemoved               EventType = "device.removed"
 	// EventTypeDeviceMetadataChanged fires when an operator renames a
 	// device/channel or changes its room/function assignment. It carries no
@@ -306,6 +307,25 @@ type DeviceCreatedEvent struct {
 
 // Type implements Event.
 func (DeviceCreatedEvent) Type() EventType { return EventTypeDeviceCreated }
+
+// DeviceReleasedEvent fires when an operator finishes the onboarding
+// wizard and the device may reach the ecosystems.
+//
+// It exists because releasing is the only moment a fully-built, already
+// materialised device becomes publishable. Nothing on the wire changes,
+// so no value event carries it, and the device was created long before —
+// without this the MQTT discovery, the Matter endpoint set and the
+// outbound webhook would keep withholding it until a daemon restart.
+// loom:reachable:reason="published by adapter.ReleaseDevice and consumed by the MQTT event bridge and the Matter reassemble trigger; both sides go through the generic events.Publish/Subscribe, whose type instantiation the analyzer cannot resolve"
+type DeviceReleasedEvent struct {
+	Base
+	CentralName string
+	InterfaceID string
+	Address     string
+}
+
+// Type implements Event.
+func (DeviceReleasedEvent) Type() EventType { return EventTypeDeviceReleased }
 
 // DeviceRemovedEvent fires when the CCU reports a device deletion.
 type DeviceRemovedEvent struct {

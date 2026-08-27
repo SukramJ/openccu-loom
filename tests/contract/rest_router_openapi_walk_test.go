@@ -230,6 +230,8 @@ func (fakeDeviceAdmin) RenameChannel(context.Context, string, int, string) error
 func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string, interfaces.AcceptInboxOptions) error {
 	return nil
 }
+
+func (fakeDeviceAdmin) ReleaseDevice(context.Context, string) error          { return nil }
 func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { return nil }
 func (fakeDeviceAdmin) InterfaceDutyCycle(string) (int, bool)                { return 0, false }
 func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }

@@ -2638,6 +2638,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish onboarding and publish the device to the ecosystems
+         * @description Ends the hold an accepted-but-unreleased device is under. Until
+         *     this call the device is fully materialised and configurable — it
+         *     has its CCU ise_id, its channels and its data points, and it is
+         *     visible in this daemon's own REST / WebSocket surfaces — but it is
+         *     withheld from the ecosystems: MQTT (and therefore Home Assistant),
+         *     the Matter bridge, and the outbound webhook.
+         *
+         *     The separation from `POST /devices/{addr}/accept` is deliberate.
+         *     Between the two steps the operator names the device and assigns
+         *     its rooms and functions. An ecosystem that sees a device first and
+         *     is corrected afterwards keeps the identity it saw — Home
+         *     Assistant its entity ids, a Matter controller its endpoint number
+         *     — so releasing last is what makes that naming stick.
+         *
+         *     Only a device that entered through the deferred-creation wizard
+         *     (`central.behavior.delay_new_device_creation`) is ever withheld.
+         *     A device that never did is released from the start, which is why
+         *     an upgrade publishes exactly what was published before.
+         *
+         *     `404` means no central is withholding the address: it was already
+         *     released, or it never went through the wizard.
+         */
+        post: operations["releaseDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/firmware/refresh": {
         parameters: {
             query?: never;
@@ -12567,6 +12607,29 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    releaseDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device released */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];

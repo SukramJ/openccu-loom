@@ -2,6 +2,16 @@
 
 ## 0.66.0
 
+- New devices go through a short wizard before they show up in Home
+  Assistant. Pair the device on the CCU, confirm it with a name, then give
+  it its room — and only when you finish does it appear in Home Assistant,
+  on your Matter controller and on any webhook. That order matters: an
+  ecosystem that sees a device before you have named it keeps the unnamed
+  ids, and renaming afterwards does not fix them.
+- Only devices you pair from now on go through this, and only with "delay
+  new device creation" switched on. Everything already in your setup stays
+  exactly as it is.
+
 - "Delay new device creation" now actually holds devices back. Until now a
   device you had not accepted reappeared — fully set up — after the next
   restart, and its inbox entry was gone. The decision is remembered now:
