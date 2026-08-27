@@ -301,7 +301,7 @@ func TestAcceptedDelayedDescriptionsReachTheRegistryAsManual(t *testing.T) {
 	created := collectCreated(bus)
 
 	// Simulate a newDevices callback storing delayed descriptions.
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 		{Address: "AA:0", Parent: "AA", Type: "MAINTENANCE"},
 	})
@@ -311,7 +311,7 @@ func TestAcceptedDelayedDescriptionsReachTheRegistryAsManual(t *testing.T) {
 		t.Fatalf("pending=%+v, want one AA/HmIP-X entry", pending)
 	}
 
-	descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "AA")
+	descs := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), "AA")
 	if len(descs) != 2 {
 		t.Fatalf("taken descriptions=%d, want the device and its channel", len(descs))
 	}
@@ -335,7 +335,7 @@ func TestTakeDelayedDeviceDescriptionsUnknownAddressYieldsNothing(t *testing.T) 
 	t.Parallel()
 	dc, _, devs, _, _ := newDCFull(t)
 
-	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "GHOST"); descs != nil {
+	if descs := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), "GHOST"); descs != nil {
 		t.Fatalf("descs=%+v, want nil for an address that was never parked", descs)
 	}
 	if devs.Len() != 0 {
@@ -360,7 +360,7 @@ func TestStoreDelayedSkipsAReannouncementOfAKnownDevice(t *testing.T) {
 	// re-announces its whole inventory after every reconnect. Parking
 	// devices that exist here long since would present the entire fleet to
 	// the operator as waiting for approval.
-	dc.StoreDelayedDeviceDescriptions(iface, known)
+	dc.StoreDelayedDeviceDescriptions(context.Background(), iface, known)
 
 	if pending := dc.PendingDevices(); len(pending) != 0 {
 		t.Fatalf("pending=%+v, want empty — the device is already created", pending)
@@ -368,7 +368,7 @@ func TestStoreDelayedSkipsAReannouncementOfAKnownDevice(t *testing.T) {
 
 	// A known device announcing a channel the cache has never seen is the
 	// factory-reset re-pair: that one still needs an operator decision.
-	dc.StoreDelayedDeviceDescriptions(iface, []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(context.Background(), iface, []hmproto.DeviceDescription{
 		{Address: "AA:4", Parent: "AA", Type: "SHUTTER_CONTACT"},
 	})
 	pending := dc.PendingDevices()
@@ -381,12 +381,12 @@ func TestStoreDelayedAndAcceptCleansUpEmptyInterfaceEntry(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _, _ := newDCFull(t)
 
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 	})
 
 	// Accept the only delayed device.
-	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "AA"); len(descs) != 1 {
+	if descs := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), "AA"); len(descs) != 1 {
 		t.Fatalf("taken descriptions=%d, want 1", len(descs))
 	}
 
@@ -397,7 +397,7 @@ func TestStoreDelayedAndAcceptCleansUpEmptyInterfaceEntry(t *testing.T) {
 	if stillExists {
 		t.Fatal("delayed map for interface must be cleaned up after all devices accepted")
 	}
-	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "AA"); descs != nil {
+	if descs := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), "AA"); descs != nil {
 		t.Fatalf("second take returned %+v, want nil", descs)
 	}
 }
@@ -651,18 +651,18 @@ func TestHandleAcceptedDevicesPublishesOutsideTheCoordinatorLock(t *testing.T) {
 	var reentered atomic.Bool
 	unsub := events.Subscribe(bus, func(hmevent.DeviceCreatedEvent) {
 		// A read that takes the coordinator's own lock.
-		dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), nil)
+		dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), nil)
 		reentered.Store(true)
 	})
 	defer unsub()
 
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "REENT0001", Type: "HmIP-STH"},
 	})
 
 	done := make(chan struct{})
 	go func() {
-		descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "REENT0001")
+		descs := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), "REENT0001")
 		dc.HandleAcceptedDevices(wireKey(hmenum.InterfaceHmIPRF), descs)
 		close(done)
 	}()

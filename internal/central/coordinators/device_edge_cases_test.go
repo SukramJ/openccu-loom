@@ -65,7 +65,7 @@ func TestTakeDelayedDescriptionsOnAnEmptyQueueCreatesNothing(t *testing.T) {
 	dc, _, devs, _, _ := newDCFull(t)
 
 	// No StoreDelayedDeviceDescriptions call → delayedDescs is empty.
-	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), "VCU0000001"); descs != nil {
+	if descs := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), "VCU0000001"); descs != nil {
 		t.Fatalf("descs=%+v, want nil when the deferred queue is empty", descs)
 	}
 	if devs.Len() != 0 {
@@ -86,13 +86,13 @@ func TestAcceptingOneDeviceLeavesTheOtherPending(t *testing.T) {
 	dc, bus, devs, _, _ := newDCFull(t)
 	created := collectCreated(bus)
 
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "VCU0000001", Type: "HM-Test"},
 		{Address: "VCU0000001:0", Parent: "VCU0000001", Type: "MAINTENANCE"},
 		{Address: "VCU0000002", Type: "HM-Test"},
 	})
 
-	taken := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), "VCU0000001")
+	taken := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), "VCU0000001")
 	dc.HandleAcceptedDevices(wireKey(hmenum.InterfaceBidCosRF), taken)
 
 	// VCU0000001 must be registered.
@@ -287,14 +287,14 @@ func TestStoreDelayedDescriptionsParentKnownChannelsMissing(t *testing.T) {
 	})
 
 	// CCU sends newDevices with channel descriptions (factory reset).
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "HEQ0128279:0", Parent: "HEQ0128279", Type: "MAINTENANCE"},
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
 	})
 
 	// Both channel descriptions must be retrievable through the accept flow
 	// using the parent address as key.
-	taken := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279")
+	taken := dc.TakeDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279")
 	if len(taken) != 2 {
 		t.Fatalf("taken descriptions=%d, want both channels", len(taken))
 	}
@@ -328,21 +328,21 @@ func TestStoreDelayedDescriptionsIsIdempotentPerAddress(t *testing.T) {
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
 	}
 
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), batch)
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), batch)
 	first := len(dc.delayedDescs[string(wireKey(hmenum.InterfaceBidCosRF))]["HEQ0128279"])
 	if first != len(batch) {
 		t.Fatalf("first announcement stored %d descriptions, want %d", first, len(batch))
 	}
 
 	// The CCU re-announces the same inventory after a reconnect.
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), batch)
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), batch)
 	if got := len(dc.delayedDescs[string(wireKey(hmenum.InterfaceBidCosRF))]["HEQ0128279"]); got != first {
 		t.Fatalf("re-announcement grew the delayed inbox to %d descriptions, want %d — "+
 			"the inbox must be keyed by address, not appended to", got, first)
 	}
 
 	// A changed description for an already-pending address must win.
-	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT", Firmware: "2.0"},
 	})
 	stored := dc.delayedDescs[string(wireKey(hmenum.InterfaceBidCosRF))]["HEQ0128279"]

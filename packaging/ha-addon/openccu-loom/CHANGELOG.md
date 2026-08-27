@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.66.0
+
+- "Delay new device creation" now actually holds devices back. Until now a
+  device you had not accepted reappeared — fully set up — after the next
+  restart, and its inbox entry was gone. The decision is remembered now:
+  a device you pair on the CCU waits in the inbox, is not usable anywhere,
+  and only becomes a real device when you release it. You give it its name
+  and room in that same step.
+- Switching the setting off releases everything still waiting, rather than
+  leaving devices stuck in the inbox.
+
 ## 0.65.4
 
 - The device inbox no longer shows every paired device as waiting for

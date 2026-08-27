@@ -640,8 +640,22 @@ func (p *DevicePipeline) IngestFromBackend(
 	if err != nil {
 		return fmt.Errorf("pipeline: ListDevices: %w", err)
 	}
+	descs, held := p.withholdParked(ctx, interfaceID, descs, logger)
 	if err := p.Ingest(ctx, interfaceID, iface, descs); err != nil {
 		return err
+	}
+	// The held-back descriptions are re-parked with this pull's payload:
+	// the queue keeps only the decision across a restart, so the inbox
+	// surface is filled from the live CCU each time rather than from a
+	// stored copy that could describe a device that has since changed.
+	if len(held) > 0 && p.unit.Devices != nil {
+		p.unit.Devices.StoreDelayedDeviceDescriptions(ctx, hmtypes.ParseWireInterfaceID(interfaceID), held)
+		// Publish the queue onto the inbox surface. Parking without this
+		// leaves the device in a state nobody can see or act on: absent
+		// from the model because it is held back, and absent from the
+		// inbox because nothing announced it — which reads to an operator
+		// as a device that simply vanished after a restart.
+		PublishPendingDevices(p.unit)
 	}
 	// After live ListDevices, also materialise any devices whose descriptions
 	// were already in the registry (from a previous run's persisted cache) but
@@ -651,6 +665,71 @@ func (p *DevicePipeline) IngestFromBackend(
 		_ = p.unit.Devices.CheckAndCreateDevicesFromCache(ctx)
 	}
 	return p.finishIngest(ctx, interfaceID, iface, b, writer, runner, logger)
+}
+
+// withholdParked splits a pull's descriptions into the ones to
+// materialise and the ones to hold back, and collects parked entries the
+// CCU no longer reports.
+//
+// The gate HONOURS the parked set; it never adds to it. A device enters
+// the set through the newDevices callback alone, which is what a pairing
+// actually is. Deciding "this pull returned an address I do not know,
+// therefore it is new" would park an entire installation the first time a
+// daemon starts with an empty cache — an upgrade would look exactly like
+// a hundred simultaneous pairings.
+//
+// Channels follow their root: holding a device back while materialising
+// its channels would build half an entity that no north-bound surface
+// could serve.
+func (p *DevicePipeline) withholdParked(
+	ctx context.Context,
+	interfaceID string,
+	descs []hmproto.DeviceDescription,
+	logger *slog.Logger,
+) (keep, held []hmproto.DeviceDescription) {
+	if p.unit == nil || p.unit.Devices == nil {
+		return descs, nil
+	}
+	wireID := hmtypes.ParseWireInterfaceID(interfaceID)
+
+	// Everything the CCU currently reports, so a parked entry for a
+	// device that has since been unpaired can be collected instead of
+	// naming a device nobody can accept.
+	present := make(map[string]struct{}, len(descs))
+	for i := range descs {
+		if descs[i].Parent == "" {
+			present[descs[i].Address] = struct{}{}
+		}
+	}
+	if swept := p.unit.Devices.SweepParkedNotIn(ctx, wireID, present); swept > 0 && logger != nil {
+		logger.Info("pipeline.parked.swept",
+			slog.String("interface", interfaceID),
+			slog.Int("devices", swept),
+			slog.String("detail", "held-back devices the CCU no longer reports"))
+	}
+
+	keep = make([]hmproto.DeviceDescription, 0, len(descs))
+	heldRoots := make(map[string]struct{})
+	for i := range descs {
+		d := descs[i]
+		root := d.Parent
+		if root == "" {
+			root = d.Address
+		}
+		if p.unit.Devices.IsParked(wireID, root) {
+			heldRoots[root] = struct{}{}
+			held = append(held, d)
+			continue
+		}
+		keep = append(keep, d)
+	}
+	if len(heldRoots) > 0 && logger != nil {
+		logger.Info("pipeline.parked.withheld",
+			slog.String("interface", interfaceID),
+			slog.Int("devices", len(heldRoots)),
+			slog.String("detail", "awaiting operator acceptance; not materialised"))
+	}
+	return keep, held
 }
 
 // IngestNewDevices is the hot-plug entry point: it materialises devices

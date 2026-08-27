@@ -555,7 +555,8 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 		// hot-plug ingestor below, and a stored copy would never be read
 		// again while the CCU keeps re-announcing its whole inventory on
 		// every reconnect.
-		h.unit.Devices.StoreDelayedDeviceDescriptions(iface, descriptions)
+		//nolint:contextcheck // the queue's SQLite write outlives the callback: the request ctx is cancelled the moment the RPC response is written, which would abort the very row that makes this a gate
+		h.unit.Devices.StoreDelayedDeviceDescriptions(h.ctx, iface, descriptions)
 		// Publish the queue on the operator's inbox surface. Without this
 		// the deferred device is invisible: it exists on the CCU, has no
 		// data points here, and nothing tells anyone it is waiting.

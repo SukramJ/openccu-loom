@@ -56,12 +56,12 @@ func AcceptPendingDevice(ctx context.Context, u *central.Unit, address string) (
 	if !ok {
 		return false, nil
 	}
-	descs := u.Devices.TakeDelayedDeviceDescriptions(iface, address)
+	descs := u.Devices.TakeDelayedDeviceDescriptions(ctx, iface, address)
 	if len(descs) == 0 {
 		return false, nil
 	}
 	if err := u.IngestDevices(ctx, string(iface), descs); err != nil {
-		u.Devices.StoreDelayedDeviceDescriptions(iface, descs)
+		u.Devices.StoreDelayedDeviceDescriptions(ctx, iface, descs)
 		PublishPendingDevices(u)
 		return true, fmt.Errorf("accept pending device %s: %w", address, err)
 	}

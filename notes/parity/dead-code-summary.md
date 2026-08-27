@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 3ad9bc6f
-HEAD: 3ad9bc6f
+Generated: b13b5a14
+HEAD: b13b5a14
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29985 |
-| Reachable | 5149 |
-| Whitelisted | 21819 |
+| Total Exported | 30027 |
+| Reachable | 5153 |
+| Whitelisted | 21857 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

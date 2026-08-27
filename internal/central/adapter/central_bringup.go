@@ -293,6 +293,12 @@ func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.U
 			slog.Int("devices", devN),
 			slog.Int("paramsets", psN))
 	}
+	// Restore the deferred-creation queue in the same window and for the
+	// same reason: the gated bring-up below is the pull that would
+	// otherwise materialise every held-back device before anything could
+	// hold it back.
+	WirePendingDevices(m.parentCtx, unit, m.deps.PendingDevices,
+		cc.Behavior.DelayNewDeviceCreationEnabled(), m.logger)
 	callbackURL, binRPCCallbackAddr, cbHandlers, deregister := registerCentralCallbacks(m.deps, cc, unit, m.logger)
 	b := &centralBringUp{
 		cfg:                m.cfg,

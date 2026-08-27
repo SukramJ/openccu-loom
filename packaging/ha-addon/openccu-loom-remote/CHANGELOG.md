@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.66.0
+
+- Version alignment with OpenCCU-Loom 0.66.0. The proxy itself is unchanged;
+  the release makes "delay new device creation" a real gate — a device you
+  have not released stays out of the model across restarts.
+
 # 0.65.4
 
 - Version alignment with OpenCCU-Loom 0.65.4. The proxy itself is unchanged;
