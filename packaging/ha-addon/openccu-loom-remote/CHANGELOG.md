@@ -4,6 +4,15 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.65.1
+
+- Version alignment with OpenCCU-Loom 0.65.1. The proxy itself is unchanged;
+  the release makes Matter accessories conform to the device types the
+  specification defines for them — thermostats stop serving measurement
+  clusters they are meant to consume, metering plugs move their electrical
+  readings onto their own accessory, and battery levels move onto the device's
+  own accessory instead of a nameless extra one.
+
 # 0.65.0
 
 - Version alignment with OpenCCU-Loom 0.65.0. The proxy itself is unchanged;

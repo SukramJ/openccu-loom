@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.65.1] - 2026-08-27
+
 ### Fixed
 
 - **Bridged endpoints served clusters their Matter device type does not
