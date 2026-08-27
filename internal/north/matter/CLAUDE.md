@@ -21,6 +21,19 @@ repo-wide rules live in the root [`CLAUDE.md`](../../../CLAUDE.md).
 | Repo | Local path | Role |
 | --- | --- | --- |
 | matter.js | `../matter.js/` | Matter Core implementation: schema (`packages/model`), wire codec (`packages/types`), behavior layer (`packages/node/src/behaviors`), device types (`packages/node/src/devices`), protocol engine (`packages/protocol`). The single Matter-side gold standard. |
+| connectedhomeip ("chip") | `../connectedhomeip/` | The CSA reference implementation, checked out locally. Not a second gold standard — matter.js remains the one. It is the **authority on tool and controller behaviour that matter.js does not model**: chip-tool's own argument handling (`examples/chip-tool/`), the access-control and read-client semantics already cited across `bridge/` and `im/` (`src/access/AccessControl.cpp`, `src/app/ReadClient.cpp`), and the source of every error string a chip-tool run prints. |
+
+**When chip-tool behaves unexpectedly, read its source, not its output.**
+The suite under `tests/chiptool/` and the CI control leg both drive the
+chip-tool binary from `connectedhomeip/chip-cert-bins`, whose sources are
+the local checkout above. Its argument parsing, its address handling and
+its storage initialisation each rejected a plausible-looking invocation
+during the control leg's bring-up, and every one of those rejections is a
+readable line in `examples/chip-tool/` — the messages
+(`Unknown cluster or command set`, `Unsupported address`,
+`ExamplePersistentStorage.cpp` init failures) are grep-able strings there.
+Reading the tree beats inferring the contract from a CI log, and beats
+assuming a convention.
 
 [`home-assistant-matter-bridge`](https://github.com/Nabu-Casa/home-assistant-matter-bridge)
 (Apache-2.0, local at `../home-assistant-matter-bridge/`) is one
