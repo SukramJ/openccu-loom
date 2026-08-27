@@ -198,8 +198,16 @@ elif [[ $NO_GO -eq 0 ]]; then
             lint_pkg_set["./$(dirname -- "$f")/..."]=1
         done
         mapfile -t lint_pkgs < <(printf '%s\n' "${!lint_pkg_set[@]}" | sort)
+        # Build tags of every gated suite in the repo. Without them a staged
+        # change under a fully gated package (tests/chiptool, tests/loadtest,
+        # tests/bench …) makes golangci-lint find no Go files at all and exit
+        # with "no go files to analyze", which the hook then reports as lint
+        # issues — blocking every commit to those suites while saying nothing
+        # about the code. Keep in sync with the //go:build tags in tests/.
+        lint_tags="chiptool,integration,integration_live,e2e,bench,loadtest,cuxd_live,cuxd_live_push,deadlock,race"
         # shellcheck disable=SC2086
-        if ! "$GOLANGCI_BIN" run --new-from-rev=HEAD --timeout=300s "${lint_pkgs[@]}" 2>&1 | sed 's/^/    /' >&2; then
+        if ! "$GOLANGCI_BIN" run --new-from-rev=HEAD --timeout=300s \
+            --build-tags="$lint_tags" "${lint_pkgs[@]}" 2>&1 | sed 's/^/    /' >&2; then
             fail "golangci-lint reported issues; fix before committing"
             note "to skip once: GOHM_PRECOMMIT_SKIP_LINT=1 git commit ..."
             exit 1

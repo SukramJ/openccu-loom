@@ -6,10 +6,20 @@ name: chiptool
 # needs no multicast at all (it pairs via `pairing already-discovered`
 # on loopback), so this workflow is where the chip-tool layers run.
 #
-# Two jobs:
+# Three jobs:
 #   - chiptool: the Go capability suite (`make chiptool-test`) against
 #     a runner-native chip-tool binary extracted from the pinned
 #     connectedhomeip/chip-cert-bins image.
+#   - chiptool-control: the CONTROL LEG. The same chip-tool, the same
+#     runner setup, driving a CHIP reference app instead of the bridge —
+#     no OpenCCU-Loom code in the path at all. It answers the question a
+#     red `chiptool` job cannot answer on its own: is chip-tool and its
+#     environment working here? Green control + red suite is a bridge
+#     defect; both red is the environment (a chip-cert-bins pin bump, a
+#     runner image change, avahi/dbus, network). Without it every red run
+#     starts with the same hour of ruling the environment out.
+#     Modelled on matter.js .github/workflows/chip-cert-tests.yml, whose
+#     chiptool-vs-cert-bins legs exist for exactly this reason.
 #   - matter-smoke: the compose PASE smoke (`make matter-smoke`),
 #     identical to a local Linux run.
 #
@@ -129,6 +139,114 @@ jobs:
       # empty spa_dist — the suite drives REST + Matter UDP, not the SPA.
       - name: chip-tool capability suite
         run: OPENCCU_LOOM_CHIPTOOL_BIN="$HOME/.cache/chiptool-bin/chip-tool" make chiptool-test
+
+  chiptool-control:
+    name: chip-tool control leg (CHIP app, no bridge)
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Same pin as the suite, read from the same single source of truth,
+      # so the control leg can never validate a different chip-tool build
+      # than the one the suite runs.
+      - name: resolve chip-tool pin
+        id: pin
+        run: |
+          pin=$(sed -n 's|.*image: connectedhomeip/chip-cert-bins:\([0-9a-f]\{40\}\).*|\1|p' compose/matter-smoke.yml)
+          if [ -z "$pin" ]; then
+            echo "::error::chip-cert-bins pin not found in compose/matter-smoke.yml"
+            exit 1
+          fi
+          echo "pin=$pin" >> "$GITHUB_OUTPUT"
+
+      # The reference app is picked by looking at what the image actually
+      # contains, not by assuming a name: the binary set has changed across
+      # chip-cert-bins tags before, and a hardcoded name turns a pin bump
+      # into a mystery failure. If no candidate is present the step prints
+      # the real listing and fails with it, which is the diagnostic the
+      # next person needs.
+      - name: select a CHIP reference app
+        id: app
+        run: |
+          image="connectedhomeip/chip-cert-bins:${{ steps.pin.outputs.pin }}"
+          apps=$(docker run --rm --entrypoint ls "$image" -1 /root/apps)
+          echo "apps in /root/apps:"
+          echo "$apps"
+          for candidate in chip-all-clusters-app chip-bridge-app chip-lighting-app; do
+            if echo "$apps" | grep -qx "$candidate"; then
+              echo "app=$candidate" >> "$GITHUB_OUTPUT"
+              echo "selected $candidate"
+              exit 0
+            fi
+          done
+          echo "::error::none of the expected reference apps is in this chip-cert-bins tag (listing above)"
+          exit 1
+
+      - name: extract chip-tool and the reference app
+        run: |
+          image="connectedhomeip/chip-cert-bins:${{ steps.pin.outputs.pin }}"
+          mkdir -p "$HOME/chip-control"
+          docker create --name chip-control-bins "$image"
+          docker cp chip-control-bins:/root/apps/chip-tool "$HOME/chip-control/chip-tool"
+          docker cp "chip-control-bins:/root/apps/${{ steps.app.outputs.app }}" "$HOME/chip-control/app"
+          docker rm chip-control-bins
+          chmod +x "$HOME/chip-control/chip-tool" "$HOME/chip-control/app"
+
+      # Identical runtime dependencies to the suite job — that is the point:
+      # the control leg validates this setup, so it must be the same setup.
+      - name: install chip-tool runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libavahi-client-dev libdbus-1-dev libglib2.0-dev \
+            libevent-dev libssl-dev libpcsclite-dev avahi-daemon
+          sudo systemctl start avahi-daemon
+          systemctl is-active dbus avahi-daemon
+
+      # CHIP drives CHIP. The app commissions onto loopback with the same
+      # `pairing onnetwork` flow the suite uses, and one Descriptor read
+      # proves the session carries data both ways. Nothing here touches the
+      # bridge, so a failure is never an interop finding about OpenCCU-Loom.
+      - name: chip-tool against the CHIP reference app
+        run: |
+          set -o pipefail
+          cd "$HOME/chip-control"
+          rm -rf ./kvs-app ./kvs-tool
+          ./app --KVS ./kvs-app --secured-device-port 5560 --discriminator 3841 --passcode 20202021 \
+            > app.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+
+          # Wait for the app to bind rather than sleeping a fixed guess.
+          for _ in $(seq 1 30); do
+            if grep -qiE "server listening|CHIP minimal mDNS started|Server initialization complete" app.log; then
+              break
+            fi
+            sleep 1
+          done
+
+          ./chip-tool --storage-directory ./kvs-tool pairing onnetwork 4242 20202021 \
+            | tee pair.log
+          ./chip-tool --storage-directory ./kvs-tool descriptor read parts-list 4242 0 \
+            | tee read.log
+          grep -q "PartsList" read.log \
+            || { echo "::error::Descriptor.PartsList not returned by the reference app"; exit 1; }
+
+      - name: upload control-leg logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chiptool-control-logs
+          path: |
+            ~/chip-control/app.log
+            ~/chip-control/pair.log
+            ~/chip-control/read.log
+          if-no-files-found: ignore
 
   matter-smoke:
     name: matter-smoke (compose PASE)
