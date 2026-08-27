@@ -92,6 +92,16 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	auditBuf := ov.buf
 	auditRec := ov.rec
 	auditDB := ov.db
+	// The deferred-creation queue lives in the same shared database. It is
+	// what turns `delay_new_device_creation` into a gate: without it an
+	// unaccepted device is materialised by the next boot's pull and its
+	// inbox entry disappears with the process.
+	var pendingDeviceStores adapter.PendingDeviceStores
+	if auditDB != nil {
+		pendingDeviceStores = adapter.PendingDeviceStores{
+			Pending: sqlitestore.NewPendingDeviceStore(auditDB),
+		}
+	}
 	// Audit read service: the in-memory buffer alone, or — when the
 	// durable DB is present — combined with the SQLite store so the SPA
 	// can page / filter / CSV-export over the full retained history.
@@ -536,6 +546,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		masterValuesStore:       masterValuesStore,
 		valuesCacheStore:        valuesCacheStore,
 		descriptorStores:        si.descriptorStores,
+		pendingDeviceStores:     pendingDeviceStores,
 		sqCentrals:              sqCentrals,
 		historyStore:            historyStore,
 		recordingOverrides:      recordingOverrides,

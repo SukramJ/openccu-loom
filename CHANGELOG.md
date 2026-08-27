@@ -6,6 +6,48 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-08-27
+
+### Changed
+
+- **`delay_new_device_creation` is a gate now, not a notice.** The toggle
+  promised to hold a newly-paired device back until an operator accepts it, and
+  for the callback that announced the pairing it did. Everything else ignored
+  it: the deferred-creation queue lived only in memory, and the boot pull never
+  consulted it — so an unaccepted device was materialised by the next restart,
+  fully usable, while its inbox entry disappeared with the process. The
+  operator's pending decision vanished without a trace.
+
+  The decision is now persisted per central (`pending_devices`) and the boot
+  pull honours it, so a held-back device stays out of the model, out of REST,
+  MQTT, Matter and the WebSocket, and on the inbox surface until it is
+  accepted. Accepting it carries its first-time configuration — name, rooms,
+  functions — so it is named at the moment it becomes usable.
+
+  Only the decision is stored, never the descriptions: the CCU delivers a full
+  set on every pull, so a stored copy would be a duplicate that can go stale
+  and would resurrect a device unpaired while the daemon was down. A parked
+  entry the CCU stops reporting is swept by the next pull.
+
+  The gate **honours** the parked set; it never adds to it. A device enters it
+  through the `newDevices` callback alone, which is what a pairing is. Deciding
+  "this pull returned an address I do not know, therefore it is new" would park
+  an entire installation on the first boot after an upgrade.
+
+  Turning the toggle off releases the queue rather than leaving it behind:
+  "stop asking" rather than devices stranded in a state whose only explanation
+  is a setting that is no longer on.
+
+### Fixed
+
+- A store failure while parking a device now holds it back for that run anyway
+  instead of dropping the decision — the safe direction, because a run that
+  forgets across a restart is recoverable while a device that appears without
+  approval is the failure the gate exists to prevent. A failed *restore* is the
+  deliberate opposite: nothing is held back, because a database hiccup
+  presenting the whole installation as pending is indistinguishable from a real
+  defect.
+
 ## [0.65.4] - 2026-08-27
 
 ### Fixed

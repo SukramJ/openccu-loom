@@ -60,11 +60,31 @@ type DeviceCoordinator struct {
 	logger   *slog.Logger
 	recorder observability.Recorder
 
-	// mu guards delayedDescs, which stores device descriptions that
-	// have been announced (newDevices callback) but not yet accepted.
-	// They are keyed by interface → device address → descriptions.
+	// mu guards delayedDescs and parked, below.
+	//
+	// delayedDescs stores device descriptions that have been announced
+	// (newDevices callback) but not yet accepted, keyed by interface →
+	// device address → descriptions. It is the payload half and is
+	// rebuilt from the live pull on every boot.
+	//
+	// parked is the decision half: interface → device address, for every
+	// device held back from the model. It survives a restart through
+	// [PendingDeviceSink], which is what makes the deferred-creation
+	// toggle a gate rather than a notice — before it, an unaccepted
+	// device was materialised by the next boot's pull and its inbox entry
+	// vanished with the process.
+	//
+	// The two are separate because they answer different questions and
+	// have different lifetimes: "should this be held back" outlives the
+	// process, "what does it look like" comes fresh from the CCU.
 	mu           sync.Mutex
 	delayedDescs map[string]map[string][]hmproto.DeviceDescription
+	parked       map[string]map[string]struct{}
+
+	// pending persists the parked set. Nil leaves the queue in-memory
+	// only — the pre-0.65.4 behaviour, still the shape every test that
+	// does not care about durability gets.
+	pending PendingDeviceSink
 
 	// nameOverrideChecker is optional; when wired, RenameNewDeviceFromOverride
 	// uses it to look up operator-configured device name overrides.
@@ -101,7 +121,185 @@ func NewDeviceCoordinator(
 		logger:       logger,
 		recorder:     observability.NoopRecorder{},
 		delayedDescs: make(map[string]map[string][]hmproto.DeviceDescription),
+		parked:       make(map[string]map[string]struct{}),
 	}
+}
+
+// PendingDeviceSink persists the deferred-creation decision — which
+// devices are held back from the model — so it outlives the process.
+//
+// It deliberately carries no descriptions: the CCU delivers a full set on
+// every boot pull, so a stored copy would be a duplicate that can go
+// stale, and would resurrect a device unpaired while the daemon was down.
+// The sink answers "hold this address back"; the payload comes from the
+// live pull.
+//
+// Implemented by the SQLite pending-device store and wired by the
+// composition root. Every method is best-effort from the coordinator's
+// point of view: a failing store must not stop a device from being
+// parked in memory, because dropping the decision would materialise a
+// device the operator has not accepted.
+type PendingDeviceSink interface {
+	// Load returns the held-back addresses of this central, keyed by
+	// canonical wire interface id.
+	Load(ctx context.Context) (map[string][]string, error)
+	// Add records one address as held back.
+	Add(ctx context.Context, interfaceID, address, model string) error
+	// Remove drops one address — accepted, or gone from the CCU.
+	Remove(ctx context.Context, interfaceID, address string) error
+	// Clear drops every held-back address of this central.
+	Clear(ctx context.Context) error
+}
+
+// SetPendingDeviceSink wires the durable half of the deferred-creation
+// queue and seeds the in-memory parked set from it. Called by the
+// composition root before the south-bound bring-up, so the boot pull can
+// ask [DeviceCoordinator.IsParked] and hold back what an earlier run
+// parked.
+//
+// A load failure is logged and degrades to an empty parked set: nothing
+// is held back rather than everything, because the opposite failure mode
+// — a database hiccup presenting the whole installation as pending — is
+// the one an operator cannot tell from a real defect.
+func (c *DeviceCoordinator) SetPendingDeviceSink(ctx context.Context, sink PendingDeviceSink) {
+	c.mu.Lock()
+	c.pending = sink
+	c.mu.Unlock()
+	if sink == nil {
+		return
+	}
+	byIface, err := sink.Load(ctx)
+	if err != nil {
+		c.logger.Warn("device_coordinator.pending.load_failed",
+			slog.String("central", c.centralName),
+			slog.String("err", err.Error()),
+			slog.String("detail", "nothing is held back this run; an unaccepted device will be materialised"))
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	total := 0
+	for ifaceID, addrs := range byIface {
+		if len(addrs) == 0 {
+			continue
+		}
+		set, ok := c.parked[ifaceID]
+		if !ok {
+			set = make(map[string]struct{}, len(addrs))
+			c.parked[ifaceID] = set
+		}
+		for _, a := range addrs {
+			set[a] = struct{}{}
+			total++
+		}
+	}
+	c.logger.Info("device_coordinator.pending.restored",
+		slog.String("central", c.centralName),
+		slog.Int("devices", total))
+}
+
+// IsParked reports whether address is held back from the model.
+//
+// The boot pull consults this and only this: it honours the parked set,
+// it never adds to it. A device enters the set through the newDevices
+// callback alone, which is what a pairing actually is — deciding "unknown
+// to me, therefore new" from a pull result would park an entire
+// installation the first time a daemon starts with an empty cache.
+func (c *DeviceCoordinator) IsParked(iface hmtypes.WireInterfaceID, address string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	set, ok := c.parked[string(iface)]
+	if !ok {
+		return false
+	}
+	_, parked := set[address]
+	return parked
+}
+
+// ParkedAddresses returns the held-back addresses of one interface.
+func (c *DeviceCoordinator) ParkedAddresses(iface hmtypes.WireInterfaceID) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	set := c.parked[string(iface)]
+	out := make([]string, 0, len(set))
+	for a := range set {
+		out = append(out, a)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// ReleaseAllParked empties the queue, in memory and in the store, and
+// reports how many devices it freed.
+//
+// This is the `delay_new_device_creation` off-switch. The toggle means
+// "ask me about new devices", so turning it off means "stop asking" —
+// leaving the queue behind would strand devices in a state whose only
+// explanation is a setting that is no longer on, and that an operator
+// could clear only through the database.
+func (c *DeviceCoordinator) ReleaseAllParked(ctx context.Context) int {
+	c.mu.Lock()
+	freed := 0
+	for _, set := range c.parked {
+		freed += len(set)
+	}
+	c.parked = make(map[string]map[string]struct{})
+	c.delayedDescs = make(map[string]map[string][]hmproto.DeviceDescription)
+	sink := c.pending
+	c.mu.Unlock()
+	if sink != nil {
+		if err := sink.Clear(ctx); err != nil {
+			c.logger.Warn("device_coordinator.pending.clear_failed",
+				slog.String("central", c.centralName),
+				slog.String("err", err.Error()))
+		}
+	}
+	return freed
+}
+
+// SweepParkedNotIn drops every held-back address of iface that is absent
+// from present — the devices the CCU no longer reports.
+//
+// A parked row carries no descriptions, so a device unpaired while the
+// daemon was down leaves an entry the pull can never fill: it would sit
+// on the inbox surface forever, naming a device that does not exist, and
+// an operator accepting it would get nothing. The pull is the only place
+// that knows the current truth, so it is the place that collects them.
+func (c *DeviceCoordinator) SweepParkedNotIn(ctx context.Context, iface hmtypes.WireInterfaceID, present map[string]struct{}) int {
+	ifaceID := string(iface)
+	c.mu.Lock()
+	set := c.parked[ifaceID]
+	var stale []string
+	for a := range set {
+		if _, ok := present[a]; !ok {
+			stale = append(stale, a)
+		}
+	}
+	for _, a := range stale {
+		delete(set, a)
+		if byAddress, ok := c.delayedDescs[ifaceID]; ok {
+			delete(byAddress, a)
+			if len(byAddress) == 0 {
+				delete(c.delayedDescs, ifaceID)
+			}
+		}
+	}
+	if len(set) == 0 {
+		delete(c.parked, ifaceID)
+	}
+	sink := c.pending
+	c.mu.Unlock()
+	if sink != nil {
+		for _, a := range stale {
+			if err := sink.Remove(ctx, ifaceID, a); err != nil {
+				c.logger.Warn("device_coordinator.pending.remove_failed",
+					slog.String("central", c.centralName),
+					slog.String("address", a),
+					slog.String("err", err.Error()))
+			}
+		}
+	}
+	return len(stale)
 }
 
 // SetRecorder rewires the observability recorder. Returns the receiver
@@ -880,7 +1078,7 @@ func (c *DeviceCoordinator) PendingDevices() []PendingDevice {
 // after the device has been materialised, so a north-bound subscriber
 // resolves the device in the model when the event fires.
 func (c *DeviceCoordinator) TakeDelayedDeviceDescriptions(
-	iface hmtypes.WireInterfaceID, address string,
+	ctx context.Context, iface hmtypes.WireInterfaceID, address string,
 ) []hmproto.DeviceDescription {
 	ifaceID := string(iface)
 	c.mu.Lock()
@@ -896,6 +1094,25 @@ func (c *DeviceCoordinator) TakeDelayedDeviceDescriptions(
 	delete(byAddress, address)
 	if len(byAddress) == 0 {
 		delete(c.delayedDescs, ifaceID)
+	}
+	// The decision goes with the payload: once handed out, the device is
+	// being materialised, so the next boot pull must stop holding it back.
+	// Dropping the durable half here rather than after materialisation is
+	// deliberate — a failed accept puts the descriptions back through
+	// StoreDelayedDeviceDescriptions, which re-records the decision.
+	if set, ok := c.parked[ifaceID]; ok {
+		delete(set, address)
+		if len(set) == 0 {
+			delete(c.parked, ifaceID)
+		}
+	}
+	if sink := c.pending; sink != nil {
+		if err := sink.Remove(ctx, ifaceID, address); err != nil {
+			c.logger.Warn("device_coordinator.pending.remove_failed",
+				slog.String("central", c.centralName),
+				slog.String("address", address),
+				slog.String("err", err.Error()))
+		}
 	}
 	return descs
 }
@@ -940,10 +1157,16 @@ const maxDelayedDevicesPerInterface = 1024
 // for approval". A known device announcing an address the cache has never
 // seen (the factory-reset re-pair) is still parked: that one does need an
 // operator decision.
-func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
+func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(ctx context.Context, iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
 	ifaceID := string(iface)
+	var newlyParked []parkedEntry
+	locked := true
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer func() {
+		if locked {
+			c.mu.Unlock()
+		}
+	}()
 	if _, ok := c.delayedDescs[ifaceID]; !ok {
 		c.delayedDescs[ifaceID] = make(map[string][]hmproto.DeviceDescription)
 	}
@@ -975,10 +1198,51 @@ func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmtypes.WireInt
 			continue
 		}
 		pending[key] = append(entry, d)
+		newlyParked = append(newlyParked, parkedEntry{address: key, model: d.Type})
 	}
 	if len(pending) == 0 {
 		delete(c.delayedDescs, ifaceID)
 	}
+	// Record the decision beside the payload. The in-memory set is what
+	// the boot pull consults; the sink is what carries it across a
+	// restart, which is the difference between a gate and a notice.
+	if len(newlyParked) > 0 {
+		set, ok := c.parked[ifaceID]
+		if !ok {
+			set = make(map[string]struct{}, len(newlyParked))
+			c.parked[ifaceID] = set
+		}
+		for _, p := range newlyParked {
+			set[p.address] = struct{}{}
+		}
+	}
+	sink := c.pending
+	c.mu.Unlock()
+	locked = false
+
+	// Outside the lock: the sink talks to SQLite, and a wedged database
+	// must not hold the callback goroutine that is parking the device.
+	// Failing to persist is logged, never fatal — the device stays parked
+	// in memory for this run, which is the safe direction.
+	if sink != nil {
+		for _, p := range newlyParked {
+			if err := sink.Add(ctx, ifaceID, p.address, p.model); err != nil {
+				c.logger.Warn("device_coordinator.pending.add_failed",
+					slog.String("central", c.centralName),
+					slog.String("address", p.address),
+					slog.String("err", err.Error()),
+					slog.String("detail", "the device is held back this run but a restart will materialise it"))
+			}
+		}
+	}
+}
+
+// parkedEntry is one address the deferred-creation queue just took on,
+// carried out of the locked section so the sink write happens without
+// holding the coordinator mutex.
+type parkedEntry struct {
+	address string
+	model   string
 }
 
 // ParamsetConsistencyChecker is the south-bound contract used by

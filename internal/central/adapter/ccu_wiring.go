@@ -166,6 +166,14 @@ type WireDeps struct {
 	// (see [WireDescriptorPersistence]) and mirror every later mutation
 	// back. The zero value disables the feature.
 	Descriptors DescriptorStores
+
+	// PendingDevices, when non-nil, makes `delay_new_device_creation` a
+	// gate instead of a notice: the deferred-creation queue is restored
+	// before the south-bound bring-up, so the boot pull holds back what
+	// an earlier run parked. Nil leaves the queue in memory only, where
+	// an unaccepted device is materialised by the next restart and its
+	// inbox entry disappears with the process.
+	PendingDevices PendingDeviceStores
 }
 
 // WireCentrals performs the full southbound bootstrap: per central it

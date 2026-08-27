@@ -1738,8 +1738,23 @@ type CentralBehavior struct {
 	// back until an operator accepts it: the announced descriptions are
 	// parked, the device is listed on the inbox surface (REST GET /inbox,
 	// WS inbox.list, the SPA inbox view) and only the accept
-	// (POST /devices/{addr}/accept) materialises it. Reference stack key:
+	// (POST /devices/{addr}/accept) materialises it. The accept carries
+	// the device's first-time configuration — name, rooms, functions —
+	// so the operator names it at the moment it becomes usable rather
+	// than hunting it down afterwards. Reference stack key:
 	// delay_new_device_creation.
+	//
+	// The hold is durable: the decision is persisted per central and the
+	// boot pull honours it, so a held-back device stays out of the model
+	// across restarts. Until 0.65.4 the queue lived only in memory and
+	// the pull ignored it, which made this a notice rather than a gate —
+	// an unaccepted device was materialised by the next restart and its
+	// inbox entry disappeared with the process.
+	//
+	// Turning it off releases the queue rather than leaving it: the
+	// setting means "ask me about new devices", so switching it off means
+	// "stop asking" instead of stranding devices in a state whose only
+	// explanation is a setting that is no longer on.
 	DelayNewDeviceCreation *bool `yaml:"delay_new_device_creation,omitempty" json:"delay_new_device_creation,omitempty" cfg:"expert"`
 }
 
