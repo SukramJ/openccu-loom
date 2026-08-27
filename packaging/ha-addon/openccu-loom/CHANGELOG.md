@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.65.4
+
+- The device inbox no longer shows every paired device as waiting for
+  approval. If you had "delay new device creation" switched on, your whole
+  installation appeared in the inbox while the same devices were also
+  listed and working normally. The daemon was not writing device
+  descriptions to its cache, so it could not tell a device it already knew
+  from a genuinely new one. One restart is enough — the cache refills and
+  the inbox empties by itself.
+
 ## 0.65.3
 
 - Documentation fix in the published API description only; the daemon

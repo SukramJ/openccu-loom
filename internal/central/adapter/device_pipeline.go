@@ -387,6 +387,29 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 	if p.unit == nil {
 		return errors.New("pipeline: no central")
 	}
+	// Record every description — roots AND channels — in the description
+	// registry, whose persistence sink mirrors it to SQLite. This is the
+	// device-side counterpart of what the paramset half already does after
+	// hydrating a channel; without it the pull was the one path that built
+	// a whole model while writing nothing here, so the table stayed empty
+	// forever and every warm boot hydrated `devices: 0` beside a healthy
+	// `paramsets: N`.
+	//
+	// An empty description registry is not a missing optimisation, it is a
+	// wrong answer for everything keyed on it: the deferred-creation filter
+	// then parks the CCU's post-init inventory announcement — the operator
+	// sees every device in the installation waiting for approval — and the
+	// firmware domain, channel-team resolution and
+	// CheckAndCreateDevicesFromCache all read an empty cache.
+	//
+	// Keyed by the canonical wire id, the same one the device registry
+	// below uses: a lookup against the bare interface finds nothing.
+	if p.unit.DescRegistry != nil {
+		wireID := hmtypes.ParseWireInterfaceID(interfaceID)
+		for i := range descs {
+			p.unit.DescRegistry.Put(wireID, descs[i])
+		}
+	}
 	// First pass: build devices (only entries without PARENT — these
 	// are the device roots; children are channels).
 	byAddress := map[string]*device.Device{}

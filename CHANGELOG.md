@@ -6,6 +6,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.65.4] - 2026-08-27
+
+### Fixed
+
+- **The device inbox presented every paired device as waiting for approval.**
+  With `delay_new_device_creation` enabled, an installation's entire fleet
+  appeared on the inbox surface while simultaneously being fully materialised
+  and visible in the device list — two lists, same devices, fed from different
+  sources. The cause was one missing write: the device-ingest pipeline built
+  the whole model without recording a single description in the device-
+  description registry. That registry is the warm-boot cache, and its
+  persistence sink is what fills the SQLite table, so on an installation whose
+  descriptions had never arrived over a `newDevices` callback the table stayed
+  empty for good — every boot logged `wire.descriptors.hydrated devices=0`
+  beside a healthy `paramsets=N`, because the paramset half of the same
+  pipeline had been recording its descriptors since 0.26.0 and the device half
+  never had. The deferred-creation filter skips an announcement whose device is
+  known *and* whose description is cached; with the cache permanently empty the
+  second condition never held, so the CCU's post-init inventory announcement —
+  which covers the complete fleet, since the daemon answers `listDevices` with
+  an empty array — was parked in full. The pull now records every description,
+  roots and channels, keyed by the canonical wire id. One restart repopulates
+  the cache and empties the inbox; no manual step is needed.
+- The same empty cache silently degraded everything else keyed on a device
+  description: the firmware domain iterates the description registry to find
+  devices to check, channel-team resolution reads a channel's description, and
+  `CheckAndCreateDevicesFromCache` had nothing to restore from on a warm boot.
+
 ## [0.65.3] - 2026-08-27
 
 ### Fixed

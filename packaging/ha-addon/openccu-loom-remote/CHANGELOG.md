@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.65.4
+
+- Version alignment with OpenCCU-Loom 0.65.4. The proxy itself is unchanged;
+  the release stops the device inbox from listing every paired device as
+  waiting for approval.
+
 # 0.65.3
 
 - Version alignment with OpenCCU-Loom 0.65.3. The proxy itself is unchanged;
