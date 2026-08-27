@@ -287,43 +287,83 @@ func sameDescription(a, b hmproto.DeviceDescription) bool {
 }
 
 // HandleNewDevices ingests freshly-announced devices. It stores their
-// normalised descriptions and emits a [hmevent.DeviceCreatedEvent] for
-// each top-level device. After all descriptions are processed it emits
-// a [hmevent.DataFetchCompletedEvent] so the cache coordinator marks
-// its dirty bit and persists the updated state.
+// normalised descriptions, registers every top-level device and emits a
+// [hmevent.DeviceCreatedEvent] for those the device registry did not
+// already hold. After all descriptions are processed it emits a
+// [hmevent.DataFetchCompletedEvent] so the cache coordinator marks its
+// dirty bit and persists the updated state.
 //
-// Descriptions that are not yet present in the local cache are identified
-// via IdentifyMissingDeviceDescriptions before storing — these correspond
-// to factory-reset re-pair scenarios where a known device reappears with
-// channel addresses the cache has never seen.
+// The announcement is not a creation. The daemon answers listDevices
+// with an empty array, so the CCU re-announces its complete inventory
+// after every reconnect and this method is called with the whole fleet
+// each time. Announcing all of it as created turned one reconnect into
+// one event per device for every subscriber — the WebSocket lifecycle
+// plane broadcast each one to every `device.*.lifecycle` subscriber, and
+// the security index coalesced them only because it debounces. Only an
+// address the registry does not know yet is news; the rest is the CCU
+// repeating itself.
+//
+// The source distinguishes the two kinds of news, decided BEFORE the
+// registry is written (afterwards every address looks known):
+//
+//   - an address the device registry does not hold is a genuine
+//     pairing — [hmenum.SourceOfDeviceCreationNew];
+//   - a known device whose channel addresses the description cache has
+//     never seen is a factory-reset re-pair, where the device kept its
+//     identity but rebuilt its channels —
+//     [hmenum.SourceOfDeviceCreationRefresh].
 func (c *DeviceCoordinator) HandleNewDevices(_ context.Context, iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
-	// Identify descriptions missing from the cache before storing them,
-	// so factory-reset re-pair scenarios are detected correctly.
+	// Both lookups read registry state the ingest below mutates, so they
+	// have to complete first: IdentifyMissingDeviceDescriptions against
+	// the description cache, c.devices.Has against the device registry.
 	missing := c.IdentifyMissingDeviceDescriptions(iface, descriptions)
-	missingSet := make(map[string]struct{}, len(missing))
+	rePairedRoots := make(map[string]struct{}, len(missing))
 	for i := range missing {
-		missingSet[missing[i].Address] = struct{}{}
-	}
-	c.ingestDescriptions(iface, descriptions, func(address string) hmenum.SourceOfDeviceCreation {
-		if _, wasMissing := missingSet[address]; wasMissing {
-			// Device address was unknown to the cache: factory-reset
-			// re-pair path. Use Refresh source so north-bound adapters
-			// can distinguish re-pairs from genuine new devices.
-			return hmenum.SourceOfDeviceCreationRefresh
+		// Only a missing CHANNEL marks a re-pair. A missing root address
+		// is a device the registry cannot know either, and that case is
+		// already the NEW branch below.
+		root := missing[i].Parent
+		if root == "" {
+			addr, _, isChannel := strings.Cut(missing[i].Address, ":")
+			if !isChannel {
+				continue
+			}
+			root = addr
 		}
-		return hmenum.SourceOfDeviceCreationNew
+		rePairedRoots[root] = struct{}{}
+	}
+	known := make(map[string]struct{}, len(descriptions))
+	for i := range descriptions {
+		if descriptions[i].IsDevice() && c.devices.Has(iface, descriptions[i].Address) {
+			known[descriptions[i].Address] = struct{}{}
+		}
+	}
+	c.ingestDescriptions(iface, descriptions, func(address string) (hmenum.SourceOfDeviceCreation, bool) {
+		if _, isKnown := known[address]; !isKnown {
+			return hmenum.SourceOfDeviceCreationNew, true
+		}
+		if _, rePaired := rePairedRoots[address]; rePaired {
+			return hmenum.SourceOfDeviceCreationRefresh, true
+		}
+		return "", false
 	})
 }
 
 // ingestDescriptions stores the descriptions, registers every top-level
-// device and publishes one [hmevent.DeviceCreatedEvent] per device with
-// the source the caller derives per address. It carries the shared body
-// of [DeviceCoordinator.HandleNewDevices] and
+// device and publishes one [hmevent.DeviceCreatedEvent] per device the
+// caller elects to announce. It carries the shared body of
+// [DeviceCoordinator.HandleNewDevices] and
 // [DeviceCoordinator.HandleAcceptedDevices].
+//
+// sourceOf decides both halves per top-level address: the creation
+// source, and whether the address is news at all. Returning false
+// suppresses the event only — the description and registry writes still
+// happen, because a re-announcement can carry an updated description for
+// a device the registry already holds.
 func (c *DeviceCoordinator) ingestDescriptions(
 	iface hmtypes.WireInterfaceID,
 	descriptions []hmproto.DeviceDescription,
-	sourceOf func(address string) hmenum.SourceOfDeviceCreation,
+	sourceOf func(address string) (hmenum.SourceOfDeviceCreation, bool),
 ) {
 	deviceCount := 0
 	for i := range descriptions {
@@ -336,15 +376,19 @@ func (c *DeviceCoordinator) ingestDescriptions(
 				Model:     desc.Type,
 			}
 			c.devices.Put(entry)
+			deviceCount++
+			source, announce := sourceOf(desc.Address)
+			if !announce {
+				continue
+			}
 			events.Publish(c.bus, hmevent.DeviceCreatedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
 				InterfaceID: string(iface),
 				Address:     desc.Address,
 				Model:       desc.Type,
-				Source:      sourceOf(desc.Address),
+				Source:      source,
 			})
-			deviceCount++
 		}
 	}
 	if len(descriptions) > 0 {
@@ -862,8 +906,11 @@ func (c *DeviceCoordinator) TakeDelayedDeviceDescriptions(
 // with the creation source pinned to MANUAL, which is what north-bound
 // consumers use to tell an operator-driven accept from a hot-plug.
 func (c *DeviceCoordinator) HandleAcceptedDevices(iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
-	c.ingestDescriptions(iface, descriptions, func(string) hmenum.SourceOfDeviceCreation {
-		return hmenum.SourceOfDeviceCreationManual
+	// Always announced: an accept is an operator action on a device that
+	// was held out of the model until now, so the event is the only thing
+	// that tells the north-bound surfaces the device exists.
+	c.ingestDescriptions(iface, descriptions, func(string) (hmenum.SourceOfDeviceCreation, bool) {
+		return hmenum.SourceOfDeviceCreationManual, true
 	})
 }
 

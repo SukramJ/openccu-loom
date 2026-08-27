@@ -274,24 +274,7 @@ func TestHandleRawEventNormalizedPONGRoutesToTracker(t *testing.T) {
 	}
 }
 
-// ---- EmitDevicesCreatedEvents / EmitDeviceRemovedEvent ----
-
-func TestEmitDevicesCreatedEvents(t *testing.T) {
-	bus := events.NewBus()
-	cache := NewCacheCoordinator()
-	ec := NewEventCoordinator(bus, cache, nil)
-	ec.SetCentralName("ccu1")
-
-	received := make(chan hmevent.DeviceCreatedEvent, 3)
-	_ = events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) { received <- e })
-
-	ec.EmitDevicesCreatedEvents("iface1", []string{"A1", "A2"}, "MODEL_X", hmenum.SourceOfDeviceCreationNew)
-
-	time.Sleep(50 * time.Millisecond)
-	if len(received) != 2 {
-		t.Fatalf("got %d DeviceCreatedEvents, want 2", len(received))
-	}
-}
+// ---- EmitDeviceRemovedEvent ----
 
 func TestEmitDeviceRemovedEvent(t *testing.T) {
 	bus := events.NewBus()

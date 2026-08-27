@@ -6,6 +6,57 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.65.2] - 2026-08-27
+
+### Fixed
+
+- **A CCU reconnect announced every device in the installation as newly
+  created.** The daemon answers the CCU's `listDevices` with an empty array, so
+  the CCU re-announces its complete inventory through `newDevices` after every
+  reconnect. That announcement was passed straight through as one
+  `device.created` event per device: the WebSocket `device.{address}.lifecycle`
+  plane broadcast the whole fleet to every subscriber, and a client had no way
+  to tell a genuine pairing from the CCU repeating itself. The creation source
+  made it worse by being inverted — a re-announced device was reported as `NEW`
+  while a device the daemon had never seen was reported as `REFRESH`, so a
+  client filtering on `NEW` received exactly the noise and missed every real
+  arrival. Only an address the device registry does not already hold is
+  announced now, and the source says which kind of news it is: `NEW` for a
+  pairing, `REFRESH` for a factory-reset re-pair where the device kept its
+  address but rebuilt its channels. Descriptions carried by a re-announcement
+  are still stored, so an updated firmware revision still reaches the model.
+
+### Added
+
+- **`expires_at` on `GET /api/v1/auth/me` and the login response.** A client
+  that resolves its credential once and keeps the snapshot — a WebSocket
+  captures its identity at the upgrade — could not learn when that credential
+  dies, even though the daemon closes the connection the instant it does. Both
+  responses now carry the deadline in UTC, absent when the credential has no
+  server-side expiry. `POST /auth/login` reports the lifetime of the session it
+  just issued. The admin token list carries the same information but is
+  addressed by a fingerprint a client does not know for itself, so a rotation
+  could only ever be discovered through the resulting 401.
+- **`expires_at` on the WebSocket `{op:"reauth_ok"}` acknowledgement**, so a
+  long-lived connection that has just refilled its credential in-band can
+  schedule the next refill without a REST round trip. The `reauth` op itself is
+  now documented in `assets/wsapi.json`, alongside the other envelope
+  operations.
+- **The Config UI warns before the session ends.** A session is an absolute
+  12-hour window that activity does not extend, so the first sign of a lapsed
+  one used to be a bounce to the login screen mid-task — and, because the
+  daemon closes the WebSocket at the same instant, a reconnect loop against a
+  socket that could never come back. The SPA now reads the deadline from the
+  identity, shows a banner for the last 15 minutes with a "sign in again"
+  action, and hands over to the login view exactly when the credential lapses.
+  A deployment whose credential has no server-side expiry — HA Ingress, Basic
+  auth — never sees the banner.
+
+### Removed
+
+- `EventCoordinator.EmitDevicesCreatedEvents`, which had no caller outside its
+  own test.
+
 ## [0.65.1] - 2026-08-27
 
 ### Fixed

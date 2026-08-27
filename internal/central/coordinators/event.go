@@ -502,29 +502,6 @@ func (c *EventCoordinator) SetPingPongTracker(fn func(interfaceID, callerID stri
 	c.mu.Unlock()
 }
 
-// EmitDevicesCreatedEvents publishes a [hmevent.DeviceCreatedEvent] for each
-// address in addresses. Use this when a batch of devices needs to be
-// announced after an out-of-band operation (e.g. bulk import, cache restore)
-// rather than arriving one-by-one through the newDevices callback.
-func (c *EventCoordinator) EmitDevicesCreatedEvents(interfaceID string, addresses []string, model string, source hmenum.SourceOfDeviceCreation) {
-	if len(addresses) == 0 {
-		return
-	}
-	c.mu.RLock()
-	cn := c.centralName
-	c.mu.RUnlock()
-	for _, addr := range addresses {
-		events.Publish(c.bus, hmevent.DeviceCreatedEvent{
-			Base:        hmevent.NewBase(),
-			CentralName: cn,
-			InterfaceID: interfaceID,
-			Address:     addr,
-			Model:       model,
-			Source:      source,
-		})
-	}
-}
-
 // EmitDeviceRemovedEvent publishes a [hmevent.DeviceRemovedEvent] for the
 // given address. Use this when a device-removed signal is received out-of-band
 // (e.g. via a scheduled deletion job) rather than through the deleteDevices

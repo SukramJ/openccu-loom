@@ -1,5 +1,22 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.65.2
+
+- A CCU reconnect no longer reports every paired device as newly created.
+  The CCU re-announces its whole inventory whenever the connection comes
+  back, and the daemon passed that on as one creation event per device;
+  clients watching for new devices saw the entire installation arrive
+  again. Only a device the daemon did not already know is announced now.
+- Clients are told when their login expires. The identity endpoint and the
+  login response now carry the session's or token's deadline, so a
+  long-running client can renew before it is disconnected instead of
+  finding out through a failed request.
+- The Config UI warns you 15 minutes before your session ends, instead of
+  dropping you on the login screen in the middle of what you were doing.
+  Sessions run for a fixed 12 hours and clicking around does not extend
+  them. Running the add-on behind Home Assistant Ingress? Nothing changes —
+  that login has no expiry and the banner never appears.
+
 ## 0.65.1
 
 Matter accessories now match what the specification says a device of their

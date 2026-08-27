@@ -374,6 +374,10 @@ func (c *client) sendOp(op outboundOp) {
 // reauth handles the in-band {op:"reauth", token:"..."} frame.
 // Re-resolves token via the hub's TokenStore; on success swaps the
 // connection's identity (subject + role) without forcing a reconnect.
+// The {op:"reauth_ok"} ack carries the new credential's expires_at when
+// it has one, so the client learns the deadline [watchCredentialExpiry]
+// will enforce without a REST round trip.
+//
 // On failure (no store wired, empty token, unknown token) emits
 // {op:"reauth_failed"} and closes the connection — clients can then
 // reconnect with fresh credentials.
@@ -393,7 +397,12 @@ func (c *client) reauth(token string) {
 	c.mu.Lock()
 	c.identity = id
 	c.mu.Unlock()
-	c.sendOp(outboundOp{Op: "reauth_ok"})
+	ack := outboundOp{Op: "reauth_ok"}
+	if !id.ExpiresAt.IsZero() {
+		exp := id.ExpiresAt.UTC()
+		ack.ExpiresAt = &exp
+	}
+	c.sendOp(ack)
 }
 
 // SetIdentity records the connection's authenticated identity. The
@@ -542,6 +551,15 @@ type outboundOp struct {
 	// anything itself. Absent on the first ping and whenever the last pong
 	// carried no echo.
 	RTTMs *float64 `json:"rtt_ms,omitempty"`
+	// ExpiresAt is the deadline of the credential a `reauth_ok` frame just
+	// installed, in UTC. Absent when the new credential has no server-side
+	// expiry. It closes the loop the reauth op opens: the connection is
+	// closed by [client.watchCredentialExpiry] the moment the deadline
+	// passes, so a client that has just refilled its credential needs to
+	// know when to do it again — and reading that back over REST would
+	// mean a round trip on a surface the client is on precisely to avoid
+	// them.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // readPump reads inbound frames, assembles fragmented messages and updates

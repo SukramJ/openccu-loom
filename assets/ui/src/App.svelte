@@ -62,6 +62,7 @@
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
   import RestartBanner from "$lib/components/RestartBanner.svelte";
+  import SessionExpiryBanner from "$lib/components/SessionExpiryBanner.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
@@ -458,6 +459,7 @@
           <ConnectionBadge />
         </div>
       </header>
+      <SessionExpiryBanner />
       <RestartBanner />
       <main id="main">
         {#if route.kind === "list"}
