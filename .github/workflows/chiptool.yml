@@ -230,9 +230,19 @@ jobs:
             sleep 1
           done
 
-          ./chip-tool --storage-directory ./kvs-tool pairing onnetwork 4242 20202021 \
+          # Argument order and pairing form both taken from the suite's own
+          # controller (tests/chiptool/harness/chiptool.go: --storage-directory
+          # is APPENDED at :203, and Pair uses `already-discovered` with
+          # --bypass-attestation-verifier at :248). chip-tool parses its first
+          # argument as the cluster/command set, so a leading global flag fails
+          # with "Unknown cluster or command set"; and the reference app carries
+          # test attestation certificates the verifier rejects by default.
+          ./chip-tool pairing already-discovered 4242 20202021 127.0.0.1 5560 \
+            --bypass-attestation-verifier true \
+            --storage-directory ./kvs-tool \
             | tee pair.log
-          ./chip-tool --storage-directory ./kvs-tool descriptor read parts-list 4242 0 \
+          ./chip-tool descriptor read parts-list 4242 0 \
+            --storage-directory ./kvs-tool \
             | tee read.log
           grep -q "PartsList" read.log \
             || { echo "::error::Descriptor.PartsList not returned by the reference app"; exit 1; }
