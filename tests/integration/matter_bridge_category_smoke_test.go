@@ -156,7 +156,12 @@ func TestMatterBridgeSmoke_ClimateClusterSurface(t *testing.T) {
 		t,
 		makeSmokeClimateDevice("CATCLIM01", "Bridged Thermostat"),
 		catDevTypeThermostat,
-		[]uint32{0x0201, 0x0204, 0x0402}, // Thermostat, ThermostatUI, TemperatureMeasurement
+		// Thermostat + ThermostatUserInterfaceConfiguration only. The Device
+		// Library names TemperatureMeasurement (0x0402) for 0x0301 as
+		// element=clientCluster, so a thermostat endpoint must not serve it;
+		// the channel's ACTUAL_TEMPERATURE reaches controllers as its own
+		// TemperatureSensor endpoint instead.
+		[]uint32{0x0201, 0x0204},
 	)
 }
 

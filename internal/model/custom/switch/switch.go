@@ -17,7 +17,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // startUpOnOffNull is the sentinel stored in Switch.startUpOnOff when
@@ -69,20 +68,6 @@ type Switch struct {
 	// §10.6.5). Bumped on every successful MatterWrite / MatterInvoke
 	// so DataVersionFilter evaluation correctly detects cluster changes.
 	hmtypes.DataVersionTracker
-
-	// Optional Matter measurement-source attachments populated via
-	// [Switch.AttachPowerSource] / [Switch.AttachEnergySource]. When
-	// set they appear as additional cluster servers on the Switch's
-	// bridged Matter endpoint (ElectricalPowerMeasurement 0x0090 +
-	// ElectricalEnergyMeasurement 0x0091). Unset for switches that have
-	// no energy hardware (the default HmIP-FSM3 / etc.).
-	//
-	// Held atomically, like the writable OnOff attributes below: the
-	// ingest pipeline attaches them one stage *after* the custom data
-	// point is published to its channel, so the Matter assembler can be
-	// walking this Switch from the IM goroutine while they are written.
-	attachedPowerSource  atomic.Pointer[interfaces.MatterFloatMeasurementSource]
-	attachedEnergySource atomic.Pointer[interfaces.MatterFloatMeasurementSource]
 
 	// LT-feature writable OnOff attributes stored atomically so
 	// MatterRead and MatterWrite race safely without a dedicated mutex.

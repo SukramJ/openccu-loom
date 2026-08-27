@@ -251,7 +251,39 @@ const (
 	MatterMeasurementPower                                  // 0x0090 ElectricalPowerMeasurement
 	MatterMeasurementEnergy                                 // 0x0091 ElectricalEnergyMeasurement
 	MatterMeasurementMomentarySwitch                        // 0x003B Switch (Generic Switch endpoint)
+	MatterMeasurementElectrical                             // 0x0090 + 0x0091 + 0x009C (ElectricalSensor endpoint)
 )
+
+// MatterElectricalReadings is the typed read surface of a consolidated
+// electrical measurement group. One CCU channel reports POWER, VOLTAGE,
+// CURRENT, FREQUENCY and ENERGY_COUNTER as separate parameters, while Matter
+// groups the first four into ElectricalPowerMeasurement (0x0090) attributes
+// and the fifth into ElectricalEnergyMeasurement (0x0091) — both on one
+// ElectricalSensor endpoint. Implemented by [generic.ElectricalGroup].
+//
+// Every accessor returns (value, false) when the device does not report that
+// parameter, which the cluster layer renders as a Matter null rather than as
+// an unsupported attribute: the attribute is specified for the cluster, the
+// reading simply is not there.
+//
+// Units are the ones the CCU reports, converted at the cluster boundary:
+// watts, volts, milliamperes, hertz, watt-hours.
+//
+// loom:reachable:reason="held as a struct field type in production — measurement.ElectricalPowerServer.readings and measurement.energyOf.r — which the analyzer's reachability walk does not count as a use of the interface itself"
+type MatterElectricalReadings interface {
+	ActivePower() (value float64, observed bool)
+	Voltage() (value float64, observed bool)
+	Current() (value float64, observed bool)
+	Frequency() (value float64, observed bool)
+	Energy() (value float64, observed bool)
+
+	// HasEnergy reports whether the source carries an energy counter at all.
+	// The cluster layer decides the endpoint's ServerList from this, never
+	// from Energy()'s observed flag: a Matter endpoint's cluster set is
+	// quasi-static, so a cluster gated on a not-yet-reported value would
+	// appear mid-session after controllers cached the list.
+	HasEnergy() bool
+}
 
 // MatterMeasurementSource is implemented by Generic / Calculated DPs
 // that project to a single Matter measurement cluster. The endpoint
@@ -470,11 +502,19 @@ func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
 		return 0x0015 // ContactSensor
 	case MatterMeasurementMomentarySwitch:
 		return 0x000F // GenericSwitch
+	case MatterMeasurementElectrical:
+		// The Device Library's carrier for ElectricalPowerMeasurement +
+		// ElectricalEnergyMeasurement, with PowerTopology mandatory
+		// alongside them (matter.js electrical-sensor.element.ts). The
+		// per-parameter Power / Energy classes below never reach an
+		// endpoint of their own: the assembler consolidates them into one
+		// ElectricalGroup, exactly as it does for press parameters.
+		return 0x0510 // ElectricalSensor
 	default:
-		// Battery / Power / Energy: no standalone endpoint type — the
-		// measurement rides on a host-cluster (PowerSource on the host
-		// endpoint, Electrical{Power,Energy}Measurement on the OnOff
-		// endpoint).
+		// Battery, and the per-parameter Power / Energy classes that the
+		// assembler folds into an ElectricalGroup before an endpoint is
+		// built. PowerSource rides on the bridged endpoint of the device
+		// it powers, which BridgedNode (0x0013) specifies for it.
 		return 0
 	}
 }
@@ -566,6 +606,11 @@ func MatterMeasurementClassClusterID(class MatterMeasurementClass) uint32 {
 		return 0x0091 // ElectricalEnergyMeasurement
 	case MatterMeasurementMomentarySwitch:
 		return 0x003B // Switch (GenericSwitch's cluster)
+	case MatterMeasurementElectrical:
+		// The group mounts three clusters; this names the headline one so
+		// eligibility.Classify has a single id to report. The full set is
+		// built by measurement.FromMeasurementClass.
+		return 0x0090 // ElectricalPowerMeasurement
 	default:
 		return 0
 	}

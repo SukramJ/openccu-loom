@@ -1,6 +1,6 @@
 {
-  "generated": "01e399b8",
-  "head": "01e399b8",
+  "generated": "3ad9bc6f",
+  "head": "3ad9bc6f",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 29984,
-    "reachable": 4985,
-    "whitelisted": 21820,
+    "total_exported": 29985,
+    "reachable": 4987,
+    "whitelisted": 21819,
     "unreachable": 3179
   },
   "by_package": [
@@ -3004,7 +3004,7 @@
       "package": "internal/central/adapter",
       "identifier": "DevicePipeline",
       "file": "internal/central/adapter/device_pipeline.go",
-      "line": 73,
+      "line": 72,
       "kind": "type"
     },
     {
@@ -9052,14 +9052,14 @@
       "package": "internal/model/custom/switch",
       "identifier": "GroupStateDataPoint",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 43,
+      "line": 42,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "GroupStateDataPoint",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 43,
+      "line": 42,
       "kind": "type"
     },
     {
@@ -11908,7 +11908,7 @@
       "package": "internal/north/matter/endpoint",
       "identifier": "Topology",
       "file": "internal/north/matter/endpoint/types.go",
-      "line": 379,
+      "line": 385,
       "kind": "type"
     },
     {
@@ -22513,28 +22513,28 @@
       "package": "pkg/interfaces",
       "identifier": "MatterBoolMeasurementSource",
       "file": "pkg/interfaces/matter.go",
-      "line": 296,
+      "line": 328,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterBoolMeasurementSource",
       "file": "pkg/interfaces/matter.go",
-      "line": 296,
+      "line": 328,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterChangeNotifier",
       "file": "pkg/interfaces/matter.go",
-      "line": 319,
+      "line": 351,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterChangeNotifier",
       "file": "pkg/interfaces/matter.go",
-      "line": 319,
+      "line": 351,
       "kind": "type"
     },
     {
@@ -22653,35 +22653,35 @@
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilitySource",
       "file": "pkg/interfaces/matter.go",
-      "line": 423,
+      "line": 455,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilitySource",
       "file": "pkg/interfaces/matter.go",
-      "line": 423,
+      "line": 455,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilityState",
       "file": "pkg/interfaces/matter.go",
-      "line": 362,
+      "line": 394,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilityVerdict",
       "file": "pkg/interfaces/matter.go",
-      "line": 401,
+      "line": 433,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEligibilityVerdict",
       "file": "pkg/interfaces/matter.go",
-      "line": 401,
+      "line": 433,
       "kind": "type"
     },
     {
@@ -22702,56 +22702,56 @@
       "package": "pkg/interfaces",
       "identifier": "MatterEventEmitter",
       "file": "pkg/interfaces/matter.go",
-      "line": 346,
+      "line": 378,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventEmitter",
       "file": "pkg/interfaces/matter.go",
-      "line": 346,
+      "line": 378,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventPriority",
       "file": "pkg/interfaces/matter.go",
-      "line": 324,
+      "line": 356,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventPriority",
       "file": "pkg/interfaces/matter.go",
-      "line": 324,
+      "line": 356,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventReceiver",
       "file": "pkg/interfaces/matter.go",
-      "line": 354,
+      "line": 386,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterEventReceiver",
       "file": "pkg/interfaces/matter.go",
-      "line": 354,
+      "line": 386,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterFloatMeasurementSource",
       "file": "pkg/interfaces/matter.go",
-      "line": 278,
+      "line": 310,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterFloatMeasurementSource",
       "file": "pkg/interfaces/matter.go",
-      "line": 278,
+      "line": 310,
       "kind": "type"
     },
     {
@@ -22772,14 +22772,14 @@
       "package": "pkg/interfaces",
       "identifier": "MatterMeasurementSource",
       "file": "pkg/interfaces/matter.go",
-      "line": 260,
+      "line": 292,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "MatterMeasurementSource",
       "file": "pkg/interfaces/matter.go",
-      "line": 260,
+      "line": 292,
       "kind": "type"
     },
     {
@@ -80861,14 +80861,14 @@
       "identifier": "TestCelsiusToMatterClamping",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1475
+      "line": 1386
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestCelsiusToMatterRoundsTenthDegreeReadings",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1494
+      "line": 1405
     },
     {
       "package": "internal/model/custom/climate",
@@ -80893,17 +80893,10 @@
     },
     {
       "package": "internal/model/custom/climate",
-      "identifier": "TestClimateClusterCompositionWithHumidity",
+      "identifier": "TestClimateClusterCompositionIsThermostatOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 44
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateClusterCompositionWithoutHumidity",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/matter_test.go",
-      "line": 70
+      "line": 586
     },
     {
       "package": "internal/model/custom/climate",
@@ -80917,21 +80910,21 @@
       "identifier": "TestClimateConfigPayloadNoModes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2079
+      "line": 1944
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateConfigPayloadWithModes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2092
+      "line": 1957
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateConfigPayloadWithProfilesNoneFiltered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2104
+      "line": 1969
     },
     {
       "package": "internal/model/custom/climate",
@@ -81068,62 +81061,6 @@
     },
     {
       "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerMatterAttributes",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 983
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerMatterInvoke",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2038
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerMatterReportable",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 975
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerMatterWrite",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 966
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerReadClusterRevision",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2029
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerReadObserved",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2019
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerReadUnknownAttr",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1004
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateHumidityServerReadUnobserved",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1013
-    },
-    {
-      "package": "internal/model/custom/climate",
       "identifier": "TestClimateInfoPayloadKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
@@ -81236,38 +81173,31 @@
     },
     {
       "package": "internal/model/custom/climate",
-      "identifier": "TestClimateMountsHumidityServerForIntegerSlot",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/matter_test.go",
-      "line": 628
-    },
-    {
-      "package": "internal/model/custom/climate",
       "identifier": "TestClimateOnMatterValueChangedFansActualTemperature",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 596
+      "line": 513
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateOnMatterValueChangedFiresOnConfirmedSetpointChange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 567
+      "line": 484
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateOnMatterValueChangedNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 608
+      "line": 525
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateOnMatterValueChangedUnsubscribeStopsCallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 581
+      "line": 498
     },
     {
       "package": "internal/model/custom/climate",
@@ -81435,7 +81365,7 @@
       "identifier": "TestClimateSetModeSimpleRFCoolUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1759
+      "line": 1670
     },
     {
       "package": "internal/model/custom/climate",
@@ -81505,7 +81435,7 @@
       "identifier": "TestClimateSetTemperatureNoSetpointNoWriter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1719
+      "line": 1630
     },
     {
       "package": "internal/model/custom/climate",
@@ -81526,14 +81456,14 @@
       "identifier": "TestClimateSetTemperatureRFWriterOnlyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1726
+      "line": 1637
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateSetTemperatureWriterOnlyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1703
+      "line": 1614
     },
     {
       "package": "internal/model/custom/climate",
@@ -81596,14 +81526,14 @@
       "identifier": "TestClimateStatePayloadOptimumStartStop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2070
+      "line": 1935
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateStatePayloadTemperatureOffset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2061
+      "line": 1926
     },
     {
       "package": "internal/model/custom/climate",
@@ -81617,7 +81547,7 @@
       "identifier": "TestClimateStatePayloadWithActivity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2051
+      "line": 1916
     },
     {
       "package": "internal/model/custom/climate",
@@ -81635,48 +81565,6 @@
     },
     {
       "package": "internal/model/custom/climate",
-      "identifier": "TestClimateTempMeasServerMatterAttributes",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 954
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateTempMeasServerMatterInvoke",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2006
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateTempMeasServerMatterReportable",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 946
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateTempMeasServerMatterWrite",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 937
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateTempMeasServerReadFeatureMap",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1997
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestClimateTempMeasServerReadUnknownAttr",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 995
-    },
-    {
-      "package": "internal/model/custom/climate",
       "identifier": "TestClimateTemperatureUnitMappedFromCapabilities",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/payload_discovery_test.go",
@@ -81687,168 +81575,168 @@
       "identifier": "TestClimateThermostatServerMatterAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1261
+      "line": 1172
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterInvokeNoSetpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1550
+      "line": 1461
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterInvokeSetpointRaiseLower",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1527
+      "line": 1438
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterInvokeUnknownCmd",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1541
+      "line": 1452
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterReportable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1274
+      "line": 1185
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterWriteSetpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1331
+      "line": 1242
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterWriteSetpointBadType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1343
+      "line": 1254
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterWriteSystemMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1360
+      "line": 1271
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterWriteSystemModeBadType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1377
+      "line": 1288
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterWriteSystemModeUnknownMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1395
+      "line": 1306
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerMatterWriteUnknownAttr",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1386
+      "line": 1297
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerReadControlSeq",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1298
+      "line": 1209
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerReadFeatureMap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2193
+      "line": 2058
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerReadLocalTempUnobserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2180
+      "line": 2045
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerReadMinMaxSetpoints",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1282
+      "line": 1193
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerReadRunningMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2161
+      "line": 2026
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatServerReadSystemMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1313
+      "line": 1224
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatUIServerMatterAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1245
+      "line": 1156
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatUIServerMatterInvoke",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1984
+      "line": 1895
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatUIServerMatterReportable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1238
+      "line": 1149
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatUIServerMatterWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1229
+      "line": 1140
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatUIServerRead",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1207
+      "line": 1118
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatUIServerReadFeatureMap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1975
+      "line": 1886
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestClimateThermostatUIServerReadUnknownAttr",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1220
+      "line": 1131
     },
     {
       "package": "internal/model/custom/climate",
@@ -81925,56 +81813,56 @@
       "identifier": "TestExtractSetpointRaiseLowerBadAmountType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1065
+      "line": 976
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestExtractSetpointRaiseLowerBadModeType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1051
+      "line": 962
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestExtractSetpointRaiseLowerMissingAmount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1058
+      "line": 969
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestExtractSetpointRaiseLowerMissingMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1044
+      "line": 955
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestExtractSetpointRaiseLowerSuccess",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1030
+      "line": 941
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestExtractSetpointRaiseLowerWrongType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1072
+      "line": 983
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestHumidityToMatterClamping",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1514
+      "line": 1425
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestHumidityToMatterRounds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 651
+      "line": 545
     },
     {
       "package": "internal/model/custom/climate",
@@ -82030,14 +81918,14 @@
       "identifier": "TestIPThermostatGroupConstructorIsRegistered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2206
+      "line": 2071
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestIPThermostatGroupConstructorReturnsDP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1578
+      "line": 1489
     },
     {
       "package": "internal/model/custom/climate",
@@ -82114,49 +82002,49 @@
       "identifier": "TestMatterScheduleEntriesBoostProfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1953
+      "line": 1864
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestMatterScheduleEntriesNilClimate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1931
+      "line": 1842
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestMatterScheduleEntriesNoChannelRef",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1938
+      "line": 1849
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestMatterScheduleEntriesNoProfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1945
+      "line": 1856
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestMatterScheduleEntriesWeekProfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1962
+      "line": 1873
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestMatterToHmMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1446
+      "line": 1357
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestMatterToHmModeUnknown",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1464
+      "line": 1375
     },
     {
       "package": "internal/model/custom/climate",
@@ -82177,21 +82065,21 @@
       "identifier": "TestNumWeekProgramsKindIPNoChannelRef",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1770
+      "line": 1681
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestNumWeekProgramsKindRFNoChannelRef",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1778
+      "line": 1689
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestNumWeekProgramsKindSimpleRFNoChannelRef",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1785
+      "line": 1696
     },
     {
       "package": "internal/model/custom/climate",
@@ -82405,73 +82293,66 @@
     },
     {
       "package": "internal/model/custom/climate",
-      "identifier": "TestParityMatterJS_ClimateMeasurementServersMatchStandaloneMandatorySet",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/parity_matterjs_test.go",
-      "line": 287
-    },
-    {
-      "package": "internal/model/custom/climate",
       "identifier": "TestParityMatterJS_SystemModeAutoRequiresAutoFeature",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/parity_matterjs_test.go",
-      "line": 180
+      "line": 178
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParityMatterJS_ThermostatCommandList",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/parity_matterjs_test.go",
-      "line": 351
+      "line": 285
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParityMatterJS_ThermostatFeatureMapBits",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/parity_matterjs_test.go",
-      "line": 92
+      "line": 90
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParityMatterJS_ThermostatMandatoryAttributeIDs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/parity_matterjs_test.go",
-      "line": 126
+      "line": 124
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParityMatterJS_ThermostatUIMandatoryAttributeIDs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/parity_matterjs_test.go",
-      "line": 240
+      "line": 238
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParseFlatBoolTrue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1673
+      "line": 1584
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParseFlatEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1692
+      "line": 1603
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParseFlatInvalidJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1685
+      "line": 1596
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestParseFlatUnsupportedType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1849
+      "line": 1760
     },
     {
       "package": "internal/model/custom/climate",
@@ -82506,21 +82387,21 @@
       "identifier": "TestProfileForWeekIndexAllValid",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1814
+      "line": 1725
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestProfileForWeekIndexInvalid",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1834
+      "line": 1745
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestProfileForWeekIndexOutOfRange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1188
+      "line": 1099
     },
     {
       "package": "internal/model/custom/climate",
@@ -82548,119 +82429,105 @@
       "identifier": "TestRefreshLinkPeerActivitySourcesCoolingPeer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1165
+      "line": 1076
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRefreshLinkPeerActivitySourcesLevelPeer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1116
+      "line": 1027
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRefreshLinkPeerActivitySourcesStatePeer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1141
+      "line": 1052
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesDisableAway",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1659
+      "line": 1570
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesDisableBoost",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1639
+      "line": 1550
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesEnableBoost",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1629
+      "line": 1540
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesSet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1595
+      "line": 1506
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesSetAway",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2126
+      "line": 1991
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesSetAwayForDuration",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 2139
+      "line": 2004
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesSetMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1609
+      "line": 1520
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesSetProfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1619
+      "line": 1530
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRegisterServicesSetTemperatureOffset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1649
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestRelativeHumidityEncoding",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/matter_test.go",
-      "line": 486
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestRelativeHumiditySaturation",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/matter_test.go",
-      "line": 497
+      "line": 1560
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestResolveWeekProgramPointerNilChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1804
+      "line": 1715
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestResolveWeekProgramPointerSimpleRF",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1796
+      "line": 1707
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestRfControlModeLabelOutOfRange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1744
+      "line": 1655
     },
     {
       "package": "internal/model/custom/climate",
@@ -82674,7 +82541,7 @@
       "identifier": "TestRfThermostatGroupConstructorReturnsDP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1565
+      "line": 1476
     },
     {
       "package": "internal/model/custom/climate",
@@ -82905,7 +82772,7 @@
       "identifier": "TestSetpointWriteWrongTypeRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 509
+      "line": 426
     },
     {
       "package": "internal/model/custom/climate",
@@ -83038,14 +82905,7 @@
       "identifier": "TestSystemModeFromHmModeClampsToFeatureMap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1409
-    },
-    {
-      "package": "internal/model/custom/climate",
-      "identifier": "TestTempMeasurementMirrorsLocalTemperature",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/climate/matter_test.go",
-      "line": 474
+      "line": 1320
     },
     {
       "package": "internal/model/custom/climate",
@@ -83115,21 +82975,21 @@
       "identifier": "TestThermostatClusterRevisionIs7",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 523
+      "line": 440
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatControlSequenceHeatingOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 158
+      "line": 111
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatCoolCapableDeviceAdvertisesCoolWithoutAuto",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 262
+      "line": 215
     },
     {
       "package": "internal/model/custom/climate",
@@ -83143,28 +83003,28 @@
       "identifier": "TestThermostatFeatureMapHeatOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 170
+      "line": 123
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatHeatOnlyCoolSetpointNotPresent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 218
+      "line": 171
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatHeatOnlyExcludesCoolAndAutoAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 193
+      "line": 146
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatHeatingSetpointReadAndWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 113
+      "line": 66
     },
     {
       "package": "internal/model/custom/climate",
@@ -83178,21 +83038,21 @@
       "identifier": "TestThermostatLocalTemperatureEncoding",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 87
+      "line": 40
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatLocalTemperatureUnobserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 101
+      "line": 54
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatMinMaxHeatSetpointFromCapabilities",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 139
+      "line": 92
     },
     {
       "package": "internal/model/custom/climate",
@@ -83206,7 +83066,7 @@
       "identifier": "TestThermostatNoFabricatedAttrAt0x30",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 536
+      "line": 453
     },
     {
       "package": "internal/model/custom/climate",
@@ -83227,14 +83087,14 @@
       "identifier": "TestThermostatRunningModeValueNeverAuto",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 370
+      "line": 323
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatSetpointRaiseLowerCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 426
+      "line": 379
     },
     {
       "package": "internal/model/custom/climate",
@@ -83255,21 +83115,21 @@
       "identifier": "TestThermostatSetpointRaiseLowerWithoutBaselineFails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 447
+      "line": 400
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatSystemModeReadClampsHmAutoToFeatureMap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 320
+      "line": 273
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatSystemModeUnsupportedRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 415
+      "line": 368
     },
     {
       "package": "internal/model/custom/climate",
@@ -83283,14 +83143,14 @@
       "identifier": "TestThermostatSystemModeWriteCoolRejectedHeatOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 238
+      "line": 191
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestThermostatSystemModeWriteRoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 397
+      "line": 350
     },
     {
       "package": "internal/model/custom/climate",
@@ -83304,35 +83164,35 @@
       "identifier": "TestThermostatUITempDisplayModeIsCelsius",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 462
+      "line": 415
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestToFloat64UnknownType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1920
+      "line": 1831
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestToFloat64Variants",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1898
+      "line": 1809
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestToFloatUnknownTypeIgnored",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1105
+      "line": 1016
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestToFloatVariants",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1083
+      "line": 994
     },
     {
       "package": "internal/model/custom/climate",
@@ -83346,28 +83206,28 @@
       "identifier": "TestToUint16MinutesOutOfRange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1881
+      "line": 1792
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestToUint16MinutesUnknownType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1891
+      "line": 1802
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestToUint16MinutesVariants",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/climate_internals_test.go",
-      "line": 1860
+      "line": 1771
     },
     {
       "package": "internal/model/custom/climate",
       "identifier": "TestUnknownCommandsRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/climate/matter_test.go",
-      "line": 551
+      "line": 468
     },
     {
       "package": "internal/model/custom/climate",
@@ -90157,14 +90017,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 121
+      "line": 106
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 121
+      "line": 106
     },
     {
       "package": "internal/model/custom/switch",
@@ -90245,20 +90105,6 @@
     },
     {
       "package": "internal/model/custom/switch",
-      "identifier": "TestAttachPowerEnergySourcesNilDevice",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/payload_test.go",
-      "line": 220
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "identifier": "TestAttachPowerSourceRacesTheMatterAssembler",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/matter_power_test.go",
-      "line": 135
-    },
-    {
-      "package": "internal/model/custom/switch",
       "identifier": "TestConfigPayloadCategoryIsSwitch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
@@ -90270,13 +90116,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
       "line": 156
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "identifier": "TestFindSiblingMeasurementSourcesEmptyChannels",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/payload_test.go",
-      "line": 229
     },
     {
       "package": "internal/model/custom/switch",
@@ -90297,7 +90136,7 @@
       "identifier": "TestHAComponentIsSwitch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 240
+      "line": 220
     },
     {
       "package": "internal/model/custom/switch",
@@ -90959,41 +90798,6 @@
     },
     {
       "package": "internal/model/custom/switch",
-      "identifier": "TestSwitch_AttachBothAddsTwoClusters",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/matter_power_test.go",
-      "line": 84
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "identifier": "TestSwitch_AttachEnergyAddsCluster",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/matter_power_test.go",
-      "line": 64
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "identifier": "TestSwitch_AttachPowerAddsCluster",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/matter_power_test.go",
-      "line": 44
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "identifier": "TestSwitch_AttachPowerNilClears",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/matter_power_test.go",
-      "line": 105
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "identifier": "TestSwitch_DefaultClusterServersBaseline",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/custom/switch/matter_power_test.go",
-      "line": 25
-    },
-    {
-      "package": "internal/model/custom/switch",
       "identifier": "TestSwitch_MatterDataVersion_BumpsOnCCUEcho",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/matter_dataversion_test.go",
@@ -91004,28 +90808,28 @@
       "identifier": "TestTopicSlotHasCorrectFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 247
+      "line": 227
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "TestTopicSlotInvalidAddressFallsBack",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/switch/payload_test.go",
-      "line": 261
+      "line": 241
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "Writer",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 30
+      "line": 29
     },
     {
       "package": "internal/model/custom/switch",
       "identifier": "Writer",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/model/custom/switch/switch.go",
-      "line": 30
+      "line": 29
     },
     {
       "package": "internal/model/custom/textdisplay",
@@ -95117,6 +94921,34 @@
     },
     {
       "package": "internal/model/generic",
+      "identifier": "ElectricalGroup",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/model/generic/electrical.go",
+      "line": 27
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "ElectricalGroup",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/model/generic/electrical.go",
+      "line": 27
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "ElectricalGroupMember",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/model/generic/electrical.go",
+      "line": 74
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "ElectricalGroupMember",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/model/generic/electrical.go",
+      "line": 74
+    },
+    {
+      "package": "internal/model/generic",
       "identifier": "ErrCollectorConsumed",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/collector.go",
@@ -95744,6 +95576,20 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/dummy.go",
       "line": 16
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "NewElectricalGroup",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/model/generic/electrical.go",
+      "line": 87
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "NewElectricalGroup",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/model/generic/electrical.go",
+      "line": 87
     },
     {
       "package": "internal/model/generic",
@@ -114468,14 +114314,14 @@
       "identifier": "AirQualityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1226
+      "line": 1296
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "AirQualityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1226
+      "line": 1296
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -114496,14 +114342,14 @@
       "identifier": "CO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1405
+      "line": 1475
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "CO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1405
+      "line": 1475
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -114661,6 +114507,20 @@
     },
     {
       "package": "internal/north/matter/cluster/measurement",
+      "identifier": "ClusterPowerTopology",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1716
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "ClusterPowerTopology",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1716
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
       "identifier": "ClusterPressureMeasurement",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
@@ -114692,28 +114552,42 @@
       "identifier": "ElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1094
+      "line": 1164
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "ElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1094
+      "line": 1164
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "ElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 969
+      "line": 986
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "ElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 969
+      "line": 986
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "ElectricalReadingsSource",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1014
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "ElectricalReadingsSource",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1014
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -114776,14 +114650,14 @@
       "identifier": "NewAirQualityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1241
+      "line": 1311
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewAirQualityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1241
+      "line": 1311
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -114804,42 +114678,56 @@
       "identifier": "NewCO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1411
+      "line": 1481
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewCO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1411
+      "line": 1481
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1103
+      "line": 1173
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1103
+      "line": 1173
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 978
+      "line": 1000
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 978
+      "line": 1000
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "NewElectricalPowerServerFromReadings",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1007
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "NewElectricalPowerServerFromReadings",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1007
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -114888,56 +114776,70 @@
       "identifier": "NewPM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1439
+      "line": 1509
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1439
+      "line": 1509
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1425
+      "line": 1495
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1425
+      "line": 1495
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1489
+      "line": 1559
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1489
+      "line": 1559
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPowerSourceServerFromFloat",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1498
+      "line": 1568
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPowerSourceServerFromFloat",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1498
+      "line": 1568
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "NewPowerTopologyServer",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1749
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "NewPowerTopologyServer",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1749
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -114986,42 +114888,56 @@
       "identifier": "PM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1433
+      "line": 1503
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1433
+      "line": 1503
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1419
+      "line": 1489
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1419
+      "line": 1489
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1472
+      "line": 1542
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1472
+      "line": 1542
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "PowerTopologyServer",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1741
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "PowerTopologyServer",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 1741
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -121626,6 +121542,20 @@
     },
     {
       "package": "internal/north/matter/schema",
+      "identifier": "DeviceTypeAllowsServerCluster",
+      "reason": "conformance oracle for tests/contract/matter_devicetype_conformance_test.go; the bridge itself mounts clusters from the model layer",
+      "file": "internal/north/matter/schema/lookup.go",
+      "line": 65
+    },
+    {
+      "package": "internal/north/matter/schema",
+      "identifier": "DeviceTypeAllowsServerCluster",
+      "reason": "conformance oracle for tests/contract/matter_devicetype_conformance_test.go; the bridge itself mounts clusters from the model layer",
+      "file": "internal/north/matter/schema/lookup.go",
+      "line": 65
+    },
+    {
+      "package": "internal/north/matter/schema",
       "identifier": "DeviceTypeName",
       "reason": "introspection companion to the generated device-type tables; retained for diagnostics — no production caller yet",
       "file": "internal/north/matter/schema/lookup.go",
@@ -121637,6 +121567,20 @@
       "reason": "introspection companion to the generated device-type tables; retained for diagnostics — no production caller yet",
       "file": "internal/north/matter/schema/lookup.go",
       "line": 44
+    },
+    {
+      "package": "internal/north/matter/schema",
+      "identifier": "DeviceTypeServerClusters",
+      "reason": "conformance oracle read through DeviceTypeAllowsServerCluster and directly by the device-type guards in tests/contract and tests/integration; the bridge mounts clusters from the model layer, so production reads it only through that function",
+      "file": "internal/north/matter/schema/devicetypes.go",
+      "line": 215
+    },
+    {
+      "package": "internal/north/matter/schema",
+      "identifier": "DeviceTypeServerClusters",
+      "reason": "conformance oracle read through DeviceTypeAllowsServerCluster and directly by the device-type guards in tests/contract and tests/integration; the bridge mounts clusters from the model layer, so production reads it only through that function",
+      "file": "internal/north/matter/schema/devicetypes.go",
+      "line": 215
     },
     {
       "package": "internal/north/matter/schema",
@@ -172740,6 +172684,20 @@
     },
     {
       "package": "pkg/interfaces",
+      "identifier": "MatterElectricalReadings",
+      "reason": "held as a struct field type in production — measurement.ElectricalPowerServer.readings and measurement.energyOf.r — which the analyzer's reachability walk does not count as a use of the interface itself",
+      "file": "pkg/interfaces/matter.go",
+      "line": 273
+    },
+    {
+      "package": "pkg/interfaces",
+      "identifier": "MatterElectricalReadings",
+      "reason": "held as a struct field type in production — measurement.ElectricalPowerServer.readings and measurement.energyOf.r — which the analyzer's reachability walk does not count as a use of the interface itself",
+      "file": "pkg/interfaces/matter.go",
+      "line": 273
+    },
+    {
+      "package": "pkg/interfaces",
       "identifier": "TestAcceptInboxOptions_HasConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/interfaces/rest_ports_test.go",
@@ -173433,6 +173391,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestEveryADRIsInTheIndex",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/published_docs_test.go",
+      "line": 214
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestEveryBootMarkIsPassedExactlyOnce",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_manifest_test.go",
@@ -173699,6 +173664,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestHostRiddenMeasurementClassesHaveAHost",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/matter_measurement_devicetype_conformance_test.go",
+      "line": 161
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestI18nCatalogParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/i18n_catalog_keys_test.go",
@@ -173878,6 +173850,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/matter_schema_sync_test.go",
       "line": 25
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestMeasurementClassEnumerationIsComplete",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/matter_measurement_devicetype_conformance_test.go",
+      "line": 195
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestMeasurementClassProjectsOntoAConformantDeviceType",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/matter_measurement_devicetype_conformance_test.go",
+      "line": 96
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestMeasurementClassesUnderInvestigationAreStillBroken",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/matter_measurement_devicetype_conformance_test.go",
+      "line": 247
     },
     {
       "package": "tests/contract",

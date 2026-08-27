@@ -1,5 +1,25 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.65.1
+
+Matter accessories now match what the specification says a device of their
+type looks like, which is what the ecosystems check them against.
+
+Thermostats no longer serve temperature and humidity as their own readings —
+the specification has a thermostat consume those from elsewhere, and both
+values already reach your Home app as separate sensors. Metering plugs gain a
+second accessory carrying power, voltage, current, frequency and consumption,
+because that is where those readings belong; they also now report voltage,
+current and frequency for real instead of leaving them blank. Battery levels
+move onto the device's own accessory rather than a nameless extra one.
+
+Paired metering plugs and battery devices re-learn once after updating: a plug
+gains an accessory, a battery device loses an empty one. Your device selection
+is unaffected.
+
+Amazon Alexa recognises a bridged accessory only by the clusters its device
+type declares, so each of these cost visibility there before.
+
 ## 0.65.0
 
 Derived sensors can now reach Matter. Apparent temperature, dew point,

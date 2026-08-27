@@ -35,53 +35,6 @@ func TestMatterDeviceTypeIsThermostat(t *testing.T) {
 	}
 }
 
-// TestClimateClusterCompositionWithHumidity confirms the four-cluster
-// projection on a Climate that has a HUMIDITY DP: Thermostat (0x0201),
-// ThermostatUIConfiguration (0x0204), TemperatureMeasurement (0x0402),
-// and RelativeHumidityMeasurement (0x0405). The Schedules cluster
-// (0x0024) is intentionally absent — matter.js MatterDefinition does
-// not include it, and Apple Home pair-aborts when it is advertised.
-func TestClimateClusterCompositionWithHumidity(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	servers := r.climate.MatterClusterServers()
-	got := map[uint32]bool{}
-	for _, s := range servers {
-		got[s.MatterClusterID()] = true
-	}
-	want := []uint32{0x0201, 0x0204, 0x0402, 0x0405}
-	for _, id := range want {
-		if !got[id] {
-			t.Errorf("cluster 0x%04X missing from %v", id, got)
-		}
-	}
-	if got[0x0024] {
-		t.Errorf("Schedules cluster (0x0024) must not be emitted")
-	}
-	if len(servers) != 4 {
-		t.Errorf("expected 4 cluster servers, got %d", len(servers))
-	}
-}
-
-// TestClimateClusterCompositionWithoutHumidity asserts the conditional
-// emission of RelativeHumidityMeasurement: when the Climate has no
-// humidity DP, the cluster is absent from the projection. The Schedules
-// cluster (0x0024) is intentionally absent in all cases.
-// This is the rich-model way to keep Matter advertising honest.
-func TestClimateClusterCompositionWithoutHumidity(t *testing.T) {
-	r := newRig(t, "HmIP-eTRV:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	// Detach humidity to simulate a TRV without humidity sensor.
-	r.climate.humidity = nil
-	servers := r.climate.MatterClusterServers()
-	for _, s := range servers {
-		if s.MatterClusterID() == 0x0405 {
-			t.Fatalf("RelativeHumidityMeasurement must not be emitted when humidity DP is absent")
-		}
-	}
-	if len(servers) != 3 {
-		t.Errorf("expected 3 cluster servers (no humidity, no Schedules), got %d", len(servers))
-	}
-}
-
 // TestThermostatLocalTemperatureEncoding round-trips ACTUAL_TEMPERATURE
 // through the int16 0.01°C encoding.
 func TestThermostatLocalTemperatureEncoding(t *testing.T) {
@@ -468,42 +421,6 @@ func TestThermostatUITempDisplayModeIsCelsius(t *testing.T) {
 	}
 }
 
-// TestTempMeasurementMirrorsLocalTemperature confirms the
-// TemperatureMeasurement cluster surfaces the same value as Thermostat
-// LocalTemperature.
-func TestTempMeasurementMirrorsLocalTemperature(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.actualTemperature.OnEvent(19.25)
-	srv := findCluster(t, r.climate, 0x0402)
-	v, ok := srv.MatterRead(0x0000)
-	if !ok || v.(int16) != 1925 {
-		t.Fatalf("TempMeas MeasuredValue = (%v, %v), want (1925, true)", v, ok)
-	}
-}
-
-// TestRelativeHumidityEncoding round-trips HUMIDITY through the
-// uint16 0.01% encoding.
-func TestRelativeHumidityEncoding(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.humidity.OnEvent(45.5)
-	srv := findCluster(t, r.climate, 0x0405)
-	v, ok := srv.MatterRead(0x0000)
-	if !ok || v.(uint16) != 4550 {
-		t.Fatalf("Humidity MeasuredValue = (%v, %v), want (4550, true)", v, ok)
-	}
-}
-
-// TestRelativeHumiditySaturation locks the clamp at 100 % → 10000.
-func TestRelativeHumiditySaturation(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.humidity.OnEvent(105) // out-of-range CCU value
-	srv := findCluster(t, r.climate, 0x0405)
-	v, _ := srv.MatterRead(0x0000)
-	if v.(uint16) != 10000 {
-		t.Fatalf("Humidity 105 %% → Matter %d, want 10000", v.(uint16))
-	}
-}
-
 // TestSetpointWriteWrongTypeRejected — defence-in-depth against bridge
 // regressions.
 func TestSetpointWriteWrongTypeRejected(t *testing.T) {
@@ -550,7 +467,7 @@ func TestThermostatNoFabricatedAttrAt0x30(t *testing.T) {
 // across every cluster server in the projection.
 func TestUnknownCommandsRejected(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	for _, id := range []uint32{0x0201, 0x0204, 0x0402, 0x0405} {
+	for _, id := range []uint32{0x0201, 0x0204} {
 		srv := findCluster(t, r.climate, id)
 		_, err := srv.MatterInvoke(context.Background(), 0x99, nil, hmenum.CommandPriorityHigh)
 		if !errors.Is(err, errMatterUnknownCommand) {
@@ -621,29 +538,6 @@ func TestClimateOnMatterValueChangedNilSafe(t *testing.T) {
 	r.setpoint.OnEvent(20.0) // must not panic with no subscriber
 }
 
-// TestClimateMountsHumidityServerForIntegerSlot pins that
-// RelativeHumidityMeasurement (0x0405) is mounted for an HmIP wall
-// thermostat, whose HUMIDITY parameter is INTEGER-typed and therefore
-// resolves into the integer slot only.
-func TestClimateMountsHumidityServerForIntegerSlot(t *testing.T) {
-	t.Parallel()
-	c := newIntegerHumidityClimate()
-	var found interfaces.MatterClusterServer
-	for _, s := range c.MatterClusterServers() {
-		if s.MatterClusterID() == matterClusterRelativeHumidityMeasurement {
-			found = s
-		}
-	}
-	if found == nil {
-		t.Fatal("RelativeHumidityMeasurement not mounted for an INTEGER-typed HUMIDITY channel")
-	}
-	c.humidityInt.OnEvent(int32(51))
-	v, ok := found.MatterRead(matterAttrMeasuredValue)
-	if !ok || v != uint16(5100) {
-		t.Fatalf("MeasuredValue = (%v,%v), want (5100,true)", v, ok)
-	}
-}
-
 // TestHumidityToMatterRounds pins the same rounding contract
 // [celsiusToMatter] carries: 20.4*100 is 2039.9999999999998 in binary64,
 // and truncation would report 20.39 % where every other surface shows
@@ -665,5 +559,68 @@ func TestHumidityToMatterRounds(t *testing.T) {
 		if got := humidityToMatter(tc.in); got != tc.want {
 			t.Errorf("humidityToMatter(%v) = %d, want %d", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestClimateClusterCompositionIsThermostatOnly pins the projection to the
+// two clusters the Matter Device Library specifies for device type 0x0301 as
+// server clusters: Thermostat (0x0201, conformance M) and
+// ThermostatUserInterfaceConfiguration (0x0204, conformance O).
+//
+// Three clusters must NOT appear, each for its own reason:
+//
+//   - TemperatureMeasurement (0x0402) and RelativeHumidityMeasurement
+//     (0x0405) are named for 0x0301 as element=clientCluster — a thermostat
+//     consumes those readings from another endpoint rather than serving them
+//     (matter.js packages/model/src/standard/elements/thermostat-device.element.ts).
+//     They were served here until the device-type conformance guard was
+//     built; the readings now reach controllers as their own
+//     TemperatureSensor / HumiditySensor endpoints, and Apple reads the
+//     temperature from the Thermostat cluster's LocalTemperature either way.
+//   - Schedules (0x0024) is not in matter.js's MatterDefinition at all, and
+//     Apple Home pair-aborts on an unknown cluster ID.
+//
+// The count assertion is what makes this a composition test rather than a
+// presence test: an extra cluster nobody noticed is exactly the defect the
+// conformance guard exists to catch, and catching it here is cheaper.
+func TestClimateClusterCompositionIsThermostatOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		model    string
+		humidity bool
+	}{
+		{name: "WithHumiditySensor", model: "HmIP-BWTH:1", humidity: true},
+		{name: "WithoutHumiditySensor", model: "HmIP-eTRV:1", humidity: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t, tc.model, KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+			if !tc.humidity {
+				r.climate.humidity = nil
+			}
+			// The humidity slot state must not change the cluster set — that
+			// it once did is why 0x0405 was conditional here.
+			if tc.humidity && r.climate.humidity == nil {
+				t.Fatal("rig has no humidity data point; the case tests nothing")
+			}
+
+			got := map[uint32]bool{}
+			servers := r.climate.MatterClusterServers()
+			for _, s := range servers {
+				got[s.MatterClusterID()] = true
+			}
+			for _, id := range []uint32{0x0201, 0x0204} {
+				if !got[id] {
+					t.Errorf("cluster 0x%04X missing from %v", id, got)
+				}
+			}
+			for _, id := range []uint32{0x0402, 0x0405, 0x0024} {
+				if got[id] {
+					t.Errorf("cluster 0x%04X must not be served on a Thermostat endpoint", id)
+				}
+			}
+			if len(servers) != 2 {
+				t.Errorf("expected exactly 2 cluster servers, got %d (%v)", len(servers), got)
+			}
+		})
 	}
 }

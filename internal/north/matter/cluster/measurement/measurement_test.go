@@ -1758,67 +1758,6 @@ func TestPowerSourceServerFeatureMapHasBATWithoutREPLC(t *testing.T) {
 	}
 }
 
-// TestFromMeasurementClass_PowerEnergy verifies that the materializer
-// dispatches Power → ClusterID 0x0090, Energy → 0x0091, and returns nil
-// for a wrong-typed source (fakeBool for a float-only class).
-func TestFromMeasurementClass_PowerEnergy(t *testing.T) {
-	t.Parallel()
-
-	type row struct {
-		name    string
-		class   interfaces.MatterMeasurementClass
-		src     any
-		wantID  uint32
-		wantNil bool
-	}
-
-	rows := []row{
-		{
-			name:   "Power+fakeFloat→0x0090",
-			class:  interfaces.MatterMeasurementPower,
-			src:    fakeFloat{class: interfaces.MatterMeasurementPower, val: 800.0, obs: true},
-			wantID: measurement.ClusterElectricalPower,
-		},
-		{
-			name:   "Energy+fakeFloat→0x0091",
-			class:  interfaces.MatterMeasurementEnergy,
-			src:    fakeFloat{class: interfaces.MatterMeasurementEnergy, val: 1234.5, obs: true},
-			wantID: measurement.ClusterElectricalEnergy,
-		},
-		{
-			name:    "Power+fakeBool→nil(wrong type)",
-			class:   interfaces.MatterMeasurementPower,
-			src:     fakeBool{class: interfaces.MatterMeasurementPower, val: false, obs: true},
-			wantNil: true,
-		},
-		{
-			name:    "Energy+fakeBool→nil(wrong type)",
-			class:   interfaces.MatterMeasurementEnergy,
-			src:     fakeBool{class: interfaces.MatterMeasurementEnergy, val: false, obs: true},
-			wantNil: true,
-		},
-	}
-
-	for _, r := range rows {
-		t.Run(r.name, func(t *testing.T) {
-			t.Parallel()
-			servers := measurement.FromMeasurementClass(r.class, r.src)
-			if r.wantNil {
-				if servers != nil {
-					t.Errorf("want nil, got %v (len=%d)", servers, len(servers))
-				}
-				return
-			}
-			if len(servers) != 1 {
-				t.Fatalf("want 1 server, got %d", len(servers))
-			}
-			if got := servers[0].MatterClusterID(); got != r.wantID {
-				t.Errorf("ClusterID = 0x%04X, want 0x%04X", got, r.wantID)
-			}
-		})
-	}
-}
-
 // --- DataVersion tests for all 9 remaining servers ---
 //
 // Each test verifies that a freshly-constructed server carries a non-zero
@@ -2266,24 +2205,6 @@ func TestFromMeasurementClass_Battery(t *testing.T) {
 	got := measurement.FromMeasurementClass(interfaces.MatterMeasurementBattery, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Battery): want non-empty")
-	}
-}
-
-func TestFromMeasurementClass_Power(t *testing.T) {
-	t.Parallel()
-	src := fakeFloat{class: interfaces.MatterMeasurementPower, val: 500, obs: true}
-	got := measurement.FromMeasurementClass(interfaces.MatterMeasurementPower, src)
-	if len(got) == 0 {
-		t.Error("FromMeasurementClass(Power): want non-empty")
-	}
-}
-
-func TestFromMeasurementClass_Energy(t *testing.T) {
-	t.Parallel()
-	src := fakeFloat{class: interfaces.MatterMeasurementEnergy, val: 10, obs: true}
-	got := measurement.FromMeasurementClass(interfaces.MatterMeasurementEnergy, src)
-	if len(got) == 0 {
-		t.Error("FromMeasurementClass(Energy): want non-empty")
 	}
 }
 

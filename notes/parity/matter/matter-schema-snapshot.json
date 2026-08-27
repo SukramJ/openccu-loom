@@ -4,554 +4,4221 @@
     "specificationVersion": 17170432,
     "interactionModelRevision": 12,
     "dataModelRevision": 21,
-    "sourceCommit": "a688a47b5ec3d35dca66d14fe1232c32b97f8407"
+    "sourceCommit": "c6b188fe00bc7d1b97fe22c63cd3a553ad8efd8f"
   },
   "deviceTypes": [
     {
       "id": 10,
       "name": "DoorLock",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 257,
+          "name": "DoorLock",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 11,
       "name": "DoorLockController",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 257,
+          "name": "DoorLock",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 14,
       "name": "Aggregator",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 37,
+          "name": "Actions",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1873,
+          "name": "CommissionerControl",
+          "element": "serverCluster",
+          "conformance": "FabricSynchronization"
+        }
+      ]
     },
     {
       "id": 15,
       "name": "GenericSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 59,
+          "name": "Switch",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 17,
       "name": "PowerSource",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 47,
+          "name": "PowerSource",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 18,
       "name": "OtaRequestor",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 41,
+          "name": "OtaSoftwareUpdateProvider",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 42,
+          "name": "OtaSoftwareUpdateRequestor",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 19,
       "name": "BridgedNode",
       "classification": "utility",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 46,
+          "name": "PowerSourceConfiguration",
+          "element": "serverCluster",
+          "conformance": "BridgedPowerSourceInfo, D"
+        },
+        {
+          "id": 47,
+          "name": "PowerSource",
+          "element": "serverCluster",
+          "conformance": "BridgedPowerSourceInfo"
+        },
+        {
+          "id": 57,
+          "name": "BridgedDeviceBasicInformation",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 60,
+          "name": "AdministratorCommissioning",
+          "element": "serverCluster",
+          "conformance": "FabricSynchronizedNode"
+        },
+        {
+          "id": 1872,
+          "name": "EcosystemInformation",
+          "element": "serverCluster",
+          "conformance": "FabricSynchronizedNode, O"
+        }
+      ]
     },
     {
       "id": 20,
       "name": "OtaProvider",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 41,
+          "name": "OtaSoftwareUpdateProvider",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 42,
+          "name": "OtaSoftwareUpdateRequestor",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 21,
       "name": "ContactSensor",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 22,
       "name": "RootNode",
       "classification": "node",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "PowerSourceCond, O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 31,
+          "name": "AccessControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 40,
+          "name": "BasicInformation",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 43,
+          "name": "LocalizationConfiguration",
+          "element": "serverCluster",
+          "conformance": "LanguageLocale"
+        },
+        {
+          "id": 44,
+          "name": "TimeFormatLocalization",
+          "element": "serverCluster",
+          "conformance": "TimeLocale"
+        },
+        {
+          "id": 45,
+          "name": "UnitLocalization",
+          "element": "serverCluster",
+          "conformance": "UnitLocale"
+        },
+        {
+          "id": 46,
+          "name": "PowerSourceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O, D"
+        },
+        {
+          "id": 48,
+          "name": "GeneralCommissioning",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 49,
+          "name": "NetworkCommissioning",
+          "element": "serverCluster",
+          "conformance": "!CustomNetworkConfig"
+        },
+        {
+          "id": 50,
+          "name": "DiagnosticLogs",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 51,
+          "name": "GeneralDiagnostics",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 52,
+          "name": "SoftwareDiagnostics",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Thread]"
+        },
+        {
+          "id": 54,
+          "name": "WiFiNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[WiFi]"
+        },
+        {
+          "id": 55,
+          "name": "EthernetNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Ethernet]"
+        },
+        {
+          "id": 56,
+          "name": "TimeSynchronization",
+          "element": "clientCluster",
+          "conformance": "TimeSyncWithClientCond, O"
+        },
+        {
+          "id": 60,
+          "name": "AdministratorCommissioning",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 62,
+          "name": "OperationalCredentials",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 63,
+          "name": "GroupKeyManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 70,
+          "name": "IcdManagement",
+          "element": "serverCluster",
+          "conformance": "SIT | LIT"
+        },
+        {
+          "id": 2049,
+          "name": "TlsCertificateManagement",
+          "element": "serverCluster",
+          "conformance": "TLSCertificatesCond, O"
+        },
+        {
+          "id": 2050,
+          "name": "TlsClientManagement",
+          "element": "serverCluster",
+          "conformance": "TLSClientCond, O"
+        }
+      ]
     },
     {
       "id": 23,
       "name": "SolarPower",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "desc"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 24,
       "name": "BatteryStorage",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 23,
+          "name": "SolarPower",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 25,
       "name": "SecondaryNetworkInterface",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 49,
+          "name": "NetworkCommissioning",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Thread]"
+        },
+        {
+          "id": 54,
+          "name": "WiFiNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[WiFi]"
+        },
+        {
+          "id": 55,
+          "name": "EthernetNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "[Ethernet]"
+        }
+      ]
     },
     {
       "id": 34,
       "name": "Speaker",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        }
+      ]
     },
     {
       "id": 35,
       "name": "CastingVideoPlayer",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 151,
+          "name": "Messages",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "serverCluster",
+          "conformance": "PhysicalInputs"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "serverCluster",
+          "conformance": "ContentAppPlatform"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "serverCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 36,
       "name": "ContentApp",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1293,
+          "name": "ApplicationBasic",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ContentAppObserver",
+          "element": "clientCluster",
+          "conformance": "ObserverClient"
+        }
+      ]
     },
     {
       "id": 39,
       "name": "ModeSelect",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 80,
+          "name": "ModeSelect",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 40,
       "name": "BasicVideoPlayer",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 151,
+          "name": "Messages",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "serverCluster",
+          "conformance": "PhysicalInputs"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "serverCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 41,
       "name": "CastingVideoClient",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 151,
+          "name": "Messages",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "ApplicationBasic",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "clientCluster",
+          "conformance": "P, O"
+        },
+        {
+          "id": 1296,
+          "name": "ContentAppObserver",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 42,
       "name": "VideoRemoteControl",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1283,
+          "name": "WakeOnLan",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1284,
+          "name": "Channel",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1285,
+          "name": "TargetNavigator",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1286,
+          "name": "MediaPlayback",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1287,
+          "name": "MediaInput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1288,
+          "name": "LowPower",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1289,
+          "name": "KeypadInput",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1290,
+          "name": "ContentLauncher",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1291,
+          "name": "AudioOutput",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1292,
+          "name": "ApplicationLauncher",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1294,
+          "name": "AccountLogin",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1295,
+          "name": "ContentControl",
+          "element": "clientCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 43,
       "name": "Fan",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 769,
+          "name": "Thermostat",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 44,
       "name": "AirQualitySensor",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 91,
+          "name": "AirQuality",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1036,
+          "name": "CarbonMonoxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1037,
+          "name": "CarbonDioxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1043,
+          "name": "NitrogenDioxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1045,
+          "name": "OzoneConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1066,
+          "name": "Pm25ConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1067,
+          "name": "FormaldehydeConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1068,
+          "name": "Pm1ConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1069,
+          "name": "Pm10ConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1070,
+          "name": "TotalVolatileOrganicCompoundsConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1071,
+          "name": "RadonConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 45,
       "name": "AirPurifier",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 44,
+          "name": "AirQualitySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 113,
+          "name": "HepaFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 769,
+          "name": "Thermostat",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 775,
+          "name": "HumiditySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 64,
       "name": "IrrigationSystem",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 66,
+          "name": "WaterValve",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 65,
       "name": "WaterFreezeDetector",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 66,
       "name": "WaterValve",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 129,
+          "name": "ValveConfigurationAndControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 67,
       "name": "WaterLeakDetector",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 68,
       "name": "RainSensor",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 69,
+          "name": "BooleanState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 69,
       "name": "SoilSensor",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1072,
+          "name": "SoilMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 112,
       "name": "Refrigerator",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 82,
+          "name": "RefrigeratorAndTemperatureControlledCabinetMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 87,
+          "name": "RefrigeratorAlarm",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 113,
+          "name": "TemperatureControlledCabinet",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "[Rev >= v3]"
+        }
+      ]
     },
     {
       "id": 113,
       "name": "TemperatureControlledCabinet",
       "classification": "simple",
-      "revision": 6
+      "revision": 6,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 72,
+          "name": "OvenCavityOperationalState",
+          "element": "serverCluster",
+          "conformance": "[Heater]"
+        },
+        {
+          "id": 73,
+          "name": "OvenMode",
+          "element": "serverCluster",
+          "conformance": "[Heater]"
+        },
+        {
+          "id": 82,
+          "name": "RefrigeratorAndTemperatureControlledCabinetMode",
+          "element": "serverCluster",
+          "conformance": "[Cooler]"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 100,
+          "name": "TemperatureAlarm",
+          "element": "serverCluster",
+          "conformance": "P, O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 114,
       "name": "RoomAirConditioner",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 113,
+          "name": "HepaFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 516,
+          "name": "ThermostatUserInterfaceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 775,
+          "name": "HumiditySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 115,
       "name": "LaundryWasher",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 81,
+          "name": "LaundryWasherMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 83,
+          "name": "LaundryWasherControls",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 116,
       "name": "RoboticVacuumCleaner",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 84,
+          "name": "RvcRunMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 85,
+          "name": "RvcCleanMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 97,
+          "name": "RvcOperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 336,
+          "name": "ServiceArea",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 117,
       "name": "Dishwasher",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 89,
+          "name": "DishwasherMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 93,
+          "name": "DishwasherAlarm",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 118,
       "name": "SmokeCoAlarm",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 92,
+          "name": "SmokeCoAlarm",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1036,
+          "name": "CarbonMonoxideConcentrationMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 119,
       "name": "CookSurface",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        }
+      ]
     },
     {
       "id": 120,
       "name": "Cooktop",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 119,
+          "name": "CookSurface",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 121,
       "name": "MicrowaveOven",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 94,
+          "name": "MicrowaveOvenMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 95,
+          "name": "MicrowaveOvenControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 122,
       "name": "ExtractorHood",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 113,
+          "name": "HepaFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 114,
+          "name": "ActivatedCarbonFilterMonitoring",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 123,
       "name": "Oven",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 113,
+          "name": "TemperatureControlledCabinet",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 120,
+          "name": "Cooktop",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 124,
       "name": "LaundryDryer",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 74,
+          "name": "LaundryDryerControls",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 81,
+          "name": "LaundryWasherMode",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 86,
+          "name": "TemperatureControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 96,
+          "name": "OperationalState",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 144,
       "name": "NetworkInfrastructureManager",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1105,
+          "name": "WiFiNetworkManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1106,
+          "name": "ThreadBorderRouterManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1107,
+          "name": "ThreadNetworkDirectory",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 145,
       "name": "ThreadBorderRouter",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 25,
+          "name": "SecondaryNetworkInterface",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 53,
+          "name": "ThreadNetworkDiagnostics",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1106,
+          "name": "ThreadBorderRouterManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1107,
+          "name": "ThreadNetworkDirectory",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 256,
       "name": "OnOffLight",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 257,
       "name": "DimmableLight",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 259,
       "name": "OnOffLightSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 260,
       "name": "DimmerSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 261,
       "name": "ColorDimmerSwitch",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 262,
       "name": "LightSensor",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1024,
+          "name": "IlluminanceMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 263,
       "name": "OccupancySensor",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 128,
+          "name": "BooleanStateConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 266,
       "name": "OnOffPlugInUnit",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 267,
       "name": "DimmablePlugInUnit",
       "classification": "simple",
-      "revision": 5
+      "revision": 5,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 268,
       "name": "ColorTemperatureLight",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 269,
       "name": "ExtendedColorLight",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 271,
       "name": "MountedOnOffControl",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 272,
       "name": "MountedDimmableLoadControl",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 304,
       "name": "JointFabricAdministrator",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1874,
+          "name": "JointFabricDatastore",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1875,
+          "name": "JointFabricAdministrator",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 320,
       "name": "Intercom",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 15,
+          "name": "GenericSwitch",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 321,
       "name": "AudioDoorbell",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 59,
+          "name": "Switch",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1365,
+          "name": "PushAvStreamTransport",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 322,
       "name": "Camera",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 263,
+          "name": "OccupancySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1360,
+          "name": "ZoneManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1365,
+          "name": "PushAvStreamTransport",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 323,
       "name": "VideoDoorbell",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 322,
+          "name": "Camera",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 328,
+          "name": "Doorbell",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 324,
       "name": "FloodlightCamera",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 322,
+          "name": "Camera",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 325,
       "name": "SnapshotCamera",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 263,
+          "name": "OccupancySensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1360,
+          "name": "ZoneManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 326,
       "name": "Chime",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 327,
       "name": "CameraController",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 47,
+          "name": "PowerSource",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1360,
+          "name": "ZoneManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1361,
+          "name": "CameraAvStreamManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1362,
+          "name": "CameraAvSettingsUserLevelManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1365,
+          "name": "PushAvStreamTransport",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 2049,
+          "name": "TlsCertificateManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 2050,
+          "name": "TlsClientManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 328,
       "name": "Doorbell",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 59,
+          "name": "Switch",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1366,
+          "name": "Chime",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 514,
       "name": "WindowCovering",
       "classification": "simple",
-      "revision": 6
+      "revision": 6,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "Active, O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "serverCluster",
+          "conformance": "X"
+        }
+      ]
     },
     {
       "id": 515,
       "name": "WindowCoveringController",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "Active, O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 560,
       "name": "Closure",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 10,
+          "name": "DoorLock",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 256,
+          "name": "OnOffLight",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 561,
+          "name": "ClosurePanel",
+          "element": "deviceType",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 561,
       "name": "ClosurePanel",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 258,
+          "name": "WindowCovering",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "serverCluster",
+          "conformance": "X"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 574,
       "name": "ClosureController",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 260,
+          "name": "ClosureControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 261,
+          "name": "ClosureDimension",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 769,
       "name": "Thermostat",
       "classification": "simple",
-      "revision": 6
+      "revision": 6,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "Active"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 155,
+          "name": "EnergyPreference",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 514,
+          "name": "FanControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 516,
+          "name": "ThermostatUserInterfaceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1073,
+          "name": "AmbientContextSensing",
+          "element": "clientCluster",
+          "conformance": "P, O"
+        }
+      ]
     },
     {
       "id": 770,
       "name": "TemperatureSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 516,
+          "name": "ThermostatUserInterfaceConfiguration",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 771,
       "name": "Pump",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 512,
+          "name": "PumpConfigurationAndControl",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1027,
+          "name": "PressureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 772,
       "name": "PumpController",
       "classification": "simple",
-      "revision": 4
+      "revision": 4,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 512,
+          "name": "PumpConfigurationAndControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1027,
+          "name": "PressureMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 773,
       "name": "PressureSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1027,
+          "name": "PressureMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 774,
       "name": "FlowSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 775,
       "name": "HumiditySensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1029,
+          "name": "RelativeHumidityMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 777,
       "name": "HeatPump",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 769,
+          "name": "Thermostat",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1295,
+          "name": "WaterHeater",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 778,
       "name": "ThermostatController",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "clientCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1292,
       "name": "EnergyEvse",
       "classification": "simple",
-      "revision": 2
+      "revision": 2,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 153,
+          "name": "EnergyEvse",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 157,
+          "name": "EnergyEvseMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1293,
       "name": "DeviceEnergyManagement",
       "classification": "utility",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 152,
+          "name": "DeviceEnergyManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 159,
+          "name": "DeviceEnergyManagementMode",
+          "element": "serverCluster",
+          "conformance": "ControllableESA, O"
+        },
+        {
+          "id": 160,
+          "name": "ElectricalGridConditions",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 1295,
       "name": "WaterHeater",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 17,
+          "name": "PowerSource",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 148,
+          "name": "WaterHeaterManagement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 158,
+          "name": "WaterHeaterMode",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 513,
+          "name": "Thermostat",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 770,
+          "name": "TemperatureSensor",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1293,
+          "name": "DeviceEnergyManagement",
+          "element": "deviceType",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "desc"
+        }
+      ]
     },
     {
       "id": 1296,
       "name": "ElectricalSensor",
       "classification": "utility",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 144,
+          "name": "ElectricalPowerMeasurement",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 145,
+          "name": "ElectricalEnergyMeasurement",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 156,
+          "name": "PowerTopology",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1297,
       "name": "ElectricalUtilityMeter",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1299,
+          "name": "ElectricalEnergyTariff",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        },
+        {
+          "id": 1300,
+          "name": "ElectricalMeter",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        },
+        {
+          "id": 2822,
+          "name": "MeterIdentification",
+          "element": "serverCluster",
+          "conformance": "M"
+        }
+      ]
     },
     {
       "id": 1298,
       "name": "MeterReferencePoint",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 1299,
+          "name": "ElectricalEnergyTariff",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        },
+        {
+          "id": 1300,
+          "name": "ElectricalMeter",
+          "element": "deviceType",
+          "conformance": "[ElectricalEnergy].a+"
+        }
+      ]
     },
     {
       "id": 1299,
       "name": "ElectricalEnergyTariff",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 149,
+          "name": "CommodityPrice",
+          "element": "serverCluster",
+          "conformance": "[ActiveTariff].a+"
+        },
+        {
+          "id": 160,
+          "name": "ElectricalGridConditions",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1792,
+          "name": "CommodityTariff",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        }
+      ]
     },
     {
       "id": 1300,
       "name": "ElectricalMeter",
       "classification": "simple",
-      "revision": 1
+      "revision": 1,
+      "requirements": [
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 144,
+          "name": "ElectricalPowerMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 145,
+          "name": "ElectricalEnergyMeasurement",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 149,
+          "name": "CommodityPrice",
+          "element": "serverCluster",
+          "conformance": "[ActiveTariff].a+"
+        },
+        {
+          "id": 160,
+          "name": "ElectricalGridConditions",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1296,
+          "name": "ElectricalSensor",
+          "element": "deviceType",
+          "conformance": "M"
+        },
+        {
+          "id": 1792,
+          "name": "CommodityTariff",
+          "element": "serverCluster",
+          "conformance": "O.a+"
+        },
+        {
+          "id": 2823,
+          "name": "CommodityMetering",
+          "element": "serverCluster",
+          "conformance": "P, M"
+        }
+      ]
     },
     {
       "id": 2112,
       "name": "ControlBridge",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1024,
+          "name": "IlluminanceMeasurement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1030,
+          "name": "OccupancySensing",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 2128,
       "name": "OnOffSensor",
       "classification": "simple",
-      "revision": 3
+      "revision": 3,
+      "requirements": [
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "Groups",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 6,
+          "name": "OnOff",
+          "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 8,
+          "name": "LevelControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 29,
+          "name": "Descriptor",
+          "element": "serverCluster"
+        },
+        {
+          "id": 98,
+          "name": "ScenesManagement",
+          "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 768,
+          "name": "ColorControl",
+          "element": "clientCluster",
+          "conformance": "O"
+        }
+      ]
     }
   ],
   "clusters": [
@@ -673,7 +4340,8 @@
       "events": [],
       "features": [
         {
-          "name": "GN"
+          "name": "GN",
+          "bit": 0
         }
       ]
     },
@@ -781,15 +4449,18 @@
       "features": [
         {
           "name": "LT",
-          "conformance": "[!OFFONLY]"
+          "conformance": "[!OFFONLY]",
+          "bit": 0
         },
         {
           "name": "DF",
-          "conformance": "[!OFFONLY]"
+          "conformance": "[!OFFONLY]",
+          "bit": 1
         },
         {
           "name": "OFFONLY",
-          "conformance": "[!(LT | DF)]"
+          "conformance": "[!(LT | DF)]",
+          "bit": 2
         }
       ]
     },
@@ -1002,15 +4673,18 @@
       "features": [
         {
           "name": "OO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "LT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "FQ",
-          "conformance": "P"
+          "conformance": "P",
+          "bit": 2
         }
       ]
     },
@@ -1090,7 +4764,8 @@
       "features": [
         {
           "name": "TAGLIST",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 0
         }
       ]
     },
@@ -1252,15 +4927,18 @@
       "features": [
         {
           "name": "EXTS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "MNGD",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 1
         },
         {
           "name": "AUX",
-          "conformance": "P, desc"
+          "conformance": "P, desc",
+          "bit": 2
         }
       ]
     },
@@ -1877,7 +5555,8 @@
       "events": [],
       "features": [
         {
-          "name": "CALFMT"
+          "name": "CALFMT",
+          "bit": 0
         }
       ]
     },
@@ -1920,7 +5599,8 @@
       "events": [],
       "features": [
         {
-          "name": "TEMP"
+          "name": "TEMP",
+          "bit": 0
         }
       ]
     },
@@ -2251,19 +5931,23 @@
       "features": [
         {
           "name": "WIRED",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "BAT",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "RECHG",
-          "conformance": "[BAT]"
+          "conformance": "[BAT]",
+          "bit": 2
         },
         {
           "name": "REPLC",
-          "conformance": "[BAT]"
+          "conformance": "[BAT]",
+          "bit": 3
         }
       ]
     },
@@ -2460,11 +6144,13 @@
       "features": [
         {
           "name": "TC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "NR",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         }
       ]
     },
@@ -2650,15 +6336,18 @@
       "features": [
         {
           "name": "WI",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "TH",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "ET",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 2
         }
       ]
     },
@@ -2858,7 +6547,8 @@
       "features": [
         {
           "name": "DMTEST",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 0
         }
       ]
     },
@@ -2932,7 +6622,8 @@
       ],
       "features": [
         {
-          "name": "WTRMRK"
+          "name": "WTRMRK",
+          "bit": 0
         }
       ]
     },
@@ -3551,16 +7242,20 @@
       ],
       "features": [
         {
-          "name": "PKTCNT"
+          "name": "PKTCNT",
+          "bit": 0
         },
         {
-          "name": "ERRCNT"
+          "name": "ERRCNT",
+          "bit": 1
         },
         {
-          "name": "MLECNT"
+          "name": "MLECNT",
+          "bit": 2
         },
         {
-          "name": "MACCNT"
+          "name": "MACCNT",
+          "bit": 3
         }
       ]
     },
@@ -3732,10 +7427,12 @@
       ],
       "features": [
         {
-          "name": "PKTCNT"
+          "name": "PKTCNT",
+          "bit": 0
         },
         {
-          "name": "ERRCNT"
+          "name": "ERRCNT",
+          "bit": 1
         }
       ]
     },
@@ -3850,10 +7547,12 @@
       "events": [],
       "features": [
         {
-          "name": "PKTCNT"
+          "name": "PKTCNT",
+          "bit": 0
         },
         {
-          "name": "ERRCNT"
+          "name": "ERRCNT",
+          "bit": 1
         }
       ]
     },
@@ -4078,16 +7777,20 @@
       ],
       "features": [
         {
-          "name": "TZ"
+          "name": "TZ",
+          "bit": 0
         },
         {
-          "name": "NTPC"
+          "name": "NTPC",
+          "bit": 1
         },
         {
-          "name": "NTPS"
+          "name": "NTPS",
+          "bit": 2
         },
         {
-          "name": "TSC"
+          "name": "TSC",
+          "bit": 3
         }
       ]
     },
@@ -4273,7 +7976,8 @@
       "features": [
         {
           "name": "BIS",
-          "conformance": "[Rev >= v4]"
+          "conformance": "[Rev >= v4]",
+          "bit": 20
         }
       ]
     },
@@ -4370,27 +8074,33 @@
       "features": [
         {
           "name": "LS",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "MS",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "MSR",
-          "conformance": "[MS & !AS]"
+          "conformance": "[MS & !AS]",
+          "bit": 2
         },
         {
           "name": "MSL",
-          "conformance": "[MS & (MSR | AS)]"
+          "conformance": "[MS & (MSR | AS)]",
+          "bit": 3
         },
         {
           "name": "MSM",
-          "conformance": "AS, [MS & MSR]"
+          "conformance": "AS, [MS & MSR]",
+          "bit": 4
         },
         {
           "name": "AS",
-          "conformance": "[MS]"
+          "conformance": "[MS]",
+          "bit": 5
         }
       ]
     },
@@ -4461,7 +8171,8 @@
       "events": [],
       "features": [
         {
-          "name": "BC"
+          "name": "BC",
+          "bit": 0
         }
       ]
     },
@@ -4747,11 +8458,13 @@
       "features": [
         {
           "name": "CS",
-          "conformance": "P"
+          "conformance": "P",
+          "bit": 0
         },
         {
           "name": "GCAST",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         }
       ]
     },
@@ -4845,7 +8558,8 @@
       "features": [
         {
           "name": "CHGEVENT",
-          "conformance": "[Rev >= v3]"
+          "conformance": "[Rev >= v3]",
+          "bit": 0
         }
       ]
     },
@@ -4999,19 +8713,23 @@
       "features": [
         {
           "name": "CIP",
-          "conformance": "LITS, O"
+          "conformance": "LITS, O",
+          "bit": 0
         },
         {
           "name": "UAT",
-          "conformance": "LITS, O"
+          "conformance": "LITS, O",
+          "bit": 1
         },
         {
           "name": "LITS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "DSLS",
-          "conformance": "[LITS]"
+          "conformance": "[LITS]",
+          "bit": 3
         }
       ]
     },
@@ -5174,7 +8892,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -5298,7 +9017,8 @@
       "events": [],
       "features": [
         {
-          "name": "DEPONOFF"
+          "name": "DEPONOFF",
+          "bit": 0
         }
       ]
     },
@@ -5359,7 +9079,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -5420,7 +9141,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -5480,11 +9202,13 @@
       "features": [
         {
           "name": "SPIN",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "RINSE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         }
       ]
     },
@@ -5543,11 +9267,13 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         },
         {
           "name": "DIRECTMODECH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 20
         }
       ]
     },
@@ -5606,11 +9332,13 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         },
         {
           "name": "DIRECTMODECH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 20
         }
       ]
     },
@@ -5696,15 +9424,18 @@
       "features": [
         {
           "name": "TN",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "TL",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "STEP",
-          "conformance": "[TN]"
+          "conformance": "[TN]",
+          "bit": 2
         }
       ]
     },
@@ -5781,7 +9512,8 @@
       "features": [
         {
           "name": "RESET",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -5842,7 +9574,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -5877,19 +9610,23 @@
       "features": [
         {
           "name": "FAIR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "MOD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "VPOOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "XPOOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         }
       ]
     },
@@ -6098,11 +9835,13 @@
       "features": [
         {
           "name": "SMOKE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "CO",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         }
       ]
     },
@@ -6180,7 +9919,8 @@
       ],
       "features": [
         {
-          "name": "RESET"
+          "name": "RESET",
+          "bit": 0
         }
       ]
     },
@@ -6236,7 +9976,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -6355,15 +10096,18 @@
       "features": [
         {
           "name": "PWRNUM",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "WATTS",
-          "conformance": "P, O.a"
+          "conformance": "P, O.a",
+          "bit": 1
         },
         {
           "name": "PWRLMTS",
-          "conformance": "[PWRNUM]"
+          "conformance": "[PWRNUM]",
+          "bit": 2
         }
       ]
     },
@@ -6690,7 +10434,8 @@
       "features": [
         {
           "name": "SN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -6824,43 +10569,53 @@
       "features": [
         {
           "name": "OVER",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 20
         },
         {
           "name": "UNDER",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 21
         },
         {
           "name": "MAJOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 22
         },
         {
           "name": "MINOR",
-          "conformance": "[MAJOR]"
+          "conformance": "[MAJOR]",
+          "bit": 23
         },
         {
           "name": "OCRIADJ",
-          "conformance": "[OVER]"
+          "conformance": "[OVER]",
+          "bit": 24
         },
         {
           "name": "OMAJADJ",
-          "conformance": "[OVER & MAJOR]"
+          "conformance": "[OVER & MAJOR]",
+          "bit": 25
         },
         {
           "name": "OMINADJ",
-          "conformance": "[OVER & MINOR]"
+          "conformance": "[OVER & MINOR]",
+          "bit": 26
         },
         {
           "name": "UMINADJ",
-          "conformance": "[UNDER & MINOR]"
+          "conformance": "[UNDER & MINOR]",
+          "bit": 27
         },
         {
           "name": "UMAJADJ",
-          "conformance": "[UNDER & MAJOR]"
+          "conformance": "[UNDER & MAJOR]",
+          "bit": 28
         },
         {
           "name": "UCRIADJ",
-          "conformance": "[UNDER]"
+          "conformance": "[UNDER]",
+          "bit": 29
         }
       ]
     },
@@ -6978,15 +10733,18 @@
       "features": [
         {
           "name": "LN",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 0
         },
         {
           "name": "SD",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 1
         },
         {
           "name": "PGA",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 2
         }
       ]
     },
@@ -7069,15 +10827,18 @@
       "features": [
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "WRN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "REP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         }
       ]
     },
@@ -7160,15 +10921,18 @@
       "features": [
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "WRN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "REP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         }
       ]
     },
@@ -7251,15 +11015,18 @@
       "features": [
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "WRN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "REP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         }
       ]
     },
@@ -7379,23 +11146,28 @@
       "features": [
         {
           "name": "VIS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "AUD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "SPRS",
-          "conformance": "[VIS | AUD]"
+          "conformance": "[VIS | AUD]",
+          "bit": 2
         },
         {
           "name": "SENSLVL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "FAULTEV",
-          "conformance": "[Rev >= v2]"
+          "conformance": "[Rev >= v2]",
+          "bit": 4
         }
       ]
     },
@@ -7544,11 +11316,13 @@
       "features": [
         {
           "name": "TS",
-          "conformance": "desc"
+          "conformance": "desc",
+          "bit": 0
         },
         {
           "name": "LVL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         }
       ]
     },
@@ -7764,23 +11538,28 @@
       "features": [
         {
           "name": "DIRC",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "ALTC",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "POLY",
-          "conformance": "[ALTC]"
+          "conformance": "[ALTC]",
+          "bit": 2
         },
         {
           "name": "HARM",
-          "conformance": "[ALTC]"
+          "conformance": "[ALTC]",
+          "bit": 3
         },
         {
           "name": "PWRQ",
-          "conformance": "[ALTC]"
+          "conformance": "[ALTC]",
+          "bit": 4
         }
       ]
     },
@@ -7869,27 +11648,33 @@
       "features": [
         {
           "name": "IMPE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "EXPE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "CUME",
-          "conformance": "O.b+"
+          "conformance": "O.b+",
+          "bit": 2
         },
         {
           "name": "PERE",
-          "conformance": "O.b+"
+          "conformance": "O.b+",
+          "bit": 3
         },
         {
           "name": "APPE",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 4
         },
         {
           "name": "REAE",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 5
         }
       ]
     },
@@ -7988,11 +11773,13 @@
       "features": [
         {
           "name": "EM",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "TP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         }
       ]
     },
@@ -8084,7 +11871,8 @@
       "features": [
         {
           "name": "FORE",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -8161,19 +11949,23 @@
       "features": [
         {
           "name": "CONF",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "RESP",
-          "conformance": "[CONF]"
+          "conformance": "[CONF]",
+          "bit": 1
         },
         {
           "name": "RPLY",
-          "conformance": "[CONF]"
+          "conformance": "[CONF]",
+          "bit": 2
         },
         {
           "name": "PROT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         }
       ]
     },
@@ -8345,31 +12137,38 @@
       "features": [
         {
           "name": "PA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "PFR",
-          "conformance": "[!PA].a, STA | PAU | FA | CON, O"
+          "conformance": "[!PA].a, STA | PAU | FA | CON, O",
+          "bit": 1
         },
         {
           "name": "SFR",
-          "conformance": "[!PA].a"
+          "conformance": "[!PA].a",
+          "bit": 2
         },
         {
           "name": "STA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "PAU",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "FA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "CON",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 6
         }
       ]
     },
@@ -8686,23 +12485,28 @@
       "features": [
         {
           "name": "PREF",
-          "conformance": "M"
+          "conformance": "M",
+          "bit": 0
         },
         {
           "name": "SOC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "PNC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "RFID",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "V2X",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         }
       ]
     },
@@ -8772,11 +12576,13 @@
       "features": [
         {
           "name": "BALA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LPMS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         }
       ]
     },
@@ -8821,19 +12627,23 @@
       "features": [
         {
           "name": "NODE",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 0
         },
         {
           "name": "TREE",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 1
         },
         {
           "name": "SET",
-          "conformance": "O.a"
+          "conformance": "O.a",
+          "bit": 2
         },
         {
           "name": "DYPF",
-          "conformance": "[SET]"
+          "conformance": "[SET]",
+          "bit": 3
         }
       ]
     },
@@ -8892,7 +12702,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -8951,7 +12762,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -9010,7 +12822,8 @@
       "features": [
         {
           "name": "DEPONOFF",
-          "conformance": "X"
+          "conformance": "X",
+          "bit": 0
         }
       ]
     },
@@ -9068,7 +12881,8 @@
       "features": [
         {
           "name": "FORE",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -9668,55 +13482,68 @@
       "features": [
         {
           "name": "PIN",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "RID",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         },
         {
           "name": "FGP",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 2
         },
         {
           "name": "WDSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "DPS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "FACE",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 6
         },
         {
           "name": "COTA",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 7
         },
         {
           "name": "USR",
-          "conformance": "PIN | RID | FGP | FACE | ALIRO"
+          "conformance": "PIN | RID | FGP | FACE | ALIRO",
+          "bit": 8
         },
         {
           "name": "YDSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 10
         },
         {
           "name": "HDSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 11
         },
         {
           "name": "UBOLT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 12
         },
         {
           "name": "ALIRO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 13
         },
         {
           "name": "ALBU",
-          "conformance": "[ALIRO]"
+          "conformance": "[ALIRO]",
+          "bit": 14
         }
       ]
     },
@@ -9910,19 +13737,23 @@
       "features": [
         {
           "name": "LF",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "TL",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "PA_LF",
-          "conformance": "[LF]"
+          "conformance": "[LF]",
+          "bit": 2
         },
         {
           "name": "PA_TL",
-          "conformance": "[TL]"
+          "conformance": "[TL]",
+          "bit": 4
         }
       ]
     },
@@ -10047,39 +13878,48 @@
       "features": [
         {
           "name": "PS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LT",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "IS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "SP",
-          "conformance": "[PS & !IS]"
+          "conformance": "[PS & !IS]",
+          "bit": 3
         },
         {
           "name": "VT",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 4
         },
         {
           "name": "PD",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 5
         },
         {
           "name": "CL",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 6
         },
         {
           "name": "PT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 7
         },
         {
           "name": "MO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 8
         }
       ]
     },
@@ -10233,35 +14073,43 @@
       "features": [
         {
           "name": "PS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LT",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "UT",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 2
         },
         {
           "name": "LM",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 3
         },
         {
           "name": "SP",
-          "conformance": "[PS]"
+          "conformance": "[PS]",
+          "bit": 4
         },
         {
           "name": "TR",
-          "conformance": "[PS].b"
+          "conformance": "[PS].b",
+          "bit": 5
         },
         {
           "name": "RO",
-          "conformance": "[PS].b"
+          "conformance": "[PS].b",
+          "bit": 6
         },
         {
           "name": "MD",
-          "conformance": "[PS].b"
+          "conformance": "[PS].b",
+          "bit": 7
         }
       ]
     },
@@ -10367,13 +14215,16 @@
       "events": [],
       "features": [
         {
-          "name": "SELRUN"
+          "name": "SELRUN",
+          "bit": 0
         },
         {
-          "name": "PROG"
+          "name": "PROG",
+          "bit": 1
         },
         {
-          "name": "MAPS"
+          "name": "MAPS",
+          "bit": 2
         }
       ]
     },
@@ -10720,31 +14571,38 @@
       "features": [
         {
           "name": "PRSCONST",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "PRSCOMP",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "FLW",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "SPD",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 3
         },
         {
           "name": "TEMP",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 4
         },
         {
           "name": "AUTO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "LOCAL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 6
         }
       ]
     },
@@ -11439,43 +15297,53 @@
       "features": [
         {
           "name": "HEAT",
-          "conformance": "AUTO, O.a+"
+          "conformance": "AUTO, O.a+",
+          "bit": 0
         },
         {
           "name": "COOL",
-          "conformance": "AUTO, O.a+"
+          "conformance": "AUTO, O.a+",
+          "bit": 1
         },
         {
           "name": "OCC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "SB",
-          "conformance": "D"
+          "conformance": "D",
+          "bit": 4
         },
         {
           "name": "AUTO",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         },
         {
           "name": "LTNE",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 6
         },
         {
           "name": "MSCH",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 7
         },
         {
           "name": "PRES",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 8
         },
         {
           "name": "TEVT",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 9
         },
         {
           "name": "TSUGGEST",
-          "conformance": "[PRES]"
+          "conformance": "[PRES]",
+          "bit": 10
         }
       ]
     },
@@ -11611,27 +15479,33 @@
       "features": [
         {
           "name": "SPD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "AUT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "RCK",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "WND",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "STEP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "DIR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         }
       ]
     },
@@ -12266,23 +16140,28 @@
       "features": [
         {
           "name": "HS",
-          "conformance": "EHUE, O"
+          "conformance": "EHUE, O",
+          "bit": 0
         },
         {
           "name": "EHUE",
-          "conformance": "CL, O"
+          "conformance": "CL, O",
+          "bit": 1
         },
         {
           "name": "CL",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "XY",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "CT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         }
       ]
     },
@@ -12510,7 +16389,8 @@
       "features": [
         {
           "name": "EXT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -12778,39 +16658,48 @@
       "features": [
         {
           "name": "OTHER",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "PIR",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "US",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "PHY",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 3
         },
         {
           "name": "AIR",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 4
         },
         {
           "name": "RAD",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 5
         },
         {
           "name": "RFS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 6
         },
         {
           "name": "VIS",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 7
         },
         {
           "name": "OCCEVENT",
-          "conformance": "[Rev >= v7]"
+          "conformance": "[Rev >= v7]",
+          "bit": 9
         }
       ]
     },
@@ -12929,27 +16818,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -13068,27 +16963,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -13207,27 +17108,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -13346,27 +17253,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -13485,27 +17398,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -13624,27 +17543,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -13763,27 +17688,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -13902,27 +17833,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -14041,27 +17978,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -14180,27 +18123,33 @@
       "features": [
         {
           "name": "MEA",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "LEV",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MED",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 2
         },
         {
           "name": "CRI",
-          "conformance": "[LEV]"
+          "conformance": "[LEV]",
+          "bit": 3
         },
         {
           "name": "PEA",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 4
         },
         {
           "name": "AVG",
-          "conformance": "[MEA]"
+          "conformance": "[MEA]",
+          "bit": 5
         }
       ]
     },
@@ -14368,23 +18317,28 @@
       "features": [
         {
           "name": "HA",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 0
         },
         {
           "name": "OC",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 1
         },
         {
           "name": "OI",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 2
         },
         {
           "name": "AUD",
-          "conformance": "P, O.a+"
+          "conformance": "P, O.a+",
+          "bit": 3
         },
         {
           "name": "PRED",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 4
         }
       ]
     },
@@ -14542,7 +18496,8 @@
       "features": [
         {
           "name": "PC",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },
@@ -14758,16 +18713,20 @@
       "events": [],
       "features": [
         {
-          "name": "CL"
+          "name": "CL",
+          "bit": 0
         },
         {
-          "name": "LI"
+          "name": "LI",
+          "bit": 1
         },
         {
-          "name": "EG"
+          "name": "EG",
+          "bit": 2
         },
         {
-          "name": "RP"
+          "name": "RP",
+          "bit": 3
         }
       ]
     },
@@ -15066,19 +19025,24 @@
       ],
       "features": [
         {
-          "name": "AS"
+          "name": "AS",
+          "bit": 0
         },
         {
-          "name": "VS"
+          "name": "VS",
+          "bit": 1
         },
         {
-          "name": "TT"
+          "name": "TT",
+          "bit": 2
         },
         {
-          "name": "AT"
+          "name": "AT",
+          "bit": 3
         },
         {
-          "name": "AA"
+          "name": "AA",
+          "bit": 4
         }
       ]
     },
@@ -15147,7 +19111,8 @@
       "events": [],
       "features": [
         {
-          "name": "NU"
+          "name": "NU",
+          "bit": 0
         }
       ]
     },
@@ -15212,13 +19177,16 @@
       "events": [],
       "features": [
         {
-          "name": "NV"
+          "name": "NV",
+          "bit": 0
         },
         {
-          "name": "LK"
+          "name": "LK",
+          "bit": 1
         },
         {
-          "name": "NK"
+          "name": "NK",
+          "bit": 2
         }
       ]
     },
@@ -15285,23 +19253,28 @@
       "features": [
         {
           "name": "CS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "UP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 1
         },
         {
           "name": "AS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 2
         },
         {
           "name": "TT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "AT",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         }
       ]
     },
@@ -15356,7 +19329,8 @@
       "events": [],
       "features": [
         {
-          "name": "NU"
+          "name": "NU",
+          "bit": 0
         }
       ]
     },
@@ -15428,7 +19402,8 @@
       "events": [],
       "features": [
         {
-          "name": "AP"
+          "name": "AP",
+          "bit": 0
         }
       ]
     },
@@ -15805,28 +19780,36 @@
       ],
       "features": [
         {
-          "name": "ST"
+          "name": "ST",
+          "bit": 0
         },
         {
-          "name": "PM"
+          "name": "PM",
+          "bit": 1
         },
         {
-          "name": "BU"
+          "name": "BU",
+          "bit": 2
         },
         {
-          "name": "OCR"
+          "name": "OCR",
+          "bit": 3
         },
         {
-          "name": "SCR"
+          "name": "SCR",
+          "bit": 4
         },
         {
-          "name": "BC"
+          "name": "BC",
+          "bit": 5
         },
         {
-          "name": "BA"
+          "name": "BA",
+          "bit": 6
         },
         {
-          "name": "BTW"
+          "name": "BTW",
+          "bit": 7
         }
       ]
     },
@@ -16001,19 +19984,23 @@
       "features": [
         {
           "name": "TWODCART",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "PERZONESENS",
-          "conformance": "[TWODCART]"
+          "conformance": "[TWODCART]",
+          "bit": 1
         },
         {
           "name": "USERDEFINED",
-          "conformance": "[TWODCART]"
+          "conformance": "[TWODCART]",
+          "bit": 2
         },
         {
           "name": "FOCUSZONES",
-          "conformance": "[USERDEFINED]"
+          "conformance": "[USERDEFINED]",
+          "bit": 3
         }
       ]
     },
@@ -16479,47 +20466,58 @@
       "features": [
         {
           "name": "ADO",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "VDO",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "SNP",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "PRIV",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "SPKR",
-          "conformance": "[ADO]"
+          "conformance": "[ADO]",
+          "bit": 4
         },
         {
           "name": "ICTL",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 5
         },
         {
           "name": "WMARK",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 6
         },
         {
           "name": "OSD",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 7
         },
         {
           "name": "STOR",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 8
         },
         {
           "name": "HDR",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 9
         },
         {
           "name": "NV",
-          "conformance": "[VDO | SNP]"
+          "conformance": "[VDO | SNP]",
+          "bit": 10
         }
       ]
     },
@@ -16676,23 +20674,28 @@
       "features": [
         {
           "name": "DPTZ",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "MPAN",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "MTILT",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "MZOOM",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 3
         },
         {
           "name": "MPRESETS",
-          "conformance": "[MPAN | MTILT | MZOOM]"
+          "conformance": "[MPAN | MTILT | MZOOM]",
+          "bit": 4
         }
       ]
     },
@@ -16774,7 +20777,8 @@
       "features": [
         {
           "name": "METADATA",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 0
         }
       ]
     },
@@ -16940,11 +20944,13 @@
       "features": [
         {
           "name": "PERZONESENS",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         },
         {
           "name": "METADATA",
-          "conformance": "P, O"
+          "conformance": "P, O",
+          "bit": 1
         }
       ]
     },
@@ -17201,27 +21207,33 @@
       "features": [
         {
           "name": "PRICE",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 0
         },
         {
           "name": "FCRED",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 1
         },
         {
           "name": "AUXLD",
-          "conformance": "O.a+"
+          "conformance": "O.a+",
+          "bit": 2
         },
         {
           "name": "PEAKP",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 3
         },
         {
           "name": "PWRTHLD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 4
         },
         {
           "name": "RNDM",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 5
         }
       ]
     },
@@ -17966,7 +21978,8 @@
       "features": [
         {
           "name": "PWRTHLD",
-          "conformance": "O"
+          "conformance": "O",
+          "bit": 0
         }
       ]
     },

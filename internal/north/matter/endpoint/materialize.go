@@ -85,6 +85,18 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 			}
 		}
 	}
+	// The device's battery rides on this endpoint when attachPowerSource
+	// picked it. Appended after the endpoint's own clusters so the primary
+	// function stays first in the ServerList.
+	if ep.PowerSource != nil {
+		for _, s := range measurement.FromMeasurementClass(interfaces.MatterMeasurementBattery, ep.PowerSource) {
+			if ps, ok := s.(*measurement.PowerSourceServer); ok {
+				ps.SetEndpoint(ep.ID)
+			}
+			inner = append(inner, s)
+		}
+	}
+
 	if len(inner) == 0 {
 		// Defensive: a bridged endpoint with neither source nor
 		// measurement contributes no cluster surface; the topology

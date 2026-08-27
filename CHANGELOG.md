@@ -6,7 +6,60 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.65.1] - 2026-08-27
+
 ### Fixed
+
+- **Bridged endpoints served clusters their Matter device type does not
+  specify.** The Device Library says, per device type, which clusters an
+  endpoint may serve and which it only consumes from another endpoint as a
+  client; serving a client-only cluster is as non-conformant as serving one the
+  type never names. Three endpoint shapes did it. Thermostat endpoints served
+  TemperatureMeasurement and RelativeHumidityMeasurement, both named for
+  0x0301 as client clusters — the readings already reach controllers as their
+  own TemperatureSensor and HumiditySensor endpoints, and Apple takes the
+  temperature from the Thermostat cluster's own LocalTemperature, so both are
+  simply gone. The switch endpoint of a metering plug served
+  ElectricalPowerMeasurement and ElectricalEnergyMeasurement, which
+  OnOffPlugInUnit does not name at all; the metering channel now projects its
+  own ElectricalSensor endpoint (0x0510) carrying both plus the PowerTopology
+  cluster that device type makes mandatory. And a battery data point
+  materialised as an endpoint with no device type — its DeviceTypeList was
+  BridgedNode alone, which Apple files under "Other"; PowerSource now rides on
+  one of the device's own endpoints, where BridgedNode specifies it. Alexa
+  recognises a bridged endpoint only by the clusters its device type
+  specifies, so each of these cost visibility there.
+
+  Controllers re-learn the affected devices once: a metering plug gains an
+  ElectricalSensor endpoint whose readings used to sit on its switch endpoint,
+  and a battery device loses the typeless endpoint its battery level used to
+  occupy. Existing exposure allowlist rows keep working — the electrical
+  parameters are still gated individually, they now feed one shared endpoint.
+
+### Added
+
+- **Voltage, current and frequency reach the electrical cluster.** They were
+  declared in the ElectricalPowerMeasurement attribute table and hardcoded to
+  null, pending a multi-source projection. A metering channel's POWER, VOLTAGE,
+  CURRENT and FREQUENCY parameters are now consolidated into one measurement
+  group behind the single ElectricalSensor endpoint, so all four attributes
+  carry live readings instead of one.
+- **Device types carry their cluster requirements, and clusters their own
+  surface.** The matter.js schema snapshot now records, per device type, which
+  clusters the Device Library specifies for it and on which side, and per
+  feature its FeatureMap bit position. Guards hold the Matter surface against
+  it at three levels: which clusters an endpoint may mount, whether every
+  mandatory and feature-gated attribute of a mounted cluster answers a read,
+  and whether every mandatory command reaches `AcceptedCommandList`. They walk
+  the whole hydrated device fleet, so a drift fails the build rather than a
+  pairing.
+
+  The attribute levels came up clean across 2772 mandatory and 1965
+  feature-gated reads. The command level found the Groups and ScenesManagement
+  stubs: both clusters are mandatory on the light and plug device types and
+  neither accepts its mandatory commands, because Matter models groups and
+  scenes as node-level tables a bridge keeps itself rather than as anything a
+  CCU provides. Recorded as declared gaps that say so.
 
 - **Connection latency measured a fraction of the path it was named after.**
   The hub's `connection_latency_ms` metric — the sensor MQTT discovery

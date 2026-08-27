@@ -1,16 +1,30 @@
 // Walks @matter/model's MatterDefinition tree and emits a parity-friendly
-// snapshot for openccu-loom's matter-side code: device types with revisions,
+// snapshot for openccu-loom's matter-side code: device types with revisions
+// and their cluster requirements (server/client + conformance),
 // clusters with revisions + featureMap + per-attribute IDs/types/conformance/
 // constraints + commands + events. Output is JSON on stdout — pipe to
 // notes/parity/matter/matter-schema-snapshot.json for in-repo persistence.
 import { MatterDefinition, Specification } from "@matter/model";
 import { execSync } from "node:child_process";
 
+// ReqOut is one cluster requirement of a device type: which cluster the
+// Device Library specifies for the type, on which side (server/client), and
+// under which conformance. openccu-loom's device-type conformance guard
+// (tests/contract/matter_devicetype_conformance_test.go) reads these to
+// decide whether a bridged endpoint may mount a given cluster as a server.
+interface ReqOut {
+    id: number;
+    name: string;
+    element: string;
+    conformance?: string;
+}
+
 interface DeviceTypeOut {
     id: number;
     name: string;
     classification?: string;
     revision: number;
+    requirements: ReqOut[];
 }
 
 interface AttrOut {
@@ -47,7 +61,7 @@ interface ClusterOut {
     attributes: AttrOut[];
     commands: CmdOut[];
     events: EvtOut[];
-    features?: { name: string; conformance?: string; description?: string }[];
+    features?: { name: string; conformance?: string; description?: string; bit?: number }[];
 }
 
 const out = {
@@ -121,19 +135,34 @@ function resolvedChildren(node: any, seen: Set<string> = new Set()): any[] {
 for (const c of children) {
     if (c.tag === "deviceType" && typeof c.id === "number") {
         let rev = 1;
-        const desc = resolvedChildren(c).find((ch: any) => ch.tag === "requirement" && ch.name === "Descriptor");
+        const kids = resolvedChildren(c);
+        const desc = kids.find((ch: any) => ch.tag === "requirement" && ch.name === "Descriptor");
         if (desc) {
             const dtList = desc.children?.find((ch: any) => ch.name === "DeviceTypeList");
             if (dtList?.default?.[0]?.revision) rev = dtList.default[0].revision;
         }
-        out.deviceTypes.push({ id: c.id, name: c.name, classification: c.classification, revision: rev });
+        // Cluster requirements carry a numeric id; the nested per-attribute /
+        // per-command / per-feature requirements do not and are skipped.
+        const requirements: ReqOut[] = [];
+        for (const ch of kids) {
+            if (ch.tag !== "requirement" || typeof ch.id !== "number" || !ch.element) continue;
+            requirements.push({ id: ch.id, name: ch.name, element: ch.element, conformance: ch.conformance });
+        }
+        requirements.sort((a, b) => a.id - b.id || a.element.localeCompare(b.element));
+        out.deviceTypes.push({
+            id: c.id,
+            name: c.name,
+            classification: c.classification,
+            revision: rev,
+            requirements,
+        });
     } else if (c.tag === "cluster" && typeof c.id === "number") {
         let rev = 1;
         let featureMap = 0;
         const attributes: AttrOut[] = [];
         const commands: CmdOut[] = [];
         const events: EvtOut[] = [];
-        const features: { name: string; conformance?: string; description?: string }[] = [];
+        const features: { name: string; conformance?: string; description?: string; bit?: number }[] = [];
         for (const ch of resolvedChildren(c)) {
             if (ch.tag === "attribute") {
                 if (ch.id === 0xFFFD || ch.name === "ClusterRevision") {
@@ -142,7 +171,22 @@ for (const c of children) {
                 if (ch.id === 0xFFFC || ch.name === "FeatureMap") {
                     if (typeof ch.default === "number") featureMap = ch.default;
                     for (const f of (ch.children ?? [])) {
-                        if (f.tag === "field") features.push({ name: f.name, conformance: f.conformance, description: f.description });
+                        if (f.tag === "field") {
+                            // `constraint` is the bit POSITION, which is NOT the
+                            // field's index in this list: feature bits are sparse
+                            // (DoorLock has no bit 3 and no bit 9), so deriving a
+                            // bit from array order mislabels every feature after
+                            // the first gap. Recording it is what lets a
+                            // conformance check read the position instead of
+                            // assuming one.
+                            const bit = f.constraint === undefined ? undefined : Number(f.constraint);
+                            features.push({
+                                name: f.name,
+                                conformance: f.conformance,
+                                description: f.description,
+                                bit: Number.isInteger(bit) ? bit : undefined,
+                            });
+                        }
                     }
                 }
                 if (typeof ch.id === "number") {

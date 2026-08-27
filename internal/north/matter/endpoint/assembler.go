@@ -257,6 +257,7 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 		if dev == nil {
 			continue
 		}
+		deviceEndpoints := make([]*Endpoint, 0, 4)
 		for _, ch := range dev.Channels() {
 			if ch == nil {
 				continue
@@ -265,10 +266,69 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, eps...)
+			deviceEndpoints = append(deviceEndpoints, eps...)
 		}
+		attachPowerSource(dev, deviceEndpoints)
+		out = append(out, deviceEndpoints...)
 	}
 	return out, nil
+}
+
+// attachPowerSource binds the device's battery reading to exactly one of its
+// endpoints, so the PowerSource cluster (0x002F) is served where the Device
+// Library puts it.
+//
+// PowerSource is a property of the physical device, not of any one function it
+// exposes, and BridgedNode (0x0013) — the secondary device type every bridged
+// endpoint carries — specifies it as a server cluster. Mounting it on a
+// bridged endpoint is therefore conformant whatever that endpoint's primary
+// type is, and it is what matter.js's ecosystem notes prescribe for a bridge:
+// power-source information belongs at the bridged-node level, not on an
+// endpoint whose device type does not specify it.
+//
+// The alternative — letting the battery data point materialise as an endpoint
+// of its own — produced an endpoint with device type 0, whose DeviceTypeList
+// was [BridgedNode] alone and which Apple files under its "Other" fallback.
+//
+// Exactly one endpoint gets it. A device with a switch and a metering channel
+// has one battery, and advertising it twice would have controllers show two
+// battery levels for one device. The target is the lowest-numbered channel's
+// first endpoint, which is the device's primary function: channel order is the
+// CCU's own, and assembleChannel appends in a stable order within a channel.
+func attachPowerSource(dev *device.Device, eps []*Endpoint) {
+	if dev == nil || len(eps) == 0 {
+		return
+	}
+	var battery interfaces.MatterMeasurementSource
+	for _, ch := range dev.Channels() {
+		if ch == nil {
+			continue
+		}
+		for _, gdp := range ch.DataPoints() {
+			meas, ok := gdp.(interfaces.MatterMeasurementSource)
+			if !ok || meas.MatterMeasurementClass() != interfaces.MatterMeasurementBattery {
+				continue
+			}
+			battery = meas
+			break
+		}
+		if battery != nil {
+			break
+		}
+	}
+	if battery == nil {
+		return
+	}
+	target := eps[0]
+	for _, ep := range eps[1:] {
+		if ep.Channel == nil || target.Channel == nil {
+			continue
+		}
+		if ep.Channel.Number < target.Channel.Number {
+			target = ep
+		}
+	}
+	target.PowerSource = battery
 }
 
 func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
@@ -417,6 +477,11 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 	// physical button after the loop. See [generic.ButtonGroup] and
 	// [ButtonGroupDPKey].
 	var pressMembers []device.ParameterDataPoint
+	// Electrical DPs (POWER / VOLTAGE / CURRENT / FREQUENCY /
+	// ENERGY_COUNTER) are consolidated the same way: Matter groups them into
+	// the attributes of one ElectricalSensor endpoint, so one metering socket
+	// is one accessory rather than five. See [ElectricalGroupDPKey].
+	var electricalMembers []device.ParameterDataPoint
 	for _, gdp := range ch.DataPoints() {
 		key := genericDPKeyForMeasurement(gdp)
 		if key == "" {
@@ -474,6 +539,22 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			pressMembers = append(pressMembers, gdp)
 			continue
 		}
+		if meas.MatterMeasurementClass() == interfaces.MatterMeasurementBattery {
+			// PowerSource is mounted on one of the device's endpoints by
+			// attachPowerSource, never as an endpoint of its own — it has no
+			// device type, and an endpoint without one advertises
+			// DeviceTypeList=[BridgedNode] alone.
+			continue
+		}
+		switch meas.MatterMeasurementClass() {
+		case interfaces.MatterMeasurementPower, interfaces.MatterMeasurementEnergy:
+			// Defer to the per-channel consolidation below. The allowlist
+			// stays per-parameter, so an operator can expose consumption
+			// while keeping voltage private.
+			electricalMembers = append(electricalMembers, gdp)
+			continue
+		default:
+		}
 		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindGeneric, key, meas)
 		if err != nil {
 			return nil, err
@@ -493,7 +574,85 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		}
 	}
 
+	if len(electricalMembers) > 0 {
+		ep, err := a.makeElectricalGroupEndpoint(ctx, centralName, dev, ch, electricalMembers)
+		if err != nil {
+			return nil, err
+		}
+		if ep != nil {
+			seen[ep.SourceKey] = struct{}{}
+			out = append(out, ep)
+		}
+	}
+
 	return out, nil
+}
+
+// ElectricalGroupDPKey is the synthetic dp_key persisted for the per-channel
+// consolidated ElectricalSensor endpoint.
+//
+// A metering plug reports POWER, VOLTAGE, CURRENT, FREQUENCY and
+// ENERGY_COUNTER as five parameters; Matter models the first four as
+// attributes of ONE ElectricalPowerMeasurement cluster and the fifth as
+// ElectricalEnergyMeasurement, both on a single ElectricalSensor device type
+// (0x0510, matter.js electrical-sensor.element.ts). No single member
+// parameter can serve as the row key, so the group gets its own — the same
+// reasoning as [ButtonGroupDPKey].
+//
+// These clusters used to be attached to the OnOff endpoint of the switch on
+// the same device instead. The Device Library specifies neither of them for
+// OnOffPlugInUnit (0x010A) in any role, which made that endpoint
+// non-conformant; ElectricalSensor is their specified carrier.
+const ElectricalGroupDPKey = "ELECTRICAL"
+
+// makeElectricalGroupEndpoint builds the single ElectricalSensor endpoint for
+// one channel from its allowed electrical DPs. Returns (nil, nil) when no
+// member survives the group's parameter filter.
+func (a *Assembler) makeElectricalGroupEndpoint(
+	ctx context.Context,
+	centralName string,
+	dev *device.Device,
+	ch *device.Channel,
+	members []device.ParameterDataPoint,
+) (*Endpoint, error) {
+	srcs := make([]generic.ElectricalGroupMember, 0, len(members))
+	for _, m := range members {
+		src, ok := m.(generic.ElectricalGroupMember)
+		if !ok {
+			continue
+		}
+		srcs = append(srcs, src)
+	}
+	group := generic.NewElectricalGroup(srcs...)
+	if group == nil {
+		return nil, nil
+	}
+	sourceKey := store.EndpointKey{
+		CentralName:   centralName,
+		DeviceAddress: dev.Address,
+		ChannelNo:     ch.Number,
+		DPKind:        store.DPKindGeneric,
+		DPKey:         ElectricalGroupDPKey,
+	}
+	deviceType := measurementDeviceType(interfaces.MatterMeasurementElectrical)
+	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
+	if err != nil {
+		return nil, err
+	}
+	return &Endpoint{
+		ID:            id,
+		DeviceType:    deviceType,
+		Reachable:     dev.Available(),
+		FriendlyName:  friendlyName(dev, ch, a.parameterSuffix(ch, ElectricalGroupDPKey), a.channelLabel()),
+		BridgedDevice: dev,
+		Channel:       ch,
+		Measurement:   group,
+		SourceKey:     sourceKey,
+		state:         a.states.stateFor(sourceKey),
+		// Same parent chain as every other bridged endpoint.
+		ParentEndpointID:    1,
+		HasParentEndpointID: true,
+	}, nil
 }
 
 // ButtonGroupDPKey is the synthetic dp_key persisted for the

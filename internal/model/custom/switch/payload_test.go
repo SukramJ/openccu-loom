@@ -214,26 +214,6 @@ func TestRegisterSwitchServicesRegisteredTurnOnFor(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AttachPowerEnergySources — nil-safe smoke test
-// ---------------------------------------------------------------------------
-
-func TestAttachPowerEnergySourcesNilDevice(t *testing.T) {
-	// Must not panic.
-	AttachPowerEnergySources(nil)
-}
-
-// ---------------------------------------------------------------------------
-// findSiblingMeasurementSources — empty channels returns nil
-// ---------------------------------------------------------------------------
-
-func TestFindSiblingMeasurementSourcesEmptyChannels(t *testing.T) {
-	pwr, eng := findSiblingMeasurementSources(nil)
-	if pwr != nil || eng != nil {
-		t.Fatalf("expected nil for empty channels, got pwr=%v eng=%v", pwr, eng)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // topology.go — HAComponent and TopicSlot
 // ---------------------------------------------------------------------------
 

@@ -63,8 +63,6 @@ func TestParityMatterJS_ClimateClusterRevisions(t *testing.T) {
 	}{
 		{matterClusterThermostat, "Thermostat", matterThermClusterRevision},
 		{matterClusterThermostatUI, "ThermostatUserInterfaceConfiguration", matterThermUIClusterRevision},
-		{matterClusterTemperatureMeasurement, "TemperatureMeasurement", matterTempMeasClusterRevision},
-		{matterClusterRelativeHumidityMeasurement, "RelativeHumidityMeasurement", matterHumidityClusterRevision},
 	}
 
 	for _, c := range cases {
@@ -268,70 +266,6 @@ func TestParityMatterJS_ThermostatUIMandatoryAttributeIDs(t *testing.T) {
 			_, ok := server.MatterRead(a.id)
 			if !ok {
 				t.Errorf("mandatory attribute %s (0x%04X) not handled in MatterRead()", a.name, a.id)
-			}
-		})
-	}
-}
-
-// TestParityMatterJS_ClimateMeasurementServersMatchStandaloneMandatorySet
-// verifies that the climate-derived TemperatureMeasurement (0x0402) and
-// RelativeHumidityMeasurement (0x0405) projections advertise the same
-// conformance-"M" attribute set as the standalone
-// internal/north/matter/cluster/measurement servers — MeasuredValue,
-// MinMeasuredValue and MaxMeasuredValue (matter.js packages/model/src/
-// standard/elements/temperature-measurement.element.ts:15-26 and
-// relative-humidity-measurement.element.ts:15-26). A controller that reads
-// MinMeasuredValue/MaxMeasuredValue on a bridged climate endpoint must not
-// get UnsupportedAttribute where a standalone sensor endpoint on the same
-// bridge answers it.
-func TestParityMatterJS_ClimateMeasurementServersMatchStandaloneMandatorySet(t *testing.T) {
-	t.Parallel()
-
-	mandatoryMeasurementAttrs := []struct {
-		id   uint32
-		name string
-	}{
-		{matterAttrMeasuredValue, "MeasuredValue"},
-		{matterAttrMinMeasuredValue, "MinMeasuredValue"},
-		{matterAttrMaxMeasuredValue, "MaxMeasuredValue"},
-	}
-
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-
-	servers := []struct {
-		name   string
-		server interface {
-			interfaces.MatterClusterServer
-			interfaces.MatterClusterAttributeLister
-		}
-	}{
-		{"TemperatureMeasurement", climateTempMeasServer{c: r.climate}},
-		{"RelativeHumidityMeasurement", climateHumidityServer{c: r.climate}},
-	}
-
-	for _, sc := range servers {
-		t.Run(sc.name, func(t *testing.T) {
-			t.Parallel()
-
-			attrList := sc.server.MatterAttributes()
-			attrSet := make(map[uint32]bool, len(attrList))
-			for _, id := range attrList {
-				attrSet[id] = true
-			}
-
-			for _, a := range mandatoryMeasurementAttrs {
-				t.Run(a.name, func(t *testing.T) {
-					t.Parallel()
-
-					if !attrSet[a.id] {
-						t.Errorf("mandatory attribute %s (0x%04X) missing from MatterAttributes()", a.name, a.id)
-					}
-
-					_, ok := sc.server.MatterRead(a.id)
-					if !ok {
-						t.Errorf("mandatory attribute %s (0x%04X) not handled in MatterRead()", a.name, a.id)
-					}
-				})
 			}
 		})
 	}

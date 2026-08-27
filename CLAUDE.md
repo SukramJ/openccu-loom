@@ -196,6 +196,29 @@ have produced had the claim been false. If you cannot name that result, or the
 check cannot produce it, the finding is **unverified** — say so in those words.
 It is a legitimate outcome; a false "verified" is not.
 
+And the limit of that rule: **a negative control validates the mechanism,
+never the inputs.** It proves the check reacts when the cause is absent — but
+it runs on the same input data, so a check fed a guessed value confirms its
+own wrong answer with a green control behind it.
+
+So when a check needs a value the source does not explicitly carry — a bit
+position, a unit, an ordinal, a sort order, an ID mapping — there are two
+honest moves: extend the source until it carries the value, or report the
+measurement as **not performable** and name what is missing. Substituting a
+plausible convention is guessing, however clean the rest of the check is.
+
+The tell is a comment asserting a property of a data source ("X is in Y
+order", "the first entry is the primary"). If that property was not read from
+the source, the check does not get built yet.
+
+Case: a FeatureMap conformance check derived each feature's bit from its index
+in the extracted schema list. Feature bits are sparse — DoorLock skips 3 and 9
+— so every feature past the first gap was mislabelled, and the check reported
+three confident violations against correct code. The snapshot did not carry
+the bit positions (`constraint` in the matter.js element); extracting them
+first was the only sound path. Nothing about the check looked wrong, and its
+negative control was green.
+
 And the twin rule: **an event nobody consumes is a dead feature that looks
 identical to a live one** — both the type-switch that silently `default:`s and
 the event with no subscriber at all. A comment naming a consumer is a

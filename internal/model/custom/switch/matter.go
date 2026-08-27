@@ -7,9 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -86,64 +84,22 @@ var (
 func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInUnit }
 
 // MatterClusterServers implements [interfaces.MatterEndpointSource].
-// Switch contributes OnOff (the Switch itself) plus the Groups +
-// ScenesManagement stubs that are mandatory on the
-// OnOffPlugInUnit (0x010A) device-type per matter.js
-// packages/model/src/standard/elements/on-off-plug-in-unit.element.ts.
-// Energy-aware variants (HmIP-PSM and similar) additionally
-// contribute ElectricalPowerMeasurement (0x0090) and
-// ElectricalEnergyMeasurement (0x0091) host-clusters when the
-// channel exposes a POWER / ENERGY_COUNTER sensor — wired through
-// the [Switch.attachedPowerSource] / [Switch.attachedEnergySource]
-// hooks the ingest pipeline populates right after materialising the
-// device's custom data points.
+// Switch contributes OnOff plus the Groups + ScenesManagement clusters
+// the Device Library makes mandatory for OnOffPlugInUnit (0x010A).
+//
+// Electrical measurement is deliberately absent. ElectricalPowerMeasurement
+// (0x0090) and ElectricalEnergyMeasurement (0x0091) used to be attached here
+// from sibling channels, but the Device Library specifies neither for 0x010A
+// in any role — its carrier is ElectricalSensor (0x0510), which also makes
+// PowerTopology mandatory alongside them. The metering channel now projects
+// its own consolidated ElectricalSensor endpoint; see
+// endpoint.ElectricalGroupDPKey.
 func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
-	servers := []interfaces.MatterClusterServer{
+	return []interfaces.MatterClusterServer{
 		s,
 		wire.Groups{},
 		wire.ScenesManagement{},
 	}
-	if src := s.attachedPowerSource.Load(); src != nil {
-		servers = append(servers, measurement.NewElectricalPowerServer(*src))
-	}
-	if src := s.attachedEnergySource.Load(); src != nil {
-		servers = append(servers, measurement.NewElectricalEnergyServer(*src))
-	}
-	return servers
-}
-
-// AttachPowerSource binds an [interfaces.MatterFloatMeasurementSource]
-// (typically the Switch channel's POWER generic.Sensor) so the
-// Matter projection includes ElectricalPowerMeasurement on the
-// Switch endpoint. Calling with nil clears the attachment.
-//
-// The write is atomic because the caller runs after the custom data
-// point is already published on its channel, and therefore reachable by
-// the Matter assembler on another goroutine — the model layer attaches
-// the sources one pipeline stage later, not at construction.
-func (s *Switch) AttachPowerSource(src interfaces.MatterFloatMeasurementSource) {
-	storeMeasurementSource(&s.attachedPowerSource, src)
-}
-
-// AttachEnergySource binds the ENERGY_COUNTER source — projects to
-// ElectricalEnergyMeasurement (0x0091).
-func (s *Switch) AttachEnergySource(src interfaces.MatterFloatMeasurementSource) {
-	storeMeasurementSource(&s.attachedEnergySource, src)
-}
-
-// storeMeasurementSource publishes src into slot, clearing it for a nil
-// source. The extra indirection is what makes the interface value
-// storable in an [atomic.Pointer].
-func storeMeasurementSource(
-	slot *atomic.Pointer[interfaces.MatterFloatMeasurementSource],
-	src interfaces.MatterFloatMeasurementSource,
-) {
-	if src == nil {
-		slot.Store(nil)
-
-		return
-	}
-	slot.Store(&src)
 }
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
