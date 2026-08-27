@@ -527,7 +527,9 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 // every reconnect (our listDevices reply is deliberately empty) no-ops.
 // HandleNewDevices — and with it the DeviceCreatedEvent — runs after the
 // ingest so north-bound subscribers (MQTT discovery, Matter reassembly)
-// resolve the device in the model when the event fires.
+// resolve the device in the model when the event fires. It dedups against
+// the device registry on the same grounds, so the re-announcement passes
+// through it without emitting an event per device.
 func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, descs xmlrpc.ArrayValue) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.new_devices",

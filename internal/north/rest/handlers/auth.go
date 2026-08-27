@@ -257,6 +257,19 @@ type meResponse struct {
 	Subject string `json:"subject"`
 	Role    string `json:"role"`
 	Scheme  string `json:"scheme,omitempty"`
+	// ExpiresAt is the instant the credential behind this identity stops
+	// being accepted. A pointer rather than a bare time so "no
+	// server-side expiry" omits the field entirely: a zero time.Time
+	// marshals to 0001-01-01, which every client reads as long expired.
+	//
+	// A request-scoped caller never needs it, but a long-lived one does.
+	// A WebSocket captures its identity at the upgrade and is closed by
+	// [ws.client.watchCredentialExpiry] the moment the deadline passes;
+	// without this field the client cannot know when that happens and
+	// every rotation has to be discovered through the resulting 401,
+	// even though the in-band {op:"reauth"} frame could have refilled
+	// the credential before it died.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // Login authenticates the supplied credentials against the user store
@@ -296,10 +309,17 @@ func Login(d *AuthDeps) http.HandlerFunc {
 			return
 		}
 		auth.WriteSessionCookie(w, sess, d.Secure)
+		// Report the deadline of the session just issued, not the one on
+		// the identity the user store returned: AuthenticateBasic resolves
+		// a credential, it does not mint one, so its identity carries no
+		// deadline. Omitting the field here would tell a client that the
+		// session it just received never expires.
+		exp := sess.Expires.UTC()
 		JSON(w, http.StatusOK, meResponse{
-			Subject: id.Subject,
-			Role:    string(id.Role),
-			Scheme:  string(id.Scheme),
+			Subject:   id.Subject,
+			Role:      string(id.Role),
+			Scheme:    string(id.Scheme),
+			ExpiresAt: &exp,
 		})
 	}
 }
@@ -348,10 +368,15 @@ func Me() http.HandlerFunc {
 				problem.New(problem.TypeUnauthorized, r, "Not authenticated", "no active session"))
 			return
 		}
-		JSON(w, http.StatusOK, meResponse{
+		resp := meResponse{
 			Subject: id.Subject,
 			Role:    string(id.Role),
 			Scheme:  string(id.Scheme),
-		})
+		}
+		if !id.ExpiresAt.IsZero() {
+			exp := id.ExpiresAt.UTC()
+			resp.ExpiresAt = &exp
+		}
+		JSON(w, http.StatusOK, resp)
 	}
 }

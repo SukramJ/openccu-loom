@@ -2979,6 +2979,9 @@ const EN: Catalog = {
     "CCU temporarily unavailable. Try again in a few seconds.",
   "api.error.unauthorized": "Session expired. Please sign in again.",
   "auth.error.invalid_credentials": "Invalid username or password.",
+  "auth.session_expiring":
+    "Your session ends in {minutes} min. Finish what you are editing and sign in again — activity does not extend it.",
+  "auth.sign_in_again": "Sign in again",
   "api.error.forbidden": "You are not authorised for this action.",
   "api.error.not_found": "Resource not found.",
   "api.error.rate_limited": "Too many requests — slowing down.",
@@ -6897,6 +6900,9 @@ const DE: Catalog = {
     "CCU vorübergehend nicht erreichbar. In wenigen Sekunden erneut versuchen.",
   "api.error.unauthorized": "Sitzung abgelaufen. Bitte erneut anmelden.",
   "auth.error.invalid_credentials": "Ungültige Anmeldedaten.",
+  "auth.session_expiring":
+    "Deine Sitzung endet in {minutes} Min. Schließe ab, was du gerade bearbeitest, und melde dich neu an — Aktivität verlängert sie nicht.",
+  "auth.sign_in_again": "Neu anmelden",
   "api.error.forbidden": "Für diese Aktion fehlt die Berechtigung.",
   "api.error.not_found": "Ressource nicht gefunden.",
   "api.error.rate_limited": "Zu viele Anfragen — Geschwindigkeit gedrosselt.",

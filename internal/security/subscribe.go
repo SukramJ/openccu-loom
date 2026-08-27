@@ -70,15 +70,15 @@ func (s *Service) attachUnit(u *central.Unit) {
 			s.log.Error("security: rebuild index", "central", name, "error", err)
 		}
 	}
-	// The hot-plug events arrive in bursts, not singly: the CCU
-	// re-announces its whole inventory on every reconnect, so one
-	// reconnect publishes a DeviceCreatedEvent per device, back to back,
-	// on the bus dispatch goroutine. RebuildIndex is a whole-fleet pass
-	// — three store round trips plus every device × channel × data point
-	// of every central, ending in a state publish the MQTT plane
-	// reconciles against — so rebuilding per event turns a reconnect
-	// into N of them and stalls the event pipeline for the duration.
-	// Coalesce the burst into one rebuild once the announcements settle.
+	// The hot-plug events can still arrive in a burst — an operator
+	// accepting a batch out of the deferred-creation inbox, or a CCU
+	// whose whole inventory really is new to this daemon — and they are
+	// dispatched back to back on the bus goroutine. RebuildIndex is a
+	// whole-fleet pass — three store round trips plus every device ×
+	// channel × data point of every central, ending in a state publish
+	// the MQTT plane reconciles against — so rebuilding per event turns
+	// one batch into N of them and stalls the event pipeline for the
+	// duration. Coalesce into one rebuild once the announcements settle.
 	debounce := newRebuildDebouncer(indexRebuildDebounce, func() {
 		if u.IsSouthboundReady() {
 			rebuild()

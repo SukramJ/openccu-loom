@@ -106,6 +106,17 @@ export type Identity = {
   subject: string;
   role: string;
   scheme?: string;
+  /**
+   * RFC3339 instant at which this credential stops being accepted, in UTC.
+   * Absent when it has no server-side expiry — a Basic identity, the HA
+   * Ingress passthrough, or an unbounded bearer token.
+   *
+   * A session is an absolute 12h window that activity does NOT extend, and
+   * the daemon closes the WebSocket the moment it lapses. Without the
+   * deadline the SPA learns of it only from the next failed request, which
+   * lands as a bounce to the login screen mid-task.
+   */
+  expires_at?: string;
 };
 
 /**

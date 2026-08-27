@@ -1,5 +1,5 @@
 {
- "version": "1.2",
+ "version": "1.3",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -21,6 +21,10 @@
   "read_timeout_seconds": 60,
   "echo": "Opaque token on every server `ping`. A client that copies it verbatim into its `pong` (`{\"op\":\"pong\",\"echo\":\"<token>\"}`) lets the daemon time the round-trip against its own clock alone; the two ends need no clock agreement. Echoing is OPTIONAL \u2014 a bare `{\"op\":\"pong\"}` is still a valid heartbeat, it just cannot be timed. Never parse the token; its encoding is not part of this contract.",
   "rtt_ms": "Round-trip time in milliseconds of the PREVIOUS heartbeat on this connection, carried on the next `ping`. Lets a client display its own latency to the daemon without measuring anything itself. Absent on the first ping and whenever the preceding pong carried no echo. This is the client\u2192daemon distance only \u2014 it says nothing about the daemon\u2192CCU path, which the `connection_latency_ms` hub metric reports separately."
+ },
+ "reauth": {
+  "description": "Client → server: `{op:\"reauth\", token:\"<bearer token>\"}` swaps the credential behind an established connection without a reconnect. A socket resolves its identity once, at the upgrade, and the daemon closes it the instant that credential's deadline passes — so a long-lived client must refill before the deadline rather than discover the rotation through a 401. On success the daemon answers `{op:\"reauth_ok\"}`, carrying `expires_at` (RFC3339, UTC) when the new credential has a server-side deadline and omitting it when it has none. On failure — no token store wired, empty token, unknown or expired token — it answers `{op:\"reauth_failed\"}` and closes the connection; the client reconnects with fresh credentials. The same deadline is readable over REST as the `expires_at` field of GET /auth/me.",
+  "expires_at": "string? — RFC3339 UTC instant at which the newly installed credential stops being accepted. Absent means no server-side expiry."
  },
  "subscription_ack": {
   "description": "After a `{op:\"subscribe\", topics:[...]}` or `{op:\"unsubscribe\", topics:[...]}` is processed, the daemon echoes one `{op:\"subscribed\"|\"unsubscribed\", topics:[...]}` frame carrying the topics the client just requested. Reconnect-after-failure logic can use this ACK to confirm the subscription set survived the round trip without needing to inspect daemon-side state. An empty topics array suppresses the ACK to keep no-op subscribes quiet."
@@ -376,7 +380,7 @@
   },
   {
    "category": "devices",
-   "description": "Server-pushed: a new device was observed in the registry (added via CCU pairing, cache reload, or initial-snapshot import).",
+   "description": "Server-pushed: a device the daemon did not know before was observed in the registry. Not sent for the full-inventory announcement the CCU repeats after every reconnect — only an address the device registry does not already hold is announced, so a client may treat this frame as a genuine arrival rather than filtering the fleet out of it. The `source` field says which kind: NEW is a pairing, REFRESH a factory-reset re-pair (the device kept its address but rebuilt its channels), MANUAL an operator accepting a device out of the deferred-creation inbox, CACHE a device restored from the persisted description cache at boot.",
    "kind": "broadcast",
    "name": "device.created",
    "topic": "device.{address}.lifecycle",
