@@ -36,9 +36,9 @@ type OTASoftwareUpdateRequestor struct{}
 // — a different cluster — and would silently collide if a Provider
 // surface is ever added. The latency in this fix is harmless because
 // we never list 0x0029 in any endpoint's ServerList today
-// (`daemon.go::buildRootClusters` does not mount this cluster); the
-// constant is read only by the parity-snapshot test which now
-// resolves the correct Requestor entry.
+// (`cmd/openccu-loom/daemon_matter.go::buildRootClusters` does not mount
+// this cluster); the constant is read only by the parity-snapshot test
+// which now resolves the correct Requestor entry.
 const (
 	otaRequestorClusterID       uint32 = 0x002A
 	otaRequestorClusterRevision uint16 = 1
