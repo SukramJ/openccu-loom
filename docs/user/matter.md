@@ -106,11 +106,20 @@ OpenCCU-Loom maps Homematic devices to these Matter device types. Anything it ca
 
 Measuring devices — a switch-measuring plug such as the HmIP-PSM, for
 example — also surface their electrical readings to Matter. Instantaneous
-power, voltage, and current appear via the **Electrical Power Measurement**
-cluster and cumulative consumption via the **Electrical Energy Measurement**
-cluster, both attached to the device's parent endpoint. Ecosystem apps that
-understand these clusters (for example the energy screens in newer Apple Home
-and Google Home builds) show the live and accumulated values there.
+power, voltage, current and frequency appear via the **Electrical Power
+Measurement** cluster and cumulative consumption via the **Electrical Energy
+Measurement** cluster. Both sit on a separate **Electrical Sensor** endpoint
+alongside the plug's switch endpoint, which is where the Matter Device Library
+specifies them; ecosystem apps that understand these clusters (for example the
+energy screens in newer Apple Home and Google Home builds) show the live and
+accumulated values there.
+
+!!! note "Metering plugs re-learn once after updating"
+    These clusters previously sat on the plug's switch endpoint, which the
+    Device Library does not specify for that device type — Alexa in particular
+    recognises a bridged endpoint only by the clusters its device type names.
+    After updating, a paired metering plug gains a second accessory carrying
+    the readings. This is a one-time step.
 
 ### Buttons / momentary switches
 
@@ -124,6 +133,13 @@ your ecosystem can distinguish short-tap, hold, and double-tap automations.
     exposed. After updating, a paired button device may appear with new
     endpoints; re-create any automations that targeted the old ones. This is
     a one-time step.
+
+### Battery level
+
+Battery-powered devices report their level through the **Power Source**
+cluster, which rides on the device's own accessory rather than appearing as a
+separate one. A device has one battery, so exactly one of its endpoints
+carries the cluster.
 
 ## Choosing which devices are exposed
 
@@ -147,7 +163,7 @@ Matter controllers do not implement the specification uniformly — each ecosyst
 - A device must be mappable to a supported Matter type before it can be exposed.
 - The default test vendor identity means ecosystems may treat the bridge as uncertified (see the warning above).
 
-For the technical contract behind the Matter mapping, see [`docs/matter-parity-contract.md`](../matter-parity-contract.md).
+For the technical contract behind the Matter mapping, see [`docs/matter-parity-contract.md`](../matter-parity-contract.md); the per-ecosystem findings behind the caveats above are collected in [Matter Ecosystem Observations](../developer/matter-ecosystem-observations.md).
 
 ## Where to go next
 

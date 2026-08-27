@@ -3,7 +3,9 @@
 !!! info "Who this page is for"
     Contributors and AI agents working on the Matter bridge. End users
     and administrators do not need this page — see [Matter](user/matter.md)
-    for the operator-facing guide.
+    for the operator-facing guide. What the ecosystems themselves do with the
+    result is collected in
+    [Matter Ecosystem Observations](developer/matter-ecosystem-observations.md).
 
 OpenCCU-Loom's Matter side is a deliberate, behaviour-level port of
 [matter.js](https://github.com/project-chip/matter.js) HEAD. This page
