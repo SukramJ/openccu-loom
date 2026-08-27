@@ -657,6 +657,11 @@ func (p *DevicePipeline) IngestFromBackend(
 		// as a device that simply vanished after a restart.
 		PublishPendingDevices(p.unit)
 	}
+	// Devices restored into the wizard's middle state are on no other
+	// surface: they are materialised, so nothing announces them as new,
+	// and withheld, so no ecosystem shows them. Without this a restart
+	// leaves them configurable but unfindable.
+	PublishAwaitingRelease(p.unit)
 	// After live ListDevices, also materialise any devices whose descriptions
 	// were already in the registry (from a previous run's persisted cache) but
 	// whose Device objects were not yet created — covers the warm-start path

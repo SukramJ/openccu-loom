@@ -37,6 +37,7 @@
   let centralFilter = $state(loadLS("inbox:central"));
   $effect(() => saveLS("inbox:central", centralFilter));
   let accepting = $state<string | null>(null);
+  let releasing = $state<string | null>(null);
 
   // Teach-in scope: install mode on the CCU is per-interface only, so the
   // operator always pairs on a specific radio (BidCos-RF / HmIP-RF, …) —
@@ -271,6 +272,11 @@
   }
 
   function isReplaceable(d: InboxDevice): boolean {
+    // Replace swaps a device that is WAITING to be taken into service for
+    // an existing one. An entry awaiting release has already been taken
+    // into service — it is materialised and configured — so the action
+    // does not apply and offering it would only confuse the last step.
+    if (d.awaiting_release) return false;
     // The CCU exposes replaceDevice on BidCos only; HmIP throws
     // NotImplementedException, so hide the action there (the server
     // still enforces it). An unknown interface stays hidden.
@@ -504,6 +510,29 @@
     } finally {
       acceptSubmitting = false;
       accepting = null;
+    }
+  }
+
+  // The wizard's last step. An entry flagged awaiting_release is already
+  // accepted and materialised — it has been named and placed by now — and
+  // only this call publishes it to Home Assistant, Matter and any
+  // webhook.
+  async function releaseDevice(address: string, central: string) {
+    releasing = address;
+    try {
+      await api.releaseDevice(address, central);
+      toastStore.success(t("inbox.released", { name: address }));
+      await load();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError
+          ? `${err.status}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
+    } finally {
+      releasing = null;
     }
   }
 
@@ -756,7 +785,14 @@
             {#if centrals.length > 1 && d.central}
               <Badge variant="muted">{d.central}</Badge>
             {/if}
-            {#if d.pending_creation}
+            {#if d.awaiting_release}
+              <!-- Already accepted and materialised: it can be renamed and
+                   placed right now, and only the release publishes it to
+                   Home Assistant, Matter and any webhook. -->
+              <Badge variant="success" title={t("inbox.awaiting_release_hint")}>
+                {t("inbox.awaiting_release_badge")}
+              </Badge>
+            {:else if d.pending_creation}
               <!-- The daemon parked this device (delay_new_device_creation):
                    it has no data points here until it is accepted. -->
               <Badge variant="warning" title={t("inbox.pending_creation_hint")}>
@@ -781,14 +817,36 @@
               <span class="text-slate-400 dark:text-slate-500">—</span>
             {/if}
           {:else if col.key === "actions"}
-            <Button
-              type="button"
-              size="sm"
-              onclick={() => openAccept(d.address, d.central ?? "")}
-              disabled={accepting === d.address}
-            >
-              {accepting === d.address ? "…" : t("inbox.accept")}
-            </Button>
+            {#if d.awaiting_release}
+              <!-- Offering "accept" here would ask the operator to accept a
+                   device that is already accepted. The remaining step is
+                   publishing it. -->
+              <Button
+                type="button"
+                size="sm"
+                onclick={() => void releaseDevice(d.address, d.central ?? "")}
+                disabled={releasing === d.address}
+              >
+                {releasing === d.address ? "…" : t("inbox.release")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => (location.hash = `#/device/${encodeURIComponent(d.address)}`)}
+              >
+                {t("inbox.configure")}
+              </Button>
+            {:else}
+              <Button
+                type="button"
+                size="sm"
+                onclick={() => openAccept(d.address, d.central ?? "")}
+                disabled={accepting === d.address}
+              >
+                {accepting === d.address ? "…" : t("inbox.accept")}
+              </Button>
+            {/if}
             {#if isReplaceable(d)}
               <Button
                 type="button"

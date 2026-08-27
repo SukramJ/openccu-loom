@@ -42,6 +42,42 @@ func PublishPendingDevices(u *central.Unit) {
 	u.HubModel.Inbox.SetPendingCreation(out)
 }
 
+// PublishAwaitingRelease mirrors the devices that are materialised but
+// still withheld from the ecosystems onto the hub's inbox aggregate.
+//
+// They belong on that surface for the same reason the deferred queue
+// does: both mean "this is waiting for you". They carry a different flag
+// because the ask is different — a parked device needs a decision about
+// whether it exists at all, this one needs its last configuration step
+// and a release.
+func PublishAwaitingRelease(u *central.Unit) {
+	if u == nil || u.HubModel == nil || u.Devices == nil || u.ModelRegistry == nil {
+		return
+	}
+	var out []hub.InboxDevice
+	seen := map[string]struct{}{}
+	for _, d := range u.ModelRegistry.List() {
+		if d == nil {
+			continue
+		}
+		if u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(d.InterfaceID), d.Address) {
+			continue
+		}
+		if _, dup := seen[d.Address]; dup {
+			continue
+		}
+		seen[d.Address] = struct{}{}
+		out = append(out, hub.InboxDevice{
+			Address:         d.Address,
+			Name:            d.Name(),
+			Model:           d.Model,
+			Interface:       string(BareInterfaceFromWireID(u.Name(), d.InterfaceID)),
+			AwaitingRelease: true,
+		})
+	}
+	u.HubModel.Inbox.SetAwaitingRelease(out)
+}
+
 // AcceptPendingDevice materialises a device an operator accepted out of
 // the deferred-creation queue and reports whether the queue held it.
 // The descriptions run through the same materialiser the immediate
@@ -73,6 +109,10 @@ func AcceptPendingDevice(ctx context.Context, u *central.Unit, address string) (
 	// keeps.
 	u.Devices.HandleAcceptedDevices(iface, descs)
 	PublishPendingDevices(u)
+	// The accept moved it from "decide whether this exists" to "configure
+	// it and publish it". Without this the device leaves the inbox
+	// surface entirely and the operator has no way back to the last step.
+	PublishAwaitingRelease(u)
 	return true, nil
 }
 
@@ -103,6 +143,7 @@ func ReleaseDevice(ctx context.Context, u *central.Unit, address string) bool {
 		InterfaceID: d.InterfaceID,
 		Address:     address,
 	})
+	PublishAwaitingRelease(u)
 	return true
 }
 

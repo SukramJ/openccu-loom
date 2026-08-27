@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.16.0
+  version: 7.17.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -12605,6 +12605,22 @@ components:
         serial: { type: string }
         manufacturer: { type: string }
         first_seen: { type: integer, format: int64 }
+        awaiting_release:
+          type: boolean
+          description: |
+            True when the device is already accepted and fully
+            materialised — it has its CCU ise_id, its channels and its
+            data points, and it can be renamed and assigned rooms right
+            now — but is still withheld from the ecosystems (MQTT and
+            therefore Home Assistant, the Matter bridge, outbound
+            webhooks) until the operator finishes onboarding it with
+            POST /devices/{addr}/release.
+
+            This is the onboarding wizard's middle state and a different
+            ask than `pending_creation`: that one means "decide whether
+            this device exists", this one means "configure it, then
+            publish it". A client must not offer an accept action for an
+            entry flagged here — it is already accepted.
         pending_creation:
           type: boolean
           description: |

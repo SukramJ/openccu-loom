@@ -11,6 +11,9 @@
 - Only devices you pair from now on go through this, and only with "delay
   new device creation" switched on. Everything already in your setup stays
   exactly as it is.
+- The web UI walks you through it: the device shows up in the inbox, you
+  confirm it with a name, give it a room, and press Release when you are
+  done. Until then it is yours to configure and nobody else's to see.
 
 - "Delay new device creation" now actually holds devices back. Until now a
   device you had not accepted reappeared — fully set up — after the next

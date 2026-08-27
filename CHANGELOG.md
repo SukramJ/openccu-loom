@@ -36,6 +36,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   released, so an existing installation publishes exactly what it published
   before and nothing disappears from Home Assistant on upgrade.
 
+- **The Config UI drives the wizard.** A device between the accept and the
+  release appears on the inbox surface with its own badge and its own action:
+  *Release* instead of *Accept*, plus a shortcut into the device view to finish
+  naming and placing it. Offering "accept" there would ask the operator to
+  accept a device that is already accepted, so the two states never show the
+  same controls, and *Replace* — which swaps a device not yet in service — is
+  hidden for it.
+
+  The German label for the first state moved from *Wartet auf Freigabe* to
+  *Wartet auf Übernahme* in the process: with a real release step the old
+  wording named the wrong one of the two.
+
 ### Changed
 
 ### Changed

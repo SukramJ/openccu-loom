@@ -10,6 +10,7 @@ const mockListInbox = vi.fn();
 const mockListRooms = vi.fn();
 const mockListFunctions = vi.fn();
 const mockAcceptInboxDevice = vi.fn();
+const mockReleaseDevice = vi.fn();
 const mockListReplaceCandidates = vi.fn();
 const mockReplaceDevice = vi.fn();
 const mockSearchWiredDevices = vi.fn();
@@ -32,6 +33,7 @@ vi.mock("$lib/api/client", () => ({
     listRooms: (...args: unknown[]) => mockListRooms(...args),
     listFunctions: (...args: unknown[]) => mockListFunctions(...args),
     acceptInboxDevice: (...args: unknown[]) => mockAcceptInboxDevice(...args),
+    releaseDevice: (...args: unknown[]) => mockReleaseDevice(...args),
     listReplaceCandidates: (...args: unknown[]) => mockListReplaceCandidates(...args),
     replaceDevice: (...args: unknown[]) => mockReplaceDevice(...args),
     searchWiredDevices: (...args: unknown[]) => mockSearchWiredDevices(...args),
@@ -134,6 +136,7 @@ beforeEach(() => {
   mockListRooms.mockResolvedValue([{ name: "Kitchen" }, { name: "Living Room" }]);
   mockListFunctions.mockResolvedValue([{ name: "Lights" }, { name: "Heating" }]);
   mockAcceptInboxDevice.mockResolvedValue(undefined);
+  mockReleaseDevice.mockResolvedValue(undefined);
   mockGetGroups.mockResolvedValue([]);
   mockGroupSuitable.mockResolvedValue({ assignable: [], leftover: [] });
   mockUpdateGroup.mockResolvedValue(undefined);
@@ -647,5 +650,85 @@ describe("Inbox — accept dialog keyboard handling", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The onboarding wizard's last step.
+//
+// A device flagged awaiting_release is ALREADY accepted and materialised: it
+// has its channels and data points here and can be named and placed. What is
+// left is publishing it to the ecosystems. Offering "accept" for it would ask
+// the operator to accept a device that is already accepted, and the two states
+// must not read the same — which is why the German label for the pending state
+// moved from "Wartet auf Freigabe" to "Wartet auf Übernahme" in this change.
+// ---------------------------------------------------------------------------
+
+describe("Inbox — awaiting release", () => {
+  const AWAITING = [
+    {
+      address: "000ABCDE",
+      model: "HmIP-STH",
+      central: "",
+      interface: "HmIP-RF",
+      awaiting_release: true,
+    },
+  ];
+
+  it("marks a device that is accepted but not yet published", async () => {
+    mockListInbox.mockResolvedValue(AWAITING);
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.awaiting_release_badge")).toBeInTheDocument();
+    });
+    // The pending badge must NOT appear too: the two states are different
+    // asks, and showing both would tell the operator to accept a device
+    // that is already accepted.
+    expect(screen.queryByText("inbox.pending_creation_badge")).toBeNull();
+  });
+
+  it("offers release instead of accept", async () => {
+    mockListInbox.mockResolvedValue(AWAITING);
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.release")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("inbox.accept")).toBeNull();
+  });
+
+  it("releases through the release endpoint, not the accept one", async () => {
+    mockListInbox.mockResolvedValue(AWAITING);
+    render(Inbox);
+    await waitFor(() => expect(screen.getByText("inbox.release")).toBeInTheDocument());
+
+    await fireEvent.click(screen.getByText("inbox.release"));
+
+    await waitFor(() => {
+      expect(mockReleaseDevice).toHaveBeenCalledWith("000ABCDE", "");
+    });
+    expect(mockAcceptInboxDevice).not.toHaveBeenCalled();
+    expect(mockToastSuccess).toHaveBeenCalled();
+  });
+
+  it("surfaces a failed release instead of swallowing it", async () => {
+    mockListInbox.mockResolvedValue(AWAITING);
+    mockReleaseDevice.mockRejectedValueOnce(new Error("upstream down"));
+    render(Inbox);
+    await waitFor(() => expect(screen.getByText("inbox.release")).toBeInTheDocument());
+
+    await fireEvent.click(screen.getByText("inbox.release"));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  // Negative control for the whole block: a plain CCU inbox entry keeps the
+  // accept action and gains no release button. Without this the tests above
+  // would pass on a view that showed "release" for everything.
+  it("leaves a plain inbox entry on the accept path", async () => {
+    render(Inbox);
+    await waitFor(() => expect(screen.getByText("inbox.accept")).toBeInTheDocument());
+    expect(screen.queryByText("inbox.release")).toBeNull();
+    expect(screen.queryByText("inbox.awaiting_release_badge")).toBeNull();
   });
 });
