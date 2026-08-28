@@ -5789,6 +5789,34 @@ export interface components {
              */
             has_sub_devices: boolean;
             rx_mode?: components["schemas"]["RxMode"];
+            firmware: components["schemas"]["DeviceFirmware"];
+            availability: components["schemas"]["DeviceAvailability"];
+        };
+        /**
+         * @description Installed / available firmware pair for the device. Served on every
+         *     summary row, not only on the detail response: the values come from
+         *     the in-memory model, so a client bootstrapping N devices reads them
+         *     from the list instead of issuing N detail requests.
+         */
+        DeviceFirmware: {
+            Current?: string;
+            Available?: string;
+            Updatable?: boolean;
+            UpdateState?: string;
+        };
+        /**
+         * @description Reachability, battery and signal snapshot for the device. Served on
+         *     every summary row for the same reason as `firmware`. The three
+         *     nullable members are null when the device has no such indicator —
+         *     never 0 or false, which would read as a real measurement.
+         */
+        DeviceAvailability: {
+            IsReachable?: boolean;
+            /** Format: date-time */
+            LastUpdated?: string;
+            BatteryLevel?: number | null;
+            LowBattery?: boolean | null;
+            SignalStrength?: number | null;
         };
         /**
          * @description Named flags decoded from the device's CCU RX_MODE bitmask. The
@@ -5816,21 +5844,17 @@ export interface components {
             per_page: number;
             total: number;
         };
+        /**
+         * @description A device summary plus its channel list. `firmware` and `availability`
+         *     come from the embedded summary — they moved there in APIVersion
+         *     7.23.0 and are unchanged on this response, same keys, same place.
+         *     `channels` is the only member the summary does not carry, and a
+         *     client that walks the nested snapshot already has it, so a bootstrap
+         *     no longer needs this endpoint per device.
+         */
         DeviceDetail: components["schemas"]["DeviceSummary"] & {
-            firmware: {
-                Current?: string;
-                Available?: string;
-                Updatable?: boolean;
-                UpdateState?: string;
-            };
-            availability: {
-                IsReachable?: boolean;
-                /** Format: date-time */
-                LastUpdated?: string;
-                BatteryLevel?: number | null;
-                LowBattery?: boolean | null;
-                SignalStrength?: number | null;
-            };
+            firmware: components["schemas"]["DeviceFirmware"];
+            availability: components["schemas"]["DeviceAvailability"];
             channels: components["schemas"]["ChannelSummary"][];
         };
         /** @description Operator per-channel overrides (G12). */

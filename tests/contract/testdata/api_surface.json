@@ -1,5 +1,5 @@
 {
- "api_version": "7.22.0",
+ "api_version": "7.23.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -949,6 +949,13 @@
   "DetermineParameterResponse": [
    "value:unknown"
   ],
+  "DeviceAvailability": [
+   "BatteryLevel:integer|null",
+   "IsReachable:boolean",
+   "LastUpdated:string",
+   "LowBattery:boolean|null",
+   "SignalStrength:integer|null"
+  ],
   "DeviceAvailabilityChangedPayload": [
    "available:boolean",
    "central:string",
@@ -964,6 +971,12 @@
    "source:string"
   ],
   "DeviceDetail": [],
+  "DeviceFirmware": [
+   "Available:string",
+   "Current:string",
+   "Updatable:boolean",
+   "UpdateState:string"
+  ],
   "DeviceInstallModeRequest": [
    "seconds:integer"
   ],
@@ -990,11 +1003,13 @@
   ],
   "DeviceSummary": [
    "address:string",
+   "availability:$ref:DeviceAvailability",
    "available:boolean",
    "central:string",
    "channels_count:integer",
    "communication_test_supported:boolean",
    "config_restore_supported:boolean",
+   "firmware:$ref:DeviceFirmware",
    "functions:array\u003cstring\u003e",
    "has_sub_devices:boolean",
    "interface:string",

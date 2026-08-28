@@ -31,6 +31,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one would reject a conforming daemon response. The lists come from the
   `cdpkind` package itself, pinned to its constants and helpers by two guards.
 
+- **`firmware` and `availability` are on every device summary row.** They were
+  served only by `GET /devices/{addr}`, which is what forced a bootstrapping
+  client into one detail request per device on top of the list request. Both
+  accessors read the in-memory model — no southbound query, no extra CCU radio
+  traffic — so a row costs a struct copy, not a wire call, and a client's
+  bootstrap drops from N+1 requests to 1. `GET /snapshot` carries them for the
+  same reason.
+
+  `GET /devices/{addr}` is unchanged: `DeviceDetail` embeds the summary, so
+  both fields keep the same keys in the same place. Its only remaining
+  exclusive member is `channels`, which the nested snapshot already delivers —
+  the endpoint stays for refreshing a single device.
+
 - **The WebSocket envelope's `kind` has a named type.** `initial|change|refresh`
   existed only as prose in `assets/wsapi.json`, so a generated client had to
   spell the three literals itself. It is `hmenum.WSEnvelopeKind` now and ships

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.22.0
+  version: 7.23.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -8418,6 +8418,8 @@ components:
           update_available,
           master_pushes_config_pending,
           has_sub_devices,
+          firmware,
+          availability,
         ]
       properties:
         address: { type: string }
@@ -8512,6 +8514,35 @@ components:
             sections.
         rx_mode:
           $ref: "#/components/schemas/RxMode"
+        firmware:
+          $ref: "#/components/schemas/DeviceFirmware"
+        availability:
+          $ref: "#/components/schemas/DeviceAvailability"
+    DeviceFirmware:
+      type: object
+      description: |
+        Installed / available firmware pair for the device. Served on every
+        summary row, not only on the detail response: the values come from
+        the in-memory model, so a client bootstrapping N devices reads them
+        from the list instead of issuing N detail requests.
+      properties:
+        Current: { type: string }
+        Available: { type: string }
+        Updatable: { type: boolean }
+        UpdateState: { type: string }
+    DeviceAvailability:
+      type: object
+      description: |
+        Reachability, battery and signal snapshot for the device. Served on
+        every summary row for the same reason as `firmware`. The three
+        nullable members are null when the device has no such indicator —
+        never 0 or false, which would read as a real measurement.
+      properties:
+        IsReachable: { type: boolean }
+        LastUpdated: { type: string, format: date-time }
+        BatteryLevel: { type: ["integer", "null"] }
+        LowBattery: { type: ["boolean", "null"] }
+        SignalStrength: { type: ["integer", "null"] }
     RxMode:
       type: object
       description: |
@@ -8548,26 +8579,27 @@ components:
         per_page: { type: integer }
         total: { type: integer }
     DeviceDetail:
+      description: |
+        A device summary plus its channel list. `firmware` and `availability`
+        come from the embedded summary — they moved there in APIVersion
+        7.23.0 and are unchanged on this response, same keys, same place.
+        `channels` is the only member the summary does not carry, and a
+        client that walks the nested snapshot already has it, so a bootstrap
+        no longer needs this endpoint per device.
       allOf:
         - $ref: "#/components/schemas/DeviceSummary"
         - type: object
           required: [firmware, availability, channels]
           properties:
+            # Restated from DeviceSummary on purpose. The response has
+            # always required both and still does; declaring them only in
+            # the referenced summary reads to a differ that does not
+            # resolve allOf as a removal from this response, which would
+            # force a major bump for a wire-identical change.
             firmware:
-              type: object
-              properties:
-                Current: { type: string }
-                Available: { type: string }
-                Updatable: { type: boolean }
-                UpdateState: { type: string }
+              $ref: "#/components/schemas/DeviceFirmware"
             availability:
-              type: object
-              properties:
-                IsReachable: { type: boolean }
-                LastUpdated: { type: string, format: date-time }
-                BatteryLevel: { type: ["integer", "null"] }
-                LowBattery: { type: ["boolean", "null"] }
-                SignalStrength: { type: ["integer", "null"] }
+              $ref: "#/components/schemas/DeviceAvailability"
             channels:
               type: array
               items: { $ref: "#/components/schemas/ChannelSummary" }
