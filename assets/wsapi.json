@@ -1,5 +1,5 @@
 {
- "version": "1.6",
+ "version": "1.7",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -1373,7 +1373,7 @@
   },
   {
    "category": "cdp",
-   "description": "Invoke an operation on a custom data point (turn_on, set_temperature, open, …).",
+   "description": "Invoke an operation on a custom data point (turn_on, set_temperature, open, …). Operation arguments use the units and scales a Home Assistant client expects, matching what the custom-data-point STATE reports — not the CCU wire values, which live on the data-point plane. Concretely for a colour light: set_color takes {hue, saturation} with hue in degrees 0..360 and saturation 0..100, the same scale `state.color.s` reports back; the daemon converts to the wire `SATURATION` fraction 0..1 itself. Read and write therefore need no conversion in either direction — scaling `state.color.s` before sending it back is the mistake this note exists to prevent.",
    "name": "cdp.invoke",
    "args": {
     "device": "string",
