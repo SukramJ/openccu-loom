@@ -210,16 +210,18 @@ one is not in the legacy reference key: CUxD serials are `CUX` + a
 two-digit device type + a per-CCU running number that conventionally
 starts at 1, so two CCUs bridged into one Home Assistant declare
 identical CUxD keys and HA keeps only the first. Because the daemon is
-multi-CCU-first (ADR-0002) it scopes that class; the reference, which runs
-one CCU per config entry, does not. A client rebuilding the key must
-apply the same rule — or consume the `unique_id` the push payloads carry
-(P6), which already has it. Only the *parameter-level* key is affected;
-the channel-level key is unscoped for CUxD on both sides. The divergence
-is pinned from both ends by
-`tests/contract/testdata/routing_key/cuxd_scoping_golden.json` (Go
-contract test + `make routing-key-parity`) and catalogued as
-[`by_design.md` → BD-Identity-CUxDCentralScoping](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md),
-whose retirement condition is the reference adopting the rule.
+multi-CCU-first (ADR-0002) it scopes that class. The reference did not
+until aiohomematic 2026.8.7, which adopted the same rule
+(SukramJ/aiohomematic#3370) and thereby retired what had been a declared
+divergence; the cases now sit in the shared golden fixtures and are
+replayed by the Go contract test and `make routing-key-parity` like every
+other case. A client rebuilding the key must apply the rule — or consume
+the `unique_id` the push payloads carry (P6), which already has it. Only
+the *parameter-level* key is affected; the channel-level key is unscoped
+for CUxD on both sides.
+
+A client pinned to an aiohomematic older than 2026.8.7 still rebuilds the
+bare key and must scope it itself.
 
 **Resolved (P6):** the canonical `unique_id` is now carried on the
 value-bearing push payloads (`datapoint.value_changed`,

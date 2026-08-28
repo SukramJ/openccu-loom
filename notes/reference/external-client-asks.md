@@ -1,7 +1,18 @@
 # External-Client Integration — Backlog & Vertragslücken
 
 **Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Wellen **J** (`unique_id`-Ownership) und **K** (CCU-Domänen-Ableitung, „dümmerer Client") **vollständig umgesetzt** (In-Tree **0.10.0**). Die J1-Nacharbeit ist erledigt: `unique_id` ist jetzt **garantiert nicht-leer** (Serial-Readiness-Gate, `hub_wiring.go` `resolveCCUSerial` — ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist) und im Schema `required` (REST + WS) — der Client kann `canonical.py` aus dem Entity-/Key-Pfad streichen — inkl. **J5** (Week-Profile-/Schedule-Channel-Switch-`unique_id`s, jetzt umgesetzt). J2 hat jetzt einen echten Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`) zusätzlich zum Go-Golden-Test (deckt auch die J5-Key-Formate bit-identisch ab). Bewusste Non-Goals: K1-Feld-Parameter-Komposition (`notes/parity/by_design.md`). Offen: nur noch F2 (bewusst).
-**Letzte Aktualisierung:** 2026-06-22
+**Letzte Aktualisierung:** 2026-08-28
+
+**Nachtrag 2026-08-28 — die CUxD-Divergenz ist erloschen.** J2 verwies auf die
+einzige erklärte Abweichung vom geteilten Routing-Key-Vertrag: `CUX*`-Adressen
+wurden hier per Central skopiert, von der Referenz nicht. aiohomematic 2026.8.7
+hat dieselbe Regel übernommen (SukramJ/aiohomematic#3370) — das war die
+Retirement-Bedingung, die `notes/parity/by_design.md` selbst genannt hatte. Die
+Fälle liegen jetzt in den geteilten Golden-Fixtures, `cuxd_scoping_golden.json`
+und der `BD-Identity-CUxDCentralScoping`-Eintrag sind entfallen, und
+`script/requirements/reference-stack.txt` pinnt 2026.8.7. Die J1-Aussage oben —
+der Client könne `canonical.py` aus dem Entity-/Key-Pfad streichen — war
+bis dahin für CUxD-Installationen nicht haltbar; sie ist es jetzt.
 
 ## Closure Index
 

@@ -23,10 +23,13 @@
 #
 # That construction only covers cases the fixtures carry, so a rule that
 # exists in one implementation and not the other stays invisible while
-# every replay passes. Deliberate divergences therefore get their own
-# fixture (cuxd_scoping_golden.json) carrying BOTH answers, and both
-# sides assert it: Go pins `expected`, this script pins
-# `reference_expected`, and each also fails when the two stop differing.
+# every replay passes. That is what a deliberate divergence used to need a
+# separate fixture for: CUxD addresses were scoped by the central here and
+# left bare by the reference, so `cuxd_scoping_golden.json` carried both
+# answers and each side asserted the two still differed. The reference has
+# since landed the same rule, so the divergence retired: its cases moved
+# into the shared fixtures and the file is gone. Should another one arise,
+# that is the shape to bring back.
 #
 # Source of truth (../aiohomematic/aiohomematic/model/support.py):
 #   - generate_unique_id(*, config_provider, address, parameter, prefix)
@@ -268,78 +271,6 @@ def _check_hub_slug() -> int:
     return mismatches
 
 
-def _check_declared_divergences() -> int:
-    """
-    Replay the cases the Go side deliberately answers differently.
-
-    A divergence that lives only in the Go code is invisible here: the
-    shared fixtures carry no case for it, so every replay passes while
-    the two implementations disagree, and a client that rebuilds the key
-    from the reference emits an id the daemon never publishes. So the
-    divergence gets its own fixture and is asserted from both ends —
-    Python must still produce `reference_expected`, and that value must
-    still differ from the `expected` the Go contract test pins. If either
-    side moves (the Go rule is reverted, or the reference adopts it),
-    one of the two assertions fails and the fixture, the by_design.md
-    entry and the published client contract get updated together.
-    """
-    mismatches = 0
-    cases = _load_fixture("cuxd_scoping_golden.json", key="unique_id_cases")
-    for c in cases:
-        got = generate_unique_id(
-            config_provider=_config_provider(c["central_id"]),
-            address=c["address"],
-            parameter=c.get("parameter"),
-            prefix=c.get("prefix"),
-        )
-        reference_expected = c.get("reference_expected")
-        if reference_expected is None:
-            mismatches += 1
-            print(
-                f"MISSING reference_expected for declared divergence case {c['address']!r}",
-                file=sys.stderr,
-            )
-            continue
-        if got != reference_expected:
-            mismatches += 1
-            print(
-                "MISMATCH generate_unique_id (declared divergence)"
-                f"(central_id={c['central_id']!r}, address={c['address']!r}, "
-                f"parameter={c.get('parameter')!r}, prefix={c.get('prefix')!r})\n"
-                f"  python              = {got!r}\n"
-                f"  reference_expected  = {reference_expected!r}",
-                file=sys.stderr,
-            )
-        if reference_expected == c["expected"]:
-            mismatches += 1
-            print(
-                f"STALE DIVERGENCE {c['address']!r}: the reference now produces the same key as the Go "
-                "side. Retire the fixture entry, the by_design.md rationale and the scoped-class list "
-                "in docs/external-clients/ together.",
-                file=sys.stderr,
-            )
-
-    channel_cases = _load_fixture(
-        "cuxd_scoping_golden.json", key="channel_unique_id_cases"
-    )
-    for c in channel_cases:
-        got = generate_channel_unique_id(
-            config_provider=_config_provider(c["central_id"]),
-            address=c["address"],
-        )
-        if got != c["expected"]:
-            mismatches += 1
-            print(
-                "MISMATCH generate_channel_unique_id (declared divergence fixture)"
-                f"(central_id={c['central_id']!r}, address={c['address']!r})\n"
-                f"  python   = {got!r}\n"
-                f"  fixture  = {c['expected']!r}",
-                file=sys.stderr,
-            )
-
-    total = len(cases) + len(channel_cases)
-    print(f"declared divergences: {total - mismatches}/{total} cases match")
-    return mismatches
 
 
 def main() -> int:
@@ -347,7 +278,6 @@ def main() -> int:
     total_mismatches += _check_unique_id()
     total_mismatches += _check_channel_unique_id()
     total_mismatches += _check_hub_slug()
-    total_mismatches += _check_declared_divergences()
 
     if total_mismatches:
         print(
@@ -357,8 +287,7 @@ def main() -> int:
         )
         return 1
     print(
-        "\nrouting-key parity: OK (Python == fixtures; Go == fixtures ⇒ Go == Python, "
-        "except the declared divergences, which match on both sides)"
+        "\nrouting-key parity: OK (Python == fixtures; Go == fixtures ⇒ Go == Python)"
     )
     return 0
 
