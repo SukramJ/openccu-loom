@@ -50,6 +50,45 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in `assets/schemas/enums.json` like every other wire vocabulary. The wire is
   unchanged.
 
+### Changed
+
+- **The MQTT entity-description table is maintained here, not generated.**
+  `internal/north/mqtt/entity_descriptions_generated.go` carried a
+  `DO NOT EDIT` header, a generator name and the stamp `2026-05-02T15:22:37Z`.
+  All three were false: the generator appeared in no make target and no
+  workflow, and re-running it does not reproduce the file — it emits a
+  different set of symbol names, and the result fails to compile against the
+  rest of the package. The file had been hand-edited for months while wearing
+  a machine-output label, which is also why two sentences in its own header
+  broke off mid-clause, where a project name had been cut out to satisfy the
+  comment guard.
+
+  Following ADR 0063 and ADR 0067 the header comes off, the generator is
+  deleted, and the 147 rules are ordinary daemon-owned source. The file is
+  `entity_descriptions_table.go` now, since the old name was the same claim.
+  Provenance, the scope decision and the reachability findings move to
+  `notes/reference/ha-entity-description-table.md`.
+
+  The upstream drift was measured before the generator went, not assumed:
+  159 rules upstream against 147 here, differing by exactly the 12 keys the
+  plan named, with nothing extra on this side. All 12 stay out of scope, and
+  the note says why per rule — nine `SECURITY_*` rules describe a second
+  security surface over a domain this daemon already owns, `DAEMON_CONNECTION`
+  and `DAEMON_LATENCY` describe a Python client's connection to its own
+  daemon, and `event_doorbell` is already implemented from a better source
+  (`ccudata.DoorbellModels()`, the full CCU model set rather than three
+  hard-coded entries).
+
+- **The description table's coherence guard compares content, not a count.**
+  `TestHARegistryDescriptionRulesCountUnchanged` pinned `len(rules) == 147`,
+  which catches a truncated slice and misses every edit that keeps the count —
+  a changed `device_class`, a device list that loses a model, a priority that
+  reorders two rules. Those are the edits that change a discovery payload. It
+  is replaced by `TestHARegistryDescriptionRulesMatchTheGolden`, which
+  compares every field of every rule against
+  `tests/contract/testdata/ha_registry_description_rules.json` and names the
+  rule that moved.
+
 ### Fixed
 
 - **The API-surface guard read a newly named route as a rename.** Giving a bare

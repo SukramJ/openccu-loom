@@ -247,7 +247,12 @@ func TestDocPurity(t *testing.T) {
 				return nil
 			}
 
-			// Skip ha_ files (W8-A conflict zone).
+			// An `ha_` prefix exempts a file: those carry the Home
+			// Assistant projection, where naming the upstream integration
+			// is the point rather than stray provenance. The exemption is
+			// the filename alone, so a table that is not named `ha_*` is
+			// scanned in full and keeps its provenance in notes/ or an ADR
+			// (ADR 0067).
 			base := filepath.Base(path)
 			if strings.HasPrefix(base, "ha_") {
 				return nil

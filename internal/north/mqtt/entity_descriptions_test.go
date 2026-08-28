@@ -320,13 +320,14 @@ func TestEntityDescriptionLookupDevicePrefixMatch(t *testing.T) {
 	}
 }
 
-// TestEntityDescriptionLookupRuleCount sanity-checks that the generator
-// produced a sensible amount of rules — guards against an empty file
-// silently slipping past CI.
+// TestEntityDescriptionLookupRuleCount is the in-package floor: a table
+// that lost most of its rules fails here without needing the contract
+// suite. Exact content is pinned separately, by
+// TestHARegistryDescriptionRulesMatchTheGolden in tests/contract/.
 func TestEntityDescriptionLookupRuleCount(t *testing.T) {
 	t.Parallel()
 	if got := len(haRegistryDescriptionRules); got < 100 {
-		t.Errorf("haRegistryDescriptionRules = %d entries; expected ≥100 (homematicip_local has ~147)", got)
+		t.Errorf("haRegistryDescriptionRules = %d entries; expected at least 100", got)
 	}
 }
 
