@@ -24,6 +24,9 @@ import (
 // stubDeviceIndex is an inline stub for DeviceIndex.
 type stubDeviceIndex struct {
 	devices map[string]*device.Device
+	// unreleased marks addresses the onboarding wizard still withholds.
+	// Absent means released, mirroring the production rule.
+	unreleased map[string]bool
 }
 
 func (s *stubDeviceIndex) Devices() []*device.Device {
@@ -52,6 +55,8 @@ func (s *stubDeviceIndex) SerialSuffix(central string) string {
 	}
 	return ""
 }
+
+func (s *stubDeviceIndex) Released(address string) bool { return !s.unreleased[address] }
 
 func newTestDevice(addr, model string) *device.Device {
 	return device.New(device.Config{
@@ -965,6 +970,8 @@ func (m *multiCentralDeviceIndex) SerialSuffix(central string) string {
 	return ""
 }
 
+func (m *multiCentralDeviceIndex) Released(string) bool { return true }
+
 func TestListDevices_CentralFilter(t *testing.T) {
 	t.Parallel()
 
@@ -1781,7 +1788,7 @@ func TestToDeviceSummary_UpdateStatus(t *testing.T) {
 
 	for _, tc := range cases {
 		d := newTestDeviceWithFirmware("0001ABCD", tc.fw)
-		s := toDeviceSummary(d, "")
+		s := toDeviceSummary(d, "", true)
 		if _, ok := valid[s.UpdateStatus]; !ok {
 			t.Errorf("%s: UpdateStatus = %q is not a valid DeviceUpdateStatus value", tc.name, s.UpdateStatus)
 		}
@@ -1890,7 +1897,7 @@ func TestToDeviceSummary_RxModeSurfacesWakeup(t *testing.T) {
 		Interface: hmenum.InterfaceHmIPRF,
 		RxMode:    hmenum.RxModeAlways,
 	})
-	ms := toDeviceSummary(mains, "ccu-01")
+	ms := toDeviceSummary(mains, "ccu-01", true)
 	if ms.RxMode == nil {
 		t.Fatal("mains device: expected non-nil rx_mode")
 	}
@@ -1908,7 +1915,7 @@ func TestToDeviceSummary_RxModeSurfacesWakeup(t *testing.T) {
 		Interface: hmenum.InterfaceHmIPRF,
 		RxMode:    hmenum.RxModeWakeup | hmenum.RxModeLazyConfig,
 	})
-	bs := toDeviceSummary(battery, "ccu-01")
+	bs := toDeviceSummary(battery, "ccu-01", true)
 	if bs.RxMode == nil {
 		t.Fatal("battery device: expected non-nil rx_mode")
 	}
@@ -1922,8 +1929,61 @@ func TestToDeviceSummary_RxModeSurfacesWakeup(t *testing.T) {
 		Model:     "HM-Test",
 		Interface: hmenum.InterfaceVirtualDevices,
 	})
-	ns := toDeviceSummary(none, "ccu-01")
+	ns := toDeviceSummary(none, "ccu-01", true)
 	if ns.RxMode != nil {
 		t.Errorf("no-rx-mode device: expected nil rx_mode, got %+v", *ns.RxMode)
+	}
+}
+
+// TestListDevicesCarriesTheReleaseState pins the onboarding state onto the
+// device list.
+//
+// This endpoint deliberately still LISTS an unreleased device — the Config
+// UI has to see it to configure it, which is the state's whole purpose. A
+// consumer of this API can be an ecosystem all the same: the transport
+// does not determine the role, and an ecosystem that adopts a device
+// before it is named keeps the identity it saw. So the state travels as a
+// field and the consumer decides.
+//
+// Without it a REST/WS client cannot tell the two states apart at all, and
+// the release step — enforced on MQTT, Matter and the webhook — does
+// nothing for it.
+func TestListDevicesCarriesTheReleaseState(t *testing.T) {
+	t.Parallel()
+	held := newTestDevice("0001HELD", "HmIP-STH")
+	free := newTestDevice("0002FREE", "HmIP-BSM")
+	idx := &stubDeviceIndex{
+		devices:    map[string]*device.Device{"0001HELD": held, "0002FREE": free},
+		unreleased: map[string]bool{"0001HELD": true},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
+	w := httptest.NewRecorder()
+	ListDevices(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var body struct {
+		Items []DeviceSummary `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Items) != 2 {
+		t.Fatalf("got %d device(s), want 2 — the endpoint must still LIST a withheld device", len(body.Items))
+	}
+	byAddr := map[string]DeviceSummary{}
+	for _, s := range body.Items {
+		byAddr[s.Address] = s
+	}
+	if byAddr["0001HELD"].Released {
+		t.Error("the withheld device reports released — an ecosystem consumer would adopt it before it is named")
+	}
+	// The negative control: without it this test would pass on a field
+	// hardcoded to false, which would make every existing consumer filter
+	// its whole fleet away.
+	if !byAddr["0002FREE"].Released {
+		t.Error("a device that never entered the wizard reports unreleased")
 	}
 }

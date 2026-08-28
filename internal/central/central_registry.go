@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Registry holds every configured [*Unit] keyed by name.
@@ -261,6 +262,24 @@ func (r *Registry) SerialSuffix(name string) string {
 		return ""
 	}
 	return routingkey.SerialSuffix(c.SystemInformation().Serial)
+}
+
+// Released reports whether a device has finished onboarding and may be
+// adopted by an ecosystem. Unknown addresses and devices that never
+// entered the wizard report true, so absence of a hold reads as
+// released — the same rule the persisted queue uses.
+func (r *Registry) Released(address string) bool {
+	for _, u := range r.List() {
+		if u == nil || u.ModelRegistry == nil || u.Devices == nil {
+			continue
+		}
+		d, ok := u.ModelRegistry.Get(address)
+		if !ok || d == nil {
+			continue
+		}
+		return u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(d.InterfaceID), d.Address)
+	}
+	return true
 }
 
 // CanonicalSerial returns the canonical (last-10, case-preserved) serial of

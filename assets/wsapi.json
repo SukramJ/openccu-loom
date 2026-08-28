@@ -1,5 +1,5 @@
 {
- "version": "1.3",
+ "version": "1.4",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -394,6 +394,14 @@
     "address": "string",
     "duration_seconds": "integer?"
    }
+  },
+  {
+   "category": "devices",
+   "description": "Server-pushed: an operator finished onboarding a device — it stops being withheld from the ecosystems (MQTT and therefore Home Assistant, the Matter bridge, outbound webhooks) and may now be adopted by a consumer of this API too. Rides the same device.{address}.lifecycle topic as device.created; subscribers route by envelope `type`. A broadcast rather than a reply, because the consumer that needs it is precisely the one that was already connected and filtered the device out on its device.created frame: without this push it would never learn the device became adoptable. NOTE: this API does not withhold an unreleased device — the Config UI has to see it to configure it — so a consumer that adopts devices filters on the `released` field of device.created and this frame lifts that filter.",
+   "kind": "broadcast",
+   "name": "device.released",
+   "topic": "device.{address}.lifecycle",
+   "payload": "DeviceReleasedPayload"
   },
   {
    "category": "devices",

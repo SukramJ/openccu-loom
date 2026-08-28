@@ -47,16 +47,31 @@ type DeviceSummary struct {
 	// address devices by ISE_ID (e.g. the HA rename-by-ise_id path) need
 	// it to map back to the device address. 0 when the CCU did not report
 	// one (e.g. non-CCU backends).
-	IseID         int    `json:"ise_id,omitempty"`
-	Model         string `json:"model"`
-	ModelLabel    string `json:"model_label,omitempty"`
-	ModelIcon     string `json:"model_icon,omitempty"`
-	SubModel      string `json:"sub_model,omitempty"`
-	Name          string `json:"name"`
-	Manufacturer  string `json:"manufacturer,omitempty"`
-	ProductGroup  string `json:"product_group,omitempty"`
-	IsAvailable   bool   `json:"available"`
-	ChannelsCount int    `json:"channels_count"`
+	IseID        int    `json:"ise_id,omitempty"`
+	Model        string `json:"model"`
+	ModelLabel   string `json:"model_label,omitempty"`
+	ModelIcon    string `json:"model_icon,omitempty"`
+	SubModel     string `json:"sub_model,omitempty"`
+	Name         string `json:"name"`
+	Manufacturer string `json:"manufacturer,omitempty"`
+	ProductGroup string `json:"product_group,omitempty"`
+	IsAvailable  bool   `json:"available"`
+	// Released reports whether the device has finished onboarding. False
+	// means it is accepted and configurable but deliberately not yet
+	// published to the ecosystems.
+	//
+	// This endpoint still lists it: the Config UI has to see it to
+	// configure it, which is the state's whole purpose. But a consumer of
+	// this API can be an ecosystem as much as a configuration client —
+	// the transport does not determine the role — and an ecosystem that
+	// adopts a device before it is named keeps the identity it saw: Home
+	// Assistant its entity ids, a Matter controller its endpoint number.
+	// So the state travels with the device and the consumer decides.
+	//
+	// Always true on an installation that never used the onboarding
+	// wizard, so an existing client needs no filter to keep working.
+	Released      bool `json:"released"`
+	ChannelsCount int  `json:"channels_count"`
 	// Updatable reports whether the device *supports* firmware updates
 	// (CCU UPDATABLE capability) — NOT whether one is pending.
 	Updatable bool `json:"updatable"`
@@ -610,7 +625,7 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		}
 		out := make([]DeviceSummary, 0, end-start)
 		for _, d := range filtered[start:end] {
-			out = append(out, toDeviceSummary(d, idx.CentralOf(d.Address)))
+			out = append(out, toDeviceSummary(d, idx.CentralOf(d.Address), idx.Released(d.Address)))
 		}
 		w.Header().Set("X-Total-Count", strconv.Itoa(total))
 		JSON(w, http.StatusOK, map[string]any{
@@ -638,7 +653,7 @@ func GetDevice(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 			summaries = append(summaries, toChannelSummary(ch, labels))
 		}
 		JSON(w, http.StatusOK, DeviceDetail{
-			DeviceSummary: toDeviceSummary(d, idx.CentralOf(d.Address)),
+			DeviceSummary: toDeviceSummary(d, idx.CentralOf(d.Address), idx.Released(d.Address)),
 			Firmware:      d.Firmware().Info(),
 			Availability:  d.AvailabilityInfo(),
 			Channels:      summaries,
@@ -909,8 +924,9 @@ func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
 	return idx.SerialSuffix(idx.CentralOf(dev.Address))
 }
 
-func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
+func toDeviceSummary(d *device.Device, centralName string, released bool) DeviceSummary {
 	return DeviceSummary{
+		Released:                   released,
 		Address:                    d.Address,
 		Central:                    centralName,
 		Interface:                  string(d.Interface),

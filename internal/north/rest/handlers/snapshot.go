@@ -170,7 +170,7 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName s
 		sort.Slice(devs, func(i, j int) bool { return devs[i].Address < devs[j].Address })
 		env.Devices = make([]DeviceSummary, 0, len(devs))
 		for _, d := range devs {
-			env.Devices = append(env.Devices, toDeviceSummary(d, deps.Devices.CentralOf(d.Address)))
+			env.Devices = append(env.Devices, toDeviceSummary(d, deps.Devices.CentralOf(d.Address), deps.Devices.Released(d.Address)))
 		}
 		if inc.channels {
 			env.DeviceChannels = snapshotDeviceChannels(deps.Devices, devs, deps.Labels, inc.dataPoints)

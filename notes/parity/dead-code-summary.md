@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 5eb443a0
-HEAD: 5eb443a0
+Generated: d4838b4c
+HEAD: d4838b4c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30052 |
+| Total Exported | 30057 |
 | Reachable | 5167 |
-| Whitelisted | 21868 |
+| Whitelisted | 21873 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

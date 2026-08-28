@@ -79,6 +79,8 @@ func registryWithLevelDevice(t *testing.T) (*central.Registry, *central.Unit, *d
 	return reg, u, d
 }
 
+func (s crossPlaneDeviceIndex) Released(string) bool { return true }
+
 // TestEventBridgeValueChanged_LevelDisplayValue is the WS-plane pin for
 // the DisplayValue projection plus the MQTT double-scaling tripwire in
 // one test, driven through the real EventBridge (not by calling

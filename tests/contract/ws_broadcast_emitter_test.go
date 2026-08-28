@@ -107,6 +107,11 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeDeviceRemoved)"},
 		WireValue: string(hmevent.EventTypeDeviceRemoved),
 	},
+	"device.released": {
+		Files:     []string{"internal/north/rest/ws/device_lifecycle.go"},
+		Tokens:    []string{"hub.Publish(Event{", "broadcastDeviceReleased"},
+		WireValue: "device.released",
+	},
 	// Emitted from the event bridge rather than the ws package: the rename
 	// arrives on the domain bus and the MQTT re-publish rides the same
 	// handler, so keeping both arms in one place is what stops one plane

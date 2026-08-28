@@ -116,6 +116,8 @@ func (fakeMasterProfilesService) Profiles(string, string) ([]masterprofile.Profi
 	return nil, nil
 }
 
+func (fakeDeviceIndex) Released(string) bool { return true }
+
 func (fakeMasterProfilesService) Profile(string, string, int) (masterprofile.Profile, error) {
 	return masterprofile.Profile{}, nil
 }
@@ -480,6 +482,8 @@ func (fakeInterfaceIndex) Interfaces() []handlers.InterfaceState { return nil }
 func (fakeInterfaceIndex) Interface(string) (handlers.InterfaceState, bool) {
 	return handlers.InterfaceState{}, false
 }
+
+func (f fakeHubIndex) Released(string) bool                        { return true }
 func (fakeInterfaceIndex) Reconnect(context.Context, string) error { return nil }
 
 type fakeConfigAdminService struct{}
