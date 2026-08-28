@@ -106,6 +106,13 @@ func run() error {
 		AuthEnabled: true,
 		Devices:     resolveDevices(*devicesFlag),
 		Serial:      "GODEVCCU0001",
+		// A real CCU always has ReGa object ids, and two things a client
+		// reads are empty without them: Device.listAllDetail's "id" — the
+		// ise_id every ReGa-addressed operation needs, so a rename cannot be
+		// exercised at all — and the channel ids of rooms and functions, which
+		// makes every room/function assignment point at nothing. Simulating a
+		// CCU without them is the less realistic default, not the safer one.
+		Realism: godevccu.Realism{RegaIDs: true},
 		// Real HmIP actuator firmware aggregates the virtual-receiver group
 		// onto the state (…_TRANSMITTER) channel; consumers that read state
 		// there (the reference stack's custom data points) never see a
