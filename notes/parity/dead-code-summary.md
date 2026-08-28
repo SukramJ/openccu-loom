@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 0c2b3036
-HEAD: 0c2b3036
+Generated: 18e551ce
+HEAD: 18e551ce
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30069 |
+| Total Exported | 30080 |
 | Reachable | 5167 |
-| Whitelisted | 21885 |
+| Whitelisted | 21896 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

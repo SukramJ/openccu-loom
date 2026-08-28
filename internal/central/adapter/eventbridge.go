@@ -497,16 +497,6 @@ func (b *EventBridge) onDeviceMetadataChanged(ctx context.Context, u *central.Un
 	b.publishDeviceSnapshot(ctx, u.Name(), d)
 }
 
-// deviceMetadataChangedWSPayload is the `device.metadata_changed` WS
-// broadcast payload declared in assets/wsapi.json. Address is always the
-// device address, even when a channel was renamed — a client materialises a
-// device's name and area as one unit and re-reads the whole device.
-type deviceMetadataChangedWSPayload struct {
-	Central       string `json:"central"`
-	InterfaceID   string `json:"interface_id"`
-	DeviceAddress string `json:"device_address"`
-}
-
 // publishDeviceMetadataChangedWS broadcasts the WebSocket
 // `device.metadata_changed` frame for a rename or room/function change,
 // alongside the MQTT re-publish [EventBridge.onDeviceMetadataChanged]
@@ -522,7 +512,7 @@ func (b *EventBridge) publishDeviceMetadataChangedWS(centralName string, e hmeve
 		Topic: ws.DeviceLifecycleTopic(e.Address),
 		Type:  string(hmevent.EventTypeDeviceMetadataChanged),
 		When:  e.Timestamp(),
-		Payload: deviceMetadataChangedWSPayload{
+		Payload: ws.DeviceMetadataChangedPayload{
 			Central:       centralName,
 			InterfaceID:   e.InterfaceID,
 			DeviceAddress: e.Address,
@@ -2951,17 +2941,6 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 	})
 }
 
-// scheduleChangedWSPayload is the `schedules.changed` WS broadcast payload
-// declared in assets/wsapi.json. The profile body is deliberately not
-// inlined — a week profile is large and most subscribers only need to
-// invalidate and re-read.
-type scheduleChangedWSPayload struct {
-	Central       string `json:"central"`
-	InterfaceID   string `json:"interface_id"`
-	DeviceAddress string `json:"device_address"`
-	Channel       int    `json:"channel"`
-}
-
 // publishScheduleChangedWS broadcasts the WebSocket `schedules.changed`
 // frame for the channel whose week profile moved, alongside the MQTT
 // publish the caller performs on the same OnChange tick, so an SPA
@@ -2982,7 +2961,7 @@ func (b *EventBridge) publishScheduleChangedWS(centralName, iface, deviceAddr st
 		Topic: ws.DeviceLifecycleTopic(deviceAddr),
 		Type:  "schedules.changed",
 		When:  time.Now(),
-		Payload: scheduleChangedWSPayload{
+		Payload: ws.ScheduleChangedPayload{
 			Central:       centralName,
 			InterfaceID:   iface,
 			DeviceAddress: deviceAddr,

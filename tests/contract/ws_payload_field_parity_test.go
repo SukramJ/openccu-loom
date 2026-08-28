@@ -72,6 +72,7 @@ var wsPayloadStructs = map[string]any{
 	"DataPointValueChangedPayload":       ws.DataPointValueChangedPayload{},
 	"DeviceAvailabilityChangedPayload":   ws.DeviceAvailabilityChangedPayload{},
 	"DeviceCreatedPayload":               ws.DeviceCreatedPayload{},
+	"DeviceMetadataChangedPayload":       ws.DeviceMetadataChangedPayload{},
 	"DeviceReleasedPayload":              ws.DeviceReleasedPayload{},
 	"DeviceRemovedPayload":               ws.DeviceRemovedPayload{},
 	"DeviceTriggerPayload":               ws.DeviceTriggerPayload{},
@@ -89,6 +90,7 @@ var wsPayloadStructs = map[string]any{
 	"SecurityStateChangedPayload":        ws.SecurityStateChangedPayload{},
 	"SecurityZoneChangedPayload":         ws.SecurityZoneChangedPayload{},
 	"SystemStatusChangedPayload":         ws.SystemStatusChangedPayload{},
+	"ScheduleChangedPayload":             ws.ScheduleChangedPayload{},
 	"SysvarChangedPayload":               ws.SysvarChangedPayload{},
 }
 
@@ -100,8 +102,6 @@ var wsPayloadStructs = map[string]any{
 // Never add a name here to silence a failure on a payload that *is* a ws
 // struct: registering it in [wsPayloadStructs] is the whole point.
 var wsPayloadsDeclaredElsewhere = map[string]string{
-	"DeviceMetadataChangedPayload": "unexported adapter struct (internal/central/adapter/eventbridge.go deviceMetadataChangedWSPayload) — export it into the ws package to cover it",
-	"ScheduleChangedPayload":       "unexported adapter struct — same as DeviceMetadataChangedPayload",
 	// These three have no Go type at all: the publish sites assemble them
 	// as `map[string]any` literals (handlers/matter_exposures.go:397,428,
 	// handlers/matter_maintenance.go:111, cmd/openccu-loom/

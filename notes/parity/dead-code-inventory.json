@@ -1,6 +1,6 @@
 {
-  "generated": "0c2b3036",
-  "head": "0c2b3036",
+  "generated": "18e551ce",
+  "head": "18e551ce",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 30069,
+    "total_exported": 30080,
     "reachable": 5167,
-    "whitelisted": 21885,
+    "whitelisted": 21896,
     "unreachable": 3017
   },
   "by_package": [
@@ -136065,28 +136065,28 @@
       "identifier": "MatterCommissioningClose",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 415
+      "line": 422
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterCommissioningClose",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 415
+      "line": 422
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterCommissioningCloser",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 406
+      "line": 413
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterCommissioningCloser",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 406
+      "line": 413
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136401,42 +136401,42 @@
       "identifier": "MatterExposeBulk",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 246
+      "line": 253
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposeBulk",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 246
+      "line": 253
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposeUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 171
+      "line": 178
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposeUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 171
+      "line": 178
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposureBulkUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 236
+      "line": 243
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposureBulkUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 236
+      "line": 243
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136541,28 +136541,28 @@
       "identifier": "MatterFabricRevoke",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 376
+      "line": 383
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterFabricRevoke",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 376
+      "line": 383
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterFabricRevoker",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 368
+      "line": 375
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterFabricRevoker",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 368
+      "line": 375
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136807,56 +136807,56 @@
       "identifier": "MatterShare",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 441
+      "line": 448
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterShare",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 441
+      "line": 448
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 356
+      "line": 363
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 356
+      "line": 363
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatusReader",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 338
+      "line": 345
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatusReader",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 338
+      "line": 345
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatusResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 343
+      "line": 350
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatusResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 343
+      "line": 350
     },
     {
       "package": "internal/north/rest/handlers",
@@ -151420,6 +151420,20 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "DeviceAssociatedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 104
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "DeviceAssociatedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 104
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "DeviceAvailabilityChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/device_lifecycle.go",
@@ -151476,6 +151490,20 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "DeviceMetadataChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 64
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "DeviceMetadataChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 64
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "DeviceQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_default.go",
@@ -151529,6 +151557,20 @@
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/device_lifecycle.go",
       "line": 57
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "DeviceScopedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 25
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "DeviceScopedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 25
     },
     {
       "package": "internal/north/rest/ws",
@@ -152453,6 +152495,20 @@
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
       "line": 315
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "ScheduleChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 79
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "ScheduleChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/device_scoped.go",
+      "line": 79
     },
     {
       "package": "internal/north/rest/ws",
@@ -154168,6 +154224,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/hub_commands_central_scope_test.go",
       "line": 76
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestHubEntityKeepsItselfButLosesTheAssociation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/released_only_filter_test.go",
+      "line": 202
     },
     {
       "package": "internal/north/rest/ws",
@@ -156506,6 +156569,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_default_test.go",
       "line": 2255
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestTriggerFrameIsWithheld",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/released_only_filter_test.go",
+      "line": 242
     },
     {
       "package": "internal/north/rest/ws",
@@ -172711,6 +172781,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/config_restart_required_test.go",
       "line": 123
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestEveryDeviceScopedPayloadIsFilterable",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/ws_device_scoped_payload_test.go",
+      "line": 41
     },
     {
       "package": "tests/contract",

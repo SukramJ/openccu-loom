@@ -6,6 +6,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The onboarding filter only covered half the frames it should have.** It
+  matched on a type switch that listed five of the eleven broadcast payloads
+  naming a device, so a `released_only` subscriber still received, for a device
+  it had explicitly asked not to see: custom-data-point state (covers roller
+  shutters, climate, lights), **device triggers** — the worst of them, because a
+  client that turns those into automations would have fired them — optimistic
+  rollbacks, metadata changes, schedule changes and Matter exposure changes.
+
+  The switch is gone. A payload now says for itself whether it is device-scoped
+  (`ws.DeviceScopedPayload`), and a contract test requires every broadcast
+  payload carrying a `device_address` to implement that or to be listed with a
+  reason — so the next payload cannot slip past silently. The guard found the
+  Matter exposure frame on its first run, which neither the report nor I had on
+  the list.
+
+- **A system variable or program bound to a withheld device is no longer
+  mishandled.** Such an entity exists on the CCU regardless of whether the
+  device has been released here, so dropping the frame would take something the
+  operator has, while passing it through unchanged makes a filtering client
+  attach the entity to a device it does not have. The entity now survives with
+  its device association stripped, which the payload contract already defines
+  as "attach it to the central hub" — a shape every client already handles.
+
+- `device.metadata_changed` and `schedules.changed` moved their payload structs
+  into the `ws` package. As unexported adapter types they were invisible both
+  to the new filter and to the existing payload-field parity guard, which had
+  carried them as documented holes.
+
+
 ### Added
 
 - **A server-side onboarding filter, opt-in on both planes.** REST

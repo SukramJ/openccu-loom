@@ -32,13 +32,13 @@ func TestReleasedOnlyFilterIsPerConnectionAndOptIn(t *testing.T) {
 	free := DataPointValueChangedPayload{DeviceAddress: "FREE0001"}
 
 	// Default off: a client that never asked keeps seeing everything.
-	if plain.withheldFromThisClient(held) {
+	if _, keep := plain.shapeForThisClient(held); !keep {
 		t.Error("a client that did not opt in lost a frame — the Config UI would go blind")
 	}
-	if filtering.withheldFromThisClient(free) {
+	if _, keep := filtering.shapeForThisClient(free); !keep {
 		t.Error("a released device was withheld from a filtering client")
 	}
-	if !filtering.withheldFromThisClient(held) {
+	if _, keep := filtering.shapeForThisClient(held); keep {
 		t.Error("a withheld device reached a filtering client")
 	}
 }
@@ -62,11 +62,11 @@ func TestReleasedOnlyFilterLetsTheReleaseFrameThrough(t *testing.T) {
 	c := &client{hub: h}
 	c.setReleasedOnly(true)
 
-	if c.withheldFromThisClient(DeviceReleasedPayload{DeviceAddress: "NOW0001"}) {
+	if _, keep := c.shapeForThisClient(DeviceReleasedPayload{DeviceAddress: "NOW0001"}); !keep {
 		t.Error("the release frame was withheld — the client can never learn the device became adoptable")
 	}
 	// Negative control: while still held, its other frames are dropped.
-	if !c.withheldFromThisClient(DeviceCreatedPayload{DeviceAddress: "STILL001"}) {
+	if _, keep := c.shapeForThisClient(DeviceCreatedPayload{DeviceAddress: "STILL001"}); keep {
 		t.Error("a still-held device's creation frame reached a filtering client")
 	}
 }
@@ -83,7 +83,7 @@ func TestMissingReleaseCheckerWithholdsNothing(t *testing.T) {
 	c := &client{hub: h}
 	c.setReleasedOnly(true)
 
-	if c.withheldFromThisClient(DeviceCreatedPayload{DeviceAddress: "ANY00001"}) {
+	if _, keep := c.shapeForThisClient(DeviceCreatedPayload{DeviceAddress: "ANY00001"}); !keep {
 		t.Error("an unwired hub withheld a frame — a filtering subscriber would receive nothing at all")
 	}
 }
@@ -99,7 +99,7 @@ func TestNonDeviceFramesAreNeverWithheld(t *testing.T) {
 	c := &client{hub: h}
 	c.setReleasedOnly(true)
 
-	if c.withheldFromThisClient(map[string]any{"anything": 1}) {
+	if _, keep := c.shapeForThisClient(map[string]any{"anything": 1}); !keep {
 		t.Error("a frame that names no device was withheld")
 	}
 }
@@ -182,5 +182,74 @@ func TestPlainSubscriptionStillSeesEverything(t *testing.T) {
 	if got.Payload.DeviceAddress != "HELD0003" {
 		t.Fatalf("a client that did not opt in got %q instead of the withheld device — the Config UI would go blind",
 			got.Payload.DeviceAddress)
+	}
+}
+
+// TestHubEntityKeepsItselfButLosesTheAssociation pins the second category,
+// which the first design got wrong in both possible directions.
+//
+// A system variable or program that names a withheld device exists on the
+// CCU regardless of whether that device has been released here. Dropping
+// the frame would take away something the operator has — the sysvar
+// vanishes until an unrelated device finishes onboarding. Passing it
+// through unchanged is no better: a filtering client attaches the entity
+// to a device it does not have, and either loses it or invents a phantom.
+//
+// So the entity survives and the association goes. The payload contract
+// already defines what an absent association means — the client attaches
+// to the central hub — so the frame degrades into a shape every client
+// already handles.
+func TestHubEntityKeepsItselfButLosesTheAssociation(t *testing.T) {
+	t.Parallel()
+	h := NewHub()
+	h.SetReleaseChecker(func(addr string) bool { return addr != "HELD0004" })
+	c := &client{hub: h}
+	c.setReleasedOnly(true)
+
+	held := SysvarChangedPayload{Name: "Party", Channel: "HELD0004:1", DeviceAddress: "HELD0004"}
+	shaped, keep := c.shapeForThisClient(held)
+	if !keep {
+		t.Fatal("the sysvar was dropped — it exists on the CCU regardless of an unrelated device's onboarding")
+	}
+	got, ok := shaped.(SysvarChangedPayload)
+	if !ok {
+		t.Fatalf("shaped payload type %T, want SysvarChangedPayload", shaped)
+	}
+	if got.DeviceAddress != "" || got.Channel != "" {
+		t.Errorf("association survived as device=%q channel=%q — the client attaches the entity to a device it does not have",
+			got.DeviceAddress, got.Channel)
+	}
+	if got.Name != "Party" {
+		t.Errorf("name = %q, want Party — stripping the association must not empty the entity", got.Name)
+	}
+
+	// Negative control: a sysvar on a RELEASED device keeps its
+	// association, or the filter would flatten every hub entity onto the
+	// central for a filtering client.
+	free := SysvarChangedPayload{Name: "Away", Channel: "FREE0004:1", DeviceAddress: "FREE0004"}
+	shaped, keep = c.shapeForThisClient(free)
+	if !keep {
+		t.Fatal("a sysvar on a released device was dropped")
+	}
+	if got, _ := shaped.(SysvarChangedPayload); got.DeviceAddress != "FREE0004" {
+		t.Errorf("association was stripped from a released device's sysvar: %+v", got)
+	}
+}
+
+// TestTriggerFrameIsWithheld pins the payload the old type switch missed
+// that mattered most: a client that turns device triggers into
+// automations would have fired them for a device it asked not to see.
+func TestTriggerFrameIsWithheld(t *testing.T) {
+	t.Parallel()
+	h := NewHub()
+	h.SetReleaseChecker(func(addr string) bool { return addr != "HELD0005" })
+	c := &client{hub: h}
+	c.setReleasedOnly(true)
+
+	if _, keep := c.shapeForThisClient(DeviceTriggerPayload{DeviceAddress: "HELD0005"}); keep {
+		t.Error("a withheld device's trigger reached a filtering client — it could drive an automation")
+	}
+	if _, keep := c.shapeForThisClient(DeviceTriggerPayload{DeviceAddress: "FREE0005"}); !keep {
+		t.Error("a released device's trigger was withheld")
 	}
 }
