@@ -214,6 +214,20 @@ export interface paths {
                      *     the daemon manages.
                      */
                     central?: string;
+                    /**
+                     * @description Set `true` to omit devices that have not finished onboarding.
+                     *     Opt-in and never the default: this endpoint's other consumer
+                     *     is the Config UI, which has to see a device that is still
+                     *     being onboarded in order to configure it, so withholding by
+                     *     default would make a device silently vanish from every
+                     *     existing client's list.
+                     *
+                     *     Use it when the caller adopts devices — an ecosystem
+                     *     integration — rather than configures them. The `released`
+                     *     field on each entry carries the same information for a caller
+                     *     that would rather filter itself.
+                     */
+                    released_only?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -2144,6 +2158,16 @@ export interface paths {
                      *     Unknown tokens are ignored.
                      */
                     include?: string;
+                    /**
+                     * @description Set `true` to omit devices that have not finished onboarding.
+                     *     Opt-in and never the default — a snapshot is what an
+                     *     ecosystem client seeds from, and it is also what the Config
+                     *     UI reloads; only the caller knows which it is. Pair it with
+                     *     the WebSocket subscribe option of the same name, or the two
+                     *     planes disagree: absent from the snapshot but arriving as a
+                     *     `device.created` push.
+                     */
+                    released_only?: boolean;
                     /**
                      * @description Tokenise operator-assigned names (device / channel /
                      *     sub-device / sysvar / room / function labels and program

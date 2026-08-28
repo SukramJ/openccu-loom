@@ -1987,3 +1987,52 @@ func TestListDevicesCarriesTheReleaseState(t *testing.T) {
 		t.Error("a device that never entered the wizard reports unreleased")
 	}
 }
+
+// TestListDevicesReleasedOnlyIsOptIn pins the REST half of the onboarding
+// filter, in both directions.
+//
+// The default must stay unchanged: this endpoint's other consumer is the
+// Config UI, and a device silently vanishing from every existing client's
+// list is the failure mode opposite to the one the filter exists for.
+func TestListDevicesReleasedOnlyIsOptIn(t *testing.T) {
+	t.Parallel()
+	held := newTestDevice("0001HELD", "HmIP-STH")
+	free := newTestDevice("0002FREE", "HmIP-BSM")
+	idx := &stubDeviceIndex{
+		devices:    map[string]*device.Device{"0001HELD": held, "0002FREE": free},
+		unreleased: map[string]bool{"0001HELD": true},
+	}
+
+	list := func(query string) []string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices"+query, http.NoBody)
+		w := httptest.NewRecorder()
+		ListDevices(idx).ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+		var body struct {
+			Items []DeviceSummary `json:"items"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		out := make([]string, 0, len(body.Items))
+		for _, s := range body.Items {
+			out = append(out, s.Address)
+		}
+		return out
+	}
+
+	if got := list(""); len(got) != 2 {
+		t.Errorf("default listing = %v, want both — withholding by default would break the Config UI", got)
+	}
+	if got := list("?released_only=true"); len(got) != 1 || got[0] != "0002FREE" {
+		t.Errorf("released_only listing = %v, want only 0002FREE", got)
+	}
+	// A value other than "true" must not filter: an opt-in that triggers
+	// on any present value would surprise a client passing false.
+	if got := list("?released_only=false"); len(got) != 2 {
+		t.Errorf("released_only=false listing = %v, want both", got)
+	}
+}

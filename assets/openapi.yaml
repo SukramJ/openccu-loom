@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.19.0
+  version: 7.20.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -147,6 +147,22 @@ paths:
             (exact match; `central == SystemCCUEntry.name ==
             payload.central`). Omit to list devices across every central
             the daemon manages.
+        - name: released_only
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: |
+            Set `true` to omit devices that have not finished onboarding.
+            Opt-in and never the default: this endpoint's other consumer
+            is the Config UI, which has to see a device that is still
+            being onboarded in order to configure it, so withholding by
+            default would make a device silently vanish from every
+            existing client's list.
+
+            Use it when the caller adopts devices — an ecosystem
+            integration — rather than configures them. The `released`
+            field on each entry carries the same information for a caller
+            that would rather filter itself.
       responses:
         "200":
           description: OK
@@ -1857,6 +1873,18 @@ paths:
             Comma-separated set of nested entities to expand:
             `channels` and/or `data_points` (alias `data-points`).
             Unknown tokens are ignored.
+        - name: released_only
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: |
+            Set `true` to omit devices that have not finished onboarding.
+            Opt-in and never the default — a snapshot is what an
+            ecosystem client seeds from, and it is also what the Config
+            UI reloads; only the caller knows which it is. Pair it with
+            the WebSocket subscribe option of the same name, or the two
+            planes disagree: absent from the snapshot but arriving as a
+            `device.created` push.
         - name: anonymize
           in: query
           required: false

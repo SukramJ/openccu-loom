@@ -1,5 +1,5 @@
 {
- "version": "1.5",
+ "version": "1.6",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -25,6 +25,9 @@
  "reauth": {
   "description": "Client → server: `{op:\"reauth\", token:\"<bearer token>\"}` swaps the credential behind an established connection without a reconnect. A socket resolves its identity once, at the upgrade, and the daemon closes it the instant that credential's deadline passes — so a long-lived client must refill before the deadline rather than discover the rotation through a 401. On success the daemon answers `{op:\"reauth_ok\"}`, carrying `expires_at` (RFC3339, UTC) when the new credential has a server-side deadline and omitting it when it has none. On failure — no token store wired, empty token, unknown or expired token — it answers `{op:\"reauth_failed\"}` and closes the connection; the client reconnects with fresh credentials. The same deadline is readable over REST as the `expires_at` field of GET /auth/me.",
   "expires_at": "string? — RFC3339 UTC instant at which the newly installed credential stops being accepted. Absent means no server-side expiry."
+ },
+ "released_only": {
+  "description": "Client → server: append `released_only: true` to a subscribe op to drop every frame about a device the onboarding wizard has not released — the device.created / device.removed / device.availability_changed lifecycle frames and the datapoint.value_changed stream alike. Off by default and per connection, because this plane serves two kinds of consumer at once: the Config UI, which MUST see a device that is still being onboarded in order to configure it, and an ecosystem client, which must not adopt it before it is named. The `device.released` frame is never dropped — it is what lifts the filter, and withholding it would leave a filtering client unable to ever learn the device became adoptable. Frames that name no device (hub, system, alarm) are never affected. Pass `released_only: false` to turn it back off; an absent field leaves the current preference untouched across re-subscribes, exactly like `classify`."
  },
  "subscription_ack": {
   "description": "After a `{op:\"subscribe\", topics:[...]}` or `{op:\"unsubscribe\", topics:[...]}` is processed, the daemon echoes one `{op:\"subscribed\"|\"unsubscribed\", topics:[...]}` frame carrying the topics the client just requested. Reconnect-after-failure logic can use this ACK to confirm the subscription set survived the round trip without needing to inspect daemon-side state. An empty topics array suppresses the ACK to keep no-op subscribes quiet."

@@ -110,7 +110,8 @@ type snapshotInclude struct {
 // useful for diagnostics. Applies to both response shapes.
 func Snapshot(deps SnapshotDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		env := buildSnapshotEnvelope(deps, snapshotIncludes(r), strings.TrimSpace(r.URL.Query().Get("central")))
+		env := buildSnapshotEnvelope(deps, snapshotIncludes(r), strings.TrimSpace(r.URL.Query().Get("central")),
+			r.URL.Query().Get("released_only") == "true")
 		if wantsAnonymise(r) {
 			anonymiseSnapshot(&env)
 		}
@@ -152,7 +153,7 @@ func snapshotIncludes(r *http.Request) snapshotInclude {
 // the hub entities (programs + sysvars) to that one CCU via exact match
 // on the canonical central name. Rooms and functions are not
 // central-tagged in the model and stay fleet-wide.
-func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName string) SnapshotEnvelope {
+func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName string, releasedOnly bool) SnapshotEnvelope {
 	env := SnapshotEnvelope{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -170,7 +171,14 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName s
 		sort.Slice(devs, func(i, j int) bool { return devs[i].Address < devs[j].Address })
 		env.Devices = make([]DeviceSummary, 0, len(devs))
 		for _, d := range devs {
-			env.Devices = append(env.Devices, toDeviceSummary(d, deps.Devices.CentralOf(d.Address), deps.Devices.Released(d.Address)))
+			released := deps.Devices.Released(d.Address)
+			// Same opt-in as GET /devices: a snapshot is what an
+			// ecosystem client seeds from, and it is also what the
+			// Config UI reloads. Only the caller knows which it is.
+			if releasedOnly && !released {
+				continue
+			}
+			env.Devices = append(env.Devices, toDeviceSummary(d, deps.Devices.CentralOf(d.Address), released))
 		}
 		if inc.channels {
 			env.DeviceChannels = snapshotDeviceChannels(deps.Devices, devs, deps.Labels, inc.dataPoints)

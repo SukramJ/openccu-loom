@@ -592,6 +592,13 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		// (`SystemCCUEntry.name == CentralRow.name == payload.central`), so
 		// a multi-CCU client can fetch exactly one CCU's device list.
 		centralFilter := strings.TrimSpace(q.Get("central"))
+		// released_only is opt-in and never the default: this endpoint's
+		// other consumer is the Config UI, which has to see a device that
+		// is still being onboarded in order to configure it. Withholding
+		// by default would make a device silently vanish from every
+		// existing client's list — the failure mode opposite to the one
+		// this filter exists for.
+		releasedOnly := q.Get("released_only") == "true"
 		filtered := devs[:0:0]
 		for _, d := range devs {
 			if centralFilter != "" && idx.CentralOf(d.Address) != centralFilter {
@@ -607,6 +614,9 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 				continue
 			}
 			if addrFilter != "" && !strings.Contains(strings.ToLower(d.Address), addrFilter) {
+				continue
+			}
+			if releasedOnly && !idx.Released(d.Address) {
 				continue
 			}
 			filtered = append(filtered, d)
