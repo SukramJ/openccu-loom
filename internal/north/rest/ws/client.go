@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // clientBufferSize is the max number of queued events per client.
@@ -583,15 +584,15 @@ type inboundMessage struct {
 // outboundEvent is the envelope every server→client event uses.
 // Seq is the monotonic cursor a reconnecting client passes back as
 // `since` on its next subscribe; Kind tags the event family
-// ("initial" first observation, "change" delta, "refresh" periodic
-// re-emit). See ADR 0022.
+// ([KindInitial] first observation, [KindChange] delta, [KindRefresh]
+// periodic re-emit). See ADR 0022.
 type outboundEvent struct {
-	Seq     uint64 `json:"seq"`
-	Kind    string `json:"kind"`
-	Topic   string `json:"topic"`
-	Type    string `json:"type"`
-	TS      string `json:"ts"`
-	Payload any    `json:"payload"`
+	Seq     uint64                `json:"seq"`
+	Kind    hmenum.WSEnvelopeKind `json:"kind"`
+	Topic   string                `json:"topic"`
+	Type    string                `json:"type"`
+	TS      string                `json:"ts"`
+	Payload any                   `json:"payload"`
 }
 
 // outboundOp is the simple envelope for ping, pong, subscribe ACKs,

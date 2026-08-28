@@ -1291,7 +1291,7 @@ func (b *EventBridge) onValueChanged(centralName string, e hmevent.DataPointValu
 // fan-out worker is not running (a unit test that drives a handler without
 // calling Start), the publish falls back to running inline so behaviour is
 // preserved.
-func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+func (b *EventBridge) dispatchLive(centralName string, envKind hmenum.WSEnvelopeKind, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedWS(centralName, envKind, e)
 	if b.mqtt == nil {
 		// No broker to publish to, but the availability transition this
@@ -1331,7 +1331,7 @@ func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPo
 // broker for a data point the operator asked not to see, and for a device
 // whose data points are all hidden it would create an availability topic with
 // no entity to own it.
-func (b *EventBridge) publishValueChangedSinks(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+func (b *EventBridge) publishValueChangedSinks(ctx context.Context, centralName string, envKind hmenum.WSEnvelopeKind, e hmevent.DataPointValueChangedEvent) {
 	published := b.publishValueChangedMQTT(ctx, centralName, envKind, e)
 	if published || isReachabilityParameter(e.Key.Parameter) {
 		b.refreshDeviceAvailabilityFor(ctx, centralName, e)
@@ -1355,7 +1355,7 @@ func (b *EventBridge) refreshDeviceAvailabilityFor(ctx context.Context, centralN
 // publish to complete inline. The live bus subscriptions do NOT call
 // this — they go through [EventBridge.dispatchLive], which runs the WS
 // side inline and hands the MQTT side to the fan-out worker.
-func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName string, envKind hmenum.WSEnvelopeKind, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedWS(centralName, envKind, e)
 	b.publishValueChangedSinks(ctx, centralName, envKind, e)
 }
@@ -1384,7 +1384,7 @@ func (b *EventBridge) publishSnapshotValue(ctx context.Context, centralName stri
 // publishValueChangedWS emits the WebSocket-side fan-out for a value change.
 // The hub's per-client enqueue is bounded and non-blocking, so this is safe to
 // run inline on the bus dispatch goroutine.
-func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+func (b *EventBridge) publishValueChangedWS(centralName string, envKind hmenum.WSEnvelopeKind, e hmevent.DataPointValueChangedEvent) {
 	if b.wsHub == nil {
 		return
 	}
@@ -1509,7 +1509,7 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 // wiring, or when the global visibility filter dropped the parameter. The
 // availability refresh in [EventBridge.publishValueChangedSinks] keys on that
 // answer.
-func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) bool {
+func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName string, envKind hmenum.WSEnvelopeKind, e hmevent.DataPointValueChangedEvent) bool {
 	if b.mqtt == nil {
 		return false
 	}

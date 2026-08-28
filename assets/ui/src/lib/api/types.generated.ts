@@ -12,26 +12,7 @@ export interface paths {
             cookie?: never;
         };
         /** Daemon build + runtime info */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Info"];
-                    };
-                };
-            };
-        };
+        get: operations["getInfo"];
         put?: never;
         post?: never;
         delete?: never;
@@ -48,35 +29,7 @@ export interface paths {
             cookie?: never;
         };
         /** Aggregated health snapshot */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Healthy / degraded */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Health"];
-                    };
-                };
-                /** @description Any component unhealthy */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Health"];
-                    };
-                };
-            };
-        };
+        get: operations["getHealth"];
         put?: never;
         post?: never;
         delete?: never;
@@ -119,27 +72,7 @@ export interface paths {
          *     policy keys and feature flags without removing existing
          *     ones.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ConfigSnapshot"];
-                    };
-                };
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        get: operations["getConfig"];
         put?: never;
         post?: never;
         delete?: never;
@@ -165,29 +98,7 @@ export interface paths {
          *     persisted server-side. Downstream log aggregation
          *     handles counting and slicing. See ADR 0016.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["UIEventRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-            };
-        };
+        post: operations["postUIEvent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -202,50 +113,7 @@ export interface paths {
             cookie?: never;
         };
         /** Paginated device list */
-        get: {
-            parameters: {
-                query?: {
-                    page?: components["parameters"]["Page"];
-                    per_page?: components["parameters"]["PerPage"];
-                    /**
-                     * @description Scope the list to a single CCU by its canonical central name
-                     *     (exact match; `central == SystemCCUEntry.name ==
-                     *     payload.central`). Omit to list devices across every central
-                     *     the daemon manages.
-                     */
-                    central?: string;
-                    /**
-                     * @description Set `true` to omit devices that have not finished onboarding.
-                     *     Opt-in and never the default: this endpoint's other consumer
-                     *     is the Config UI, which has to see a device that is still
-                     *     being onboarded in order to configure it, so withholding by
-                     *     default would make a device silently vanish from every
-                     *     existing client's list.
-                     *
-                     *     Use it when the caller adopts devices — an ecosystem
-                     *     integration — rather than configures them. The `released`
-                     *     field on each entry carries the same information for a caller
-                     *     that would rather filter itself.
-                     */
-                    released_only?: boolean;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["DeviceList"];
-                    };
-                };
-            };
-        };
+        get: operations["listDevices"];
         put?: never;
         post?: never;
         delete?: never;
@@ -262,29 +130,7 @@ export interface paths {
             cookie?: never;
         };
         /** Single device detail */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["DeviceDetail"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["getDevice"];
         put?: never;
         post?: never;
         /**
@@ -338,29 +184,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ChannelSummary"][];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["listDeviceChannels"];
         put?: never;
         post?: never;
         delete?: never;
@@ -376,30 +200,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                    no: components["parameters"]["ChannelNo"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ChannelSummary"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["getDeviceChannel"];
         put?: never;
         post?: never;
         delete?: never;
@@ -431,30 +232,7 @@ export interface paths {
          *     groups — the bootstrap shape an `event` platform builds its
          *     entities from. Empty array when the channel has no event sources.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                    no: components["parameters"]["ChannelNo"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["EventGroupSummary"][];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["listChannelEventGroups"];
         put?: never;
         post?: never;
         delete?: never;
@@ -470,30 +248,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                    no: components["parameters"]["ChannelNo"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["DataPointSummary"][];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["listChannelDataPoints"];
         put?: never;
         post?: never;
         delete?: never;
@@ -509,31 +264,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                    no: components["parameters"]["ChannelNo"];
-                    param: components["parameters"]["Parameter"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["DataPointSummary"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["getChannelDataPoint"];
         put?: never;
         post?: never;
         delete?: never;
@@ -561,40 +292,7 @@ export interface paths {
          *         network glitches and must not double-actuate the
          *         actuator.
          */
-        put: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /** @description Optional UUID for retry deduplication. See description. */
-                    "Idempotency-Key"?: string;
-                };
-                path: {
-                    addr: components["parameters"]["Address"];
-                    no: components["parameters"]["ChannelNo"];
-                    param: components["parameters"]["Parameter"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["SetValueRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                404: components["responses"]["NotFound"];
-                423: components["responses"]["Locked"];
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        put: operations["putDataPointValue"];
         post?: never;
         delete?: never;
         options?: never;
@@ -610,66 +308,14 @@ export interface paths {
             cookie?: never;
         };
         /** Get the operator per-channel overrides (G12) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                    no: components["parameters"]["ChannelNo"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ChannelFlags"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["getChannelFlags"];
         /**
          * Set the operator per-channel overrides (G12)
          * @description Hide the channel from the operation surfaces (data-point list, MQTT,
          *     Matter) and/or lock it against control writes. An absent field keeps
          *     its current value.
          */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: components["parameters"]["Address"];
-                    no: components["parameters"]["ChannelNo"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ChannelFlagsRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ChannelFlags"];
-                    };
-                };
-                400: components["responses"]["BadRequest"];
-                404: components["responses"]["NotFound"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        put: operations["putChannelFlags"];
         post?: never;
         delete?: never;
         options?: never;
@@ -714,43 +360,7 @@ export interface paths {
          *         the same body as the original; the daemon trusts the
          *         client's key choice.
          */
-        put: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /** @description Optional UUID for client-side retry de-duplication. See description. */
-                    "Idempotency-Key"?: string;
-                    /** @description Edit-lock token for MASTER and LINK writes. These configuration paramsets are gated behind the per-resource edit lock: the caller must open an edit session (`POST /sessions/edit` with key `channel:{addr}:{key}`) and present the returned token here, else the write is rejected 423 Locked. VALUES writes are ungated and ignore this header. */
-                    "X-Edit-Token"?: string;
-                };
-                path: {
-                    addr: components["parameters"]["Address"];
-                    key: "VALUES" | "MASTER" | "LINK";
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            responses: {
-                /** @description Accepted (atomic write dispatched to CCU) */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                403: components["responses"]["Forbidden"];
-                423: components["responses"]["Locked"];
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        put: operations["putParamset"];
         post?: never;
         delete?: never;
         options?: never;
@@ -989,39 +599,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: {
-                    page?: components["parameters"]["Page"];
-                    per_page?: components["parameters"]["PerPage"];
-                    /**
-                     * @description Overrides whether internal (Tmp_*, prgEnergyCounter_*) programs
-                     *     are listed. When omitted, each central applies its
-                     *     `include_internal_programs` config default (hidden by default,
-                     *     mirroring the CCU WebUI's "show system programs" toggle). The
-                     *     daemon always knows every program; this only steers delivery.
-                     */
-                    include_internal?: boolean;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        /** @description Total number of programs before pagination. */
-                        "X-Total-Count"?: number;
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ProgramSummary"][];
-                    };
-                };
-            };
-        };
+        get: operations["listPrograms"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1053,49 +631,7 @@ export interface paths {
          *     for an unconditional run, and `false` for a condition-checked run
          *     whose condition was not met.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Optional client-supplied UUID for retry deduplication on
-                     *     mutating requests. The daemon caches the response per
-                     *     `(method, path, key)` for 5 minutes; a retry with the same key
-                     *     within that window replays the cached response and sets the
-                     *     `Idempotent-Replay: true` response header. Keys older than 5
-                     *     minutes (or evicted under memory pressure) flow through as
-                     *     fresh requests. The cache key does NOT include the request
-                     *     body — a retry MUST use the same body as the original; the
-                     *     daemon trusts the client's key choice.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": components["schemas"]["ProgramExecuteRequest"];
-                };
-            };
-            responses: {
-                /** @description Execution result */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ProgramExecuteResponse"];
-                    };
-                };
-                400: components["responses"]["BadRequest"];
-                404: components["responses"]["NotFound"];
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        post: operations["executeProgram"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1120,42 +656,7 @@ export interface paths {
          *     is a real device write — the same authorization weight as
          *     `PUT /devices/.../value`.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["WebhookValueRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                401: components["responses"]["Unauthorized"];
-                /**
-                 * @description Inbound webhook disabled (`north.webhook.inbound.enabled` is
-                 *     false) — the route is not mounted.
-                 */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        post: operations["webhookSetValue"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1178,33 +679,7 @@ export interface paths {
          *     Authorization: an operator identity OR the configured inbound bearer
          *     token. `central` is required when more than one CCU is configured.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["WebhookProgramRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                401: components["responses"]["Unauthorized"];
-                404: components["responses"]["NotFound"];
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        post: operations["webhookRunProgram"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1218,31 +693,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: {
-                    page?: components["parameters"]["Page"];
-                    per_page?: components["parameters"]["PerPage"];
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        /** @description Total number of sysvars before pagination. */
-                        "X-Total-Count"?: number;
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["SysvarSummary"][];
-                    };
-                };
-            };
-        };
+        get: operations["listSysvars"];
         put?: never;
         /** Create sysvar on the CCU (Rega create_system_variable) */
         post: operations["createSysvar"];
@@ -1285,29 +736,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    name: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["SysvarSummary"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["getSysvar"];
         /**
          * Set the sysvar runtime value. Idempotent — body carries {value} only.
          * @description Sysvars can fire CCU programs and scenes when their value
@@ -1360,31 +789,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: {
-                    page?: components["parameters"]["Page"];
-                    per_page?: components["parameters"]["PerPage"];
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        /** @description Total number of alarm messages before pagination. */
-                        "X-Total-Count"?: number;
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["AlarmMessage"][];
-                    };
-                };
-            };
-        };
+        get: operations["listAlarmMessages"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1400,31 +805,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: {
-                    page?: components["parameters"]["Page"];
-                    per_page?: components["parameters"]["PerPage"];
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        /** @description Total number of service messages before pagination. */
-                        "X-Total-Count"?: number;
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ServiceMessage"][];
-                    };
-                };
-            };
-        };
+        get: operations["listServiceMessages"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1445,55 +826,9 @@ export interface paths {
          *     point; external clients mirror the reference stack's per-interface
          *     install-mode sensor and button from it.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InstallModeInterfaceEntry"][];
-                    };
-                };
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        get: operations["listInstallModeInterfaces"];
         put?: never;
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["InstallModeInterfaceRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                404: components["responses"]["NotFound"];
-                422: components["responses"]["UnprocessableEntity"];
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        post: operations["setInstallModeInterface"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1537,26 +872,7 @@ export interface paths {
          *     (`/bin/install_addon`, i.e. OpenCCU / RaspberryMatic); elsewhere
          *     `supported` is false and the check/install verbs answer 404.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["AddonUpdateStatus"];
-                    };
-                };
-            };
-        };
+        get: operations["getAddonUpdate"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1575,25 +891,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** @description Trigger an immediate update check against the release feed. */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Check started; observe via GET or the WS broadcast. */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        post: operations["checkAddonUpdate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1614,34 +912,7 @@ export interface paths {
          *     and install the latest add-on package via the firmware's
          *     install_addon. The daemon restarts as part of the install.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Install started; the daemon will restart. */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                404: components["responses"]["NotFound"];
-                /** @description No update available, or an install is already running. */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        post: operations["installAddonUpdate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1659,27 +930,7 @@ export interface paths {
          * @description CCU system-update info per central — the data behind the reference
          *     stack's system-update entity.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["SystemUpdateEntry"][];
-                    };
-                };
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        get: operations["getSystemUpdate"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1698,35 +949,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** @description Starts the CCU firmware update. With `backup_first` a full CCU backup is taken first and the update starts only once it is durably stored; a failed backup aborts and the update does not run, because the point of asking for one is to have something to return to. The call then blocks for as long as the backup takes — minutes on a large configuration — since its response is what tells the operator whether that safety net exists. */
-        post: {
-            parameters: {
-                query?: {
-                    /** @description Target central (optional for single-CCU deployments). */
-                    central?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": components["schemas"]["InstallSystemUpdateRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                404: components["responses"]["NotFound"];
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        post: operations["installSystemUpdate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1745,27 +968,7 @@ export interface paths {
          *     of the Prometheus `/metrics` endpoint for the system-health,
          *     connection-latency and last-event-age hub sensors.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["HubMetricsEntry"][];
-                    };
-                };
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        get: operations["getSystemMetrics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1781,26 +984,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InterfaceState"][];
-                    };
-                };
-            };
-        };
+        get: operations["listInterfaces"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1816,29 +1000,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InterfaceState"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
+        get: operations["getInterface"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1856,28 +1018,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
+        post: operations["reconnectInterface"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2149,59 +1290,7 @@ export interface paths {
          *     implies `channels`. With `Accept: application/x-ndjson` the same
          *     entities stream as `kind:"channel"` / `kind:"data_point"` lines.
          */
-        get: {
-            parameters: {
-                query?: {
-                    /**
-                     * @description Comma-separated set of nested entities to expand:
-                     *     `channels` and/or `data_points` (alias `data-points`).
-                     *     Unknown tokens are ignored.
-                     */
-                    include?: string;
-                    /**
-                     * @description Set `true` to omit devices that have not finished onboarding.
-                     *     Opt-in and never the default — a snapshot is what an
-                     *     ecosystem client seeds from, and it is also what the Config
-                     *     UI reloads; only the caller knows which it is. Pair it with
-                     *     the WebSocket subscribe option of the same name, or the two
-                     *     planes disagree: absent from the snapshot but arriving as a
-                     *     `device.created` push.
-                     */
-                    released_only?: boolean;
-                    /**
-                     * @description Tokenise operator-assigned names (device / channel /
-                     *     sub-device / sysvar / room / function labels and program
-                     *     descriptions) with stable non-identifying hashes. Addresses
-                     *     and values stay intact. `anonymise` is accepted as an alias.
-                     */
-                    anonymize?: boolean;
-                    /**
-                     * @description Scope the snapshot to a single CCU by its canonical central
-                     *     name (exact match; `central == SystemCCUEntry.name ==
-                     *     payload.central`). Scopes the device tree (devices, channels)
-                     *     and hub entities (programs, sysvars). Rooms and functions are
-                     *     not central-tagged and stay fleet-wide. Omit for all centrals.
-                     */
-                    central?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Snapshot"];
-                        "application/x-ndjson": string;
-                    };
-                };
-            };
-        };
+        get: operations["getSnapshot"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2251,34 +1340,7 @@ export interface paths {
          *     - `device.availability_changed` → [DeviceAvailabilityChangedPayload](#/components/schemas/DeviceAvailabilityChangedPayload)
          *     - `matter.*` broadcasts: see `wsapi.json` (payload schemas TBD).
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Switching Protocols */
-                101: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /**
-                 * @description Plain HTTP request without a valid WebSocket upgrade — the
-                 *     server rejects the connection rather than serving HTML.
-                 */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        get: operations["streamEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3208,36 +2270,7 @@ export interface paths {
          *     half of the `schedule_enabled` map in WeekProfileResponse. External
          *     clients drive their schedule-channel switch entities through it.
          */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    addr: string;
-                    no: number;
-                    /** @description Schedule target channel key, e.g. `1_1`. */
-                    key: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ChannelLockRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                404: components["responses"]["NotFound"];
-                502: components["responses"]["BadGateway"];
-            };
-        };
+        put: operations["putWeekProfileChannelLock"];
         post?: never;
         delete?: never;
         options?: never;
@@ -6203,6 +5236,13 @@ export interface components {
              *     `text_display`. Drives the SPA's CDP-aware widget
              *     selection (ADR 0016). Empty when the kind classifier
              *     does not recognise the Custom-DP type.
+             *
+             *     Deliberately not a closed enum: the empty value is
+             *     reachable, so a schema that pinned the token set would
+             *     reject a conforming response. The full token list is
+             *     published as the open `CustomDPKind` vocabulary in
+             *     `assets/schemas/enums.json`; consumers keep a fallback
+             *     for tokens they do not know.
              */
             kind?: string;
             /**
@@ -6220,6 +5260,12 @@ export interface components {
              *     `effects`, `tilt`, `boost`, `away`. Mirrors the
              *     per-category Capability struct from
              *     `internal/model/custom/mixins.go`.
+             *
+             *     A Custom-DP carries only the flags of its own category, so
+             *     a missing key means the feature is not applicable — never
+             *     that it is switched off. The full key list is published as
+             *     the open `CustomDPCapability` vocabulary in
+             *     `assets/schemas/enums.json`.
              */
             capabilities?: {
                 [key: string]: boolean;
@@ -11204,6 +10250,166 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Info"];
+                };
+            };
+        };
+    };
+    getHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Healthy / degraded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description Any component unhealthy */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    getConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSnapshot"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    postUIEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UIEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    listDevices: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+                /**
+                 * @description Scope the list to a single CCU by its canonical central name
+                 *     (exact match; `central == SystemCCUEntry.name ==
+                 *     payload.central`). Omit to list devices across every central
+                 *     the daemon manages.
+                 */
+                central?: string;
+                /**
+                 * @description Set `true` to omit devices that have not finished onboarding.
+                 *     Opt-in and never the default: this endpoint's other consumer
+                 *     is the Config UI, which has to see a device that is still
+                 *     being onboarded in order to configure it, so withholding by
+                 *     default would make a device silently vanish from every
+                 *     existing client's list.
+                 *
+                 *     Use it when the caller adopts devices — an ecosystem
+                 *     integration — rather than configures them. The `released`
+                 *     field on each entry carries the same information for a caller
+                 *     that would rather filter itself.
+                 */
+                released_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceList"];
+                };
+            };
+        };
+    };
+    getDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     deleteDevice: {
         parameters: {
             query?: {
@@ -11283,6 +10489,53 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listDeviceChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelSummary"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getDeviceChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     patchChannel: {
         parameters: {
             query?: never;
@@ -11313,6 +10566,167 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    listChannelEventGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventGroupSummary"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listChannelDataPoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPointSummary"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getChannelDataPoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+                param: components["parameters"]["Parameter"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataPointSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putDataPointValue: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for retry deduplication. See description. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+                param: components["parameters"]["Parameter"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetValueRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            423: components["responses"]["Locked"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getChannelFlags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelFlags"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putChannelFlags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelFlagsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelFlags"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getParamset: {
         parameters: {
             query?: never;
@@ -11337,6 +10751,43 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    putParamset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional UUID for client-side retry de-duplication. See description. */
+                "Idempotency-Key"?: string;
+                /** @description Edit-lock token for MASTER and LINK writes. These configuration paramsets are gated behind the per-resource edit lock: the caller must open an edit session (`POST /sessions/edit` with key `channel:{addr}:{key}`) and present the returned token here, else the write is rejected 423 Locked. VALUES writes are ungated and ignore this header. */
+                "X-Edit-Token"?: string;
+            };
+            path: {
+                addr: components["parameters"]["Address"];
+                key: "VALUES" | "MASTER" | "LINK";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted (atomic write dispatched to CCU) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            423: components["responses"]["Locked"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -11722,6 +11173,170 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    listPrograms: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+                /**
+                 * @description Overrides whether internal (Tmp_*, prgEnergyCounter_*) programs
+                 *     are listed. When omitted, each central applies its
+                 *     `include_internal_programs` config default (hidden by default,
+                 *     mirroring the CCU WebUI's "show system programs" toggle). The
+                 *     daemon always knows every program; this only steers delivery.
+                 */
+                include_internal?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description Total number of programs before pagination. */
+                    "X-Total-Count"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgramSummary"][];
+                };
+            };
+        };
+    };
+    executeProgram: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional client-supplied UUID for retry deduplication on
+                 *     mutating requests. The daemon caches the response per
+                 *     `(method, path, key)` for 5 minutes; a retry with the same key
+                 *     within that window replays the cached response and sets the
+                 *     `Idempotent-Replay: true` response header. Keys older than 5
+                 *     minutes (or evicted under memory pressure) flow through as
+                 *     fresh requests. The cache key does NOT include the request
+                 *     body — a retry MUST use the same body as the original; the
+                 *     daemon trusts the client's key choice.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProgramExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Execution result */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgramExecuteResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    webhookSetValue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookValueRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /**
+             * @description Inbound webhook disabled (`north.webhook.inbound.enabled` is
+             *     false) — the route is not mounted.
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    webhookRunProgram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookProgramRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSysvars: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description Total number of sysvars before pagination. */
+                    "X-Total-Count"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SysvarSummary"][];
+                };
+            };
+        };
+    };
     createSysvar: {
         parameters: {
             query?: never;
@@ -11769,6 +11384,29 @@ export interface operations {
             };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSysvar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SysvarSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     putSysvar: {
@@ -11899,6 +11537,104 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    listAlarmMessages: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description Total number of alarm messages before pagination. */
+                    "X-Total-Count"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmMessage"][];
+                };
+            };
+        };
+    };
+    listServiceMessages: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    /** @description Total number of service messages before pagination. */
+                    "X-Total-Count"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceMessage"][];
+                };
+            };
+        };
+    };
+    listInstallModeInterfaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallModeInterfaceEntry"][];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setInstallModeInterface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallModeInterfaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     installModeSearch: {
         parameters: {
             query?: never;
@@ -11922,6 +11658,209 @@ export interface operations {
                 };
             };
             422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getAddonUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddonUpdateStatus"];
+                };
+            };
+        };
+    };
+    checkAddonUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Check started; observe via GET or the WS broadcast. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    installAddonUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Install started; the daemon will restart. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description No update available, or an install is already running. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSystemUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemUpdateEntry"][];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    installSystemUpdate: {
+        parameters: {
+            query?: {
+                /** @description Target central (optional for single-CCU deployments). */
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InstallSystemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSystemMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubMetricsEntry"][];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listInterfaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceState"][];
+                };
+            };
+        };
+    };
+    getInterface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceState"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    reconnectInterface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -12186,6 +12125,87 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ListSystemStatusResponse"];
                 };
+            };
+        };
+    };
+    getSnapshot: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Comma-separated set of nested entities to expand:
+                 *     `channels` and/or `data_points` (alias `data-points`).
+                 *     Unknown tokens are ignored.
+                 */
+                include?: string;
+                /**
+                 * @description Set `true` to omit devices that have not finished onboarding.
+                 *     Opt-in and never the default — a snapshot is what an
+                 *     ecosystem client seeds from, and it is also what the Config
+                 *     UI reloads; only the caller knows which it is. Pair it with
+                 *     the WebSocket subscribe option of the same name, or the two
+                 *     planes disagree: absent from the snapshot but arriving as a
+                 *     `device.created` push.
+                 */
+                released_only?: boolean;
+                /**
+                 * @description Tokenise operator-assigned names (device / channel /
+                 *     sub-device / sysvar / room / function labels and program
+                 *     descriptions) with stable non-identifying hashes. Addresses
+                 *     and values stay intact. `anonymise` is accepted as an alias.
+                 */
+                anonymize?: boolean;
+                /**
+                 * @description Scope the snapshot to a single CCU by its canonical central
+                 *     name (exact match; `central == SystemCCUEntry.name ==
+                 *     payload.central`). Scopes the device tree (devices, channels)
+                 *     and hub entities (programs, sysvars). Rooms and functions are
+                 *     not central-tagged and stay fleet-wide. Omit for all centrals.
+                 */
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Snapshot"];
+                    "application/x-ndjson": string;
+                };
+            };
+        };
+    };
+    streamEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching Protocols */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Plain HTTP request without a valid WebSocket upgrade — the
+             *     server rejects the connection rather than serving HTML.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13384,6 +13404,36 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    putWeekProfileChannelLock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+                /** @description Schedule target channel key, e.g. `1_1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelLockRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
         };
     };
     listMasterProfiles: {

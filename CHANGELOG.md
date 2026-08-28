@@ -6,6 +6,48 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Every route in the OpenAPI document carries an `operationId`.** 37 of the
+  295 operations had none, and `operationId` is what a generator keys its
+  client methods on: `openapi-typescript` leaves a route without one out of its
+  `operations` table entirely, so the SPA's generated types described 258 of
+  295 routes and the other 37 — `GET /devices`, `GET /info`, `PUT
+  …/data-points/{param}/value` among them — were simply absent from it. The
+  same document is vendored by `node-red-contrib-openccu-loom`, and a contract
+  test in `openccu-loom-client` needs the ids to address an operation at all.
+
+  Purely additive: the field was absent, never differently named. Measured with
+  `oasdiff breaking --fail-on ERR`, which reports no breaking change; the
+  APIVersion guard therefore asks for a minor bump, not a major, and no client
+  is locked out by a major mismatch.
+
+- **The two open token sets on `CustomDPSummary` are published in full.**
+  `assets/schemas/enums.json` gained a `vocabularies` block listing every
+  `kind` token (22) and every `capabilities` key (26). Both are documented
+  rather than closed, and the document says so: `kind` has a reachable empty
+  value, and a missing capability key means the flag does not apply to that
+  category rather than that it is false — a closed enum generated from either
+  one would reject a conforming daemon response. The lists come from the
+  `cdpkind` package itself, pinned to its constants and helpers by two guards.
+
+- **The WebSocket envelope's `kind` has a named type.** `initial|change|refresh`
+  existed only as prose in `assets/wsapi.json`, so a generated client had to
+  spell the three literals itself. It is `hmenum.WSEnvelopeKind` now and ships
+  in `assets/schemas/enums.json` like every other wire vocabulary. The wire is
+  unchanged.
+
+### Fixed
+
+- **The API-surface guard read a newly named route as a rename.** Giving a bare
+  route an `operationId` moved it from the `(unnamed)` sentinel to a real name,
+  which `TestAPISurfaceChangesCarryTheRightBump` classified as breaking and so
+  demanded a major bump — the one thing that would have locked existing clients
+  out over a purely additive change. A generator never emitted a symbol for an
+  unnamed route, so nothing can break; the move is additive now. Dropping an
+  existing name stays breaking, which is the direction that does remove a
+  symbol.
+
 ## [0.66.1] - 2026-08-27
 
 ### Added

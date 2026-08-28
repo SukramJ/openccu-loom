@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // Event is one item the domain layer hands to [*Hub.Publish]. Topic
@@ -17,13 +18,12 @@ import (
 // in the package doc.
 //
 // Seq is assigned by the hub at Publish time — callers may leave it
-// zero. Kind is one of the wire constants ("initial", "change",
-// "refresh"); an empty Kind defaults to "change" on the wire so the
-// new envelope field is opt-in for emit-site callers that have not
-// been updated.
+// zero. An empty Kind defaults to [KindChange] on the wire, so the
+// envelope field stays opt-in for emit-site callers that do not care
+// about the distinction.
 type Event struct {
 	Seq     uint64
-	Kind    string
+	Kind    hmenum.WSEnvelopeKind
 	Topic   string
 	Type    string
 	When    time.Time
@@ -34,10 +34,14 @@ type Event struct {
 // these explicitly when the distinction matters; the default
 // (empty -> "change") matches the dominant case (value-change
 // broadcast). See ADR 0022.
+//
+// Package-local spellings of [hmenum.WSEnvelopeKind], which is where
+// the vocabulary is declared and from where the contract export
+// publishes it.
 const (
-	KindInitial = "initial"
-	KindChange  = "change"
-	KindRefresh = "refresh"
+	KindInitial = hmenum.WSEnvelopeKindInitial
+	KindChange  = hmenum.WSEnvelopeKindChange
+	KindRefresh = hmenum.WSEnvelopeKindRefresh
 )
 
 // defaultReplayCapacity is the in-memory replay buffer size when no

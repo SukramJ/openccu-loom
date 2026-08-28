@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -113,7 +114,7 @@ type ValueChange struct {
 	// EnvelopeKind distinguishes initial-snapshot pushes ([KindInitial])
 	// and source-token re-emits ([KindRefresh]) from incremental changes.
 	// Empty means [KindChange].
-	EnvelopeKind  string
+	EnvelopeKind  hmenum.WSEnvelopeKind
 	Central       string
 	Interface     string
 	DeviceAddress string
@@ -196,7 +197,8 @@ func (h *Hub) PublishCustomDataPointStateChanged(
 // [KindRefresh]); the per-CDP widget `kind` keeps its name on the
 // payload. uniqueID is the canonical loom routing key; pass "" to omit.
 func (h *Hub) PublishCustomDataPointStateChangedKind(
-	envKind, centralName, deviceAddr string,
+	envKind hmenum.WSEnvelopeKind,
+	centralName, deviceAddr string,
 	channel int,
 	name, kind string,
 	state map[string]any,

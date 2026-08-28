@@ -3535,6 +3535,23 @@
       ]
     },
     {
+      "name": "WSEnvelopeKind",
+      "values": [
+        {
+          "go_name": "WSEnvelopeKindChange",
+          "wire_value": "change"
+        },
+        {
+          "go_name": "WSEnvelopeKindInitial",
+          "wire_value": "initial"
+        },
+        {
+          "go_name": "WSEnvelopeKindRefresh",
+          "wire_value": "refresh"
+        }
+      ]
+    },
+    {
       "name": "WeekdayStr",
       "values": [
         {
@@ -3584,6 +3601,76 @@
     {
       "address": "sysvar",
       "go_name": "SysvarAddress"
+    }
+  ],
+  "vocabularies": [
+    {
+      "applies_to": [
+        "CustomDPSummary.kind"
+      ],
+      "closed": false,
+      "description": "Stable widget hint derived from the concrete Custom-DP type (ADR 0016). Open: the classifier returns the empty string for a Custom-DP type it does not recognise, so consumers keep a fallback rather than rejecting the value.",
+      "name": "CustomDPKind",
+      "tokens": [
+        "light",
+        "light_color",
+        "light_color_temp",
+        "light_fixed_color",
+        "light_rgbw",
+        "light_dali",
+        "light_effect",
+        "light_sound_led",
+        "cover",
+        "cover_blind",
+        "cover_garage",
+        "climate_simple",
+        "climate_rf",
+        "climate_hmip",
+        "lock",
+        "siren",
+        "siren_smoke",
+        "siren_sound",
+        "switch",
+        "text_display",
+        "valve_irrigation",
+        "valve_modulating"
+      ]
+    },
+    {
+      "applies_to": [
+        "CustomDPSummary.capabilities"
+      ],
+      "closed": false,
+      "description": "Keys of the flat capability map on a Custom-DP. Open: a Custom-DP carries only the flags of its own category, so a missing key means the feature is not applicable to that category — not that it is switched off.",
+      "name": "CustomDPCapability",
+      "tokens": [
+        "dimmable",
+        "color",
+        "color_temp",
+        "effects",
+        "transition",
+        "position",
+        "tilt",
+        "stop",
+        "vent",
+        "inverted_control",
+        "boost",
+        "profile",
+        "auto",
+        "heat",
+        "cool",
+        "off",
+        "away",
+        "comfort",
+        "eco",
+        "open",
+        "child_safe",
+        "acoustic",
+        "optical",
+        "duration",
+        "soundfiles",
+        "volume_set"
+      ]
     }
   ]
 }

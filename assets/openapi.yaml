@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.21.0
+  version: 7.22.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -48,6 +48,7 @@ tags:
 paths:
   /info:
     get:
+      operationId: getInfo
       tags: [core]
       summary: Daemon build + runtime info
       security: []
@@ -60,6 +61,7 @@ paths:
 
   /health:
     get:
+      operationId: getHealth
       tags: [core]
       summary: Aggregated health snapshot
       security: []
@@ -77,6 +79,7 @@ paths:
 
   /config:
     get:
+      operationId: getConfig
       tags: [core]
       summary: Sanitized effective configuration
       description: |
@@ -114,6 +117,7 @@ paths:
 
   /ui/event:
     post:
+      operationId: postUIEvent
       tags: [core]
       summary: SPA telemetry sink (fire-and-forget)
       description: |
@@ -133,6 +137,7 @@ paths:
 
   /devices:
     get:
+      operationId: listDevices
       tags: [devices]
       summary: Paginated device list
       parameters:
@@ -172,6 +177,7 @@ paths:
 
   /devices/{addr}:
     get:
+      operationId: getDevice
       tags: [devices]
       summary: Single device detail
       parameters:
@@ -282,6 +288,7 @@ paths:
 
   /devices/{addr}/channels:
     get:
+      operationId: listDeviceChannels
       tags: [devices]
       parameters:
         - $ref: "#/components/parameters/Address"
@@ -298,6 +305,7 @@ paths:
 
   /devices/{addr}/channels/{no}:
     get:
+      operationId: getDeviceChannel
       tags: [devices]
       parameters:
         - $ref: "#/components/parameters/Address"
@@ -346,6 +354,7 @@ paths:
 
   /devices/{addr}/channels/{no}/event-groups:
     get:
+      operationId: listChannelEventGroups
       tags: [devices]
       summary: List per-Kind event groups for a channel
       description: |
@@ -368,6 +377,7 @@ paths:
 
   /devices/{addr}/channels/{no}/data-points:
     get:
+      operationId: listChannelDataPoints
       tags: [devices]
       parameters:
         - $ref: "#/components/parameters/Address"
@@ -385,6 +395,7 @@ paths:
 
   /devices/{addr}/channels/{no}/data-points/{param}:
     get:
+      operationId: getChannelDataPoint
       tags: [devices]
       parameters:
         - $ref: "#/components/parameters/Address"
@@ -401,6 +412,7 @@ paths:
 
   /devices/{addr}/channels/{no}/data-points/{param}/value:
     put:
+      operationId: putDataPointValue
       tags: [devices]
       summary: Set a data point value on the CCU
       description: |
@@ -446,6 +458,7 @@ paths:
 
   /devices/{addr}/channels/{no}/flags:
     get:
+      operationId: getChannelFlags
       tags: [devices]
       summary: Get the operator per-channel overrides (G12)
       parameters:
@@ -460,6 +473,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
     put:
+      operationId: putChannelFlags
       tags: [devices]
       summary: Set the operator per-channel overrides (G12)
       description: |
@@ -513,6 +527,7 @@ paths:
           $ref: "#/components/responses/BadGateway"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     put:
+      operationId: putParamset
       tags: [paramsets]
       summary: Write a paramset atomically (one wire call)
       description: |
@@ -960,6 +975,7 @@ paths:
 
   /programs:
     get:
+      operationId: listPrograms
       tags: [hub]
       parameters:
         - $ref: "#/components/parameters/Page"
@@ -989,6 +1005,7 @@ paths:
 
   /programs/{id}/execute:
     post:
+      operationId: executeProgram
       tags: [hub]
       description: |
         Triggers a CCU program. Programs typically drive actuators or
@@ -1032,6 +1049,7 @@ paths:
 
   /webhook/value:
     post:
+      operationId: webhookSetValue
       tags: [webhook]
       summary: Inbound webhook — set a datapoint value
       description: |
@@ -1063,6 +1081,7 @@ paths:
 
   /webhook/program:
     post:
+      operationId: webhookRunProgram
       tags: [webhook]
       summary: Inbound webhook — run a program
       description: |
@@ -1089,6 +1108,7 @@ paths:
 
   /sysvars:
     get:
+      operationId: listSysvars
       tags: [hub]
       parameters:
         - $ref: "#/components/parameters/Page"
@@ -1158,6 +1178,7 @@ paths:
         required: true
         schema: { type: string }
     get:
+      operationId: getSysvar
       tags: [hub]
       responses:
         "200":
@@ -1275,6 +1296,7 @@ paths:
 
   /alarm-messages:
     get:
+      operationId: listAlarmMessages
       tags: [messages]
       parameters:
         - $ref: "#/components/parameters/Page"
@@ -1294,6 +1316,7 @@ paths:
 
   /service-messages:
     get:
+      operationId: listServiceMessages
       tags: [messages]
       parameters:
         - $ref: "#/components/parameters/Page"
@@ -1313,6 +1336,7 @@ paths:
 
   /install-mode/interfaces:
     get:
+      operationId: listInstallModeInterfaces
       tags: [hub]
       description: |
         Per-interface install-mode state. One entry per install-mode data
@@ -1328,6 +1352,7 @@ paths:
                 items: { $ref: "#/components/schemas/InstallModeInterfaceEntry" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
+      operationId: setInstallModeInterface
       tags: [hub]
       security:
         - basicAuth: []
@@ -1381,6 +1406,7 @@ paths:
 
   /system/addon-update:
     get:
+      operationId: getAddonUpdate
       tags: [system]
       description: |
         Self-update status of the daemon's own CCU add-on package.
@@ -1396,6 +1422,7 @@ paths:
 
   /system/addon-update/check:
     post:
+      operationId: checkAddonUpdate
       tags: [system]
       description: Trigger an immediate update check against the release feed.
       security:
@@ -1409,6 +1436,7 @@ paths:
 
   /system/addon-update/install:
     post:
+      operationId: installAddonUpdate
       tags: [system]
       description: |
         Download, verify (SHA256 against the release checksums), stage
@@ -1430,6 +1458,7 @@ paths:
 
   /system/update:
     get:
+      operationId: getSystemUpdate
       tags: [hub]
       description: |
         CCU system-update info per central — the data behind the reference
@@ -1446,6 +1475,7 @@ paths:
 
   /system/update/install:
     post:
+      operationId: installSystemUpdate
       tags: [hub]
       security:
         - basicAuth: []
@@ -1481,6 +1511,7 @@ paths:
 
   /system/metrics:
     get:
+      operationId: getSystemMetrics
       tags: [hub]
       description: |
         Hub metric samples per central as JSON — the machine-readable twin
@@ -1498,6 +1529,7 @@ paths:
 
   /interfaces:
     get:
+      operationId: listInterfaces
       tags: [interfaces]
       responses:
         "200":
@@ -1510,6 +1542,7 @@ paths:
 
   /interfaces/{id}:
     get:
+      operationId: getInterface
       tags: [interfaces]
       parameters:
         - name: id
@@ -1527,6 +1560,7 @@ paths:
 
   /interfaces/{id}/reconnect:
     post:
+      operationId: reconnectInterface
       tags: [interfaces]
       security:
         - basicAuth: []
@@ -1849,6 +1883,7 @@ paths:
 
   /snapshot:
     get:
+      operationId: getSnapshot
       tags: [snapshot]
       summary: One-shot dump of structural daemon state
       description: |
@@ -1920,6 +1955,7 @@ paths:
 
   /events:
     get:
+      operationId: streamEvents
       tags: [events]
       summary: Upgrade to the WebSocket event stream
       description: |
@@ -3053,6 +3089,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/channels/{no}/week_profile/channel-locks/{key}:
     put:
+      operationId: putWeekProfileChannelLock
       tags: [devices]
       description: |
         Toggle one target channel's week-program participation — the write
@@ -7771,6 +7808,13 @@ components:
             `text_display`. Drives the SPA's CDP-aware widget
             selection (ADR 0016). Empty when the kind classifier
             does not recognise the Custom-DP type.
+
+            Deliberately not a closed enum: the empty value is
+            reachable, so a schema that pinned the token set would
+            reject a conforming response. The full token list is
+            published as the open `CustomDPKind` vocabulary in
+            `assets/schemas/enums.json`; consumers keep a fallback
+            for tokens they do not know.
         channels:
           type: array
           items: { type: integer }
@@ -7790,6 +7834,12 @@ components:
             `effects`, `tilt`, `boost`, `away`. Mirrors the
             per-category Capability struct from
             `internal/model/custom/mixins.go`.
+
+            A Custom-DP carries only the flags of its own category, so
+            a missing key means the feature is not applicable — never
+            that it is switched off. The full key list is published as
+            the open `CustomDPCapability` vocabulary in
+            `assets/schemas/enums.json`.
         config:
           type: object
           additionalProperties: true

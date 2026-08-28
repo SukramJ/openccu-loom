@@ -59,6 +59,69 @@ const (
 	KindValveMod    = "valve_modulating"
 )
 
+// Kinds returns every kind token [Of] can return apart from
+// [KindUnknown], in a stable order. It is the source the contract
+// export (`script/export_schemas.go`) publishes as the open
+// `CustomDPKind` vocabulary — the tokens are documented, not closed,
+// because KindUnknown is reachable and consumers must keep a
+// fallback.
+//
+// TestKindsCoversEveryKindConstant pins this against the constants
+// above.
+//
+// loom:reachable:reason="sole caller is script/export_schemas.go, the contract-export generator run by 'make export-schemas'; it carries //go:build ignore and the analyzer builds with -tags=!ignore, so no production edge to it can exist — the guards in vocabulary_test.go pin the returned list against the constants"
+func Kinds() []string {
+	return []string{
+		KindLight,
+		KindLightColor,
+		KindLightColorTemp,
+		KindLightFixedColor,
+		KindLightRGBW,
+		KindLightDali,
+		KindLightEffect,
+		KindLightSoundLed,
+		KindCover,
+		KindCoverBlind,
+		KindCoverGarage,
+		KindClimateSimple,
+		KindClimateRF,
+		KindClimateHmIP,
+		KindLock,
+		KindSiren,
+		KindSirenSmoke,
+		KindSirenSound,
+		KindSwitch,
+		KindTextDisplay,
+		KindValveIrr,
+		KindValveMod,
+	}
+}
+
+// CapabilityFlags returns every key [Capabilities] can put on its
+// map, in a stable order. Published alongside [Kinds] as the open
+// `CustomDPCapability` vocabulary: a Custom-DP carries only the flags
+// of its own category, so a consumer reads absence as "not
+// applicable", never as false.
+//
+// TestCapabilityFlagsCoversEveryHelper pins this against the per-
+// category helpers that actually build the maps.
+//
+// loom:reachable:reason="sole caller is script/export_schemas.go, the contract-export generator run by 'make export-schemas'; it carries //go:build ignore and the analyzer builds with -tags=!ignore, so no production edge to it can exist — the guards in vocabulary_test.go pin the returned list against the helpers that build the maps"
+func CapabilityFlags() []string {
+	return []string{
+		// light
+		"dimmable", "color", "color_temp", "effects", "transition",
+		// cover
+		"position", "tilt", "stop", "vent", "inverted_control",
+		// climate
+		"boost", "profile", "auto", "heat", "cool", "off", "away", "comfort", "eco",
+		// lock
+		"open", "child_safe",
+		// siren
+		"acoustic", "optical", "duration", "soundfiles", "volume_set",
+	}
+}
+
 // Of returns the stable kind string for dp, or KindUnknown when dp
 // is not a known Custom-DP type. The order in the type-switch is
 // most-specific-first: subtypes of Light precede *light.Light itself.
@@ -150,14 +213,14 @@ func Capabilities(dp device.AttachableDataPoint) map[string]bool {
 		// per the current DEVICE_OPERATION_MODE (RGB/RGBW → hs, TUNABLE_WHITE →
 		// colour temp, every non-PWM mode → effects), mirroring the reference
 		// CustomDpIpRGBWLight.has_* mode gating. The static profile flags only
-		// carry the mode-independent dimmable/transition pair.
-		return map[string]bool{
-			"dimmable":   v.Capabilities.Dimmable,
-			"transition": v.Capabilities.Transition,
-			"color":      v.HasColor(),
-			"color_temp": v.HasColorTempColorMode(),
-			"effects":    v.HasEffects(),
-		}
+		// carry the mode-independent dimmable/transition pair, so the three
+		// mode-gated flags overwrite their static counterparts — building on
+		// lightCaps keeps the light flag set defined in exactly one place.
+		caps := lightCaps(v.Capabilities)
+		caps["color"] = v.HasColor()
+		caps["color_temp"] = v.HasColorTempColorMode()
+		caps["effects"] = v.HasEffects()
+		return caps
 	case *light.DRGDaliLight:
 		return lightCaps(v.Capabilities)
 	case *light.EffectLight:

@@ -56,7 +56,7 @@ func TestEventBridgeWSDeliveryWithoutMQTT(t *testing.T) {
 		name     string
 		publish  func(u *central.Unit, d *device.Device)
 		wantType hmevent.EventType
-		wantKind string
+		wantKind hmenum.WSEnvelopeKind
 	}{
 		{
 			name: "value_changed",
