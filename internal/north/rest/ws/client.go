@@ -77,6 +77,11 @@ type client struct {
 	// stream stays lean for clients that cache classification from the
 	// snapshot catalogue instead.
 	classify bool
+	// releasedOnly, when set via a subscribe frame's `released_only:true`,
+	// drops every frame about a device the onboarding wizard has not
+	// released. Default off, because this plane's other consumer — the
+	// Config UI — has to see exactly those devices to configure them.
+	releasedOnly bool
 
 	// out carries domain events (topic broadcasts) to the writer
 	// goroutine; ctrl carries every other outbound frame (subscribe/
@@ -158,6 +163,60 @@ func (c *client) setClassify(v bool) {
 	c.mu.Lock()
 	c.classify = v
 	c.mu.Unlock()
+}
+
+// setReleasedOnly records the client's opt-in to the onboarding filter.
+func (c *client) setReleasedOnly(v bool) {
+	c.mu.Lock()
+	c.releasedOnly = v
+	c.mu.Unlock()
+}
+
+// releasedOnlyEnabled reports whether this client asked to be spared
+// devices that are still being onboarded.
+func (c *client) releasedOnlyEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.releasedOnly
+}
+
+// withheldFromThisClient reports whether a frame must be dropped for this
+// connection because it concerns a device the wizard has not released.
+//
+// The device.released frame itself always passes: the state flips before
+// the event is published, so by the time it reaches here the address is
+// released. That is the frame that lifts the filter, and dropping it
+// would strand a filtering client forever.
+func (c *client) withheldFromThisClient(payload any) bool {
+	if !c.releasedOnlyEnabled() {
+		return false
+	}
+	addr := deviceAddressOf(payload)
+	if addr == "" {
+		return false
+	}
+	return !c.hub.deviceReleased(addr)
+}
+
+// deviceAddressOf extracts the device a payload is about, or "" when the
+// payload is not device-scoped. Only the device-scoped payloads are
+// listed: a frame that names no device (hub, system, alarm) is never
+// withheld, because there is nothing to withhold it on behalf of.
+func deviceAddressOf(payload any) string {
+	switch p := payload.(type) {
+	case DataPointValueChangedPayload:
+		return p.DeviceAddress
+	case DeviceCreatedPayload:
+		return p.DeviceAddress
+	case DeviceReleasedPayload:
+		return p.DeviceAddress
+	case DeviceRemovedPayload:
+		return p.DeviceAddress
+	case DeviceAvailabilityChangedPayload:
+		return p.DeviceAddress
+	default:
+		return ""
+	}
 }
 
 // classifyEnabled reports whether this client opted into inline
@@ -513,6 +572,11 @@ type inboundMessage struct {
 	// client. Pointer so an absent field leaves the current preference
 	// untouched across re-subscribes.
 	Classify *bool `json:"classify,omitempty"`
+	// ReleasedOnly, when present on a subscribe frame, drops frames about
+	// devices that have not finished onboarding. Pointer for the same
+	// reason as Classify: an absent field leaves the preference untouched
+	// across re-subscribes.
+	ReleasedOnly *bool `json:"released_only,omitempty"`
 	// Echo carries back the opaque token the server put on its `ping`
 	// frame. Optional: a client that answers the heartbeat without it
 	// still keeps the connection alive, it just cannot be timed.
@@ -666,6 +730,9 @@ func (c *client) dispatchMessage(opcode byte, payload []byte) bool {
 		if msg.Classify != nil {
 			c.setClassify(*msg.Classify)
 		}
+		if msg.ReleasedOnly != nil {
+			c.setReleasedOnly(*msg.ReleasedOnly)
+		}
 		c.subscribe(msg.Topics)
 		c.sendAck("subscribed", msg.Topics)
 		if msg.Since != nil {
@@ -762,6 +829,11 @@ func (c *client) writePump() {
 				kind = KindChange
 			}
 			payload := ev.Payload
+			// Drop frames about a device this client asked not to see
+			// until it has finished onboarding.
+			if c.withheldFromThisClient(payload) {
+				continue
+			}
 			// Strip the inline classification fields unless this client
 			// opted into them. The payload is a value type, so the copy
 			// here never mutates the buffered event other clients read.

@@ -280,6 +280,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	recordingOverrides := si.recordingOverrides
 	recordingStore := si.recordingStore
 	wsHub := si.wsHub
+	// Teach the WebSocket hub which devices have finished onboarding, so a
+	// subscriber can ask to be spared the ones that have not
+	// (`released_only:true`). Without this the option is accepted and
+	// filters nothing — the hub falls back to "everything is released",
+	// which is the safe direction: a missing checker must not blank a
+	// subscriber's stream.
+	wsHub.SetReleaseChecker(reg.Released)
 	wsHandler := si.wsHandler
 	valueWriter := si.valueWriter
 	mqttCollector := si.mqttCollector

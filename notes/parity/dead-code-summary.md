@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: c3f5fe17
-HEAD: c3f5fe17
+Generated: 0c2b3036
+HEAD: 0c2b3036
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30062 |
+| Total Exported | 30069 |
 | Reachable | 5167 |
-| Whitelisted | 21878 |
+| Whitelisted | 21885 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

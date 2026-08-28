@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A server-side onboarding filter, opt-in on both planes.** REST
+  (`?released_only=true` on `GET /devices` and `GET /snapshot`) and WebSocket
+  (`released_only: true` on a subscribe frame) now omit devices that have not
+  finished onboarding. It completes what 0.66.1 started: that release exposed
+  the state so a consumer could filter itself, this one lets it ask the daemon
+  to filter instead — including the race where a `device.created` push arrives
+  before the consumer's snapshot read completes.
+
+  Off by default and per connection, deliberately. This surface serves two
+  kinds of consumer at once: the Config UI, which **must** see a device that is
+  still being onboarded in order to configure it, and an ecosystem client,
+  which must not adopt it before it is named. Filtering by default would blind
+  the first and make a device silently vanish from every existing client's
+  list.
+
+  The two planes are meant to be used together — filtering the snapshot while
+  leaving the socket unfiltered produces exactly the inconsistency the option
+  exists to avoid: absent from the snapshot, arriving as a push. The
+  `device.released` frame is never dropped; it is what lifts the filter.
+
+
 ## [0.66.1] - 2026-08-27
 
 ### Fixed

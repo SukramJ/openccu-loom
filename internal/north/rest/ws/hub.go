@@ -90,6 +90,16 @@ type Hub struct {
 	tokensMu sync.RWMutex
 	tokens   auth.TokenStore
 
+	// releaseChecker answers "has this device finished onboarding" for the
+	// per-connection released-only filter. Nil means every device counts
+	// as released, which is the correct fallback: withholding on a
+	// missing checker would silently blank a subscriber's whole stream.
+	//
+	// Guarded by releaseMu: the composition root installs it after the
+	// listener is already accepting.
+	releaseMu    sync.RWMutex
+	releaseCheck func(deviceAddress string) bool
+
 	// resyncSignals counts [Hub.SignalResync] calls so a wiring test
 	// can assert that a producer actually reaches this seam.
 	resyncSignals atomic.Uint64
@@ -122,6 +132,33 @@ func (h *Hub) SignalResync() int {
 		c.sendOp(outboundOp{Op: "replay_lost", OldestSeq: anchor})
 	}
 	return len(targets)
+}
+
+// SetReleaseChecker wires the predicate the released-only subscribe
+// option consults. Nil disables the filter for every connection.
+//
+// The option exists because this plane serves two kinds of consumer at
+// once: the Config UI, which must see a device that is still being
+// onboarded, and an ecosystem client, which must not adopt it. Filtering
+// by default would blind the first; not offering the filter at all makes
+// the second reimplement it, including the race where a creation push
+// arrives before its snapshot read completes.
+func (h *Hub) SetReleaseChecker(fn func(deviceAddress string) bool) {
+	h.releaseMu.Lock()
+	h.releaseCheck = fn
+	h.releaseMu.Unlock()
+}
+
+// deviceReleased reports whether an address may reach a filtering
+// subscriber. True when no checker is wired.
+func (h *Hub) deviceReleased(address string) bool {
+	h.releaseMu.RLock()
+	fn := h.releaseCheck
+	h.releaseMu.RUnlock()
+	if fn == nil || address == "" {
+		return true
+	}
+	return fn(address)
 }
 
 // ResyncSignals reports how many times [Hub.SignalResync] has been
