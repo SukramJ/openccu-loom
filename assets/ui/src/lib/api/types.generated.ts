@@ -8342,7 +8342,25 @@ export interface components {
              *     DataPointValueChangedPayload.unique_id.
              */
             unique_id: string;
-            /** @description Composed state snapshot — keys depend on the CDP category. */
+            /**
+             * @description Composed state snapshot — keys depend on the CDP category.
+             *
+             *     **Units and scales are the ones a Home Assistant client
+             *     expects, not the CCU's wire values.** This is the abstraction
+             *     plane: the raw parameter values live on the data-point plane
+             *     (`DataPointValueChangedPayload.value`, `GET
+             *     /devices/{addr}/channels/{ch}/data-points`), where the daemon
+             *     reports whatever the CCU sent.
+             *
+             *     The one that has caused a real mis-read: for a colour light,
+             *     `color` is `{h, s}` with **hue in degrees 0..360 and
+             *     saturation 0..100** — already scaled from the wire
+             *     `SATURATION` parameter, which carries the fraction 0..1. A
+             *     client that reads `color.s` and scales it again ends up with
+             *     every colour fully saturated. The `set_color` operation takes
+             *     saturation on the same 0..100 scale, so the two directions
+             *     match and neither needs converting.
+             */
             state: {
                 [key: string]: unknown;
             };

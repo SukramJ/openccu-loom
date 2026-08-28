@@ -180,43 +180,40 @@ func (c *client) releasedOnlyEnabled() bool {
 	return c.releasedOnly
 }
 
-// withheldFromThisClient reports whether a frame must be dropped for this
-// connection because it concerns a device the wizard has not released.
+// shapeForThisClient decides what a frame becomes for this connection: it
+// is dropped, it is rewritten, or it passes untouched.
 //
-// The device.released frame itself always passes: the state flips before
-// the event is published, so by the time it reaches here the address is
-// released. That is the frame that lifts the filter, and dropping it
-// would strand a filtering client forever.
-func (c *client) withheldFromThisClient(payload any) bool {
+// Three outcomes, because there are three kinds of payload:
+//
+//   - one ABOUT a withheld device is dropped — that is the filter;
+//   - a hub entity that merely NAMES a withheld device keeps its own
+//     existence but loses the association, because a subscriber that
+//     cannot see the device can neither attach the entity to it nor
+//     should lose the entity over it;
+//   - everything else passes.
+//
+// The device.released frame passes on its own without a special case: the
+// state flips before the event is published, so by the time it reaches
+// here the address reads released. That is the frame that lifts the
+// filter, and dropping it would strand a filtering client forever.
+func (c *client) shapeForThisClient(payload any) (any, bool) {
 	if !c.releasedOnlyEnabled() {
-		return false
+		return payload, true
 	}
-	addr := deviceAddressOf(payload)
-	if addr == "" {
-		return false
+	if p, ok := payload.(DeviceScopedPayload); ok {
+		addr := p.DeviceAddr()
+		if addr != "" && !c.hub.deviceReleased(addr) {
+			return nil, false
+		}
+		return payload, true
 	}
-	return !c.hub.deviceReleased(addr)
-}
-
-// deviceAddressOf extracts the device a payload is about, or "" when the
-// payload is not device-scoped. Only the device-scoped payloads are
-// listed: a frame that names no device (hub, system, alarm) is never
-// withheld, because there is nothing to withhold it on behalf of.
-func deviceAddressOf(payload any) string {
-	switch p := payload.(type) {
-	case DataPointValueChangedPayload:
-		return p.DeviceAddress
-	case DeviceCreatedPayload:
-		return p.DeviceAddress
-	case DeviceReleasedPayload:
-		return p.DeviceAddress
-	case DeviceRemovedPayload:
-		return p.DeviceAddress
-	case DeviceAvailabilityChangedPayload:
-		return p.DeviceAddress
-	default:
-		return ""
+	if p, ok := payload.(DeviceAssociatedPayload); ok {
+		addr := p.AssociatedDeviceAddr()
+		if addr != "" && !c.hub.deviceReleased(addr) {
+			return p.WithoutDeviceAssociation(), true
+		}
 	}
+	return payload, true
 }
 
 // classifyEnabled reports whether this client opted into inline
@@ -829,11 +826,13 @@ func (c *client) writePump() {
 				kind = KindChange
 			}
 			payload := ev.Payload
-			// Drop frames about a device this client asked not to see
-			// until it has finished onboarding.
-			if c.withheldFromThisClient(payload) {
+			// Drop — or reshape — frames touching a device this client
+			// asked not to see until it has finished onboarding.
+			shaped, keep := c.shapeForThisClient(payload)
+			if !keep {
 				continue
 			}
+			payload = shaped
 			// Strip the inline classification fields unless this client
 			// opted into them. The payload is a value type, so the copy
 			// here never mutates the buffered event other clients read.

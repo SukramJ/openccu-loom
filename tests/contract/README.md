@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 394.
+Guards without a doc comment: 7 of 395.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -405,6 +405,7 @@ Guards without a doc comment: 7 of 394.
 | TestWSCentralStateBroadcastReachesHub | ws_broadcast_roundtrip_test.go | TestWSCentralStateBroadcastReachesHub is the round-trip half of the WS broadcast contract for "central.state_changed": a real central state transition, driven through the real state machine, must produce a real entry in the hub's replay buffer — not merely a token in source text. |
 | TestEveryRegisteredWSCommandIsClassified | ws_command_classification_test.go | TestEveryRegisteredWSCommandIsClassified asserts that every command name registered via router.Register(...) in the WS command source files appears in exactly one of writeCommandRoles or readOnlyCommands (internal/north/rest/ws/commands.go). |
 | TestWSCommandResultsMatchTheirHandlers | ws_command_result_parity_test.go | TestWSCommandResultsMatchTheirHandlers pins the WS command plane to the rule the rest of this repository is held to: declared and published must be the same set. |
+| TestEveryDeviceScopedPayloadIsFilterable | ws_device_scoped_payload_test.go | TestEveryDeviceScopedPayloadIsFilterable is the rule that carries itself. |
 | TestWebSocketAcceptsFragmentedClientMessages | ws_framing_test.go | TestWebSocketAcceptsFragmentedClientMessages pins RFC 6455 §5.4 on the north-bound WebSocket boundary: a client is free to split one logical message across a non-final data frame plus continuations, and the server must act on the assembled message. |
 | TestEveryBroadcastPayloadIsFieldChecked | ws_payload_field_parity_test.go | TestEveryBroadcastPayloadIsFieldChecked asserts that every payload named by a broadcast in assets/wsapi.json is either registered above or recorded as declared elsewhere. |
 | TestWSPayloadStructsMatchOpenAPISchemaFields | ws_payload_field_parity_test.go | TestWSPayloadStructsMatchOpenAPISchemaFields pins every registered broadcast payload struct to the fields of its OpenAPI component schema, in both directions. |

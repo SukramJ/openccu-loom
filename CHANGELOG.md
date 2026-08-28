@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.66.1] - 2026-08-27
+
 ### Added
 
 - **A server-side onboarding filter, opt-in on both planes.** REST
@@ -27,25 +29,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   leaving the socket unfiltered produces exactly the inconsistency the option
   exists to avoid: absent from the snapshot, arriving as a push. The
   `device.released` frame is never dropped; it is what lifts the filter.
-
-
-## [0.66.1] - 2026-08-27
-
-### Fixed
-
-- **`delay_new_device_creation` was never applied without a restart, while the
-  config surface said it was.** The field is not classified restart-required,
-  so saving it reported `restart_required: false` — but it was read at exactly
-  two points, both during bring-up. Switching it off changed nothing until the
-  next restart. That was tolerable while the toggle only gated future parking;
-  it stopped being tolerable in 0.66.0, when a persisted queue started hanging
-  off the same path and every already-held device stayed invisible to the
-  ecosystems with nothing to explain why. A config reload now re-applies the
-  setting per central and, when it goes off, releases the whole queue and
-  announces each device — a silent release would leave MQTT, Matter and every
-  connected API consumer withholding them anyway.
-
-### Added
 
 - **The onboarding release state is visible to REST and WebSocket consumers.**
   0.66.0 enforced the hold on MQTT, Matter and the outbound webhook, and
@@ -77,11 +60,63 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `released` and the inbox listing gains `awaiting_release`. An assistant
   driving the daemon is a device consumer like any other, and it was seeing a
   withheld device exactly like one in service.
+
 - The `datapoint.value_changed` plane is now documented as **not** filtered by
   release state. It never was, and it should not be — the Config UI needs those
   values to verify a device before releasing it — but a consumer that filtered
   only the device list was still receiving them, with nothing saying so.
 
+### Fixed
+
+- **The onboarding filter only covered half the frames it should have.** It
+  matched on a type switch that listed five of the eleven broadcast payloads
+  naming a device, so a `released_only` subscriber still received, for a device
+  it had explicitly asked not to see: custom-data-point state (covers roller
+  shutters, climate, lights), **device triggers** — the worst of them, because a
+  client that turns those into automations would have fired them — optimistic
+  rollbacks, metadata changes, schedule changes and Matter exposure changes.
+
+  The switch is gone. A payload now says for itself whether it is device-scoped
+  (`ws.DeviceScopedPayload`), and a contract test requires every broadcast
+  payload carrying a `device_address` to implement that or to be listed with a
+  reason — so the next payload cannot slip past silently. The guard found the
+  Matter exposure frame on its first run, which neither the report nor I had on
+  the list.
+
+- **A system variable or program bound to a withheld device is no longer
+  mishandled.** Such an entity exists on the CCU regardless of whether the
+  device has been released here, so dropping the frame would take something the
+  operator has, while passing it through unchanged makes a filtering client
+  attach the entity to a device it does not have. The entity now survives with
+  its device association stripped, which the payload contract already defines
+  as "attach it to the central hub" — a shape every client already handles.
+
+- `device.metadata_changed` and `schedules.changed` moved their payload structs
+  into the `ws` package. As unexported adapter types they were invisible both
+  to the new filter and to the existing payload-field parity guard, which had
+  carried them as documented holes.
+
+- **`delay_new_device_creation` was never applied without a restart, while the
+  config surface said it was.** The field is not classified restart-required,
+  so saving it reported `restart_required: false` — but it was read at exactly
+  two points, both during bring-up. Switching it off changed nothing until the
+  next restart. That was tolerable while the toggle only gated future parking;
+  it stopped being tolerable in 0.66.0, when a persisted queue started hanging
+  off the same path and every already-held device stayed invisible to the
+  ecosystems with nothing to explain why. A config reload now re-applies the
+  setting per central and, when it goes off, releases the whole queue and
+  announces each device — a silent release would leave MQTT, Matter and every
+  connected API consumer withholding them anyway.
+
+- **The colour saturation scale is documented on both directions.** A client
+  reading `state.color.s` from the custom-data-point plane and scaling it for
+  Home Assistant ends up with every colour fully saturated: the value is
+  **already** the 0..100 scale HA expects, converted from the wire
+  `SATURATION` fraction 0..1 by the daemon. `set_color` takes the same 0..100,
+  so neither direction needs converting. Both scales lived only in Go comments
+  until now, which is what made the wrong assumption possible; they are in the
+  contract assets now, together with the reason the raw data-point plane still
+  reports the wire value.
 
 ## [0.66.0] - 2026-08-27
 

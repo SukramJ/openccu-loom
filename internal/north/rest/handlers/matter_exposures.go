@@ -159,6 +159,13 @@ type MatterExposureUpdate struct {
 	FriendlyName  string `json:"friendly_name"`
 }
 
+// DeviceAddr implements ws.DeviceScopedPayload: an exposure change is
+// about one device's Matter surface, so a subscriber filtering out that
+// device must not receive it either. Declared here rather than in the ws
+// package because the payload is the handler's own type; the interface is
+// satisfied structurally.
+func (u MatterExposureUpdate) DeviceAddr() string { return u.DeviceAddress }
+
 // MatterExposeUpdate updates a single exposure row. When publisher
 // is non-nil the handler emits `matter.exposable_changed` after a
 // successful upsert. Audit records every mutation when recorder is
