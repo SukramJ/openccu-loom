@@ -115,6 +115,8 @@ function makeDevice(overrides: Partial<DeviceSummary> = {}): DeviceSummary {
     update_available: false,
     master_pushes_config_pending: false,
     has_sub_devices: false,
+    firmware: { Current: "1.4.8", Available: "1.4.8", Updatable: false, UpdateState: "UP_TO_DATE" },
+    availability: { IsReachable: true, LastUpdated: "2026-01-01T00:00:00Z", BatteryLevel: null, LowBattery: null, SignalStrength: -62 },
     ...overrides,
   };
 }

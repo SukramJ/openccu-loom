@@ -1,0 +1,3774 @@
+[
+  {
+    "Description": {
+      "Key": "INTRUSION_ALARM",
+      "DeviceClass": "safety",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "INTRUSION_ALARM"
+    ],
+    "Devices": [
+      "HmIP-SWSD"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "SMOKE_ALARM",
+      "DeviceClass": "smoke",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "SMOKE_ALARM"
+    ],
+    "Devices": [
+      "HmIP-SWSD"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "STATE",
+      "DeviceClass": "door",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HmIP-DLP"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "STATE",
+      "DeviceClass": "occupancy",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HmIP-DSD-PCB"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "STATE",
+      "DeviceClass": "opening",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HmIP-SCI",
+      "HmIP-FCI1",
+      "HmIP-FCI6"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "STATE",
+      "DeviceClass": "smoke",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HM-Sec-SD"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "STATE",
+      "DeviceClass": "window",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HmIP-SWD",
+      "HmIP-SWDO",
+      "HmIP-SWDM",
+      "HM-Sec-SC",
+      "HM-SCI-3-FM",
+      "ZEL STG RM FFK"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "STATE",
+      "DeviceClass": "moisture",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HM-Sen-RD-O"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "WINDOW_OPEN",
+      "DeviceClass": "window",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "WINDOW_OPEN"
+    ],
+    "Devices": [
+      "HmIP-SRH",
+      "HM-Sec-RHS"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "WORKING",
+      "DeviceClass": "running",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "WORKING"
+    ],
+    "Devices": [
+      "HM-Sec-Win"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "FREQUENCY",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "frequency",
+      "UnitOfMeasurement": "mHz",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "number",
+    "Parameters": [
+      "FREQUENCY"
+    ],
+    "Devices": [
+      "HMW-IO-12-Sw14-DR"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "LEVEL",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "pipe_level",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 100
+    },
+    "Category": "number",
+    "Parameters": [
+      "LEVEL"
+    ],
+    "Devices": [
+      "HmIP-eTRV",
+      "HmIP-HEATING"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "ACTUAL_TEMPERATURE",
+      "DeviceClass": "temperature",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "°C",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ACTUAL_TEMPERATURE"
+    ],
+    "Devices": [
+      "ELV-SH-BS",
+      "HmIP-BB",
+      "HmIP-BD",
+      "HmIP-BR",
+      "HmIP-BS",
+      "HmIP-DR",
+      "HmIP-FB",
+      "HmIP-FD",
+      "HmIP-FR",
+      "HmIP-FS",
+      "HmIP-MOD-OC8",
+      "HmIP-PCB",
+      "HmIP-PD",
+      "HmIP-PS",
+      "HmIP-USB",
+      "HmIPW-DR",
+      "HmIPW-FIO"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "COLOR",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "COLOR"
+    ],
+    "Devices": [
+      "HmIP-BSL",
+      "HmIP-RGBW",
+      "HmIPW-WRC6"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "FREQUENCY",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "frequency",
+      "UnitOfMeasurement": "mHz",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "FREQUENCY"
+    ],
+    "Devices": [
+      "HMW-IO-12-Sw14-DR"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "pipe_level",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 100
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "LEVEL"
+    ],
+    "Devices": [
+      "HmIP-eTRV",
+      "HmIP-HEATING",
+      "HmIP-FALMOT-C12",
+      "HmIPW-FALMOT-C12"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "cover_level",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 100
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "LEVEL"
+    ],
+    "Devices": [
+      "HmIP-BROLL",
+      "HmIP-FROLL",
+      "HmIP-BBL",
+      "HmIP-DRBLI4",
+      "HmIPW-DRBL4",
+      "HmIP-FBL"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "light_level",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 100
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "LEVEL"
+    ],
+    "Devices": [
+      "HmIP-BSL",
+      "HmIP-BDT",
+      "HmIP-DRDI3",
+      "HmIP-FDT",
+      "HmIPW-PDT",
+      "HmIP-RGBW",
+      "HmIP-SCTH230",
+      "HmIPW-DRD3",
+      "HmIPW-WRC6"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "cover_tilt",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 100
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "LEVEL_2"
+    ],
+    "Devices": [
+      "HmIP-BBL",
+      "HmIP-DRBLI4",
+      "HmIPW-DRBL4",
+      "HmIP-FBL"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "SEC-KEY_DIRECTION",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sec_direction",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "DIRECTION"
+    ],
+    "Devices": [
+      "HM-Sec-Key"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "SEC-KEY_ERROR",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sec_key_error",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ERROR"
+    ],
+    "Devices": [
+      "HM-Sec-Key"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "SEC-WIN_DIRECTION",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sec_direction",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "DIRECTION"
+    ],
+    "Devices": [
+      "HM-Sec-Win"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "SEC-WIN_ERROR",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sec_win_error",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ERROR"
+    ],
+    "Devices": [
+      "HM-Sec-Win"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "SEC-WIN_STATUS",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sec_win_status",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "STATUS"
+    ],
+    "Devices": [
+      "HM-Sec-Win"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "STATE",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sec_wds_state",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HM-Sec-WDS"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "TIME_OF_OPERATION",
+      "DeviceClass": "duration",
+      "StateClass": "total_increasing",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "d",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 0.000011574074074074073
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "TIME_OF_OPERATION"
+    ],
+    "Devices": [
+      "HmIP-SWSD"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "TRI_STATE",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "tri_state",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "STATE"
+    ],
+    "Devices": [
+      "HmIP-SRH",
+      "HmIP-STV",
+      "HM-Sec-RHS",
+      "HM-Sec-xx",
+      "ZEL STG RM FDK"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "VALVE_STATE",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "pipe_level",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "VALVE_STATE"
+    ],
+    "Devices": [
+      "HM-CC-RT-DN",
+      "HM-CC-VD"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "WKP_CODE_STATE",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "wkp_code_state",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "CODE_STATE"
+    ],
+    "Devices": [
+      "HmIP-WKP"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 10
+  },
+  {
+    "Description": {
+      "Key": "ACOUSTIC_ALARM_ACTIVE",
+      "DeviceClass": "safety",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "ACOUSTIC_ALARM_ACTIVE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ALARMSTATE",
+      "DeviceClass": "safety",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "ALARMSTATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "BLOCKED",
+      "DeviceClass": "problem",
+      "StateClass": "",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "BLOCKED_PERMANENT",
+      "BLOCKED_TEMPORARY"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "BURST_LIMIT_WARNING",
+      "DeviceClass": "problem",
+      "StateClass": "",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "BURST_LIMIT_WARNING"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DEW_POINT_ALARM",
+      "DeviceClass": "problem",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "DEW_POINT_ALARM"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DUTY_CYCLE",
+      "DeviceClass": "problem",
+      "StateClass": "",
+      "EntityCategory": "diagnostic",
+      "Icon": "mdi:radio-tower",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "DUTYCYCLE",
+      "DUTY_CYCLE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "EMERGENCY_OPERATION",
+      "DeviceClass": "safety",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "EMERGENCY_OPERATION"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ERROR_JAMMED",
+      "DeviceClass": "problem",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "ERROR_JAMMED"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "HEATER_STATE",
+      "DeviceClass": "heat",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "HEATER_STATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "LOW_BAT",
+      "DeviceClass": "battery",
+      "StateClass": "",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "LOWBAT",
+      "LOW_BAT",
+      "LOWBAT_SENSOR"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "MOISTURE_DETECTED",
+      "DeviceClass": "moisture",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "MOISTURE_DETECTED"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "MOTION",
+      "DeviceClass": "motion",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "MOTION"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "OPTICAL_ALARM_ACTIVE",
+      "DeviceClass": "safety",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "OPTICAL_ALARM_ACTIVE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "POWER_MAINS_FAILURE",
+      "DeviceClass": "power",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "POWER_MAINS_FAILURE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "PRESENCE_DETECTION_STATE",
+      "DeviceClass": "presence",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "PRESENCE_DETECTION_STATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "PROCESS",
+      "DeviceClass": "running",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "PROCESS",
+      "WORKING"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RAINING",
+      "DeviceClass": "moisture",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "RAINING"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SABOTAGE",
+      "DeviceClass": "tamper",
+      "StateClass": "",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "SABOTAGE",
+      "SABOTAGE_STICKY"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SABOTAGE",
+      "DeviceClass": "tamper",
+      "StateClass": "",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "SABOTAGE_ACCELERATION",
+      "SABOTAGE_BATTERY",
+      "SABOTAGE_MAGNETIC_FIELD",
+      "SABOTAGE_VERTICAL"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WATERLEVEL_DETECTED",
+      "DeviceClass": "moisture",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "WATERLEVEL_DETECTED"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WINDOW_STATE",
+      "DeviceClass": "window",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "binary_sensor",
+    "Parameters": [
+      "WINDOW_STATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "PRESS_LONG",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "button",
+    "Parameters": [
+      "PRESS_LONG"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "PRESS_SHORT",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "button",
+    "Parameters": [
+      "PRESS_SHORT"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RESET_MOTION",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "button",
+    "Parameters": [
+      "RESET_MOTION"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RESET_PRESENCE",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "button",
+    "Parameters": [
+      "RESET_PRESENCE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "BLIND",
+      "DeviceClass": "blind",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "cover",
+    "Parameters": null,
+    "Devices": [
+      "HmIP-BBL",
+      "HmIP-FBL",
+      "HmIP-DRBLI4",
+      "HmIPW-DRBL4"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "GARAGE-HO",
+      "DeviceClass": "garage",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "cover",
+    "Parameters": null,
+    "Devices": [
+      "HmIP-MOD-HO",
+      "HmIP-MOD-TM"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "HM-Sec-Win",
+      "DeviceClass": "window",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "cover",
+    "Parameters": null,
+    "Devices": [
+      "HM-Sec-Win"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "HmIP-HDM1",
+      "DeviceClass": "shade",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "cover",
+    "Parameters": null,
+    "Devices": [
+      "HmIP-HDM1"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SHUTTER",
+      "DeviceClass": "shutter",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "cover",
+    "Parameters": null,
+    "Devices": [
+      "HmIP-BROLL",
+      "HmIP-FROLL",
+      "HM-LC-Bl1PBU-FM"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "CONNECTIVITY_SENSOR",
+      "DeviceClass": "connectivity",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_binary_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "Connectivity",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "INSTALL_MODE_BIDCOS_BUTTON",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "install_mode_bidcos_button",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_button",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "INSTALL_MODE_BIDCOS_BUTTON",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "INSTALL_MODE_HMIP_BUTTON",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "install_mode_hmip_button",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_button",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "INSTALL_MODE_HMIP_BUTTON",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ALARM_MESSAGES",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "alarm_messages",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "ALARM_MESSAGES",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "CONNECTION_LATENCY",
+      "DeviceClass": "duration",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "mdi:timer-outline",
+      "TranslationKey": "connection_latency",
+      "UnitOfMeasurement": "ms",
+      "SuggestedDisplayPrecision": 1,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "connection_latency",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ENERGY_COUNTER",
+      "DeviceClass": "energy",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "energy_counter_total",
+      "UnitOfMeasurement": "Wh",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svEnergyCounter",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ENERGY_COUNTER_FEED_IN",
+      "DeviceClass": "energy",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "energy_counter_feed_in_total",
+      "UnitOfMeasurement": "Wh",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svEnergyCounterFeedIn",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "INBOX",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "inbox",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "inbox",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "INSTALL_MODE_BIDCOS",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "install_mode_bidcos",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "INSTALL_MODE_BIDCOS",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "INSTALL_MODE_HMIP",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "install_mode_hmip",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "INSTALL_MODE_HMIP",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "LAST_EVENT_AGE",
+      "DeviceClass": "duration",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "mdi:clock-alert-outline",
+      "TranslationKey": "last_event_age",
+      "UnitOfMeasurement": "s",
+      "SuggestedDisplayPrecision": 1,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "last_event_age",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RAIN_COUNTER",
+      "DeviceClass": "",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "rain_counter_total",
+      "UnitOfMeasurement": "mm",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svHmIPRainCounter",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RAIN_COUNTER_TODAY",
+      "DeviceClass": "",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "rain_counter_today",
+      "UnitOfMeasurement": "mm",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svHmIPRainCounterToday",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RAIN_COUNTER_YESTERDAY",
+      "DeviceClass": "",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "rain_counter_yesterday",
+      "UnitOfMeasurement": "mm",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svHmIPRainCounterYesterday",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SERVICE_MESSAGES",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "service_messages",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "SERVICE_MESSAGES",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SUNSHINE_COUNTER",
+      "DeviceClass": "duration",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sunshine_counter_total",
+      "UnitOfMeasurement": "min",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svHmIPSunshineCounter",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SUNSHINE_COUNTER_TODAY",
+      "DeviceClass": "duration",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sunshine_counter_today",
+      "UnitOfMeasurement": "min",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svHmIPSunshineCounterToday",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SUNSHINE_COUNTER_YESTERDAY",
+      "DeviceClass": "duration",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sunshine_counter_yesterday",
+      "UnitOfMeasurement": "min",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "svHmIPSunshineCounterYesterday",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SYSTEM_HEALTH",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "mdi:heart-pulse",
+      "TranslationKey": "system_health",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": 1,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "hub_sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "system_health",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "BUTTON_LOCK",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "button_lock",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "lock",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "BUTTON_LOCK",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "FREQUENCY",
+      "DeviceClass": "frequency",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "Hz",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "number",
+    "Parameters": [
+      "FREQUENCY"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "LEVEL",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 100
+    },
+    "Category": "number",
+    "Parameters": [
+      "LEVEL",
+      "LEVEL_2"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SCHEDULE_SWITCH",
+      "DeviceClass": "switch",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "schedule_switch",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "HEATING_COOLING",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "heating_cooling",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "select",
+    "Parameters": [
+      "HEATING_COOLING"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "AIR_PRESSURE",
+      "DeviceClass": "pressure",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "hPa",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "AIR_PRESSURE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "APPARENT_TEMPERATURE",
+      "DeviceClass": "temperature",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "°C",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "APPARENT_TEMPERATURE",
+      "FROST_POINT"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "BRIGHTNESS",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "brightness",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "BRIGHTNESS"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "CARRIER_SENSE_LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "mdi:radio-tower",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "CARRIER_SENSE_LEVEL"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "CODE_ID",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "CODE_ID"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "CONCENTRATION",
+      "DeviceClass": "carbon_dioxide",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "ppm",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "CONCENTRATION"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "CURRENT",
+      "DeviceClass": "current",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "mA",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "CURRENT"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DEW_POINT",
+      "DeviceClass": "temperature",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "dew_point",
+      "UnitOfMeasurement": "°C",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "DEWPOINT",
+      "DEW_POINT"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DEW_POINT_SPREAD",
+      "DeviceClass": "temperature",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "K",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "DEW_POINT_SPREAD"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DIRECTION",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "direction",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ACTIVITY_STATE",
+      "DIRECTION"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DIRT_LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "DIRT_LEVEL"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DOOR_STATE",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "door_state",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "DOOR_STATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "DUTY_CYCLE_LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "mdi:radio-tower",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "DUTY_CYCLE_LEVEL"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ENERGY_COUNTER",
+      "DeviceClass": "energy",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "Wh",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ENERGY_COUNTER",
+      "ENERGY_COUNTER_FEED_IN"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ENTHALPY",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "mdi:fire",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "kJ/kg",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ENTHALPY"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "FILLING_LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "FILLING_LEVEL"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "FREQUENCY",
+      "DeviceClass": "frequency",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "Hz",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "FREQUENCY"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "GAS_ENERGY_COUNTER",
+      "DeviceClass": "gas",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "GAS_ENERGY_COUNTER"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "GAS_FLOW",
+      "DeviceClass": "volume_flow_rate",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "m³/h",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "GAS_FLOW"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "GAS_POWER",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "GAS_POWER"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "GAS_VOLUME",
+      "DeviceClass": "gas",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "GAS_VOLUME"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "HUMIDITY",
+      "DeviceClass": "humidity",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "HUMIDITY",
+      "ACTUAL_HUMIDITY"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "IEC_ENERGY_COUNTER",
+      "DeviceClass": "energy",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "kWh",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "IEC_ENERGY_COUNTER"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "IEC_POWER",
+      "DeviceClass": "power",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "W",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "IEC_POWER"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "ILLUMINATION",
+      "DeviceClass": "illuminance",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "lx",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ILLUMINATION",
+      "AVERAGE_ILLUMINATION",
+      "CURRENT_ILLUMINATION",
+      "HIGHEST_ILLUMINATION",
+      "LOWEST_ILLUMINATION",
+      "LUX"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "IP_ADDRESS",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "diagnostic",
+      "Icon": "mdi:ip-network",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "IP_ADDRESS"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": 100
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "LEVEL",
+      "LEVEL_2"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "LOCK_STATE",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "lock_state",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "LOCK_STATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "LOCK_STATE_REASON",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "lock_state_reason",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "LOCK_STATE_REASON"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "MASS_CONCENTRATION_PM_1",
+      "DeviceClass": "pm1",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "µg/m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "MASS_CONCENTRATION_PM_1",
+      "MASS_CONCENTRATION_PM_1_24H_AVERAGE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "MASS_CONCENTRATION_PM_10",
+      "DeviceClass": "pm10",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "µg/m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "MASS_CONCENTRATION_PM_10",
+      "MASS_CONCENTRATION_PM_10_24H_AVERAGE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "MASS_CONCENTRATION_PM_2_5",
+      "DeviceClass": "pm25",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "µg/m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "MASS_CONCENTRATION_PM_2_5",
+      "MASS_CONCENTRATION_PM_2_5_24H_AVERAGE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "NUMBER_CONCENTRATION_PM_1",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "1/cm³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "NUMBER_CONCENTRATION_PM_1"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "NUMBER_CONCENTRATION_PM_10",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "1/cm³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "NUMBER_CONCENTRATION_PM_10"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "NUMBER_CONCENTRATION_PM_2_5",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "1/cm³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "NUMBER_CONCENTRATION_PM_2_5"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "OPERATING_VOLTAGE",
+      "DeviceClass": "voltage",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "V",
+      "SuggestedDisplayPrecision": 1,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "BATTERY_STATE",
+      "OPERATING_VOLTAGE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "OPERATING_VOLTAGE_LEVEL",
+      "DeviceClass": "battery",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "OPERATING_VOLTAGE_LEVEL"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "POWER",
+      "DeviceClass": "power",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "W",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "POWER"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RAIN_COUNTER",
+      "DeviceClass": "",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "rain_counter_total",
+      "UnitOfMeasurement": "mm",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "RAIN_COUNTER"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "RSSI",
+      "DeviceClass": "signal_strength",
+      "StateClass": "measurement",
+      "EntityCategory": "diagnostic",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "dBm",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "RSSI_DEVICE",
+      "RSSI_PEER"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SMOKE_DETECTOR_ALARM_STATUS",
+      "DeviceClass": "enum",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "smoke_detector_alarm_status",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "SMOKE_DETECTOR_ALARM_STATUS"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SMOKE_LEVEL",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "SMOKE_LEVEL"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SUNSHINEDURATION",
+      "DeviceClass": "",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "sunshine_duration",
+      "UnitOfMeasurement": "min",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "SUNSHINEDURATION"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "TEMPERATURE",
+      "DeviceClass": "temperature",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "°C",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "ACTUAL_TEMPERATURE",
+      "TEMPERATURE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "TYPICAL_PARTICLE_SIZE",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "µm",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "TYPICAL_PARTICLE_SIZE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "VALUE",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "VALUE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "VAPOR_CONCENTRATION",
+      "DeviceClass": "absolute_humidity",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "g/m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "VAPOR_CONCENTRATION"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "VOLTAGE",
+      "DeviceClass": "voltage",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "V",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "VOLTAGE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WATER_FLOW",
+      "DeviceClass": "volume_flow_rate",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "L/min",
+      "SuggestedDisplayPrecision": 1,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "WATER_FLOW"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WATER_VOLUME",
+      "DeviceClass": "water",
+      "StateClass": "total_increasing",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "L",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "WATER_VOLUME"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WATER_VOLUME_SINCE_OPEN",
+      "DeviceClass": "water",
+      "StateClass": "total",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "L",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "WATER_VOLUME_SINCE_OPEN"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WIND_DIR",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "wind_dir",
+      "UnitOfMeasurement": "°",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "WIND_DIR",
+      "WIND_DIR_RANGE",
+      "WIND_DIRECTION",
+      "WIND_DIRECTION_RANGE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WIND_SPEED",
+      "DeviceClass": "wind_speed",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "wind_speed",
+      "UnitOfMeasurement": "km/h",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": [
+      "WIND_SPEED"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "SWSD",
+      "DeviceClass": "",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "siren",
+    "Parameters": null,
+    "Devices": [
+      "HmIP-SWSD"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "AUTO_RELOCK_STATE",
+      "DeviceClass": "switch",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "switch",
+    "Parameters": [
+      "AUTO_RELOCK_STATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "INHIBIT",
+      "DeviceClass": "switch",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "switch",
+    "Parameters": [
+      "INHIBIT"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "MOTION_DETECTION_ACTIVE",
+      "DeviceClass": "switch",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "switch",
+    "Parameters": [
+      "MOTION_DETECTION_ACTIVE",
+      "PRESENCE_DETECTION_ACTIVE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "OUTLET",
+      "DeviceClass": "outlet",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "switch",
+    "Parameters": null,
+    "Devices": [
+      "HmIP-PS"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "PERMISSION_STATE",
+      "DeviceClass": "switch",
+      "StateClass": "",
+      "EntityCategory": "config",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": false,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "switch",
+    "Parameters": [
+      "PERMISSION_STATE"
+    ],
+    "Devices": null,
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "WSM",
+      "DeviceClass": "water",
+      "StateClass": "",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "irrigation_valve",
+      "UnitOfMeasurement": "",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "",
+      "Multiplier": null
+    },
+    "Category": "valve",
+    "Parameters": null,
+    "Devices": [
+      "ELV-SH-WSM ",
+      "HmIP-WSM"
+    ],
+    "Unit": "",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": 0
+  },
+  {
+    "Description": {
+      "Key": "CONCENTRATION_FALLBACK",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "g/m³",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "g/m³",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": -100
+  },
+  {
+    "Description": {
+      "Key": "PERCENTAGE_FALLBACK",
+      "DeviceClass": "",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "%",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "%",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": -100
+  },
+  {
+    "Description": {
+      "Key": "PRESSURE_BAR_FALLBACK",
+      "DeviceClass": "pressure",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "bar",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "bar",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": -100
+  },
+  {
+    "Description": {
+      "Key": "TEMPERATURE_CELSIUS_FALLBACK",
+      "DeviceClass": "temperature",
+      "StateClass": "measurement",
+      "EntityCategory": "",
+      "Icon": "",
+      "TranslationKey": "",
+      "UnitOfMeasurement": "°C",
+      "SuggestedDisplayPrecision": null,
+      "EnabledByDefault": null,
+      "Options": null,
+      "NameSource": "parameter",
+      "Multiplier": null
+    },
+    "Category": "sensor",
+    "Parameters": null,
+    "Devices": null,
+    "Unit": "°C",
+    "Postfix": "",
+    "VarNameContains": "",
+    "Priority": -100
+  }
+]

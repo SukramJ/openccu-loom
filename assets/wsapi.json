@@ -1,10 +1,10 @@
 {
- "version": "1.7",
+ "version": "1.8",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
    "seq": "integer (uint64) — monotonic daemon-assigned cursor; clients store the last received value and pass it back as `since` on subscribe to resume the stream after a reconnect",
-   "kind": "string enum (initial|change|refresh) — event family discriminator; default and dominant case is `change`",
+   "kind": "string enum (initial|change|refresh) — event family discriminator; default and dominant case is `change`. Named vocabulary: the `WSEnvelopeKind` enum in assets/schemas/enums.json",
    "topic": "string — routing key the client subscribed to (broadcasts only; absent on command replies)",
    "type": "string — discriminator naming the event family; matches the `name` field of the matching broadcast entry below",
    "ts": "string — RFC3339Nano timestamp of the event; UTC",

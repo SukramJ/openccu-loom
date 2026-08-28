@@ -2036,3 +2036,69 @@ func TestListDevicesReleasedOnlyIsOptIn(t *testing.T) {
 		t.Errorf("released_only=false listing = %v, want both", got)
 	}
 }
+
+// TestListDevicesCarriesFirmwareAndAvailability pins the property a
+// bootstrapping client relies on when it skips the per-device detail
+// request: the list row's `firmware` and `availability` are byte-for-byte
+// what the detail response serves for the same device. A row that carried
+// the keys but different values would let a client build its registry from
+// stale data and never notice.
+func TestListDevicesCarriesFirmwareAndAvailability(t *testing.T) {
+	t.Parallel()
+	d := newTestDeviceWithFirmware("0001ABCD", device.FirmwareInfo{
+		Current:     "1.2.4",
+		Available:   "1.4.0",
+		Updatable:   true,
+		UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate,
+	})
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
+	w := httptest.NewRecorder()
+	ListDevices(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list: expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var list struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("unmarshal list: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(list.Items))
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+	w = httptest.NewRecorder()
+	GetDevice(idx, nil).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("detail: expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var detail map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("unmarshal detail: %v", err)
+	}
+
+	for _, key := range []string{"firmware", "availability"} {
+		row, ok := list.Items[0][key]
+		if !ok {
+			t.Errorf("list row carries no %q — a client cannot skip the detail request", key)
+			continue
+		}
+		if string(row) != string(detail[key]) {
+			t.Errorf("%s: list row = %s, detail = %s", key, row, detail[key])
+		}
+	}
+
+	// The detail response must keep serving them at the same place, so an
+	// existing client reading only the detail endpoint sees no change.
+	var fw device.FirmwareInfo
+	if err := json.Unmarshal(detail["firmware"], &fw); err != nil {
+		t.Fatalf("unmarshal detail firmware: %v", err)
+	}
+	if fw.Current != "1.2.4" || fw.Available != "1.4.0" || !fw.Updatable {
+		t.Errorf("detail firmware = %+v, want the seeded values", fw)
+	}
+}

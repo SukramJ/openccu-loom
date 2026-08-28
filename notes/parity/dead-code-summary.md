@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 18e551ce
-HEAD: 18e551ce
+Generated: ec5b1fb9
+HEAD: ec5b1fb9
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30080 |
-| Reachable | 5167 |
-| Whitelisted | 21896 |
+| Total Exported | 30095 |
+| Reachable | 5173 |
+| Whitelisted | 21905 |
 | **Unreachable** | **3017** |
 
 ## Top-20 Packages by Dead Code

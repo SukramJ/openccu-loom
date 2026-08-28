@@ -6,6 +6,102 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-08-28
+
+### Added
+
+- **Every route in the OpenAPI document carries an `operationId`.** 37 of the
+  295 operations had none, and `operationId` is what a generator keys its
+  client methods on: `openapi-typescript` leaves a route without one out of its
+  `operations` table entirely, so the SPA's generated types described 258 of
+  295 routes and the other 37 — `GET /devices`, `GET /info`, `PUT
+  …/data-points/{param}/value` among them — were simply absent from it. The
+  same document is vendored by `node-red-contrib-openccu-loom`, and a contract
+  test in `openccu-loom-client` needs the ids to address an operation at all.
+
+  Purely additive: the field was absent, never differently named. Measured with
+  `oasdiff breaking --fail-on ERR`, which reports no breaking change; the
+  APIVersion guard therefore asks for a minor bump, not a major, and no client
+  is locked out by a major mismatch.
+
+- **The two open token sets on `CustomDPSummary` are published in full.**
+  `assets/schemas/enums.json` gained a `vocabularies` block listing every
+  `kind` token (22) and every `capabilities` key (26). Both are documented
+  rather than closed, and the document says so: `kind` has a reachable empty
+  value, and a missing capability key means the flag does not apply to that
+  category rather than that it is false — a closed enum generated from either
+  one would reject a conforming daemon response. The lists come from the
+  `cdpkind` package itself, pinned to its constants and helpers by two guards.
+
+- **`firmware` and `availability` are on every device summary row.** They were
+  served only by `GET /devices/{addr}`, which is what forced a bootstrapping
+  client into one detail request per device on top of the list request. Both
+  accessors read the in-memory model — no southbound query, no extra CCU radio
+  traffic — so a row costs a struct copy, not a wire call, and a client's
+  bootstrap drops from N+1 requests to 1. `GET /snapshot` carries them for the
+  same reason.
+
+  `GET /devices/{addr}` is unchanged: `DeviceDetail` embeds the summary, so
+  both fields keep the same keys in the same place. Its only remaining
+  exclusive member is `channels`, which the nested snapshot already delivers —
+  the endpoint stays for refreshing a single device.
+
+- **The WebSocket envelope's `kind` has a named type.** `initial|change|refresh`
+  existed only as prose in `assets/wsapi.json`, so a generated client had to
+  spell the three literals itself. It is `hmenum.WSEnvelopeKind` now and ships
+  in `assets/schemas/enums.json` like every other wire vocabulary. The wire is
+  unchanged.
+
+### Changed
+
+- **The MQTT entity-description table is maintained here, not generated.**
+  `internal/north/mqtt/entity_descriptions_generated.go` carried a
+  `DO NOT EDIT` header, a generator name and the stamp `2026-05-02T15:22:37Z`.
+  All three were false: the generator appeared in no make target and no
+  workflow, and re-running it does not reproduce the file — it emits a
+  different set of symbol names, and the result fails to compile against the
+  rest of the package. The file had been hand-edited for months while wearing
+  a machine-output label, which is also why two sentences in its own header
+  broke off mid-clause, where a project name had been cut out to satisfy the
+  comment guard.
+
+  Following ADR 0063 and ADR 0067 the header comes off, the generator is
+  deleted, and the 147 rules are ordinary daemon-owned source. The file is
+  `entity_descriptions_table.go` now, since the old name was the same claim.
+  Provenance, the scope decision and the reachability findings move to
+  `notes/reference/ha-entity-description-table.md`.
+
+  The upstream drift was measured before the generator went, not assumed:
+  159 rules upstream against 147 here, differing by exactly the 12 keys the
+  plan named, with nothing extra on this side. All 12 stay out of scope, and
+  the note says why per rule — nine `SECURITY_*` rules describe a second
+  security surface over a domain this daemon already owns, `DAEMON_CONNECTION`
+  and `DAEMON_LATENCY` describe a Python client's connection to its own
+  daemon, and `event_doorbell` is already implemented from a better source
+  (`ccudata.DoorbellModels()`, the full CCU model set rather than three
+  hard-coded entries).
+
+- **The description table's coherence guard compares content, not a count.**
+  `TestHARegistryDescriptionRulesCountUnchanged` pinned `len(rules) == 147`,
+  which catches a truncated slice and misses every edit that keeps the count —
+  a changed `device_class`, a device list that loses a model, a priority that
+  reorders two rules. Those are the edits that change a discovery payload. It
+  is replaced by `TestHARegistryDescriptionRulesMatchTheGolden`, which
+  compares every field of every rule against
+  `tests/contract/testdata/ha_registry_description_rules.json` and names the
+  rule that moved.
+
+### Fixed
+
+- **The API-surface guard read a newly named route as a rename.** Giving a bare
+  route an `operationId` moved it from the `(unnamed)` sentinel to a real name,
+  which `TestAPISurfaceChangesCarryTheRightBump` classified as breaking and so
+  demanded a major bump — the one thing that would have locked existing clients
+  out over a purely additive change. A generator never emitted a symbol for an
+  unnamed route, so nothing can break; the move is additive now. Dropping an
+  existing name stays breaking, which is the direction that does remove a
+  symbol.
+
 ## [0.66.1] - 2026-08-27
 
 ### Added

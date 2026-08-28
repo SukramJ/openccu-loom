@@ -75,6 +75,7 @@ The table below catalogues every ADR. Each entry links to the record itself.
 | [0064](../adr/0064-garage-projects-as-matter-closure.md) | A garage drive projects as a Matter Closure, not a WindowCovering | Refines ADR 0049: the drive carries ClosureControl with named stops, so the WindowCovering projection and its lift-percentage machinery are removed. |
 | [0065](../adr/0065-composition-root-wiring-is-checkable.md) | The composition root states its wiring, so a machine can check it | Each `wire*` function declares its seam into a manifest the daemon builds at start-up, turning "is X wired, and does it run before Y" from an approximate question into an exact one. |
 | [0066](../adr/0066-relicense-agpl-commercial-exception.md) | Relicense to AGPL-3.0-only with a commercial exception | **Proposed.** MIT gives commercial reuse of the code away; AGPL plus a written exception makes monetisation ask first, while the licence stays OSI-approved. Supersedes ADR 0001 from v0.66.0. |
+| [0067](../adr/0067-north-surface-is-a-model-api.md) | The north surface is a model API, not an HA entity projection | The REST/WS contract stays Home-Assistant-agnostic and the entity projection stays in the Python consumer; the MQTT plane keeps its own projection and is explicitly not a precedent. Additive model fields remain welcome — the line is drawn at descriptors. |
 
 ## Related reading
 

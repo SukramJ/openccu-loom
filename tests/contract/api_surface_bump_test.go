@@ -56,6 +56,8 @@ var valueSemanticsChanges = []string{
 	"7.13.0 HubMetricsEntry.connection_latency_ms: meaning — the number is the same shape and unit but a different measurement. It was the duration of one JSON-RPC Interface.listInterfaces call on the reconciler's five-minute cadence, a one-way surface covering neither BIN-RPC nor the callback leg; it is now the matched PING→PONG round-trip over each interface's own transport on the 30-second connection-check cadence. A client that calibrated thresholds against the old figure will read higher values for a healthy CCU, because the old one omitted the reply path",
 	"7.13.0 (wsapi 1.2) heartbeat.echo / heartbeat.rtt_ms: vocabulary — the server ping carries an optional opaque echo token, and reports the previous heartbeat's round-trip as rtt_ms once a client echoes it. Both are absent unless used and neither appears in the OpenAPI schema, so no diff sees them; a bare {op:\"pong\"} stays a valid heartbeat",
 	"7.14.0 DeviceCreatedPayload (device.created broadcast): meaning — the broadcast stopped carrying the CCU's full inventory. The daemon answers listDevices with an empty array, so the CCU re-announces every device it has after each reconnect, and all of it was published as device.created; only an address the device registry does not already hold is announced now. The shape is identical either way, so no diff sees it, and it inverts what a subscriber should do: the frame is a genuine arrival to act on rather than a fleet-wide repeat to filter out. A client that rebuilt its model from that burst no longer receives one",
+	"7.22.0 CustomDPSummary.kind / CustomDPSummary.capabilities: vocabulary — both token sets are now published in full as open vocabularies in assets/schemas/enums.json (CustomDPKind, CustomDPCapability). Neither field changed shape, so no schema diff sees it; the spec previously listed a partial \"e.g.\" set in prose, which is how a client came to hardcode a subset. Both stay open on purpose: kind has a reachable empty value, and an absent capability key means the flag does not apply to that category rather than that it is false",
+	"7.22.0 (wsapi 1.8) envelope.kind: vocabulary — the initial|change|refresh set is a named type now (hmenum.WSEnvelopeKind) and ships in assets/schemas/enums.json like every other wire vocabulary. The wire is unchanged; before this the three literals existed only as prose in wsapi.json, so a generated client had to spell them itself",
 	"7.15.0 DeviceCreatedPayload.source: vocabulary — the documented value set was wrong rather than merely incomplete. It named NEW_DEVICE, which hmenum.SourceOfDeviceCreation has never had, so a client filtering on the documented token matched nothing, and the token reached generated client packages (openccu-loom-types) as their documentation. The real values are NEW (a pairing), REFRESH (a factory-reset re-pair), MANUAL (an operator accepting out of the deferred-creation inbox) and CACHE (a boot restore from the persisted description cache); INIT is defined by the enum but no producer sets it on this broadcast",
 }
 
@@ -108,6 +110,15 @@ func TestAPISurfaceChangesCarryTheRightBump(t *testing.T) {
 		switch {
 		case !ok:
 			breaking = append(breaking, "operation removed: "+key)
+		case id == unnamedOperation && cur != unnamedOperation:
+			// Naming a previously bare route is an addition, not a rename.
+			// operationId is optional, and a generator keyed on it never
+			// emitted an entry for the route at all — openapi-typescript
+			// leaves such a route out of its `operations` table entirely, so
+			// there is no symbol a client could have bound to and none can
+			// break. The reverse direction stays below: dropping a name does
+			// remove a symbol.
+			additive = append(additive, fmt.Sprintf("operationId named on %s: %q", key, cur))
 		case cur != id:
 			breaking = append(breaking, fmt.Sprintf("operationId renamed on %s: %q -> %q", key, id, cur))
 		}
@@ -215,6 +226,11 @@ func TestAPIVersionMatchesTheSpecDocument(t *testing.T) {
 	}
 }
 
+// unnamedOperation is the sentinel the surface records for a route that
+// carries no operationId. It is not a name: the diff above treats a move
+// away from it as additive rather than as a rename.
+const unnamedOperation = "(unnamed)"
+
 func buildAPISurface(spec *openapi3.T) apiSurface {
 	out := apiSurface{
 		APIVersion: handlers.APIVersion,
@@ -225,7 +241,7 @@ func buildAPISurface(spec *openapi3.T) apiSurface {
 		for method, op := range item.Operations() {
 			id := op.OperationID
 			if id == "" {
-				id = "(unnamed)"
+				id = unnamedOperation
 			}
 			out.Operations[method+" "+path] = id
 		}

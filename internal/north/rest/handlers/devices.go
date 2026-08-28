@@ -123,6 +123,18 @@ type DeviceSummary struct {
 	// them to show a "pending wakeup" hint after a link/config write.
 	// Omitted when the CCU reports no rx mode (RX_MODE == 0).
 	RxMode *RxModeInfo `json:"rx_mode,omitempty"`
+
+	// Firmware and Availability are the installed/available firmware pair
+	// and the reachability + battery + signal snapshot. Both were served
+	// only by [DeviceDetail], which is what forced a bootstrapping client
+	// into one detail request per device on top of the list request. Both
+	// accessors read the in-memory model — no southbound query — so
+	// serving them per row costs a struct copy, not a wire call.
+	//
+	// [DeviceDetail] embeds this struct, so the detail response carries
+	// them at the same place with the same keys as before.
+	Firmware     device.FirmwareInfo     `json:"firmware"`
+	Availability device.AvailabilityInfo `json:"availability"`
 }
 
 // RxModeInfo decodes a device's CCU RX_MODE bitmask into named boolean
@@ -159,13 +171,15 @@ func rxModeInfo(m hmenum.RxMode) *RxModeInfo {
 	}
 }
 
-// DeviceDetail extends [DeviceSummary] with the firmware snapshot
-// and channel summaries.
+// DeviceDetail extends [DeviceSummary] with the channel summaries.
+//
+// It is the last field the summary does not carry, and a client that
+// needs it already has it from the nested device snapshot — so a
+// bootstrap no longer needs this endpoint at all. It stays because a
+// client refreshing one device should not have to read the whole list.
 type DeviceDetail struct {
 	DeviceSummary
-	Firmware     device.FirmwareInfo     `json:"firmware"`
-	Availability device.AvailabilityInfo `json:"availability"`
-	Channels     []ChannelSummary        `json:"channels"`
+	Channels []ChannelSummary `json:"channels"`
 }
 
 // ChannelSummary is one entry in `GET .../channels`.
@@ -664,8 +678,6 @@ func GetDevice(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 		}
 		JSON(w, http.StatusOK, DeviceDetail{
 			DeviceSummary: toDeviceSummary(d, idx.CentralOf(d.Address), idx.Released(d.Address)),
-			Firmware:      d.Firmware().Info(),
-			Availability:  d.AvailabilityInfo(),
 			Channels:      summaries,
 		})
 	}
@@ -962,6 +974,8 @@ func toDeviceSummary(d *device.Device, centralName string, released bool) Device
 		TeamSupported:              d.Interface.SupportsTeams(),
 		HasSubDevices:              d.HasSubDevices(),
 		RxMode:                     rxModeInfo(d.RxMode),
+		Firmware:                   d.Firmware().Info(),
+		Availability:               d.AvailabilityInfo(),
 	}
 }
 
