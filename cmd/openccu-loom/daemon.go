@@ -573,6 +573,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Cache-reset service (ADR 0042) — drives POST /admin/cache/clear.
 	// Nil when south-bound never came up (no re-init manager); the route
 	// then stays unmounted.
+	// Bind the bring-up handles to the reload path so a live config edit
+	// can re-apply the settings that are otherwise read only during
+	// wiring — see reloadDeps.bringUp.
+	deps.SetBringUpManager(sb.bringUpManager)
 	cacheResetSvc := buildCacheResetService(cfg, reg, valuesCacheStore, masterValuesStore, si.descriptorStores, sb.bringUpManager, auditBuf, logger)
 	// A restore replaces the CCU's whole configuration, so the caches
 	// derived from the old one have to go with it. Without this the

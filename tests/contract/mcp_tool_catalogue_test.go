@@ -184,6 +184,8 @@ func (mcpNoopWriter) SetValue(context.Context, string, hmenum.Parameter, any, hm
 	return nil
 }
 
+func (emptyDevices) Released(string) bool { return true }
+
 type mcpNoopParamsets struct{}
 
 func (mcpNoopParamsets) GetParamset(context.Context, string, hmenum.ParamsetKey) (map[string]any, error) {

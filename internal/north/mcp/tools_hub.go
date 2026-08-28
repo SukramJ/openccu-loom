@@ -322,6 +322,12 @@ type inboxDeviceSummary struct {
 	// delay_new_device_creation is enabled; it exists on the CCU but has
 	// no data points here until it is accepted.
 	PendingCreation bool `json:"pending_creation,omitempty"`
+	// AwaitingRelease marks a device that is already accepted and
+	// materialised — it can be renamed and assigned rooms now — but is
+	// still withheld from the ecosystems until an operator finishes
+	// onboarding it. Do not offer to accept such a device: it is
+	// accepted. The remaining step is releasing it.
+	AwaitingRelease bool `json:"awaiting_release,omitempty"`
 }
 
 type listInboxOut struct {
@@ -331,7 +337,7 @@ type listInboxOut struct {
 func registerListInbox(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_inbox",
-		Description: "List devices waiting for acceptance — newly detected devices in the CCU inbox plus any this daemon parked because delay_new_device_creation is enabled (pending_creation) — optionally scoped to one central via central_name.",
+		Description: "List devices waiting for acceptance — newly detected devices in the CCU inbox plus any this daemon parked because delay_new_device_creation is enabled (pending_creation), plus devices already accepted but not yet released (awaiting_release) — optionally scoped to one central via central_name. The two flags are different asks: pending_creation needs an accept, awaiting_release needs a release.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listInboxOut, error) {
 		out := listInboxOut{Devices: []inboxDeviceSummary{}}
 		scan, err := centralsToScan(d, in.CentralName)
@@ -355,6 +361,7 @@ func registerListInbox(s *mcpsdk.Server, d Deps) {
 					Manufacturer:    dev.Manufacturer,
 					Central:         c,
 					PendingCreation: dev.PendingCreation,
+					AwaitingRelease: dev.AwaitingRelease,
 				})
 			}
 		}

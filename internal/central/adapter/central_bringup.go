@@ -261,6 +261,92 @@ func newBringUpManager() *BringUpManager {
 	return &BringUpManager{byCentral: make(map[string]*centralBringUp)}
 }
 
+// ApplyDeferredCreationBehavior re-applies each central's
+// `delay_new_device_creation` setting to its live callback handler and
+// reports how many centrals changed.
+//
+// Without it the toggle was read exactly twice, both times during
+// bring-up, while the config surface reported `restart_required: false`
+// for it — so switching it off in the UI said "applied" and changed
+// nothing until the next restart. That was tolerable while the toggle
+// only gated future parking; it stopped being tolerable once a persisted
+// queue hung off the same path, because the devices already held stayed
+// invisible to the ecosystems with nothing to explain why.
+//
+// Turning it OFF releases the queue: the setting means "ask me about new
+// devices", so switching it off means "stop asking" rather than leaving
+// devices stranded in a state whose only explanation is a setting that is
+// no longer on. Each released device is announced, because a connected
+// consumer has no other way to learn it became adoptable.
+func (m *BringUpManager) ApplyDeferredCreationBehavior(ctx context.Context, cfg *config.Config) int {
+	if m == nil || cfg == nil {
+		return 0
+	}
+	byName := make(map[string]*config.CentralConfig, len(cfg.Centrals))
+	for i := range cfg.Centrals {
+		byName[cfg.Centrals[i].Name] = &cfg.Centrals[i]
+	}
+
+	m.mu.Lock()
+	handles := make([]*centralBringUp, 0, len(m.byCentral))
+	for _, h := range m.byCentral {
+		handles = append(handles, h)
+	}
+	m.mu.Unlock()
+
+	changed := 0
+	for _, h := range handles {
+		cc, ok := byName[h.cc.Name]
+		if !ok {
+			continue
+		}
+		want := cc.Behavior.DelayNewDeviceCreationEnabled()
+		if h.cbHandlers == nil || h.cbHandlers.DelayNewDeviceCreation() == want {
+			continue
+		}
+		h.cbHandlers.SetDelayNewDeviceCreation(want)
+		changed++
+		if want {
+			continue
+		}
+		for _, addr := range releaseEveryHeldDevice(ctx, h.unit) {
+			h.logger.Info("central.deferred_creation.released",
+				slog.String("central", h.cc.Name),
+				slog.String("address", addr))
+		}
+	}
+	return changed
+}
+
+// releaseEveryHeldDevice frees every device the wizard still withholds on
+// one central and returns the addresses it freed, announcing each so the
+// ecosystems and the connected API consumers pick them up.
+//
+// It goes through [ReleaseDevice] per device rather than the coordinator's
+// bulk clear precisely because of that announcement: a bulk clear leaves
+// MQTT, Matter and every WebSocket consumer believing the devices are
+// still held until the next restart.
+func releaseEveryHeldDevice(ctx context.Context, u *central.Unit) []string {
+	if u == nil || u.Devices == nil || u.ModelRegistry == nil {
+		return nil
+	}
+	var freed []string
+	for _, d := range u.ModelRegistry.List() {
+		if d == nil {
+			continue
+		}
+		if ReleaseDevice(ctx, u, d.Address) {
+			freed = append(freed, d.Address)
+		}
+	}
+	// Devices still parked out of the model have no address in the model
+	// to release; the coordinator's own clear covers them, and the next
+	// pull materialises them.
+	u.Devices.ReleaseAllParked(ctx)
+	PublishAwaitingRelease(u)
+	return freed
+}
+
 func (m *BringUpManager) add(b *centralBringUp) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

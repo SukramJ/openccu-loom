@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -70,7 +71,9 @@ type CallbackHandlers struct {
 	// devices: when true, NewDevices only stores the descriptions for
 	// the operator inbox / manual-accept flow instead of creating the
 	// entities right away. Set per-central via [SetDelayNewDeviceCreation].
-	delayNewDeviceCreation bool
+	// Atomic because it is no longer write-once: a config reload flips
+	// it while the callback goroutine is reading it in NewDevices.
+	delayNewDeviceCreation atomic.Bool
 
 	// selfReloadSem is a non-blocking semaphore (buffered channel) that
 	// caps the number of concurrent self-reload goroutines at
@@ -110,12 +113,19 @@ func (h *CallbackHandlers) SetWriter(w *clientpkg.ValueWriter) {
 	h.writer = w
 }
 
+// DelayNewDeviceCreation reports the current setting, so a config reload
+// can tell an actual change from a no-op rather than re-applying and
+// re-releasing on every edit.
+func (h *CallbackHandlers) DelayNewDeviceCreation() bool {
+	return h.delayNewDeviceCreation.Load()
+}
+
 // SetDelayNewDeviceCreation toggles deferred ingest of newly-paired
 // devices for this central. When true, NewDevices stores the
 // descriptions for the manual-accept flow but does not create the
 // entities immediately.
 func (h *CallbackHandlers) SetDelayNewDeviceCreation(delay bool) {
-	h.delayNewDeviceCreation = delay
+	h.delayNewDeviceCreation.Store(delay)
 }
 
 // incidentRecorder returns the incident recorder wired to the central's
@@ -547,7 +557,7 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 	if len(descriptions) == 0 {
 		return nil
 	}
-	if h.delayNewDeviceCreation {
+	if h.delayNewDeviceCreation.Load() {
 		// Defer entity creation: the device waits on the inbox surface
 		// until an operator accepts it. The inbox is only
 		// filled here because the accept flow is the sole path that

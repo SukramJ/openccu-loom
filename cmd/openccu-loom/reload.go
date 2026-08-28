@@ -97,6 +97,19 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 		deps.SetCurrentConfig(next)
 		applied := 0
 
+		// Per-central behaviour that is read during wiring rather than on
+		// every use. `delay_new_device_creation` is not classified
+		// restart-required, so the config surface tells the operator the
+		// edit is applied; before this it was not, and switching the
+		// toggle off left every already-held device withheld from the
+		// ecosystems with nothing to explain why.
+		if mgr := deps.BringUpManager(); mgr != nil {
+			if n := mgr.ApplyDeferredCreationBehavior(context.Background(), next); n > 0 {
+				logger.Info("daemon.reload.deferred_creation_applied", slog.Int("centrals", n))
+				applied++
+			}
+		}
+
 		// Hot-reloadable: MQTT. The supervisor owns the rebuild
 		// sequence (new stack starts before the old one tears down,
 		// rollback on connect failure). A nil supervisor means the

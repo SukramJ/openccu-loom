@@ -64,3 +64,40 @@ func TestPin_PendingDevices_GateConsultedByThePull(t *testing.T) {
 		"internal/central/adapter/device_pipeline.go",
 		"", "IsParked")
 }
+
+// TestPin_DeferredCreationToggle_AppliedOnReload pins that a live config
+// edit actually reaches the per-central handler.
+//
+// `delay_new_device_creation` is not classified restart-required, so the
+// config surface tells the operator the edit is applied. It was read at
+// exactly two points, both during bring-up — so before this the surface
+// was lying, and switching the toggle off left every already-held device
+// withheld from the ecosystems with nothing to explain why.
+func TestPin_DeferredCreationToggle_AppliedOnReload(t *testing.T) {
+	contract.MustFindCallerInFile(t,
+		"cmd/openccu-loom/reload.go",
+		"", "ApplyDeferredCreationBehavior")
+}
+
+// TestPin_DeferredCreationToggle_ManagerBound pins the other half: the
+// reload path can only reach the handles if the composition root hands
+// them over. Without this the call above finds a nil manager and silently
+// does nothing, which is indistinguishable from working.
+func TestPin_DeferredCreationToggle_ManagerBound(t *testing.T) {
+	contract.MustFindCallerInFile(t,
+		"cmd/openccu-loom/daemon.go",
+		"", "SetBringUpManager")
+}
+
+// TestPin_ReleaseState_OnTheMCPSurface pins that an assistant driving the
+// daemon sees the onboarding state too.
+//
+// MCP is the surface this repository's own rules warn gets forgotten,
+// "because nothing fails when they are skipped" — and it was skipped when
+// the release gate shipped: an assistant saw a withheld device exactly
+// like any other.
+func TestPin_ReleaseState_OnTheMCPSurface(t *testing.T) {
+	contract.MustFindCallerInFile(t,
+		"internal/north/mcp/tools.go",
+		"", "Released")
+}

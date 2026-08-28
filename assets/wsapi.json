@@ -1,5 +1,5 @@
 {
- "version": "1.4",
+ "version": "1.5",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -356,7 +356,7 @@
   },
   {
    "category": "datapoint",
-   "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple. Subscribe with `classify:true` to receive inline category / data_point_type on the payload (default off). `value` is the raw CCU wire value; when the data point declares a non-trivial multiplier the payload also carries `display_value`, the same reading expressed in the unit the data point names. It matches the `display_value` on the REST data-point summary, so a client that seeds from REST and updates from here shows one consistent number.",
+   "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple. Subscribe with `classify:true` to receive inline category / data_point_type on the payload (default off). `value` is the raw CCU wire value; when the data point declares a non-trivial multiplier the payload also carries `display_value`, the same reading expressed in the unit the data point names. It matches the `display_value` on the REST data-point summary, so a client that seeds from REST and updates from here shows one consistent number. NOT filtered by onboarding release state: a device an operator has accepted but not yet released streams values here like any other, because the Config UI needs them to verify the device before releasing it. A consumer that adopts devices must therefore drop these frames for a device whose `released` is false — the state arrives on `device.created` and is lifted by `device.released`, both on the device's lifecycle topic. Filtering the device LIST alone is not enough.",
    "kind": "broadcast",
    "name": "datapoint.value_changed",
    "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
