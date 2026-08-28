@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.67.1
+
+- No change to the daemon's behaviour, the add-on, or anything your broker or
+  Home Assistant receives. This release records that a long-standing
+  difference between the daemon and the Python library it is measured against
+  has been resolved: both now build the routing key for CUxD devices the same
+  way. The daemon's side of that was already correct and is untouched.
+- If you integrate against the REST/WebSocket API with your own client, the
+  two published integration pages now describe the resolved state — including
+  what still applies when your client is pinned to an older version of that
+  library.
+
 ## 0.67.0
 
 - Every route in the daemon's API document now carries a machine-readable

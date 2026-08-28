@@ -6,6 +6,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.67.1] - 2026-08-28
+
+### Changed
+
+- **The CUxD routing-key divergence retired.** `CUX*` addresses were namespaced
+  by the central here and left bare by the Python reference implementation,
+  because CUxD hands out the same synthetic addresses on every CCU and two
+  bridged CCUs would otherwise declare identical `unique_id`s for them. The
+  reference has adopted the same rule, which is the retirement condition
+  `notes/parity/by_design.md` had named for itself.
+
+  Nothing the daemon emits changes — this side already applied the rule. What
+  changes is that the two implementations now agree, so the divergence fixture
+  that carried both answers is gone and its cases moved into the shared golden
+  fixtures replayed by `make routing-key-parity`. The pin in
+  `script/requirements/reference-stack.txt` moves with them; without that the
+  next bump would have turned both halves of the guard red at once, which is
+  precisely what the guard was built to do and would have read as a regression.
+
+  `TestRoutingKeyCUxDScopingGolden` becomes `TestRoutingKeyCentralScopedFamilies`
+  and keeps the one assertion that does not follow from the golden values: every
+  centrally scoped address family must answer true to `NeedsCentralScope`, which
+  the north-bound planes read to decide whether to withhold an id until the CCU
+  serial is known.
+
+- **The published external-client pages say so.** Both
+  `docs/external-clients/ha-drop-in-identity-and-scoping.md` and
+  `ha-unique-id-migration.md` described the divergence as live and named its
+  retirement condition. They now describe it as retired, and both keep the
+  caveat that a client pinned to an older reference still rebuilds the bare key
+  and has to scope it itself.
+
 ## [0.67.0] - 2026-08-28
 
 ### Added
