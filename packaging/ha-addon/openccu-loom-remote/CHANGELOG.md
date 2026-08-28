@@ -4,6 +4,16 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.67.0
+
+- Every route in the daemon's API document now carries a machine-readable
+  operation name, so tools that generate a client from it cover the whole
+  surface. Purely additive.
+- Device lists carry each device's firmware and reachability details
+  directly, so a client's start-up is one request instead of one per device.
+- The MQTT entity-description table is maintained in the repository now,
+  with a content-level regression test. Discovery payloads are unchanged.
+
 # 0.66.1
 
 - Version alignment with OpenCCU-Loom 0.66.1. The proxy itself is unchanged;

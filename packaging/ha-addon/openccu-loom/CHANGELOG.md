@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.67.0
+
+- Every route in the daemon's API document now carries a machine-readable
+  operation name, so tools that generate a client from it cover the whole
+  surface instead of most of it. Purely additive — nothing on the wire
+  changed.
+- Device lists now carry each device's firmware and reachability details
+  directly. A client that reads them no longer has to ask the daemon once
+  per device, which makes its start-up a single request instead of one per
+  device on a large installation.
+- The Home Assistant entity-description table behind MQTT discovery is now
+  maintained in the repository like every other device catalogue, with a
+  test that compares its full content rather than only counting entries.
+  No change to the discovery payloads your broker receives.
+
 ## 0.66.1
 
 - Fixes a gap in the new device wizard for setups that talk to the daemon

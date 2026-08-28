@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-08-28
+
 ### Added
 
 - **Every route in the OpenAPI document carries an `operationId`.** 37 of the
