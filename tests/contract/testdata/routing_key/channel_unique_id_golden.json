@@ -1,5 +1,5 @@
 {
-  "description": "Golden fixture for generate_channel_unique_id(): aiohomematic's channel/device-level routing key (Channel._unique_id). No parameter; central_id is prepended only for virtual-remote addresses. See aiohomematic_contract/unique_id.py and docs/contract-gaps.md (P1).",
+  "description": "Golden fixture for generate_channel_unique_id(): aiohomematic's channel/device-level routing key (Channel._unique_id). No parameter; central_id is prepended only for virtual-remote addresses — CUxD channel keys stay bare on both sides, which is why the CUxD cases live here rather than in a divergence file. See aiohomematic_contract/unique_id.py and docs/contract-gaps.md (P1).",
   "cases": [
     {
       "central_id": "ccu3",
@@ -30,6 +30,16 @@
       "central_id": "ccu3",
       "address": "VCU1234567",
       "expected": "vcu1234567"
+    },
+    {
+      "central_id": "1234",
+      "address": "CUX2801001:1",
+      "expected": "cux2801001_1"
+    },
+    {
+      "central_id": "1234",
+      "address": "CUX2801001",
+      "expected": "cux2801001"
     }
   ]
 }

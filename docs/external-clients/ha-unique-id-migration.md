@@ -56,11 +56,13 @@ contract test). The leading `central_id` slot of the routing key is:
     running number chosen per CCU, conventionally starting at 1 — the
     first `(28) System` device is `CUX2801001` on essentially every
     install. Two CCUs therefore declare byte-identical keys for their
-    CUxD data points. The daemon adds the serial suffix for this class;
-    the legacy reference key does not, so a CUxD key is the one case
-    where the migration below cannot simply prepend `loom_`. Channel-level
-    keys stay unscoped on both sides. Background:
-    [`by_design.md` → BD-Identity-CUxDCentralScoping](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md).
+    CUxD data points. The daemon adds the serial suffix for this class,
+    and so does the reference from aiohomematic 2026.8.7 onward
+    (SukramJ/aiohomematic#3370). Against an older reference a CUxD key is
+    the one case where the migration below cannot simply prepend `loom_`;
+    against 2026.8.7 or newer it is an ordinary case. Either way the
+    entities re-key once on the upgrade that adopts the rule.
+    Channel-level keys stay unscoped on both sides.
 
 Hub data-point names are slugged with the shared `hub_slug` rule
 (python-slugify defaults: Unicode transliteration, dash separator,

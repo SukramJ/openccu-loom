@@ -97,9 +97,12 @@ entity-identity stability.
 
 3. **Cross-backend HA routing key** — `internal/routingkey`
    (`GenerateUniqueID`, `GenerateChannelUniqueID`, `HubSlug`) mirrors the
-   shared routing-key contract bit-for-bit **except for the one declared
-   divergence below (BD-Identity-CUxDCentralScoping)**, and is locked by a
-   golden-fixture test under `tests/contract/`. It exists so the Go side
+   shared routing-key contract bit-for-bit and is locked by a
+   golden-fixture test under `tests/contract/`. It carried one declared
+   divergence until 2026-08-28 — CUxD addresses were scoped by the central
+   here and left bare by the reference — which retired when aiohomematic
+   2026.8.7 landed the same rule (SukramJ/aiohomematic#3370). The cases now
+   live in the shared golden fixtures. It exists so the Go side
    can reproduce / validate the key that the HA drop-in client rebuilds
    from `address` + `parameter` (+ `entry_id[-10:]` as the HA-owned
    prefix, which the daemon cannot know). The WS / REST payloads expose
@@ -114,55 +117,6 @@ roots), so it must not be used where the HA routing key is expected; new
 consumers use `internal/routingkey` instead. See
 `docs/external-clients/ha-drop-in-identity-and-scoping.md` for the full
 owner split (client injects the HA prefix; daemon supplies scoping).
-
-### BD-Identity-CUxDCentralScoping — CUxD addresses are namespaced by the central; the reference leaves them bare
-
-**Divergence.** `internal/routingkey.needsCentralPrefix` treats a `CUX*`
-address like the hub pseudo-addresses, `INT000*` and the virtual-remote
-buses: the *parameter-level* key carries the central discriminator
-(`loom_<serial10>_cux2801001_1_state`). The Python reference
-(`aiohomematic/model/support.py:generate_unique_id`) scopes only the four
-hub pseudo-addresses, `INT000*` and `VIRTUAL_REMOTE_ADDRESSES` — a CUxD
-address comes out bare (`cux2801001_1_state`). The *channel-level* key
-(`GenerateChannelUniqueID`) is scoped on neither side, so the asymmetry
-is parameter-level only.
-
-**Why.** CUxD device serials are `CUX` + a two-digit device type + a
-five-digit running number the operator picks per CCU, conventionally
-starting at 1 — nothing in the address derives from the CCU. The first
-`(28) System` device is `CUX2801001` on essentially every CUxD install,
-so two CCUs bridged into one Home Assistant would declare byte-identical
-`unique_id`s. HA keeps whichever arrived first and drops the other CCU's
-entities; because the MQTT discovery payload is retained, the loss
-outlives the daemon that caused it. The daemon is multi-CCU-first
-(ADR 0002) while the reference runs one CCU per config entry, so the
-collision is reachable here in a way it is not there.
-
-**Cost, and the guards that hold it.** This is a genuine fork of a shared
-contract, not a port artefact, and it carries two costs that must stay
-visible:
-
-- a drop-in client that rebuilds the key from the reference emits an id
-  the daemon never publishes for CUxD data points, so the client needs
-  the same rule (and the one-time registry rewrite in
-  `docs/external-clients/ha-unique-id-migration.md`);
-- every install that upgraded across the change re-keyed its CUxD
-  entities once.
-
-Pinned from both ends by
-`tests/contract/testdata/routing_key/cuxd_scoping_golden.json`:
-`TestRoutingKeyCUxDScopingGolden` asserts the Go output,
-`script/routing_key_parity.py` asserts the reference output, and each
-also fails when the two stop differing. The shared fixtures
-(`unique_id_golden.json`, `channel_unique_id_golden.json`) stay
-byte-identical copies so the contract they represent is not quietly
-rewritten.
-
-**Retirement condition.** The right end state is no divergence: land the
-same rule in the reference implementation, then fold the CUxD cases into
-the shared fixtures and delete this entry. The guards above will demand
-it — once the reference scopes CUxD, both halves of the divergence
-fixture fail on the same run.
 
 ### CCU Link Management (v1.0 scope exclusion)
 
