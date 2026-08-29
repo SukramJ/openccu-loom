@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -46,21 +47,34 @@ func (f *fakeCentralLinks) CentralLinksStatus(_ context.Context, _ string) (hmap
 	return f.status, f.statusErr
 }
 
+// fakeSessionRecorder stands in for the diagnostics session recorder.
+//
+// The flag is guarded because the recorder is reached through the command
+// dispatcher: a caller has no way to see that the command it dispatches ends
+// in a plain assignment, so a parallel subtest sharing one recorder raced on
+// it without anything in the test body looking concurrent.
 type fakeSessionRecorder struct {
+	mu     sync.Mutex
 	active bool
 }
 
 func (f *fakeSessionRecorder) Start() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.active = true
 	return f.active
 }
 
 func (f *fakeSessionRecorder) Stop() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.active = false
 	return f.active
 }
 
 func (f *fakeSessionRecorder) IsActive() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.active
 }
 
@@ -346,12 +360,15 @@ func recordingBool(t *testing.T, data any) bool {
 // clears the gate.
 func TestRecordingCommandsRequireAdminRole(t *testing.T) {
 	t.Parallel()
-	rec := &fakeSessionRecorder{}
-	r := newLinksRouter(nil, rec)
 
 	for _, cmd := range []string{"recording.start", "recording.stop"} {
 		t.Run(cmd, func(t *testing.T) {
 			t.Parallel()
+			// A recorder and a router per subtest. The two cases are
+			// independent and neither reads the other's recorder state, so
+			// sharing one bought nothing and made `recording.start` and
+			// `recording.stop` write the same field concurrently.
+			r := newLinksRouter(nil, &fakeSessionRecorder{})
 			res := r.Dispatch(opCtx(), cmd, nil)
 			if res.Error == nil || res.Error.Code != CommandErrorForbidden {
 				t.Fatalf("operator dispatch of %s = %+v, want forbidden", cmd, res.Error)
