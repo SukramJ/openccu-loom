@@ -16,6 +16,17 @@ document specifies the one-time HA registry migration the client runs.
 **Related:** [`ha-drop-in-identity-and-scoping.md`](./ha-drop-in-identity-and-scoping.md),
 [`by_design.md` → BD-Identity-RoutingKeyNamespaces](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md).
 
+!!! warning "A re-key is only possible on one plane"
+    [ADR 0068](../adr/0068-unique-id-stability-per-plane.md) settles what a
+    `unique_id` promises, and the two north-bound planes differ. On **REST/WS**
+    a key may change, provided the change ships with the consumer-side
+    migration and the old key is derivable from data the consumer already
+    receives — this page is where that transition is recorded, **before** the
+    change is released. On **MQTT discovery** the key is immutable: Home
+    Assistant's MQTT integration has no `unique_id` migration path, so a
+    changed key orphans the old entry with its history and no consumer can
+    repair it.
+
 ## Why a migration
 
 Home Assistant stores each entity under a `unique_id` in its entity
