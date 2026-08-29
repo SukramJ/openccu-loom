@@ -111,3 +111,24 @@ the release proceeds — regeneration stays possible manually.
 - Contract changes without a version bump no longer merge.
 - Types releases follow daemon releases automatically once the
   dispatch token is configured.
+
+## Amendment (2026-08-29) — the dispatch target moved
+
+The generated bindings no longer ship as `openccu-loom-types`. They were
+folded into `openccu-loom-client` as `openccu_loom_client/wire/`
+([client #122](https://github.com/SukramJ/openccu-loom-client/issues/122)),
+so this ADR's release-coupling section now reads: the `daemon-release`
+dispatch fires at `SukramJ/openccu-loom-client`, whose workflow regenerates
+`wire/` and opens a pull request. The secret name
+(`TYPES_REPO_DISPATCH_TOKEN`) is unchanged.
+
+The rest of the decision stands unchanged — the digest, the four hashed
+assets, and the bump guard are unaffected by where the generated modules
+live.
+
+One consequence above is now wrong and stays on the record rather than
+being edited: releases do **not** follow daemon releases automatically any
+more. The receiving workflow opens a PR and stops, deliberately. Measured
+over the automation's lifetime, 84 of 84 downstream releases were machine-
+decided and none carried a hand-written line, which is what "automatically"
+had come to mean.
