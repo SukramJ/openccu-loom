@@ -207,15 +207,22 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-  # Notify the types repo so it regenerates openccu-loom-types from
+  # Notify openccu-loom-client so it regenerates its wire bindings from
   # this release's contract assets (ADR 0028). The receiving workflow
-  # checks out this repo at the released tag, regenerates the Pydantic
-  # models, and opens a PR there. Requires the TYPES_REPO_DISPATCH_TOKEN
-  # secret (fine-grained PAT with contents:write on the types repo);
-  # without it the step warns and the release proceeds — the types repo
-  # can always regenerate manually from the tag.
-  notify-types-repo:
-    name: trigger types regeneration
+  # checks out this repo at the released tag, regenerates
+  # openccu_loom_client/wire/, and opens a PR there — it does not bump,
+  # merge or tag. Requires the TYPES_REPO_DISPATCH_TOKEN secret
+  # (fine-grained PAT with contents:write on the receiving repo); without
+  # it the step warns and the release proceeds, since that repo can always
+  # regenerate manually from the tag.
+  #
+  # The bindings used to live in openccu-loom-types, which this job
+  # dispatched to instead. They were folded into the client
+  # (SukramJ/openccu-loom-client#122) because the separate distribution
+  # cut a release for every daemon release without ever carrying a
+  # hand-written line.
+  notify-client-repo:
+    name: trigger wire regeneration
     needs: goreleaser
     runs-on: ubuntu-latest
     steps:
@@ -226,8 +233,9 @@ jobs:
       # api-contract-guard CI job already forces a major bump for
       # oasdiff-classified breaking diffs, so comparing the major
       # against the previous release tag is authoritative — no
-      # re-classification needed at release time. The types repo uses
-      # the flag to bump its minor (instead of patch) version.
+      # re-classification needed at release time. The receiving repo
+      # surfaces the flag on the regeneration PR so a breaking contract
+      # change is reviewed before it is merged.
       - name: classify contract change vs previous release
         run: |
           set -euo pipefail
@@ -254,10 +262,10 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::TYPES_REPO_DISPATCH_TOKEN not configured — skipping types-repo dispatch"
+            echo "::warning::TYPES_REPO_DISPATCH_TOKEN not configured — skipping client-repo dispatch"
             exit 0
           fi
-          gh api repos/SukramJ/openccu-loom-types/dispatches \
+          gh api repos/SukramJ/openccu-loom-client/dispatches \
             -f event_type=daemon-release \
             -f "client_payload[tag]=${GITHUB_REF_NAME}" \
             -f "client_payload[api_version]=${API_VERSION}" \

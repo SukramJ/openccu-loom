@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The post-release regeneration dispatch points at `openccu-loom-client`.**
+  The generated wire bindings moved out of the separate `openccu-loom-types`
+  distribution and into the client as `openccu_loom_client/wire/`, so the
+  `daemon-release` `repository_dispatch` this release workflow fires now
+  reaches the repository that holds them. The secret name is unchanged.
+
+  The receiving workflow opens a pull request and stops — no version bump, no
+  auto-merge, no tag. That is the behaviour change worth knowing about: a
+  daemon release no longer causes a downstream release, only a downstream
+  review. Over the previous automation's lifetime, 84 of 84 downstream
+  releases were machine-decided and none carried a hand-written line.
+
+  ADR 0028 carries an amendment rather than an edit; one of its stated
+  consequences is now deliberately false and says so.
+
 ## [0.68.0] - 2026-08-29
 
 ### Changed

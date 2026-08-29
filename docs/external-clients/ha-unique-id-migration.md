@@ -259,7 +259,7 @@ How it landed:
    `routingkey.CanonicalUniqueID(serialSuffix, address, parameter, eventPrefix)`
    — the serial suffix comes from `(*central.Registry).SerialSuffix`;
 2. the `unique_id` property was added to each schema in `assets/openapi.yaml`;
-3. `openccu-loom-types` is regenerated downstream from that spec;
+3. the downstream client's wire bindings are regenerated from that spec;
 4. the client consumes `payload.unique_id` when present, and keeps the
    rebuild path as a **verifiable fallback** for payloads that omit it.
 
