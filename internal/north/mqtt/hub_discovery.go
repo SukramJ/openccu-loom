@@ -438,11 +438,7 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 	if !ok || p.ID == "" || role.Component == "" {
 		return DiscoveryItem{}
 	}
-	programSlug := routingkey.HubSlug(p.Name)
-	if programSlug == "" {
-		programSlug = routingkey.HubSlug(p.ID)
-	}
-	uniqueID := routingkey.CanonicalUniqueID(serial10, "program", programSlug, "")
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "program", programUniqueSlug(p), "")
 	objectID := safeLower(p.ID)
 	displayName := p.Name
 	if displayName == "" {
@@ -523,13 +519,7 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p Hu
 	}
 	stateTopic := naming.MQTTHubProgramState(d.BridgeBase, centralName, p.ID)
 	commandTopic := naming.MQTTHubProgramTrigger(d.BridgeBase, centralName, p.ID)
-	// Programs are keyed by NAME (slug), not by ID. When no name is supplied,
-	// fall back to the ID slug so the unique_id stays stable across renames.
-	programSlug := routingkey.HubSlug(p.Name)
-	if programSlug == "" {
-		programSlug = routingkey.HubSlug(p.ID)
-	}
-	uniqueID := routingkey.CanonicalUniqueID(serial10, "program", programSlug, "")
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "program", programUniqueSlug(p), "")
 	displayName := p.Name
 	if displayName == "" {
 		displayName = p.ID
@@ -1071,6 +1061,23 @@ func (b *Bridge) PublishHubDiscovery(ctx context.Context, item DiscoveryItem) er
 // before the first hub scan) falls back to the slug. That is the pre-existing
 // behaviour and can still collide, but an entity keyed on the literal 0 would
 // collide with *every* other unresolved sysvar, which is worse.
+// programUniqueSlug is the identity half of a program's unique_id.
+//
+// Keyed on the CCU program id, for the reason the sysvar id is: the name is
+// editable in the WebUI, and a key built from it re-keys the consumer's
+// entity on every rename — taking its history, its area and every automation
+// with it. The name slug stands in only while the id is unresolved.
+//
+// It mirrors [hub.Program.CanonicalUniqueID], which serves the same key on
+// the REST/WS plane; TestHubProgramUniqueIDMatchesAcrossPlanes pins the two
+// against each other.
+func programUniqueSlug(p HubProgramSpec) string {
+	if slug := routingkey.HubSlug(p.ID); slug != "" {
+		return slug
+	}
+	return routingkey.HubSlug(p.Name)
+}
+
 func sysvarUniqueID(serial10 string, sv HubSysvarSpec) string {
 	if sv.Vid > 0 {
 		return routingkey.CanonicalUniqueID(serial10, "sysvar", strconv.Itoa(sv.Vid), "")

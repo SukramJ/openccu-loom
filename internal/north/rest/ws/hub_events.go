@@ -41,10 +41,12 @@ type SysvarChangedPayload struct {
 	Name      string              `json:"name"`
 	ValueType hmenum.HubValueType `json:"value_type,omitempty"`
 	// UniqueID is the canonical loom-namespaced routing key for this
-	// sysvar (loom_<serial10>_sysvar_<hub-slug>). Always present and
-	// non-empty — it resolves from the (gated) central serial plus the
-	// sysvar name, both always carried by the change event. See
-	// [DataPointValueChangedPayload.UniqueID].
+	// sysvar (loom_<serial10>_sysvar_<vid>, falling back to the name slug
+	// while the vid is unresolved). Always present and non-empty — it
+	// resolves from the (gated) central serial plus the sysvar itself, both
+	// always carried by the change event. See
+	// [DataPointValueChangedPayload.UniqueID] and
+	// [hub.Sysvar.CanonicalUniqueID].
 	UniqueID string `json:"unique_id"`
 	Value    any    `json:"value"`
 	Previous any    `json:"previous,omitempty"`
@@ -68,12 +70,13 @@ type ProgramExecutedPayload struct {
 	Trigger   hmenum.ProgramTrigger `json:"trigger,omitempty"`
 	Success   bool                  `json:"success"`
 	// UniqueID is the canonical loom-namespaced routing key for this
-	// program (loom_<serial10>_program_<hub-slug(name)>). Deliberately
-	// optional — unlike the sysvar / value-changed payloads it keys on the
-	// program *name*, but the execution event carries only the program id,
-	// so the name is resolved from the hub model (programUniqueID) and the
-	// key is empty for a program not yet loaded. The REST ProgramSummary,
-	// which iterates resolved Program objects, always carries it.
+	// program (loom_<serial10>_program_<id>, falling back to the name slug
+	// while the id is unresolved). Deliberately optional: the key is built
+	// from the Program in the hub model (programUniqueID), so it is empty
+	// for a program the model has not loaded yet — the execution event
+	// alone does not carry enough to build one. The REST ProgramSummary,
+	// which iterates resolved Program objects, always carries it. See
+	// [hub.Program.CanonicalUniqueID].
 	UniqueID string `json:"unique_id,omitempty"`
 	// Channel is the canonical channel address ("ADDR:idx") of the device
 	// channel this program is associated with (name match — the same value

@@ -33,6 +33,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   what both sides actually do, covers programs, and states the version from
   which it holds.
 
+  The rule reaches the MQTT discovery plane too. The sysvar builder was
+  already keyed on the numeric id; the program builder was not, so the same
+  program was `loom_<serial10>_program_prg-42` over REST/WS and
+  `loom_<serial10>_program_morning-lights` over the broker — two keys for one
+  CCU object, both landing in the same Home Assistant registry, and a
+  migration note that described a rule only half the daemon followed. Nothing
+  failed, because each plane had a test asserting its own answer.
+  `TestHubUniqueIDMatchesAcrossPlanes` now pins the two against each other.
+
 ## [0.67.1] - 2026-08-28
 
 ### Changed

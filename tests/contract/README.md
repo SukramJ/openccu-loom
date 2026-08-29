@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 395.
+Guards without a doc comment: 7 of 396.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -146,6 +146,7 @@ Guards without a doc comment: 7 of 395.
 | TestReplaceClassification | hmenum_constants_test.go | TestReplaceClassification pins the exact set of interfaces whose daemon exposes `listReplaceableDevices` / `replaceDevice`: BidCos-RF and BidCos-Wired, because rfd and hs485d implement the guided device-replace swap while HMIPServer (HmIP-RF) throws NotImplementedException. |
 | TestTeamsClassification | hmenum_constants_test.go | TestTeamsClassification pins the team-assignment interface set: rfd (BidCos-RF) and HMIPServer (HmIP-RF) implement setTeam/listTeams; BidCos-Wired, CUxD and VirtualDevices do not. |
 | TestEveryHTTPClientOwnsItsTransport | http_transport_ownership_test.go | TestEveryHTTPClientOwnsItsTransport fails on any composite literal of type http.Client that omits the Transport field, on any reference to http.DefaultClient, and on the http package's request helpers that dispatch through it. |
+| TestHubUniqueIDMatchesAcrossPlanes | hub_unique_id_cross_plane_test.go | TestHubUniqueIDMatchesAcrossPlanes pins the two implementations of a hub entity's `unique_id` against each other: hub.Program / hub.Sysvar serve it on the REST/WS plane, and the MQTT discovery builder serves it on the broker. |
 | TestContractHubDataPointUniqueIDIsCentralScoped | hub_visibility_test.go | TestContractHubDataPointUniqueIDIsCentralScoped pins ADR 0002: every hub DP must produce a UniqueID with a non-empty central segment. |
 | TestContractHubDataPointVisibilityMatrix | hub_visibility_test.go | TestContractHubDataPointVisibilityMatrix pins every (forced-usage, EnabledDefault) combination on hub data points, mirroring the foundation matrix in `internal/model/datapoint/base_test.go`. |
 | TestI18nCatalogParity | i18n_catalog_keys_test.go | TestI18nCatalogParity enforces that every locale carries the same key set — missing keys are treated as a release blocker. |
