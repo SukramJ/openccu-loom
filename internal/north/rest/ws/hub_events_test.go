@@ -405,7 +405,8 @@ func TestHubEventsSubscriberSysvarUniqueID(t *testing.T) {
 }
 
 // TestHubEventsSubscriberProgramUniqueIDResolvable registers a program in the
-// hub model and verifies the executed-event payload carries the name-based slug.
+// hub model and verifies the executed-event payload carries the key built
+// from the CCU program id — the value a rename does not move.
 func TestHubEventsSubscriberProgramUniqueIDResolvable(t *testing.T) {
 	t.Parallel()
 
@@ -437,7 +438,7 @@ func TestHubEventsSubscriberProgramUniqueIDResolvable(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want ProgramExecutedPayload", ev.Payload)
 	}
-	if want := "loom_11a0001234_program_lights-off"; p.UniqueID != want {
+	if want := "loom_11a0001234_program_p1"; p.UniqueID != want {
 		t.Fatalf("unique_id = %q, want %q", p.UniqueID, want)
 	}
 }

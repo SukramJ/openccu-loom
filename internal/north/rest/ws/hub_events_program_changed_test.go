@@ -54,7 +54,7 @@ func TestHubEventsSubscriberProgramChanged(t *testing.T) {
 	if p.ExecuteAvailable {
 		t.Fatal("a deactivated program refuses to run — execute_available must be false")
 	}
-	if want := "loom_11a0001234_program_lights-off"; p.UniqueID != want {
+	if want := "loom_11a0001234_program_p1"; p.UniqueID != want {
 		t.Fatalf("unique_id = %q, want %q", p.UniqueID, want)
 	}
 }

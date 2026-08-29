@@ -386,8 +386,8 @@ func TestProgramBuilderHappyPath(t *testing.T) {
 	if m["name"] != "Morning Lights" {
 		t.Fatalf("name: got %v want %q", m["name"], "Morning Lights")
 	}
-	if m["unique_id"] != "loom_11a0001234_program_morning-lights" {
-		t.Fatalf("unique_id: got %v want loom_11a0001234_program_morning-lights", m["unique_id"])
+	if m["unique_id"] != "loom_11a0001234_program_prg-42" {
+		t.Fatalf("unique_id: got %v want loom_11a0001234_program_prg-42", m["unique_id"])
 	}
 	if _, hasCmd := m["command_topic"]; !hasCmd {
 		t.Fatal("expected command_topic")
@@ -1178,5 +1178,34 @@ func TestHubDiscoveryEnabledByDefaultPassThrough(t *testing.T) {
 				t.Fatalf("enabled_by_default: got %v want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestProgramBuilderKeysOnTheIDNotTheName pins the property the id-keyed
+// unique_id exists for: renaming a program in the WebUI must not move its
+// key, because HA re-keys the entity and drops its history with it.
+func TestProgramBuilderKeysOnTheIDNotTheName(t *testing.T) {
+	t.Parallel()
+	db := newHubBuilder()
+
+	before := jsonMap(t, db.BuildProgramDiscovery("ccu-01", HubProgramSpec{ID: "PRG_42", Name: "Morning Lights"}))
+	after := jsonMap(t, db.BuildProgramDiscovery("ccu-01", HubProgramSpec{ID: "PRG_42", Name: "Sunrise Scene"}))
+
+	if before["unique_id"] != after["unique_id"] {
+		t.Fatalf("rename moved the key: %v -> %v", before["unique_id"], after["unique_id"])
+	}
+	if before["name"] == after["name"] {
+		t.Fatalf("the fixture did not actually rename anything: name stayed %v", before["name"])
+	}
+}
+
+// TestProgramBuilderFallsBackToTheNameSlug covers the rollover shape: a
+// program whose id is not resolved yet is still owed a key, and a consumer
+// rebuilding one has to accept this form. Mirrors
+// TestProgramCanonicalUniqueIDFallsBackToTheSlug on the model side.
+func TestProgramBuilderFallsBackToTheNameSlug(t *testing.T) {
+	t.Parallel()
+	if got := programUniqueSlug(HubProgramSpec{Name: "Morning Lights"}); got != "morning-lights" {
+		t.Fatalf("programUniqueSlug without an id = %q, want %q", got, "morning-lights")
 	}
 }

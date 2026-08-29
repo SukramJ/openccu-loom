@@ -76,8 +76,8 @@ CCU serial `3014F711A0001234` → serial suffix `11a0001234`.
 |---|---|---|
 | Device `VCU1234567:1` `STATE` | `vcu1234567_1_state` | `loom_vcu1234567_1_state` |
 | Button event `VCU1234567:1` `PRESS_SHORT` | `event_vcu1234567_1_press_short` | `loom_event_vcu1234567_1_press_short` |
-| Sysvar `Außen Temperatur` | `a1b2c3d4e5_sysvar_aussen-temperatur` | `loom_11a0001234_sysvar_aussen-temperatur` |
-| Program `My Prog` | `a1b2c3d4e5_program_my-prog` | `loom_11a0001234_program_my-prog` |
+| Sysvar `Außen Temperatur` (vid 12345) | `a1b2c3d4e5_sysvar_aussen-temperatur` | `loom_11a0001234_sysvar_12345` |
+| Program `My Prog` (id 1234) | `a1b2c3d4e5_program_my-prog` | `loom_11a0001234_program_1234` |
 | Internal `INT0001234:1` `LEVEL` | `a1b2c3d4e5_int0001234_1_level` | `loom_11a0001234_int0001234_1_level` |
 | Virtual remote `BidCoS-RF:1` `PRESS_SHORT` | `a1b2c3d4e5_bidcos_rf_1_press_short` | `loom_11a0001234_bidcos_rf_1_press_short` |
 | CUxD `CUX2801001:1` `STATE` | `cux2801001_1_state` | `loom_11a0001234_cux2801001_1_state` |
@@ -161,18 +161,22 @@ for that entry, so newly-created entities already see the migrated keys.
 - **Target collisions.** If two legacy keys map to the same new key, HA's
   registry refuses the second rename because the target `unique_id`
   already exists; the entity keeps its old key. Log these.
-- **System variables are keyed on the CCU's numeric variable id.** A
-  sysvar's `unique_id` is `loom_<serial10>_sysvar_<ise_id>`, not
-  `loom_<serial10>_sysvar_<slug>`. The name was never an identity:
+- **System variables and programs are keyed on the CCU's id.** A sysvar's
+  `unique_id` is `loom_<serial10>_sysvar_<vid>` and a program's is
+  `loom_<serial10>_program_<id>`, not the slug of either name. The name was
+  never an identity, in two ways. It is editable — a rename in the WebUI
+  moved the key and took the entity's history, area and automations with it.
+  And it is not unique:
   `hub_slug` collapses punctuation and case, so `Alarm: Küche` and
   `Alarm Küche` both slug to `alarm-kuche` and produced byte-identical
   keys — HA registered whichever discovery config arrived first and
   dropped the other variable's entity outright, permanently, because the
   payload is retained on the broker.
 
-    Two consequences for a client:
+    Both implementations apply this rule as of daemon 0.68.0 and reference
+    2026.8.8. Two consequences for a client:
 
-    1. **Every sysvar entity re-keys once** on the upgrade to this
+    1. **Every sysvar and program entity re-keys once** on the upgrade to this
        release. Rewrite `loom_<serial10>_sysvar_<slug>` to
        `loom_<serial10>_sysvar_<ise_id>` in a second registry pass; the
        discovery payload carries the new key, and the state topic is

@@ -4,6 +4,8 @@
 package hub
 
 import (
+	"strconv"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
@@ -31,15 +33,26 @@ var (
 // --- Program ---
 
 // CanonicalUniqueID builds the external, loom-namespaced unique_id for
-// this program: loom_<serialSuffix>_program_<hub-slug(name)>. The
-// serialSuffix is supplied by the north boundary (central → serial);
-// hub entities always carry it because their names repeat across CCUs.
+// this program: loom_<serialSuffix>_program_<id>. The serialSuffix is
+// supplied by the north boundary (central → serial); hub entities always
+// carry it because their names repeat across CCUs.
+//
+// Keyed on the CCU program id rather than on the name, because the name is
+// editable in the WebUI and a key built from it re-keys the consumer's
+// entity on every rename — taking its history and every automation with it.
+// Falls back to the name slug while the id is unresolved, which is the
+// shape a consumer must accept during a rollover.
+//
 // See docs/external-clients/ha-unique-id-migration.md.
 func (p *Program) CanonicalUniqueID(serialSuffix string) string {
 	if p == nil {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, "program", routingkey.HubSlug(p.LegacyName()), "")
+	key := p.ID
+	if key == "" {
+		key = p.LegacyName()
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, "program", routingkey.HubSlug(key), "")
 }
 
 // Info returns identity-level fields for a Program.
@@ -96,14 +109,23 @@ func (p *Program) State() payload.StatePayload {
 // --- Sysvar ---
 
 // CanonicalUniqueID builds the external, loom-namespaced unique_id for
-// this system variable: loom_<serialSuffix>_sysvar_<hub-slug(name)>.
-// See [Program.CanonicalUniqueID] and
-// docs/external-clients/ha-unique-id-migration.md.
+// this system variable: loom_<serialSuffix>_sysvar_<vid>.
+//
+// Keyed on the CCU's numeric variable id for the reason given on
+// [Program.CanonicalUniqueID] — the name is editable and the id is not.
+// Vid is 0 until a hub scan resolves it, and then the name slug stands in;
+// [Sysvar.PathData] guards the same value the same way.
+//
+// See docs/external-clients/ha-unique-id-migration.md.
 func (s *Sysvar) CanonicalUniqueID(serialSuffix string) string {
 	if s == nil {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(s.LegacyName()), "")
+	key := s.LegacyName()
+	if vid := s.Meta().Vid; vid != 0 {
+		key = strconv.Itoa(vid)
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(key), "")
 }
 
 // Info returns identity-level fields for a Sysvar.
