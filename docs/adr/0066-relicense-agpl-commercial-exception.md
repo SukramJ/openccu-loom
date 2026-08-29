@@ -1,9 +1,29 @@
 # ADR 0066 — Relicense to AGPL-3.0-only with a commercial exception
 
-- **Status**: proposed
+- **Status**: rejected (2026-08-28)
 - **Date**: 2026-08-26
-- **Supersedes**: [ADR 0001 — License: MIT](./0001-license-mit.md), from v0.66.0 onward
+- **Supersedes**: nothing. [ADR 0001 — License: MIT](./0001-license-mit.md) stands.
 - **Related**: [ADR 0003 — Embed openccu-data metadata artifacts](./0003-embed-occu-extracts.md)
+
+> **Outcome, 2026-08-28: not adopted. The project stays MIT.**
+>
+> The proposal below is kept in full because its analysis is worth reading
+> and because the question will be asked again. What was decided is only the
+> answer, and the answer is no.
+>
+> Two things follow, and both are the reason the decision belongs in this
+> repository rather than in a consumer's notes. First, the CLA obligation
+> this ADR would have created does not arise; `CONTRIBUTING.md` continues to
+> take contributions under the DCO, and the working note
+> `notes/reference/contributor-agreements-declined.md` continues to describe
+> why. Second — and this is the consequence that
+> reaches other repositories — the daemon remains a possible destination for
+> code moved out of the MIT siblings. Line 125 of this ADR states the
+> constraint that would otherwise have applied: "MIT material may enter
+> OpenCCU-Loom, but AGPL material may not go back." Every future proposal to
+> move code here would have been a one-way door. It is not one.
+>
+> `LICENSE` was never changed, so nothing had to be reverted.
 
 ## Context
 
@@ -153,7 +173,7 @@ exactly one option.
 6. **The MIT history is permanent.** Anyone may fork v0.65.0 and carry it
    commercially forever. This is a known, accepted, unavoidable outcome.
 
-## Why this is proposed and not accepted
+## Why this was proposed and not accepted
 
 The decision above is deliberately held rather than taken. Weighed against
 what the repository actually looks like, the case for acting now is weak:
