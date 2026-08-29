@@ -6,6 +6,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.68.1] - 2026-08-29
+
+### Added
+
+- **`GET /devices/{addr}/cdps/{name}` declares its response.** It never did, so
+  no generated client carried a type for it and a consumer wrote the shape by
+  hand — reading `CustomDPSummary`, which shares a name prefix and nothing
+  else. The mistake was invisible until that code path first ran, and then
+  failed every custom-data-point refresh against a live daemon: 22 entities
+  did not come up on one installation. `CustomDPDetail` is now a declared
+  component, and the consumer can delete its hand-written copy.
+
+- **Four more success responses gained a schema.** A sweep of all 178 success
+  responses found nine without one. Besides the route above: the link paramset
+  (`LinkParamset`, a raw parameter map), the room and function create verbs
+  (`CreatedNamedResource`), and `GET /metrics`, which now declares
+  `text/plain` rather than nothing at all.
+
+  `TestEverySuccessResponseDeclaresASchema` keeps the rest honest. Four
+  responses stay listed as deliberately undeclared, each with its reason:
+  three answer with an empty body, and `GET …/ui-schema` has no schema written
+  yet — `hmapi.UISchema` nests seven further types, and a guessed partial
+  schema there would be the exact failure this guard exists to catch.
+
 ### Changed
 
 - **ADR 0068 states what a `unique_id` promises, and the two planes differ.**

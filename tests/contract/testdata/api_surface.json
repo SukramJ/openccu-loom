@@ -1,5 +1,5 @@
 {
- "api_version": "7.23.0",
+ "api_version": "7.24.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -865,6 +865,16 @@
    "subject:string",
    "token:string"
   ],
+  "CreatedNamedResource": [
+   "id:string",
+   "name:string"
+  ],
+  "CustomDPDetail": [
+   "category:string",
+   "channel_no:integer",
+   "name:string",
+   "state:null|object"
+  ],
   "CustomDPInvokeRequest": [
    "params:object",
    "priority:string"
@@ -1376,6 +1386,7 @@
    "sender_device_model:string",
    "sender_device_name:string"
   ],
+  "LinkParamset": [],
   "LinkableChannel": [
    "address:string",
    "channel_name:string",

@@ -5215,6 +5215,63 @@ export interface components {
             /** @enum {string} */
             priority?: "critical" | "high" | "default" | "low";
         };
+        /**
+         * @description Response of the room / function create verbs: the id the CCU assigned
+         *     and the name it was created under. The name is echoed rather than
+         *     assumed, because the CCU normalises it.
+         */
+        CreatedNamedResource: {
+            /** @description CCU-assigned identifier of the created object. */
+            id: string;
+            /** @description Name as the CCU stored it. */
+            name: string;
+        };
+        /**
+         * @description Raw LINK paramset of one channel-peer pair, as the CCU returns it —
+         *     a flat parameter-name to value map with no fixed key set, which is
+         *     why it declares `additionalProperties` rather than named fields.
+         */
+        LinkParamset: {
+            [key: string]: unknown;
+        };
+        /**
+         * @description Response of `GET /devices/{addr}/cdps/{name}` — deliberately *not* a
+         *     `CustomDPSummary`. The detail response carries the live `state` plus
+         *     the three fields needed to place it, and omits everything the summary
+         *     exists to serve a list with: `unique_id`, `supported_operations`,
+         *     `capabilities`, `config`, the name fields.
+         *
+         *     That distinction used to be undeclared, and a consumer read the
+         *     summary's schema for this route and validated against it. The mistake
+         *     was invisible until the code path first ran, and then broke every
+         *     custom-data-point refresh against a live daemon. Mirrors
+         *     `handlers.CustomDPDetail`.
+         */
+        CustomDPDetail: {
+            /**
+             * @description Wire identity of the Custom-DP, echoing the `{name}` path
+             *     parameter — the bare parameter name, or `PARAM@<channel>` when a
+             *     profile channel group materialises it on several channels.
+             */
+            name: string;
+            /**
+             * @description Model category of the Custom-DP (`switch`, `cover`, `climate`, …).
+             *     Vocabulary: the DataPointCategory enum in
+             *     `assets/schemas/enums.json`.
+             */
+            category: string;
+            /** @description Primary CCU channel the Custom-DP is materialised on. */
+            channel_no: number;
+            /**
+             * @description Live state snapshot — the same semantic keys the WS
+             *     `custom_data_point.state_changed` event carries (`is_locked`,
+             *     `hvac_mode`, `brightness`, …). Null when the Custom-DP reports no
+             *     state.
+             */
+            state: {
+                [key: string]: unknown;
+            } | null;
+        };
         CustomDPSummary: {
             /**
              * @description Wire identity of the Custom-DP. The bare parameter name
@@ -13288,7 +13345,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomDPDetail"];
+                };
             };
             404: components["responses"]["NotFound"];
         };
@@ -13933,7 +13992,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LinkParamset"];
+                };
             };
             400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
@@ -14123,7 +14184,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreatedNamedResource"];
+                };
             };
             400: components["responses"]["BadRequest"];
             409: components["responses"]["Conflict"];
@@ -14220,7 +14283,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreatedNamedResource"];
+                };
             };
             400: components["responses"]["BadRequest"];
             409: components["responses"]["Conflict"];
@@ -15190,7 +15255,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };

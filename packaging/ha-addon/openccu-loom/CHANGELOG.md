@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.68.1
+
+- The daemon's API document now describes what `GET /devices/{addr}/cdps/{name}`
+  answers with. It never did, so a tool that generates a client from the
+  document produced no type for that route and a consumer had to write the
+  shape by hand — one guessed wrong, and custom-data-point entities failed to
+  appear until it was corrected. Four further responses gained a description
+  in the same pass. Nothing about the daemon's behaviour changes.
+
 ## 0.68.0
 
 - **Your system-variable and program entities are renamed once by this

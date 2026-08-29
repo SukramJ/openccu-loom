@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.23.0
+  version: 7.24.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2977,7 +2977,11 @@ paths:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: name, required: true, schema: { type: string } }
       responses:
-        "200": { description: Custom DP detail }
+        "200":
+          description: Custom DP detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomDPDetail" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/cdps/{name}/{operation}:
     post:
@@ -3483,7 +3487,11 @@ paths:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: peer, required: true, schema: { type: string } }
       responses:
-        "200": { description: Paramset }
+        "200":
+          description: Paramset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkParamset" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3641,7 +3649,11 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateRoomRequest"
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedNamedResource" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "409": { $ref: "#/components/responses/Conflict" }
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -3710,7 +3722,11 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateFunctionRequest"
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedNamedResource" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "409": { $ref: "#/components/responses/Conflict" }
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -4690,7 +4706,12 @@ paths:
       operationId: metrics
       summary: Prometheus metrics (also at /metrics)
       tags: [diagnostics]
-      responses: { "200": { description: Prometheus text } }
+      responses:
+        "200":
+          description: Prometheus text
+          content:
+            text/plain:
+              schema: { type: string }
 
   /diagnostics:
     get:
@@ -7780,6 +7801,66 @@ components:
         priority:
           type: string
           enum: [critical, high, default, low]
+    CreatedNamedResource:
+      type: object
+      description: |
+        Response of the room / function create verbs: the id the CCU assigned
+        and the name it was created under. The name is echoed rather than
+        assumed, because the CCU normalises it.
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: CCU-assigned identifier of the created object.
+        name:
+          type: string
+          description: Name as the CCU stored it.
+    LinkParamset:
+      type: object
+      additionalProperties: true
+      description: |
+        Raw LINK paramset of one channel-peer pair, as the CCU returns it —
+        a flat parameter-name to value map with no fixed key set, which is
+        why it declares `additionalProperties` rather than named fields.
+    CustomDPDetail:
+      type: object
+      description: |
+        Response of `GET /devices/{addr}/cdps/{name}` — deliberately *not* a
+        `CustomDPSummary`. The detail response carries the live `state` plus
+        the three fields needed to place it, and omits everything the summary
+        exists to serve a list with: `unique_id`, `supported_operations`,
+        `capabilities`, `config`, the name fields.
+
+        That distinction used to be undeclared, and a consumer read the
+        summary's schema for this route and validated against it. The mistake
+        was invisible until the code path first ran, and then broke every
+        custom-data-point refresh against a live daemon. Mirrors
+        `handlers.CustomDPDetail`.
+      required: [name, category, channel_no, state]
+      properties:
+        name:
+          type: string
+          description: |
+            Wire identity of the Custom-DP, echoing the `{name}` path
+            parameter — the bare parameter name, or `PARAM@<channel>` when a
+            profile channel group materialises it on several channels.
+        category:
+          type: string
+          description: |
+            Model category of the Custom-DP (`switch`, `cover`, `climate`, …).
+            Vocabulary: the DataPointCategory enum in
+            `assets/schemas/enums.json`.
+        channel_no:
+          type: integer
+          description: Primary CCU channel the Custom-DP is materialised on.
+        state:
+          type: ["object", "null"]
+          additionalProperties: true
+          description: |
+            Live state snapshot — the same semantic keys the WS
+            `custom_data_point.state_changed` event carries (`is_locked`,
+            `hvac_mode`, `brightness`, …). Null when the Custom-DP reports no
+            state.
     CustomDPSummary:
       type: object
       required: [name, unique_id, category, channel_no, supported_operations]
