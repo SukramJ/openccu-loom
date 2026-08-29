@@ -24,11 +24,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`CreatedNamedResource`), and `GET /metrics`, which now declares
   `text/plain` rather than nothing at all.
 
-  `TestEverySuccessResponseDeclaresASchema` keeps the rest honest. Four
-  responses stay listed as deliberately undeclared, each with its reason:
-  three answer with an empty body, and `GET …/ui-schema` has no schema written
-  yet — `hmapi.UISchema` nests seven further types, and a guessed partial
-  schema there would be the exact failure this guard exists to catch.
+- **`GET …/ui-schema` declares its response too.** It is the largest of the
+  nine — `hmapi.UISchema` nests **thirteen** further types, not the seven a
+  first reading suggested — and the SPA's whole parameter editor is built from
+  it, so a generated client carried no type for any of it. All fourteen are
+  declared now, transcribed field by field from the Go struct tags.
+
+  `TestUISchemaDeclarationMatchesThePayload` is what makes that trustworthy: it
+  validates a fully populated `hmapi.UISchema` — marshalled, not read — against
+  the declared component, and a minimal one besides. Writing a schema by
+  reading a struct is the same act that caused the defect above; a declaration
+  nobody executed has the same standing as a guess. It bites in both
+  directions, on a mistyped field and on an optional one wrongly marked
+  required.
+
+  `TestEverySuccessResponseDeclaresASchema` keeps the rest honest. Three
+  responses stay listed as deliberately undeclared, all for the same reason:
+  their handler answers with an empty body, so `content` would be a lie.
 
 ### Changed
 

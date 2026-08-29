@@ -5235,6 +5235,210 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * @description Rendering contract for one channel's configuration form — the shape
+         *     `GET /devices/{addr}/channels/{no}/ui-schema` answers with. Mirrors
+         *     `hmapi.UISchema`; the SPA's parameter editor is built from it, and it
+         *     is the one place the daemon states what a parameter *looks like*
+         *     rather than what it holds.
+         */
+        UISchema: {
+            channel: components["schemas"]["UISchemaChannel"];
+            /** @description Named parameter groupings the form renders as sections. */
+            groups?: components["schemas"]["UISchemaGroup"][];
+            /**
+             * @description Parameter names in the order the form should render them.
+             *     Absent when the natural order applies.
+             */
+            parameter_order?: string[];
+            parameters: components["schemas"]["UISchemaParameter"][];
+            /** @description Conditional show/hide rules driven by another parameter's value. */
+            visibility?: components["schemas"]["UISchemaVisibility"][];
+            cross_validations?: components["schemas"]["UISchemaCrossValidation"][];
+            profile?: components["schemas"]["UISchemaProfile"];
+            /**
+             * @description Easymode "scene"-style multi-parameter choices — picking one
+             *     option patches every member parameter at once.
+             */
+            subset_groups?: components["schemas"]["UISchemaSubsetGroup"][];
+            /**
+             * @description Localised human-readable device model name. Empty when the model
+             *     cannot be resolved from the translation catalogue.
+             */
+            model_description?: string;
+            /** @description Icon identifier for the device type. Empty when none is registered. */
+            device_icon?: string;
+        };
+        UISchemaChannel: {
+            address: string;
+            number: number;
+            /** @description OCCU channel-type string (e.g. `ENERGIE_METER_TRANSMITTER`). */
+            type: string;
+            /** @description Localised channel-type label. Empty when no translation exists. */
+            label?: string;
+            device_address: string;
+            /**
+             * @description Paramset the form edits. Vocabulary: the ParamsetKey enum in
+             *     `assets/schemas/enums.json`.
+             */
+            paramset: string;
+        };
+        UISchemaGroup: {
+            id: string;
+            label: string;
+            /** @description Names of the parameters this group contains. */
+            parameters: string[];
+        };
+        /**
+         * @description One editable parameter. `min`, `max`, `default` and a preset's `value`
+         *     are raw JSON because a parameter's type decides theirs — an integer
+         *     bound on an INTEGER, a float on a FLOAT, a string on an ENUM.
+         */
+        UISchemaParameter: {
+            name: string;
+            /** @description Localised parameter label. Empty when no translation exists. */
+            label?: string;
+            /** @description Localised help text. Empty when none exists. */
+            help?: string;
+            /**
+             * @description CCU parameter type (`BOOL`, `INTEGER`, `FLOAT`, `ENUM`, `STRING`,
+             *     `ACTION`). Vocabulary: the ParameterType enum in
+             *     `assets/schemas/enums.json`.
+             */
+            type: string;
+            unit?: string;
+            /** @description Lower bound, typed as the parameter is. */
+            min?: unknown;
+            /** @description Upper bound, typed as the parameter is. */
+            max?: unknown;
+            /** @description Default value, typed as the parameter is. */
+            default?: unknown;
+            /** @description Choices for an ENUM parameter. */
+            value_list?: components["schemas"]["UISchemaValueListEntry"][];
+            operations: components["schemas"]["UISchemaParameterOps"];
+            flags: components["schemas"]["UISchemaParameterFlags"];
+            /** @description CCU control hint (e.g. `BUTTON.SHORT`). Empty when none is declared. */
+            control?: string;
+            /** @description Current value. Absent when the parameter has not been observed. */
+            value?: unknown;
+            /** @description Whether a value has actually been read from the CCU. */
+            observed: boolean;
+            /** @description RFC3339 timestamp of the last local modification. */
+            modified_at?: string;
+            /** @description Id of the `groups` entry this parameter belongs to. */
+            group_id?: string;
+            preset?: string;
+            category?: string;
+            /** @description Groups the keypress parameters of one button together. */
+            keypress_group?: string;
+            /** @description Render a 0..1 float as a percentage. */
+            display_as_percent?: boolean;
+            /** @description Pre-rendered display form of `value`, when one differs from it. */
+            display_value?: unknown;
+            /** @description Factor between the wire value and the displayed one. */
+            multiplier?: number;
+            has_last_value?: boolean;
+            /** @description Render collapsed unless the operator asks for it. */
+            hidden_by_default?: boolean;
+            /** @description Pairs a base/factor duration parameter with its partner. */
+            time_pair_id?: string;
+            time_selector_type?: string;
+            time_presets?: components["schemas"]["UISchemaTimePreset"][];
+            presets?: components["schemas"]["UISchemaPreset"][];
+            /** @description Whether a value outside `presets` may be entered. */
+            allow_custom_value?: boolean;
+            /** @description Id of the `subset_groups` entry this parameter is a member of. */
+            subset_group_id?: string;
+        };
+        UISchemaValueListEntry: {
+            /** @description Wire ordinal of the ENUM member. */
+            value: number;
+            /** @description Wire name of the ENUM member. */
+            key: string;
+            /** @description Localised label. Empty when no translation exists. */
+            label?: string;
+        };
+        UISchemaParameterOps: {
+            read: boolean;
+            write: boolean;
+            event: boolean;
+            /** @description The parameter supports the CCU's determine-value verb. */
+            determine?: boolean;
+        };
+        /** @description The CCU's FLAGS bitmask, decoded. */
+        UISchemaParameterFlags: {
+            visible: boolean;
+            internal: boolean;
+            service: boolean;
+        };
+        UISchemaTimePreset: {
+            base: number;
+            factor: number;
+            label: string;
+        };
+        UISchemaPreset: {
+            label: string;
+            /** @description Preset value, typed as the parameter is. */
+            value: unknown;
+        };
+        /**
+         * @description One conditional rule: when `trigger` holds `trigger_value`, show the
+         *     `show` parameters and hide the `hide` ones.
+         */
+        UISchemaVisibility: {
+            show: string[];
+            hide?: string[];
+            /** @description Name of the parameter whose value drives the rule. */
+            trigger: string;
+            /** @description Value of `trigger` that activates the rule, typed as that parameter is. */
+            trigger_value: unknown;
+        };
+        /**
+         * @description One constraint spanning several parameters. Which of the optional
+         *     parameter slots are filled depends on `rule`.
+         */
+        UISchemaCrossValidation: {
+            id: string;
+            /** @description Constraint kind, which decides the slots below. */
+            rule: string;
+            param_a?: string;
+            param_b?: string;
+            param?: string;
+            min_param?: string;
+            max_param?: string;
+            /** @description Every parameter the constraint touches. */
+            applies_to_params: string[];
+            /** @description Localised message to show when the constraint fails. */
+            error?: string;
+        };
+        /** @description Link-profile context, present only for a LINK paramset form. */
+        UISchemaProfile: {
+            receiver_type: string;
+            sender_type?: string;
+            /** @description Profile the channel currently runs. */
+            active_profile_id?: number;
+            /** @description Raw profile document, as the profile store holds it. */
+            raw?: unknown;
+        };
+        UISchemaSubsetGroup: {
+            id: string;
+            label: string;
+            member_params: string[];
+            /**
+             * @description Option the members currently match. Null when the current values
+             *     match no option.
+             */
+            current_option_id?: number | null;
+            options: components["schemas"]["UISchemaSubsetOpt"][];
+        };
+        UISchemaSubsetOpt: {
+            id: number;
+            label: string;
+            /** @description Parameter name to value, applied together when picked. */
+            values: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * @description Response of `GET /devices/{addr}/cdps/{name}` — deliberately *not* a
          *     `CustomDPSummary`. The detail response carries the live `state` plus
          *     the three fields needed to place it, and omits everything the summary
@@ -13188,7 +13392,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UISchema"];
+                };
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];

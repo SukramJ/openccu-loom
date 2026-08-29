@@ -20,20 +20,18 @@ import (
 // live daemon, and then failed every custom-data-point refresh on the
 // installation that hit it.
 //
-// Two kinds belong here and nothing else does. A verb that answers with an
+// One kind belongs here and nothing else does: a verb that answers with an
 // empty body has no schema to declare — the handler calls WriteHeader and
-// writes nothing, so `content` would be a lie. And a response whose schema is
-// genuinely not written yet stays listed with that stated plainly, rather
-// than being given a guessed one, because a wrong schema is worse than an
-// absent one: it is the absent one that made a consumer look at the handler.
+// writes nothing, so `content` would be a lie.
+//
+// "Not transcribed yet" is not a reason to be listed. It was, briefly, for
+// GET …/ui-schema; the entry is gone because the schema is written. A
+// response whose shape is known but tedious belongs in the specification,
+// not here.
 var responsesWithoutASchema = map[string]string{
 	"POST /devices/{addr}/channels/{no}/config/import 200": "empty body — handlers.ImportChannelConfig calls WriteHeader(200) and writes nothing",
 	"POST /devices/{addr}/channels/{no}/reload 200":        "empty body — handlers.ReloadChannel calls WriteHeader(200) and writes nothing",
 	"POST /devices/{addr}/reload 200":                      "empty body — handlers.ReloadDevice calls WriteHeader(200) and writes nothing",
-	"GET /devices/{addr}/channels/{no}/ui-schema 200": "not declared yet: hmapi.UISchema nests seven further types " +
-		"(channel, parameters, groups, visibility, cross-validations, profile, subset groups). " +
-		"Transcribing them is its own slice; a partial or guessed schema here would be the very " +
-		"failure this guard exists to catch",
 }
 
 // TestEverySuccessResponseDeclaresASchema walks every 200/201 response in the
