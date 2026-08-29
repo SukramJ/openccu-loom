@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 )
 
@@ -49,17 +50,34 @@ func (f *fakeThrottle) Charge(*http.Request) {
 
 // countingBasicUsers records how often a password verification was requested
 // and answers according to whether the password matches.
+//
+// The counter is guarded because the store is reached through an
+// http.Handler: a caller has no way to see that the request it serves ends
+// in a plain increment, so a parallel subtest sharing one store raced on it
+// without anything in the test body looking concurrent.
 type countingBasicUsers struct {
 	password string
-	calls    int
+
+	mu    sync.Mutex
+	calls int
 }
 
 func (c *countingBasicUsers) AuthenticateBasic(_ context.Context, username, password string) (Identity, error) {
+	c.mu.Lock()
 	c.calls++
+	c.mu.Unlock()
 	if password != c.password {
 		return Identity{}, ErrUnauthenticated
 	}
 	return Identity{Subject: username, Scheme: SchemeBasic, Role: RoleAdmin}, nil
+}
+
+// verifications reports how many password verifications the store was asked
+// for.
+func (c *countingBasicUsers) verifications() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
 }
 
 // wrongPasswordRequest builds a Basic request [countingBasicUsers] refuses —
@@ -193,8 +211,8 @@ func TestResolveRefusesTheVerificationWhenTheBudgetIsSpent(t *testing.T) {
 	}))
 	h.ServeHTTP(httptest.NewRecorder(), basicRequest(false))
 
-	if users.calls != 0 {
-		t.Fatalf("password verifications = %d with an empty budget, want 0", users.calls)
+	if got := users.verifications(); got != 0 {
+		t.Fatalf("password verifications = %d with an empty budget, want 0", got)
 	}
 	if resolved {
 		t.Fatal("an identity was resolved without a verification")
@@ -237,10 +255,13 @@ func TestResolveChargesEveryAttemptAndRefundsTheValidOne(t *testing.T) {
 // source would burn its budget at double rate.
 func TestGuardChargesOnlyWhatTheResolverDidNotAccountFor(t *testing.T) {
 	t.Parallel()
-	users := &countingBasicUsers{password: "hunter2"}
 
+	// A store per subtest. The two are independent cases, and neither reads
+	// the shared counter — sharing one store bought nothing and made the
+	// subtests write to the same field concurrently.
 	t.Run("resolver accounted", func(t *testing.T) {
 		t.Parallel()
+		users := &countingBasicUsers{password: "hunter2"}
 		th := &fakeThrottle{budget: 5}
 		m := NewMiddleware(users, nil)
 		m.BasicThrottle = th
@@ -256,6 +277,7 @@ func TestGuardChargesOnlyWhatTheResolverDidNotAccountFor(t *testing.T) {
 
 	t.Run("resolver has no throttle", func(t *testing.T) {
 		t.Parallel()
+		users := &countingBasicUsers{password: "hunter2"}
 		th := &fakeThrottle{budget: 5}
 		m := NewMiddleware(users, nil)
 		h := m.Resolve(GuardBasicAuth(th)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})))
@@ -314,7 +336,7 @@ func TestResolveWithoutThrottleStillVerifies(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", http.NoBody)
 	req.SetBasicAuth("alice", "hunter2")
 	h.ServeHTTP(httptest.NewRecorder(), req)
-	if !resolved || users.calls != 1 {
-		t.Fatalf("resolved=%v verifications=%d, want a verified identity", resolved, users.calls)
+	if got := users.verifications(); !resolved || got != 1 {
+		t.Fatalf("resolved=%v verifications=%d, want a verified identity", resolved, got)
 	}
 }
