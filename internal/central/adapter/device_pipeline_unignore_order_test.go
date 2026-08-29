@@ -5,7 +5,9 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -41,8 +43,32 @@ func (f *fakeAttachableDataPoint) DataPointKey() hmtypes.DataPointKey { return f
 // what makes [custom.SuppressUndefinedGenericDataPoints] force-mark every
 // undefined VALUES parameter NoCreate, which is the pass whose ordering
 // relative to the un-ignore marks this test exists to pin.
+//
+// Registration happens once per process. The registry is a package-level
+// singleton with no per-profile removal — only [custom.Registry.Clear],
+// which would take the real catalogue down with it — so a second
+// registration in the same binary fails with "device type already
+// registered". That is what the test needs anyway: the profile present, not
+// freshly registered. Without the guard `go test -count=2` fails here, and
+// repeat runs are the tool for finding data races.
 func registerUnIgnoreOrderProfile(t *testing.T) {
 	t.Helper()
+	unIgnoreOrderProfileOnce.Do(func() { unIgnoreOrderProfileErr = registerUnIgnoreOrderProfileNow() })
+	// The error is stored rather than reported inside the Do body: only the
+	// first caller runs it, so a failure raised in there would be invisible to
+	// every later test, which would then run without the profile and fail
+	// somewhere less obvious.
+	if unIgnoreOrderProfileErr != nil {
+		t.Fatalf("register fake profile: %v", unIgnoreOrderProfileErr)
+	}
+}
+
+var (
+	unIgnoreOrderProfileOnce sync.Once
+	unIgnoreOrderProfileErr  error
+)
+
+func registerUnIgnoreOrderProfileNow() error {
 	reg := custom.DefaultRegistry()
 	profile := custom.Profile{
 		Name:       unIgnoreOrderProfileName,
@@ -59,14 +85,15 @@ func registerUnIgnoreOrderProfile(t *testing.T) {
 		},
 	}
 	if err := reg.Register(profile); err != nil {
-		t.Fatalf("register fake profile: %v", err)
+		return err
 	}
 	ctor := func(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 		return &fakeAttachableDataPoint{key: hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(unIgnoreOrderProfileName)}}, nil
 	}
 	if err := reg.RegisterConstructor(unIgnoreOrderProfileName, ctor); err != nil {
-		t.Fatalf("register fake constructor: %v", err)
+		return fmt.Errorf("register fake constructor: %w", err)
 	}
+	return nil
 }
 
 // TestFinishIngestAppliesUnIgnoreBeforeCustomDPSuppression proves the effect
