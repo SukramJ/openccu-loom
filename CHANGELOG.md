@@ -6,6 +6,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.68.0] - 2026-08-29
+
+### Changed
+
+- **System variables and programs are keyed on the CCU's id, not on their
+  name.** Renaming either in the CCU WebUI moved its `unique_id`, which took
+  the consumer's entity history, area, customisations and every automation
+  built on it. `Sysvar.CanonicalUniqueID` now uses the numeric `Vid` and
+  `Program.CanonicalUniqueID` the program `ID`; the name slug stands in only
+  while an id is unresolved, which is the shape a consumer must accept during
+  the rollover.
+
+  **Every system variable and program entity re-keys once.** A consumer that
+  builds its registry from `unique_id` needs a migration pass shipping with
+  this release, or those entities orphan instead of moving.
+
+  The reference implementation adopted the same rule in 2026.8.8, so the
+  shared golden fixtures move together rather than declaring a divergence —
+  the opposite order would have rebuilt the CUxD construction that 0.67.1
+  retired. `script/requirements/reference-stack.txt` moves to 2026.8.8 with
+  it, and `make routing-key-parity` stays green.
+
+  `docs/external-clients/ha-unique-id-migration.md` carried the target shape
+  for sysvars already, written ahead of the implementation; it now describes
+  what both sides actually do, covers programs, and states the version from
+  which it holds.
+
 ## [0.67.1] - 2026-08-28
 
 ### Changed

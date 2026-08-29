@@ -4,6 +4,17 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.68.0
+
+- **Your system-variable and program entities are renamed once by this
+  update.** They were identified by their name, so renaming a variable in the
+  CCU WebUI silently created a new entity and abandoned the old one — with its
+  history and every automation using it. They are identified by the CCU's
+  internal id now, so a rename no longer does that.
+- Update the Home Assistant integration in the same step. It carries the
+  migration that moves your existing entities across; without it they are
+  abandoned rather than moved.
+
 # 0.67.1
 
 - No change to the daemon's behaviour, the add-on, or anything your broker or
