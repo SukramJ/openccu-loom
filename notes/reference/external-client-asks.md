@@ -336,11 +336,18 @@ veröffentlicht. Höherwertige Clients bauen darauf auf, ohne Drift zu
 riskieren.
 
 **Hosting:** Als **Sister-Repo unter gleicher Org** (`SukramJ/openccu-loom-types-py`),
-nicht als Sub-Directory innerhalb des Daemon-Repos. Das Daemon-Repo
-ist Go-only — Python-CI darin würde `make lint` / `make test` /
-`goreleaser` kompliziert machen und Multi-Sprach-Toolchain-Drift
-einschleppen. Versions-Bumps koppeln via CI-Trigger, nicht via
-Monorepo.
+nicht als Sub-Directory innerhalb des Daemon-Repos. Versions-Bumps
+koppeln via CI-Trigger, nicht via Monorepo.
+
+> **Nachtrag, 2026-08-29 — beide Hälften überholt.** Die Begründung
+> „Das Daemon-Repo ist Go-only" ist messbar falsch: 5.609 Zeilen Python
+> in 12 Dateien unter `script/`, fünf Workflows richten Python ein, das
+> `Makefile` ruft `node`. Und die Hosting-Form selbst hat sich erledigt —
+> das Sister-Repo wurde im August 2026 in `openccu-loom-client` eingefaltet
+> (dort `openccu_loom_client/wire/`), weil es in 84 von 84 Releases keine
+> handgeschriebene Zeile trug. Eine Daemon-Release öffnet dort heute einen
+> Regenerations-PR und hört auf. Der Eintrag bleibt stehen, weil er die
+> Vorgeschichte trägt; als Empfehlung gilt er nicht mehr.
 
 ### C4. Parity-Test-Skript für den Python-Client bereitstellen
 

@@ -204,10 +204,24 @@ across two files creates two sources of truth where one suffices.
 
 Considered for monorepo convenience (analogous to how Go consumers
 get types via `pkg/hmapi`). Rejected — `pkg/` is a Go-tooling
-convention. Python CI in a Go-only repo would complicate
-`make lint`, `make test`, `goreleaser`. PyPI sister-repo (asks.md
-C3) is the right hosting form; CI triggers couple versions, not the
-monorepo.
+convention. PyPI sister-repo (asks.md C3) is the right hosting form;
+CI triggers couple versions, not the monorepo.
+
+**Correction, 2026-08-29.** The second reason given here — "Python CI
+in a Go-only repo would complicate `make lint`, `make test`,
+`goreleaser`" — no longer holds, and had already stopped holding when
+it was last quoted. This repository carries 5,609 lines of Python
+across 12 files under `script/`, five workflows set up Python
+(`ci`, `docs`, `integration`, `model-parity`, `cross-stack-parity`),
+and the `Makefile` shells out to `node` for the wordmark target. The
+repository is not Go-only and has not been for some time.
+
+The rejection stands on the first reason alone, which is unaffected.
+What changes is that the door is open: moving the generator here later
+is a decision about ownership and release cadence, not a toolchain
+obstacle. Note also that the hosting form has since moved on — the
+sister distribution was folded into the Python client in 2026-08, so
+"PyPI sister-repo" now names something that no longer exists.
 
 ### D. Bundle B1 (replay semantics) into this PR
 
