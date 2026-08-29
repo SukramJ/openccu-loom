@@ -160,6 +160,7 @@ nav:
           - ADR 0065 — Composition-root wiring is checkable: adr/0065-composition-root-wiring-is-checkable.md
           - ADR 0066 — Relicense to AGPL-3.0-only: adr/0066-relicense-agpl-commercial-exception.md
           - ADR 0067 — North surface is a model API: adr/0067-north-surface-is-a-model-api.md
+          - ADR 0068 — What unique_id promises, per plane: adr/0068-unique-id-stability-per-plane.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

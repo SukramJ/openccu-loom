@@ -8,6 +8,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **ADR 0068 states what a `unique_id` promises, and the two planes differ.**
+  Three re-keys landed in two days and `homematicip_local` now carries seven
+  entity-registry migration passes, one per re-key. What was missing was a
+  rule, and the measurement that produces it: Home Assistant's MQTT
+  integration has **no** `unique_id` migration path — no second field, no
+  `async_migrate_entries`, and the entity takes the value straight from the
+  discovery payload. Another integration cannot repair it either, since
+  registry migration is scoped to one config entry and MQTT-discovered
+  entities belong to the MQTT entry.
+
+  So: on MQTT discovery the key is **immutable** — a new vocabulary is keyed on
+  a stable identifier from its first release, because there is no second
+  chance. On REST/WS a key may change, but only together with the
+  consumer-side migration, recorded in the migration page before release, and
+  only when the old key is derivable from data the consumer already receives.
+
+  A generic optional `previous_unique_id` was designed and rejected. It does
+  not solve the hard part (it arrives in the same payload as the data the
+  consumer could derive the old key from — the difficulty is *when* the
+  registry may be rewritten, not where the mapping comes from), it would have
+  covered two of the seven existing passes, and Home Assistant's MQTT
+  integration would ignore it.
+
+### Changed
+
 - **The post-release regeneration dispatch points at `openccu-loom-client`.**
   The generated wire bindings moved out of the separate `openccu-loom-types`
   distribution and into the client as `openccu_loom_client/wire/`, so the
