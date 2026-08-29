@@ -6,6 +6,42 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.68.1] - 2026-08-29
+
+### Added
+
+- **`GET /devices/{addr}/cdps/{name}` declares its response.** It never did, so
+  no generated client carried a type for it and a consumer wrote the shape by
+  hand — reading `CustomDPSummary`, which shares a name prefix and nothing
+  else. The mistake was invisible until that code path first ran, and then
+  failed every custom-data-point refresh against a live daemon: 22 entities
+  did not come up on one installation. `CustomDPDetail` is now a declared
+  component, and the consumer can delete its hand-written copy.
+
+- **Four more success responses gained a schema.** A sweep of all 178 success
+  responses found nine without one. Besides the route above: the link paramset
+  (`LinkParamset`, a raw parameter map), the room and function create verbs
+  (`CreatedNamedResource`), and `GET /metrics`, which now declares
+  `text/plain` rather than nothing at all.
+
+- **`GET …/ui-schema` declares its response too.** It is the largest of the
+  nine — `hmapi.UISchema` nests **thirteen** further types, not the seven a
+  first reading suggested — and the SPA's whole parameter editor is built from
+  it, so a generated client carried no type for any of it. All fourteen are
+  declared now, transcribed field by field from the Go struct tags.
+
+  `TestUISchemaDeclarationMatchesThePayload` is what makes that trustworthy: it
+  validates a fully populated `hmapi.UISchema` — marshalled, not read — against
+  the declared component, and a minimal one besides. Writing a schema by
+  reading a struct is the same act that caused the defect above; a declaration
+  nobody executed has the same standing as a guess. It bites in both
+  directions, on a mistyped field and on an optional one wrongly marked
+  required.
+
+  `TestEverySuccessResponseDeclaresASchema` keeps the rest honest. Three
+  responses stay listed as deliberately undeclared, all for the same reason:
+  their handler answers with an empty body, so `content` would be a lie.
+
 ### Changed
 
 - **ADR 0068 states what a `unique_id` promises, and the two planes differ.**

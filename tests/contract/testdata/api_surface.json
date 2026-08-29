@@ -1,5 +1,5 @@
 {
- "api_version": "7.23.0",
+ "api_version": "7.24.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -865,6 +865,16 @@
    "subject:string",
    "token:string"
   ],
+  "CreatedNamedResource": [
+   "id:string",
+   "name:string"
+  ],
+  "CustomDPDetail": [
+   "category:string",
+   "channel_no:integer",
+   "name:string",
+   "state:null|object"
+  ],
   "CustomDPInvokeRequest": [
    "params:object",
    "priority:string"
@@ -1376,6 +1386,7 @@
    "sender_device_model:string",
    "sender_device_name:string"
   ],
+  "LinkParamset": [],
   "LinkableChannel": [
    "address:string",
    "channel_name:string",
@@ -2234,6 +2245,123 @@
   "UIEventRequest": [
    "event:string",
    "properties:object"
+  ],
+  "UISchema": [
+   "channel:$ref:UISchemaChannel",
+   "cross_validations:array\u003c$ref:UISchemaCrossValidation\u003e",
+   "device_icon:string",
+   "groups:array\u003c$ref:UISchemaGroup\u003e",
+   "model_description:string",
+   "parameter_order:array\u003cstring\u003e",
+   "parameters:array\u003c$ref:UISchemaParameter\u003e",
+   "profile:$ref:UISchemaProfile",
+   "subset_groups:array\u003c$ref:UISchemaSubsetGroup\u003e",
+   "visibility:array\u003c$ref:UISchemaVisibility\u003e"
+  ],
+  "UISchemaChannel": [
+   "address:string",
+   "device_address:string",
+   "label:string",
+   "number:integer",
+   "paramset:string",
+   "type:string"
+  ],
+  "UISchemaCrossValidation": [
+   "applies_to_params:array\u003cstring\u003e",
+   "error:string",
+   "id:string",
+   "max_param:string",
+   "min_param:string",
+   "param:string",
+   "param_a:string",
+   "param_b:string",
+   "rule:string"
+  ],
+  "UISchemaGroup": [
+   "id:string",
+   "label:string",
+   "parameters:array\u003cstring\u003e"
+  ],
+  "UISchemaParameter": [
+   "allow_custom_value:boolean",
+   "category:string",
+   "control:string",
+   "default:unknown",
+   "display_as_percent:boolean",
+   "display_value:unknown",
+   "flags:$ref:UISchemaParameterFlags",
+   "group_id:string",
+   "has_last_value:boolean",
+   "help:string",
+   "hidden_by_default:boolean",
+   "keypress_group:string",
+   "label:string",
+   "max:unknown",
+   "min:unknown",
+   "modified_at:string",
+   "multiplier:number",
+   "name:string",
+   "observed:boolean",
+   "operations:$ref:UISchemaParameterOps",
+   "preset:string",
+   "presets:array\u003c$ref:UISchemaPreset\u003e",
+   "subset_group_id:string",
+   "time_pair_id:string",
+   "time_presets:array\u003c$ref:UISchemaTimePreset\u003e",
+   "time_selector_type:string",
+   "type:string",
+   "unit:string",
+   "value:unknown",
+   "value_list:array\u003c$ref:UISchemaValueListEntry\u003e"
+  ],
+  "UISchemaParameterFlags": [
+   "internal:boolean",
+   "service:boolean",
+   "visible:boolean"
+  ],
+  "UISchemaParameterOps": [
+   "determine:boolean",
+   "event:boolean",
+   "read:boolean",
+   "write:boolean"
+  ],
+  "UISchemaPreset": [
+   "label:string",
+   "value:unknown"
+  ],
+  "UISchemaProfile": [
+   "active_profile_id:integer",
+   "raw:unknown",
+   "receiver_type:string",
+   "sender_type:string"
+  ],
+  "UISchemaSubsetGroup": [
+   "current_option_id:integer|null",
+   "id:string",
+   "label:string",
+   "member_params:array\u003cstring\u003e",
+   "options:array\u003c$ref:UISchemaSubsetOpt\u003e"
+  ],
+  "UISchemaSubsetOpt": [
+   "id:integer",
+   "label:string",
+   "values:object"
+  ],
+  "UISchemaTimePreset": [
+   "base:integer",
+   "factor:integer",
+   "label:string"
+  ],
+  "UISchemaValueListEntry": [
+   "key:string",
+   "label:string",
+   "value:integer"
+  ],
+  "UISchemaVisibility": [
+   "hide:array\u003cstring\u003e",
+   "show:array\u003cstring\u003e",
+   "trigger:string",
+   "trigger_value:unknown"
   ],
   "UnIgnoreCandidateChannel": [
    "channel:integer",

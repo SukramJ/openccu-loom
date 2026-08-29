@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.68.1
+
+- The daemon's API document now describes what `GET /devices/{addr}/cdps/{name}`
+  answers with, plus four further responses. A generated client covers those
+  routes now instead of leaving a consumer to guess the shape. No behaviour
+  change.
+
 # 0.68.0
 
 - **Your system-variable and program entities are renamed once by this

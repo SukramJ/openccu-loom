@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 396.
+Guards without a doc comment: 7 of 398.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -198,6 +198,7 @@ Guards without a doc comment: 7 of 396.
 | TestNormalizeParameterIdempotent | normalization_test.go | TestNormalizeParameterIdempotent locks parameter normalisation. |
 | TestOpenAPIEnumsCoverEveryEmittedValue | openapi_enum_coverage_test.go | TestOpenAPIEnumsCoverEveryEmittedValue is the drift detector for hand-written enum lists in assets/openapi.yaml. |
 | TestNoRequestOrResponseBodyIsWrittenInline | openapi_inline_schema_test.go | TestNoRequestOrResponseBodyIsWrittenInline pins that a body with properties lives in `components/schemas` and is reached by `$ref`. |
+| TestEverySuccessResponseDeclaresASchema | openapi_response_schema_test.go | TestEverySuccessResponseDeclaresASchema walks every 200/201 response in the specification and fails when one declares no schema and is not listed above with a reason. |
 | TestOpenAPISpecIsValid | openapi_schema_test.go | TestOpenAPISpecIsValid runs the full kin-openapi validator on assets/openapi.yaml, verifying the spec is structurally valid. |
 | TestOpenAPIDeclaresMVPEndpoints | openapi_test.go | — (no doc comment) |
 | TestOpenAPIManagementPathsPresent | openapi_test.go | TestOpenAPIManagementPathsPresent pins the management and live-edit paths in the spec so a future router rename or refactor cannot silently drift away from the production OpenAPI validator middleware. |
@@ -295,6 +296,7 @@ Guards without a doc comment: 7 of 396.
 | TestEverySurfaceIsRegistered | ui_surface_registry_test.go | TestEverySurfaceIsRegistered fails when the SPA and the Go registry disagree in either direction. |
 | TestFloorSurfacesAreTheDocumentedSet | ui_surface_registry_test.go | TestFloorSurfacesAreTheDocumentedSet pins the floor itself. |
 | TestSurfaceCopyIsComplete | ui_surface_registry_test.go | TestSurfaceCopyIsComplete requires a description for every surface, in both locales, AND that the surface's label resolves to the key the navigation itself uses. |
+| TestUISchemaDeclarationMatchesThePayload | uischema_declaration_test.go | TestUISchemaDeclarationMatchesThePayload validates a fully populated [hmapi.UISchema] — the exact value the handler marshals — against the `UISchema` component in the specification. |
 | TestVisibilityReadOnlyDPSkipDocumented | visibility_read_only_audit_test.go | TestVisibilityReadOnlyDPSkipDocumented documents the read-only DP skip Logic:.py:180-189) skips DP creation when Operations has neither EVENT nor WRITE. |
 | TestVisibilityFlagOperationsTriple | visibility_triple_test.go | TestVisibilityFlagOperationsTriple pins the FLAGS × OPERATIONS filter table against the Python reference (_should_skip_data_point, model/__init__.py:180-189). |
 | TestWireMethodsCanonical | wire_methods_canonical_test.go | TestWireMethodsCanonical AST-walks internal/client/backends/*.go and verifies that every string-literal method name passed to *.Call(ctx, "<method>", ...) is either: 1. |
