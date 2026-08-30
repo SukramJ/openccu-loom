@@ -271,17 +271,22 @@ does **not** preserve history — nothing can, across a `unique_id` change. It
 converts a silent zombie into a clean disappearance the operator sees once and
 acts on once.
 
-**Blast radius before upgrading.** Every keypress channel is affected. List
-them:
+**Blast radius before upgrading.** Every keypress channel is affected. The
+affected entities are exactly the retained discovery configs whose object id
+still ends in `_event`, so read them off the broker:
 
 ```sh
-curl -s -u user:pass http://<host>:8080/api/v1/devices \
-  | jq -r '.items[].channels[]? | select(.event_groups[]?.kind == "homematic.keypress")
-           | "\(.address)\t\(.name)"'
+mosquitto_sub -h <broker> -t 'homeassistant/event/+/+/config' -v -W 3 \
+  | awk '$1 ~ /_event\/config$/ {print $1}'
 ```
 
 Or, from the Home Assistant side, search the entity list for `_event` within
 this integration.
+
+A channel's event groups are also served per channel at
+`GET /devices/{addr}/channels/{no}/event-groups`; there is no collection
+endpoint that lists them across devices, so the broker view above is the
+quicker inventory.
 
 **Operator steps.** None are required — the sweep runs on first start. Only
 automations and dashboard cards that name the old entity id need repointing;
