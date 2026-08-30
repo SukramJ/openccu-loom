@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -68,6 +71,50 @@ func ChannelPressTypes(ch ChannelInspector) []string {
 			found = append(found, strings.ToLower(pp))
 		}
 	}
+	return found
+}
+
+// channelParameterLister is an optional extension on [ChannelInspector].
+// [ChannelInspector.HasParameter] answers an exact-name question; device-error
+// parameters are prefix-matched and open-ended, so classifying them needs the
+// list. A channel that does not implement it falls back to the known roots,
+// which covers ERROR and SENSOR_ERROR but not ERROR_OVERHEAT and friends.
+type channelParameterLister interface {
+	ParameterNames() []string
+}
+
+// ChannelKindTypes returns the lower-cased wire parameters on the channel
+// that belong to the given event kind, in sorted order — the `event_types`
+// list of that kind's discovery entity.
+//
+// Home Assistant drops an event whose `event_type` is not in the announced
+// list, so a parameter that can fire has to appear here or its pulses are
+// discarded silently. That is why the device-error branch prefers the
+// channel's actual parameter list over the known roots.
+func ChannelKindTypes(ch ChannelInspector, kind event.Kind) []string {
+	if ch == nil {
+		return nil
+	}
+	if lister, ok := ch.(channelParameterLister); ok {
+		var found []string
+		for _, name := range lister.ParameterNames() {
+			if k, known := event.Classify(hmenum.Parameter(name)); known && k == kind {
+				found = append(found, strings.ToLower(name))
+			}
+		}
+		sort.Strings(found)
+		return found
+	}
+	// No list available: fall back to exact membership on the kind's known
+	// parameters. Exhaustive for keypress and impulse; for device errors it
+	// covers the roots only.
+	var found []string
+	for _, name := range event.Sources(kind) {
+		if ch.HasParameter(string(name)) {
+			found = append(found, strings.ToLower(string(name)))
+		}
+	}
+	sort.Strings(found)
 	return found
 }
 
@@ -129,6 +176,69 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 		"device_class": EventDeviceClassForModel(ev.Model),
 	}
 	maps.Copy(body, base)
+	out, err := json.Marshal(body)
+	if err != nil {
+		return "", "", "", nil, false
+	}
+	return string(HAComponentEvent), nodeID, objectID, out, true
+}
+
+// BuildChannelKindEvent produces the HA-Discovery `event` payload for the
+// impulse and device-error kinds — one channel-level entity per kind, keyed
+// and topicked as a sibling of the keypress entity.
+//
+// The keypress kind keeps [DefaultDiscoveryBuilder.BuildChannelEvent]: it
+// carries the doorbell device-class mapping and an established identity that
+// this must not disturb. Until 0.68.2 the other two kinds were not published
+// on this plane at all, so everything here is additive — no key moves.
+//
+// Returns ("", "", "", nil, false) when the channel carries no parameter of
+// the kind, or for a kind this builder does not serve.
+func (d *DefaultDiscoveryBuilder) BuildChannelKindEvent(ev Event, kind event.Kind) (component, nodeID, objectID string, buf []byte, ok bool) {
+	var leaf string
+	switch kind {
+	case event.KindImpulse:
+		leaf = "impulse"
+	case event.KindDeviceError:
+		leaf = "device_error"
+	default:
+		return "", "", "", nil, false
+	}
+	types := ChannelKindTypes(ev.Channel, kind)
+	if len(types) == 0 {
+		return "", "", "", nil, false
+	}
+	objectID = d.channelObjectID(ev, leaf)
+	uniqueID, scoped := d.channelUniqueID(ev, leaf)
+	if !scoped {
+		return "", "", "", nil, false
+	}
+	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
+
+	var stateTopic string
+	if kind == event.KindImpulse {
+		stateTopic = d.TopicBuilder.ChannelImpulse(d.centralFor(ev), ev.Interface, ev.DeviceAddress, ev.ChannelNo)
+	} else {
+		stateTopic = d.TopicBuilder.ChannelDeviceError(d.centralFor(ev), ev.Interface, ev.DeviceAddress, ev.ChannelNo)
+	}
+
+	name := fmt.Sprintf("ch%d %s", ev.ChannelNo, leaf)
+	if namer, nok := ev.Channel.(ChannelNamer); nok {
+		if cn := namer.ChannelName(); cn != "" && !channelNameIsBareAddressNo(cn) {
+			name = fmt.Sprintf("%s %s", cn, leaf)
+		}
+	}
+
+	body := map[string]any{
+		"state_topic": stateTopic,
+		"event_types": toAnySlice(types),
+	}
+	if kind == event.KindDeviceError {
+		// A device error is a problem signal; the keypress entity has no
+		// device_class and the impulse kind has no fitting one.
+		body["device_class"] = "problem"
+	}
+	maps.Copy(body, d.channelBaseBody(ev, name, uniqueID))
 	out, err := json.Marshal(body)
 	if err != nil {
 		return "", "", "", nil, false

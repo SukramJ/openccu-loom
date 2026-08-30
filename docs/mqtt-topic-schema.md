@@ -41,8 +41,18 @@ degenerate case with one entry under that segment.
 > the channel number. `<param>` is the wire-parameter name. `<zone>`
 > is an alarm-zone id, or the reserved pseudo-zone id `master`.
 
-> The channel press-event topic carries a JSON envelope
+> The three channel event topics carry the same JSON envelope
 > `{"event_type": "<type>", "available": true, "modified_at": "…"}`.
+> They are siblings rather than one topic with a kind segment: `…/event`
+> was already a leaf, and nesting under it would deliver impulses to every
+> `…/event` subscriber. Each kind gets its own Home Assistant `event`
+> entity, whose announced `event_types` list is exactly that kind's
+> parameters — a pulse whose type is not announced is dropped by Home
+> Assistant without a trace, so the lists must not be merged.
+>
+> `impulse` and `device_error` arrived in daemon 0.68.2. Before that only
+> keypress was published here, while all three reached the REST and
+> WebSocket planes.
 > `<type>` is the lower-cased press parameter (`press_short`,
 > `press_long`, …) — except on the curated doorbell models
 > (`HM-Sen-DB-PCB`, `HmIP-DBB`, `HmIP-DSD-PCB`, shared via the
@@ -60,6 +70,8 @@ degenerate case with one entry under that segment.
 | Per-DP CALCULATED state | `<base>/<central>/<iface>/<addr>/<ch>/calculated/<param>` |
 | Custom-DP derived state | `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>` |
 | Channel press event (not retained) | `<base>/<central>/<iface>/<addr>/<ch>/event` |
+| Channel impulse event (not retained) | `<base>/<central>/<iface>/<addr>/<ch>/impulse` |
+| Channel device-error event (not retained) | `<base>/<central>/<iface>/<addr>/<ch>/device_error` |
 | Device availability | `<base>/<central>/<iface>/<addr>/availability` |
 | Device info snapshot | `<base>/<central>/<iface>/<addr>/info` |
 | Device diagnostics | `<base>/<central>/<iface>/<addr>/diagnostics` |
