@@ -348,7 +348,10 @@ func supportedOperationsForWS(cat hmenum.DataPointCategory) []string { //nolint:
 	case hmenum.DataPointCategoryLight:
 		return []string{"turn_on", "turn_off", "set_brightness", "set_color", "set_color_temperature", "set_effect"}
 	case hmenum.DataPointCategoryClimate:
-		return []string{"set_temperature", "enable_boost", "disable_boost", "set_mode", "set_profile", "enable_away", "disable_away"}
+		return []string{
+			"set_temperature", "enable_boost", "disable_boost", "set_mode", "set_profile",
+			"enable_away", "enable_away_by_calendar", "enable_away_by_duration", "disable_away",
+		}
 	case hmenum.DataPointCategoryCover:
 		return []string{"open", "close", "set_position", "stop", "set_tilt"}
 	case hmenum.DataPointCategoryLock:

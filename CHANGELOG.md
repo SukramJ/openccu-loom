@@ -10,6 +10,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Two climate operations become discoverable.** `enable_away_by_calendar`
+  and `enable_away_by_duration` were implemented, parameterised and
+  reachable through the custom-data-point dispatcher, and neither the REST
+  nor the WebSocket plane named them in `supported_operations`. A client
+  could execute them only by guessing they existed. Both planes now
+  advertise them.
+
+  A new contract guard compares the operation vocabulary each plane
+  advertises against the set the dispatcher accepts, and holds the two
+  planes' copies equal to each other. It found nine further operations no
+  plane announces — the tilt family and `set_combined` on slatted blinds,
+  `ventilate` on garage doors, `commit` on buffered text displays,
+  `set_on_time` on lights and irrigation valves, and two aliases of
+  already-announced commands. Those are recorded rather than closed: the
+  advertised tables are keyed by category, which is coarser than the type
+  the dispatcher routes on, so adding `open_tilt` to the Cover row would
+  promise a tilt command on roller shutters that have no slats. Trading a
+  silent omission for a false promise is not a fix; the list keeps the gap
+  visible until the capability is declared per data point by the model.
+
 - **Impulse and device-error events reach the MQTT plane.** They never did.
   The publish path returned early for any parameter that was not a keypress
   (`eventbridge.go`, `!mqtt.IsPressParameter`), so `SEQUENCE_OK` and the
