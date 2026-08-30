@@ -31,6 +31,30 @@ type Profile struct {
 	Params      map[string]ParamConstraint `json:"params"`
 }
 
+// FixedParams returns the parameters a profile pins to a value, keyed by
+// parameter name.
+//
+// The constraint types counted here are the ones [scoreProfile] counts when it
+// decides a profile MATCHES — an absent constraint_type included, which the
+// upstream JSON leaves out for a plain fixed value. The two must agree or a
+// profile is recognised on parameters it then declines to write: the WS apply
+// path matched only the literal "fixed", so a profile could be reported as
+// applied while a parameter it was matched on kept its old device value.
+//
+// A constraint without a value pins nothing and is skipped.
+func (p Profile) FixedParams() map[string]any {
+	out := make(map[string]any, len(p.Params))
+	for name, c := range p.Params {
+		switch c.ConstraintType {
+		case "", "fixed":
+			if c.Value != nil {
+				out[name] = c.Value
+			}
+		}
+	}
+	return out
+}
+
 // ParamConstraint is the shape every parameter value carries in the
 // upstream JSON. Only "fixed" is widely used today; "range" /
 // "value_list" / "min" / "max" appear sporadically. The raw JSON

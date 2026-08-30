@@ -96,12 +96,13 @@ func SourceDisplayNames(refs []SecuritySourceRef) []string {
 	return out
 }
 
-// SecurityRefKey builds the routing key of a data point. The format is
-// shared with the alarm input index; changing it in one place without
-// the other silently breaks source deduplication.
 // securityRefSeparator joins the four segments of a security source key.
 const securityRefSeparator = "|"
 
+// SecurityRefKey builds the routing key of a data point. The format is
+// shared with the alarm input index; changing it in one place without
+// the other silently breaks source deduplication. [ParseSecurityRefKey] is
+// its inverse, so a consumer never has to know the separator.
 func SecurityRefKey(central, interfaceID, channelAddress, parameter string) string {
 	return central + securityRefSeparator + interfaceID + securityRefSeparator + channelAddress + securityRefSeparator + parameter
 }
