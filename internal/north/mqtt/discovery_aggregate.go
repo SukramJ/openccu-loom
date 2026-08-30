@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -112,7 +113,7 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 		return "", "", "", nil, false
 	}
 	objectID = d.channelObjectID(ev, "event")
-	uniqueID, scoped := d.channelUniqueID(ev, "event")
+	uniqueID, scoped := d.channelEventGroupUniqueID(ev, event.GenerateTranslationKey(event.KindKeypress))
 	if !scoped {
 		return "", "", "", nil, false
 	}
@@ -185,7 +186,7 @@ func (d *DefaultDiscoveryBuilder) BuildChannelKindEvent(ev Event, kind event.Kin
 		return "", "", "", nil, false
 	}
 	objectID = d.channelObjectID(ev, leaf)
-	uniqueID, scoped := d.channelUniqueID(ev, leaf)
+	uniqueID, scoped := d.channelEventGroupUniqueID(ev, event.GenerateTranslationKey(kind))
 	if !scoped {
 		return "", "", "", nil, false
 	}
@@ -463,6 +464,27 @@ func (d *DefaultDiscoveryBuilder) discoveryContext(ev Event) discoveryCtx {
 // `<channel>_<suffix>` derivation.
 func (d *DefaultDiscoveryBuilder) channelObjectID(ev Event, suffix string) string {
 	return channelPathData(ev).DiscoveryObjectID(suffix)
+}
+
+// channelEventGroupUniqueID is the identity of a channel-level event entity:
+// the routing key [event.Group.CanonicalUniqueID] publishes for the same
+// channel and kind, so the MQTT entity, the REST projection and the model
+// itself name it identically.
+//
+// It is deliberately not [DefaultDiscoveryBuilder.channelUniqueID] with a
+// leaf suffix. That helper places the central scope in front of the whole
+// key, which yields loom_<central>_<channel>_<leaf>; an event group's
+// reference layout carries the family first and the central inside the
+// channel slot. The two differ for every channel, and the family prefix is
+// what lets a consumer recognise an event group at all.
+func (d *DefaultDiscoveryBuilder) channelEventGroupUniqueID(ev Event, kindShort string) (string, bool) {
+	channelAddress := ev.DeviceAddress + ":" + strconv.Itoa(ev.ChannelNo)
+	serial := d.serialSuffix(d.centralFor(ev))
+	if serial == "" && routingkey.NeedsCentralScope(channelAddress) {
+		return "", false
+	}
+	id := routingkey.EventGroupUniqueID(serial, channelAddress, kindShort)
+	return id, id != ""
 }
 
 // channelUniqueID is the cross-broker-stable id used for HA's
