@@ -4,7 +4,7 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
-# 0.69.1
+# 0.70.0
 
 A channel now carries its device-trigger event groups inline, so clients
 build their event entities from one call instead of a round trip per

@@ -1,6 +1,6 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.69.1
+## 0.70.0
 
 A channel now carries its device-trigger event groups inline, so clients
 build their event entities from one call instead of a round trip per
