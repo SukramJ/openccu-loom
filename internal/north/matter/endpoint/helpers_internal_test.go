@@ -192,6 +192,49 @@ func TestFriendlyName_NoNameFallsBackToAddress(t *testing.T) {
 	}
 }
 
+// TestFriendlyName_MatchesModelNaming pins the NodeLabel to
+// [device.Channel.NameData] instead of an adapter-private
+// de-duplication rule, so a future divergence between Matter and the
+// model's naming authority (MQTT discovery, REST) fails here. The two
+// cases below are exactly the ones the pre-fix adapter rule handled
+// on its own — verified against [device.Channel.NameData] directly,
+// not against a value re-derived by the test.
+func TestFriendlyName_MatchesModelNaming(t *testing.T) {
+	t.Parallel()
+
+	t.Run("device name equals channel name", func(t *testing.T) {
+		t.Parallel()
+		dev := makeDevice("ABC0001", "Buecherregal")
+		ch := makeChannel(dev, "ABC0001:1", 1, "Buecherregal")
+		want := ch.NameData().TranslatedFullName()
+		got := friendlyName(dev, ch, "", "Kanal")
+		if got != want {
+			t.Errorf("friendlyName = %q, want model naming %q", got, want)
+		}
+	})
+
+	t.Run("channel name carries device name as a prefix", func(t *testing.T) {
+		t.Parallel()
+		// The channel name is not a pure duplicate here — it has a real
+		// suffix word after the device-name prefix. The model's own
+		// de-duplication rule (composeName in internal/model/naming)
+		// strips only the duplicated prefix and keeps the suffix; the
+		// pre-fix adapter rule instead dropped the whole channel name
+		// whenever one name prefixed the other, producing "Buecherregal"
+		// here instead of the model's "Buecherregal Schalt".
+		dev := makeDevice("ABC0001", "Buecherregal")
+		ch := makeChannel(dev, "ABC0001:1", 1, "Buecherregal Schalt")
+		want := ch.NameData().TranslatedFullName()
+		got := friendlyName(dev, ch, "", "Kanal")
+		if got != want {
+			t.Errorf("friendlyName = %q, want model naming %q", got, want)
+		}
+		if got != "Buecherregal Schalt" {
+			t.Errorf("friendlyName = %q, want %q", got, "Buecherregal Schalt")
+		}
+	})
+}
+
 func TestFriendlyName_LengthCapping(t *testing.T) {
 	t.Parallel()
 	dev := makeDevice("ABC0001", "VeryLongDeviceNameThatExceedsTheMatterLimit")

@@ -25,48 +25,44 @@ func isNotFound(err error) bool {
 // for one bridged endpoint. The label is operator-facing and shows up
 // in Apple Home / Google Home as the device card title.
 //
-// Layering: device-name first when present, channel-name next when
-// the channel has its own label (multi-channel devices), parameter
-// suffix last when this is a measurement / calculated sub-endpoint
-// distinguishable only by parameter.
+// The device+channel portion is the model's own answer:
+// [device.Channel.NameData] ([naming.NameData.TranslatedFullName]) is
+// the same naming authority MQTT discovery and REST use, including its
+// device/channel de-duplication rule ([naming] package doc) — Matter
+// must not re-derive that rule, or the two planes drift apart and show
+// the same device under two different names. paramSuffix is appended
+// last when this is a measurement / calculated sub-endpoint
+// distinguishable only by parameter; it is already resolved through
+// the same naming primitives by [Assembler.parameterSuffix].
+//
+// One piece has no model equivalent: a channel the operator never
+// named collapses, in [naming.NameData], to the device name alone —
+// fine for MQTT/REST, which disambiguate same-named entities by their
+// stable id, but Matter's NodeLabel is the only thing Apple/Google
+// Home show, so several unnamed channels of one device would all
+// render identically. channelLabel + the raw channel number is kept
+// as a Matter-only disambiguator for that case.
 //
 // Caps the result at 32 utf-8 bytes (Matter NodeLabel maximum,
 // §9.13.6.5). The truncation is byte-based with a defensive rune
 // boundary check; over-long inputs lose the suffix first, then the
-// channel-name, then the device-name.
+// disambiguator.
 func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix, channelLabel string) string {
-	var devName, chName string
-	if dev != nil {
-		devName = dev.Name()
-		if devName == "" {
-			devName = dev.Address
+	label := ch.NameData().TranslatedFullName()
+	if label == "" {
+		// Neither the device nor the channel carries an operator name;
+		// [naming.NameData] has nothing to build on either. Fall back to
+		// the device address, the one identifier guaranteed to exist.
+		if dev != nil {
+			label = dev.Address
 		}
 	}
-	if ch != nil {
-		chName = ch.Name()
-		if chName == "" && ch.Number > 0 {
-			chName = fmt.Sprintf("%s %d", channelLabel, ch.Number)
-		}
-	}
-	// HmIP single-channel devices (HMIP-PSM, HMIP-SWDM, …) often carry
-	// the same name on the device and the only channel — emitting both
-	// surfaces as "Bücherregal Bücherregal" in Apple Home. Same when one
-	// is a prefix of the other ("Bücherregal" / "Bücherregal Schalt"):
-	// drop the redundant component to keep the label readable.
-	if devName != "" && chName != "" && equalOrPrefix(devName, chName) {
-		chName = ""
-	}
-	parts := make([]string, 0, 3)
-	if devName != "" {
-		parts = append(parts, devName)
-	}
-	if chName != "" {
-		parts = append(parts, chName)
+	if ch != nil && ch.Number > 0 && ch.Name() == "" {
+		label = strings.TrimSpace(fmt.Sprintf("%s %s %d", label, channelLabel, ch.Number))
 	}
 	if paramSuffix != "" {
-		parts = append(parts, "("+paramSuffix+")")
+		label = strings.TrimSpace(label + " (" + paramSuffix + ")")
 	}
-	label := strings.Join(parts, " ")
 	return truncateUTF8(label, 32)
 }
 
@@ -93,32 +89,6 @@ func (a *Assembler) parameterSuffix(ch *device.Channel, parameter string) string
 		return ""
 	}
 	return name
-}
-
-// equalOrPrefix reports whether a and b are equal or one is a
-// case-sensitive prefix of the other on a non-letter boundary. Used to
-// detect redundant device-name / channel-name combinations on HmIP
-// single-channel devices where the CCU labels both with the same
-// string ("Bücherregal Bücherregal") or a near-duplicate that only
-// differs in a trailing punctuation+digit ("Trockner Trockner:0").
-//
-// The non-letter boundary check prevents "Bücher" from swallowing
-// "Bücherregal" while still accepting separators like space, colon,
-// comma, parenthesis, underscore, dash — every CCU label suffix
-// we observed.
-func equalOrPrefix(a, b string) bool {
-	if a == b {
-		return true
-	}
-	if len(a) < len(b) {
-		a, b = b, a
-	}
-	if !strings.HasPrefix(a, b) {
-		return false
-	}
-	next := a[len(b)]
-	isLetter := (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
-	return !isLetter
 }
 
 // truncateUTF8 caps s at maxBytes, snapping to a rune boundary.
