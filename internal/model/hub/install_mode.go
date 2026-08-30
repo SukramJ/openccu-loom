@@ -205,7 +205,13 @@ func (m *InstallMode) Press(ctx context.Context) error {
 
 // defaultInstallModeDuration is the default pairing window duration used
 // by Press().
-const defaultInstallModeDuration = 60 * time.Second
+const defaultInstallModeDuration = DefaultInstallModeDuration
+
+// DefaultInstallModeDuration is the pairing window a CCU opens when no
+// duration is given. It is a property of the pairing behaviour, not of the
+// surface that happens to trigger it, so a north plane that defaults an
+// omitted duration reads it here rather than restating the number.
+const DefaultInstallModeDuration = 60 * time.Second
 
 // EnableForDevice enables install mode and restricts pairing to the given
 // device address. When deviceAddress is empty this is equivalent to [Enable]

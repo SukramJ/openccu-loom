@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
@@ -301,7 +302,7 @@ func PostCopyProfile(svc ScheduleService) http.HandlerFunc {
 				problem.New(problem.TypeValidation, r, "target_channel_address is required", ""))
 			return
 		}
-		if body.SourceProfile < 1 || body.SourceProfile > 6 || body.TargetProfile < 1 || body.TargetProfile > 6 {
+		if !weekprofile.ValidProfileIndex(body.SourceProfile) || !weekprofile.ValidProfileIndex(body.TargetProfile) {
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, "source_profile and target_profile must be 1..6", ""))
 			return

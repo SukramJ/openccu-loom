@@ -321,7 +321,8 @@ func PostInstallModeInterface(idx HubIndex, rec audit.Recorder) http.HandlerFunc
 		}
 		duration := time.Duration(req.Seconds) * time.Second
 		if duration == 0 {
-			duration = 60 * time.Second
+			// The default pairing window is the model's, not this handler's.
+			duration = hub.DefaultInstallModeDuration
 		}
 		for _, nh := range idx.Hubs() {
 			if nh.Hub == nil || (req.Central != "" && nh.Central != req.Central) {

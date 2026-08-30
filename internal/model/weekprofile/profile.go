@@ -209,6 +209,27 @@ func NewClimate(loader Loader[*schedule.Climate], saver Saver[*schedule.Climate]
 // Climate schedule copy helpers
 // ---------------------------------------------------------------------------
 
+// The climate-profile index range a CCU device exposes. A device may expose
+// fewer than MaxProfileIndex slots — ProfileDataPoint.profileCount says how
+// many — but no device exposes more, and an index outside this range names no
+// profile at all.
+//
+// Named here because two layers reject it: the REST write path, which answers
+// 422 before the work starts, and the schedule adapter, which refuses the
+// copy. Two spellings of one range drift into a request one accepts and the
+// other rejects.
+const (
+	// MinProfileIndex is the lowest valid climate-profile index.
+	MinProfileIndex = 1
+	// MaxProfileIndex is the highest climate-profile index any device exposes.
+	MaxProfileIndex = 6
+)
+
+// ValidProfileIndex reports whether n names a climate profile.
+func ValidProfileIndex(n int) bool {
+	return n >= MinProfileIndex && n <= MaxProfileIndex
+}
+
 // CopyClimateProfileKey copies the per-key profile data (one of P1..P6) from
 // src into dst, storing it under dstKey. Both src and dst must have a loaded
 // schedule; srcKey must exist in the source; dstKey must be a valid profile
