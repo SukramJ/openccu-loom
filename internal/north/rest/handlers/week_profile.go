@@ -141,8 +141,11 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 		}
 
 		resp := WeekProfileResponse{
-			Address:                 ch.Address,
-			UniqueID:                routingkey.CanonicalUniqueID(serial, deviceAddr, "WEEK_PROFILE", "week_profile"),
+			Address: ch.Address,
+			UniqueID: routingkey.CanonicalUniqueID(
+				serial, deviceAddr,
+				weekprofile.SensorParameter, weekprofile.SensorFamily,
+			),
 			ScheduleType:            schedType,
 			MinTemp:                 wp.MinTemp(),
 			MaxTemp:                 wp.MaxTemp(),

@@ -24,7 +24,7 @@ const alarmDiscoveryNodeID = "alarm"
 // alarmMasterZone is the reserved zone segment of the aggregate panel
 // that arms/disarms every zone at once. A real zone ID is a UUID, so it
 // can never collide with this token.
-const alarmMasterZone = "master"
+const alarmMasterZone = alarmpanel.MasterZoneID
 
 // HA alarm_control_panel supported-feature tokens. HA reads these from
 // the discovery payload to decide which arm buttons the panel renders.
@@ -121,7 +121,11 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 	if zone == "" {
 		return DiscoveryItem{}
 	}
-	uniqueID := "openccu-loom_alarm_" + zone
+	// The panel's identity is the model's — [alarmpanel.PanelUniqueID] is what
+	// internal/alarm stamps on the same panel, and the two derived entities
+	// below hang their suffixes off it. An entity id spelled out here as well
+	// is one rename away from two entities for one zone.
+	uniqueID := alarmpanel.PanelUniqueID(zone)
 	body := map[string]any{
 		"name":                 zoneName,
 		"unique_id":            uniqueID,
@@ -182,7 +186,7 @@ func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName, label string, master
 	if zone == "" {
 		return DiscoveryItem{}
 	}
-	uniqueID := "openccu-loom_alarm_" + zone + "_reset_motion"
+	uniqueID := alarmpanel.PanelUniqueID(zone) + "_reset_motion"
 	body := map[string]any{
 		"name":              zoneName + " — " + label,
 		"unique_id":         uniqueID,
@@ -231,7 +235,7 @@ func BuildAlarmTriggeredMotionDiscovery(base, zoneID, zoneName, label string, ma
 	if zone == "" {
 		return DiscoveryItem{}
 	}
-	uniqueID := "openccu-loom_alarm_" + zone + "_triggered_motion"
+	uniqueID := alarmpanel.PanelUniqueID(zone) + "_triggered_motion"
 	body := map[string]any{
 		"name":                zoneName + " — " + label,
 		"unique_id":           uniqueID,

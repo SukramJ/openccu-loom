@@ -220,6 +220,13 @@ func TestGetWeekProfile_UniqueID(t *testing.T) {
 	if !strings.HasPrefix(uid, "loom_week_profile_") {
 		t.Errorf("unique_id must start with %q, got %q", "loom_week_profile_", uid)
 	}
+	// Both identity segments are the model's. They used to be literals here,
+	// beside the model's own — and unlike the channel switch below, the model
+	// had no exported constant at all, so nothing could have caught a drift.
+	if want := routingkey.CanonicalUniqueID(idx.SerialSuffix("home"), "0001ABCD",
+		weekprofile.SensorParameter, weekprofile.SensorFamily); uid != want {
+		t.Errorf("unique_id = %q, want the model-derived %q", uid, want)
+	}
 	if !strings.HasSuffix(uid, "_week_profile") {
 		t.Errorf("unique_id must end with %q, got %q", "_week_profile", uid)
 	}
