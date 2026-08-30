@@ -6,6 +6,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **A published identity may change on either plane — but on MQTT only as a
+  documented break.** ADR 0068 said the MQTT `unique_id` was immutable. That
+  over-read its own measurement: what was shown is that Home Assistant offers
+  no migration there, not that a change is forbidden. Those are different
+  things, and the second does not follow from the first.
+
+  The amendment permits the change and attaches obligations instead: the old
+  and new identity side by side with a real example; what is lost, named —
+  history, area, customisations, and every automation or dashboard entry that
+  refers to the entity by id; the orphan swept rather than left behind; the
+  operator steps; how to see the blast radius before upgrading; and the notice
+  in the add-on changelogs, not only this one, because that is what an add-on
+  user reads.
+
+  The sweep is the whole of the mitigation and is worth being exact about: it
+  does not save the history. Retracting the retained discovery config of the
+  old identity converts a silent zombie — a permanently unavailable entity
+  beside the new one — into a clean disappearance, so the operator sees what
+  happened and acts once. `RunDiscoveryOrphanCleanupOnce` already implements
+  it.
+
+  `docs/external-clients/breaking-change-process.md` carries this as a
+  procedure. Each application of it gets a section in the unique-id migration
+  page, written before the release rather than after.
+
 ## [0.68.1] - 2026-08-29
 
 ### Added
