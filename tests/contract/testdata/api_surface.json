@@ -1,5 +1,5 @@
 {
- "api_version": "7.25.0",
+ "api_version": "7.26.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -772,6 +772,7 @@
    "category:string",
    "custom_dp_name:string",
    "data_points_count:integer",
+   "event_groups:array\u003c$ref:EventGroupSummary\u003e",
    "functions:array\u003cstring\u003e",
    "group_no:integer",
    "hidden:boolean",

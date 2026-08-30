@@ -6233,6 +6233,21 @@ export interface components {
              *     MASTER/config edits are unaffected. Omitted when false.
              */
             locked?: boolean;
+            /**
+             * @description The channel's device-trigger event groups — the same objects
+             *     `GET /devices/{addr}/channels/{no}/event-groups` serves, carried
+             *     inline so a client builds its event entities from the one
+             *     bootstrap call instead of a round trip per channel.
+             *
+             *     Each group carries its own `unique_id`, `kind`, `event_types` and
+             *     member `parameters`, so a consumer never has to classify CCU
+             *     parameter names or recompute a routing key for itself — doing so
+             *     is what caps a consumer at the event kinds its author knew about.
+             *
+             *     Omitted when the channel exposes no event sources, which is the
+             *     common case; only trigger-capable channels grow the payload.
+             */
+            event_groups?: components["schemas"]["EventGroupSummary"][];
         };
         MQTTReloadResponse: {
             /** @description Always true on success; the 503 path returns a problem+json document instead. */

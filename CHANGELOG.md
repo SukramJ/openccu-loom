@@ -6,6 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.70.0] - 2026-08-30
+
+### Added
+
+- **A channel carries its event groups inline.** `ChannelSummary` gains
+  `event_groups`, the same objects
+  `GET /devices/{addr}/channels/{no}/event-groups` serves. A client building
+  event entities had to either make one round trip per channel or classify
+  CCU parameter names itself — and a hand-kept copy of that set caps its
+  holder at the event kinds its author wrote down, which is precisely how the
+  MQTT plane came to publish keypresses and nothing else for as long as it
+  did.
+
+  Each group carries its `unique_id`, `kind`, `event_types` and member
+  `parameters`, so a consumer never recomputes a routing key or decides what
+  counts as a press. The field is omitted for channels without event sources,
+  which is most of them, so the payload grows only where the data exists. A
+  contract guard holds the inline copy equal to the endpoint's answer.
+
+  API version 7.26.0 (additive).
+
 ## [0.69.0] - 2026-08-30
 
 ### Changed

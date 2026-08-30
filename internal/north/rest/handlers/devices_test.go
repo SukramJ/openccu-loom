@@ -1674,7 +1674,7 @@ func TestToChannelSummary_FunctionsPopulated(t *testing.T) {
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
 	ch.SetFunctions([]string{"Licht", "Heizung"})
 
-	s := toChannelSummary(ch, nil)
+	s := toChannelSummary(ch, nil, "")
 	if len(s.Functions) != 2 {
 		t.Fatalf("Functions len = %d, want 2: %v", len(s.Functions), s.Functions)
 	}
@@ -1690,7 +1690,7 @@ func TestToChannelSummary_FunctionsOmittedWhenEmpty(t *testing.T) {
 	d := newTestDevice("0001ABCD", "HmIP-BSM")
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
 
-	s := toChannelSummary(ch, nil)
+	s := toChannelSummary(ch, nil, "")
 	if len(s.Functions) != 0 {
 		t.Fatalf("expected empty Functions, got %v", s.Functions)
 	}
@@ -1829,7 +1829,7 @@ func TestToChannelSummary_IsCustomDpPrimary(t *testing.T) {
 
 	t.Run("primary channel with custom DP yields is_custom_dp_primary=true", func(t *testing.T) {
 		t.Parallel()
-		s := toChannelSummary(chPrimary, nil)
+		s := toChannelSummary(chPrimary, nil, "")
 		if !s.IsCustomDpPrimary {
 			t.Error("expected IsCustomDpPrimary=true for channel with custom DP (no group, treated as primary)")
 		}
@@ -1837,7 +1837,7 @@ func TestToChannelSummary_IsCustomDpPrimary(t *testing.T) {
 
 	t.Run("plain channel without custom DP yields is_custom_dp_primary=false", func(t *testing.T) {
 		t.Parallel()
-		s := toChannelSummary(chPlain, nil)
+		s := toChannelSummary(chPlain, nil, "")
 		if s.IsCustomDpPrimary {
 			t.Error("expected IsCustomDpPrimary=false for channel without custom DP")
 		}
