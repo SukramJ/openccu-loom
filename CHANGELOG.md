@@ -81,6 +81,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Sysvar WebSocket frames carry the model's identity.** The
+  `sysvar.changed` frame stamped the variable's name slug unconditionally,
+  while the model — and REST with it — key on the CCU's vid as soon as a hub
+  scan resolves one, precisely because a name is editable and an id is not.
+  A client seeding its registry from these frames bound entities to a key
+  that moved when an operator renamed the variable, and that disagreed with
+  the same variable's id over REST.
+
+  Only sysvars with a resolved vid change; one the model has not scanned yet
+  keeps the name-keyed fallback, which is the value it had before. The
+  transition, what is lost, and a command to see the blast radius before
+  upgrading are on record in
+  `docs/external-clients/ha-unique-id-migration.md`.
+
 - **Event-group keys follow the reference layout.** The daemon stamped
   `loom_<channel>_event_group/homematic.keypress` — channel first, a slash, the
   kind unshortened — while the reference stack and the Python client both build

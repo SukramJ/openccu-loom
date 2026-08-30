@@ -616,3 +616,50 @@ func TestHubEventsSubscriberSystemUpdate(t *testing.T) {
 		t.Fatalf("UpdateAvailable = false, want true")
 	}
 }
+
+// TestHubEventsSubscriberSysvarUniqueIDUsesTheVid pins the WebSocket frame to
+// the model's identity for a sysvar the hub has resolved.
+//
+// The frame used to stamp the name slug unconditionally. A name is editable
+// and a vid is not, which is exactly why [hub.Sysvar.CanonicalUniqueID] keys
+// on the vid once a scan has produced one — a client seeding its registry
+// from these events otherwise bound entities to a key that moved on rename
+// and disagreed with the same variable's id over REST.
+//
+// The sibling test above covers the other half: a sysvar the model has not
+// seen keeps the name-keyed fallback, so the field never vanishes mid-scan.
+func TestHubEventsSubscriberSysvarUniqueIDUsesTheVid(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	cu.Hub.SetHubModel(cu.HubModel)
+	sv := hub.NewSysvar("home", "Außen Temperatur", "", hmenum.HubValueType("FLOAT"), nil)
+	sv.Vid = 4711
+	cu.HubModel.PutSysvar(sv)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	events.Publish(cu.EventBus, hmevent.SysvarChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "home",
+		Name:        "Außen Temperatur",
+		ValueType:   hmenum.HubValueType("FLOAT"),
+		NewValue:    hmtypes.FloatValue(5.5),
+		OldValue:    hmtypes.FloatValue(4.0),
+	})
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == SysvarTopic("home", "Außen Temperatur")
+	})
+	p, ok := ev.Payload.(SysvarChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want SysvarChangedPayload", ev.Payload)
+	}
+	if want := "loom_11a0001234_sysvar_4711"; p.UniqueID != want {
+		t.Fatalf("unique_id = %q, want %q — the frame must carry the model's identity, not the name slug", p.UniqueID, want)
+	}
+}

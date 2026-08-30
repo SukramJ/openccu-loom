@@ -234,6 +234,51 @@ Each entry is one applied re-key, written before the release that carries it,
 per [ADR 0068](../adr/0068-unique-id-stability-per-plane.md) and
 [Breaking a Published Identity](./breaking-change-process.md).
 
+### Sysvar WebSocket frames carry the model identity — daemon 0.69.0
+
+**Old** — the `sysvar.changed` frame keyed on the variable's name slug,
+unconditionally:
+
+```
+loom_11a0001234_sysvar_aussen-temperatur
+```
+
+**New** — the frame carries what the model publishes, which keys on the CCU's
+vid once a hub scan has resolved one:
+
+```
+loom_11a0001234_sysvar_4711
+```
+
+**Scope — narrower than it looks.** Only sysvars with a resolved vid change.
+A variable the model has not scanned yet still gets the name-keyed fallback,
+which is the same value as before, so nothing changes mid-scan. REST already
+published the vid-keyed id: this frame was the one surface disagreeing with
+the rest of the daemon, which is the defect being fixed rather than a new
+scheme being introduced.
+
+**What is lost.** A client that seeded its entity registry from these frames
+alone — rather than from REST — holds entities under the name-keyed id. Those
+entities keep their history only if the client re-keys them; otherwise a new
+entity appears beside the old one and the old one goes stale. The affected
+client in this family, `homematicip_local`, already migrates hub keys from the
+name slug (`_async_migrate_hub_keys_from_name_slug`), so it re-keys on the
+next start.
+
+**Blast radius before upgrading.** Compare the two ids for every sysvar:
+
+```sh
+curl -s -u user:pass http://<host>:8080/api/v1/sysvars \
+  | jq -r '.items[] | "\(.name)\t\(.unique_id)"'
+```
+
+Every row whose `unique_id` ends in a number rather than a name slug is a
+variable whose WebSocket frames change. A row ending in a slug is unaffected.
+
+**No MQTT sweep applies.** This is the REST/WebSocket plane, which has no
+retained discovery payload to retract; nothing is left behind to orphan. The
+MQTT plane is untouched by this change.
+
 ### Event groups move onto the reference layout — daemon api 7.25.0
 
 **Old** `loom_<channel>_event_group/<kind>` — the channel first, a slash, and

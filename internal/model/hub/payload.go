@@ -121,11 +121,25 @@ func (s *Sysvar) CanonicalUniqueID(serialSuffix string) string {
 	if s == nil {
 		return ""
 	}
-	key := s.LegacyName()
 	if vid := s.Meta().Vid; vid != 0 {
-		key = strconv.Itoa(vid)
+		return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(strconv.Itoa(vid)), "")
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(key), "")
+	return SysvarUniqueIDForName(serialSuffix, s.LegacyName())
+}
+
+// SysvarUniqueIDForName builds the name-keyed routing key of a sysvar, the
+// same fallback [Sysvar.CanonicalUniqueID] uses before a hub scan has
+// resolved a vid.
+//
+// It exists so a caller holding only a name — an event that arrived before
+// the model saw the variable — reaches the model's own rule instead of
+// rebuilding it. The key is the fallback, not the identity: a name is
+// editable, so once a vid is known that is what the id keys on.
+func SysvarUniqueIDForName(serialSuffix, name string) string {
+	if serialSuffix == "" || name == "" {
+		return ""
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(name), "")
 }
 
 // Info returns identity-level fields for a Sysvar.

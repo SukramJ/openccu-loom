@@ -8,8 +8,8 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
-	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -152,6 +152,37 @@ func programUniqueID(reg *central.Registry, centralName, programID string) strin
 	return p.CanonicalUniqueID(reg.SerialSuffix(centralName))
 }
 
+// sysvarUniqueID resolves the routing key of the named sysvar through the
+// hub model, so the WebSocket frame carries the same identity REST and the
+// model itself publish.
+//
+// The frame used to stamp the name slug unconditionally. That is only the
+// model's fallback: [hub.Sysvar.CanonicalUniqueID] keys on the CCU's vid as
+// soon as a hub scan has resolved one, precisely because a name is editable
+// and an id is not. A client seeding its registry from these events bound
+// its entities to a key that changed when an operator renamed the variable,
+// and that disagreed with the same variable's id over REST.
+//
+// Returns "" only when the central is unknown; a sysvar the model has not
+// seen yet still gets the model's name-keyed fallback, so the field never
+// silently disappears mid-scan. See
+// docs/external-clients/ha-unique-id-migration.md.
+func sysvarUniqueID(reg *central.Registry, centralName, name string) string {
+	if reg == nil {
+		return ""
+	}
+	h := reg.HubFor(centralName)
+	if h == nil {
+		return ""
+	}
+	if sv, ok := h.Sysvar(name); ok && sv != nil {
+		return sv.CanonicalUniqueID(reg.SerialSuffix(centralName))
+	}
+	// The change event can outrun the hub scan. Fall back to the model's own
+	// name-keyed rule rather than dropping the field or inventing a key.
+	return hub.SysvarUniqueIDForName(reg.SerialSuffix(centralName), name)
+}
+
 // sysvarDeviceLink resolves the current device association of the named
 // sysvar from the central's hub model: the channel address plus the derived
 // device address. Both are empty when the central, the sysvar, or the
@@ -263,12 +294,10 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 				Type:  string(hmevent.EventTypeSysvarChanged),
 				When:  e.Timestamp(),
 				Payload: SysvarChangedPayload{
-					Central:   centralName,
-					Name:      e.Name,
-					ValueType: e.ValueType,
-					UniqueID: routingkey.CanonicalUniqueID(
-						reg.SerialSuffix(centralName), "sysvar", routingkey.HubSlug(e.Name), "",
-					),
+					Central:       centralName,
+					Name:          e.Name,
+					ValueType:     e.ValueType,
+					UniqueID:      sysvarUniqueID(reg, centralName, e.Name),
 					Value:         e.NewValue.Unwrap(),
 					Previous:      e.OldValue.Unwrap(),
 					Channel:       channel,
