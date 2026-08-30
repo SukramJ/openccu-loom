@@ -8,7 +8,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -180,7 +179,7 @@ func sysvarUniqueID(reg *central.Registry, centralName, name string) string {
 	}
 	// The change event can outrun the hub scan. Fall back to the model's own
 	// name-keyed rule rather than dropping the field or inventing a key.
-	return hub.SysvarUniqueIDForName(reg.SerialSuffix(centralName), name)
+	return hubmodel.SysvarUniqueIDForName(reg.SerialSuffix(centralName), name)
 }
 
 // sysvarDeviceLink resolves the current device association of the named
