@@ -13,6 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
+	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -394,6 +395,16 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		}
 		// No channel inspector (agg=false) — fall through to the per-parameter
 		// path below.
+	}
+	// Impulse and device-error aggregation, the same shape one kind over.
+	// Both were absent from this plane until 0.68.2 — the events reached the
+	// REST and WebSocket planes and simply never appeared here — so this adds
+	// entities rather than moving any.
+	if kind, known := event.Classify(hmenum.Parameter(ev.Parameter)); known && kind != event.KindKeypress {
+		if comp, nid, oid, p, agg := d.BuildChannelKindEvent(ev, kind); agg {
+			return comp, nid, oid, p, true
+		}
+		// No channel inspector — fall through to the per-parameter path.
 	}
 	// Usage gate — the model's DataPointUsage verdict (same source as
 	// the REST `DataPointSummary.usage` field) decides whether a wire DP

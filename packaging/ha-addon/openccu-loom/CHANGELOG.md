@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.68.2
+
+- Fixes the identifier the daemon reports for a device's button / impulse /
+  error event groups over the REST and WebSocket API. It did not match what
+  the Python client and the reference stack build, so the value could not be
+  used by anything that received it. Nothing to do on your side: no entity
+  changes, and the MQTT path is untouched.
+
 ## 0.68.1
 
 - The daemon's API document now describes what `GET /devices/{addr}/cdps/{name}`

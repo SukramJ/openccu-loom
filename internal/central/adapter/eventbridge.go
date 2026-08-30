@@ -21,6 +21,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
@@ -2424,18 +2425,31 @@ func (b *EventBridge) publishChannelEventState(
 	if b.mqtt == nil {
 		return
 	}
-	if !mqtt.IsPressParameter(parameter) {
-		return
-	}
-	if len(mqtt.ChannelPressTypes(ch)) == 0 {
-		// No PRESS_* parameter on the channel → not a press channel, skip.
-		return
-	}
 	bridge := b.mqtt.Bridge()
 	if bridge == nil {
 		return
 	}
-	notePublish(ctx, bridge.PublishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, model, parameter))
+	// Route by the kind the parameter belongs to. Until 0.68.2 only the
+	// keypress branch existed, so impulse and device-error events reached
+	// the REST/WS planes and simply never appeared on MQTT — a coverage gap
+	// rather than a different shape.
+	kind, known := event.Classify(hmenum.Parameter(parameter))
+	if !known {
+		return
+	}
+	lowered := strings.ToLower(parameter)
+	switch kind {
+	case event.KindKeypress:
+		if len(mqtt.ChannelPressTypes(ch)) == 0 {
+			// No PRESS_* parameter on the channel → not a press channel, skip.
+			return
+		}
+		notePublish(ctx, bridge.PublishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, model, parameter))
+	case event.KindImpulse:
+		notePublish(ctx, bridge.PublishChannelImpulseState(ctx, centralName, iface, deviceAddr, channelNo, lowered))
+	case event.KindDeviceError:
+		notePublish(ctx, bridge.PublishChannelDeviceErrorState(ctx, centralName, iface, deviceAddr, channelNo, lowered))
+	}
 }
 
 // publishChannelEventDiscoverySnapshot publishes the HA `event`

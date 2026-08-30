@@ -228,6 +228,56 @@ for that entry, so newly-created entities already see the migrated keys.
   and keeps the rebuild path as a fallback for payloads that omit the
   field (e.g. before the CCU serial is known).
 
+## Transitions on record
+
+Each entry is one applied re-key, written before the release that carries it,
+per [ADR 0068](../adr/0068-unique-id-stability-per-plane.md) and
+[Breaking a Published Identity](./breaking-change-process.md).
+
+### Event groups move onto the reference layout — daemon api 7.25.0
+
+**Old** `loom_<channel>_event_group/<kind>` — the channel first, a slash, and
+the kind unshortened:
+
+```
+loom_vcu1234567_1_event_group/homematic.keypress
+```
+
+**New** `loom_event_group_<kind>_<channel-unique-id>`, which is what the
+reference stack and the Python client both build:
+
+```
+loom_event_group_keypress_vcu1234567_1
+loom_event_group_keypress_11a0001234_bidcos_rf_1   ← virtual remote
+```
+
+Note where the central-id slot sits: **inside the channel id**, for the address
+families that need one, not in front of the whole key.
+
+**Who has to act: nobody.** This is the unusual case where a key changes and no
+consumer is affected, and it is worth being explicit about why rather than
+leaving it to look like an oversight.
+
+- The Python client never read this value. It recomputes the reference
+  spelling itself (`ChannelEventGroup.unique_id`), so its entities were already
+  keyed the new way. `EventGroupSummary` does not appear in its source outside
+  the generated wire models, and it does not call `GET …/event-groups`.
+- The MQTT discovery plane is untouched. It keys channel events on
+  `loom_[<serial>_]<channel>_event` through a different builder, and that
+  string does not change here. Its granularity — one event entity per channel
+  rather than one per kind — is a separate question and stays as it is.
+
+So there is no registry pass to run and no entity re-keys. What changed is that
+`EventGroupSummary.unique_id` is now usable: its own description always claimed
+a client could seed its event-entity registry from it, and until this release
+doing so would have bound entities to a key nothing else uses.
+
+**If you did key on the old value**, the mapping is mechanical:
+`loom_<channel>_event_group/homematic.<kind>` →
+`loom_event_group_<kind>_<channel>`. `TestEventGroupKeyFollowsTheReferenceLayout`
+in `tests/contract/` carries the exact expected strings for all four address
+families.
+
 ## Relationship to the daemon schema
 
 The daemon runs the same routing-key contract on the Go side

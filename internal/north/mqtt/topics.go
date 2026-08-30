@@ -127,6 +127,20 @@ func (b *TopicBuilder) ChannelEvent(centralName, iface, address string, channel 
 	return pd.MQTTChannelEvent(b.Base, centralName)
 }
 
+// ChannelImpulse is the non-retained per-channel impulse-event topic.
+// Delegates to [naming.PathData.MQTTChannelImpulse].
+func (b *TopicBuilder) ChannelImpulse(centralName, iface, address string, channel int) string {
+	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
+	return pd.MQTTChannelImpulse(b.Base, centralName)
+}
+
+// ChannelDeviceError is the non-retained per-channel device-error topic.
+// Delegates to [naming.PathData.MQTTChannelDeviceError].
+func (b *TopicBuilder) ChannelDeviceError(centralName, iface, address string, channel int) string {
+	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
+	return pd.MQTTChannelDeviceError(b.Base, centralName)
+}
+
 // AggregatedState is the retained per-Source state topic introduced
 // by ADR 0007. Delegates to [naming.PathData.MQTTChannelAggregateState].
 func (b *TopicBuilder) AggregatedState(centralName, iface, address string, channel int) string {
