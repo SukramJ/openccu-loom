@@ -234,6 +234,64 @@ Each entry is one applied re-key, written before the release that carries it,
 per [ADR 0068](../adr/0068-unique-id-stability-per-plane.md) and
 [Breaking a Published Identity](./breaking-change-process.md).
 
+### Channel event entities move onto the event-group layout — daemon 0.69.0
+
+**Old** — the generic channel-id helper with an `event` leaf, no family
+marker, and the central scope in front of the whole key:
+
+```
+loom_vcu1234567_1_event          discovery object: 1_event
+```
+
+**New** — the routing key the model publishes for the same event group:
+
+```
+loom_event_group_keypress_vcu1234567_1
+                                 discovery object: 1_event_group_keypress
+```
+
+**What is lost.** Home Assistant treats the re-keyed entity as a new one. The
+old entity's history, its area assignment and every customisation (name, icon,
+category) do not carry over, and any automation, script or dashboard card that
+names the old entity id stops resolving. Its entity id changes with the
+object id — `event.<device>_<channel>_event` becomes
+`event.<device>_<channel>_event_group_keypress`.
+
+**Why the object id moves too, and not just the id.** Home Assistant reads
+`unique_id` only in its entity constructor; a discovery update never re-reads
+it. Publishing a new id onto the same topic therefore changes nothing on a
+running instance and would surface unannounced at its next restart. Moving the
+object id publishes the entity on a new topic and leaves the old config
+behind, which makes it a genuine orphan.
+
+**The mitigation, and its limit.** `RunDiscoveryOrphanCleanupOnce` retracts the
+old config on the first start after the upgrade, so the old entity disappears
+instead of lingering as permanently unavailable beside the new one. The sweep
+does **not** preserve history — nothing can, across a `unique_id` change. It
+converts a silent zombie into a clean disappearance the operator sees once and
+acts on once.
+
+**Blast radius before upgrading.** Every keypress channel is affected. List
+them:
+
+```sh
+curl -s -u user:pass http://<host>:8080/api/v1/devices \
+  | jq -r '.items[].channels[]? | select(.event_groups[]?.kind == "homematic.keypress")
+           | "\(.address)\t\(.name)"'
+```
+
+Or, from the Home Assistant side, search the entity list for `_event` within
+this integration.
+
+**Operator steps.** None are required — the sweep runs on first start. Only
+automations and dashboard cards that name the old entity id need repointing;
+Home Assistant's own "Repairs" and the automation editor flag an unresolvable
+entity id.
+
+**Impulse and device-error entities are new**, not re-keyed: they were added
+in the same unreleased cycle and have never been published under another
+identity.
+
 ### Sysvar WebSocket frames carry the model identity — daemon 0.69.0
 
 **Old** — the `sysvar.changed` frame keyed on the variable's name slug,

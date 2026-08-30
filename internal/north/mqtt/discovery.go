@@ -397,7 +397,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// path below.
 	}
 	// Impulse and device-error aggregation, the same shape one kind over.
-	// Both were absent from this plane until 0.68.2 — the events reached the
+	// Both were absent from this plane until 0.69.0 — the events reached the
 	// REST and WebSocket planes and simply never appeared here — so this adds
 	// entities rather than moving any.
 	if kind, known := event.Classify(hmenum.Parameter(ev.Parameter)); known && kind != event.KindKeypress {

@@ -6,7 +6,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.68.2] - 2026-08-30
+## [0.69.0] - 2026-08-30
+
+### Changed
+
+- **Breaking: channel event entities carry the model's event-group
+  identity.** A channel's keypress entity was keyed
+  `loom_<central>_<channel>_event` on MQTT while the model and REST name the
+  same group `loom_event_group_keypress_<channel>`. Both now come from the
+  model, and impulse and device-error entities follow the same layout.
+
+  Home Assistant re-creates the keypress entity: its history, area and
+  customisations are lost, and automations or dashboard cards naming the old
+  entity id must be repointed. The entity id changes as well, from
+  `event.<device>_<channel>_event` to
+  `event.<device>_<channel>_event_group_keypress`.
+
+  The discovery object id moves with the identity on purpose. Home Assistant
+  reads `unique_id` only in its entity constructor, so a new id on the same
+  topic would reach a running instance not at all and appear unannounced at
+  its next restart. Moving the object id publishes on a new topic and leaves
+  the old config as a genuine orphan, which
+  `RunDiscoveryOrphanCleanupOnce` retracts on first start — turning a
+  permanently-unavailable zombie into a clean disappearance. The sweep does
+  not preserve history; nothing can across a `unique_id` change.
+
+  The full transition, a command to list the affected channels before
+  upgrading, and the operator steps are in
+  `docs/external-clients/ha-unique-id-migration.md`. Both add-on changelogs
+  carry the notice.
+
+  Impulse and device-error entities are new rather than re-keyed — they were
+  added in the same unreleased cycle and never published under another id.
 
 ### Added
 

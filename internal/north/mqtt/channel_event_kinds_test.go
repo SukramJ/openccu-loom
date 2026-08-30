@@ -128,10 +128,19 @@ func TestEachEventKindGetsItsOwnEntity(t *testing.T) {
 		t.Errorf("impulse event_types = %v, want [sequence_ok]", got)
 	}
 
-	// The keypress entity keeps its established identity: it must still be
-	// the `_event` object, not a renamed one.
-	if oid, _ := seen["PRESS_SHORT"]["__object_id"].(string); len(oid) < 6 || oid[len(oid)-6:] != "_event" {
-		t.Errorf("keypress object_id = %q, want it to keep the established _event suffix", oid)
+	// Every kind names its object after the event group it publishes. The
+	// keypress entity used to be the bare `_event` object; moving it is the
+	// documented re-key (ADR 0068), and moving the OBJECT id — not just the
+	// unique_id — is what makes the old config an orphan the discovery sweep
+	// can retract instead of a zombie on an overwritten topic.
+	for param, wantLeaf := range map[string]string{
+		"PRESS_SHORT":    "1_event_group_keypress",
+		"SEQUENCE_OK":    "1_event_group_impulse",
+		"ERROR_OVERHEAT": "1_event_group_device_error",
+	} {
+		if oid, _ := seen[param]["__object_id"].(string); oid != wantLeaf {
+			t.Errorf("%s object_id = %q, want %q", param, oid, wantLeaf)
+		}
 	}
 }
 

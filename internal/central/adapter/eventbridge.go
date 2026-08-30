@@ -2451,7 +2451,7 @@ func (b *EventBridge) publishChannelEventState(
 	if bridge == nil {
 		return
 	}
-	// Route by the kind the parameter belongs to. Until 0.68.2 only the
+	// Route by the kind the parameter belongs to. Until 0.69.0 only the
 	// keypress branch existed, so impulse and device-error events reached
 	// the REST/WS planes and simply never appeared on MQTT — a coverage gap
 	// rather than a different shape.

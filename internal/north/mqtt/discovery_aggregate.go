@@ -112,8 +112,9 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 	if len(types) == 0 {
 		return "", "", "", nil, false
 	}
-	objectID = d.channelObjectID(ev, "event")
-	uniqueID, scoped := d.channelEventGroupUniqueID(ev, event.GenerateTranslationKey(event.KindKeypress))
+	kindSlug := event.GenerateTranslationKey(event.KindKeypress)
+	objectID = d.channelObjectID(ev, eventGroupLeaf(kindSlug))
+	uniqueID, scoped := d.channelEventGroupUniqueID(ev, kindSlug)
 	if !scoped {
 		return "", "", "", nil, false
 	}
@@ -166,7 +167,7 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 //
 // The keypress kind keeps [DefaultDiscoveryBuilder.BuildChannelEvent]: it
 // carries the doorbell device-class mapping and an established identity that
-// this must not disturb. Until 0.68.2 the other two kinds were not published
+// this must not disturb. Until 0.69.0 the other two kinds were not published
 // on this plane at all, so everything here is additive — no key moves.
 //
 // Returns ("", "", "", nil, false) when the channel carries no parameter of
@@ -185,8 +186,9 @@ func (d *DefaultDiscoveryBuilder) BuildChannelKindEvent(ev Event, kind event.Kin
 	if len(types) == 0 {
 		return "", "", "", nil, false
 	}
-	objectID = d.channelObjectID(ev, leaf)
-	uniqueID, scoped := d.channelEventGroupUniqueID(ev, event.GenerateTranslationKey(kind))
+	kindSlug := event.GenerateTranslationKey(kind)
+	objectID = d.channelObjectID(ev, eventGroupLeaf(kindSlug))
+	uniqueID, scoped := d.channelEventGroupUniqueID(ev, kindSlug)
 	if !scoped {
 		return "", "", "", nil, false
 	}
@@ -464,6 +466,22 @@ func (d *DefaultDiscoveryBuilder) discoveryContext(ev Event) discoveryCtx {
 // `<channel>_<suffix>` derivation.
 func (d *DefaultDiscoveryBuilder) channelObjectID(ev Event, suffix string) string {
 	return channelPathData(ev).DiscoveryObjectID(suffix)
+}
+
+// eventGroupLeaf is the discovery object-id leaf of a channel-level event
+// entity. It carries the same family marker as the entity's unique_id, which
+// is what makes a re-key survivable: the object id is part of the discovery
+// topic, so a changed leaf publishes the new entity on a new topic and leaves
+// the old config behind as a genuine orphan.
+//
+// That matters more than the naming symmetry. Home Assistant reads unique_id
+// only in its entity constructor, so a new id written onto the SAME topic
+// reaches a running instance not at all — it would surface unannounced at the
+// next restart. Moving the topic instead lets the existing discovery-orphan
+// sweep retract the old config, which is what turns a silent zombie entity
+// into a clean disappearance the operator can see and act on once.
+func eventGroupLeaf(kindSlug string) string {
+	return "event_group_" + kindSlug
 }
 
 // channelEventGroupUniqueID is the identity of a channel-level event entity:
