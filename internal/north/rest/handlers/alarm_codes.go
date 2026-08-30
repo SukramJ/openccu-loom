@@ -11,12 +11,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -387,10 +387,9 @@ func alarmCodeRowFromReq(id string, req hmapi.AlarmCodeRequest, existingHash str
 // hmenum.ParameterPressLong. A binding on any other parameter (e.g. a
 // typo'd "PRESS") is accepted by the wire schema but can never fire,
 // so it is rejected here rather than stored inert (S7 fail-visible).
-var validRemoteKeyParameters = map[string]struct{}{
-	string(hmenum.ParameterPressShort): {},
-	string(hmenum.ParameterPressLong):  {},
-}
+// The set itself is the router's, read through [alarm.IsRemotePressParameter]
+// — a parameter added to the routing must widen what this write accepts, and
+// a copy kept here would not.
 
 // validateAlarmCodeWrite enforces the write-time invariants a stored
 // code needs to ever authenticate or fire (notes/concepts/alarm-concept.md §11,
@@ -431,7 +430,7 @@ func validateAlarmCodeWrite(req hmapi.AlarmCodeRequest, existingHash string) err
 		if b.ZoneID == "" {
 			return fmt.Errorf("remote_key binding requires zone_id: %w", ErrInvalidAlarmCode)
 		}
-		if _, ok := validRemoteKeyParameters[b.Parameter]; !ok {
+		if !alarm.IsRemotePressParameter(hmenum.Parameter(b.Parameter)) {
 			return fmt.Errorf("remote_key binding parameter must be PRESS_SHORT or PRESS_LONG: %w", ErrInvalidAlarmCode)
 		}
 		if !validRemoteKeyAction(b.Action) {
@@ -447,12 +446,7 @@ func validateAlarmCodeWrite(req hmapi.AlarmCodeRequest, existingHash string) err
 // (a bare "arm:" is valid too — dispatchArm defaults an empty mode to
 // full protection).
 func validRemoteKeyAction(action string) bool {
-	switch action {
-	case "disarm", "silence", "panic":
-		return true
-	default:
-		return strings.HasPrefix(action, "arm:")
-	}
+	return alarm.IsDispatchableRemoteAction(action)
 }
 
 // decodeStrictBinding decodes raw into a codes.Binding, rejecting a

@@ -358,10 +358,16 @@ func (s *ControlServer) SetCurrentPosition(pos *wire.ClosureCurrentPosition) {
 		s.secureState = &secure
 	}
 	if pos == nil {
-		s.mainState = wire.ClosureMainStateMoving
+		// A null Position means the drive's position is unknown, which the
+		// spec says plainly (matter.js closure-control.resource.ts:429-439:
+		// "If the closure doesn't know accurately its current state the value
+		// null shall be used"). Whether it is MOVING is a different question
+		// and a different attribute, answered by the model from the drive's
+		// own motion signal and delivered through [ControlServer.SetMainState]
+		// — reading it off the position made a stuck or unreferenced door
+		// report as perpetually in motion.
 		return
 	}
-	s.mainState = wire.ClosureMainStateStopped
 	// The drive arrived, so nothing is outstanding.
 	s.targetPosition = nil
 }

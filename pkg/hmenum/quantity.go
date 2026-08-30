@@ -41,6 +41,7 @@ const (
 	QuantityMoisture  Quantity = "moisture"
 	QuantityMotion    Quantity = "motion"
 	QuantityOccupancy Quantity = "occupancy"
+	QuantityDoor      Quantity = "door"
 	QuantityOpening   Quantity = "opening"
 	QuantityPresence  Quantity = "presence"
 	QuantityProblem   Quantity = "problem"

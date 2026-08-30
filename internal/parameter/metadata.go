@@ -351,6 +351,31 @@ var binarySensorQuantityByDeviceAndParam = []binarySensorDeviceParamRule{
 		Quantity:      hmenum.QuantitySmoke,
 	},
 	{
+		// A door lock's own contact, distinct from a window sensor.
+		ModelPrefixes: []string{"HmIP-DLP"},
+		Parameter:     "STATE",
+		Quantity:      hmenum.QuantityDoor,
+	},
+	{
+		// Rotary handle sensors report the sash through WINDOW_OPEN
+		// rather than STATE.
+		ModelPrefixes: []string{"HmIP-SRH", "HM-Sec-RHS"},
+		Parameter:     "WINDOW_OPEN",
+		Quantity:      hmenum.QuantityWindow,
+	},
+	{
+		ModelPrefixes: []string{"HmIP-SWSD"},
+		Parameter:     "SMOKE_ALARM",
+		Quantity:      hmenum.QuantitySmoke,
+	},
+	{
+		// The siren's intrusion channel is a safety condition, not a
+		// smoke one, on the same device.
+		ModelPrefixes: []string{"HmIP-SWSD"},
+		Parameter:     "INTRUSION_ALARM",
+		Quantity:      hmenum.QuantitySafety,
+	},
+	{
 		ModelPrefixes: []string{
 			"HmIP-SWD",
 			"HmIP-SWDO",

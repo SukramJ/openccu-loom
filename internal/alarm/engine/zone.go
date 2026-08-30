@@ -297,6 +297,14 @@ type ZoneSnapshot struct {
 	// ("" / 0 when none). Remaining is relative to the snapshot time.
 	TimerKind      string
 	TimerRemaining time.Duration
+	// TimerTotal is the countdown's full length as the engine armed it —
+	// what a progress display divides TimerRemaining by.
+	//
+	// It is carried here because it is not derivable from the zone config: an
+	// entry delay honours a per-sensor override (ModeConfig.entryDelay), so a
+	// consumer reading the zone's EntryDelaySeconds computes a total the
+	// engine never used, and the bar it draws runs at the wrong rate or jumps.
+	TimerTotal time.Duration
 }
 
 // snapshot builds an ZoneSnapshot; the caller holds the engine lock.
@@ -317,6 +325,7 @@ func (a *zone) snapshot(now time.Time) ZoneSnapshot {
 	}
 	if a.timerCancel != nil {
 		snap.TimerKind = a.timerKind
+		snap.TimerTotal = a.timerRemaining
 		if r := a.timerDeadline.Sub(now); r > 0 {
 			snap.TimerRemaining = r
 		}

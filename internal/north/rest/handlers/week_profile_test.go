@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -246,6 +247,17 @@ func TestGetWeekProfile_UniqueID(t *testing.T) {
 	}
 	if !strings.HasPrefix(tcUID, "loom_schedule_channel_switch_") {
 		t.Errorf("target unique_id must start with %q, got %q", "loom_schedule_channel_switch_", tcUID)
+	}
+	// The parameter name and the family are the model's, not this handler's.
+	// Both used to be spelled out here as literals beside the model's own
+	// construction in weekprofile.NewChannelSwitch; an id that drifts does not
+	// fail, it re-creates the entity on the consumer and strands whatever the
+	// operator attached to the old one.
+	if want := routingkey.CanonicalUniqueID(
+		idx.SerialSuffix("home"), "0001ABCD",
+		weekprofile.ChannelSwitchParameter("1_1"), weekprofile.ChannelSwitchFamily,
+	); tcUID != want {
+		t.Errorf("target unique_id = %q, want the model-derived %q", tcUID, want)
 	}
 	if !strings.Contains(tcUID, "0001abcd") {
 		t.Errorf("target unique_id must contain device address root %q, got %q", "0001abcd", tcUID)

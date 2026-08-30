@@ -2690,6 +2690,10 @@
           "wire_value": "distance"
         },
         {
+          "go_name": "QuantityDoor",
+          "wire_value": "door"
+        },
+        {
           "go_name": "QuantityDuration",
           "wire_value": "duration"
         },

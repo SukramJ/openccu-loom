@@ -234,6 +234,19 @@ type DataFetcher interface {
 	FetchInboxDevices(ctx context.Context) ([]InboxDevice, error)
 }
 
+// Translation keys of the hub's counting aggregates. They are the entity
+// identity every north plane publishes, so they live here as named constants
+// rather than as literals inside each TranslationKey method — an adapter that
+// needs the key by type reads the constant, and a rename moves both at once.
+const (
+	// AlarmMessagesKey names the alarm-message counter.
+	AlarmMessagesKey = "alarm_messages"
+	// ServiceMessagesKey names the service-message counter.
+	ServiceMessagesKey = "service_messages"
+	// InboxKey names the inbox counter.
+	InboxKey = "inbox"
+)
+
 // Hub aggregates all CCU-level entities for one central: programs,
 // system variables, messages, metrics, inbox, install-mode state,
 // connectivity sensors, and update entities. The north-bound

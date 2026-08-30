@@ -11,20 +11,24 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // energyDefaultGroup is used when the "group" query parameter is absent.
 const energyDefaultGroup = "day"
 
 // energyParameterPower/EnergyCounter/EnergyCounterFeedIn mirror
-// pkg/hmenum's parameter constants without importing hmenum here — the
-// handler package folds rows purely by the parameter string the store
-// already filtered on. POWER is an instantaneous reading; the ENERGY_*
-// counters are monotonic totals — the two are folded differently.
-const (
-	energyParameterPower               = "POWER"
-	energyParameterEnergyCounter       = "ENERGY_COUNTER"
-	energyParameterEnergyCounterFeedIn = "ENERGY_COUNTER_FEED_IN"
+// pkg/hmenum's parameter constants, which is where the names live. They used
+// to be typed out here on the grounds that the handler folds rows purely by
+// the string the store already filtered on — but the store filters on the
+// same hmenum constants, so a rename there would have left this switch
+// matching nothing while the rows still arrived. POWER is an instantaneous
+// reading; the ENERGY_* counters are monotonic totals — the two are folded
+// differently.
+var (
+	energyParameterPower               = string(hmenum.ParameterPower)
+	energyParameterEnergyCounter       = string(hmenum.ParameterEnergyCounter)
+	energyParameterEnergyCounterFeedIn = string(hmenum.ParameterEnergyCounterFeedIn)
 )
 
 // EnergyBucket is one aggregated point in a device's energy breakdown.

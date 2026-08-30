@@ -3,7 +3,10 @@
 
 package routingkey
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // loomNamespace is the constant prefix applied to every external
 // unique_id. It segregates loom entities from other integrations'
@@ -117,4 +120,57 @@ func EventGroupUniqueID(centralID, channelAddress, shortKind string) string {
 // literal.
 func CalculatedUniqueID(serialSuffix, address, parameter string) string {
 	return CanonicalUniqueID(serialSuffix, address, parameter, CalculatedFamilyPrefix)
+}
+
+// ZoneSlugStem is the fallback stem [UniqueSlug] uses for an alarm zone whose
+// name yields nothing sluggable. It sits here rather than in either caller so
+// the two cannot fall back to different stems and hand one zone two
+// identities.
+const ZoneSlugStem = "zone"
+
+// EffectiveSlug is the slug a stored row actually answers to: its stored
+// value when it has one, otherwise the slug derived from its name, otherwise
+// the fallback stem.
+//
+// A row whose stored slug is blank still resolves to something at read time,
+// so it must reserve that something when a sibling is being named — and a
+// name that slugs to nothing resolves to the stem, which therefore has to be
+// reserved too. Skipping the blank case hands a new row the identity an
+// existing one already answers to.
+func EffectiveSlug(stored, name, stem string) string {
+	if stored != "" {
+		return stored
+	}
+	if s := HubSlug(name); s != "" {
+		return s
+	}
+	return stem
+}
+
+// UniqueSlug derives a stable external identifier for name, unique against
+// taken, by appending "-2", "-3", … on collision. When the name yields nothing
+// sluggable — a zone named only with emoji — it falls back to stem, because
+// the thing still needs an identifier and its UUID is unusable in an entity
+// id, which is the reason a slug exists at all.
+//
+// The rule lives here because two packages need it and neither can import the
+// other: the REST handler assigns a slug when a zone is created, and the
+// security index re-derives the effective slug of a row whose stored slug is
+// blank. Two copies of a collision rule do not stay equal by luck — they
+// diverge on the first edge case one of them meets, and the result is two
+// zones answering to one identity.
+func UniqueSlug(name, stem string, taken map[string]bool) string {
+	base := HubSlug(name)
+	if base == "" {
+		base = stem
+	}
+	if !taken[base] {
+		return base
+	}
+	for n := 2; ; n++ {
+		candidate := base + "-" + strconv.Itoa(n)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
 }

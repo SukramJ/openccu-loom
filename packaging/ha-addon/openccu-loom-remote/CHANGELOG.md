@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.71.0
+
+Two fixes you may notice: an alarm entry countdown now reports the delay the
+engine actually armed (it was reporting the zone default, ignoring a
+per-sensor override), and a garage door no longer shows as permanently moving
+in Home Assistant, Apple Home or Google Home when the drive reports an unknown
+door state. No action required.
+
 # 0.70.0
 
 A channel now carries its device-trigger event groups inline, so clients

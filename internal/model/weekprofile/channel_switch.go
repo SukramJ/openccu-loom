@@ -35,6 +35,25 @@ type ChannelSwitch struct {
 	profile    *ProfileDataPoint
 }
 
+// ChannelSwitchParameter returns the parameter name a channel switch is keyed
+// on: the SCHEDULE_CHANNEL_LOCK_ family plus the channel key.
+//
+// It is the entity's identity, so it has one definition. A north plane that
+// spells it out again publishes an id that agrees today and drifts on the
+// first rename — and an id that drifts re-creates the entity on the consumer,
+// losing whatever the operator attached to the old one.
+func ChannelSwitchParameter(channelKey string) string {
+	return channelSwitchPrefix + channelKey
+}
+
+// ChannelSwitchFamily is the routing-key family a channel-switch entity is
+// published under. Named beside the parameter for the same reason.
+const ChannelSwitchFamily = "schedule_channel_switch"
+
+// channelSwitchPrefix is the CCU parameter-name family of a per-channel
+// schedule lock.
+const channelSwitchPrefix = "SCHEDULE_CHANNEL_LOCK_"
+
 // NewChannelSwitch constructs a ChannelSwitch for the given device address
 // and channel key. The channelKey must match one of the keys registered on
 // profile via [ProfileDataPoint.RegisterChannel].
@@ -43,7 +62,7 @@ type ChannelSwitch struct {
 //
 //	<central>:<deviceAddress>:SCHEDULE_CHANNEL_LOCK_<channelKey>
 func NewChannelSwitch(centralName, deviceAddress, channelKey string, profile *ProfileDataPoint) *ChannelSwitch {
-	keyName := "SCHEDULE_CHANNEL_LOCK_" + channelKey
+	keyName := ChannelSwitchParameter(channelKey)
 	cs := &ChannelSwitch{
 		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, deviceAddress, keyName),
 		channelKey:          channelKey,

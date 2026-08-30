@@ -808,7 +808,7 @@ func (a *AlarmMessages) LatestTimestamp() time.Time {
 
 // TranslationKey returns the HA translation key used to localise the
 // alarm-messages sensor entity.
-func (a *AlarmMessages) TranslationKey() string { return "alarm_messages" }
+func (a *AlarmMessages) TranslationKey() string { return AlarmMessagesKey }
 
 // DataType returns the CCU data type for the alarm-messages aggregate.
 func (a *AlarmMessages) DataType() string { return "INTEGER" }
@@ -852,7 +852,7 @@ func (s *ServiceMessages) AdditionalInformation() []map[string]any {
 
 // TranslationKey returns the HA translation key used to localise the
 // service-messages sensor entity.
-func (s *ServiceMessages) TranslationKey() string { return "service_messages" }
+func (s *ServiceMessages) TranslationKey() string { return ServiceMessagesKey }
 
 // AdditionalInformation returns a slice of maps, one per active alarm
 // message, each containing the alarm's key fields. The map view is the

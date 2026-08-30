@@ -105,8 +105,13 @@ func TestLookupBinarySensorRuleWindowContacts(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s/STATE: not found", model)
 		}
-		if d.DeviceClass != "window" {
-			t.Fatalf("%s/STATE: device_class=%q want window", model, d.DeviceClass)
+		_ = d
+		// The device_class is the domain's answer now, not the rule's — the
+		// rule carries only what this plane knows on its own. Asserted
+		// through the resolver the discovery payload actually calls, so a
+		// model that stops classifying these fails here.
+		if got := resolveBinarySensorDeviceClass(model, "STATE"); got != "window" {
+			t.Fatalf("%s/STATE: device_class=%q want window", model, got)
 		}
 	}
 	// The prefix walk requires a "-" separator, so the variants resolve

@@ -6,6 +6,52 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.71.0] - 2026-08-30
+
+### Fixed
+
+- **Eleven adapters answered domain questions for themselves.** A second audit
+  pass, partitioned by file so every one of the 370 north-adapter files
+  belonged to exactly one reader, found eleven places where a north plane
+  re-derived a fact the domain owns. Two of them were not merely duplicates
+  but wrong answers:
+
+  - The alarm countdown's total was read back from the zone's mode
+    configuration, which is the zone default. The engine arms the per-sensor
+    entry delay, so a zone configured for 30 s with a sensor overriding to
+    90 s reported a total of 30 while counting down from 90 — a progress bar
+    drawn from the pair runs at the wrong rate. The engine already tracked the
+    armed length; the snapshot now carries it.
+  - A garage drive reported as MOVING to Apple and Google Home whenever its
+    door state was UNKNOWN, because the Matter cluster inferred motion from a
+    null position. Null means *unknown position*, which the spec states
+    directly; motion is a separate attribute and DOOR_STATE carries no
+    travelling value at all. The model has always known motion from SECTION —
+    but SECTION never reached the projection, and the seam that would have
+    delivered it had no caller. Both halves are wired and pinned now.
+
+  A third surfaced while writing a guard rather than from the audit: a zone
+  named only with emoji slugs to nothing and falls back to the stem "zone",
+  and the creation path reserved a row's slug only when the derivation was
+  non-empty. A second unsluggable zone was therefore handed the identity the
+  first already answered to.
+
+  The remaining eight are duplicated vocabulary and classification —
+  the security severity ladder, the hub aggregate keys, the energy parameter
+  names, the alarm remote-binding sets, the zone-slug collision rule, the
+  week-profile channel-switch identity, the binary-sensor device classes and
+  the program-runnable rule. Every one has a guard, and every guard was taken
+  through a bite proof that stages the regression rather than mutating the
+  shared source.
+
+  Two look-alikes were measured and deliberately left apart: the by-parameter
+  binary-sensor table (never measured against the domain, so removing its
+  classes would have been a guess) and the MQTT channel-name builder, which
+  agrees with the model's rule at real channels and is now held to it by a
+  parity guard rather than folded in blind.
+
+  API version 7.27.0: hmenum gains QuantityDoor, which is additive.
+
 ## [0.70.0] - 2026-08-30
 
 ### Added

@@ -129,8 +129,12 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 					ChannelAddress: info.ChannelAddress,
 					Name:           info.Name,
 					ChannelType:    info.ChannelType,
+					// Parameter name and family are the model's — this plane
+					// publishes the entity, it does not name it.
 					UniqueID: routingkey.CanonicalUniqueID(
-						serial, deviceAddr, "SCHEDULE_CHANNEL_LOCK_"+key, "schedule_channel_switch",
+						serial, deviceAddr,
+						weekprofile.ChannelSwitchParameter(key),
+						weekprofile.ChannelSwitchFamily,
 					),
 				}
 			}

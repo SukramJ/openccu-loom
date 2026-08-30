@@ -6,7 +6,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -518,33 +517,16 @@ func apiOutput(row sqlitestore.AlarmOutputRow) hmapi.AlarmOutput {
 // a zone named only with emoji still needs an identifier, and the UUID
 // is unusable in an entity id, which is the reason the slug exists.
 func uniqueZoneSlug(name string, existing []sqlitestore.AlarmZoneRow) string {
-	base := routingkey.HubSlug(name)
-	if base == "" {
-		base = "zone"
-	}
 	taken := make(map[string]bool, len(existing))
 	for i := range existing {
 		// A blank stored slug (pre-migration rows the charset migration
 		// reset, or a row that has never been read through the security
-		// domain's refreshZoneSlugs) still resolves to an effective slug
-		// at read time — routingkey.HubSlug(name) — so it must reserve
-		// that slug here too, or a new zone can be handed the identity an
-		// existing one already answers to.
-		slug := existing[i].Slug
-		if slug == "" {
-			slug = routingkey.HubSlug(existing[i].Name)
-		}
-		if slug != "" {
-			taken[slug] = true
-		}
+		// domain's refreshZoneSlugs) still resolves to an effective slug at
+		// read time, so it must reserve that slug here too — including the
+		// stem, for a name that slugs to nothing. Reserving only the
+		// non-blank derivations left the stem free and handed a new zone the
+		// identity an emoji-named one already answered to.
+		taken[routingkey.EffectiveSlug(existing[i].Slug, existing[i].Name, routingkey.ZoneSlugStem)] = true
 	}
-	if !taken[base] {
-		return base
-	}
-	for n := 2; ; n++ {
-		candidate := base + "-" + strconv.Itoa(n)
-		if !taken[candidate] {
-			return candidate
-		}
-	}
+	return routingkey.UniqueSlug(name, routingkey.ZoneSlugStem, taken)
 }

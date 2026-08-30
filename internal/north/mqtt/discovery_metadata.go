@@ -36,6 +36,7 @@ var quantityToSensorDeviceClass = map[hmenum.Quantity]string{
 
 var quantityToBinarySensorDeviceClass = map[hmenum.Quantity]string{
 	hmenum.QuantityBattery:   "battery",
+	hmenum.QuantityDoor:      "door",
 	hmenum.QuantityHeat:      "heat",
 	hmenum.QuantityMoisture:  "moisture",
 	hmenum.QuantityMotion:    "motion",

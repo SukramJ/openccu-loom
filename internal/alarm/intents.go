@@ -6,6 +6,7 @@ package alarm
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -144,10 +145,43 @@ func (r *intentRouter) onEvent(ctx context.Context, centralName string, e hmeven
 		r.handleKeypadPress(ctx, centralName, e, true)
 	case hmenum.ParameterPressUnlock:
 		r.handleKeypadPress(ctx, centralName, e, false)
-	case hmenum.ParameterPressShort, hmenum.ParameterPressLong:
-		r.handleRemotePress(ctx, centralName, e)
 	default:
-		// Not an intent-carrying parameter.
+		if IsRemotePressParameter(hmenum.Parameter(e.Key.Parameter)) {
+			r.handleRemotePress(ctx, centralName, e)
+		}
+		// Otherwise: not an intent-carrying parameter.
+	}
+}
+
+// RemotePressParameters returns the press parameters a remote binding can
+// fire on — the exact set [intentRouter.onEvent] routes to handleRemotePress.
+//
+// Exported because a binding is validated on write, far from here: a binding
+// stored against a parameter this router never routes is accepted by the wire
+// schema and then never fires, which is indistinguishable from a broken
+// remote. The write path rejects it instead, and reads this set to know what
+// to reject.
+func RemotePressParameters() []hmenum.Parameter {
+	return []hmenum.Parameter{hmenum.ParameterPressShort, hmenum.ParameterPressLong}
+}
+
+// IsRemotePressParameter reports whether p is one of [RemotePressParameters].
+func IsRemotePressParameter(p hmenum.Parameter) bool {
+	return slices.Contains(RemotePressParameters(), p)
+}
+
+// IsDispatchableRemoteAction reports whether [intentRouter.dispatchRemoteAction]
+// has a branch for action: the fixed verbs, or an "arm:<mode>" prefix (a bare
+// "arm:" is valid — dispatchArm defaults an empty mode to full protection).
+//
+// Same reason as [RemotePressParameters]: a verb the dispatcher does not know
+// is stored inert rather than refused, so the write path asks here.
+func IsDispatchableRemoteAction(action string) bool {
+	switch action {
+	case remoteActionDisarm, remoteActionSilence, remoteActionPanic:
+		return true
+	default:
+		return strings.HasPrefix(action, remoteActionArmPrefix)
 	}
 }
 
@@ -263,22 +297,33 @@ func (r *intentRouter) handleRemotePress(ctx context.Context, centralName string
 
 // dispatchRemoteAction executes the verb encoded in a remote binding's
 // action ("arm:<mode>" | "disarm" | "silence" | "panic").
+// The verbs a remote binding's action may carry. Named here because both the
+// dispatcher below and the write-time validation in the REST handler must
+// agree on them; a verb known to one and not the other is stored and never
+// fires.
+const (
+	remoteActionArmPrefix = "arm:"
+	remoteActionDisarm    = "disarm"
+	remoteActionSilence   = "silence"
+	remoteActionPanic     = "panic"
+)
+
 func (r *intentRouter) dispatchRemoteAction(ctx context.Context, row *CodeRow) {
 	action := row.Binding.Action
 	switch {
-	case strings.HasPrefix(action, "arm:"):
+	case strings.HasPrefix(action, remoteActionArmPrefix):
 		if !row.Perms.Arm {
 			r.journalPermissionDenied(ctx, row, "remote", "arm")
 			return
 		}
 		r.dispatchArm(ctx, row, strings.TrimPrefix(action, "arm:"), "remote")
-	case action == "disarm":
+	case action == remoteActionDisarm:
 		if !row.Perms.Disarm {
 			r.journalPermissionDenied(ctx, row, "remote", "disarm")
 			return
 		}
 		r.dispatchDisarm(ctx, row, "remote")
-	case action == "silence":
+	case action == remoteActionSilence:
 		if !row.Perms.Silence {
 			r.journalPermissionDenied(ctx, row, "remote", "silence")
 			return
@@ -286,7 +331,7 @@ func (r *intentRouter) dispatchRemoteAction(ctx context.Context, row *CodeRow) {
 		if err := r.svc.engine.Silence(ctx, row.Binding.ZoneID, row.Name, "remote"); err != nil {
 			r.journalActionFault(ctx, row, "remote", "silence", err)
 		}
-	case action == "panic":
+	case action == remoteActionPanic:
 		r.dispatchPanic(ctx, row)
 	default:
 		r.journalActionFault(ctx, row, "remote", action, errUnknownAction)
