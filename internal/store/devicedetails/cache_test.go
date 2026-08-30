@@ -165,19 +165,3 @@ func TestAddChannelRoomEmptyIsNoop(t *testing.T) {
 		t.Errorf("expected 0 rooms after empty add, got %v", rooms)
 	}
 }
-
-func TestDeviceAddressFromChannel(t *testing.T) {
-	t.Parallel()
-	// With colon: strip suffix.
-	if got := deviceAddressFromChannel("VCU1234567:1"); got != "VCU1234567" {
-		t.Errorf("with colon: got %q, want VCU1234567", got)
-	}
-	// Without colon: return unchanged (device-level address).
-	if got := deviceAddressFromChannel("VCU1234567"); got != "VCU1234567" {
-		t.Errorf("without colon: got %q, want VCU1234567", got)
-	}
-	// Empty string: return empty.
-	if got := deviceAddressFromChannel(""); got != "" {
-		t.Errorf("empty: got %q, want empty", got)
-	}
-}

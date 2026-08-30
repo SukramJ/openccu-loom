@@ -7,11 +7,11 @@ import (
 	"context"
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // energyDefaultGroup is used when the "group" query parameter is absent.
@@ -204,16 +204,6 @@ type EnergyRawRow struct {
 // caller falls back to the bare address as the name).
 type DeviceNamer func(address string) (name string, ok bool)
 
-// deviceAddressOf returns the device address prefix of a channel
-// address ("ABC0000001:4" -> "ABC0000001"; a bare device address without
-// a channel suffix is returned unchanged).
-func deviceAddressOf(channelAddress string) string {
-	if i := strings.IndexByte(channelAddress, ':'); i >= 0 {
-		return channelAddress[:i]
-	}
-	return channelAddress
-}
-
 // counterReading is one bucket's (first, last, max) triple for a single
 // cumulative counter series (one channel, one parameter), tagged with the
 // bucket start so the readings can be ordered before the range total is
@@ -272,7 +262,7 @@ func FoldEnergyRows(q EnergyQuery, rows []EnergyRawRow, nameOf DeviceNamer) Ener
 
 	for i := range rows {
 		row := &rows[i]
-		dev := deviceAddressOf(row.ChannelAddress)
+		dev := hmtypes.DeviceAddress(row.ChannelAddress)
 		deviceOf[dev] = struct{}{}
 		key := bucketKey{device: dev, ts: row.BucketTS.UnixMilli()}
 		b, ok := buckets[key]

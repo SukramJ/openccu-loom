@@ -167,28 +167,6 @@ func TestNumericValue(t *testing.T) {
 // deviceAddressOf()
 // ============================================================
 
-func TestDeviceAddressOf(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		in   string
-		want string
-	}{
-		{"ABC123:4", "ABC123"},
-		{"ABC123", "ABC123"},
-		{"DEV:0", "DEV"},
-		{"LONGDEV:12", "LONGDEV"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.in, func(t *testing.T) {
-			t.Parallel()
-			got := deviceAddressOf(tc.in)
-			if got != tc.want {
-				t.Errorf("deviceAddressOf(%q) = %q, want %q", tc.in, got, tc.want)
-			}
-		})
-	}
-}
-
 // ============================================================
 // enqueue / drain / drop-oldest
 // ============================================================

@@ -19,6 +19,7 @@ import (
 	paramcoerce "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // deviceSummary is the per-device projection shared by the device tools.
@@ -138,14 +139,6 @@ type getHealthOut struct {
 // parseParamsetKey accepts the two operator-facing paramset keys. LINK
 // is intentionally excluded — it needs a peer address and a different
 // tool shape.
-// deviceAddressOf strips a channel suffix (`ADDR:n` → `ADDR`): write
-// tools target channels while device ownership is tracked per device.
-func deviceAddressOf(address string) string {
-	if i := strings.IndexByte(address, ':'); i > 0 {
-		return address[:i]
-	}
-	return address
-}
 
 // resolveDataPoint resolves the VALUES data point for a channel address +
 // parameter through the device model, returning nil when the model does
@@ -157,7 +150,7 @@ func resolveDataPoint(devices DeviceLister, channelAddress, parameterName string
 	if devices == nil {
 		return nil
 	}
-	dev, ok := devices.Device(deviceAddressOf(channelAddress))
+	dev, ok := devices.Device(hmtypes.DeviceAddress(channelAddress))
 	if !ok || dev == nil {
 		return nil
 	}
@@ -576,7 +569,7 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 		// authoritative, never an implicit fallback). Ownership is
 		// tracked per device, so the channel suffix must be stripped
 		// before the lookup — writes always target channels.
-		if owner := d.Devices.CentralOf(deviceAddressOf(address)); owner != central {
+		if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(address)); owner != central {
 			return nil, setDatapointOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
 		}
 		// Coerce the JSON value against the parameter descriptor before it
@@ -630,7 +623,7 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		if !ok {
 			return nil, writeParamsetOut{}, fmt.Errorf("key must be MASTER or VALUES, got %q", in.Key)
 		}
-		if owner := d.Devices.CentralOf(deviceAddressOf(address)); owner != central {
+		if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(address)); owner != central {
 			return nil, writeParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
 		}
 		// Strict edit-lock enforcement for configuration paramsets, mirroring

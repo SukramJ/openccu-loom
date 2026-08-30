@@ -46,7 +46,7 @@ func (s *Service) rebuildIndexes(ctx context.Context) error {
 			channelAddress: row.ChannelAddress,
 			parameter:      row.Parameter,
 		}
-		dev := devKey(row.CentralName, deviceAddress(row.ChannelAddress))
+		dev := devKey(row.CentralName, hmtypes.DeviceAddress(row.ChannelAddress))
 		devIndex[dev] = append(devIndex[dev], row.ID)
 	}
 	s.mu.Lock()
@@ -121,7 +121,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	ctx := context.Background()
 	s.mu.Lock()
 	binding, isSensorDP := s.dpIndex[dpKey(centralName, e.Key.InterfaceID, e.Key.ChannelAddress, e.Key.Parameter)]
-	devSensors := append([]string(nil), s.devIndex[devKey(centralName, deviceAddress(e.Key.ChannelAddress))]...)
+	devSensors := append([]string(nil), s.devIndex[devKey(centralName, hmtypes.DeviceAddress(e.Key.ChannelAddress))]...)
 	s.mu.Unlock()
 
 	// Keypad/remote intent routing sees every data point unconditionally:
@@ -264,18 +264,18 @@ func (s *Service) journalDeviceBlocked(ctx context.Context, centralName string, 
 		Source: "keypad",
 		Details: map[string]any{
 			"central":   centralName,
-			"device":    deviceAddress(key.ChannelAddress),
+			"device":    hmtypes.DeviceAddress(key.ChannelAddress),
 			"parameter": key.Parameter,
 		},
 	}); err != nil {
-		s.log.Error("alarm keypad-blocked journal append failed", "device", deviceAddress(key.ChannelAddress), "error", err)
+		s.log.Error("alarm keypad-blocked journal append failed", "device", hmtypes.DeviceAddress(key.ChannelAddress), "error", err)
 	}
 }
 
 // updateDeviceHealth merges one health flag into the cached per-device
 // state and pushes the full flag set to every sensor of the device.
 func (s *Service) updateDeviceHealth(ctx context.Context, centralName string, key hmtypes.DataPointKey, sensorIDs []string, apply func(*engine.SensorHealth)) {
-	dev := devKey(centralName, deviceAddress(key.ChannelAddress))
+	dev := devKey(centralName, hmtypes.DeviceAddress(key.ChannelAddress))
 	s.mu.Lock()
 	h := s.devHealth[dev]
 	apply(&h)
@@ -415,14 +415,6 @@ func splitDevKey(key string) (centralName, deviceAddr string, ok bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
-}
-
-// deviceAddress strips the channel suffix of a channel address.
-func deviceAddress(channelAddress string) string {
-	if i := strings.IndexByte(channelAddress, ':'); i >= 0 {
-		return channelAddress[:i]
-	}
-	return channelAddress
 }
 
 // paramValueActive normalizes a wire value onto binary activation

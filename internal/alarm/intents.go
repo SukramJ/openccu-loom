@@ -191,7 +191,7 @@ func (r *intentRouter) trackCodeID(centralName string, e hmevent.DataPointValueC
 	if !ok {
 		return
 	}
-	key := devKey(centralName, deviceAddress(e.Key.ChannelAddress))
+	key := devKey(centralName, hmtypes.DeviceAddress(e.Key.ChannelAddress))
 	r.mu.Lock()
 	c := r.wkp[key]
 	if c == nil {
@@ -205,7 +205,7 @@ func (r *intentRouter) trackCodeID(centralName string, e hmevent.DataPointValueC
 
 // trackCodeState records whether the last scan was a recognised code.
 func (r *intentRouter) trackCodeState(centralName string, e hmevent.DataPointValueChangedEvent) {
-	key := devKey(centralName, deviceAddress(e.Key.ChannelAddress))
+	key := devKey(centralName, hmtypes.DeviceAddress(e.Key.ChannelAddress))
 	r.mu.Lock()
 	c := r.wkp[key]
 	if c == nil {
@@ -226,7 +226,7 @@ func (r *intentRouter) handleKeypadPress(ctx context.Context, centralName string
 	if !ok {
 		return
 	}
-	dev := deviceAddress(e.Key.ChannelAddress)
+	dev := hmtypes.DeviceAddress(e.Key.ChannelAddress)
 
 	r.mu.Lock()
 	c := r.wkp[devKey(centralName, dev)]

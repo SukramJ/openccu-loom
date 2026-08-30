@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Cache holds the runtime device-detail metadata for one Unit.
@@ -105,7 +106,7 @@ func (c *Cache) AddChannelRoom(channelAddress, room string) {
 	// Maintain the device-rooms aggregate. Mirrors
 	// `_prepare_device_rooms` (`details.py:178-198`): a device is in
 	// every room any of its channels is in.
-	deviceAddr := deviceAddressFromChannel(channelAddress)
+	deviceAddr := hmtypes.DeviceAddress(channelAddress)
 	if deviceAddr != "" {
 		dset, ok := c.deviceRooms[deviceAddr]
 		if !ok {
@@ -311,16 +312,6 @@ func (c *Cache) IsEmpty() bool {
 		len(c.channelRooms) == 0 &&
 		len(c.deviceRooms) == 0 &&
 		len(c.functions) == 0
-}
-
-// deviceAddressFromChannel extracts "VCU…" from "VCU…:N". Returns the
-// input unchanged when no colon is present (the address is already
-// device-level).
-func deviceAddressFromChannel(addr string) string {
-	if i := strings.IndexByte(addr, ':'); i > 0 {
-		return addr[:i]
-	}
-	return addr
 }
 
 // sortedSet returns a stable-ordered copy of the string set. Empty or
