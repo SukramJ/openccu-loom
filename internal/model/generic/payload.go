@@ -139,6 +139,20 @@ func (d *DataPoint[T]) Config() payload.ConfigPayload {
 	return cfg
 }
 
+// ReadingAvailable reports whether a reading may be published as available.
+//
+// A reading is available only when it has been refreshed AND passes the
+// north-bound validity gate — its paired STATUS is acceptable, its value type
+// matches, and it is within range. The value itself is still carried
+// alongside, so a consumer that ignores availability can read it.
+//
+// Named here because every north plane answers the same question and a plane
+// that restates it drifts on the day validity grows a condition: the value
+// keeps flowing while one consumer greys the entity out and another does not.
+func ReadingAvailable(observed, valid bool) bool {
+	return observed && valid
+}
+
 // State returns the live state of the data point: current
 // value, observation flag, last-modified / last-refreshed timestamps,
 // and the paired parameter status when available. Callers that
@@ -156,12 +170,7 @@ func (d *DataPoint[T]) State() payload.StatePayload {
 	}
 	v, observed := d.Value()
 	st := &payload.GenericDataPointState{
-		// Mirror the reference is_valid north-bound gate
-		// (model/data_point.py is_valid): a reading is available only when it
-		// has been refreshed, its paired STATUS is acceptable, its value type
-		// matches, and it is within range. The value itself is still carried
-		// below so a consumer that ignores availability can read it.
-		Available: observed && d.IsValid(),
+		Available: ReadingAvailable(observed, d.IsValid()),
 	}
 	if observed {
 		st.Value = v

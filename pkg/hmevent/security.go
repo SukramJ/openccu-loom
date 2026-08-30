@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SecuritySourceRef identifies one data point that contributed to a
@@ -71,17 +72,35 @@ func NewSecuritySourceRef(central, interfaceID, channelAddress, parameter string
 // SecurityRefKey builds the routing key of a data point. The format is
 // shared with the alarm input index; changing it in one place without
 // the other silently breaks source deduplication.
+// securityRefSeparator joins the four segments of a security source key.
+const securityRefSeparator = "|"
+
 func SecurityRefKey(central, interfaceID, channelAddress, parameter string) string {
-	return central + "|" + interfaceID + "|" + channelAddress + "|" + parameter
+	return central + securityRefSeparator + interfaceID + securityRefSeparator + channelAddress + securityRefSeparator + parameter
 }
 
-// SecurityDeviceAddress strips the channel suffix from a channel
-// address. An address without a suffix is returned unchanged.
-func SecurityDeviceAddress(channelAddress string) string {
-	if i := strings.IndexByte(channelAddress, ':'); i >= 0 {
-		return channelAddress[:i]
+// ParseSecurityRefKey splits a key produced by [SecurityRefKey] back into its
+// four parts. ok is false when the key does not carry exactly four segments.
+//
+// The inverse belongs beside the builder: a consumer that splits the key
+// itself hard-codes both the separator and the field order, and neither is
+// visible from the key it is handed. The REST override endpoint did exactly
+// that, so a fifth segment added here would have been silently truncated into
+// the fourth.
+func ParseSecurityRefKey(ref string) (central, interfaceID, channelAddress, parameter string, ok bool) {
+	parts := strings.Split(ref, securityRefSeparator)
+	if len(parts) != 4 {
+		return "", "", "", "", false
 	}
-	return channelAddress
+	return parts[0], parts[1], parts[2], parts[3], true
+}
+
+// SecurityDeviceAddress strips the channel suffix from a channel address.
+//
+// It is [hmtypes.DeviceAddress] under a name this package's callers already
+// use; the parse itself is the domain's address grammar and lives there.
+func SecurityDeviceAddress(channelAddress string) string {
+	return hmtypes.DeviceAddress(channelAddress)
 }
 
 // Empty reports whether the reference carries no identity at all.

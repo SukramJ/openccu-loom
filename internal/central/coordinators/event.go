@@ -536,6 +536,9 @@ func isFalseBool(v hmtypes.ParamValue) bool {
 // to every channel of the device, so callers operate on the device
 // address (everything before the first colon).
 func splitDeviceAddress(channelAddress string) string {
-	addr, _ := splitChannelAddress(channelAddress)
-	return addr
+	// The address half is the domain's rule; only the CHANNEL half differs
+	// here (splitChannelAddress yields 0 rather than -1 for a channel-less
+	// address, matching how the CCU addresses device-level parameters), which
+	// is why that one stays local and this one does not.
+	return hmtypes.DeviceAddress(channelAddress)
 }
