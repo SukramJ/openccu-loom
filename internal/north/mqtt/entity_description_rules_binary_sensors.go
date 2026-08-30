@@ -12,11 +12,21 @@ package mqtt
 // numberDescriptionsByDeviceAndParam: exact hit first, then
 // hasModelPrefix walk. SuggestedDisplayPrecision is -1 for all
 // binary-sensor entries (no decimal rendering).
+// The device_class of these rules is deliberately absent: it is the domain's
+// answer, resolved from parameter.BinarySensorQuantityFor and translated by
+// quantityToBinarySensorDeviceClass. This table used to carry it too and,
+// being applied second, overwrote the domain's — so a correction in
+// internal/parameter reached REST, WS and Matter while MQTT kept publishing
+// the stale class for every model named here.
+//
+// What stays is what only this plane knows: which entity key to use, whether
+// HA enables it by default, and the display precision. The by-parameter table
+// below still carries its own device classes; those were not measured against
+// the domain and are left alone.
 var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HmIP-DLP — door sensor (magnetic contact), STATE → door
 	{"HmIP-DLP", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "door",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -24,7 +34,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HmIP-DSD-PCB — occupancy detector, STATE → occupancy
 	{"HmIP-DSD-PCB", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "occupancy",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -32,7 +41,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HmIP-SCI — contact sensor, STATE → opening
 	{"HmIP-SCI", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "opening",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -40,7 +48,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HmIP-FCI1 — multi-channel contact input, STATE → opening
 	{"HmIP-FCI1", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "opening",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -48,7 +55,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HmIP-FCI6 — 6-channel contact input, STATE → opening
 	{"HmIP-FCI6", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "opening",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -56,7 +62,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HM-Sec-SD — smoke detector, STATE → smoke
 	{"HM-Sec-SD", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "smoke",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -68,25 +73,21 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// Divergence from the ported table, see notes/parity/by_design.md.
 	{"HmIP-SWDO", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "window",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
 	{"HmIP-SWDM", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "window",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
 	{"HM-Sec-SC", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "window",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
 	{"HM-SCI-3-FM", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "window",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -94,7 +95,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// contain spaces.
 	{"ZEL STG RM FFK", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "window",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -102,7 +102,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HM-Sen-RD-O — rain detector, STATE → moisture
 	{"HM-Sen-RD-O", "STATE"}: {
 		Key:                       "STATE",
-		DeviceClass:               "moisture",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -110,7 +109,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HM-Sec-Win — working/motion flag; disabled by default (diagnostic)
 	{"HM-Sec-Win", "WORKING"}: {
 		Key:                       "WORKING",
-		DeviceClass:               "running",
 		EnabledByDefault:          false,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -118,7 +116,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HmIP-SRH — rotary handle, WINDOW_OPEN → window
 	{"HmIP-SRH", "WINDOW_OPEN"}: {
 		Key:                       "WINDOW_OPEN",
-		DeviceClass:               "window",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -126,7 +123,6 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// HM-Sec-RHS — rotary handle, WINDOW_OPEN → window
 	{"HM-Sec-RHS", "WINDOW_OPEN"}: {
 		Key:                       "WINDOW_OPEN",
-		DeviceClass:               "window",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
@@ -135,14 +131,12 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 	// SMOKE_ALARM → smoke
 	{"HmIP-SWSD", "SMOKE_ALARM"}: {
 		Key:                       "SMOKE_ALARM",
-		DeviceClass:               "smoke",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
 	// INTRUSION_ALARM → safety
 	{"HmIP-SWSD", "INTRUSION_ALARM"}: {
 		Key:                       "INTRUSION_ALARM",
-		DeviceClass:               "safety",
 		EnabledByDefault:          true,
 		SuggestedDisplayPrecision: -1,
 	},
