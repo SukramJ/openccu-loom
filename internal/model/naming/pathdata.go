@@ -189,6 +189,43 @@ func (p PathData) MQTTChannelAggregateState(base, centralName string) string {
 	)
 }
 
+// MQTTChannelImpulse returns the per-channel impulse-event topic
+// `<base>/<central>/<iface>/<addr>/<ch>/impulse`. Non-retained; carries
+// the same JSON envelope as [PathData.MQTTChannelEvent].
+//
+// A sibling leaf rather than `…/event/impulse`: the event topic is
+// already a leaf, and nesting under it would make every `…/event`
+// subscriber receive impulses too.
+func (p PathData) MQTTChannelImpulse(base, centralName string) string {
+	return p.channelEventLeaf(base, centralName, "impulse")
+}
+
+// MQTTChannelDeviceError returns the per-channel device-error topic
+// `<base>/<central>/<iface>/<addr>/<ch>/device_error`. Non-retained;
+// same envelope and the same sibling-leaf reasoning as
+// [PathData.MQTTChannelImpulse].
+func (p PathData) MQTTChannelDeviceError(base, centralName string) string {
+	return p.channelEventLeaf(base, centralName, "device_error")
+}
+
+// channelEventLeaf builds one of the per-channel event leaves. The
+// keypress leaf keeps its established `event` name — renaming it would
+// move an identity Home Assistant has already stored.
+func (p PathData) channelEventLeaf(base, centralName, leaf string) string {
+	if p.Address == "" {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%s/%s/%s/%s/%d/%s",
+		strings.Trim(base, "/"),
+		TopicSafe(centralName),
+		TopicSafe(string(p.Interface)),
+		TopicSafe(p.Address),
+		p.ChannelNo,
+		leaf,
+	)
+}
+
 // MQTTChannelEvent returns the per-channel event-aggregate topic
 // `<base>/<central>/<iface>/<addr>/<ch>/event`. Non-retained;
 // carries the multi-press JSON `{"event_type": ...}` payload.
