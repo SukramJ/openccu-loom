@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SecuritySourceRef identifies one data point that contributed to a
@@ -68,20 +69,66 @@ func NewSecuritySourceRef(central, interfaceID, channelAddress, parameter string
 	}
 }
 
-// SecurityRefKey builds the routing key of a data point. The format is
-// shared with the alarm input index; changing it in one place without
-// the other silently breaks source deduplication.
-func SecurityRefKey(central, interfaceID, channelAddress, parameter string) string {
-	return central + "|" + interfaceID + "|" + channelAddress + "|" + parameter
+// DisplayName is the label a consumer shows for this source: its resolved
+// name, or its channel address when the name has not been resolved yet. Empty
+// when neither is known, which means the ref names nothing displayable.
+func (r SecuritySourceRef) DisplayName() string {
+	if r.Name != "" {
+		return r.Name
+	}
+	return r.ChannelAddress
 }
 
-// SecurityDeviceAddress strips the channel suffix from a channel
-// address. An address without a suffix is returned unchanged.
-func SecurityDeviceAddress(channelAddress string) string {
-	if i := strings.IndexByte(channelAddress, ':'); i >= 0 {
-		return channelAddress[:i]
+// SourceDisplayNames maps refs onto their display names, dropping the ones
+// that name nothing.
+//
+// The rule lives with the type because every surface that lists sources needs
+// it — the security renderer in the domain and the MQTT reconciler both had
+// byte-identical copies, and a copy of a display rule diverges silently: one
+// plane starts showing addresses where another shows names.
+func SourceDisplayNames(refs []SecuritySourceRef) []string {
+	out := make([]string, 0, len(refs))
+	for i := range refs {
+		if n := refs[i].DisplayName(); n != "" {
+			out = append(out, n)
+		}
 	}
-	return channelAddress
+	return out
+}
+
+// securityRefSeparator joins the four segments of a security source key.
+const securityRefSeparator = "|"
+
+// SecurityRefKey builds the routing key of a data point. The format is
+// shared with the alarm input index; changing it in one place without
+// the other silently breaks source deduplication. [ParseSecurityRefKey] is
+// its inverse, so a consumer never has to know the separator.
+func SecurityRefKey(central, interfaceID, channelAddress, parameter string) string {
+	return central + securityRefSeparator + interfaceID + securityRefSeparator + channelAddress + securityRefSeparator + parameter
+}
+
+// ParseSecurityRefKey splits a key produced by [SecurityRefKey] back into its
+// four parts. ok is false when the key does not carry exactly four segments.
+//
+// The inverse belongs beside the builder: a consumer that splits the key
+// itself hard-codes both the separator and the field order, and neither is
+// visible from the key it is handed. The REST override endpoint did exactly
+// that, so a fifth segment added here would have been silently truncated into
+// the fourth.
+func ParseSecurityRefKey(ref string) (central, interfaceID, channelAddress, parameter string, ok bool) {
+	parts := strings.Split(ref, securityRefSeparator)
+	if len(parts) != 4 {
+		return "", "", "", "", false
+	}
+	return parts[0], parts[1], parts[2], parts[3], true
+}
+
+// SecurityDeviceAddress strips the channel suffix from a channel address.
+//
+// It is [hmtypes.DeviceAddress] under a name this package's callers already
+// use; the parse itself is the domain's address grammar and lives there.
+func SecurityDeviceAddress(channelAddress string) string {
+	return hmtypes.DeviceAddress(channelAddress)
 }
 
 // Empty reports whether the reference carries no identity at all.

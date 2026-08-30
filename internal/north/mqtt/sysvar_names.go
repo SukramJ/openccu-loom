@@ -3,7 +3,7 @@
 
 package mqtt
 
-import "strings"
+import "github.com/SukramJ/openccu-loom/internal/model/hub"
 
 // autoSysvarClass describes the friendly presentation of a CCU-auto-generated
 // system variable whose raw name is a machine token
@@ -15,53 +15,55 @@ import "strings"
 // entity-description rules for the svEnergyCounter / svHmIPRainCounter /
 // svHmIPSunshineCounter system variables.
 type autoSysvarClass struct {
-	// contains is the substring of the sysvar name that identifies the class
-	// (matches the reference's `var_name_contains`).
-	contains string
 	// translationKey is the i18n catalogue key of the friendly name. It drives
 	// both the HA display name and — for a freshly discovered entity — the
 	// entity_id slug.
 	translationKey string
 	// deviceClass is the HA `device_class` ("" = omit).
 	deviceClass string
-	// unit is the HA `unit_of_measurement` ("" = omit).
-	unit string
-	// stateClass is the HA `state_class`. These are cumulative counters, so it
-	// is `total_increasing` (long-term statistics), NOT `measurement`.
+	// stateClass is the HA `state_class`. The domain reports these counters as
+	// cumulative, which renders as `total_increasing` (long-term statistics)
+	// rather than `measurement`.
 	stateClass string
+	// unit is the HA `unit_of_measurement`, carried over from the domain's
+	// class ("" = omit).
+	unit string
 }
 
-// autoSysvarClasses is the classification table, most-specific first purely for
-// readability — matching is by LONGEST matching `contains` (see
-// [classifyAutoSysvar]), so order does not affect correctness. Longest-match is
-// required because the base tokens are substrings of the specific ones
-// (`svEnergyCounter` ⊂ `svEnergyCounterFeedIn`; `svHmIPRainCounter` ⊂
-// `svHmIPRainCounterToday`), so a first-match-wins scan would mis-classify the
-// specific variants as their base.
-var autoSysvarClasses = []autoSysvarClass{
-	{"svEnergyCounterFeedIn", "discovery.energy_counter_feed_in_total", "energy", "Wh", "total_increasing"},
-	{"svEnergyCounter", "discovery.energy_counter_total", "energy", "Wh", "total_increasing"},
-	{"svHmIPRainCounterToday", "discovery.rain_counter_today", "", "mm", "total_increasing"},
-	{"svHmIPRainCounterYesterday", "discovery.rain_counter_yesterday", "", "mm", "total_increasing"},
-	{"svHmIPRainCounter", "discovery.rain_counter_total", "", "mm", "total_increasing"},
-	{"svHmIPSunshineCounterToday", "discovery.sunshine_counter_today", "duration", "min", "total_increasing"},
-	{"svHmIPSunshineCounterYesterday", "discovery.sunshine_counter_yesterday", "duration", "min", "total_increasing"},
-	{"svHmIPSunshineCounter", "discovery.sunshine_counter_total", "duration", "min", "total_increasing"},
+// autoSysvarPresentation renders the domain's [hub.AutoSysvarKind] into Home
+// Assistant's vocabulary. What each token MEANS — the quantity, its unit and
+// whether it only ever grows — is the domain's answer and lives in
+// internal/model/hub; this table is the translation of that answer, which is
+// the part HA cares about and no other plane shares.
+var autoSysvarPresentation = map[hub.AutoSysvarKind]autoSysvarClass{
+	hub.AutoSysvarEnergyCounterFeedIn:      {translationKey: "discovery.energy_counter_feed_in_total", deviceClass: "energy", stateClass: "total_increasing"},
+	hub.AutoSysvarEnergyCounter:            {translationKey: "discovery.energy_counter_total", deviceClass: "energy", stateClass: "total_increasing"},
+	hub.AutoSysvarRainCounterToday:         {translationKey: "discovery.rain_counter_today", deviceClass: "", stateClass: "total_increasing"},
+	hub.AutoSysvarRainCounterYesterday:     {translationKey: "discovery.rain_counter_yesterday", deviceClass: "", stateClass: "total_increasing"},
+	hub.AutoSysvarRainCounter:              {translationKey: "discovery.rain_counter_total", deviceClass: "", stateClass: "total_increasing"},
+	hub.AutoSysvarSunshineCounterToday:     {translationKey: "discovery.sunshine_counter_today", deviceClass: "duration", stateClass: "total_increasing"},
+	hub.AutoSysvarSunshineCounterYesterday: {translationKey: "discovery.sunshine_counter_yesterday", deviceClass: "duration", stateClass: "total_increasing"},
+	hub.AutoSysvarSunshineCounter:          {translationKey: "discovery.sunshine_counter_total", deviceClass: "duration", stateClass: "total_increasing"},
 }
 
-// classifyAutoSysvar returns the presentation class for a CCU-auto-generated
-// sysvar name, or ok=false when the name is a regular (operator-named) sysvar
-// that must keep its own name. Matching is case-sensitive (the CCU tokens are
-// fixed) and longest-`contains`-wins.
+// classifyAutoSysvar returns the HA presentation of a CCU-auto-generated
+// sysvar, or ok=false for an operator-named one that keeps its own name.
+//
+// The classification itself — which token means what, in which unit, and
+// whether it is cumulative — comes from [hub.ClassifyAutoSysvar]. This adds
+// only the Home Assistant rendering.
 func classifyAutoSysvar(name string) (autoSysvarClass, bool) {
-	var (
-		best   autoSysvarClass
-		bestLn int
-	)
-	for _, c := range autoSysvarClasses {
-		if len(c.contains) > bestLn && strings.Contains(name, c.contains) {
-			best, bestLn = c, len(c.contains)
-		}
+	domain, ok := hub.ClassifyAutoSysvar(name)
+	if !ok {
+		return autoSysvarClass{}, false
 	}
-	return best, bestLn > 0
+	pres, ok := autoSysvarPresentation[domain.Kind]
+	if !ok {
+		// The domain grew a kind this plane does not render yet. Declining is
+		// correct: an entity with no translation key would show its raw CCU
+		// name, which is what the classification exists to avoid.
+		return autoSysvarClass{}, false
+	}
+	pres.unit = domain.Unit
+	return pres, true
 }

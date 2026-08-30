@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"path"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -353,7 +352,7 @@ func (r *Recorder) onValueChanged(unit *central.Unit, e hmevent.DataPointValueCh
 	// Look up the live DP and require ValueSource == live, which excludes
 	// the unobserved zero default (unobserved), a value replayed at boot
 	// (cache), and a frozen value after connection loss (stale).
-	dev, ok := unit.ModelRegistry.Get(deviceAddressOf(e.Key.ChannelAddress))
+	dev, ok := unit.ModelRegistry.Get(hmtypes.DeviceAddress(e.Key.ChannelAddress))
 	if !ok || dev == nil {
 		return
 	}
@@ -562,12 +561,4 @@ func allow(parameter string, include, exclude []string) bool {
 func globMatch(pattern, name string) bool {
 	ok, err := path.Match(pattern, name)
 	return err == nil && ok
-}
-
-// deviceAddressOf returns the device part of a channel address
-// ("ABC123:4" -> "ABC123"). Device addresses never contain a colon; the
-// colon separates the channel number.
-func deviceAddressOf(channelAddress string) string {
-	addr, _, _ := strings.Cut(channelAddress, ":")
-	return addr
 }

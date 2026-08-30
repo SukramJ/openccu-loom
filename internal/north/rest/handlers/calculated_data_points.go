@@ -112,13 +112,14 @@ func toCalculatedDPSummary(dp device.AttachableDataPoint, ch *device.Channel, la
 // Exported so the WebSocket calc-dp renderer emits the identical flag —
 // REST and WS consumers must not disagree about a data point's availability.
 func CalculatedDPAvailable(dp device.AttachableDataPoint, observed bool) bool {
-	if !observed {
-		return false
+	v, ok := dp.(interface{ IsValid() bool })
+	if !ok {
+		// Unclassifiable: no validity gate to apply, so observation alone
+		// decides. Stated rather than folded into the rule below, because it
+		// is this layer's convention and not the model's.
+		return observed
 	}
-	if v, ok := dp.(interface{ IsValid() bool }); ok {
-		return v.IsValid()
-	}
-	return true
+	return generic.ReadingAvailable(observed, v.IsValid())
 }
 
 // CalculatedDPTranslatedName resolves the locale-aware entity name for

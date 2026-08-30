@@ -60,12 +60,16 @@ type AlarmCodeAdmin interface {
 	DeleteCode(ctx context.Context, id string) (ok bool, err error)
 }
 
-// alarmCodeKinds is the accepted set for the AlarmCode.Kind discriminator.
-var alarmCodeKinds = map[string]struct{}{
-	"pin":         {},
-	"keypad_slot": {},
-	"remote_key":  {},
-}
+// alarmCodeKinds is the accepted set for the AlarmCode.Kind discriminator,
+// built from the codes package's own kinds rather than restated: a kind this
+// handler accepts but the facade cannot dispatch is stored and never fires.
+var alarmCodeKinds = func() map[string]struct{} {
+	out := make(map[string]struct{}, len(codes.Kinds()))
+	for _, k := range codes.Kinds() {
+		out[string(k)] = struct{}{}
+	}
+	return out
+}()
 
 // ListAlarmCodes renders every configured alarm code (hash-free).
 func ListAlarmCodes(admin AlarmCodeAdmin) http.HandlerFunc {

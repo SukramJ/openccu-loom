@@ -10,6 +10,48 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Sixteen more adapters answered domain questions for themselves.** A third
+  audit pass, with per-file read receipts so coverage is demonstrable rather
+  than aggregate, read 366 of the 370 north-adapter files end to end. The four
+  it only scanned are Matter protocol machinery, named as such. Two earlier
+  passes had covered the same files at 70% depth — and the missing 30% is
+  where these sixteen sat.
+
+  Two continued fixes from the previous round rather than being new: the REST
+  program summary still decided for itself whether a deactivated program can
+  run (the WebSocket copy had been moved to the model and this one left
+  behind), and the device-address rule still existed nine times over. A half
+  fix is worse than none — both planes looked consistent while only one
+  tracked the domain.
+
+  Three were wrong answers rather than duplicates:
+
+  - Applying a master profile wrote only parameters whose `constraint_type`
+    was the literal `"fixed"`, while the matcher that SELECTS the profile also
+    counts an absent constraint type — the shape the upstream JSON actually
+    emits. A profile could be reported as applied while a parameter it had
+    been matched on kept its old device value.
+  - An operator-named zone that slugs to nothing (emoji) did not reserve the
+    fallback stem, so a second such zone was handed the first one's identity.
+  - Auto-generated sysvar classification lived only on the MQTT plane, and its
+    longest-match rule with it. Read by a first-match scan — which is what a
+    reimplementation elsewhere would produce — today's rainfall publishes as
+    the all-time total.
+
+  Everything else is duplicated vocabulary, identity composition or a domain
+  rule restated: the alarm panel id, the week-profile entity segments, the
+  security source key's inverse, the hazard always-on invariant, the source
+  display-name fallback, the alarm-code kinds, the pairing window, the
+  climate-profile range, and the calculated-availability rule.
+
+  Two were measured and deliberately NOT resolved, with the reasoning
+  recorded: the MQTT `device_class` fallback disagrees with the domain on five
+  parameters, and resolving them changes payloads on non-sensor components;
+  and the HA-registry table's classes cannot simply be deleted, because
+  `applyEntityDescription` uses a set-or-DELETE and emptying them would strip
+  `device_class` from the devices they name. Both are held equal by guards
+  instead.
+
 - **Eleven adapters answered domain questions for themselves.** A second audit
   pass, partitioned by file so every one of the 370 north-adapter files
   belonged to exactly one reader, found eleven places where a north plane

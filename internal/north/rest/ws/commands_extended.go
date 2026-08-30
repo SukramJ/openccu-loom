@@ -908,12 +908,12 @@ func masterProfilesApplyHandler(s *masterprofile.Store, w ParamsetWriter, locks 
 		// leaving all other MASTER parameters at their current device
 		// values. The sparse dict avoids a pre-read and carries no
 		// data-loss risk for parameters outside the profile.
-		values := make(map[string]any, len(prof.Params))
-		for k, v := range prof.Params {
-			if v.ConstraintType == "fixed" {
-				values[k] = v.Value
-			}
-		}
+		// Which parameters a profile pins is the store's answer, and it is
+		// the same answer its matcher uses. This path used to select only the
+		// literal "fixed" while the matcher also counts an absent
+		// constraint_type, so a profile could be reported as applied while a
+		// parameter it had been matched on kept its old device value.
+		values := prof.FixedParams()
 		key := configui.SessionKey{ChannelAddress: p.ChannelAddress, ParamsetKey: hmenum.ParamsetKeyMaster}
 		if err := w.PutParamset(ctx, key, values); err != nil {
 			return nil, fmt.Errorf("master_profiles.apply: %w", err)

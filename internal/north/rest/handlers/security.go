@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -313,8 +312,11 @@ func PutSecuritySourceOverride(d SecurityDomain, rec audit.Recorder) http.Handle
 				problem.New(problem.TypeBadRequest, r, "Invalid source reference", ""))
 			return
 		}
-		parts := strings.SplitN(ref, "|", 4)
-		if len(parts) != 4 {
+		// The key's shape is hmevent's, both to build and to split — a
+		// handler that splits it itself hard-codes the separator and the
+		// field order, neither of which is visible from the key it is handed.
+		central, interfaceID, channelAddress, parameter, ok := hmevent.ParseSecurityRefKey(ref)
+		if !ok {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "Invalid source reference",
 					"expected <central>|<interface_id>|<channel_address>|<parameter>"))
@@ -332,7 +334,7 @@ func PutSecuritySourceOverride(d SecurityDomain, rec audit.Recorder) http.Handle
 		if in.Included != nil {
 			included = *in.Included
 		}
-		err := d.SetSourceOverride(r.Context(), parts[0], parts[1], parts[2], parts[3],
+		err := d.SetSourceOverride(r.Context(), central, interfaceID, channelAddress, parameter,
 			hmenum.SecurityClass(in.Class), included, in.Note)
 		switch {
 		case err == nil:

@@ -429,7 +429,7 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 	if observed {
 		v := active
 		e.Active = &v
-		e.ExecuteAvailable = active
+		e.ExecuteAvailable = hub.ProgramExecuteAvailable(active)
 	}
 	// H-032: expose last_executed when a run has been observed.
 	if ts, hasTS := p.LastExecution(); hasTS {

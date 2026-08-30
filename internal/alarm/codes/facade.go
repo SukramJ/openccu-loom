@@ -37,6 +37,17 @@ const (
 	KindRemoteKey  Kind = "remote_key"
 )
 
+// Kinds returns every accepted [Kind].
+//
+// Exported because a write path has to reject an unknown discriminator before
+// it reaches the store, and that check lives in the REST handler — far from
+// here. A set typed out there instead accepts a kind this package cannot
+// dispatch, or refuses one it can, and neither shows up until a code silently
+// never fires.
+func Kinds() []Kind {
+	return []Kind{KindPIN, KindKeypadSlot, KindRemoteKey}
+}
+
 // Perms are the per-code verb permissions (perms_json).
 type Perms struct {
 	Arm     bool `json:"arm"`

@@ -285,7 +285,7 @@ func (s *SchedulesDomain) CopyClimateProfile(
 	srcChannelAddress string, srcProfile int,
 	dstChannelAddress string, dstProfile int,
 ) error {
-	if srcProfile < 1 || srcProfile > 6 || dstProfile < 1 || dstProfile > 6 {
+	if !weekprofile.ValidProfileIndex(srcProfile) || !weekprofile.ValidProfileIndex(dstProfile) {
 		return ErrScheduleCopyProfileRange
 	}
 	if srcChannelAddress == dstChannelAddress && srcProfile == dstProfile {

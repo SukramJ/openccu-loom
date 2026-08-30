@@ -46,6 +46,21 @@ func ChannelSwitchParameter(channelKey string) string {
 	return channelSwitchPrefix + channelKey
 }
 
+// The identity segments of the device-level week-profile entity. They are not
+// the model's internal profileKeyName ("WEEKPROFILE") — that names the data
+// point inside the model, while these two name the ENTITY a north plane
+// publishes. Both live here for the same reason ChannelSwitchParameter does:
+// an entity id composed from literals in a handler is one rename away from a
+// second entity for one profile.
+const (
+	// SensorParameter is the parameter segment of a week-profile entity's
+	// routing key.
+	SensorParameter = "WEEK_PROFILE"
+	// SensorFamily is the routing-key family a week-profile entity is
+	// published under.
+	SensorFamily = "week_profile"
+)
+
 // ChannelSwitchFamily is the routing-key family a channel-switch entity is
 // published under. Named beside the parameter for the same reason.
 const ChannelSwitchFamily = "schedule_channel_switch"
