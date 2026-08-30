@@ -118,6 +118,23 @@ func (s SecuritySeverity) String() string { return string(s) }
 // Valid reports whether s is one of the defined severities.
 func (s SecuritySeverity) Valid() bool { return s.Rank() >= 0 }
 
+// SecuritySeverities returns the severity ladder in ascending order.
+//
+// The ladder is the domain's vocabulary and its order carries meaning — it is
+// what [SecuritySeverity.Rank] compares. A consumer that needs the list (an HA
+// enum sensor must declare its options, for one) reads it here rather than
+// re-typing the strings, because a re-typed ladder that gains a rung in one
+// place and not the other reports a value the other end rejects.
+func SecuritySeverities() []SecuritySeverity {
+	return []SecuritySeverity{
+		SecuritySeverityOK,
+		SecuritySeverityInfo,
+		SecuritySeverityWarning,
+		SecuritySeverityAlarm,
+		SecuritySeverityCritical,
+	}
+}
+
 // Rank returns the ordinal used to fold many conditions into one
 // overall severity; higher wins. An undefined severity ranks -1 so a
 // zero value can never outrank a real one.

@@ -341,7 +341,7 @@ func (*Inbox) Description() string { return "" }
 
 // TranslationKey returns the HA translation key used to localise the inbox
 // sensor entity.
-func (i *Inbox) TranslationKey() string { return "inbox" }
+func (i *Inbox) TranslationKey() string { return InboxKey }
 
 // DataType returns the CCU data type for the inbox aggregate.
 func (i *Inbox) DataType() string { return "INTEGER" }

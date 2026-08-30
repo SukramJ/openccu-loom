@@ -122,11 +122,21 @@ func GetHubDataPoints(idx HubIndex) http.HandlerFunc {
 
 func hubDataPoints(central string, h *hub.Hub) HubDataPoints {
 	dp := HubDataPoints{
-		Central:         central,
-		AlarmMessages:   HubCountDataPoint{LegacyName: "alarm_messages"},
-		ServiceMessages: HubCountDataPoint{LegacyName: "service_messages"},
-		Inbox:           HubCountDataPoint{LegacyName: "inbox"},
-		Update:          HubUpdateDataPoint{LegacyName: "system_update"},
+		Central: central,
+		// The three aggregates the hub model owns name themselves. Typing
+		// their keys out here again would let a rename in the model pass
+		// unnoticed on this plane, and the key is the entity's identity.
+		// The constants are what the model's own TranslationKey methods
+		// return, so the two cannot disagree.
+		AlarmMessages:   HubCountDataPoint{LegacyName: hub.AlarmMessagesKey},
+		ServiceMessages: HubCountDataPoint{LegacyName: hub.ServiceMessagesKey},
+		Inbox:           HubCountDataPoint{LegacyName: hub.InboxKey},
+		// These two have no model object to name them: the update and the
+		// daemon-connection data points are assembled by this handler alone,
+		// so the literal is the only source there is rather than a copy of
+		// one. Stated rather than hidden — if either grows a model twin, its
+		// key belongs there and this line follows it.
+		Update: HubUpdateDataPoint{LegacyName: "system_update"},
 		// True by construction: the response exists, so the daemon does.
 		DaemonConnection: HubDaemonConnectionDataPoint{LegacyName: "daemon_connection", Connected: true},
 	}

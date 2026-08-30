@@ -32,8 +32,8 @@ func securitySystemEntities(tr func(key, fallback string) string) []securityEnti
 			name:        tr("security.entity.state", "Security state"),
 			deviceClass: "enum",
 			// An enum sensor without options is refused; the vocabulary
-			// is the severity ladder, ascending.
-			options:          []string{"ok", "info", "warning", "alarm", "critical"},
+			// is the domain's severity ladder, in its own ascending order.
+			options:          securitySeverityOptions(),
 			valueTemplate:    stateValueTemplate,
 			jsonAttributes:   true,
 			enabledByDefault: true,
@@ -135,4 +135,17 @@ func securityZoneEntity(base, slug, name string, tr func(key, fallback string) s
 		jsonAttributes:   true,
 		enabledByDefault: true,
 	}
+}
+
+// securitySeverityOptions renders the domain's severity ladder as the string
+// list an HA enum sensor declares. The order is the domain's, because the
+// ladder is ordered — a rung added there must appear here, and a copy typed
+// out locally would not.
+func securitySeverityOptions() []string {
+	ladder := hmenum.SecuritySeverities()
+	out := make([]string, 0, len(ladder))
+	for _, s := range ladder {
+		out = append(out, string(s))
+	}
+	return out
 }
