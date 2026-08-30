@@ -11,7 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -681,6 +684,87 @@ func TestDewPointLoadDataPointValueWithSource(t *testing.T) {
 	})
 	if len(calls) != 1 || calls[0] != "ADDR:1/ACTUAL_TEMPERATURE" {
 		t.Fatalf("unexpected loader calls: %v", calls)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// sourceSink.SourceParameters
+// ---------------------------------------------------------------------------
+
+// TestSourceSinkSourceParametersEmpty pins the no-sources case: a fresh
+// sourceSink reports no dependencies rather than nil-panicking.
+func TestSourceSinkSourceParametersEmpty(t *testing.T) {
+	var ss sourceSink
+	if got := ss.SourceParameters(); len(got) != 0 {
+		t.Fatalf("expected no parameters, got %v", got)
+	}
+}
+
+// TestSourceSinkSourceParametersSkipsSourcesWithoutAKey mirrors
+// TestSourceSinkLoadDataPointValueCalls: a registered source that does not
+// implement dataPointKeyProvider (a bare SourceDP, e.g. a test stub) is
+// skipped rather than contributing an empty name.
+func TestSourceSinkSourceParametersSkipsSourcesWithoutAKey(t *testing.T) {
+	var ss sourceSink
+
+	dp1 := &stubDataPointKeyDP{
+		key: hmtypes.DataPointKey{ChannelAddress: "VCU:1", Parameter: "ACTUAL_TEMPERATURE"},
+	}
+	dp1.setObserved(20.0)
+
+	dp2 := &stubSourceDP{}
+	dp2.setObserved(50.0)
+
+	ss.RegisterSource(dp1)
+	ss.RegisterSource(dp2)
+
+	got := ss.SourceParameters()
+	if len(got) != 1 || got[0] != "ACTUAL_TEMPERATURE" {
+		t.Fatalf("expected [ACTUAL_TEMPERATURE], got %v", got)
+	}
+}
+
+// TestApparentTemperatureSourceParametersMatchSubscribe is the falsification
+// case: ApparentTemperatureSensor.Subscribe wires temperature, humidity AND
+// WIND_SPEED (internal/model/calculated/subscribe.go). A REST projection
+// derived from the parameter name alone (the pre-fix dependsOnForKey
+// mapping) never listed WIND_SPEED for APPARENT_TEMPERATURE — this test
+// would have failed against that mapping.
+func TestApparentTemperatureSourceParametersMatchSubscribe(t *testing.T) {
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "CALCSRC01"})
+	ch := d.AddChannel("CALCSRC01:1", 1, "WEATHER_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	temp := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterActualTemperature)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	hum := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterHumidity)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	wind := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterWindSpeed)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	ch.Put(temp)
+	ch.Put(hum)
+	ch.Put(wind)
+
+	s := NewApparentTemperatureSensor()
+	ch.AttachCalculatedDataPoint(s)
+
+	want := map[string]bool{
+		string(hmenum.ParameterActualTemperature): true,
+		string(hmenum.ParameterHumidity):          true,
+		string(hmenum.ParameterWindSpeed):         true,
+	}
+	got := s.SourceParameters()
+	if len(got) != len(want) {
+		t.Fatalf("expected %d parameters, got %d: %v", len(want), len(got), got)
+	}
+	for _, p := range got {
+		if !want[p] {
+			t.Errorf("unexpected parameter %q in %v", p, got)
+		}
 	}
 }
 

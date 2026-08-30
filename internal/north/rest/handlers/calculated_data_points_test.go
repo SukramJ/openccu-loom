@@ -257,10 +257,28 @@ func TestGetCalculatedDataPoint_DeviceNotFound_Returns404(t *testing.T) {
 	}
 }
 
+// TestGetCalculatedDataPoint_DependsOnPopulated exercises the handler
+// end-to-end against a real DewPointSensor wired through Subscribe, so
+// depends_on in the JSON response reflects the model's actual resolved
+// source set rather than a stub.
 func TestGetCalculatedDataPoint_DependsOnPopulated(t *testing.T) {
 	t.Parallel()
-	d := newTestDevice("DEV0015", "HmIP-STE2")
-	addCalculatedDP(d, "DEV0015", "DEW_POINT", 1, hmenum.DataPointCategorySensor, 10.0)
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "DEV0015"})
+	ch := d.AddChannel("DEV0015:1", 1, "WEATHER_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	temp := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterActualTemperature)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	hum := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterHumidity)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	ch.Put(temp)
+	ch.Put(hum)
+
+	sensor := calculated.NewDewPointSensor()
+	ch.AttachCalculatedDataPoint(sensor)
+
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0015": d}}
 
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
@@ -273,8 +291,17 @@ func TestGetCalculatedDataPoint_DependsOnPopulated(t *testing.T) {
 	}
 	var out CalculatedDPDetail
 	_ = json.Unmarshal(w.Body.Bytes(), &out)
-	if len(out.DependsOn) == 0 {
-		t.Fatal("expected depends_on to be populated for DEW_POINT")
+	want := map[string]bool{
+		string(hmenum.ParameterActualTemperature): true,
+		string(hmenum.ParameterHumidity):          true,
+	}
+	if len(out.DependsOn) != len(want) {
+		t.Fatalf("expected %d deps, got %d: %v", len(want), len(out.DependsOn), out.DependsOn)
+	}
+	for _, p := range out.DependsOn {
+		if !want[p] {
+			t.Errorf("unexpected dependency %q in %v", p, out.DependsOn)
+		}
 	}
 }
 
@@ -293,31 +320,61 @@ func TestGetCalculatedDataPoint_InvalidChannelNo_Returns400(t *testing.T) {
 	}
 }
 
-// --- dependsOnForKey branches ---
+// --- dependsOn branches ---
 
-func TestDependsOnForKey_DefaultCase_ReturnsNil(t *testing.T) {
+// TestDependsOn_NoSourceParameterProvider_ReturnsNil pins the fallback for a
+// calculated data point that does not expose the model's resolved source
+// set (e.g. a stub used in unrelated tests): dependsOn must not guess.
+func TestDependsOn_NoSourceParameterProvider_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	key := hmtypes.DataPointKey{Parameter: "UNKNOWN_PARAM"}
-	if got := dependsOnForKey(key); got != nil {
-		t.Errorf("unknown param: expected nil, got %v", got)
+	dp := &stubCalculatedDP{key: hmtypes.DataPointKey{Parameter: "DEW_POINT"}}
+	if got := dependsOn(dp); got != nil {
+		t.Errorf("expected nil, got %v", got)
 	}
 }
 
-func TestDependsOnForKey_DewPoint(t *testing.T) {
+// TestDependsOn_ReadsModelResolvedSources pins depends_on to whatever the
+// model's Subscribe wiring actually registered, not a name-based guess.
+// ApparentTemperatureSensor's own doc says it depends on temperature +
+// humidity + WIND_SPEED (internal/model/calculated/subscribe.go), so the
+// dependency set here must include WIND_SPEED even though this handler's
+// old dependsOnForKey mapping for that parameter never listed it.
+func TestDependsOn_ReadsModelResolvedSources(t *testing.T) {
 	t.Parallel()
-	key := hmtypes.DataPointKey{Parameter: "DEW_POINT"}
-	got := dependsOnForKey(key)
-	if len(got) != 2 {
-		t.Errorf("DEW_POINT: expected 2 deps, got %d: %v", len(got), got)
-	}
-}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "CALCDEP01"})
+	ch := d.AddChannel("CALCDEP01:1", 1, "WEATHER_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	temp := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterActualTemperature)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	hum := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterHumidity)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	wind := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterWindSpeed)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	ch.Put(temp)
+	ch.Put(hum)
+	ch.Put(wind)
 
-func TestDependsOnForKey_OperatingVoltageLevel(t *testing.T) {
-	t.Parallel()
-	key := hmtypes.DataPointKey{Parameter: "OPERATING_VOLTAGE_LEVEL"}
-	got := dependsOnForKey(key)
-	if len(got) != 1 {
-		t.Errorf("OPERATING_VOLTAGE_LEVEL: expected 1 dep, got %d: %v", len(got), got)
+	sensor := calculated.NewApparentTemperatureSensor()
+	ch.AttachCalculatedDataPoint(sensor)
+
+	got := dependsOn(sensor)
+	want := map[string]bool{
+		string(hmenum.ParameterActualTemperature): true,
+		string(hmenum.ParameterHumidity):          true,
+		string(hmenum.ParameterWindSpeed):         true,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d deps, got %d: %v", len(want), len(got), got)
+	}
+	for _, p := range got {
+		if !want[p] {
+			t.Errorf("unexpected dependency %q in %v", p, got)
+		}
 	}
 }
 

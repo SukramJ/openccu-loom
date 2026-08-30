@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // --- DTOs ---
@@ -147,15 +146,25 @@ func CalculatedDPTranslatedName(ch *device.Channel, parameter string, labels Par
 	return name
 }
 
-// dependsOnForKey returns the wire parameters a calculated DP depends on,
-// inferred from the parameter name conventions. This is a best-effort
-// mapping that covers the known sensor types.
-func dependsOnForKey(key hmtypes.DataPointKey) []string {
-	switch key.Parameter {
-	case "DEW_POINT", "FROST_POINT", "VAPOR_CONCENTRATION", "DEW_POINT_SPREAD", "ENTHALPY", "APPARENT_TEMPERATURE":
-		return []string{"ACTUAL_TEMPERATURE", "HUMIDITY"}
-	case "OPERATING_VOLTAGE_LEVEL":
-		return []string{"OPERATING_VOLTAGE"}
+// sourceParameterProvider is implemented by every calculated sensor that
+// embeds the model's sourceSink (internal/model/calculated/state_uncertain.go)
+// — every shipping calculated data point. dependsOn reads the actual
+// resolved source set instead of re-deriving it from the parameter name, so
+// the REST projection tracks whatever a sensor's Subscribe hook wires up
+// (including a fallback like OPERATING_VOLTAGE_LEVEL's OPERATING_VOLTAGE /
+// BATTERY_STATE choice) without needing its own copy of that logic.
+type sourceParameterProvider interface {
+	SourceParameters() []string
+}
+
+// dependsOn returns the wire parameters dp actually depends on, as resolved
+// by the model's Subscribe wiring. A calculated data point that has not been
+// subscribed yet (no channel to resolve sources from) or that does not
+// implement [sourceParameterProvider] reports no dependencies rather than a
+// guessed one.
+func dependsOn(dp device.AttachableDataPoint) []string {
+	if sp, ok := dp.(sourceParameterProvider); ok {
+		return sp.SourceParameters()
 	}
 	return nil
 }
@@ -247,7 +256,7 @@ func GetCalculatedDataPoint(idx DeviceIndex, labels ParameterLabeler) http.Handl
 		summary := toCalculatedDPSummary(dp, ch, labels, serialSuffixForChannel(idx, ch))
 		detail := CalculatedDPDetail{
 			CalculatedDPSummary: summary,
-			DependsOn:           dependsOnForKey(dp.DataPointKey()),
+			DependsOn:           dependsOn(dp),
 		}
 		JSON(w, http.StatusOK, detail)
 	}
