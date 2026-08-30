@@ -8,10 +8,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// HA `device_class` mappings keyed on.Quantity].
-// the openccu-loom discovery builder consults these instead of the
-// older parameter-name-only heuristic so the same Quantity-detection
-// logic feeds both the Python and Go integrations.
+// HA `device_class` mappings keyed on [hmenum.Quantity]. The discovery
+// builder consults these instead of the older parameter-name-only
+// heuristic, so one quantity classification feeds every plane.
 
 var quantityToSensorDeviceClass = map[hmenum.Quantity]string{
 	hmenum.QuantityCO2:            "carbon_dioxide",
