@@ -6,7 +6,6 @@ package security
 import (
 	"context"
 	"sort"
-	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -231,23 +230,12 @@ func (s *Service) refreshZoneSlugs(ctx context.Context) {
 
 // deriveUniqueZoneSlug derives a stable external identifier for name,
 // unique against taken — the same base-plus-numeric-suffix rule a
-// freshly created zone gets (mirrors uniqueZoneSlug in the alarm-config
-// REST handler, which this package cannot import without an inverted
-// dependency).
+// freshly created zone gets. The rule itself is [routingkey.UniqueSlug] —
+// this package and the alarm-config REST handler both need it and neither can
+// import the other, which is why it lives beside HubSlug rather than being
+// mirrored in each.
 func deriveUniqueZoneSlug(name string, taken map[string]bool) string {
-	base := routingkey.HubSlug(name)
-	if base == "" {
-		base = "zone"
-	}
-	if !taken[base] {
-		return base
-	}
-	for n := 2; ; n++ {
-		candidate := base + "-" + strconv.Itoa(n)
-		if !taken[candidate] {
-			return candidate
-		}
-	}
+	return routingkey.UniqueSlug(name, routingkey.ZoneSlugStem, taken)
 }
 
 // indexUnit classifies every data point of one central.
