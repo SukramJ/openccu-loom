@@ -1,6 +1,23 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.68.2
+## 0.69.0
+
+**Breaking — the button-press entity is re-created.** A channel's keypress
+`event` entity is re-keyed onto the daemon's event-group identity, so Home
+Assistant removes the old entity and adds a new one. Its history, its area
+and any customisation are lost, and automations or dashboard cards that
+refer to it by entity id must be pointed at the new entity.
+
+Old: `event.<device>_<channel>_event` — new:
+`event.<device>_<channel>_event_group_keypress`.
+
+The daemon retracts the old discovery config on first start, so the old
+entity disappears instead of lingering as permanently unavailable. To see
+which entities are affected before upgrading, search your Home Assistant
+entity list for `_event` under this integration.
+
+Impulse and device-error events are published for the first time in this
+release; those entities are new and nothing changes for them.
 
 - Fixes the identifier the daemon reports for a device's button / impulse /
   error event groups over the REST and WebSocket API. It did not match what

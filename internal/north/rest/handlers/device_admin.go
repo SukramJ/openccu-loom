@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -239,18 +240,10 @@ func writeRenameError(w http.ResponseWriter, r *http.Request, err error) {
 	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Rename failed", err)
 }
 
-// dutyCycleWarningThreshold is the transmit duty cycle in percent at or
-// above which a firmware update is flagged as risky. The CCU WebUI
-// gates device updates on a high duty cycle (isDutyCycleOK4DevUpdate);
-// we do not block — an OTA flash still queues — but the operator is
-// warned so a stalled transfer over a saturated radio is expected, not
-// surprising.
-const dutyCycleWarningThreshold = 80
-
 // FirmwareUpdateResponse is the 202 body of the device firmware-update
 // endpoint. DutyCycleWarning is present only when the device's radio
 // interface reports a transmit duty cycle at or above
-// [dutyCycleWarningThreshold]; it is advisory — the update is scheduled
+// [coordinators.DutyCycleWarningThreshold]; it is advisory — the update is scheduled
 // regardless. Absent when the duty cycle is unknown or below the
 // threshold.
 type FirmwareUpdateResponse struct {
@@ -278,7 +271,7 @@ func UpdateDeviceFirmware(admin DeviceAdmin) http.HandlerFunc {
 			return
 		}
 		resp := FirmwareUpdateResponse{Status: "scheduled"}
-		if dc, ok := admin.InterfaceDutyCycle(addr); ok && dc >= dutyCycleWarningThreshold {
+		if dc, ok := admin.InterfaceDutyCycle(addr); ok && coordinators.FirmwareUpdateRisky(dc) {
 			resp.DutyCycleWarning = &dc
 		}
 		JSON(w, http.StatusAccepted, resp)

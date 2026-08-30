@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/event"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // listingChannel is a fakeChannelInspector that also reports its parameter
@@ -127,10 +128,19 @@ func TestEachEventKindGetsItsOwnEntity(t *testing.T) {
 		t.Errorf("impulse event_types = %v, want [sequence_ok]", got)
 	}
 
-	// The keypress entity keeps its established identity: it must still be
-	// the `_event` object, not a renamed one.
-	if oid, _ := seen["PRESS_SHORT"]["__object_id"].(string); len(oid) < 6 || oid[len(oid)-6:] != "_event" {
-		t.Errorf("keypress object_id = %q, want it to keep the established _event suffix", oid)
+	// Every kind names its object after the event group it publishes. The
+	// keypress entity used to be the bare `_event` object; moving it is the
+	// documented re-key (ADR 0068), and moving the OBJECT id — not just the
+	// unique_id — is what makes the old config an orphan the discovery sweep
+	// can retract instead of a zombie on an overwritten topic.
+	for param, wantLeaf := range map[string]string{
+		"PRESS_SHORT":    "1_event_group_keypress",
+		"SEQUENCE_OK":    "1_event_group_impulse",
+		"ERROR_OVERHEAT": "1_event_group_device_error",
+	} {
+		if oid, _ := seen[param]["__object_id"].(string); oid != wantLeaf {
+			t.Errorf("%s object_id = %q, want %q", param, oid, wantLeaf)
+		}
 	}
 }
 
@@ -145,5 +155,51 @@ func TestKnownRootsFallbackWhenTheChannelCannotList(t *testing.T) {
 	got := ChannelKindTypes(ch, event.KindDeviceError)
 	if len(got) != 1 || got[0] != "error" {
 		t.Fatalf("fallback types = %v, want [error] — the roots only", got)
+	}
+}
+
+// TestChannelEventIdentityFollowsTheModel pins each channel-level event
+// entity's unique_id to the routing key the model publishes for the same
+// channel and kind.
+//
+// The entity used to be keyed loom_<central>_<channel>_event — the generic
+// channel-id helper with an "event" leaf. That layout puts the central scope
+// in front of the whole key and carries no family marker, so an event group
+// was unrecognisable as one and disagreed with the id REST reports for the
+// same group. Re-keying it was a documented break (ADR 0068); this guard is
+// what keeps the two planes from drifting apart again.
+func TestChannelEventIdentityFollowsTheModel(t *testing.T) {
+	t.Parallel()
+
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	ch := &listingChannel{names: []string{"PRESS_SHORT", "SEQUENCE_OK", "ERROR_OVERHEAT"}}
+
+	cases := map[string]string{
+		"PRESS_SHORT":    "keypress",
+		"SEQUENCE_OK":    "impulse",
+		"ERROR_OVERHEAT": "device_error",
+	}
+	for param, kind := range cases {
+		ev := Event{
+			Interface:     "HmIP-RF",
+			DeviceAddress: "0034WRC2",
+			DeviceName:    "Flur Taster",
+			ChannelNo:     1,
+			Parameter:     param,
+			Channel:       ch,
+		}
+		_, _, _, buf, ok := db.Build(ev)
+		if !ok {
+			t.Fatalf("Build(%q) returned ok=false", param)
+		}
+		body := decodeBody(t, buf)
+		got, _ := body["unique_id"].(string)
+		want := routingkey.EventGroupUniqueID(db.serialSuffix("ccu"), "0034WRC2:1", kind)
+		if want == "" {
+			t.Fatalf("%s: the model produced no id — the guard lost its subject", param)
+		}
+		if got != want {
+			t.Errorf("%s: unique_id = %q, want the model's %q", param, got, want)
+		}
 	}
 }

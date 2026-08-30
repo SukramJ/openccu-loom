@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 399.
+Guards without a doc comment: 7 of 400.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -89,6 +89,7 @@ Guards without a doc comment: 7 of 399.
 | TestCustomDP_HmIPPS_AsRfSwitchAnchor | custom_dp_anchor_test.go | TestCustomDP_HmIPPS_AsRfSwitchAnchor pins the Switch end-to-end on a real generated profile. |
 | TestCustomDP_HmIPWGT | custom_dp_anchor_test.go | TestCustomDP_HmIPWGT exercises a multi-profile device. |
 | TestCustomDP_HmIPeTRV | custom_dp_anchor_test.go | TestCustomDP_HmIPeTRV pins the radiator-thermostat layout. |
+| TestAdvertisedCustomDPOperationsMatchTheDispatcher | custom_dp_operations_test.go | TestAdvertisedCustomDPOperationsMatchTheDispatcher pins the operation vocabulary the REST and WebSocket planes advertise against the set the dispatcher actually accepts. |
 | TestEveryRegisteredProfileHasConstructor | custom_profile_constructor_resolves_test.go | TestEveryRegisteredProfileHasConstructor walks every profile the process-wide registry maps to at least one CCU device model and asserts a [custom.Constructor] is registered for its name. |
 | TestPinnedChannelGroupSchemasAreUnchanged | custom_profile_constructor_resolves_test.go | TestPinnedChannelGroupSchemasAreUnchanged pins the wrapped generic-DP composition (the Field→Parameter mapping, plus visibility forcing) of four representative profiles — spanning cover, switch, lock and climate — field by field. |
 | TestRealDeviceModelsMaterializeCustomDataPoint | custom_profile_constructor_resolves_test.go | TestRealDeviceModelsMaterializeCustomDataPoint drives custom.CreateCustomDataPoints — the exact function the daemon calls at device-hydration time — against a handful of well-known CCU models and asserts the profile's primary channel receives a non-nil custom data point. |

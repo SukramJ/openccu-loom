@@ -1209,6 +1209,27 @@ func (c *Channel) FinalizeInit(centralName string) {
 	c.BuildEventGroups(centralName)
 }
 
+// EventSources returns the parameters of kind k that this channel actually
+// exposes, in the kind's canonical source order.
+//
+// The classification is [modevent.Classify]'s alone. North-bound adapters
+// used to keep their own copy of the click-parameter set to answer this, and
+// a copy of an enumerable domain set silently caps its holder at the size
+// its author knew about: the MQTT plane knew only keypresses and never
+// published the impulse and device-error kinds the model had all along.
+func (c *Channel) EventSources(k modevent.Kind) []hmenum.Parameter {
+	if c == nil {
+		return nil
+	}
+	var found []hmenum.Parameter
+	for _, p := range modevent.Sources(k) {
+		if c.HasParameter(string(p)) {
+			found = append(found, p)
+		}
+	}
+	return found
+}
+
 // EventGroups returns every event group built for this channel, sorted by kind.
 // Returns nil when no generic events have been attached or
 // [BuildEventGroups] has not been called yet.

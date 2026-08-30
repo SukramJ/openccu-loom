@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,43 +14,21 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// pressParameters is the closed set of click-event parameter names a press
-// channel can expose — the reference stack's CLICK_EVENTS set. Every channel
-// carrying at least one of these gets a single channel-level keypress `event`
-// entity whose event_types list these (lower-cased), and each WRITABLE press
-// (usage=data_point) additionally gets a press-button companion.
-var pressParameters = []string{
-	"PRESS_SHORT",
-	"PRESS_LONG",
-	"PRESS_LONG_START",
-	"PRESS_LONG_RELEASE",
-	"PRESS_CONT",
-	"PRESS",
-	"PRESS_LOCK",
-	"PRESS_UNLOCK",
+// isPressParameter reports whether p is a click-event parameter, asking
+// [event.Classify] rather than a list kept here. The set used to be
+// duplicated in this file and exported for the EventBridge to share; a copy
+// of an enumerable domain set caps its holder at the size its author knew
+// about, which is why this plane published only keypresses while the model
+// had known three event kinds all along.
+func isPressParameter(p string) bool {
+	kind, known := event.Classify(hmenum.Parameter(strings.ToUpper(p)))
+	return known && kind == event.KindKeypress
 }
-
-// IsPressParameter reports whether p is one of the canonical click-event
-// parameter names (case-insensitive). Exported so the EventBridge can
-// use the same check without duplicating the set.
-func IsPressParameter(p string) bool {
-	up := strings.ToUpper(p)
-	return slices.Contains(pressParameters, up)
-}
-
-// PressParameters returns a copy of the canonical click-event parameter set
-// in detection order. Exported so the EventBridge can synthesise a press
-// channel's snapshot event without duplicating the set.
-func PressParameters() []string {
-	return slices.Clone(pressParameters)
-}
-
-// isPressParameter is the package-internal alias used by Build.
-func isPressParameter(p string) bool { return IsPressParameter(p) }
 
 // ChannelPressTypes returns the lower-cased HA event_types for all
 // PRESS_* parameters present on ch. Returns nil only when the channel has
@@ -59,16 +36,16 @@ func isPressParameter(p string) bool { return IsPressParameter(p) }
 // keypress event entity per press channel regardless of how many press
 // types it carries (a single PRESS_SHORT KEY channel gets the same
 // channel-level `event` entity as a four-type remote), so a single press
-// type is enough to materialise the aggregate. The result order mirrors
-// pressParameters. Exported so the EventBridge can detect press channels.
+// type is enough to materialise the aggregate. The order follows
+// [event.Sources], the model's own source order.
 func ChannelPressTypes(ch ChannelInspector) []string {
 	if ch == nil {
 		return nil
 	}
 	var found []string
-	for _, pp := range pressParameters {
-		if ch.HasParameter(pp) {
-			found = append(found, strings.ToLower(pp))
+	for _, p := range event.Sources(event.KindKeypress) {
+		if ch.HasParameter(string(p)) {
+			found = append(found, strings.ToLower(string(p)))
 		}
 	}
 	return found
@@ -135,8 +112,9 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 	if len(types) == 0 {
 		return "", "", "", nil, false
 	}
-	objectID = d.channelObjectID(ev, "event")
-	uniqueID, scoped := d.channelUniqueID(ev, "event")
+	kindSlug := event.GenerateTranslationKey(event.KindKeypress)
+	objectID = d.channelObjectID(ev, eventGroupLeaf(kindSlug))
+	uniqueID, scoped := d.channelEventGroupUniqueID(ev, kindSlug)
 	if !scoped {
 		return "", "", "", nil, false
 	}
@@ -189,7 +167,7 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 //
 // The keypress kind keeps [DefaultDiscoveryBuilder.BuildChannelEvent]: it
 // carries the doorbell device-class mapping and an established identity that
-// this must not disturb. Until 0.68.2 the other two kinds were not published
+// this must not disturb. Until 0.69.0 the other two kinds were not published
 // on this plane at all, so everything here is additive — no key moves.
 //
 // Returns ("", "", "", nil, false) when the channel carries no parameter of
@@ -208,8 +186,9 @@ func (d *DefaultDiscoveryBuilder) BuildChannelKindEvent(ev Event, kind event.Kin
 	if len(types) == 0 {
 		return "", "", "", nil, false
 	}
-	objectID = d.channelObjectID(ev, leaf)
-	uniqueID, scoped := d.channelUniqueID(ev, leaf)
+	kindSlug := event.GenerateTranslationKey(kind)
+	objectID = d.channelObjectID(ev, eventGroupLeaf(kindSlug))
+	uniqueID, scoped := d.channelEventGroupUniqueID(ev, kindSlug)
 	if !scoped {
 		return "", "", "", nil, false
 	}
@@ -487,6 +466,43 @@ func (d *DefaultDiscoveryBuilder) discoveryContext(ev Event) discoveryCtx {
 // `<channel>_<suffix>` derivation.
 func (d *DefaultDiscoveryBuilder) channelObjectID(ev Event, suffix string) string {
 	return channelPathData(ev).DiscoveryObjectID(suffix)
+}
+
+// eventGroupLeaf is the discovery object-id leaf of a channel-level event
+// entity. It carries the same family marker as the entity's unique_id, which
+// is what makes a re-key survivable: the object id is part of the discovery
+// topic, so a changed leaf publishes the new entity on a new topic and leaves
+// the old config behind as a genuine orphan.
+//
+// That matters more than the naming symmetry. Home Assistant reads unique_id
+// only in its entity constructor, so a new id written onto the SAME topic
+// reaches a running instance not at all — it would surface unannounced at the
+// next restart. Moving the topic instead lets the existing discovery-orphan
+// sweep retract the old config, which is what turns a silent zombie entity
+// into a clean disappearance the operator can see and act on once.
+func eventGroupLeaf(kindSlug string) string {
+	return "event_group_" + kindSlug
+}
+
+// channelEventGroupUniqueID is the identity of a channel-level event entity:
+// the routing key [event.Group.CanonicalUniqueID] publishes for the same
+// channel and kind, so the MQTT entity, the REST projection and the model
+// itself name it identically.
+//
+// It is deliberately not [DefaultDiscoveryBuilder.channelUniqueID] with a
+// leaf suffix. That helper places the central scope in front of the whole
+// key, which yields loom_<central>_<channel>_<leaf>; an event group's
+// reference layout carries the family first and the central inside the
+// channel slot. The two differ for every channel, and the family prefix is
+// what lets a consumer recognise an event group at all.
+func (d *DefaultDiscoveryBuilder) channelEventGroupUniqueID(ev Event, kindShort string) (string, bool) {
+	channelAddress := ev.DeviceAddress + ":" + strconv.Itoa(ev.ChannelNo)
+	serial := d.serialSuffix(d.centralFor(ev))
+	if serial == "" && routingkey.NeedsCentralScope(channelAddress) {
+		return "", false
+	}
+	id := routingkey.EventGroupUniqueID(serial, channelAddress, kindShort)
+	return id, id != ""
 }
 
 // channelUniqueID is the cross-broker-stable id used for HA's

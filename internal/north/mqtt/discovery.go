@@ -397,7 +397,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// path below.
 	}
 	// Impulse and device-error aggregation, the same shape one kind over.
-	// Both were absent from this plane until 0.68.2 — the events reached the
+	// Both were absent from this plane until 0.69.0 — the events reached the
 	// REST and WebSocket planes and simply never appeared here — so this adds
 	// entities rather than moving any.
 	if kind, known := event.Classify(hmenum.Parameter(ev.Parameter)); known && kind != event.KindKeypress {
@@ -573,14 +573,12 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	if ev.descParamset() == hmenum.ParamsetKeyMaster {
 		body["entity_category"] = EntityCategoryConfig
 	}
-	// state_class — only applies to sensor entities. The
-	// ValueBehavior→state_class mapping is authoritative; the legacy
-	// parameter-name fallback fills the gaps for parameters not yet in
-	// the Quantity metadata table.
+	// state_class — only applies to sensor entities. The value behaviour is
+	// the domain's answer (parameter.MetadataFor); this adapter only renames
+	// it into Home Assistant's vocabulary. A parameter the domain cannot
+	// classify gets no state_class rather than a guess from its name.
 	if comp == HAComponentSensor {
 		if cls := resolveSensorStateClass(ev.Model, ev.Parameter, ev.descUnit()); cls != "" {
-			body["state_class"] = cls
-		} else if cls := stateClassFor(ev.Parameter); cls != "" {
 			body["state_class"] = cls
 		}
 	}

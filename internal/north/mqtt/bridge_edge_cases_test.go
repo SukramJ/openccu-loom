@@ -443,39 +443,6 @@ func TestBridgePublishChannelEventDiscoveryDisabled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// indexFromValue — covers all type branches.
-// ---------------------------------------------------------------------------
-
-func TestIndexFromValue(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		in      any
-		wantIdx int64
-		wantOK  bool
-	}{
-		{int(2), 2, true},
-		{int32(3), 3, true},
-		{int64(4), 4, true},
-		{uint(5), 5, true},
-		{uint32(6), 6, true},
-		{uint64(7), 7, true},
-		{float64(8), 8, true},
-		{float32(9), 9, true},
-		{"10", 10, true},
-		{"", 0, false},
-		{"abc", 0, false},
-		{nil, 0, false},
-		{true, 0, false},
-	}
-	for _, c := range cases {
-		gotIdx, gotOK := indexFromValue(c.in)
-		if gotOK != c.wantOK || (gotOK && gotIdx != c.wantIdx) {
-			t.Errorf("indexFromValue(%v) = (%d, %v), want (%d, %v)", c.in, gotIdx, gotOK, c.wantIdx, c.wantOK)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
 // ResolveEnumLabel
 // ---------------------------------------------------------------------------
 

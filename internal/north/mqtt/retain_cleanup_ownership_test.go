@@ -274,3 +274,42 @@ func TestDiscoveryOrphanSweepDefersHubPlaneUntilItDeclared(t *testing.T) {
 			n, cl.retractions(), hubTopic)
 	}
 }
+
+// TestDiscoveryOrphanSweepRetractsTheOldEventObject is the mitigation proof
+// for the channel-event re-key (ADR 0068).
+//
+// The entity moved from the `_event` object to `_event_group_<kind>`. Because
+// the object id is part of the discovery topic, the old config is left on a
+// topic nothing declares any more — a genuine orphan the sweep retracts. That
+// is the whole point of moving the object id rather than only the unique_id:
+// Home Assistant reads unique_id in its entity constructor alone, so writing
+// a new id onto the same topic would reach a running instance not at all and
+// surface unannounced at its next restart. Retracting the old config converts
+// that silent zombie into a clean disappearance.
+func TestDiscoveryOrphanSweepRetractsTheOldEventObject(t *testing.T) {
+	t.Parallel()
+
+	const centralName = "ccu"
+	cl := newBrokerClient()
+	b := NewBridge(BridgeConfig{
+		Base:               "loom",
+		HADiscoveryEnabled: true,
+		CentralName:        centralName,
+	}, cl)
+	b.MarkHubPlaneDeclared(centralName)
+
+	nodeID := discoveryNodeID(centralName, "0034WRC2")
+	oldTopic := b.Topics().DiscoveryConfig("event", nodeID, "1_event")
+	cl.seed(oldTopic, []byte(`{"unique_id":"loom_0034wrc2_1_event"}`))
+
+	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), centralName, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("the pre-re-key event config was not retracted — a running HA would keep the stale entity")
+	}
+	if retracted := cl.retractions(); !contains(retracted, oldTopic) {
+		t.Errorf("topic %q still holds its retained config; retracted=%v", oldTopic, retracted)
+	}
+}

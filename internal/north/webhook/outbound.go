@@ -20,7 +20,6 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -426,11 +425,10 @@ func (o *Outbound) deviceReleased(centralName, interfaceID, channelAddress strin
 		return true
 	}
 	// The event carries a CHANNEL address; the hold is on the device.
-	address := channelAddress
-	if root, _, isChannel := strings.Cut(channelAddress, ":"); isChannel {
-		address = root
-	}
-	return u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(interfaceID), address)
+	return u.Devices.IsReleased(
+		hmtypes.ParseWireInterfaceID(interfaceID),
+		hmtypes.DeviceAddress(channelAddress),
+	)
 }
 
 func (o *Outbound) onDataPoint(centralName string, e hmevent.DataPointValueChangedEvent) {

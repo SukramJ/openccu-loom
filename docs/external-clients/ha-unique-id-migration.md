@@ -234,6 +234,109 @@ Each entry is one applied re-key, written before the release that carries it,
 per [ADR 0068](../adr/0068-unique-id-stability-per-plane.md) and
 [Breaking a Published Identity](./breaking-change-process.md).
 
+### Channel event entities move onto the event-group layout — daemon 0.69.0
+
+**Old** — the generic channel-id helper with an `event` leaf, no family
+marker, and the central scope in front of the whole key:
+
+```
+loom_vcu1234567_1_event          discovery object: 1_event
+```
+
+**New** — the routing key the model publishes for the same event group:
+
+```
+loom_event_group_keypress_vcu1234567_1
+                                 discovery object: 1_event_group_keypress
+```
+
+**What is lost.** Home Assistant treats the re-keyed entity as a new one. The
+old entity's history, its area assignment and every customisation (name, icon,
+category) do not carry over, and any automation, script or dashboard card that
+names the old entity id stops resolving. Its entity id changes with the
+object id — `event.<device>_<channel>_event` becomes
+`event.<device>_<channel>_event_group_keypress`.
+
+**Why the object id moves too, and not just the id.** Home Assistant reads
+`unique_id` only in its entity constructor; a discovery update never re-reads
+it. Publishing a new id onto the same topic therefore changes nothing on a
+running instance and would surface unannounced at its next restart. Moving the
+object id publishes the entity on a new topic and leaves the old config
+behind, which makes it a genuine orphan.
+
+**The mitigation, and its limit.** `RunDiscoveryOrphanCleanupOnce` retracts the
+old config on the first start after the upgrade, so the old entity disappears
+instead of lingering as permanently unavailable beside the new one. The sweep
+does **not** preserve history — nothing can, across a `unique_id` change. It
+converts a silent zombie into a clean disappearance the operator sees once and
+acts on once.
+
+**Blast radius before upgrading.** Every keypress channel is affected. List
+them:
+
+```sh
+curl -s -u user:pass http://<host>:8080/api/v1/devices \
+  | jq -r '.items[].channels[]? | select(.event_groups[]?.kind == "homematic.keypress")
+           | "\(.address)\t\(.name)"'
+```
+
+Or, from the Home Assistant side, search the entity list for `_event` within
+this integration.
+
+**Operator steps.** None are required — the sweep runs on first start. Only
+automations and dashboard cards that name the old entity id need repointing;
+Home Assistant's own "Repairs" and the automation editor flag an unresolvable
+entity id.
+
+**Impulse and device-error entities are new**, not re-keyed: they were added
+in the same unreleased cycle and have never been published under another
+identity.
+
+### Sysvar WebSocket frames carry the model identity — daemon 0.69.0
+
+**Old** — the `sysvar.changed` frame keyed on the variable's name slug,
+unconditionally:
+
+```
+loom_11a0001234_sysvar_aussen-temperatur
+```
+
+**New** — the frame carries what the model publishes, which keys on the CCU's
+vid once a hub scan has resolved one:
+
+```
+loom_11a0001234_sysvar_4711
+```
+
+**Scope — narrower than it looks.** Only sysvars with a resolved vid change.
+A variable the model has not scanned yet still gets the name-keyed fallback,
+which is the same value as before, so nothing changes mid-scan. REST already
+published the vid-keyed id: this frame was the one surface disagreeing with
+the rest of the daemon, which is the defect being fixed rather than a new
+scheme being introduced.
+
+**What is lost.** A client that seeded its entity registry from these frames
+alone — rather than from REST — holds entities under the name-keyed id. Those
+entities keep their history only if the client re-keys them; otherwise a new
+entity appears beside the old one and the old one goes stale. The affected
+client in this family, `homematicip_local`, already migrates hub keys from the
+name slug (`_async_migrate_hub_keys_from_name_slug`), so it re-keys on the
+next start.
+
+**Blast radius before upgrading.** Compare the two ids for every sysvar:
+
+```sh
+curl -s -u user:pass http://<host>:8080/api/v1/sysvars \
+  | jq -r '.items[] | "\(.name)\t\(.unique_id)"'
+```
+
+Every row whose `unique_id` ends in a number rather than a name slug is a
+variable whose WebSocket frames change. A row ending in a slug is unaffected.
+
+**No MQTT sweep applies.** This is the REST/WebSocket plane, which has no
+retained discovery payload to retract; nothing is left behind to orphan. The
+MQTT plane is untouched by this change.
+
 ### Event groups move onto the reference layout — daemon api 7.25.0
 
 **Old** `loom_<channel>_event_group/<kind>` — the channel first, a slash, and

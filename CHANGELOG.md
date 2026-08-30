@@ -6,9 +6,86 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.68.2] - 2026-08-30
+## [0.69.0] - 2026-08-30
+
+### Changed
+
+- **Breaking: channel event entities carry the model's event-group
+  identity.** A channel's keypress entity was keyed
+  `loom_<central>_<channel>_event` on MQTT while the model and REST name the
+  same group `loom_event_group_keypress_<channel>`. Both now come from the
+  model, and impulse and device-error entities follow the same layout.
+
+  Home Assistant re-creates the keypress entity: its history, area and
+  customisations are lost, and automations or dashboard cards naming the old
+  entity id must be repointed. The entity id changes as well, from
+  `event.<device>_<channel>_event` to
+  `event.<device>_<channel>_event_group_keypress`.
+
+  The discovery object id moves with the identity on purpose. Home Assistant
+  reads `unique_id` only in its entity constructor, so a new id on the same
+  topic would reach a running instance not at all and appear unannounced at
+  its next restart. Moving the object id publishes on a new topic and leaves
+  the old config as a genuine orphan, which
+  `RunDiscoveryOrphanCleanupOnce` retracts on first start — turning a
+  permanently-unavailable zombie into a clean disappearance. The sweep does
+  not preserve history; nothing can across a `unique_id` change.
+
+  The full transition, a command to list the affected channels before
+  upgrading, and the operator steps are in
+  `docs/external-clients/ha-unique-id-migration.md`. Both add-on changelogs
+  carry the notice.
+
+  Impulse and device-error entities are new rather than re-keyed — they were
+  added in the same unreleased cycle and never published under another id.
 
 ### Added
+
+- **The model owns the event classification, and the adapters ask it.** The
+  MQTT plane kept its own copy of the eight click parameters and exported it
+  so the EventBridge could share it — a domain set living in an adapter,
+  with the domain reaching north to read it. That copy is what left impulse
+  and device-error events unpublished: a duplicated enumerable set caps its
+  holder at the size its author knew about, and the model had known three
+  event kinds all along.
+
+  The set is gone. `Channel.EventSources` answers which sources of a kind a
+  channel carries, the MQTT discovery path asks `event.Classify`, and the
+  EventBridge classifies through the model instead of calling into
+  `north/mqtt`. The `event_types` list of a keypress entity now follows the
+  model's source order, so it is finally the same order the REST and
+  WebSocket planes report for the same channel; the set is unchanged and no
+  entity identity moves.
+
+  Two look-alikes were measured and deliberately left apart, because they
+  answer different questions: `generic/button.go` excludes PRESS_LOCK and
+  PRESS_UNLOCK from the Matter GenericSwitch projection on purpose, and
+  `parameter.EnumLabel` refuses to read a numeric string as an index so a
+  firmware that spells an ENUM out as its label still resolves. The wire
+  reading the MQTT bridge needed is now `parameter.EnumLabelFromWire`, named
+  beside it in the model rather than duplicated in the adapter — with the
+  unsigned and 32-bit-float index forms the adapter had and the model
+  lacked.
+
+- **Two climate operations become discoverable.** `enable_away_by_calendar`
+  and `enable_away_by_duration` were implemented, parameterised and
+  reachable through the custom-data-point dispatcher, and neither the REST
+  nor the WebSocket plane named them in `supported_operations`. A client
+  could execute them only by guessing they existed. Both planes now
+  advertise them.
+
+  A new contract guard compares the operation vocabulary each plane
+  advertises against the set the dispatcher accepts, and holds the two
+  planes' copies equal to each other. It found nine further operations no
+  plane announces — the tilt family and `set_combined` on slatted blinds,
+  `ventilate` on garage doors, `commit` on buffered text displays,
+  `set_on_time` on lights and irrigation valves, and two aliases of
+  already-announced commands. Those are recorded rather than closed: the
+  advertised tables are keyed by category, which is coarser than the type
+  the dispatcher routes on, so adding `open_tilt` to the Cover row would
+  promise a tilt command on roller shutters that have no slats. Trading a
+  silent omission for a false promise is not a fix; the list keeps the gap
+  visible until the capability is declared per data point by the model.
 
 - **Impulse and device-error events reach the MQTT plane.** They never did.
   The publish path returned early for any parameter that was not a keypress
@@ -34,6 +111,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rather than hidden.
 
 ### Fixed
+
+- **Sysvar WebSocket frames carry the model's identity.** The
+  `sysvar.changed` frame stamped the variable's name slug unconditionally,
+  while the model — and REST with it — key on the CCU's vid as soon as a hub
+  scan resolves one, precisely because a name is editable and an id is not.
+  A client seeding its registry from these frames bound entities to a key
+  that moved when an operator renamed the variable, and that disagreed with
+  the same variable's id over REST.
+
+  Only sysvars with a resolved vid change; one the model has not scanned yet
+  keeps the name-keyed fallback, which is the value it had before. The
+  transition, what is lost, and a command to see the blast radius before
+  upgrading are on record in
+  `docs/external-clients/ha-unique-id-migration.md`.
 
 - **Event-group keys follow the reference layout.** The daemon stamped
   `loom_<channel>_event_group/homematic.keypress` — channel first, a slash, the

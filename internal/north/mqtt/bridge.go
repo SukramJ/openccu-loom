@@ -18,8 +18,10 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	paramlib "github.com/SukramJ/openccu-loom/internal/parameter"
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // QoSProfile is the per-category default. Individual topics can
@@ -2177,52 +2179,16 @@ func ResolveEnumLabel(value any, wireType hmenum.ParameterType, valueList []stri
 	if wireType != hmenum.ParameterTypeEnum || len(valueList) == 0 {
 		return value
 	}
-	idx, ok := indexFromValue(value)
-	if !ok || idx < 0 || idx >= int64(len(valueList)) {
-		return value
+	if label, ok := paramlib.EnumLabelFromWire(hmproto.ParameterData{ValueList: valueList}, value); ok {
+		return label
 	}
-	return valueList[idx]
+	return value
 }
 
 // resolveEnumLabel is the unexported alias used internally by the
 // bridge. New callers should use [ResolveEnumLabel].
 func resolveEnumLabel(value any, wireType hmenum.ParameterType, valueList []string) any {
 	return ResolveEnumLabel(value, wireType, valueList)
-}
-
-// indexFromValue extracts a non-negative int64 index from a Go value
-// that the wire layer might deliver as int / int32 / int64 / float64
-// / numeric string. Returns (idx, false) for nil, negative, or
-// non-numeric inputs.
-func indexFromValue(v any) (int64, bool) {
-	switch x := v.(type) {
-	case int:
-		return int64(x), true
-	case int32:
-		return int64(x), true
-	case int64:
-		return x, true
-	case uint:
-		return int64(x), true //nolint:gosec // bounded by ValueList length downstream; see #20
-	case uint32:
-		return int64(x), true
-	case uint64:
-		return int64(x), true //nolint:gosec // bounded by ValueList length downstream; see #20
-	case float64:
-		return int64(x), true
-	case float32:
-		return int64(x), true
-	case string:
-		if x == "" {
-			return 0, false
-		}
-		n, err := strconv.ParseInt(x, 10, 64)
-		if err != nil {
-			return 0, false
-		}
-		return n, true
-	}
-	return 0, false
 }
 
 // renderValue converts a primitive Go value into the raw-plane

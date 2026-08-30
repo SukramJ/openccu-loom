@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -419,14 +420,14 @@ func TestUpdateDeviceFirmware_UnknownDutyCycle_NoWarning(t *testing.T) {
 // TestUpdateDeviceFirmware_ThresholdBoundary pins the >=80 inclusive edge.
 func TestUpdateDeviceFirmware_ThresholdBoundary(t *testing.T) {
 	t.Parallel()
-	admin := &stubDeviceAdmin{dutyCycle: dutyCycleWarningThreshold, dutyCycleKnown: true}
+	admin := &stubDeviceAdmin{dutyCycle: coordinators.DutyCycleWarningThreshold, dutyCycleKnown: true}
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
 	UpdateDeviceFirmware(admin).ServeHTTP(w, req)
 
 	body := decodeFirmwareUpdate(t, w)
-	if body.DutyCycleWarning == nil || *body.DutyCycleWarning != dutyCycleWarningThreshold {
+	if body.DutyCycleWarning == nil || *body.DutyCycleWarning != coordinators.DutyCycleWarningThreshold {
 		t.Fatalf("expected warning at the threshold boundary, got %v", body.DutyCycleWarning)
 	}
 }

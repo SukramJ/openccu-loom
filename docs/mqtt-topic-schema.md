@@ -50,7 +50,7 @@ degenerate case with one entry under that segment.
 > parameters — a pulse whose type is not announced is dropped by Home
 > Assistant without a trace, so the lists must not be merged.
 >
-> `impulse` and `device_error` arrived in daemon 0.68.2. Before that only
+> `impulse` and `device_error` arrived in daemon 0.69.0. Before that only
 > keypress was published here, while all three reached the REST and
 > WebSocket planes.
 > `<type>` is the lower-cased press parameter (`press_short`,

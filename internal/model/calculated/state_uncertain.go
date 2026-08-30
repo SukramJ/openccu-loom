@@ -206,6 +206,25 @@ func (ss *sourceSink) LoadDataPointValue(loader func(channelAddress, parameter s
 	}
 }
 
+// SourceParameters returns the wire parameter name of every registered
+// source DP that implements [dataPointKeyProvider], in registration order.
+// This is the actual dependency set [Subscribe] resolved for the sensor —
+// north-bound adapters read it instead of re-deriving a calculated
+// parameter's sources from its own name, which drifts the moment a
+// Subscribe hook changes which upstream parameter it wires (e.g. the
+// OPERATING_VOLTAGE / BATTERY_STATE fallback on
+// [OperatingVoltageLevelSensor.Subscribe]).
+func (ss *sourceSink) SourceParameters() []string {
+	srcs := ss.snapshotSources()
+	out := make([]string, 0, len(srcs))
+	for _, dp := range srcs {
+		if kp, ok := dp.(dataPointKeyProvider); ok {
+			out = append(out, kp.DataPointKey().Parameter)
+		}
+	}
+	return out
+}
+
 // aggregateModifiedAt returns the maximum ModifiedAt across all registered
 // source DPs that implement [sourceTimestampProvider]. Returns the zero time
 // when no sources are registered or none carry a timestamp.

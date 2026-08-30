@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -81,8 +82,8 @@ func TestChannelEventAggregateDiscovery(t *testing.T) {
 		// All four events share the SAME objectID (same entity, dedup by cache).
 		t.Run("objectID_stable_for_"+pressParam, func(t *testing.T) {
 			t.Parallel()
-			if objectID != "1_event" {
-				t.Errorf("objectID=%q want \"1_event\"", objectID)
+			if objectID != "1_event_group_keypress" {
+				t.Errorf("objectID=%q want \"1_event_group_keypress\"", objectID)
 			}
 		})
 
@@ -327,8 +328,15 @@ func TestPerParameterPressEventSuppressedForMultiPress(t *testing.T) {
 		if !strings.Contains(oid, "event") {
 			t.Errorf("multi-press channel objectID=%q should contain \"event\"", oid)
 		}
-		if strings.Contains(oid, "press") {
-			t.Errorf("multi-press channel objectID=%q must NOT contain per-parameter press name", oid)
+		// The aggregate must not be named after the parameter that
+		// happened to fire — that is what would split one channel entity
+		// into four. Checked against the parameter names themselves; a
+		// substring test cannot be used, because the kind slug legitimately
+		// contains "press".
+		for _, p := range event.Sources(event.KindKeypress) {
+			if strings.HasSuffix(oid, "_"+strings.ToLower(string(p))) {
+				t.Errorf("multi-press channel objectID=%q is named after parameter %s", oid, p)
+			}
 		}
 	}
 
@@ -350,7 +358,11 @@ func TestPerParameterPressEventSuppressedForMultiPress(t *testing.T) {
 	if !strings.Contains(oidSingle, "event") {
 		t.Errorf("single-press channel objectID=%q should contain \"event\"", oidSingle)
 	}
-	if strings.Contains(oidSingle, "press") {
-		t.Errorf("single-press channel objectID=%q must NOT contain per-parameter press name", oidSingle)
+	// Same invariant as above: named after the group, never after the
+	// parameter that fired.
+	for _, p := range event.Sources(event.KindKeypress) {
+		if strings.HasSuffix(oidSingle, "_"+strings.ToLower(string(p))) {
+			t.Errorf("single-press channel objectID=%q is named after parameter %s", oidSingle, p)
+		}
 	}
 }
