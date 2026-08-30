@@ -253,6 +253,13 @@ type ChannelSummary struct {
 	// badge the channel and render the toggles.
 	Hidden bool `json:"hidden,omitempty"`
 	Locked bool `json:"locked,omitempty"`
+	// EventGroups carries the channel's device-trigger event groups inline —
+	// the same objects the per-channel event-groups endpoint serves. A
+	// consumer that has to fetch them separately tends to classify CCU
+	// parameter names itself instead, and a hand-kept copy of that set caps
+	// it at the kinds its author wrote down. Omitted when the channel has no
+	// event sources.
+	EventGroups []EventGroupSummary `json:"event_groups,omitempty"`
 }
 
 // DataPointSummary is one entry in `GET .../data-points`.
@@ -674,7 +681,7 @@ func GetDevice(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 		chans := d.Channels()
 		summaries := make([]ChannelSummary, 0, len(chans))
 		for _, ch := range chans {
-			summaries = append(summaries, toChannelSummary(ch, labels))
+			summaries = append(summaries, toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch)))
 		}
 		JSON(w, http.StatusOK, DeviceDetail{
 			DeviceSummary: toDeviceSummary(d, idx.CentralOf(d.Address), idx.Released(d.Address)),
@@ -696,7 +703,7 @@ func ListChannels(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 		chans := d.Channels()
 		out := make([]ChannelSummary, 0, len(chans))
 		for _, ch := range chans {
-			out = append(out, toChannelSummary(ch, labels))
+			out = append(out, toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch)))
 		}
 		JSON(w, http.StatusOK, out)
 	}
@@ -710,7 +717,7 @@ func GetChannel(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 			problem.WriteFromError(w, r, err)
 			return
 		}
-		JSON(w, http.StatusOK, toChannelSummary(ch, labels))
+		JSON(w, http.StatusOK, toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch)))
 	}
 }
 
@@ -725,7 +732,7 @@ func channelParamsetKeys(ch *device.Channel) []string {
 	return keys
 }
 
-func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummary {
+func toChannelSummary(ch *device.Channel, labels ParameterLabeler, serialSuffix string) ChannelSummary {
 	s := ChannelSummary{
 		Address:      ch.Address,
 		Number:       ch.Number,
@@ -754,6 +761,12 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 	}
 	if functions := ch.Functions(); len(functions) > 0 {
 		s.Functions = functions
+	}
+	if groups := ch.EventGroups(); len(groups) > 0 {
+		s.EventGroups = make([]EventGroupSummary, 0, len(groups))
+		for _, g := range groups {
+			s.EventGroups = append(s.EventGroups, toEventGroupSummary(g, serialSuffix))
+		}
 	}
 	s.IsCustomDpPrimary = ch.IsCustomDPPrimaryChannel()
 	// Operator per-channel overrides (G12): surfaced so the SPA can badge a

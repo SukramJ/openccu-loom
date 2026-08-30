@@ -394,7 +394,7 @@ func snapshotDeviceChannels(idx DeviceIndex, devs []*device.Device, labels Param
 		chans := d.Channels()
 		entries := make([]SnapshotChannelEntry, 0, len(chans))
 		for _, ch := range chans {
-			entry := SnapshotChannelEntry{ChannelSummary: toChannelSummary(ch, labels)}
+			entry := SnapshotChannelEntry{ChannelSummary: toChannelSummary(ch, labels, serialSuffixForChannel(idx, ch))}
 			if withDataPoints {
 				dps := ch.DataPoints()
 				entry.DataPoints = make([]DataPointSummary, 0, len(dps))

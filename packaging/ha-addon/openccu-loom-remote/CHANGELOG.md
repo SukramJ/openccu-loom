@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.69.1
+
+A channel now carries its device-trigger event groups inline, so clients
+build their event entities from one call instead of a round trip per
+channel. No operator action; nothing existing changes.
+
 # 0.69.0
 
 **Breaking — the button-press entity is re-created.** A channel's keypress

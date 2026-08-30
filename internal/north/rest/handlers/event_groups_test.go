@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -263,4 +264,53 @@ func TestToEventGroupSummary_UniqueID(t *testing.T) {
 			t.Errorf("CanonicalUniqueID on nil group = %q, want empty string", got)
 		}
 	})
+}
+
+// TestChannelSummaryEventGroupsMatchTheEndpoint holds the inline
+// `event_groups` field of a channel equal to what the per-channel endpoint
+// serves for the same channel.
+//
+// The field exists so a consumer builds its event entities from the one
+// bootstrap call. That only helps if the two agree: a client reading the
+// inline copy while the endpoint says something else is worse off than one
+// that had to make the round trip, because nothing would tell it. The
+// duplication this closes — a consumer classifying CCU parameter names for
+// itself — is exactly what capped the MQTT plane at a single event kind for
+// as long as it kept its own copy of the set.
+func TestChannelSummaryEventGroupsMatchTheEndpoint(t *testing.T) {
+	t.Parallel()
+
+	d := newTestDevice("0001ABCD", "HmIP-RC2")
+	ch := d.AddChannel("0001ABCD:1", 1, "KEY", hmenum.ParamsetKeyValues)
+	ch.AttachGenericEvent(modevent.NewSource("0001ABCD:1", hmenum.ParameterPressShort))
+	ch.AttachGenericEvent(modevent.NewSource("0001ABCD:1", hmenum.ParameterPressLong))
+	ch.AttachGenericEvent(modevent.NewSource("0001ABCD:1", hmenum.ParameterSequenceOK))
+	ch.BuildEventGroups("")
+
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
+	w := httptest.NewRecorder()
+	ListEventGroups(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("endpoint: expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var fromEndpoint []EventGroupSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &fromEndpoint); err != nil {
+		t.Fatalf("unmarshal endpoint: %v", err)
+	}
+	if len(fromEndpoint) < 2 {
+		t.Fatalf("fixture produced %d groups, want at least 2 — the guard needs more than one kind to compare", len(fromEndpoint))
+	}
+
+	inline := toChannelSummary(ch, nil, serialSuffixForChannel(idx, ch)).EventGroups
+	if len(inline) != len(fromEndpoint) {
+		t.Fatalf("channel carries %d groups, endpoint serves %d", len(inline), len(fromEndpoint))
+	}
+	for i := range fromEndpoint {
+		if diff := reflect.DeepEqual(inline[i], fromEndpoint[i]); !diff {
+			t.Errorf("group %d differs:\n inline   = %+v\n endpoint = %+v", i, inline[i], fromEndpoint[i])
+		}
+	}
 }
