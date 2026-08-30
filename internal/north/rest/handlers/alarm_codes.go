@@ -381,16 +381,6 @@ func alarmCodeRowFromReq(id string, req hmapi.AlarmCodeRequest, existingHash str
 	}, nil
 }
 
-// validRemoteKeyParameters is the set of remote-binding parameters the
-// intent router actually routes: internal/alarm/intents.go onEvent
-// dispatches handleRemotePress only for hmenum.ParameterPressShort /
-// hmenum.ParameterPressLong. A binding on any other parameter (e.g. a
-// typo'd "PRESS") is accepted by the wire schema but can never fire,
-// so it is rejected here rather than stored inert (S7 fail-visible).
-// The set itself is the router's, read through [alarm.IsRemotePressParameter]
-// — a parameter added to the routing must widen what this write accepts, and
-// a copy kept here would not.
-
 // validateAlarmCodeWrite enforces the write-time invariants a stored
 // code needs to ever authenticate or fire (notes/concepts/alarm-concept.md §11,
 // S7 fail-visible): a pin code must carry a PIN on creation, and a
@@ -430,6 +420,12 @@ func validateAlarmCodeWrite(req hmapi.AlarmCodeRequest, existingHash string) err
 		if b.ZoneID == "" {
 			return fmt.Errorf("remote_key binding requires zone_id: %w", ErrInvalidAlarmCode)
 		}
+		// A binding on a parameter the intent router does not route (a
+		// typo'd "PRESS", say) is accepted by the wire schema and can then
+		// never fire, which is indistinguishable from a broken remote — so
+		// it is rejected here rather than stored inert (S7 fail-visible).
+		// The set is the router's, not a copy: a parameter added to the
+		// routing widens what this write accepts, on its own.
 		if !alarm.IsRemotePressParameter(hmenum.Parameter(b.Parameter)) {
 			return fmt.Errorf("remote_key binding parameter must be PRESS_SHORT or PRESS_LONG: %w", ErrInvalidAlarmCode)
 		}
