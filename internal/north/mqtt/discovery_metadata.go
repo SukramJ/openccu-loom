@@ -55,6 +55,18 @@ var quantityToSwitchDeviceClass = map[hmenum.Quantity]string{
 	hmenum.QuantitySwitch: "switch",
 }
 
+// valueBehaviorToStateClass renames the domain's value behaviour into Home
+// Assistant's state_class vocabulary:
+//
+//   - "measurement"      — instantaneous reading (temperature, humidity,
+//     voltage, RSSI, …)
+//   - "total_increasing" — monotonically growing counter that may reset to
+//     zero (energy meters)
+//   - "total"            — value can decrease (e.g. cumulative water
+//     storage); not produced by HomeMatic at present.
+//
+// suggested_display_precision is deliberately not derived here — it comes
+// from the HA entity registry (HARegistryDescription).
 var valueBehaviorToStateClass = map[hmenum.ValueBehavior]string{
 	hmenum.ValueBehaviorInstantaneous: "measurement",
 	hmenum.ValueBehaviorCumulative:    "total",

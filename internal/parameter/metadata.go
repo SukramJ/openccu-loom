@@ -70,6 +70,9 @@ var sensorMetadataByParam = map[string]Metadata{
 	// GAS_ENERGY_COUNTER
 	"GAS_ENERGY_COUNTER": {Quantity: hmenum.QuantityGas, ValueBehavior: hmenum.ValueBehaviorMonotonic},
 
+	// GAS_POWER
+	"GAS_POWER": {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+
 	// GAS_FLOW
 	"GAS_FLOW": {Quantity: hmenum.QuantityVolumeFlowRate, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 
@@ -98,6 +101,9 @@ var sensorMetadataByParam = map[string]Metadata{
 	// ("LEVEL", "LEVEL_2")
 	"LEVEL":   {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 	"LEVEL_2": {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+
+	// LEVEL_SLATS
+	"LEVEL_SLATS": {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 
 	// LOCK_STATE
 	"LOCK_STATE": {Quantity: hmenum.QuantityEnum},
@@ -130,6 +136,9 @@ var sensorMetadataByParam = map[string]Metadata{
 	"BATTERY_STATE":     {Quantity: hmenum.QuantityVoltage, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 	"OPERATING_VOLTAGE": {Quantity: hmenum.QuantityVoltage, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 
+	// OPERATING_VOLTAGE_LEVEL
+	"OPERATING_VOLTAGE_LEVEL": {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+
 	// POWER
 	"POWER": {Quantity: hmenum.QuantityPower, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 
@@ -139,6 +148,10 @@ var sensorMetadataByParam = map[string]Metadata{
 	// ("RSSI_DEVICE", "RSSI_PEER")
 	"RSSI_DEVICE": {Quantity: hmenum.QuantitySignalStrength, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 	"RSSI_PEER":   {Quantity: hmenum.QuantitySignalStrength, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+
+	// ("SET_POINT_TEMPERATURE", "SET_TEMPERATURE")
+	"SET_POINT_TEMPERATURE": {Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+	"SET_TEMPERATURE":       {Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 
 	// ("ACTUAL_TEMPERATURE", "TEMPERATURE")
 	"ACTUAL_TEMPERATURE": {Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
