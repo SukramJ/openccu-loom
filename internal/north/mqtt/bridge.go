@@ -1274,6 +1274,41 @@ func (b *Bridge) PublishChannelEventState(ctx context.Context, centralName, ifac
 	return b.client.Publish(ctx, topic, buf, QoS0, false)
 }
 
+// PublishChannelImpulseState emits a non-retained impulse pulse on the
+// channel's `impulse` topic. Same envelope as
+// [Bridge.PublishChannelEventState]; `eventType` is the lower-cased wire
+// parameter (`sequence_ok`).
+func (b *Bridge) PublishChannelImpulseState(ctx context.Context, centralName, iface, address string, channel int, eventType string) error {
+	return b.publishChannelEventLeaf(ctx, b.topics.ChannelImpulse(b.resolvedCentral(centralName), iface, address, channel), eventType)
+}
+
+// PublishChannelDeviceErrorState emits a non-retained device-error pulse on
+// the channel's `device_error` topic. `eventType` is the lower-cased wire
+// parameter (`error`, `sensor_error`, `error_overheat`, …) — device-error
+// parameters are prefix-matched and open-ended, so the set is not closed.
+func (b *Bridge) PublishChannelDeviceErrorState(ctx context.Context, centralName, iface, address string, channel int, eventType string) error {
+	return b.publishChannelEventLeaf(ctx, b.topics.ChannelDeviceError(b.resolvedCentral(centralName), iface, address, channel), eventType)
+}
+
+// publishChannelEventLeaf is the shared body of the per-kind pulse
+// publishers. QoS0 and non-retained, like the keypress leaf: an event
+// entity must receive a fresh pulse, and a retained one would re-fire on
+// every reconnect.
+func (b *Bridge) publishChannelEventLeaf(ctx context.Context, topic, eventType string) error {
+	if !b.cfg.RawEnabled || topic == "" || eventType == "" {
+		return nil
+	}
+	buf, err := json.Marshal(map[string]any{
+		"event_type":  eventType,
+		"available":   true,
+		"modified_at": time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		return err
+	}
+	return b.client.Publish(ctx, topic, buf, QoS0, false)
+}
+
 // PublishSysvar emits a sysvar value on the canonical ADR-0011 topic
 // owned by the sysvar model object (`<base>/<central>/hub/sysvars/
 // <name>/state`). The bridge only fills in `base` and JSON-encodes

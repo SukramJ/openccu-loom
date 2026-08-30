@@ -496,6 +496,27 @@ func (c *Channel) HasParameter(name string) bool {
 	return c.Parameter(hmenum.Parameter(name)) != nil
 }
 
+// ParameterNames returns the VALUES-paramset parameter names the channel
+// exposes, sorted. [HasParameter] answers an exact-name question and cannot
+// serve a prefix one — device-error parameters are matched by prefix and the
+// set is open-ended (ERROR, SENSOR_ERROR, ERROR_OVERHEAT, …), so a caller
+// classifying them needs the list rather than a membership test.
+func (c *Channel) ParameterNames() []string {
+	if c == nil {
+		return nil
+	}
+	dps := c.DataPoints()
+	out := make([]string, 0, len(dps))
+	for _, dp := range dps {
+		if dp == nil {
+			continue
+		}
+		out = append(out, string(dp.Parameter()))
+	}
+	sort.Strings(out)
+	return out
+}
+
 // ParameterFloatRange returns the descriptor's MIN / MAX bounds for the named
 // VALUES-paramset parameter, parsed as float64. The third return value is
 // true when both bounds were present and parseable.

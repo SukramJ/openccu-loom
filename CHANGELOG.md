@@ -8,6 +8,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.68.2] - 2026-08-30
 
+### Added
+
+- **Impulse and device-error events reach the MQTT plane.** They never did.
+  The publish path returned early for any parameter that was not a keypress
+  (`eventbridge.go`, `!mqtt.IsPressParameter`), so `SEQUENCE_OK` and the
+  `ERROR*` family reached the REST and WebSocket planes and simply never
+  appeared on MQTT. A coverage gap, not a different shape — nothing existing
+  moves, so this is additive and needs none of the break obligations from
+  ADR 0068.
+
+  Each kind gets its own entity on its own sibling topic —
+  `…/<ch>/impulse` and `…/<ch>/device_error` beside the established
+  `…/<ch>/event`. Siblings rather than a kind segment under `event`, because
+  that topic is already a leaf and nesting would deliver impulses to every
+  existing `…/event` subscriber. The keypress entity keeps its identity,
+  its topic and its doorbell handling untouched.
+
+  Device-error parameters are prefix-matched and open-ended (`ERROR`,
+  `SENSOR_ERROR`, `ERROR_OVERHEAT`, …), and Home Assistant silently drops a
+  pulse whose `event_type` is not in the announced list. The announced list
+  is therefore built from the channel's actual parameters via a new
+  `Channel.ParameterNames`, not from the known roots — those remain the
+  fallback for a channel that cannot enumerate, and that limit is stated
+  rather than hidden.
+
 ### Fixed
 
 - **Event-group keys follow the reference layout.** The daemon stamped
