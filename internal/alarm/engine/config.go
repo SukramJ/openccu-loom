@@ -260,6 +260,26 @@ type SensorConfig struct {
 	PanicSilent bool `json:"panic_silent,omitempty"`
 }
 
+// RequiresAlwaysOn reports whether a sensor of this type must bypass the arm
+// state machine.
+//
+// A hazard sensor that is not always-on only fires while its zone is armed in
+// one of its listed modes — and with the empty mode list that is normal for a
+// smoke detector, it never fires at all. The rule is the domain's because more
+// than one surface depends on it: the REST write path couples the two so the
+// failure cannot be configured, and the input loader warns when a stored row
+// arrives without it. Two spellings of one safety invariant is not a thing to
+// keep.
+func RequiresAlwaysOn(sensorType hmenum.AlarmSensorType) bool {
+	return sensorType == hmenum.AlarmSensorTypeHazard
+}
+
+// AlwaysOnViolated reports whether cfg contradicts [RequiresAlwaysOn] for a
+// sensor of this type.
+func AlwaysOnViolated(sensorType hmenum.AlarmSensorType, cfg SensorConfig) bool {
+	return RequiresAlwaysOn(sensorType) && !cfg.AlwaysOn
+}
+
 // InMode reports whether the sensor participates in mode.
 func (c SensorConfig) InMode(mode hmenum.AlarmMode) bool {
 	for _, m := range c.Modes {

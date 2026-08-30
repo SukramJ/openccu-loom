@@ -69,6 +69,33 @@ func NewSecuritySourceRef(central, interfaceID, channelAddress, parameter string
 	}
 }
 
+// DisplayName is the label a consumer shows for this source: its resolved
+// name, or its channel address when the name has not been resolved yet. Empty
+// when neither is known, which means the ref names nothing displayable.
+func (r SecuritySourceRef) DisplayName() string {
+	if r.Name != "" {
+		return r.Name
+	}
+	return r.ChannelAddress
+}
+
+// SourceDisplayNames maps refs onto their display names, dropping the ones
+// that name nothing.
+//
+// The rule lives with the type because every surface that lists sources needs
+// it — the security renderer in the domain and the MQTT reconciler both had
+// byte-identical copies, and a copy of a display rule diverges silently: one
+// plane starts showing addresses where another shows names.
+func SourceDisplayNames(refs []SecuritySourceRef) []string {
+	out := make([]string, 0, len(refs))
+	for i := range refs {
+		if n := refs[i].DisplayName(); n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // SecurityRefKey builds the routing key of a data point. The format is
 // shared with the alarm input index; changing it in one place without
 // the other silently breaks source deduplication.

@@ -292,7 +292,7 @@ func hazardAttributes(snap security.Snapshot) map[string]any {
 			continue
 		}
 		refs = append(refs, st.Sources...)
-		byClass[string(c)] = sourceNamesOf(st.Sources)
+		byClass[string(c)] = hmevent.SourceDisplayNames(st.Sources)
 	}
 	attrs := sourcesAttribute(refs)
 	attrs["by_class"] = byClass
@@ -363,24 +363,11 @@ func sourcesAttribute(refs []hmevent.SecuritySourceRef) map[string]any {
 	}
 	return map[string]any{
 		"sources":      list,
-		"source_names": sourceNamesOf(shown),
+		"source_names": hmevent.SourceDisplayNames(shown),
 		"count":        total,
 		"truncated":    truncated,
 		"total":        total,
 	}
-}
-
-func sourceNamesOf(refs []hmevent.SecuritySourceRef) []string {
-	out := make([]string, 0, len(refs))
-	for i := range refs {
-		switch {
-		case refs[i].Name != "":
-			out = append(out, refs[i].Name)
-		case refs[i].ChannelAddress != "":
-			out = append(out, refs[i].ChannelAddress)
-		}
-	}
-	return out
 }
 
 func securitySourcePayload(r hmevent.SecuritySourceRef) map[string]any {

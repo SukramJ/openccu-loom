@@ -474,7 +474,7 @@ func (s *Service) warnContradictingEnrollments(rows []sqlitestore.AlarmSensorRow
 				"channel", row.ChannelAddress, "parameter", row.Parameter,
 				"recommended", cls.ActiveValues)
 		}
-		if row.SensorType == hmenum.AlarmSensorTypeHazard && !cfg.AlwaysOn {
+		if engine.AlwaysOnViolated(row.SensorType, cfg) {
 			s.log.Warn("hazard sensor is not always_on: it only fires while the zone is armed in one of its listed modes",
 				"sensor", row.ID, "zone", row.ZoneID, "parameter", row.Parameter)
 		}

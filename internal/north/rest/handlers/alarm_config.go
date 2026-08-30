@@ -267,7 +267,7 @@ func PutAlarmZoneSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			// fires at all. Coupling the two server-side means the
 			// failure cannot be configured, rather than merely being
 			// documented.
-			if in[i].Type == string(hmenum.AlarmSensorTypeHazard) && !cfg.AlwaysOn {
+			if engine.AlwaysOnViolated(hmenum.AlarmSensorType(in[i].Type), cfg) {
 				cfg.AlwaysOn = true
 				patched, err := json.Marshal(cfg)
 				if err != nil {

@@ -96,7 +96,7 @@ func (r *renderer) render(in reportInput) security.Notification {
 // when empty, so a catalogue entry can reference any of them without
 // the risk of a stray literal `{zone}` reaching a user.
 func (r *renderer) args(in reportInput) map[string]string {
-	names := sourceNames(in.Sources)
+	names := hmevent.SourceDisplayNames(in.Sources)
 	args := map[string]string{
 		"zone":    in.ZoneName,
 		"mode":    in.Mode.String(),
@@ -152,21 +152,6 @@ func subjectKey(c hmenum.SecurityClass, v hmenum.SecurityVerb) string {
 
 func messageKey(c hmenum.SecurityClass, v hmenum.SecurityVerb) string {
 	return "security.message." + string(c) + "." + string(v)
-}
-
-// sourceNames extracts display names, falling back to the channel
-// address so a source is never rendered as an empty string.
-func sourceNames(refs []hmevent.SecuritySourceRef) []string {
-	out := make([]string, 0, len(refs))
-	for i := range refs {
-		switch {
-		case refs[i].Name != "":
-			out = append(out, refs[i].Name)
-		case refs[i].ChannelAddress != "":
-			out = append(out, refs[i].ChannelAddress)
-		}
-	}
-	return out
 }
 
 // joinNames renders a name list, switching to a count once the list
