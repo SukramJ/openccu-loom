@@ -80,6 +80,18 @@ func (p *Program) Config() payload.ConfigPayload {
 	}
 }
 
+// ProgramExecuteAvailable reports whether a program with the given active
+// flag may be run.
+//
+// The CCU refuses to run a deactivated program, so the answer is the flag —
+// but it is the domain's answer, not a rule each plane restates. A plane that
+// restates it keeps its own version of "what makes a program runnable", and
+// the day that stops being the active flag alone (a maintenance window, a
+// disabled central) only the restatement is left behind.
+func ProgramExecuteAvailable(active bool) bool {
+	return active
+}
+
 // State returns the live program state.
 func (p *Program) State() payload.StatePayload {
 	if p == nil {
@@ -95,7 +107,7 @@ func (p *Program) State() payload.StatePayload {
 	}
 	if active, observed := p.Active(); observed {
 		out.IsActive = &active
-		out.ExecuteAvailable = active
+		out.ExecuteAvailable = ProgramExecuteAvailable(active)
 	}
 	if ts, ok := p.LastExecution(); ok {
 		out.LastExecuted = ts.Format("2006-01-02T15:04:05Z07:00")

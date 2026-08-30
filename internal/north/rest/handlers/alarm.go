@@ -472,7 +472,7 @@ func alarmZoneStatus(ctx context.Context, p AlarmPanel, snap engine.ZoneSnapshot
 			Silenced: snap.IncidentSilenced,
 		}
 	}
-	st.Countdown = alarmCountdown(ctx, p, snap)
+	st.Countdown = alarmCountdown(snap)
 	if len(snap.Readiness) > 0 {
 		st.Readiness = make(map[string]hmapi.AlarmModeReadiness, len(snap.Readiness))
 		for mode, rd := range snap.Readiness {
@@ -485,29 +485,22 @@ func alarmZoneStatus(ctx context.Context, p AlarmPanel, snap engine.ZoneSnapshot
 	return st
 }
 
-// alarmCountdown surfaces a running exit/entry countdown. The engine
-// snapshot carries only the remaining duration, so the total is sourced
-// from the zone's mode configuration; when it is unavailable the total
-// degrades to the remaining value rather than a misleading zero.
-func alarmCountdown(ctx context.Context, p AlarmPanel, snap engine.ZoneSnapshot) *hmapi.AlarmCountdown {
+// alarmCountdown surfaces a running exit/entry countdown. Both the remaining
+// duration and the total come from the engine snapshot — the engine armed the
+// timer and is the only place that knows its full length. When the total is
+// missing it degrades to the remaining value rather than a misleading zero.
+func alarmCountdown(snap engine.ZoneSnapshot) *hmapi.AlarmCountdown {
 	kind := snap.TimerKind
 	if kind != alarmCountdownExit && kind != alarmCountdownEntry {
 		return nil
 	}
 	remaining := durationSeconds(snap.TimerRemaining)
-	total := remaining
-	if row, ok, err := p.Stores().Zones.Get(ctx, snap.ID); err == nil && ok {
-		if cfg, cerr := engine.ParseZoneConfig(row.ConfigJSON); cerr == nil {
-			if mc, present := cfg.Modes[snap.Mode]; present {
-				switch {
-				case kind == alarmCountdownExit && mc.ExitDelaySeconds > 0:
-					total = mc.ExitDelaySeconds
-				case kind == alarmCountdownEntry && mc.EntryDelaySeconds > 0:
-					total = mc.EntryDelaySeconds
-				}
-			}
-		}
-	}
+	// The total is the engine's, not this handler's to re-derive. It used to
+	// be read back from the zone config, which gets an entry delay wrong
+	// whenever a sensor carries a per-sensor override: the engine arms
+	// ModeConfig.entryDelay(sensor), the config says EntryDelaySeconds, and
+	// the progress bar drawn from the difference runs at the wrong rate.
+	total := durationSeconds(snap.TimerTotal)
 	if total < remaining {
 		total = remaining
 	}

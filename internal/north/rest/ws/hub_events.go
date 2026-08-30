@@ -332,10 +332,11 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 					ProgramID: e.ProgramID,
 					UniqueID:  programUniqueID(reg, centralName, e.ProgramID),
 					Active:    e.Active,
-					// The CCU refuses to run a deactivated program, so the two
-					// travel together: a client re-renders both controls off one
-					// message instead of re-deriving the rule.
-					ExecuteAvailable: e.Active,
+					// The two travel together so a client re-renders both
+					// controls off one message. Whether an active program is
+					// runnable is the model's rule, not this frame's — the
+					// frame carries the flag, the model says what it means.
+					ExecuteAvailable: hubmodel.ProgramExecuteAvailable(e.Active),
 					Channel:          channel,
 					DeviceAddress:    deviceAddress,
 				},

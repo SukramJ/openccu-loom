@@ -1005,6 +1005,18 @@ func advanceWatermark(ctx context.Context, tx *sql.Tx, tier string, wm int64) er
 	return nil
 }
 
+// EnergyParameters returns the parameters the energy endpoint aggregates —
+// the exact filter QueryEnergy applies.
+//
+// Exported so a consumer that folds those rows can be held to the same set: a
+// parameter added here reaches the fold as rows it must handle, and a fold
+// that silently matches none of them produces a device with buckets present
+// and every figure zero, which reads as "this device consumed nothing" rather
+// than as an error.
+func EnergyParameters() []string {
+	return slices.Clone(energyParameters)
+}
+
 // energyParameters is the fixed set of parameters the energy endpoint
 // aggregates: instantaneous load plus the two cumulative meter counters
 // (consumption, feed-in). POWER is instantaneous (W, averaged); the two
