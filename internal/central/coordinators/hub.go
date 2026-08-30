@@ -44,6 +44,20 @@ type BidcosInterfaceInfo struct {
 	Connected bool
 }
 
+// DutyCycleWarningThreshold is the transmit duty cycle in percent at or
+// above which a firmware update is flagged as risky. The CCU WebUI gates
+// device updates on a high duty cycle (isDutyCycleOK4DevUpdate); we do not
+// block — an OTA flash still queues — but the operator is warned so a
+// stalled transfer over a saturated radio is expected, not surprising.
+const DutyCycleWarningThreshold = 80
+
+// FirmwareUpdateRisky reports whether a transmit duty cycle in percent is at
+// or above [DutyCycleWarningThreshold]. A negative percentage means the CCU
+// did not report the value, which is never risky.
+func FirmwareUpdateRisky(dutyCyclePercent int) bool {
+	return dutyCyclePercent >= DutyCycleWarningThreshold
+}
+
 // HubCoordinator owns the central's view of CCU "hub" entities:
 // system variables, programs, alarm messages, service messages, and
 // install-mode toggles. It re-emits changes on the internal bus.
