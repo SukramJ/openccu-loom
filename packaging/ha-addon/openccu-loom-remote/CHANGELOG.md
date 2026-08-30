@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.68.2
+
+- Fixes the identifier the daemon reports for device event groups over the
+  REST and WebSocket API so it matches what clients actually build. No entity
+  changes; the MQTT path is untouched.
+
 # 0.68.1
 
 - The daemon's API document now describes what `GET /devices/{addr}/cdps/{name}`

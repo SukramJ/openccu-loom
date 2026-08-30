@@ -76,6 +76,40 @@ func CanonicalUniqueID(serialSuffix, address, parameter, eventPrefix string) str
 // duplicate beside it.
 const CalculatedFamilyPrefix = "calculated"
 
+// EventGroupFamilyPrefix marks a device-trigger event group inside a
+// routing key, ahead of the channel:
+//
+//	loom_event_group_<kind>_<channel>
+//
+// The layout is not [CanonicalUniqueID]'s. That helper puts the central-id
+// slot in front of everything, which would yield
+// `loom_<central>_event_group_<kind>_<channel>`; the reference builds
+// `event_group_<kind>_<channel-unique-id>` and the central-id, where an
+// address family needs one, lives inside that channel id. Consumers key
+// their entity registry on the exact string, so the two spellings are not
+// interchangeable.
+const EventGroupFamilyPrefix = "event_group"
+
+// EventGroupUniqueID builds the external unique_id for a device-trigger
+// event group: the loom namespace, the family prefix, the short kind, then
+// the channel-level routing key.
+//
+//	loom_event_group_keypress_vcu1234567_1
+//	loom_event_group_keypress_11a0001234_bidcos_rf_1   (virtual remote)
+//
+// shortKind is the kind without its `homematic.` prefix — `keypress`,
+// `impulse`, `device_error`.
+func EventGroupUniqueID(centralID, channelAddress, shortKind string) string {
+	if channelAddress == "" || shortKind == "" {
+		return ""
+	}
+	channel := GenerateChannelUniqueID(centralID, channelAddress)
+	if channel == "" {
+		return ""
+	}
+	return strings.ToLower(loomNamespace + "_" + EventGroupFamilyPrefix + "_" + shortKind + "_" + channel)
+}
+
 // CalculatedUniqueID builds the external unique_id for a calculated data
 // point. It is [CanonicalUniqueID] with [CalculatedFamilyPrefix] in the
 // family slot, and exists so every producer - REST, WebSocket and MQTT
