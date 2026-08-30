@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 398.
+Guards without a doc comment: 7 of 399.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -124,6 +124,7 @@ Guards without a doc comment: 7 of 398.
 | TestReadFunctionsDoNotCollapseFailureIntoEmpty | empty_absent_failed_collapse_test.go | TestReadFunctionsDoNotCollapseFailureIntoEmpty guards against the defect class the round-4 audit found 34 times: a Get*/Load*/Fetch*/ List*/Read*/Query* function that fetches from a source outside the process (the CCU, SQLite, the broker) answering an error branch with the zero value and a nil error, so a caller cannot tell "there is nothing" from "I could not find out". |
 | TestEnumCatalogueMatchesGoConstants | enum_catalogue_parity_test.go | TestEnumCatalogueMatchesGoConstants asserts that the entries for DataPointCategory and DataPointType in assets/schemas/enums.json exactly match the const declarations in pkg/hmenum/datapoint.go. |
 | TestEventTypeStringsStable | event_catalogue_test.go | TestEventTypeStringsStable locks the wire-level strings the event- bus uses as routing keys. |
+| TestEventGroupKeyFollowsTheReferenceLayout | event_group_key_parity_test.go | TestEventGroupKeyFollowsTheReferenceLayout pins the external identity of a device-trigger event group against the layout the reference stack and the Python client both build: event_group_<kind>_<channel-unique-id> (reference) loom_event_group_<kind>_<channel-unique-id> (here, namespaced) The expected values are transcribed from what the Python client's compat event-group model produces for the same inputs — measured, not inferred. |
 | TestEveryEventTypeHasAPublisher | event_publisher_coverage_test.go | TestEveryEventTypeHasAPublisher is the mirror image of [TestEveryEventTypeHasASubscriber]: it asserts that every event type the daemon defines is actually emitted by production code. |
 | TestDeclaredSilentEventDocsClaimNoConsumers | event_subscriber_coverage_test.go | TestDeclaredSilentEventDocsClaimNoConsumers cross-checks the two truths this package keeps about an event: eventsWithoutSubscriber declares that nothing consumes it, while the catalogue's doc comment tells a reader what it is for. |
 | TestEveryEventTypeHasASubscriber | event_subscriber_coverage_test.go | TestEveryEventTypeHasASubscriber asserts that every event type the daemon defines is consumed by production code, or is declared in [eventsWithoutSubscriber] as deliberately unconsumed. |

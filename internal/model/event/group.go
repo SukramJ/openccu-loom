@@ -72,17 +72,27 @@ func (g *Group) Category() hmenum.DataPointCategory {
 }
 
 // CanonicalUniqueID returns the loom-namespaced routing key for this event
-// group — the external HA-entity identity. The serialSuffix (the CCU serial's
-// last-10 lower suffix) is supplied by the north boundary; the group
-// contributes its channel address and `event_group/<kind>` key name, so the
-// canonical key stays in lockstep with the promoted
-// [datapoint.BaseDataPointFields.UniqueID]. Mirrors
-// [generic.DataPoint.CanonicalUniqueID]. Returns "" for a nil group.
+// group — the external HA-entity identity:
+//
+//	loom_event_group_<kind>_<channel>
+//
+// The serialSuffix (the CCU serial's last-10 lower suffix) is supplied by the
+// north boundary and lands inside the channel slot for the address families
+// that need it, not in front of the whole key.
+//
+// This is the reference layout, deliberately. The key used to be built from
+// the internal key name — `loom_<channel>_event_group/homematic.keypress`,
+// with a slash and the unshortened kind — which no consumer could use: the
+// Python client recomputed the reference spelling itself rather than read the
+// value this method feeds into `EventGroupSummary.unique_id`. A field that
+// invites use and is wrong when used is worse than an absent one.
+//
+// Returns "" for a nil group or an unresolved serial.
 func (g *Group) CanonicalUniqueID(serialSuffix string) string {
 	if g == nil || serialSuffix == "" {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, g.ChannelAddress, g.KeyName(), "")
+	return routingkey.EventGroupUniqueID(serialSuffix, g.ChannelAddress, g.TranslationKey())
 }
 
 // TranslationKey returns the slugified i18n lookup key for this group. It is
