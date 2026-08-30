@@ -84,6 +84,7 @@ nav:
       - External Client Wire Contract: external-clients/topic-hierarchy.md
       - Home Assistant Drop-in: external-clients/ha-drop-in-identity-and-scoping.md
       - HA Unique-ID Migration: external-clients/ha-unique-id-migration.md
+      - Breaking a Published Identity: external-clients/breaking-change-process.md
   - Developer:
       - Architecture: developer/architecture.md
       - Development Setup: developer/setup.md
