@@ -118,6 +118,20 @@ func (s *garageClosureServer) publish() {
 		return
 	}
 	s.srv.SetCurrentPosition(closureStateFor(state))
+	// Motion is the drive's own signal (SECTION), not something to infer from
+	// the position: DOOR_STATE has no travelling value at all, so a position
+	// alone can never say whether the door is moving.
+	s.srv.SetMainState(closureMainStateFor(s.g.IsOpening(), s.g.IsClosing()))
+}
+
+// closureMainStateFor maps the model's motion predicates onto the cluster's
+// MainState, the same way the window-covering projection maps them onto
+// OperationalStatus (motionForOpeningClosing).
+func closureMainStateFor(opening, closing bool) clusterwire.ClosureMainState {
+	if opening || closing {
+		return clusterwire.ClosureMainStateMoving
+	}
+	return clusterwire.ClosureMainStateStopped
 }
 
 // --- interfaces.MatterClusterServer -------------------------------

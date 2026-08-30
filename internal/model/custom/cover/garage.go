@@ -421,6 +421,11 @@ func (g *Garage) OnSection(v int32) {
 	g.sectionV = v
 	g.hasSec = true
 	g.mu.Unlock()
+	// SECTION is the drive's motion signal, and the Matter projection reports
+	// it as MainState. Without this the cluster could only ever learn about
+	// motion from a DOOR_STATE push — which carries no travelling value — so
+	// a door that started moving stayed reported as stopped until it arrived.
+	g.closure.publishIfBuilt()
 }
 
 func toInt32(v any) (int32, bool) {

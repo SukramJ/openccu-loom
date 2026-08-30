@@ -277,22 +277,36 @@ func TestClosureControlSecureStateTracksFullyClosed(t *testing.T) {
 	}
 }
 
-// TestClosureControlTravellingReportsMovingWithNullPosition pins the
-// mid-travel shape: a drive between named stops has no position to report,
-// and a nearest-stop guess would be a reading nothing observed.
-func TestClosureControlTravellingReportsMovingWithNullPosition(t *testing.T) {
+// TestClosureControlUnknownPositionIsNotMotion pins the two apart.
+//
+// A null Position means the drive's position is unknown — the spec says so
+// directly (matter.js closure-control.resource.ts:429-439: "If the closure
+// doesn't know accurately its current state the value null shall be used").
+// Whether the drive is MOVING is a separate attribute with a separate source:
+// the model's own motion signal, delivered through SetMainState.
+//
+// This used to assert that a null position implied Moving, which made a stuck
+// or unreferenced door report as perpetually in motion to Apple and Google
+// Home, with nothing able to correct it.
+func TestClosureControlUnknownPositionIsNotMotion(t *testing.T) {
 	t.Parallel()
 	s := closure.NewControlServer(closure.Config{})
 
 	s.SetCurrentPosition(currentPtr(clusterwire.ClosureCurrentPositionFullyClosed))
+	s.SetMainState(clusterwire.ClosureMainStateStopped)
 	s.SetCurrentPosition(nil)
 
 	if got := readOverallCurrent(t, s).Position; got != nil {
-		t.Errorf("Position = %v while travelling, want null", *got)
+		t.Errorf("Position = %v with an unknown position, want null", *got)
 	}
-	v, _ := s.MatterRead(clusterwire.ClosureControlAttrMainState)
-	if v != uint8(clusterwire.ClosureMainStateMoving) {
-		t.Errorf("MainState = %v while travelling, want Moving", v)
+	if v, _ := s.MatterRead(clusterwire.ClosureControlAttrMainState); v != uint8(clusterwire.ClosureMainStateStopped) {
+		t.Errorf("MainState = %v, want the state the model last reported (Stopped) — position must not overwrite it", v)
+	}
+
+	// And the model's answer is what moves it.
+	s.SetMainState(clusterwire.ClosureMainStateMoving)
+	if v, _ := s.MatterRead(clusterwire.ClosureControlAttrMainState); v != uint8(clusterwire.ClosureMainStateMoving) {
+		t.Errorf("MainState = %v after the model reported motion, want Moving", v)
 	}
 }
 

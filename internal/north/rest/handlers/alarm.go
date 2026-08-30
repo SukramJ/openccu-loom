@@ -93,7 +93,7 @@ func AlarmState(p AlarmPanel) http.HandlerFunc {
 		snaps := p.Engine().Zones()
 		zones := make([]hmapi.AlarmZoneStatus, 0, len(snaps))
 		for i := range snaps {
-			zones = append(zones, alarmZoneStatus(r.Context(), p, snaps[i]))
+			zones = append(zones, alarmZoneStatus(p, snaps[i]))
 		}
 		JSON(w, http.StatusOK, alarmStateResponse{Zones: zones})
 	}
@@ -454,7 +454,7 @@ func TestAlarmOutput(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 // --- mapping + shared helpers ---
 
 // alarmZoneStatus maps an engine zone snapshot onto the wire status DTO.
-func alarmZoneStatus(ctx context.Context, p AlarmPanel, snap engine.ZoneSnapshot) hmapi.AlarmZoneStatus {
+func alarmZoneStatus(p AlarmPanel, snap engine.ZoneSnapshot) hmapi.AlarmZoneStatus {
 	st := hmapi.AlarmZoneStatus{
 		ID:       snap.ID,
 		Name:     snap.Name,
