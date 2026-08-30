@@ -66,3 +66,59 @@ func TestEnumLabelWithoutValueListRejectsIndexes(t *testing.T) {
 		t.Errorf("EnumLabel(label form) = (%q, %v), want (\"OPEN\", true)", label, ok)
 	}
 }
+
+// TestEnumLabelFromWireCoversEveryWireForm pins the integer forms a CCU
+// value arrives in, the numeric-string form a JSON transport produces, and
+// the two refusals that make the resolution safe: a non-numeric string is a
+// label rather than an index, and a bool is neither — an ENUM read must not
+// turn `true` into VALUE_LIST[1].
+//
+// The MQTT bridge used to carry this matrix itself. It moved here with the
+// resolution, so a transport growing another numeric form is answered once
+// instead of on whichever plane happens to notice.
+func TestEnumLabelFromWireCoversEveryWireForm(t *testing.T) {
+	t.Parallel()
+	desc := hmproto.ParameterData{ValueList: []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"}}
+	cases := []struct {
+		in        any
+		wantLabel string
+		wantOK    bool
+	}{
+		{int(2), "C", true},
+		{int32(3), "D", true},
+		{int64(4), "E", true},
+		{uint(5), "F", true},
+		{uint32(6), "G", true},
+		{uint64(7), "H", true},
+		{float64(8), "I", true},
+		{float32(9), "J", true},
+		{"10", "K", true},
+		{"", "", false},
+		{"abc", "abc", true},
+		{nil, "", false},
+		{true, "", false},
+		{int(99), "", false},
+		{"99", "", false},
+	}
+	for _, c := range cases {
+		label, ok := parameter.EnumLabelFromWire(desc, c.in)
+		if ok != c.wantOK || label != c.wantLabel {
+			t.Errorf("EnumLabelFromWire(%#v) = (%q, %v), want (%q, %v)", c.in, label, ok, c.wantLabel, c.wantOK)
+		}
+	}
+}
+
+// TestEnumLabelKeepsItsNarrowReading holds the other half: [EnumLabel] must
+// keep reading a numeric string as a label, because a data point whose
+// firmware spells an ENUM out delivers exactly that. The two functions
+// answer different callers and must not converge.
+func TestEnumLabelKeepsItsNarrowReading(t *testing.T) {
+	t.Parallel()
+	desc := hmproto.ParameterData{ValueList: []string{"A", "B", "C"}}
+	if label, ok := parameter.EnumLabel(desc, "2"); !ok || label != "2" {
+		t.Fatalf("EnumLabel(desc, \"2\") = (%q, %v), want (\"2\", true)", label, ok)
+	}
+	if label, ok := parameter.EnumLabelFromWire(desc, "2"); !ok || label != "C" {
+		t.Fatalf("EnumLabelFromWire(desc, \"2\") = (%q, %v), want (\"C\", true)", label, ok)
+	}
+}

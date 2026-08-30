@@ -29,6 +29,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	paramlib "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -2007,7 +2008,9 @@ func (b *EventBridge) publishSlotState(
 		// VALUE_LIST. Resolve to the matching label so consumers
 		// see "OPEN" / "CLOSED" instead of "2" / "0".
 		if pd.Type == hmenum.ParameterTypeEnum && len(pd.ValueList) > 0 {
-			value = mqtt.ResolveEnumLabel(value, pd.Type, pd.ValueList)
+			if label, ok := paramlib.EnumLabelFromWire(pd, value); ok {
+				value = label
+			}
 		}
 		state.AdditionalInformation = dpAdditionalInformation(dp)
 	}
@@ -2127,7 +2130,9 @@ func (b *EventBridge) republishBaseForStatusPair(
 	}
 	pd := dp.ParameterData()
 	if pd.Type == hmenum.ParameterTypeEnum && len(pd.ValueList) > 0 {
-		value = mqtt.ResolveEnumLabel(value, pd.Type, pd.ValueList)
+		if label, ok := paramlib.EnumLabelFromWire(pd, value); ok {
+			value = label
+		}
 	}
 	state := payload.PerDPState{
 		Value:                 value,
@@ -2408,6 +2413,23 @@ func datapointNameDataOf(dp any) (naming.NameData, bool) {
 	return naming.NameData{}, false
 }
 
+// channelCarriesKind reports whether ch exposes any source of kind k. The
+// classification comes from [event.Sources]; the channel is only asked
+// whether it carries each parameter, so no plane needs its own copy of the
+// set — the copy the MQTT adapter used to keep is what left impulse and
+// device-error events unpublished for as long as it existed.
+func channelCarriesKind(ch mqtt.ChannelInspector, k event.Kind) bool {
+	if ch == nil {
+		return false
+	}
+	for _, p := range event.Sources(k) {
+		if ch.HasParameter(string(p)) {
+			return true
+		}
+	}
+	return false
+}
+
 // publishChannelEventState publishes the per-channel aggregate event
 // payload when a PRESS_* parameter fires on a press channel — any channel
 // that exposes at least one PRESS_* parameter (detected via the
@@ -2440,7 +2462,7 @@ func (b *EventBridge) publishChannelEventState(
 	lowered := strings.ToLower(parameter)
 	switch kind {
 	case event.KindKeypress:
-		if len(mqtt.ChannelPressTypes(ch)) == 0 {
+		if !channelCarriesKind(ch, event.KindKeypress) {
 			// No PRESS_* parameter on the channel → not a press channel, skip.
 			return
 		}
@@ -2508,20 +2530,16 @@ func (b *EventBridge) publishChannelEventDiscoverySnapshot(
 }
 
 // firstPressParameter returns the first click-event parameter the channel
-// exposes (matching the canonical [mqtt.PressParameters] set), or an empty
-// string when the channel has none. The bridge's BuildChannelEvent path uses
-// the parameter only as a routing trigger; the channel inspector then
-// collects every press type into the channel-level event entity.
+// exposes, or an empty string when it has none. The bridge's
+// BuildChannelEvent path uses the parameter only as a routing trigger; the
+// channel inspector then collects every press type into the channel-level
+// event entity.
 func firstPressParameter(ch *device.Channel) string {
-	if ch == nil {
+	sources := ch.EventSources(event.KindKeypress)
+	if len(sources) == 0 {
 		return ""
 	}
-	for _, p := range mqtt.PressParameters() {
-		if ch.HasParameter(p) {
-			return p
-		}
-	}
-	return ""
+	return string(sources[0])
 }
 
 // publishCustomDPDiscoverySnapshot emits the aggregate (channel-level)

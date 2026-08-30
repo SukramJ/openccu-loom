@@ -10,6 +10,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The model owns the event classification, and the adapters ask it.** The
+  MQTT plane kept its own copy of the eight click parameters and exported it
+  so the EventBridge could share it — a domain set living in an adapter,
+  with the domain reaching north to read it. That copy is what left impulse
+  and device-error events unpublished: a duplicated enumerable set caps its
+  holder at the size its author knew about, and the model had known three
+  event kinds all along.
+
+  The set is gone. `Channel.EventSources` answers which sources of a kind a
+  channel carries, the MQTT discovery path asks `event.Classify`, and the
+  EventBridge classifies through the model instead of calling into
+  `north/mqtt`. The `event_types` list of a keypress entity now follows the
+  model's source order, so it is finally the same order the REST and
+  WebSocket planes report for the same channel; the set is unchanged and no
+  entity identity moves.
+
+  Two look-alikes were measured and deliberately left apart, because they
+  answer different questions: `generic/button.go` excludes PRESS_LOCK and
+  PRESS_UNLOCK from the Matter GenericSwitch projection on purpose, and
+  `parameter.EnumLabel` refuses to read a numeric string as an index so a
+  firmware that spells an ENUM out as its label still resolves. The wire
+  reading the MQTT bridge needed is now `parameter.EnumLabelFromWire`, named
+  beside it in the model rather than duplicated in the adapter — with the
+  unsigned and 32-bit-float index forms the adapter had and the model
+  lacked.
+
 - **Two climate operations become discoverable.** `enable_away_by_calendar`
   and `enable_away_by_duration` were implemented, parameterised and
   reachable through the custom-data-point dispatcher, and neither the REST

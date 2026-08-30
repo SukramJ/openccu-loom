@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,39 +18,16 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// pressParameters is the closed set of click-event parameter names a press
-// channel can expose — the reference stack's CLICK_EVENTS set. Every channel
-// carrying at least one of these gets a single channel-level keypress `event`
-// entity whose event_types list these (lower-cased), and each WRITABLE press
-// (usage=data_point) additionally gets a press-button companion.
-var pressParameters = []string{
-	"PRESS_SHORT",
-	"PRESS_LONG",
-	"PRESS_LONG_START",
-	"PRESS_LONG_RELEASE",
-	"PRESS_CONT",
-	"PRESS",
-	"PRESS_LOCK",
-	"PRESS_UNLOCK",
+// isPressParameter reports whether p is a click-event parameter, asking
+// [event.Classify] rather than a list kept here. The set used to be
+// duplicated in this file and exported for the EventBridge to share; a copy
+// of an enumerable domain set caps its holder at the size its author knew
+// about, which is why this plane published only keypresses while the model
+// had known three event kinds all along.
+func isPressParameter(p string) bool {
+	kind, known := event.Classify(hmenum.Parameter(strings.ToUpper(p)))
+	return known && kind == event.KindKeypress
 }
-
-// IsPressParameter reports whether p is one of the canonical click-event
-// parameter names (case-insensitive). Exported so the EventBridge can
-// use the same check without duplicating the set.
-func IsPressParameter(p string) bool {
-	up := strings.ToUpper(p)
-	return slices.Contains(pressParameters, up)
-}
-
-// PressParameters returns a copy of the canonical click-event parameter set
-// in detection order. Exported so the EventBridge can synthesise a press
-// channel's snapshot event without duplicating the set.
-func PressParameters() []string {
-	return slices.Clone(pressParameters)
-}
-
-// isPressParameter is the package-internal alias used by Build.
-func isPressParameter(p string) bool { return IsPressParameter(p) }
 
 // ChannelPressTypes returns the lower-cased HA event_types for all
 // PRESS_* parameters present on ch. Returns nil only when the channel has
@@ -59,16 +35,16 @@ func isPressParameter(p string) bool { return IsPressParameter(p) }
 // keypress event entity per press channel regardless of how many press
 // types it carries (a single PRESS_SHORT KEY channel gets the same
 // channel-level `event` entity as a four-type remote), so a single press
-// type is enough to materialise the aggregate. The result order mirrors
-// pressParameters. Exported so the EventBridge can detect press channels.
+// type is enough to materialise the aggregate. The order follows
+// [event.Sources], the model's own source order.
 func ChannelPressTypes(ch ChannelInspector) []string {
 	if ch == nil {
 		return nil
 	}
 	var found []string
-	for _, pp := range pressParameters {
-		if ch.HasParameter(pp) {
-			found = append(found, strings.ToLower(pp))
+	for _, p := range event.Sources(event.KindKeypress) {
+		if ch.HasParameter(string(p)) {
+			found = append(found, strings.ToLower(string(p)))
 		}
 	}
 	return found
