@@ -212,51 +212,6 @@ func TestExcludedParametersNeverClassify(t *testing.T) {
 	}
 }
 
-// TestClassificationActive verifies the two modes Active operates in: a
-// nil ActiveValues list defers entirely to the on argument (BOOL
-// parameters), while a non-nil list is exhaustive and ignores on (ENUM
-// parameters) — matching only exact, case-sensitive label strings.
-func TestClassificationActive(t *testing.T) {
-	t.Parallel()
-
-	t.Run("nil active values returns on verbatim", func(t *testing.T) {
-		t.Parallel()
-
-		var c Classification // ActiveValues is nil.
-		if got := c.Active("STATE_LABEL", true); got != true {
-			t.Errorf("Active(_, true) = %v, want true", got)
-		}
-		if got := c.Active("STATE_LABEL", false); got != false {
-			t.Errorf("Active(_, false) = %v, want false", got)
-		}
-		// The label argument is irrelevant when ActiveValues is nil.
-		if got := c.Active("", true); got != true {
-			t.Errorf("Active(\"\", true) = %v, want true", got)
-		}
-	})
-
-	t.Run("non-nil active values ignores on", func(t *testing.T) {
-		t.Parallel()
-
-		c := Classification{ActiveValues: []string{"WET", "WATER"}}
-
-		if got := c.Active("WET", false); got != true {
-			t.Errorf("Active(WET, false) = %v, want true (on ignored for ENUM)", got)
-		}
-		if got := c.Active("WATER", true); got != true {
-			t.Errorf("Active(WATER, true) = %v, want true", got)
-		}
-		if got := c.Active("DRY", true); got != false {
-			t.Errorf("Active(DRY, true) = %v, want false (unlisted label)", got)
-		}
-		// Case must match exactly — a lowercase variant of a listed label
-		// is a different string and must not be treated as active.
-		if got := c.Active("wet", true); got != false {
-			t.Errorf("Active(wet, true) = %v, want false (case mismatch)", got)
-		}
-	})
-}
-
 // TestClassifyUnclassifiedParameters verifies that ordinary, non-security
 // parameters resolve to ok=false and a zero Classification.
 func TestClassifyUnclassifiedParameters(t *testing.T) {

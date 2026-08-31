@@ -2,7 +2,7 @@
 // Copyright (C) 2026 SukramJ.
 
 // Tests for Sysvar.Extended, SysvarDpSensor list-label transform,
-// IsExcludedSysvar / CleanSysvarNames filters, MetricHubSensor as
+// the IsExcludedSysvar filter, MetricHubSensor as
 // HubDataPointer, and the MetricHubSensors factory.
 package hub
 
@@ -151,15 +151,15 @@ func TestWrapSysvarReturnsBaseForExtendedList(t *testing.T) {
 	}
 }
 
-// ─── Item 3: IsExcludedSysvar / CleanSysvarNames ─────────────────────────────
+// ─── IsExcludedSysvar ───────────────────────────────────────────────────────
 
 // TestIsExcludedSysvarOldVal verifies that names containing "OldVal"
-// are excluded, matching Python's _EXCLUDED list (hub/hub.py:95-98).
+// are excluded whatever the ID.
 func TestIsExcludedSysvarOldVal(t *testing.T) {
 	cases := []string{"OldVal", "MyVarOldVal", "OldValSomething"}
 	for _, name := range cases {
-		if !IsExcludedSysvar(name) {
-			t.Errorf("IsExcludedSysvar(%q) = false, want true", name)
+		if !IsExcludedSysvar(name, "1234") {
+			t.Errorf("IsExcludedSysvar(%q, %q) = false, want true", name, "1234")
 		}
 	}
 }
@@ -169,8 +169,27 @@ func TestIsExcludedSysvarOldVal(t *testing.T) {
 func TestIsExcludedSysvarPcCCUID(t *testing.T) {
 	cases := []string{"pcCCUID", "device_pcCCUID_x"}
 	for _, name := range cases {
-		if !IsExcludedSysvar(name) {
-			t.Errorf("IsExcludedSysvar(%q) = false, want true", name)
+		if !IsExcludedSysvar(name, "1234") {
+			t.Errorf("IsExcludedSysvar(%q, %q) = false, want true", name, "1234")
+		}
+	}
+}
+
+// TestIsExcludedSysvarFixedIDs verifies that the alarm/service-message
+// IDs are matched by equality, so an ordinary variable whose ID merely
+// starts with "40" stays in the catalogue.
+func TestIsExcludedSysvarFixedIDs(t *testing.T) {
+	for _, tc := range []struct {
+		name, id string
+		want     bool
+	}{
+		{"Alarmmeldungen", "40", true},
+		{"Servicemeldungen", "41", true},
+		{"Temperatur Garten", "401", false},
+		{"Temperatur Garten", "4", false},
+	} {
+		if got := IsExcludedSysvar(tc.name, tc.id); got != tc.want {
+			t.Errorf("IsExcludedSysvar(%q, %q) = %v, want %v", tc.name, tc.id, got, tc.want)
 		}
 	}
 }
@@ -180,35 +199,9 @@ func TestIsExcludedSysvarPcCCUID(t *testing.T) {
 func TestIsExcludedSysvarNormalNames(t *testing.T) {
 	cases := []string{"MyVar", "Temperature", "Heating", "", "mode"}
 	for _, name := range cases {
-		if IsExcludedSysvar(name) {
-			t.Errorf("IsExcludedSysvar(%q) = true, want false", name)
+		if IsExcludedSysvar(name, "1234") {
+			t.Errorf("IsExcludedSysvar(%q, %q) = true, want false", name, "1234")
 		}
-	}
-}
-
-// TestCleanSysvarNamesFiltersExcluded verifies that CleanSysvarNames
-// removes excluded names and keeps valid ones, mirroring Python's
-// _clean_variables (hub/hub.py:940-942).
-func TestCleanSysvarNamesFiltersExcluded(t *testing.T) {
-	input := []string{"Temperature", "OldVal", "Heating", "pcCCUID", "Mode"}
-	got := CleanSysvarNames(input)
-	want := []string{"Temperature", "Heating", "Mode"}
-	if len(got) != len(want) {
-		t.Fatalf("CleanSysvarNames() len=%d, want %d; got %v", len(got), len(want), got)
-	}
-	for i, g := range got {
-		if g != want[i] {
-			t.Errorf("CleanSysvarNames()[%d]=%q, want %q", i, g, want[i])
-		}
-	}
-}
-
-// TestCleanSysvarNamesEmptyInput verifies that an empty input returns
-// an empty result.
-func TestCleanSysvarNamesEmptyInput(t *testing.T) {
-	got := CleanSysvarNames(nil)
-	if len(got) != 0 {
-		t.Fatalf("CleanSysvarNames(nil) = %v, want empty", got)
 	}
 }
 

@@ -5,7 +5,6 @@ package backends
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -199,51 +198,6 @@ func TestParseCombinedParameter_Unknown(t *testing.T) {
 	}
 }
 
-func TestEncodeHMLevel(t *testing.T) {
-	cases := []struct {
-		name string
-		in   float64
-		want string
-	}{
-		{"zero", 0.0, "0x00"},
-		{"half", 0.5, "0x64"},     // 100 dec
-		{"quarter", 0.25, "0x32"}, // 50 dec
-		{"max", 1.0, "0xc8"},      // 200 dec
-		{"clamps below zero", -0.5, "0x00"},
-		{"clamps above one", 1.5, "0xc8"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := EncodeHMLevel(c.in); got != c.want {
-				t.Fatalf("EncodeHMLevel(%v) = %q, want %q", c.in, got, c.want)
-			}
-		})
-	}
-}
-
-// TestEncodeHMLevel_RoundTrip verifies that encoding then decoding a
-// 0..1 level yields the same value (within HM's 1-step quantum,
-// i.e. value*200 is integer). This is the property python's
-// converter pair guarantees.
-func TestEncodeHMLevel_RoundTrip(t *testing.T) {
-	values := []float64{0.0, 0.005, 0.25, 0.5, 0.75, 0.995, 1.0}
-	for _, v := range values {
-		hex := EncodeHMLevel(v)
-		// LEVEL_COMBINED expects the hex pair shape, prepend a partner
-		// so parseLevelCombined accepts it.
-		decoded, ok := ParseCombinedParameter("LEVEL_COMBINED", hex+","+hex)
-		if !ok {
-			t.Fatalf("roundtrip ok=false for v=%v hex=%s", v, hex)
-		}
-		got, _ := decoded["LEVEL"].(float64)
-		// HM level grid is 0.005 (200 quanta over 0..1). Compare with
-		// generous tolerance.
-		if abs(got-v) > 0.0051 {
-			t.Fatalf("roundtrip v=%v hex=%s decoded=%v", v, hex, got)
-		}
-	}
-}
-
 // TestParseCombinedParameter_PythonParity replays the exact inputs
 // Covered by py so we have a
 // contract anchor against the Python reference. Each row mirrors
@@ -356,21 +310,5 @@ func TestConvertCpvLevelHmip(t *testing.T) {
 	}
 	if _, ok := convertCpvLevelHmip("xyz"); ok {
 		t.Fatalf("non-numeric must return ok=false")
-	}
-}
-
-// TestEncodeHMLevel_HexFormat asserts the wire format is always
-// lowercase, prefixed and zero-padded to two digits — matching
-// python's `format(int(...), "#04x")`.
-func TestEncodeHMLevel_HexFormat(t *testing.T) {
-	hex := EncodeHMLevel(0.5)
-	if !strings.HasPrefix(hex, "0x") {
-		t.Fatalf("missing 0x prefix: %q", hex)
-	}
-	if hex != strings.ToLower(hex) {
-		t.Fatalf("must be lowercase: %q", hex)
-	}
-	if len(hex) < 4 {
-		t.Fatalf("must be zero-padded to at least 4 chars: %q", hex)
 	}
 }

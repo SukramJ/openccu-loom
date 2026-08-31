@@ -216,7 +216,7 @@ func TestCombinedProjectionStatePayloads(t *testing.T) {
 		if _, observed := timer.CombinedStatePayload(); observed {
 			t.Fatal("an unobserved timer must not report a state")
 		}
-		timer.OnComponents(90, combined.TimerUnitSeconds)
+		timer.OnComponents(90, hmenum.TimerUnitSeconds)
 		state, observed := timer.CombinedStatePayload()
 		if !observed || state != "90" {
 			t.Fatalf("state = (%q, %v), want (\"90\", true)", state, observed)
@@ -264,7 +264,7 @@ func TestCombinedProjectionOnCombinedChangeFires(t *testing.T) {
 		fired := 0
 		unsub := timer.OnCombinedChange(func() { fired++ })
 		defer unsub()
-		timer.OnComponents(30, combined.TimerUnitSeconds)
+		timer.OnComponents(30, hmenum.TimerUnitSeconds)
 		if fired == 0 {
 			t.Error("timer change did not reach the projection subscriber")
 		}

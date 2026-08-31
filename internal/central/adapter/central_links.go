@@ -21,9 +21,9 @@ import (
 // PRESS_LONG events to the central — refCounter > 0 switches the flow on,
 // refCounter = 0 turns it off.
 //
-// Only BidCos-RF, BidCos-Wired and HmIP-RF interfaces are eligible (mirrors
-// `Device.relevant_for_central_link_management`); CUxD and virtual-device
-// interfaces have no concept of central event routing.
+// Which devices are eligible is a domain rule, not an adapter rule: this
+// type asks [device.Device.CentralLinkEligibility] and dispatches on its
+// verdict, so the interface and model conjuncts live in exactly one place.
 type CentralLinksDomain struct {
 	registry *central.Registry
 	writer   *client.ValueWriter
@@ -57,7 +57,9 @@ const reportValueUsageLongValueID = "PRESS_LONG"
 // names a channel address only that single channel is touched (mirrors
 // the CCU channel-config dialog, which scopes the switch to the opened
 // channel). Returns the count of channels touched and the count of
-// channels that were skipped (no press events / wrong interface).
+// channels that were skipped for lack of press events. A device the
+// domain eligibility rule rejects outright — wrong interface, or a
+// virtual-remote model — yields hmapi.ErrCentralLinksUnsupported.
 func (c *CentralLinksDomain) CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error) {
 	return c.runReport(ctx, deviceAddress, channelAddress, 1)
 }
@@ -83,10 +85,10 @@ func (c *CentralLinksDomain) CentralLinksStatus(ctx context.Context, deviceAddre
 		if !ok {
 			continue
 		}
-		if !isCentralLinkInterface(dev.Interface) {
+		if eligible, reason := dev.CentralLinkEligibility(); !eligible {
 			return hmapi.CentralLinksStatus{
 				Supported: false,
-				Reason:    "interface_unsupported",
+				Reason:    reason,
 			}, nil
 		}
 		eligible := 0
@@ -181,7 +183,7 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, chann
 		if !ok {
 			continue
 		}
-		if !isCentralLinkInterface(dev.Interface) {
+		if eligible, _ := dev.CentralLinkEligibility(); !eligible {
 			return hmapi.CentralLinksReport{}, hmapi.ErrCentralLinksUnsupported
 		}
 		channels := dev.Channels()
@@ -268,19 +270,6 @@ type metadataReader interface {
 // the per-channel central click-event reference counters. Mirrors
 // `REPORT_VALUE_USAGE_DATA` in const.py.
 const reportValueUsageDataID = "reportValueUsageData"
-
-// IsCentralLinkInterface mirrors
-// `relevant_for_central_link_management`. CUxD and VirtualDevices
-// do not participate in central event routing.
-func isCentralLinkInterface(iface hmenum.Interface) bool {
-	switch iface {
-	case hmenum.InterfaceBidCosRF, hmenum.InterfaceBidCosWired, hmenum.InterfaceHmIPRF:
-		return true
-	case hmenum.InterfaceVirtualDevices, hmenum.InterfaceCUxD:
-		return false
-	}
-	return false
-}
 
 // channelHasPressEvents reports whether the channel exposes PRESS_SHORT /
 // PRESS_LONG as a generic event parameter — the minimal indicator that the

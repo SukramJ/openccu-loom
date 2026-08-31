@@ -24,6 +24,30 @@ type SirenDevice interface {
 	AvailableLights() []string
 }
 
+// acousticDisabler is the optional half of [SirenDevice]: a device that
+// can name the selection which silences its acoustic channel. The model
+// answers it from the parameter descriptor (declared DEFAULT first,
+// VALUE_LIST head as fallback); the driver must not re-derive it from
+// AvailableTones, which is a flattened projection with the DEFAULT
+// already lost.
+//
+// It is deliberately not folded into SirenDevice: a device that cannot
+// name a disable selection gets no acoustic pin, which is exactly what
+// the positional rule did for an empty VALUE_LIST.
+type acousticDisabler interface {
+	DisableAcousticLabel() (string, bool)
+}
+
+// disableAcousticSelection returns the label an activation write must
+// put in its acoustic half when that write must not start a tone.
+func disableAcousticSelection(dev SirenDevice) (string, bool) {
+	d, ok := dev.(acousticDisabler)
+	if !ok {
+		return "", false
+	}
+	return d.DisableAcousticLabel()
+}
+
 // SmokeSounderDevice is the driver's view of a smoke detector used as
 // intrusion sounder (satisfied by *siren.SmokeSiren). It has no
 // duration parameter — the engine-side watchdog is its only bound.

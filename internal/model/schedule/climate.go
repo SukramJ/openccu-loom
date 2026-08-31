@@ -31,10 +31,20 @@ func (p ClimatePeriod) Validate() error {
 	return nil
 }
 
-// MaxClimatePeriods is the per-weekday slot limit imposed by the CCU.
-// Schedules with more than 13 periods are rejected — the CCU silently drops
-// the excess otherwise.
-const MaxClimatePeriods = 13
+// MaxClimateSlots is the number of climate slots the CCU stores per
+// weekday and per profile. It is a firmware fact, not a policy: the
+// paramset declares exactly this many ENDTIME/TEMPERATURE cells, and a
+// slot beyond it has nowhere to be written.
+const MaxClimateSlots = 13
+
+// MaxClimatePeriods is the per-weekday period limit. Schedules with more
+// periods are rejected — the CCU silently drops the excess otherwise.
+//
+// It equals [MaxClimateSlots] because a gapless day maps one period to one
+// slot. It is an UPPER bound on a smaller quantity: a period preceded by a
+// gap expands to two slots, so a day validated by [ClimateWeekday.ValidateWire]
+// (which does not enforce gapless coverage) can still exceed the slot count.
+const MaxClimatePeriods = MaxClimateSlots
 
 // ClimateWeekday is a single weekday's base temperature plus a list
 // of non-overlapping periods.
@@ -92,7 +102,7 @@ func (d ClimateWeekday) Validate() error {
 				sorted[0].StartTime)
 		}
 		last := sorted[len(sorted)-1]
-		if toMinutes(last.EndTime) != 24*60 {
+		if toMinutes(last.EndTime) != ClimateEndOfDayMinutes {
 			return fmt.Errorf("schedule: last period must end at 24:00 (got %s)",
 				last.EndTime)
 		}
@@ -233,8 +243,76 @@ func (c *Climate) ValidateWire() error {
 }
 
 // DefaultBaseTemperature is the fallback returned by
-// [IdentifyBaseTemperature] when the weekday has no periods.
+// [IdentifyBaseTemperature] and [IdentifyBaseTemperatureFromSegments]
+// when the weekday has no usable stretch. 18.0 is the reference
+// fill temperature; 0.0 is not a plausible thermostat base and renders
+// as a 0 °C setpoint wherever the value is published.
 const DefaultBaseTemperature = 18.0
+
+// TempSegment is one temperature stretch of a weekday, expressed in
+// minutes since midnight. It is the input shape of
+// [IdentifyBaseTemperatureFromSegments].
+//
+// It exists because the same winner rule is applied to three different
+// wire forms — domain periods, the CCU 13-slot map, and the flat
+// paramset cells — whose normalisations genuinely differ and must stay
+// with their own reader. Only the winner rule is shared.
+type TempSegment struct {
+	StartMin    int
+	EndMin      int
+	Temperature float64
+}
+
+// IdentifyBaseTemperatureFromSegments returns the temperature that
+// occupies the most minutes across the given segments — the weekday's
+// "base temperature", the value every other stretch is reported
+// relative to.
+//
+// Input order IS accumulation order: the caller sorts. Ties are broken
+// in favour of the temperature seen FIRST in the given order, so the
+// caller's normalisation decides which of two equally long temperatures
+// wins. Callers that want the time-ordered tie-break must hand the
+// segments over in time order (see [IdentifyBaseTemperature], which
+// sorts). The helper deliberately does not sort: each of its callers
+// derives StartMin from the preceding slot's end, so a re-sort here
+// would silently re-order malformed wire data behind the caller's back.
+//
+// Segments with a non-positive duration are ignored entirely — they do
+// not even establish first-seen order. When no segment survives that
+// filter the result is [DefaultBaseTemperature].
+//
+// No rounding is applied: the base is always a temperature that
+// literally occurs in the input. Snapping it to a 0.5 °C grid would
+// report — and, on the write path, persist into the device's unused
+// slots — a value no slot of the day carries.
+func IdentifyBaseTemperatureFromSegments(segs []TempSegment) float64 {
+	// First-seen order is tracked explicitly: a map-iteration tie-break
+	// would flip the reported base between two reads of identical data.
+	tempMinutes := make(map[float64]int, len(segs))
+	order := make([]float64, 0, len(segs))
+	for _, s := range segs {
+		dur := s.EndMin - s.StartMin
+		if dur <= 0 {
+			continue
+		}
+		if _, seen := tempMinutes[s.Temperature]; !seen {
+			order = append(order, s.Temperature)
+		}
+		tempMinutes[s.Temperature] += dur
+	}
+	if len(order) == 0 {
+		return DefaultBaseTemperature
+	}
+
+	// Strict ">" keeps the first-seen temperature on a tie.
+	best := order[0]
+	for _, temp := range order[1:] {
+		if tempMinutes[temp] > tempMinutes[best] {
+			best = temp
+		}
+	}
+	return best
+}
 
 // IdentifyBaseTemperature identifies the base temperature of a climate
 // weekday schedule by finding the temperature that occupies the most
@@ -243,12 +321,11 @@ const DefaultBaseTemperature = 18.0
 // which converts 13-slot wire format to the simplified
 // (BaseTemperature + Periods) representation.
 //
-// Algorithm: iterate the periods in time order (sorted by StartTime),
-// accumulate total minutes per unique temperature value, and return the
-// temperature with the highest total. Ties break deterministically in
-// favour of the temperature whose first period starts earliest — the
-// reference helper's max() keeps the first key in accumulation order,
-// and a map-iteration tie-break would flip the result between runs.
+// It sorts the periods by StartTime and then defers to
+// [IdentifyBaseTemperatureFromSegments], which carries the single
+// winner rule shared with the wire-form readers. The sort is what makes
+// the tie-break "earliest period wins" — the reference helper's max()
+// likewise keeps the first key in accumulation order.
 // Falls back to [DefaultBaseTemperature] when the weekday has no
 // periods, or when every period has a non-positive duration.
 func IdentifyBaseTemperature(day ClimateWeekday) float64 {
@@ -264,31 +341,15 @@ func IdentifyBaseTemperature(day ClimateWeekday) float64 {
 		return toMinutes(sorted[i].StartTime) < toMinutes(sorted[j].StartTime)
 	})
 
-	// Accumulate total minutes per temperature, remembering first-seen
-	// order so the winner selection stays deterministic.
-	tempMinutes := make(map[float64]int, len(sorted))
-	order := make([]float64, 0, len(sorted))
+	segs := make([]TempSegment, 0, len(sorted))
 	for _, p := range sorted {
-		dur := toMinutes(p.EndTime) - toMinutes(p.StartTime)
-		if dur <= 0 {
-			continue
-		}
-		if _, seen := tempMinutes[p.Temperature]; !seen {
-			order = append(order, p.Temperature)
-		}
-		tempMinutes[p.Temperature] += dur
+		segs = append(segs, TempSegment{
+			StartMin:    toMinutes(p.StartTime),
+			EndMin:      toMinutes(p.EndTime),
+			Temperature: p.Temperature,
+		})
 	}
-	if len(order) == 0 {
-		return DefaultBaseTemperature
-	}
-
-	best := order[0]
-	for _, temp := range order[1:] {
-		if tempMinutes[temp] > tempMinutes[best] {
-			best = temp
-		}
-	}
-	return best
+	return IdentifyBaseTemperatureFromSegments(segs)
 }
 
 func isValidProfileKey(k string) bool {
@@ -302,41 +363,99 @@ func isValidProfileKey(k string) bool {
 	return n >= 1 && n <= 6
 }
 
-// validateClimateTime accepts HH:MM between 00:00 and 24:00
-// (inclusive — climate schedules use 24:00 as end-of-day marker).
-func validateClimateTime(s string) error {
-	if s == "24:00" {
-		return nil
-	}
-	if !timePattern.MatchString(s) {
-		return fmt.Errorf("invalid time %q", s)
-	}
-	return nil
-}
+// ClimateEndOfDay is the CCU end-of-day marker used as the last slot's
+// end time. It is deliberately outside the wall-clock grammar: a climate
+// schedule has to be able to say "until midnight" without wrapping to
+// 00:00, which would sort before every other slot.
+const ClimateEndOfDay = "24:00"
 
-// toMinutes converts "HH:MM" to total minutes since midnight. "24:00"
-// returns 1440. Invalid input returns -1 (callers should validate
-// first).
-func toMinutes(s string) int {
-	if s == "24:00" {
-		return 24 * 60
+// ClimateEndOfDayMinutes is [ClimateEndOfDay] expressed as minutes since
+// midnight.
+const ClimateEndOfDayMinutes = 24 * 60
+
+// ParseClimateTime is the single acceptance set for climate schedule
+// times and converts one to minutes since midnight.
+//
+// It exists because the same grammar used to be spelled once per layer,
+// and the three spellings disagreed: one accepted "24:30" and wrote 1470
+// minutes to the device, one rejected it, and the read paths then
+// disagreed about what the device held — one clamping to 24:00, the other
+// dropping the slot. A time the operator can save must be a time every
+// layer can read back.
+//
+// Accepted: a one- or two-digit hour 0..23, a colon, a two-digit minute
+// 0..59; plus the literal [ClimateEndOfDay]. Nothing else — in particular
+// no hour above 23 other than the end-of-day marker itself.
+func ParseClimateTime(s string) (int, error) {
+	if s == ClimateEndOfDay {
+		return ClimateEndOfDayMinutes, nil
 	}
 	before, after, ok := strings.Cut(s, ":")
 	if !ok {
-		return -1
+		return 0, fmt.Errorf("invalid time %q", s)
 	}
-	h, errH := parseDigit2(before)
-	m, errM := parseDigit2(after)
-	if errH != nil || errM != nil {
-		return -1
+	h, hOK := parseClockField(before, 1, 2, 23)
+	m, mOK := parseClockField(after, 2, 2, 59)
+	if !hOK || !mOK {
+		return 0, fmt.Errorf("invalid time %q", s)
 	}
-	return h*60 + m
+	return h*60 + m, nil
 }
 
-func parseDigit2(s string) (int, error) {
-	var v int
-	if _, err := fmt.Sscanf(s, "%d", &v); err != nil {
-		return 0, err
+// parseClockField reads a zero-padded decimal field of minLen..maxLen
+// digits and bounds it at maxVal. It rejects signs and whitespace, which
+// strconv.Atoi would accept.
+func parseClockField(s string, minLen, maxLen, maxVal int) (int, bool) {
+	if len(s) < minLen || len(s) > maxLen {
+		return 0, false
 	}
-	return v, nil
+	v := 0
+	for i := range len(s) {
+		c := s[i]
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		v = v*10 + int(c-'0')
+	}
+	if v > maxVal {
+		return 0, false
+	}
+	return v, true
+}
+
+// FormatClimateTime is the inverse of [ParseClimateTime]. It renders
+// minutes since midnight as canonical zero-padded "HH:MM", and
+// [ClimateEndOfDayMinutes] as [ClimateEndOfDay]. Anything outside
+// 0..[ClimateEndOfDayMinutes] is an error rather than a clamp: clamping is
+// what let an out-of-range value look like a legitimate time on one plane
+// while another plane discarded it.
+func FormatClimateTime(minutes int) (string, error) {
+	if minutes == ClimateEndOfDayMinutes {
+		return ClimateEndOfDay, nil
+	}
+	if minutes < 0 || minutes > ClimateEndOfDayMinutes {
+		return "", fmt.Errorf("schedule: minutes %d out of range (0..%d)", minutes, ClimateEndOfDayMinutes)
+	}
+	return fmt.Sprintf("%02d:%02d", minutes/60, minutes%60), nil
+}
+
+// validateClimateTime accepts HH:MM between 00:00 and 24:00
+// (inclusive — climate schedules use 24:00 as end-of-day marker).
+func validateClimateTime(s string) error {
+	_, err := ParseClimateTime(s)
+	return err
+}
+
+// toMinutes converts "HH:MM" to total minutes since midnight. "24:00"
+// returns 1440. Invalid input returns -1.
+//
+// The -1 sentinel is load-bearing: several callers here are sort
+// comparators that run before validation, and a comparator has to stay
+// total or sort.Slice sees an inconsistent ordering.
+func toMinutes(s string) int {
+	m, err := ParseClimateTime(s)
+	if err != nil {
+		return -1
+	}
+	return m
 }

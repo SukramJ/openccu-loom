@@ -53,7 +53,7 @@ func (l *recordingLoader) GetParamset(_ context.Context, _ string, _ hmenum.Para
 }
 
 // makeUnreachDP builds a Channel-0 UNREACH DP fixture (the canonical
-// member of relevantInitParameters).
+// member of [hmenum.RelevantInitParameters]).
 func makeUnreachDP(channelAddr, wireID string, observed bool) *generic.DataPoint[bool] {
 	dp := generic.NewDataPoint[bool](generic.Spec{
 		Key: hmtypes.DataPointKey{

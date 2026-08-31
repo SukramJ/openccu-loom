@@ -820,30 +820,6 @@ func TestLinkClientAdapter_GetLinks_WithLinks(t *testing.T) {
 	}
 }
 
-func TestLinkClientAdapter_GetLinks_IncomingLink_Direction(t *testing.T) {
-	t.Parallel()
-	// For linkClientAdapter.GetLinks: an outgoing link has both Sender and Receiver set.
-	// The "incoming" branch in GetLinks is: Receiver != "" && Sender == "".
-	// But domain.ListLinks always populates both (sender and receiver).
-	// We test the "outgoing" path here which is the normal case.
-	links := []hmproto.LinkDescription{
-		{Sender: "DEV020:1", Receiver: "PEER001:1", Name: "outgoing-link"},
-	}
-	d := buildLinksWithDataFixture(t, links)
-	adapter := &linkClientAdapter{domain: d}
-	result, err := adapter.GetLinks(context.Background(), "DEV020")
-	if err != nil {
-		t.Fatalf("GetLinks outgoing: %v", err)
-	}
-	if len(result) != 1 {
-		t.Fatalf("expected 1 link, got %d", len(result))
-	}
-	// Both sender and receiver are set → direction "outgoing".
-	if result[0].Direction != "outgoing" {
-		t.Errorf("expected direction=outgoing, got %q", result[0].Direction)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // UISchemaAdapter.UISchema — nil registry path
 // ---------------------------------------------------------------------------
@@ -1396,31 +1372,6 @@ func TestRawFloatGreaterThan_NonNumeric(t *testing.T) {
 	t.Parallel()
 	if rawFloatGreaterThan([]byte(`"string"`), 1.0) {
 		t.Error("expected false for non-numeric raw")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// isHmIPInterface — pure helper in auto_refresh.go
-// ---------------------------------------------------------------------------
-
-func TestIsHmIPInterface_HmIPRF(t *testing.T) {
-	t.Parallel()
-	if !isHmIPInterface(hmenum.InterfaceHmIPRF) {
-		t.Error("expected HmIP-RF to be HmIP interface")
-	}
-}
-
-func TestIsHmIPInterface_BidCos(t *testing.T) {
-	t.Parallel()
-	if isHmIPInterface(hmenum.InterfaceBidCosRF) {
-		t.Error("expected BidCos-RF to NOT be HmIP interface")
-	}
-}
-
-func TestIsHmIPInterface_CUxD(t *testing.T) {
-	t.Parallel()
-	if isHmIPInterface(hmenum.InterfaceCUxD) {
-		t.Error("expected CUxD to NOT be HmIP interface")
 	}
 }
 
@@ -6720,7 +6671,7 @@ func TestScheduleQueryAdapter_NilDomain(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestRunReport_UnsupportedInterface exercises the path where
-// isCentralLinkInterface returns false (e.g. CUxD interface).
+// the device is ineligible (e.g. CUxD interface).
 func TestRunReport_UnsupportedInterface(t *testing.T) {
 	t.Parallel()
 	c, err := central.New(central.Config{Name: "ccu-b27-rr1"})
@@ -6731,7 +6682,7 @@ func TestRunReport_UnsupportedInterface(t *testing.T) {
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	// CUxD interface → isCentralLinkInterface returns false.
+	// CUxD interface → not eligible for central links.
 	d := device.New(device.Config{
 		InterfaceID: "CUxD",
 		Interface:   hmenum.InterfaceCUxD,
@@ -6794,7 +6745,7 @@ func TestRunReport_ReportValueUsageError(t *testing.T) {
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	// BidCos-RF → isCentralLinkInterface returns true.
+	// BidCos-RF → eligible for central links.
 	d := device.New(device.Config{
 		InterfaceID: "BidCos-RF",
 		Interface:   hmenum.InterfaceBidCosRF,
@@ -8120,8 +8071,9 @@ func TestChannelKeyBitmask_WeekProfileWithEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("channelKeyBitmask error: %v", err)
 	}
-	if bitmask != scheduleActorChannelBitmasks["1_1"] {
-		t.Errorf("expected bitmask %d, got %d", scheduleActorChannelBitmasks["1_1"], bitmask)
+	wantBit, _ := weekprofile.ChannelKeyToBitmask("1_1")
+	if bitmask != wantBit {
+		t.Errorf("expected bitmask %d, got %d", wantBit, bitmask)
 	}
 }
 
@@ -8160,7 +8112,8 @@ func TestChannelKeyBitmask_WeekProfileEmptyScheduleEnabled(t *testing.T) {
 		t.Fatalf("channelKeyBitmask error: %v", err)
 	}
 	// Default fallback should be "1_1".
-	if bitmask != scheduleActorChannelBitmasks["1_1"] {
+	wantBit, _ := weekprofile.ChannelKeyToBitmask("1_1")
+	if bitmask != wantBit {
 		t.Errorf("expected default bitmask, got %d", bitmask)
 	}
 }
@@ -8303,8 +8256,8 @@ func TestParseSimpleSchedule_Duration(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestParseSimpleScheduleWithDomain_LockDomain exercises the lock domain
-// path in parseSimpleScheduleWithDomain, including the
-// weekprofile.ParseTimeBaseFactor call within detectLockAction.
+// path in parseSimpleScheduleWithDomain: the mode/action decode reached
+// through [schedule.DetectLockMode] and [schedule.DetectLockAction].
 func TestParseSimpleScheduleWithDomain_LockDomain(t *testing.T) {
 	t.Parallel()
 	raw := map[string]any{
@@ -8409,11 +8362,11 @@ func TestExpandWeekday_OverlappingPeriods(t *testing.T) {
 	}
 }
 
-// TestExpandWeekday_TooManyPeriods exercises the "too many periods" error
-// at line 1402: >13 stretches.
+// TestExpandWeekday_TooManyPeriods exercises the "too many periods" error:
+// one gapless hour-long period per stretch, one more than the CCU can store.
 func TestExpandWeekday_TooManyPeriods(t *testing.T) {
 	t.Parallel()
-	periods := make([]hmapi.ClimatePeriod, 14)
+	periods := make([]hmapi.ClimatePeriod, schedule.MaxClimateSlots+1)
 	start := 0
 	for i := range periods {
 		periods[i] = hmapi.ClimatePeriod{
@@ -8423,7 +8376,8 @@ func TestExpandWeekday_TooManyPeriods(t *testing.T) {
 		}
 		start += 60
 	}
-	// 14 periods each 1 hour = 14 stretches > 13 → error
+	// Each period is one hour and follows the previous one without a gap,
+	// so the expansion yields one stretch per period — one past the cap.
 	wd := hmapi.ClimateWeekday{
 		BaseTemperature: 18.0,
 		Periods:         periods,
@@ -8928,11 +8882,13 @@ func TestSimplifyWeekday_SkipIncompleteSlot(t *testing.T) {
 // non-base temperature should be merged into one period.
 func TestSimplifyWeekday_ContiguousMerge(t *testing.T) {
 	t.Parallel()
-	// Slots: 0–360 @ 22°, 360–720 @ 22° (merge!), 720–1440 @ 18° (base).
-	// base = 18° (longer duration). Two adjacent 22° slots → one period.
+	// Slots: 0–240 @ 22°, 240–480 @ 22° (merge!), 480–1440 @ 18° (base).
+	// base = 18° (960 min against 480). The durations are deliberately
+	// unequal: an equal split would make the tie-break, not the merge, the
+	// property under test. Two adjacent 22° slots → one period.
 	slots := map[int]*slotVals{
-		1: {endtime: 360, temperature: 22.0, hasTemp: true, hasEnd: true},
-		2: {endtime: 720, temperature: 22.0, hasTemp: true, hasEnd: true},
+		1: {endtime: 240, temperature: 22.0, hasTemp: true, hasEnd: true},
+		2: {endtime: 480, temperature: 22.0, hasTemp: true, hasEnd: true},
 		3: {endtime: 1440, temperature: 18.0, hasTemp: true, hasEnd: true},
 	}
 	wd := simplifyWeekday(slots)
@@ -8946,8 +8902,8 @@ func TestSimplifyWeekday_ContiguousMerge(t *testing.T) {
 	if len(wd.Periods) > 0 && wd.Periods[0].Temperature != 22.0 {
 		t.Errorf("expected period temp 22.0, got %v", wd.Periods[0].Temperature)
 	}
-	if len(wd.Periods) > 0 && wd.Periods[0].EndTime != "12:00" {
-		t.Errorf("expected EndTime=12:00, got %q", wd.Periods[0].EndTime)
+	if len(wd.Periods) > 0 && wd.Periods[0].EndTime != "08:00" {
+		t.Errorf("expected EndTime=08:00, got %q", wd.Periods[0].EndTime)
 	}
 }
 
@@ -9796,7 +9752,7 @@ func TestChannelKeyBitmask_DeviceNotInFirstCentral(t *testing.T) {
 
 // TestChannelKeyBitmask_BitmaskZeroBreak exercises line 175 of channelKeyBitmask:
 // the channel's WeekProfile has schedule-enabled keys that do NOT appear in
-// scheduleActorChannelBitmasks → bitmask stays 0 → break executed.
+// the model bit table → bitmask stays 0 → break executed.
 func TestChannelKeyBitmask_BitmaskZeroBreak(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
@@ -9820,7 +9776,7 @@ func TestChannelKeyBitmask_BitmaskZeroBreak(t *testing.T) {
 	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
 		ScheduleType: weekprofile.ScheduleTypeClimate,
 	})
-	// Seed a key that does NOT exist in scheduleActorChannelBitmasks → bitmask stays 0.
+	// Seed a key the model bit table does not carry → bitmask stays 0.
 	_ = wp.SetScheduleEnabled(context.Background(), "INVALID_KEY_NOT_IN_MAP", true, hmenum.CommandPriorityHigh)
 	ch.AttachWeekProfile(wp)
 
@@ -11140,69 +11096,6 @@ func TestMQTTCommandSink_SetSysvar_NewParamValueError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// linkClientAdapter.GetLinks: direction = "incoming" (line 78-80)
-// ---------------------------------------------------------------------------
-
-// b44GetLinksOps wraps paramsetFakeOps to override GetLinks so it
-// returns a link description with empty Sender and non-empty Receiver.
-type b44GetLinksOps struct {
-	paramsetFakeOps
-}
-
-func (f *b44GetLinksOps) GetLinks(_ context.Context, _ string) ([]hmproto.LinkDescription, error) {
-	// Sender is empty and Receiver is non-empty → direction = "incoming"
-	return []hmproto.LinkDescription{
-		{Sender: "", Receiver: "OTHERDEV44:1"},
-	}, nil
-}
-
-// TestLinkClientAdapter_GetLinks_IncomingDirection exercises lines 78-80 of
-// link_resolver.go: when a link row has Receiver != "" and Sender == "",
-// the direction is set to "incoming".
-func TestLinkClientAdapter_GetLinks_IncomingDirection(t *testing.T) {
-	t.Parallel()
-	c, err := central.New(central.Config{Name: "ccu-b44-incoming-link"})
-	if err != nil {
-		t.Fatalf("central.New: %v", err)
-	}
-	reg := central.NewRegistry()
-	if err := reg.Register(c); err != nil {
-		t.Fatalf("reg.Register: %v", err)
-	}
-	// Device with a channel so ListLinks can call backend.GetLinks.
-	d := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
-		Interface:   hmenum.InterfaceHmIPRF,
-		Address:     "B44LINKDEV01",
-		Model:       "HmIP-STH",
-		Name:        "B44LINKDEV01",
-	})
-	d.AddChannel("B44LINKDEV01:1", 1, "GENERIC", hmenum.ParamsetKeyValues)
-	c.ModelRegistry.Put(d)
-
-	// Backend returns a link with empty Sender → direction = "incoming".
-	b := &b44GetLinksOps{}
-	w := client.NewValueWriter()
-	w.Register("ccu-b44-incoming-link", "HmIP-RF", b)
-
-	domain := NewLinksDomain(reg, w, nil)
-	if err := WireLinkCoordinator(c, domain); err != nil {
-		t.Fatalf("WireLinkCoordinator: %v", err)
-	}
-
-	links, err := c.Link.GetLinks(context.Background(), "B44LINKDEV01")
-	if err != nil {
-		t.Fatalf("GetLinks: unexpected error: %v", err)
-	}
-	if len(links) == 0 {
-		t.Fatal("expected at least one link")
-	}
-	if links[0].Direction != "incoming" {
-		t.Errorf("expected direction=incoming, got %q", links[0].Direction)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // schedules.go: SetActiveProfile — backend.PutParamset error for VALUES
 // (line 1072-1075) — variant B so no collision with boost32 test name
 // ---------------------------------------------------------------------------
@@ -11267,7 +11160,7 @@ func TestCentralLinksCreateTouchedCount(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	// BidCos-RF device — isCentralLinkInterface returns true.
+	// BidCos-RF device — eligible for central links.
 	dev := device.New(device.Config{
 		InterfaceID: "BidCos-RF",
 		Interface:   hmenum.InterfaceBidCosRF,
@@ -14452,7 +14345,7 @@ func TestCentralLinksDomain_CreateCentralLinks_UnknownDevice_ReturnsErr(t *testi
 
 func TestCentralLinksDomain_CreateCentralLinks_DeviceFound_UnsupportedInterface_ReturnsErr(t *testing.T) {
 	t.Parallel()
-	// Build a fixture with a VirtualDevices interface — isCentralLinkInterface returns false.
+	// Build a fixture with a VirtualDevices interface — not eligible.
 	c, err := central.New(central.Config{Name: "ccu-cl9b"})
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
@@ -14947,18 +14840,6 @@ func TestSweepUnobservedForCentralNonNil(t *testing.T) {
 }
 
 // ============================================================
-// isCentralLinkInterface — unknown interface fallback
-// ============================================================
-
-func TestIsCentralLinkInterfaceUnknown(t *testing.T) {
-	t.Parallel()
-	// An interface not in any explicit switch case
-	if isCentralLinkInterface("UnknownInterface") {
-		t.Error("unknown interface must return false")
-	}
-}
-
-// ============================================================
 // rawJSONInt — valid, invalid, and empty paths
 // ============================================================
 
@@ -15139,18 +15020,6 @@ func TestPutClimateScheduleNilPayload(t *testing.T) {
 	err := s.PutClimateSchedule(context.Background(), "DEV001", 1, nil)
 	// Will fail at resolve (not found) before nil check, but that's OK
 	_ = err
-}
-
-// ============================================================
-// isCentralLinkInterface — unknown non-enum interface type
-// ============================================================
-
-func TestIsCentralLinkInterfaceCUxD(t *testing.T) {
-	t.Parallel()
-	// CUxD is a valid interface but not a central-link interface
-	if isCentralLinkInterface(hmenum.InterfaceCUxD) {
-		t.Error("CUxD must return false for central links")
-	}
 }
 
 // ============================================================

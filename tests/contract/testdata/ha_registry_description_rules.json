@@ -183,7 +183,6 @@
       "STATE"
     ],
     "Devices": [
-      "HmIP-SWD",
       "HmIP-SWDO",
       "HmIP-SWDM",
       "HM-Sec-SC",

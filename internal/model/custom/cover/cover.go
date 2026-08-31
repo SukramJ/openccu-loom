@@ -601,8 +601,8 @@ func (c *Cover) IsStateChangeArgs(args StateChangeArgs) bool {
 // subtypes (Blind, Garage) override.
 func (c *Cover) NamePostfix() string { return "" }
 
-// Subscribe wires the channel's DIRECTION (and LEVEL_2 when present
-// for slat-style covers) parameters into the Cover so push-driven
+// Subscribe wires the schema-resolved motion parameter (and LEVEL_2
+// when present for slat-style covers) into the Cover so push-driven
 // CCU updates feed [OnDirection] / [OnLevel] without the ingest
 // pipeline having to hand-route them. LEVEL itself is the cover's
 // embedded *generic.Float (shared with the channel), so it does not
@@ -624,20 +624,19 @@ func (c *Cover) Subscribe(ch *device.Channel) func() {
 			c.OnLevel(v)
 		}
 	}
-	// DIRECTION carries the motion state on wired/RF actuators; HmIP
-	// actuators report the same UP/DOWN indices via ACTIVITY_STATE.
-	// Wire whichever the channel exposes so IsOpening / IsClosing (and
-	// the Matter OperationalStatus + inferred TargetPosition derived
-	// from them) work across both families.
-	dirDP := ch.Parameter(hmenum.ParameterDirection)
-	if dirDP == nil {
-		dirDP = ch.Parameter(hmenum.ParameterActivityState)
-	}
-	if dirDP != nil {
-		unsubs = append(unsubs, dirDP.OnAnyUpdate(func(_, next any) {
+	// Motion is bound to the data point the profile schema names —
+	// resolved once in [New] as c.directionDp — not looked up again
+	// here. The schema states which channel carries the field: HmIP
+	// covers report motion on the shared transmitter channel while the
+	// custom DP hangs off a virtual-receiver channel, so a second
+	// own-channel lookup binds a different data point than the one the
+	// Matter DataVersion hook already observes. One resolution, one
+	// data point, both consumers.
+	if c.directionDp != nil {
+		unsubs = append(unsubs, c.directionDp.OnAnyUpdate(func(_, next any) {
 			applyDirection(next)
 		}))
-		custom.ReplayCurrentValue(dirDP, applyDirection)
+		custom.ReplayCurrentValue(c.directionDp, applyDirection)
 	}
 	// LEVEL_2 is the slat-tilt axis for Blind subtypes; the plain
 	// Cover has no tilt concept and writing LEVEL_2 into the LEVEL

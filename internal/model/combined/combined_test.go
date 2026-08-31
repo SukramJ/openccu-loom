@@ -180,12 +180,12 @@ func TestTimerRecalcUnitThresholds(t *testing.T) {
 	cases := []struct {
 		seconds  float64
 		wantVal  float64
-		wantUnit TimerUnit
+		wantUnit hmenum.TimerUnit
 	}{
-		{30, 30, TimerUnitSeconds},
-		{16343, 16343, TimerUnitSeconds},
-		{16344, 16344.0 / 60, TimerUnitMinutes},
-		{3600 * 1000, 1000, TimerUnitHours}, // huge → hours
+		{30, 30, hmenum.TimerUnitSeconds},
+		{16343, 16343, hmenum.TimerUnitSeconds},
+		{16344, 16344.0 / 60, hmenum.TimerUnitMinutes},
+		{3600 * 1000, 1000, hmenum.TimerUnitHours}, // huge → hours
 	}
 	for _, c := range cases {
 		v, u := RecalcUnit(c.seconds)
@@ -201,7 +201,7 @@ func TestTimerSetDurationSendsUnitAndValue(t *testing.T) {
 	if err := tm.SetDuration(context.Background(), 30*time.Second, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := w.find(hmenum.ParameterOnTimeUnit); v.(int32) != int32(TimerUnitSeconds) {
+	if v, _ := w.find(hmenum.ParameterOnTimeUnit); v.(int32) != int32(hmenum.TimerUnitSeconds) {
 		t.Errorf("unit=%v", v)
 	}
 	if v, _ := w.find(hmenum.ParameterOnTimeValue); v.(float64) != 30 {
@@ -216,7 +216,7 @@ func TestTimerSetDurationSendsUnitAndValue(t *testing.T) {
 
 func TestTimerOnComponentsAggregates(t *testing.T) {
 	tm := NewTimer("x", &stubWriter{}, hmenum.ParameterOnTimeValue, hmenum.ParameterOnTimeUnit)
-	tm.OnComponents(2, TimerUnitHours)
+	tm.OnComponents(2, hmenum.TimerUnitHours)
 	d, ok := tm.Value()
 	if !ok || d != 2*time.Hour {
 		t.Fatalf("d=%v ok=%v", d, ok)
@@ -323,7 +323,7 @@ func TestTimerValueSeconds(t *testing.T) {
 	if _, ok := tmr.ValueSeconds(); ok {
 		t.Error("ValueSeconds should return false before first observation")
 	}
-	tmr.OnComponents(60, TimerUnitSeconds)
+	tmr.OnComponents(60, hmenum.TimerUnitSeconds)
 	v, ok := tmr.ValueSeconds()
 	if !ok {
 		t.Error("ValueSeconds should return true after observation")
@@ -339,15 +339,15 @@ func TestTimerOnUpdate(t *testing.T) {
 	var count int
 	unsub := tmr.OnUpdate(func(_, _ float64) { count++ })
 
-	tmr.OnComponents(10, TimerUnitSeconds) // first observation → fire
-	tmr.OnComponents(10, TimerUnitSeconds) // no change → no fire
-	tmr.OnComponents(20, TimerUnitSeconds) // change → fire
+	tmr.OnComponents(10, hmenum.TimerUnitSeconds) // first observation → fire
+	tmr.OnComponents(10, hmenum.TimerUnitSeconds) // no change → no fire
+	tmr.OnComponents(20, hmenum.TimerUnitSeconds) // change → fire
 
 	if count != 2 {
 		t.Errorf("OnUpdate fired %d times, want 2", count)
 	}
 	unsub()
-	tmr.OnComponents(30, TimerUnitSeconds) // unsubscribed → no fire
+	tmr.OnComponents(30, hmenum.TimerUnitSeconds) // unsubscribed → no fire
 	if count != 2 {
 		t.Errorf("after Unsub OnUpdate fired %d times, want still 2", count)
 	}
@@ -409,7 +409,7 @@ func TestTimerHasDataPoints(t *testing.T) {
 	if tmr.HasDataPoints() {
 		t.Error("HasDataPoints must be false before observation")
 	}
-	tmr.OnComponents(10, TimerUnitSeconds)
+	tmr.OnComponents(10, hmenum.TimerUnitSeconds)
 	if !tmr.HasDataPoints() {
 		t.Error("HasDataPoints must be true after observation")
 	}
@@ -440,14 +440,14 @@ func TestTimerSetDuration(t *testing.T) {
 // TestToSeconds covers all timer unit branches.
 func TestToSeconds(t *testing.T) {
 	tests := []struct {
-		unit    TimerUnit
+		unit    hmenum.TimerUnit
 		value   float64
 		seconds float64
 	}{
-		{TimerUnitSeconds, 10, 10},
-		{TimerUnitMinutes, 2, 120},
-		{TimerUnitHours, 1, 3600},
-		{TimerUnit(99), 5, 5}, // unknown unit → passthrough
+		{hmenum.TimerUnitSeconds, 10, 10},
+		{hmenum.TimerUnitMinutes, 2, 120},
+		{hmenum.TimerUnitHours, 1, 3600},
+		{hmenum.TimerUnit(99), 5, 5}, // unknown unit → passthrough
 	}
 	for _, tt := range tests {
 		got := toSeconds(tt.value, tt.unit)
@@ -460,7 +460,7 @@ func TestToSeconds(t *testing.T) {
 // TestRecalcUnitNegative verifies negative input is clamped to 0.
 func TestRecalcUnitNegative(t *testing.T) {
 	v, u := RecalcUnit(-1)
-	if v != 0 || u != TimerUnitSeconds {
+	if v != 0 || u != hmenum.TimerUnitSeconds {
 		t.Errorf("RecalcUnit(-1) = (%v, %v), want (0, Seconds)", v, u)
 	}
 }
@@ -470,8 +470,8 @@ func TestRecalcUnitHours(t *testing.T) {
 	// 16344 * 60 = 980640 seconds → exceeds minute threshold → hours.
 	input := float64(16344*60 + 1)
 	_, u := RecalcUnit(input)
-	if u != TimerUnitHours {
-		t.Errorf("RecalcUnit(%v): expected TimerUnitHours, got %v", input, u)
+	if u != hmenum.TimerUnitHours {
+		t.Errorf("RecalcUnit(%v): expected hmenum.TimerUnitHours, got %v", input, u)
 	}
 }
 

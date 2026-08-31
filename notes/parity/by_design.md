@@ -4051,40 +4051,55 @@ compatible cross-type swaps; rejecting one after the CCU already performed
 it would strand Loom's model. A cross-type replace is logged
 (`device_coordinator.replace_device.cross_type`) and proceeds.
 
-### BD-Safety-SWDWindowRuleDropped — the ported `HmIP-SWD → STATE → window` rule is not carried
+### BD-Safety-SWDWindowRuleDropped — the reference's `HmIP-SWD → STATE → window` rule is a defect and is not reproduced
 
-Both binary-sensor classification tables are ports of the Python reference:
-`internal/model/generic/quantity.go::binarySensorQuantityByDeviceAndParam`
-mirrors `data_point_metadata.py:_BINARY_SENSOR_QUANTITY_BY_DEVICE_AND_PARAM`,
-and `internal/north/mqtt/entity_description_rules_binary_sensors.go::binarySensorRulesByDeviceAndParam`
-mirrors the `devices=`-carrying entries of `binary_sensors.py`. In both
-references `HmIP-SWD` is grouped with the window/door-contact family
-(`HmIP-SWDO`, `HmIP-SWDM`, `HM-Sec-SC`, `HM-SCI-3-FM`, `ZEL STG RM FFK`) and
-maps `STATE` onto the window quantity / `device_class: window`.
+`../aiohomematic/aiohomematic/model/data_point_metadata.py:290-303` lists
+`HmIP-SWD` in the tuple that maps `STATE` onto `Quantity.WINDOW`, alongside
+`HmIP-SWDO`, `HmIP-SWDM`, `HM-Sec-SC`, `HM-SCI-3-FM` and `ZEL STG RM FFK`.
+This is not a divergence of taste. The reference row is wrong, and
+OpenCCU-Loom does not reproduce it.
 
-OpenCCU-Loom drops the `HmIP-SWD` half of that grouping. Three reasons, all
-verifiable against `tests/integration/testdata/model_snapshot_openccu-loom.json`:
+**Why it is wrong.** Model matching in that table is a prefix walk on both
+sides — `data_point_metadata.py:321-325` uses `startswith`, and this project
+uses `strings.HasPrefix`. `HmIP-SWD` is therefore not one model among six: it
+is a prefix that covers the whole `HmIP-SWDO*` / `HmIP-SWDM*` family, which the
+two entries beside it already cover, *plus* the one device that carries the
+name exactly — `HmIP-SWD`, the water sensor. The shorter prefix adds no
+contact and one leak detector. `HmIP-SWD` is the standing special case that
+must be excluded wherever device rules are matched by prefix, and this row is
+what happens when it is not.
 
-1. **The rule is unreachable.** HmIP-SWD is the water sensor. Its only channel
-   with data points is `WATER_DETECTION_TRANSMITTER`, carrying `ALARMSTATE`,
-   `MOISTURE_DETECTED` and `WATERLEVEL_DETECTED`. There is no `STATE`
-   parameter on the model, so no lookup can ever hit the entry.
-2. **It cannot serve as a prefix fallback either.** `hasModelPrefix`
-   (`internal/north/mqtt/entity_descriptions.go:216-224`) requires a `-`
-   separator after the prefix, so `HmIP-SWD` matches neither `HmIP-SWDM`
-   (length guard) nor `HmIP-SWDM-B2` / `HmIP-SWDO-I` (separator guard). Those
-   models resolve through their own `HmIP-SWDM` / `HmIP-SWDO` entries, which
-   stay.
-3. **It is semantically inverted.** Were a firmware to add `STATE` to the
-   water sensor, the rule would label a leak detector a window contact —
-   the opposite of what the Security & Safety classifier
-   (`internal/model/safety`) must derive, and a silent mis-cast in the one
-   domain where a wrong class costs the most.
+Today the row is inert here: the captured `HmIP-SWD` descriptor carries
+`ALARMSTATE`, `MOISTURE_DETECTED`, `WATERLEVEL_DETECTED` and the
+acoustic-alarm set, and no `STATE`, while `HmIP-SWDM`, `HmIP-SWDM-B2` and
+`HmIP-SWDO-I` all declare `STATE`. Inert is not safe: the day a firmware gives
+the water sensor a `STATE` parameter, it is published as a window contact on
+the plane operators write automations against.
 
-Dropping an unreachable row changes no observable behaviour today; it removes a
-trap for the day the model gains the parameter. The window-contact siblings are
-untouched, so the reference's intent for the family is preserved. Should the
-reference ever be re-imported wholesale, this row must be dropped again.
+**Where the exclusion lives, and why it takes three assertions.** The rule is
+carried in two places that both reach the wire, and neither alone is the
+exclusion:
+
+- `internal/parameter/metadata.go` — the domain rule, after the duplicated
+  quantity tables in `internal/model/generic` and `internal/parameter` were
+  single-sourced. Pinned negatively by `TestBinarySensorQuantityByDeviceAndParam`.
+- `internal/north/mqtt/entity_description_rules_binary_sensors.go` and
+  `internal/north/mqtt/entity_descriptions_table.go` — the HA-registry rules.
+  The second matters more than it looks: `applyEntityDescription` overwrites
+  `device_class` from it *after* discovery has set the domain's answer, so a
+  row left there reaches the wire regardless of what the domain says.
+  Pinned by `TestLookupBinarySensorRuleWindowContacts` and held equal to the
+  domain by `TestRegistryBinarySensorClassesAgreeWithTheDomain`.
+
+The third assertion — `resolveBinarySensorDeviceClass("HmIP-SWD", "STATE")` is
+empty — exists because the table-level ones are not sufficient. During the
+domain-core fold the model-side table re-acquired the shorter prefix, the wire
+started answering `window` again, and the table-only assertion stayed green.
+The negative must be taken on the path the payload actually travels.
+
+Because this is a reference defect rather than a deliberate difference, a
+wholesale re-import of the ported table must drop the row again, and the row
+is worth reporting upstream.
 
 ## Homegear XML-RPC sysvar hub-wiring removed (dead until backend detection lands)
 
@@ -4171,3 +4186,39 @@ in. Two things address that without splitting the budget:
 **Retirement condition.** If Basic verification ever stops sharing a credential
 store with the login route — a separate machine-account realm, say — the shared
 bucket stops being justified and should split with it.
+
+### BD-Timer-PromotionTruncates — a promoted combined-timer duration is truncated toward zero, not rounded
+
+**Decision.** `custom.EncodeTimerDuration`
+(`internal/model/custom/mixins.go`) promotes a duration past the 16343
+threshold by plain float division and then casts to `int32`, which truncates
+toward zero. `16373 s` becomes `(272, M)`, not `(273, M)`. This matches the
+CCU-side reference end to end and is deliberate.
+
+**Why — where the reference truncates.** The promotion helper itself does not
+round; it returns a float:
+
+- `aiohomematic/aiohomematic/model/custom/mixins.py:305-332` —
+  `recalc_unit_timer` does `time /= 60` and returns `(float, unit)`.
+
+The fraction is lost one layer down, at the write boundary, because
+`DURATION_VALUE` is an INTEGER parameter and Python's `int()` on a float
+truncates toward zero:
+
+- `aiohomematic/aiohomematic/parameter_tools.py:298-299` —
+  `if param_type == ParameterType.INTEGER and isinstance(value, float): return int(value)`
+- `aiohomematic/aiohomematic/model/support.py:605` —
+  `if target_type == ParameterType.INTEGER: return int(float(value))`
+
+So the reference's two-stage float-then-truncate is observationally identical
+to this tree's single `int32(...)` cast, and the question "round or truncate?"
+is settled: truncate.
+
+**Guard.** `TestEncodeTimerDurationTruncatesTowardZero`
+(`internal/model/custom/custom_test.go`) uses a duration whose promoted value
+has a fraction above `.5`, so rounding and truncation disagree — the existing
+`16344 s → 272.4 → (272, M)` case cannot tell them apart.
+
+**Retirement condition.** If the reference ever rounds at the write boundary,
+or `DURATION_VALUE` stops being an INTEGER parameter, this entry and the guard
+go with it.

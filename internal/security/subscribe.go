@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+	"github.com/SukramJ/openccu-loom/internal/model/safety"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -172,7 +173,8 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 		s.mu.Unlock()
 		return
 	}
-	active, ok := sourceActive(src, e.NewValue)
+	active, ok, res := sourceActive(src, e.NewValue)
+	s.warnUnresolvedActivation(res, key, src, e.NewValue.Unwrap())
 	if !ok {
 		s.mu.Unlock()
 		return
@@ -270,76 +272,61 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 }
 
 // sourceActive maps a wire value onto the domain's activation
-// semantics, honouring the classifier's value narrowing.
-func sourceActive(src *indexedSource, v hmtypes.ParamValue) (active, known bool) {
-	return activeFromRaw(src.activeValues, v.Unwrap(), src.valueList)
-}
-
-// activeFromRaw is the single activation rule of the domain, shared by
-// the event path and the index seeding.
+// semantics, honouring the narrowing the index resolved for the source.
 //
-// valueList is optional: with it, an enumeration arriving as an index is
-// narrowed properly; without it the rule falls back to the default. The
-// fallback keeps a source reporting rather than silently going dark —
-// for a hazard detector, over-reporting costs a false alarm and
-// under-reporting costs the alarm entirely.
-func activeFromRaw(activeValues []string, raw any, valueList []string) (active, known bool) {
-	if len(activeValues) == 0 {
-		return normalizeActive(raw)
-	}
-	if label, ok := raw.(string); ok {
-		return containsString(activeValues, label), true
-	}
-	if idx, ok := rawIndex(raw); ok {
-		for i, label := range valueList {
-			if i == idx {
-				return containsString(activeValues, label), true
-			}
-		}
-	}
-	return normalizeActive(raw)
+// The rule itself is [safety.ActiveFromRaw], shared with the alarm
+// engine: the two domains watch the same physical contacts, and a
+// second copy here meant one plane could call a smoke detector active
+// while the other called it idle.
+func sourceActive(src *indexedSource, v hmtypes.ParamValue) (active, known bool, res safety.ActivationResolution) {
+	return safety.ActiveFromRaw(src.activeValues, v.Unwrap(), src.valueList)
 }
 
-// rawIndex narrows the integer wire kinds onto an enumeration index.
-func rawIndex(raw any) (int, bool) {
-	switch v := raw.(type) {
-	case int:
-		return v, true
-	case int32:
-		return int(v), true
-	case int64:
-		return int(v), true
-	default:
-		return 0, false
-	}
+// activationWarnLog records which data points already logged an
+// unresolved activation, so a chattering source cannot flood the log.
+type activationWarnLog struct {
+	mu     sync.Mutex
+	warned map[string]bool
 }
 
-// normalizeActive is the domain's default activation rule: booleans map
-// directly, numbers activate on non-zero.
-func normalizeActive(raw any) (active, known bool) {
-	switch v := raw.(type) {
-	case bool:
-		return v, true
-	case int:
-		return v != 0, true
-	case int32:
-		return v != 0, true
-	case int64:
-		return v != 0, true
-	case float64:
-		return v != 0, true
-	default:
-		return false, false
+// should reports whether key still owes a warning, and marks it logged.
+func (w *activationWarnLog) should(key string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.warned == nil {
+		w.warned = map[string]bool{}
 	}
+	if w.warned[key] {
+		return false
+	}
+	w.warned[key] = true
+	return true
 }
 
-func containsString(list []string, want string) bool {
-	for _, v := range list {
-		if v == want {
-			return true
-		}
+// warnUnresolvedActivation surfaces an activation the configured
+// narrowing could not decide as configured.
+//
+// A verdict the domain had to reach some other way is exactly the state
+// an operator cannot see from the outside: the source keeps reporting,
+// it just reports under a different rule than the one they chose. The
+// two cases are named apart because only one of them ever resolves on
+// its own — a value list that is not hydrated yet arrives, a firmware
+// value the list does not declare does not.
+func (s *Service) warnUnresolvedActivation(res safety.ActivationResolution, key string,
+	src *indexedSource, raw any,
+) {
+	if res == safety.ActivationApplied || !s.activationWarns.should(key) {
+		return
 	}
-	return false
+	if res == safety.ActivationIndexOutOfRange {
+		s.log.Warn("security source reported a value outside the declared value list; counted as inactive",
+			"central", src.ref.Central, "channel", src.ref.ChannelAddress,
+			"parameter", src.ref.Parameter, "value", raw)
+		return
+	}
+	s.log.Warn("security source active values unresolvable: no value list for the parameter, falling back to the default rule",
+		"central", src.ref.Central, "channel", src.ref.ChannelAddress,
+		"parameter", src.ref.Parameter)
 }
 
 // onAlarmPanelChanged keeps the zone set in step with the alarm

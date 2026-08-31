@@ -224,8 +224,10 @@ func TestIdentifyBaseTemperatureConstantDay(t *testing.T) {
 
 func TestIdentifyBaseTemperatureEmpty(t *testing.T) {
 	t.Parallel()
-	if got := identifyBaseTemperature(weekdaySlots{}); got != 0 {
-		t.Errorf("empty: got %.1f, want 0", got)
+	// No usable slot means no temperature held any minutes; the shared
+	// rule answers with the default fill temperature rather than 0 °C.
+	if got := identifyBaseTemperature(weekdaySlots{}); got != schedule.DefaultBaseTemperature {
+		t.Errorf("empty: got %.1f, want %.1f", got, schedule.DefaultBaseTemperature)
 	}
 }
 

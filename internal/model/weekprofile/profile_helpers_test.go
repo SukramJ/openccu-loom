@@ -240,7 +240,9 @@ func TestIdentifyBaseTemperatureTable(t *testing.T) {
 		{
 			name: "empty_data",
 			ws:   weekdaySlots{},
-			want: 0, // Go returns 0 for empty input
+			// A weekday with no usable slot falls back to the shared
+			// default fill temperature, not to 0 °C.
+			want: schedule.DefaultBaseTemperature,
 		},
 		{
 			name: "multiple_temperatures",

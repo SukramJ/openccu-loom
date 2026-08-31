@@ -19,10 +19,11 @@ import (
 //
 // Type conversions:
 //
-// - LinksDomain.ListLinks returns `[]handlers.Link` (locale-aware,
-// translated). LinkCoordinator.GetLinks returns
-// `[]coordinators.DeviceLink` (locale-agnostic). The adapter
-// converts the relevant subset of fields per row.
+// - LinksDomain.ListLinks returns `[]hmapi.Link` (locale-aware,
+// translated; `handlers.Link` is an alias of it).
+// LinkCoordinator.GetLinks returns `[]coordinators.DeviceLink`
+// (locale-agnostic). The adapter converts the relevant subset of
+// fields per row.
 // - LinksDomain.LinkableChannels returns
 // `[]handlers.LinkableChannel`; LinkCoordinator's signature uses
 // `[]coordinators.LinkableChannel`. Same shape, different
@@ -60,8 +61,14 @@ func (a *linkClientAdapter) RemoveLink(ctx context.Context, sender, receiver str
 
 // GetLinks delegates to [LinksDomain.ListLinks] using the empty
 // locale (the LinkCoordinator surface is locale-agnostic) and
-// converts the resulting `handlers.Link` rows into
+// converts the resulting `hmapi.Link` rows into
 // `coordinators.DeviceLink`.
+//
+// Direction is relative to the queried device and is a domain rule
+// over the address grammar (channel address to device address, then
+// compared against the queried device). [LinksDomain.enrichLink]
+// owns it; the adapter copies the value rather than deriving a
+// second one, so both surfaces cannot disagree.
 func (a *linkClientAdapter) GetLinks(ctx context.Context, deviceAddress string) ([]coordinators.DeviceLink, error) {
 	if a == nil || a.domain == nil {
 		return nil, coordinators.ErrLinkClientMissing
@@ -72,10 +79,6 @@ func (a *linkClientAdapter) GetLinks(ctx context.Context, deviceAddress string) 
 	}
 	out := make([]coordinators.DeviceLink, 0, len(rows))
 	for i := range rows {
-		direction := "outgoing"
-		if rows[i].Receiver != "" && rows[i].Sender == "" {
-			direction = "incoming"
-		}
 		out = append(out, coordinators.DeviceLink{
 			SenderAddress:       rows[i].Sender,
 			ReceiverAddress:     rows[i].Receiver,
@@ -84,7 +87,7 @@ func (a *linkClientAdapter) GetLinks(ctx context.Context, deviceAddress string) 
 			Flags:               rows[i].Flags,
 			SenderDeviceModel:   rows[i].SenderDeviceModel,
 			ReceiverDeviceModel: rows[i].ReceiverDeviceModel,
-			Direction:           direction,
+			Direction:           rows[i].Direction,
 		})
 	}
 	return out, nil

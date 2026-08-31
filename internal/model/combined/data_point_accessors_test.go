@@ -135,7 +135,7 @@ func TestTimerP2Methods(t *testing.T) {
 		t.Error("IsStateChange() must be false before any OnComponents")
 	}
 	// After observation
-	timer.OnComponents(120, TimerUnitSeconds)
+	timer.OnComponents(120, hmenum.TimerUnitSeconds)
 	if !timer.HasDataPoints() {
 		t.Error("HasDataPoints() must be true after observation")
 	}

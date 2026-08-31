@@ -167,6 +167,36 @@ func New(cfg Config) *Siren {
 	return s
 }
 
+// DisableAcousticLabel names the acoustic selection that silences this
+// siren, and whether the device declares one at all.
+//
+// It is the value any write that must not start a tone has to carry:
+// an ASIR takes tone, pattern and duration in one atomic VALUES
+// paramset and ignores partial writes, so leaving the acoustic half
+// out of an optical-only write does not keep it quiet — it re-sends
+// whatever the device selected last.
+//
+// The resolution order is the one [sirenSelectionDefaultString]
+// documents: the declared DEFAULT first, the VALUE_LIST head only as
+// its fallback. Callers outside this package have no view of the
+// descriptor — the flattened [Siren.AvailableTones] projection loses
+// the DEFAULT — so the rule has to be answered here rather than
+// re-derived from a list position.
+//
+// The second fallback covers a profile whose alarm-selection field
+// slot resolves onto a different channel than the one carrying the
+// VALUE_LIST: the selection data point is then nil while the channel
+// still offers tones, and the head is the only disable candidate left.
+func (s *Siren) DisableAcousticLabel() (string, bool) {
+	if label := sirenSelectionDefaultString(s.acousticIdx); label != "" {
+		return label, true
+	}
+	if len(s.availableTones) > 0 {
+		return s.availableTones[0], true
+	}
+	return "", false
+}
+
 // AvailableTones returns the labels of acoustic-alarm selections this
 // siren accepts (e.g. "DISABLE_ACOUSTIC_SIGNAL", "FREQUENCY_RISING",
 // "FREQUENCY_FALLING").

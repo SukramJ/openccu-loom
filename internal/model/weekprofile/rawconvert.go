@@ -91,15 +91,58 @@ func SimpleGroupNo(key string) (groupNo int, ok bool) {
 // which is a statement about our parser, not about the parameter.
 //
 // Both branches read the same grammar the parsers in this file use:
-// [climateParamPattern] and the "<NN>_WP_<FIELD>" split in
+// [IsClimateSlotName] and the "<NN>_WP_<FIELD>" split in
 // [ParseSimpleRawParamset]. Keeping the predicate here means a change to
 // either format updates the parser and its consumers together.
 func IsParameterName(key string) bool {
-	if climateParamPattern.MatchString(key) {
+	if IsClimateSlotName(key) {
 		return true
 	}
 	_, ok := SimpleGroupNo(key)
 	return ok
+}
+
+// IsClimateSlotName reports whether a MASTER paramset key is one cell of
+// a profile-prefixed climate week profile ("P1_ENDTIME_MONDAY_1").
+//
+// It accepts exactly the keys [ParseClimateRawParamset] consumes, and it
+// is the only predicate the daemon uses for that question — the hydration
+// filter in the CCU adapter delegates to it. The equivalence is the point:
+// a caller that hides or drops a cell the parser cannot read takes a
+// parameter off every surface without putting it anywhere else. A key that
+// merely shares the "P<N>_" prefix ("P1_X"), or one whose ordinal is past
+// the CCU slot count ([schedule.MaxClimateSlots], via [slotCount]), is
+// therefore an ordinary parameter here, not a cell.
+//
+// Narrowing the prefix rule this way exposes no parameter on the fleet the
+// in-process CCU simulator models: across its paramset descriptions every
+// MASTER key of the "P<1-6>_" shape is a TEMPERATURE/ENDTIME cell, and the
+// largest slot ordinal that occurs is [slotCount]. That is a statement
+// about that corpus, not about all firmware; a device carrying a higher
+// ordinal surfaces the key as a parameter rather than losing it, and
+// raising the bound is one constant.
+func IsClimateSlotName(key string) bool {
+	_, _, _, _, ok := parseClimateSlotKey(key)
+	return ok
+}
+
+// parseClimateSlotKey decomposes a profile-prefixed climate slot key into
+// its parts. ok is false for every key the climate schedule cannot hold,
+// including an ordinal outside 1..[slotCount].
+//
+// It is this package's single reading of that grammar: the parser below
+// and [IsClimateSlotName] share it, so the two can never drift into
+// disagreeing about what a slot cell is.
+func parseClimateSlotKey(key string) (profile, fieldType, weekday string, slotNo int, ok bool) {
+	m := climateParamPattern.FindStringSubmatch(key)
+	if m == nil {
+		return "", "", "", 0, false
+	}
+	no, err := strconv.Atoi(m[4])
+	if err != nil || no < 1 || no > slotCount {
+		return "", "", "", 0, false
+	}
+	return m[1], m[2], m[3], no, true
 }
 
 // ---------------------------------------------------------------------------
@@ -115,13 +158,8 @@ func IsParameterName(key string) bool {
 func ParseClimateRawParamset(raw map[string]any) (rawClimateSchedule, error) { //nolint:revive // rawClimateSchedule is a type alias for a concrete map type; callers see the underlying type.
 	out := make(rawClimateSchedule)
 	for key, val := range raw {
-		m := climateParamPattern.FindStringSubmatch(key)
-		if m == nil {
-			continue
-		}
-		profile, fieldType, weekday, slotStr := m[1], m[2], m[3], m[4]
-		slotNo, err := strconv.Atoi(slotStr)
-		if err != nil || slotNo < 1 || slotNo > slotCount {
+		profile, fieldType, weekday, slotNo, ok := parseClimateSlotKey(key)
+		if !ok {
 			continue
 		}
 		if _, ok := out[profile]; !ok {

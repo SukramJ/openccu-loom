@@ -10,12 +10,13 @@
 //
 // 1. [ToHomematicValue] / [FromHomematicValue] — type-dispatch value
 // conversion (bool→int, float rounding, time.Duration→seconds, …)
-// 2. [ConvertHMLevelToCPV] / [ConvertCPVToHMLevel] — the BidCos
-// "hex level" ↔ float64 round-trip for COMBINED_PARAMETER channels.
+// 2. [ConvertCPVToHMLevel] / [ConvertCPVToHMIPLevel] — the BidCos
+// "hex level" → float64 decode for COMBINED_PARAMETER channels. The
+// encode direction lives in internal/parameter.ConvertHMLevelToCPV,
+// the single home of the LEVEL_COMBINED byte encoding.
 //
 // [ToHomematicValue] (mirrors `to_homematic_value`)
 // [FromHomematicValue] (mirrors `from_homematic_value`)
-// [ConvertHMLevelToCPV] (mirrors `convert_hm_level_to_cpv`)
 // [ConvertableParameters] (mirrors `CONVERTABLE_PARAMETERS`)
 package value
 
@@ -103,19 +104,6 @@ func FromHomematicValue(v any, targetType string) any {
 		}
 	}
 	return v
-}
-
-// ConvertHMLevelToCPV converts a floating-point level value (0..1) to the
-// BidCos "combined parameter value" hex string used for COMBINED_PARAMETER /
-// LEVEL_COMBINED write operations.
-//
-// format(int(value * 100 * 2), "#04x") → "0x00" .. "0xc8"
-//
-// Python's `#04x` format means total width 4 including the "0x" prefix, which
-// is equivalent to Go's `%#02x` (minimum 2 hex digits).
-func ConvertHMLevelToCPV(level float64) string {
-	raw := int(math.Round(level * 100 * 2))
-	return fmt.Sprintf("%#02x", raw)
 }
 
 // ConvertCPVToHMLevel converts a BidCos CPV hex string back to a

@@ -20,37 +20,6 @@ import (
 )
 
 // ============================================================
-// isCentralLinkInterface tests (pure logic, no deps)
-// ============================================================
-
-func TestIsCentralLinkInterfaceEligible(t *testing.T) {
-	t.Parallel()
-	eligible := []hmenum.Interface{
-		hmenum.InterfaceBidCosRF,
-		hmenum.InterfaceBidCosWired,
-		hmenum.InterfaceHmIPRF,
-	}
-	for _, iface := range eligible {
-		if !isCentralLinkInterface(iface) {
-			t.Errorf("isCentralLinkInterface(%v) = false, want true", iface)
-		}
-	}
-}
-
-func TestIsCentralLinkInterfaceIneligible(t *testing.T) {
-	t.Parallel()
-	ineligible := []hmenum.Interface{
-		hmenum.InterfaceVirtualDevices,
-		hmenum.InterfaceCUxD,
-	}
-	for _, iface := range ineligible {
-		if isCentralLinkInterface(iface) {
-			t.Errorf("isCentralLinkInterface(%v) = true, want false", iface)
-		}
-	}
-}
-
-// ============================================================
 // channelHasPressEvents tests
 // ============================================================
 

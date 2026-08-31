@@ -6,7 +6,6 @@ package generic
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 	"time"
 
@@ -172,19 +171,19 @@ type Spec struct {
 
 	// NoPushUpdates marks this data point's backend interface as one
 	// that does NOT deliver VALUES updates via event callbacks — the
-	// CCU-side interface cannot push. When true, [RequiresPolling]
-	// Returns true for VALUES parameters
-	// `not client.capabilities.push_updates` branch (data_point.py:1033).
+	// CCU-side interface cannot push.
 	//
 	// The field is intentionally inverted ("No" prefix) so that the
-	// zero value (false) means "push is active" — which is the correct
-	// default for all existing tests and production DPs that do not
-	// explicitly opt out. Setting NoPushUpdates = true is the pipeline's
-	// responsibility for BIN-RPC CUxD and any other poll-only interface.
+	// zero value (false) means "push is active", the correct default for
+	// every production DP that does not explicitly opt out. Stamping it
+	// is the device-ingest pipeline's responsibility: it mirrors the
+	// backend's Capabilities.RPCCallback.
 	//
-	// replaces the unconditional MASTER-only heuristic with
-	// the two-part Python condition
-	// requires_polling = !push_updates || (HM/HMW && MASTER)
+	// It carries no reader inside the daemon at present. The polling
+	// decision that runs lives in the adapter, per interface, and is
+	// derived from the hmenum classification sets rather than from this
+	// flag; the flag is kept because the pipeline is the only place that
+	// can observe the backend capability at ingest time.
 	NoPushUpdates bool
 }
 
@@ -1464,46 +1463,6 @@ func (d *DataPoint[T]) ValidityGate() func() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.validityGate
-}
-
-// RequiresPolling reports whether the background scheduler should
-// Actively poll this parameter from the CCU.
-// two-part `requires_polling` (data_point.py:1033):
-//
-//	return (
-//	 not client.capabilities.push_updates
-//	 or (product_group in (HM, HMW) and paramset_key == MASTER)
-//	)
-//
-// Condition 1 — NoPushUpdates: when the backend interface cannot push
-// event callbacks (e.g. a poll-only transport), every parameter must
-// be polled regardless of paramset. Driven by [Spec.NoPushUpdates];
-// default false keeps the old behaviour for push-capable interfaces.
-//
-// Condition 2 — HM/HMW MASTER: BidCos-RF ("HM") and BidCos-Wired
-// ("HMW") CCUs do not push MASTER-paramset changes — those parameters
-// must be polled even when VALUES arrive via callbacks. All other
-// interface families (HmIP-RF, CUxD, VirtualDevices) are
-// covered by Condition 1 when relevant, or have their own polling
-// flags. The product-group check uses the interface-ID prefix exactly
-// As
-//
-// previously only checked MASTER paramset (Condition 2).
-// Now also checks Condition 1 so poll-only interfaces work correctly.
-func (d *DataPoint[T]) RequiresPolling() bool {
-	if d.NoPushUpdates {
-		return true
-	}
-	// HM (BidCos-RF) and HMW (BidCos-Wired) require explicit polling
-	// for MASTER-paramset parameters — the CCU never pushes them.
-	isMasterParamset := d.Key.ParamsetKey == hmenum.ParamsetKeyMaster
-	if !isMasterParamset {
-		return false
-	}
-	ifaceID := d.Key.InterfaceID
-	isHMorHMW := strings.HasPrefix(ifaceID, string(hmenum.ProductGroupHM)) ||
-		strings.HasPrefix(ifaceID, string(hmenum.ProductGroupHmW))
-	return isHMorHMW
 }
 
 // recentlyWindow is the threshold below which a timestamp counts as "recent".

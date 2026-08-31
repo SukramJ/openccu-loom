@@ -22,28 +22,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// ---------- ProductGroup discrimination ----------------------------------
-
-func TestIsHmIPInterfaceDiscriminates(t *testing.T) {
-	t.Parallel()
-
-	if !isHmIPInterface(hmenum.InterfaceHmIPRF) {
-		t.Errorf("isHmIPInterface(%q) = false, want true", hmenum.InterfaceHmIPRF)
-	}
-
-	classicCases := []hmenum.Interface{
-		hmenum.InterfaceBidCosRF,
-		hmenum.InterfaceBidCosWired,
-		hmenum.InterfaceVirtualDevices,
-		hmenum.InterfaceCUxD,
-	}
-	for _, iface := range classicCases {
-		if isHmIPInterface(iface) {
-			t.Errorf("isHmIPInterface(%q) = true, want false (classic HM)", iface)
-		}
-	}
-}
-
 // ---------- newMasterPollerForInterface ----------------------------------
 
 // fakeMasterGetter satisfies backends.MasterGetter.

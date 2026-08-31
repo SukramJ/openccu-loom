@@ -26,14 +26,6 @@ import (
 // ClientCoordinator lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
 
-func TestClientCoordinatorPrimaryClientNilWhenEmpty(t *testing.T) {
-	t.Parallel()
-	cc := NewClientCoordinator()
-	if cc.PrimaryClient() != nil {
-		t.Fatal("PrimaryClient on empty coordinator must return nil")
-	}
-}
-
 func TestClientCoordinatorAllClientsActiveFalseWhenEmpty(t *testing.T) {
 	t.Parallel()
 	cc := NewClientCoordinator()

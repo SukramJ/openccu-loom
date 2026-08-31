@@ -747,7 +747,7 @@ func transitionRampDuration(tenths *uint16) (ramp time.Duration, ramped bool) {
 // The off direction (target 0, only reachable via the WithOnOff
 // MinLevel coupling) goes through [Light.TurnOffWithRamp]; every other
 // target goes through [Light.TurnOnWith] — both bundle
-// {LEVEL, RAMP_TIME, ON_TIME=NotUsed} into one atomic put_paramset so
+// {LEVEL, RAMP_TIME, ON_TIME=TimerNotUsed} into one atomic put_paramset so
 // the device performs the transition natively.
 func (s lightLevelServer) setLevelRamped(ctx context.Context, target float64, ramp time.Duration, priority hmenum.CommandPriority) error {
 	if target == 0 {

@@ -93,11 +93,14 @@ func (s *UnobservedSweep) sweepDevice(ctx context.Context, d *device.Device) (lo
 	if d == nil {
 		return 0, 0
 	}
-	// Channel-0 RELEVANT_INIT_PARAMETERS — same set as the bootstrap
-	// pass (UNREACH / STICKY_UN_REACH / CONFIG_PENDING).
+	// Channel-0 [hmenum.RelevantInitParameters] — the same shared set the
+	// bootstrap seed walks, so a member added there takes effect on both
+	// paths. This pass deliberately has no visibility gate: an invisible
+	// channel-0 UNREACH is reachable only here, never through the broad
+	// third pass below, which skips NoCreate data points.
 	ch0 := d.Channel(d.Address + ":0")
 	if ch0 != nil {
-		for _, p := range relevantInitParameters {
+		for _, p := range hmenum.RelevantInitParameters {
 			dp := ch0.Parameter(p)
 			if dp == nil {
 				continue

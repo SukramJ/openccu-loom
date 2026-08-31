@@ -23,7 +23,7 @@ func TestTimerStateUncertain_BeforeObservation(t *testing.T) {
 func TestTimerStateUncertain_AfterObservation(t *testing.T) {
 	t.Parallel()
 	timer := combined.NewTimer("addr", nil, hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit)
-	timer.OnComponents(10.0, combined.TimerUnitSeconds)
+	timer.OnComponents(10.0, hmenum.TimerUnitSeconds)
 	if timer.StateUncertain() {
 		t.Error("Timer.StateUncertain() must be false after observation")
 	}

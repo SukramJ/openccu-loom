@@ -219,7 +219,7 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 			callbackURL,
 			config.ReliabilityConfig{},
 			nil, // masterValues: HmIP-RF is gated to a nil MasterPoller (see
-			// newMasterPollerForInterface/isHmIPInterface), so it is never
+			// newMasterPollerForInterface), so it is never
 			// dereferenced.
 			newBackendRegistry(),
 			nil, // jsonCaller: CcuBackend only needs XML-RPC for the methods

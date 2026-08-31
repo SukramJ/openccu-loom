@@ -4,7 +4,6 @@
 package backends
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -170,24 +169,4 @@ func convertCpvLevelHm(value string) any {
 		return v
 	}
 	return float64(n) / 100 / 2
-}
-
-// EncodeHMLevel encodes a 0..1 float into the HM hex wire form using
-// the format `int(value * 100 * 2)` presented as a 2-digit hex string.
-// Out-of-range inputs are clamped to [0, 1] before encoding so the wire
-// never carries negative or overflowing levels.
-//
-// Note: cover/blind.go carries a parallel inline implementation
-// (hmLevelCombined) and that is the one production uses. This exported
-// function has no production caller and is exercised by backend-level
-// unit tests only.
-func EncodeHMLevel(value float64) string {
-	switch {
-	case value < 0:
-		value = 0
-	case value > 1:
-		value = 1
-	}
-	n := int(value*100*2 + 0.5) // round half-up to mirror python's int() on already-multiplied value
-	return fmt.Sprintf("0x%02x", n)
 }

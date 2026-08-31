@@ -44,12 +44,14 @@ func TestToMinutesKnownValues(t *testing.T) {
 	}
 }
 
-// TestToMinutesInvalidInput verifies non-parseable strings return -1.
-// Note: ToMinutes does not bounds-check hours — "25:00" parses as 1500, not -1.
-// Only truly unparseable input (empty, non-numeric, too short) returns -1.
+// TestToMinutesInvalidInput verifies that everything outside the climate
+// time grammar returns -1 — unparseable input and an out-of-range clock
+// alike. An hour above 23 (other than the "24:00" end-of-day marker) used
+// to parse here as a plain minute count, which is how "24:30" reached the
+// device as 1470 minutes and was then read back differently by each plane.
 func TestToMinutesInvalidInput(t *testing.T) {
 	t.Parallel()
-	for _, s := range []string{"", "abc", "bad", "xy"} {
+	for _, s := range []string{"", "abc", "bad", "xy", "24:30", "25:00", "12:60"} {
 		if got := ToMinutes(s); got >= 0 {
 			t.Errorf("ToMinutes(%q) = %d, want -1", s, got)
 		}

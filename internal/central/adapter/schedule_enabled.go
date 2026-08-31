@@ -10,13 +10,11 @@
 // synchronously and then reads WEEK_PROGRAM_CHANNEL_LOCKS to refresh the
 // in-model state.
 //
-// Wire format:
-//
-// COMBINED_PARAMETER = "WPTCLS={bitmask},WPTCL={mode}"
-//
-// where bitmask is derived from channel_key (e.g. "1_1" → 1) and mode is 0
-// (MANU / disabled) or 2 (AUTO / enabled). A nil channel_key means "all
-// registered channels".
+// The COMBINED_PARAMETER payload and the channel-key bit table are wire
+// semantics of the week-profile domain object: this file renders neither
+// itself but asks internal/model/weekprofile (channel_keys.go) for both,
+// so one bit assignment serves the modelled write path and this fallback.
+// An empty channel_key means "all registered channels".
 
 package adapter
 
@@ -30,41 +28,22 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-const (
-	// wptclAuto is the mode value that enables the weekly program (AUTO).
-	wptclAuto = 2
+// scheduleFallbackChannelKey is the channel targeted when the device
+// carries no modelled week profile to enumerate: the first actor of the
+// first group, which is what a single-channel device exposes.
+const scheduleFallbackChannelKey = "1_1"
 
-	// wptclManu is the mode value that disables the weekly program (MANU).
-	wptclManu = 0
-)
-
-// scheduleActorChannelBitmasks maps the canonical channel key (e.g. "1_1") to
-// its bitmask value used in WPTCLS.
-var scheduleActorChannelBitmasks = map[string]int{
-	"1_1": 1,
-	"1_2": 2,
-	"1_3": 4,
-	"2_1": 8,
-	"2_2": 16,
-	"2_3": 32,
-	"3_1": 64,
-	"3_2": 128,
-	"3_3": 256,
-	"4_1": 512,
-	"4_2": 1024,
-	"4_3": 2048,
-	"5_1": 4096,
-	"5_2": 8192,
-	"5_3": 16384,
-	"6_1": 32768,
-	"6_2": 65536,
-	"6_3": 131072,
-	"7_1": 262144,
-	"7_2": 524288,
-	"7_3": 1048576,
-	"8_1": 2097152,
-	"8_2": 4194304,
-	"8_3": 8388608,
+// scheduleFallbackBitmask resolves [scheduleFallbackChannelKey] through the
+// model's bit table. Which key to fall back to is wiring policy and stays
+// here; what bit that key carries is not. The error path matters: a silent
+// miss would degrade to bitmask 0, and "WPTCLS=0" is a write the CCU accepts
+// while it targets no channel at all.
+func scheduleFallbackBitmask() (uint32, error) {
+	bit, ok := weekprofile.ChannelKeyToBitmask(scheduleFallbackChannelKey)
+	if !ok || bit == 0 {
+		return 0, fmt.Errorf("unknown channel key %q", scheduleFallbackChannelKey)
+	}
+	return bit, nil
 }
 
 // SetScheduleEnabled enables or disables the weekly program on the
@@ -72,8 +51,7 @@ var scheduleActorChannelBitmasks = map[string]int{
 //
 // When channelKey is non-empty, only the schedule for that channel is
 // toggled (e.g. "1_1"). An empty channelKey toggles all channels
-// currently registered in the model's ProfileDataPoint (same semantics
-// As
+// currently registered in the model's ProfileDataPoint.
 //
 // The operation writes the COMBINED_PARAMETER values data point on the
 // schedule channel. The schedule channel is resolved via
@@ -117,17 +95,12 @@ func (s *SchedulesDomain) SetScheduleEnabled(
 		return fmt.Errorf("schedules.SetScheduleEnabled: resolve backend: %w", err)
 	}
 
-	mode := wptclAuto
-	if !enabled {
-		mode = wptclManu
-	}
-
 	bitmask, maskErr := s.channelKeyBitmask(ctx, deviceAddress, channelKey)
 	if maskErr != nil {
 		return fmt.Errorf("schedules.SetScheduleEnabled: bitmask: %w", maskErr)
 	}
 
-	combinedValue := fmt.Sprintf("WPTCLS=%d,WPTCL=%d", bitmask, mode)
+	combinedValue := weekprofile.BuildCombinedParameterValue(bitmask, enabled)
 	if err := b.SetValue(
 		ctx,
 		scheduleChannelAddr,
@@ -148,17 +121,19 @@ func (s *SchedulesDomain) SetScheduleEnabled(
 	return nil
 }
 
-// channelKeyBitmask computes the WPTCLS bitmask for the given channel key.
+// channelKeyBitmask computes the WPTCLS bitmask for the given channel key,
+// resolving every key through the model's bit table.
+//
 // When channelKey is empty the bitmask is the OR of all channels registered
-// In the device's ProfileDataPoint (same as
-// path). When channelKey is non-empty and unknown a descriptive error is
-// returned. When no ProfileDataPoint is found in the model the fallback is
-// the bitmask for the single key "1_1" (the most common single-channel device).
-func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, channelKey string) (int, error) {
+// in the device's ProfileDataPoint. When channelKey is non-empty and unknown
+// a descriptive error is returned. When no ProfileDataPoint is found in the
+// model the fallback is [scheduleFallbackChannelKey], the shape of the most
+// common single-channel device.
+func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, channelKey string) (uint32, error) {
 	_ = ctx // reserved for future use
 
 	if channelKey != "" {
-		bitmask, ok := scheduleActorChannelBitmasks[channelKey]
+		bitmask, ok := weekprofile.ChannelKeyToBitmask(channelKey)
 		if !ok {
 			return 0, fmt.Errorf("unknown channel key %q", channelKey)
 		}
@@ -168,7 +143,7 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 	// Empty channelKey → all channels. Walk the model's ProfileDataPoint
 	// to discover which keys are registered.
 	if s.registry == nil {
-		return scheduleActorChannelBitmasks["1_1"], nil
+		return scheduleFallbackBitmask()
 	}
 	for _, u := range s.registry.List() {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
@@ -183,9 +158,9 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 			if len(enabled) == 0 {
 				break
 			}
-			bitmask := 0
+			var bitmask uint32
 			for key := range enabled {
-				if b, ok := scheduleActorChannelBitmasks[key]; ok {
+				if b, ok := weekprofile.ChannelKeyToBitmask(key); ok {
 					bitmask |= b
 				}
 			}
@@ -198,8 +173,8 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 		break
 	}
 
-	// Default: single-channel device with key "1_1".
-	return scheduleActorChannelBitmasks["1_1"], nil
+	// Default: single-channel device.
+	return scheduleFallbackBitmask()
 }
 
 // scheduleProfileFor returns the week-profile data point of the first

@@ -5,7 +5,9 @@ package textdisplay
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -179,7 +181,11 @@ func (t *TextDisplay) registerTextDisplayServices() {
 		if s, err := payload.ParamString(params, "repetitions"); err == nil {
 			opts.Repetitions = s
 		} else if n, err := payload.ParamInt32(params, "repeat"); err == nil {
-			opts.Repetitions = convertRepetitions(int(n))
+			label, lerr := custom.RepetitionsLabel(int(n))
+			if lerr != nil {
+				return fmt.Errorf("textdisplay: %w", lerr)
+			}
+			opts.Repetitions = label
 		}
 		if s, err := payload.ParamString(params, "interval"); err == nil {
 			opts.Interval = s

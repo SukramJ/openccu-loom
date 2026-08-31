@@ -58,8 +58,9 @@ type fakeSirenDevice struct {
 	opticalActive, opticalObserved   bool
 	opticalSelection                 string
 
-	tones  []string
-	lights []string
+	tones       []string
+	disableTone string
+	lights      []string
 }
 
 func newFakeSirenDevice(seq *seqCounter) *fakeSirenDevice {
@@ -92,6 +93,20 @@ func (d *fakeSirenDevice) OpticalState() (active bool, selection string, observe
 	return d.opticalActive, d.opticalSelection, d.opticalObserved
 }
 
+// DisableAcousticLabel reports the disable selection the fake device
+// declares. It is set independently of the tone list on purpose: the
+// real model resolves it from the parameter's declared DEFAULT, which
+// need not be the VALUE_LIST head, so a fake that derived it from
+// tones[0] could not tell the two rules apart.
+func (d *fakeSirenDevice) DisableAcousticLabel() (string, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.disableTone == "" {
+		return "", false
+	}
+	return d.disableTone, true
+}
+
 func (d *fakeSirenDevice) AvailableTones() []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -119,13 +134,14 @@ func (d *fakeSirenDevice) setOptical(active, observed bool) {
 }
 
 // setValueLists declares the device's acoustic/optical selection value
-// lists. Their head is the disable entry the CCU exposes first, which
-// is what an optical-only activation pins the acoustic half to — a test
-// that asserts what reaches the acoustic half has to declare them.
-func (d *fakeSirenDevice) setValueLists(tones, lights []string) {
+// lists plus the acoustic disable selection. The disable label is a
+// separate argument rather than a position in tones because the device
+// declares it in the parameter descriptor: a test that asserts what
+// reaches the acoustic half has to state it, not infer it.
+func (d *fakeSirenDevice) setValueLists(tones []string, disableTone string, lights []string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.tones, d.lights = tones, lights
+	d.tones, d.disableTone, d.lights = tones, disableTone, lights
 }
 
 func (d *fakeSirenDevice) setTurnOnErr(err error) {

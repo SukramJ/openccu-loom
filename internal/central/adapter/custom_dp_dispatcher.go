@@ -29,6 +29,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom/textdisplay"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/valve"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -179,12 +180,13 @@ func (d *CustomDPDispatcher) dispatch(
 	}
 	// SoundPlayerLED (HmIP-MP3P status LED) composes *FixedColorLight; like
 	// DRGDaliLight it is a distinct type the FixedColorLight case never
-	// matches. turn_on/turn_off need the LED's own methods (they write
-	// COLOR + ON_TIME_LIST_1 + REPETITIONS + ON_TIME atomically, not just
-	// LEVEL); every other command still dispatches through the fixed-colour
-	// path.
+	// matches. Its on/off semantics (COLOR + ON_TIME_LIST_1 + REPETITIONS +
+	// ON_TIME written atomically instead of LEVEL alone) live on its own
+	// ServiceRegistry registrations, which the turn_on / turn_off /
+	// set_level delegation in dispatchLight resolves, so the fixed-colour
+	// path is the right route for every operation.
 	if l, ok := dp.(*light.SoundPlayerLED); ok {
-		return d.dispatchSoundPlayerLED(ctx, l, operation, params, priority)
+		return d.dispatchFixedColorLight(ctx, l.FixedColorLight, operation, params, priority)
 	}
 	if l, ok := dp.(*light.ColorLight); ok {
 		return d.dispatchColorLight(ctx, l, operation, params, priority)
@@ -267,50 +269,28 @@ func (d *CustomDPDispatcher) dispatchLight(
 	ctx context.Context, l *light.Light, op string, p map[string]any, prio hmenum.CommandPriority,
 ) error {
 	switch op {
-	case "turn_on":
-		return l.TurnOn(ctx, prio)
-	case "turn_off":
-		return l.TurnOff(ctx, prio)
+	// turn_on / turn_off / set_level are defined once, on the light model's
+	// ServiceRegistry, and are reached from here through Invoke. The
+	// registry is shared by the whole embedded chain, so the concrete
+	// subtype's own registration wins: a SoundPlayerLED's atomic
+	// COLOR + ON_TIME_LIST_1 write, a ColorLight's HUE/SATURATION routing.
+	// Re-implementing the HA JSON-schema ladder here is what let this plane
+	// drop colour, colour temperature and effect while the MQTT command
+	// topic applied them.
+	case "turn_on", "turn_off", "set_level":
+		// A light whose LEVEL parameter did not resolve registers no
+		// service methods at all, so the operation genuinely does not
+		// exist for this data point.
+		if !slices.Contains(l.ServiceMethodNames(), op) {
+			return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
+		}
+		return wrapServiceErr(l.Invoke(ctx, op, p, prio))
 	case "set_brightness":
 		level, err := paramFloat(p, "brightness", 1)
 		if err != nil {
 			return err
 		}
 		return l.SetLevel(ctx, level, prio)
-	case "set_level":
-		// HA's `mqtt-light schema=json` posts a JSON object to the command topic —
-		// `{"state":"ON","brightness":255}` for a turn-on with brightness,
-		// `{"state":"OFF"}` for turn-off, `{"brightness":<0-255>}` (no state) for a
-		// level-only adjust on an already-on light. Translate these shapes into the
-		// existing TurnOn / TurnOff / SetLevel methods so the light entity actually
-		// toggles.
-		if state, ok := paramStringOptional(p, "state"); ok {
-			switch strings.ToUpper(state) {
-			case "OFF":
-				return l.TurnOff(ctx, prio)
-			case "ON":
-				if br, hasBr := p["brightness"]; hasBr {
-					if f, err := toFloat64(br); err == nil {
-						return l.SetLevel(ctx, f/255.0, prio)
-					}
-				}
-				return l.TurnOn(ctx, prio)
-			}
-		}
-		if br, hasBr := p["brightness"]; hasBr {
-			if f, err := toFloat64(br); err == nil {
-				return l.SetLevel(ctx, f/255.0, prio)
-			}
-		}
-		// Legacy / scalar path: a bare `{"level": 0.5}` payload.
-		if _, hasLevel := p["level"]; hasLevel {
-			level, err := paramFloat(p, "level", 1)
-			if err != nil {
-				return err
-			}
-			return l.SetLevel(ctx, level, prio)
-		}
-		return fmt.Errorf("%w: set_level needs state, brightness, or level", hmapi.ErrBadParam)
 	case "set_on_time":
 		// Encodes ON_TIME_VALUE / ON_TIME_UNIT for the next on cycle. The
 		// Light carries the writer + channel address it writes through.
@@ -422,89 +402,6 @@ func (d *CustomDPDispatcher) dispatchFixedColorLight(
 	default:
 		return d.dispatchLight(ctx, l.Light, op, p, prio)
 	}
-}
-
-// dispatchSoundPlayerLED handles the HmIP-MP3P status LED's own turn_on /
-// turn_off, which write COLOR + ON_TIME_LIST_1 + REPETITIONS + ON_TIME in
-// one atomic put_paramset ([light.SoundPlayerLED.TurnOn] /
-// [light.SoundPlayerLED.TurnOff]) rather than the LEVEL-only write the
-// embedded FixedColorLight's plain Light.TurnOn performs. Routing turn_on
-// through the fixed-colour path left COLOR untouched, so the LED stayed
-// dark at COLOR=BLACK and any previously commanded flash pattern
-// (ON_TIME_LIST_1/REPETITIONS) kept running across a plain turn-on/off.
-// Every other operation (set_color, set_brightness, plain set_level, …)
-// still dispatches through the fixed-colour path — only turn_on/turn_off
-// and the HA mqtt-light `set_level{state}` shape need the LED's own
-// atomic write.
-func (d *CustomDPDispatcher) dispatchSoundPlayerLED(
-	ctx context.Context, l *light.SoundPlayerLED, op string, p map[string]any, prio hmenum.CommandPriority,
-) error {
-	switch op {
-	case "turn_on":
-		return l.TurnOn(ctx, ledOnConfigFromParams(p), l.Writer, l.Address(), prio)
-	case "turn_off":
-		return l.TurnOff(ctx, l.Writer, l.Address(), prio)
-	case "set_level":
-		if state, ok := paramStringOptional(p, "state"); ok {
-			switch strings.ToUpper(state) {
-			case "OFF":
-				return l.TurnOff(ctx, l.Writer, l.Address(), prio)
-			case "ON":
-				return l.TurnOn(ctx, ledOnConfigFromParams(p), l.Writer, l.Address(), prio)
-			}
-		}
-		return d.dispatchFixedColorLight(ctx, l.FixedColorLight, op, p, prio)
-	default:
-		return d.dispatchFixedColorLight(ctx, l.FixedColorLight, op, p, prio)
-	}
-}
-
-// ledOnConfigFromParams builds a [light.LedOnConfig] from an operation's
-// params. Every field is optional, matching LedOnConfig's own documented
-// zero-value defaults (0 brightness → full, nil HSColor → keep the current
-// colour, 0 on/ramp time → no timer, 0 repetitions → none, 0 flash time →
-// PERMANENTLY_ON); a param that is present but the wrong type is ignored
-// rather than rejected, so a caller that only wants a plain turn-on can
-// omit all of them.
-func ledOnConfigFromParams(p map[string]any) light.LedOnConfig {
-	var cfg light.LedOnConfig
-	if raw, ok := p["brightness"]; ok {
-		if f, err := toFloat64(raw); err == nil {
-			cfg.Brightness = uint8(min(max(f, 0), 255))
-		}
-	}
-	if hueRaw, ok := p["hue"]; ok {
-		if hue, err := toInt32(hueRaw); err == nil {
-			sat := 100.0
-			if satRaw, ok2 := p["saturation"]; ok2 {
-				if s, err2 := toFloat64(satRaw); err2 == nil {
-					sat = s
-				}
-			}
-			cfg.HSColor = &[2]float64{float64(hue), sat}
-		}
-	}
-	if raw, ok := p["on_time"]; ok {
-		if f, err := toFloat64(raw); err == nil {
-			cfg.OnTime = f
-		}
-	}
-	if raw, ok := p["ramp_time"]; ok {
-		if f, err := toFloat64(raw); err == nil {
-			cfg.RampTime = f
-		}
-	}
-	if raw, ok := p["repetitions"]; ok {
-		if n, err := toInt32(raw); err == nil {
-			cfg.Repetitions = int(n)
-		}
-	}
-	if raw, ok := p["flash_time_ms"]; ok {
-		if n, err := toInt32(raw); err == nil {
-			cfg.FlashTimeMS = int(n)
-		}
-	}
-	return cfg
 }
 
 func (d *CustomDPDispatcher) dispatchEffectLight(
@@ -994,6 +891,32 @@ type textDisplayCarrier interface {
 // ============================================================
 // Param-parsing helpers
 // ============================================================
+
+// wrapServiceErr translates the light model's service-registry error
+// sentinels into the hmapi sentinels the REST and WebSocket layers
+// classify on. Without it every malformed payload on those planes would
+// degrade from 422 Unprocessable Entity to a 502 upstream failure,
+// because they match on [hmapi.ErrBadParam] alone.
+//
+// An unknown *method* reaching this function is never the dispatched
+// operation itself — the caller checks that the operation is registered
+// before invoking. It is the nested routing of an HA JSON-schema
+// attribute (`color`, `color_temp_kelvin`, `effect`) to a light type that
+// advertises no such axis, which is a bad parameter for the operation the
+// caller did send, not an unknown operation.
+func wrapServiceErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, payload.ErrServiceMissingParam),
+		errors.Is(err, payload.ErrServiceInvalidParam):
+		return fmt.Errorf("%w: %w", hmapi.ErrBadParam, err)
+	case errors.Is(err, payload.ErrUnknownServiceMethod):
+		return fmt.Errorf("%w: this data point supports no such attribute: %w", hmapi.ErrBadParam, err)
+	default:
+		return err
+	}
+}
 
 // paramFloat extracts a float64 from params[key]. When hi > 0, the
 // value is validated within [0, hi]. When hi == 0, no bounds check

@@ -596,8 +596,12 @@ func TestReloadScheduleNoProfileIsNoOp(t *testing.T) {
 func TestSyncChannelLocksFromWireBitDecodingUint32(t *testing.T) {
 	t.Parallel()
 	dp := NewProfileDataPoint(ProfileDataPointConfig{})
-	dp.RegisterChannel("1_1", true) // channel 1_1 bit=1
-	dp.RegisterChannel("1_2", true) // channel 1_2 bit=2
+	// The decode is keyed by the channels the device advertises, so the
+	// targets — not RegisterChannel — are what makes the keys eligible.
+	dp.SetAvailableTargetChannels(map[string]TargetChannelInfo{
+		"1_1": {ChannelNo: 1, ChannelType: "primary"},   // bit=1
+		"1_2": {ChannelNo: 2, ChannelType: "secondary"}, // bit=2
+	})
 
 	// bit 0 set → channel "1_1" LOCKED (enabled=false); bit 1 clear → channel "1_2" ENABLED
 	dp.SyncChannelLocksFromWire(uint32(1))
@@ -614,7 +618,7 @@ func TestSyncChannelLocksFromWireBitDecodingUint32(t *testing.T) {
 func TestSyncChannelLocksFromWireFloat64Input(t *testing.T) {
 	t.Parallel()
 	dp := NewProfileDataPoint(ProfileDataPointConfig{})
-	dp.RegisterChannel("1_1", true)
+	dp.SetAvailableTargetChannels(map[string]TargetChannelInfo{"1_1": {ChannelNo: 1, ChannelType: "primary"}})
 	// Deliver as float64 (common in JSON-decoded wire values)
 	dp.SyncChannelLocksFromWire(float64(1))
 	state := dp.ScheduleEnabled()
@@ -626,7 +630,7 @@ func TestSyncChannelLocksFromWireFloat64Input(t *testing.T) {
 func TestSyncChannelLocksFromWireNilInputIsNoOp(t *testing.T) {
 	t.Parallel()
 	dp := NewProfileDataPoint(ProfileDataPointConfig{})
-	dp.RegisterChannel("1_1", true)
+	dp.SetAvailableTargetChannels(map[string]TargetChannelInfo{"1_1": {ChannelNo: 1, ChannelType: "primary"}})
 	dp.SyncChannelLocksFromWire(nil) // must not panic
 	state := dp.ScheduleEnabled()
 	if state["1_1"] != true {

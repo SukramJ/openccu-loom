@@ -136,8 +136,9 @@ var sensorMetadataByParam = map[string]Metadata{
 	"BATTERY_STATE":     {Quantity: hmenum.QuantityVoltage, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 	"OPERATING_VOLTAGE": {Quantity: hmenum.QuantityVoltage, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 
-	// OPERATING_VOLTAGE_LEVEL
-	"OPERATING_VOLTAGE_LEVEL": {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+	// OPERATING_VOLTAGE_LEVEL — the derived percentage of nominal cell
+	// voltage, i.e. a battery charge level rather than a raw voltage.
+	"OPERATING_VOLTAGE_LEVEL": {Quantity: hmenum.QuantityBattery, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 
 	// POWER
 	"POWER": {Quantity: hmenum.QuantityPower, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
@@ -180,6 +181,26 @@ var sensorMetadataByParam = map[string]Metadata{
 
 	// WIND_SPEED
 	"WIND_SPEED": {Quantity: hmenum.QuantityWindSpeed, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+
+	// Derived climate readings the daemon synthesises itself. They never
+	// arrive on the wire, but they are classified through the same table
+	// so that every plane reads one answer per parameter name instead of
+	// each plane carrying its own list of calculated names.
+	//
+	// DEW_POINT / FROST_POINT report the °C at which condensation /
+	// freezing sets in; APPARENT_TEMPERATURE is the felt temperature;
+	// PARTY_TEMPERATURE is a thermostat's holiday set point. All four are
+	// temperatures. DEW_POINT_SPREAD (K) and ENTHALPY (kJ/kg) carry no
+	// quantity that Home Assistant models, but they are instantaneous
+	// readings and must be marked as such — their units are absent from
+	// the unit fallback below, so without an entry here they would be
+	// classified as unbehaved.
+	"APPARENT_TEMPERATURE": {Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+	"DEW_POINT":            {Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+	"DEW_POINT_SPREAD":     {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+	"ENTHALPY":             {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+	"FROST_POINT":          {Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
+	"PARTY_TEMPERATURE":    {Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 }
 
 // ---------------------------------------------------------------------------
@@ -375,9 +396,15 @@ var binarySensorQuantityByDeviceAndParam = []binarySensorDeviceParamRule{
 		Parameter:     "INTRUSION_ALARM",
 		Quantity:      hmenum.QuantitySafety,
 	},
+	// Window and door contacts. HmIP-SWD is deliberately absent although the
+	// reference lists it here: model matching is a prefix walk, and "HmIP-SWD"
+	// is a prefix of the whole HmIP-SWDO*/HmIP-SWDM* family as well as of the
+	// water sensor that carries the name exactly. The two entries below cover
+	// the contacts on their own, so including the shorter prefix would add
+	// nothing except the water sensor — a leak detector reported as a window
+	// contact the day a firmware gives it a STATE parameter.
 	{
 		ModelPrefixes: []string{
-			"HmIP-SWD",
 			"HmIP-SWDO",
 			"HmIP-SWDM",
 			"HM-Sec-SC",

@@ -160,7 +160,7 @@ func TestParityAtomicOnTimePutParamset(t *testing.T) {
 }
 
 // TestParityTurnOffWithRampAtomicPutParamset verifies that TurnOffWithRamp
-// bundles RAMP_TIME + LEVEL=0 + ON_TIME=NotUsed atomically. Mirrors
+// bundles RAMP_TIME + LEVEL=0 + ON_TIME=TimerNotUsed atomically. Mirrors
 // test_cedimmer → "turn_off(ramp_time=6)".
 func TestParityTurnOffWithRampAtomicPutParamset(t *testing.T) {
 	t.Parallel()
@@ -180,8 +180,8 @@ func TestParityTurnOffWithRampAtomicPutParamset(t *testing.T) {
 	if v, _ := got[string(hmenum.ParameterRampTime)].(float64); v != 6 {
 		t.Errorf("RAMP_TIME=%v, want 6", got[string(hmenum.ParameterRampTime)])
 	}
-	if v, _ := got[string(hmenum.ParameterOnTime)].(float64); v != NotUsed {
-		t.Errorf("ON_TIME=%v, want NotUsed (%v)", got[string(hmenum.ParameterOnTime)], NotUsed)
+	if v, _ := got[string(hmenum.ParameterOnTime)].(float64); v != custom.TimerNotUsed {
+		t.Errorf("ON_TIME=%v, want TimerNotUsed (%v)", got[string(hmenum.ParameterOnTime)], custom.TimerNotUsed)
 	}
 }
 
@@ -277,11 +277,13 @@ func TestParityBrightnessPctScale(t *testing.T) {
 		w := &stubWriter{}
 		l, level := newParityLightRig(t, "VCU1399816:4", w, custom.LightCapabilities{Dimmable: true})
 		level.OnEvent(tc.level)
-		b, ok := l.Brightness()
+		// Through the accessor, not by recomputing level×100 here: a test
+		// that carries its own copy of the rule agrees with any
+		// implementation and can never report a drift.
+		pct, ok := l.BrightnessPct()
 		if !ok {
-			t.Fatalf("level=%v: Brightness() ok=false", tc.level)
+			t.Fatalf("level=%v: BrightnessPct() ok=false", tc.level)
 		}
-		pct := int(b.Level() * 100)
 		if pct != tc.wantPct {
 			t.Errorf("level=%v → pct=%d, want %d", tc.level, pct, tc.wantPct)
 		}

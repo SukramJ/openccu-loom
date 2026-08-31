@@ -257,15 +257,6 @@ var (
 	InterfacesPushingConfigPending = map[Interface]struct{}{
 		InterfaceHmIPRF: {},
 	}
-
-	// PrimaryClientCandidateInterfaces is the preferred set of interfaces used
-	// when selecting a primary InterfaceClient for operations that require only
-	// one client (e.g. JSON-RPC facade, device-info queries).
-	PrimaryClientCandidateInterfaces = map[Interface]struct{}{
-		InterfaceHmIPRF:      {},
-		InterfaceBidCosRF:    {},
-		InterfaceBidCosWired: {},
-	}
 )
 
 // InterfaceRPCServerType maps each Interface to the [RPCServerType] that

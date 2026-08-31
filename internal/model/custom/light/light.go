@@ -115,9 +115,9 @@ type Light struct {
 	// value/unit pair (DURATION_VALUE + DURATION_UNIT — see
 	// [resolveOnTimeParams]; no device carries the literal ON_TIME_UNIT wire
 	// name), meaning the device interprets the reset as a timed shutdown. When
-	// true, TurnOn without an explicit on-time sends the NotUsed sentinel to
-	// cancel any previously running timer rather than leaving the old value
-	// active.
+	// true, TurnOn without an explicit on-time sends the
+	// [custom.TimerNotUsed] sentinel to cancel any previously running timer
+	// rather than leaving the old value active.
 	hasOnTimeUnit bool
 
 	// onTimeValueParam / onTimeUnitParam are the wire parameter(s)
@@ -127,7 +127,8 @@ type Light struct {
 	onTimeUnitParam  hmenum.Parameter
 
 	// resetsOnTimeOnTurnOn gates whether a plain TurnOn (no explicit
-	// on-time/timer) emits the NotUsed sentinel on a channel that carries
+	// on-time/timer) emits the [custom.TimerNotUsed] sentinel on a channel
+	// that carries
 	// ON_TIME_UNIT. Only signal lights (FixedColorLight) require this reset.
 	// For HmIP-RGBW / HmIP-DRG-DALI the device interprets the sentinel duration
 	// on a plain turn_on and switches off again immediately (briefly flashes,
@@ -385,7 +386,11 @@ func (l *Light) GroupBrightnessPct() (int, bool) {
 	if !ok {
 		return 0, false
 	}
-	return int(v*100 + 0.5), true
+	// Through custom.NewBrightness, so the group percentage carries the same
+	// [0, 1] clamp as [Light.GroupBrightness] and the one level→percent rule
+	// the model owns. Reading the raw DP value here let an out-of-range group
+	// level report a percentage outside 0..100.
+	return custom.NewBrightness(v).Pct(), true
 }
 
 // DataPointKey returns the LEVEL data point key. When the channel
@@ -596,13 +601,13 @@ func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) err
 		if !l.IsStateChangeFull(StateChangeArgsFull{TurnOn: true}) {
 			return nil
 		}
-		// Signal lights with ON_TIME_UNIT send ON_TIME=NotUsed to cancel any
+		// Signal lights with ON_TIME_UNIT send ON_TIME=TimerNotUsed to cancel any
 		// previously active timer. Without this, the old on-time remains active
 		// after a plain TurnOn and the light switches itself off unexpectedly.
 		// Other lights (RGBW/DALI) must not — the device reads the sentinel as a
 		// shutdown duration and turns off again right away.
 		if l.resetsOnTimeOnTurnOn && l.hasOnTimeUnit && l.Writer != nil {
-			notUsed := time.Duration(NotUsed * float64(time.Second))
+			notUsed := time.Duration(custom.TimerNotUsed * float64(time.Second))
 			b := l.turnOnLevel()
 			onCfg := OnConfig{
 				OnTime:     &notUsed,
@@ -734,8 +739,8 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 	case cfg.RampTime != nil:
 		// Ramp-without-on-time: the CCU otherwise treats the on-time as the
 		// implicit "back to off" timer, which the operator did not request.
-		// Send the NotUsed sentinel so RAMP_TIME runs stand-alone.
-		l.stageOnTimeParam(params, time.Duration(NotUsed*float64(time.Second)))
+		// Send the [custom.TimerNotUsed] sentinel so RAMP_TIME runs stand-alone.
+		l.stageOnTimeParam(params, time.Duration(custom.TimerNotUsed*float64(time.Second)))
 	}
 	if cfg.RampTime != nil {
 		params[hmenum.ParameterRampTime] = cfg.RampTime.Seconds()
@@ -748,14 +753,10 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 	return nil
 }
 
-// NotUsed is the sentinel value the CCU honours when an ON_TIME or RAMP_TIME
-// parameter must be left "unused" while another timer runs stand-alone.
-const NotUsed = 111600.0
-
 // TurnOffWithRamp turns the light off ramping the LEVEL down over
-// `ramp` seconds. Sends ON_TIME=NotUsed + RAMP_TIME + LEVEL=0
-// atomically when the writer supports put_paramset. The
-// ON_TIME=NotUsed sentinel is required by the CCU so the device
+// `ramp` seconds. Sends ON_TIME=[custom.TimerNotUsed] + RAMP_TIME +
+// LEVEL=0 atomically when the writer supports put_paramset. The
+// sentinel is required by the CCU so the device
 // does not silently overlay an implicit off-timer on top of the ramp.
 //
 // A [generic.CallParameterCollector] is attached to ctx for
@@ -780,7 +781,7 @@ func (l *Light) TurnOffWithRamp(ctx context.Context, ramp time.Duration, priorit
 	ctx = generic.ContextWithCollector(ctx, coll)
 	l.recordLastSent(0.0)
 	err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, map[hmenum.Parameter]any{
-		hmenum.ParameterOnTime:   NotUsed,
+		hmenum.ParameterOnTime:   custom.TimerNotUsed,
 		hmenum.ParameterRampTime: ramp.Seconds(),
 		hmenum.ParameterLevel:    0.0,
 	}, priority)
@@ -811,12 +812,17 @@ func (l *Light) TurnOff(ctx context.Context, priority hmenum.CommandPriority) er
 
 // BrightnessPct returns the current brightness as a percentage (0-100).
 // Returns observed=false when the light has not yet been observed.
+//
+// The conversion itself belongs to the value object — see
+// [custom.Brightness.Pct] — so a light and a group report the same percentage
+// for the same level. A device profile composes value objects; it is not a
+// second place for the arithmetic.
 func (l *Light) BrightnessPct() (pct int, observed bool) {
 	b, ok := l.Brightness()
 	if !ok {
 		return 0, false
 	}
-	return int(b.Level()*100 + 0.5), true
+	return b.Pct(), true
 }
 
 // resolveOnTimeParams determines the wire parameter(s) that carry a
@@ -1038,9 +1044,9 @@ func (l *Light) commandedRampTime() (float64, bool)       { _ = l; return 0, fal
 // stageOnTimeParam writes d into params using the on-time shape this light's
 // channel describes, and writes nothing when it describes none.
 //
-// The seconds-valued sentinel [NotUsed] survives the value/unit encoding the
-// same way a real duration does, so a caller cancelling a timer does not need
-// to know which shape it is cancelling.
+// The seconds-valued sentinel [custom.TimerNotUsed] survives the value/unit
+// encoding the same way a real duration does, so a caller cancelling a timer
+// does not need to know which shape it is cancelling.
 func (l *Light) stageOnTimeParam(params map[hmenum.Parameter]any, d time.Duration) {
 	valueParam := l.onTimeValueParam
 	if valueParam == "" {

@@ -49,7 +49,7 @@ func fixtureSimpleMondayP1() map[string]any {
 
 func TestParseClimateScheduleSimple(t *testing.T) {
 	t.Parallel()
-	got, err := parseClimateSchedule(fixtureSimpleMondayP1())
+	got, err := parseClimateSchedule(t.Context(), fixtureSimpleMondayP1())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestParseClimateScheduleSimple(t *testing.T) {
 
 func TestParseClimateScheduleMissingRaisesSentinel(t *testing.T) {
 	t.Parallel()
-	_, err := parseClimateSchedule(map[string]any{"UNRELATED": 1})
+	_, err := parseClimateSchedule(t.Context(), map[string]any{"UNRELATED": 1})
 	if !errors.Is(err, ErrNoSchedule) {
 		t.Errorf("got %v, want ErrNoSchedule", err)
 	}
@@ -109,7 +109,7 @@ func TestSerializeClimateScheduleRoundTrip(t *testing.T) {
 		t.Fatalf("serialize: %v", err)
 	}
 	// Re-parse must recover the simple form exactly.
-	back, err := parseClimateSchedule(raw)
+	back, err := parseClimateSchedule(t.Context(), raw)
 	if err != nil {
 		t.Fatalf("re-parse: %v", err)
 	}
@@ -343,19 +343,22 @@ func TestIsWeekProfileChannelMatchesHmIPSuffix(t *testing.T) {
 	}
 }
 
-func TestSimplifyWeekdayTieBreakPrefersLowerBase(t *testing.T) {
+func TestSimplifyWeekdayTieBreakPrefersEarliestSlot(t *testing.T) {
 	t.Parallel()
-	// Constructed equal-weight day: 12h at 18°C, 12h at 21°C.
+	// Constructed equal-weight day: 12h at 21°C, then 12h at 18°C. The
+	// warmer temperature comes first, so the two candidate rules
+	// disagree here — a day whose earliest slot is also the coolest
+	// cannot tell them apart.
 	slots := map[int]*slotVals{
-		1: {endtime: 720, temperature: 18.0, hasEnd: true, hasTemp: true},
-		2: {endtime: 1440, temperature: 21.0, hasEnd: true, hasTemp: true},
+		1: {endtime: 720, temperature: 21.0, hasEnd: true, hasTemp: true},
+		2: {endtime: 1440, temperature: 18.0, hasEnd: true, hasTemp: true},
 	}
 	wd := simplifyWeekday(slots)
-	if math.Abs(wd.BaseTemperature-18.0) > 1e-6 {
-		t.Errorf("base: got %v, want 18 (lower-temp tie-break)", wd.BaseTemperature)
+	if math.Abs(wd.BaseTemperature-21.0) > 1e-6 {
+		t.Errorf("base: got %v, want 21 (earliest-slot tie-break)", wd.BaseTemperature)
 	}
-	if len(wd.Periods) != 1 || wd.Periods[0].Temperature != 21 {
-		t.Errorf("expected one 21° period, got %+v", wd.Periods)
+	if len(wd.Periods) != 1 || wd.Periods[0].Temperature != 18 {
+		t.Errorf("expected one 18° period, got %+v", wd.Periods)
 	}
 }
 

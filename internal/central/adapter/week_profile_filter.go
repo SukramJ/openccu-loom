@@ -583,31 +583,29 @@ func subscribeProfilePointer(d *device.Device, wp *weekprofile.ProfileDataPoint)
 // Both schemas surface as ~84-180+ leaves per channel that
 // folds into a single [weekprofile.ProfileDataPoint]; we suppress
 // them at hydration time so REST / WS / MQTT / UI never see the raw
-// slot DPs. The patterns are highly specific (TEMPERATURE/ENDTIME +
-// weekday name + 1..13 slot number), which makes false-positives on
-// unrelated channels effectively impossible.
+// slot DPs. Suppression here is a drop, not a visibility mark, so a
+// key this predicate accepts reaches no surface and no operator
+// override — which is why Schema A is decided by
+// [weekprofile.IsClimateSlotName] rather than by a prefix test in this
+// file. That predicate accepts exactly what the week-profile parser can
+// decode, so nothing is dropped that the profile editor cannot show;
+// an earlier prefix-only rule here swallowed every "P<1-6>_" key
+// whatever its body.
+//
+// Schema B is still read in this file: the model has no parser for the
+// bare form, so there is nothing yet to delegate to.
 //
 // Deliberately NOT matched:
 //
 // - P_NUMBER, PRESS_*, PARTY_* — different prefix shape.
+// - P1_X, P1_LEVEL_MONDAY_1 — prefix without a decodable cell body.
 // - WEEK_PROGRAM_POINTER, ACTIVE_PROFILE — top-level pointer
 // parameters; they MUST remain visible.
 // - TEMPERATURE_MINIMUM, TEMPERATURE_MAXIMUM, TEMPERATURE_OFFSET
 // bare bounds parameters without the weekday/slot suffix.
 func isWeekProfileSlotParameter(name string) bool {
 	// Schema A: P<N>_TEMPERATURE_<DAY>_<SLOT> / P<N>_ENDTIME_<DAY>_<SLOT>.
-	if len(name) >= 4 && name[0] == 'P' && name[1] >= '1' && name[1] <= '6' && name[2] == '_' {
-		rest := name[3:]
-		for i := range len(rest) {
-			c := rest[i]
-			switch {
-			case c >= 'A' && c <= 'Z':
-			case c >= '0' && c <= '9':
-			case c == '_':
-			default:
-				return false
-			}
-		}
+	if weekprofile.IsClimateSlotName(name) {
 		return true
 	}
 	// Schema B: bare TEMPERATURE_<DAY>_<SLOT> / ENDTIME_<DAY>_<SLOT>.
@@ -656,8 +654,11 @@ func stripPrefix(s, prefix string) (rest string, ok bool) {
 	return s[len(prefix):], true
 }
 
+// consumeWeekday strips a leading weekday name. The set is the schedule
+// domain's, not this file's — a hand-written second copy in the same
+// package that already derives one is how the two drift apart.
 func consumeWeekday(s string) (day, rest string, ok bool) {
-	for _, d := range [...]string{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"} {
+	for _, d := range scheduleWeekdays {
 		if rest, ok := stripPrefix(s, d); ok {
 			return d, rest, true
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Constructor instantiates a custom data point for a given channel +
@@ -603,23 +604,19 @@ func lookupProfileForCustomDP(registry *Registry, model string, dp device.Attach
 	if dp == nil || registry == nil {
 		return Profile{}, false
 	}
-	// Defensive: a custom DP wrapping a half-formed channel (e.g. a
-	// Cover whose LEVEL data point is missing) returns the zero
-	// DataPointKey. There is no profile to attach in that case, and
-	// the channel-number parsing below would silently match channel
-	// 0 of every model otherwise.
+	// A custom DP wrapping a half-formed channel (e.g. a Cover whose
+	// LEVEL data point is missing) returns the zero DataPointKey.
+	// There is no profile to attach in that case. The explicit check
+	// stays although [hmtypes.ChannelNo] would also reject an empty
+	// address: it is the contract the nil-embed paths of the generic
+	// and light data points name as the reason their zero key is
+	// safe to hand over.
 	channelAddr := dp.DataPointKey().ChannelAddress
 	if channelAddr == "" {
 		return Profile{}, false
 	}
-	chNum := -1
-	if i := indexOfColon(channelAddr); i >= 0 && i+1 < len(channelAddr) {
-		n, err := atoiSmall(channelAddr[i+1:])
-		if err == nil {
-			chNum = n
-		}
-	}
-	if chNum < 0 {
+	chNum, ok := hmtypes.ChannelNo(channelAddr)
+	if !ok {
 		return Profile{}, false
 	}
 	for _, profile := range registry.GetConfigs(model) {
@@ -633,33 +630,6 @@ func lookupProfileForCustomDP(registry *Registry, model string, dp device.Attach
 		}
 	}
 	return Profile{}, false
-}
-
-// indexOfColon / atoiSmall are tiny inlined helpers that avoid
-// pulling `strings` / `strconv` into this file. The channel
-// numbers we deal with never exceed two digits.
-func indexOfColon(s string) int {
-	for i := range len(s) {
-		if s[i] == ':' {
-			return i
-		}
-	}
-	return -1
-}
-
-func atoiSmall(s string) (int, error) {
-	if s == "" {
-		return 0, errEmpty
-	}
-	n := 0
-	for i := range len(s) {
-		c := s[i]
-		if c < '0' || c > '9' {
-			return 0, errBadDigit
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
 }
 
 // hasForcedUsage reports whether the data point has had its forced
@@ -756,12 +726,6 @@ func forceUsageOnDataPoint(dp device.ParameterDataPoint, usage hmenum.DataPointU
 type forcer interface {
 	SetForcedUsage(usage hmenum.DataPointUsage)
 }
-
-// errEmpty / errBadDigit guard the tiny inlined atoi helper.
-var (
-	errEmpty    = errors.New("custom: empty channel id")
-	errBadDigit = errors.New("custom: non-numeric channel id")
-)
 
 // Compile-time assertion: the generic DataPoint specialisations the
 // domain layer emits actually implement [forcer].

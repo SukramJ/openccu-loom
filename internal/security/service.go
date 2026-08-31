@@ -101,6 +101,13 @@ type Service struct {
 	centralUnsubs map[string][]func()
 	// retention cancels the pending fault-retention tick.
 	retention *time.Timer
+
+	// activationWarns dedupes the unresolved-activation warning per data
+	// point. It carries its own mutex rather than reusing mu: the warning
+	// is raised from sourceActive's caller while mu is held, and a
+	// chattering enumeration would otherwise flood the log — the index
+	// seeding walks every data point of every device on every rebuild.
+	activationWarns activationWarnLog
 }
 
 // New builds the service. Construction is cheap and side-effect free;
@@ -123,16 +130,17 @@ func New(deps Deps) (*Service, error) {
 	}
 	deps.Settings.DuressVisibility = vis
 	return &Service{
-		settings:      deps.Settings,
-		reg:           deps.Registry,
-		stores:        deps.Stores,
-		alarmBus:      deps.AlarmBus,
-		clk:           clk,
-		log:           log,
-		render:        newRenderer(deps.Catalogs, deps.Settings.Locale, deps.Settings.PublicURL),
-		bus:           events.NewBus(),
-		agg:           newAggregate(),
-		centralUnsubs: map[string][]func(){},
+		settings:        deps.Settings,
+		reg:             deps.Registry,
+		stores:          deps.Stores,
+		alarmBus:        deps.AlarmBus,
+		clk:             clk,
+		log:             log,
+		render:          newRenderer(deps.Catalogs, deps.Settings.Locale, deps.Settings.PublicURL),
+		bus:             events.NewBus(),
+		agg:             newAggregate(),
+		centralUnsubs:   map[string][]func(){},
+		activationWarns: activationWarnLog{warned: map[string]bool{}},
 	}, nil
 }
 

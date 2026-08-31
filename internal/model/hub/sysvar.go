@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -142,46 +143,44 @@ func (s *Sysvar) registerSysvarServices() {
 	})
 }
 
-// excludedSysvarMarkers is the Go equivalent of Python's _EXCLUDED list
-// In.py:95-98). Any sysvar whose legacy name
-// contains one of these substrings is a CCU-internal variable that should
-// not be surfaced to north-bound adapters or home-automation platforms.
+// excludedSysvarMarkers are the name substrings that mark a CCU
+// calculation scratch value: it exists only so the CCU can diff against
+// the previous reading, and is never hub data (the reference stack's
+// model/hub/hub.py `_EXCLUDED`).
 //
-// Current exclusions mirror
-// - "OldVal" — internal change-detection helper created by the CCU.
-// - "pcCCUID" — internal CCU device-ID variable.
+//   - "OldVal" — internal change-detection helper created by the CCU.
+//   - "pcCCUID" — internal CCU device-ID variable.
 var excludedSysvarMarkers = []string{
 	"OldVal",
 	"pcCCUID",
 }
 
-// IsExcludedSysvar reports whether name contains any of the
-// [excludedSysvarMarkers] substrings.
-func IsExcludedSysvar(name string) bool {
+// excludedSysvarIDs are the fixed ISE IDs (alarm / service messages) that
+// the daemon surfaces through dedicated hub singletons instead of as
+// ordinary system variables (the reference stack's const.py
+// `IGNORE_SYSVARS_BY_ID`). Matched by equality, never by substring: ID
+// "401" is an ordinary variable and must not be swallowed by "40".
+var excludedSysvarIDs = []string{
+	"40",
+	"41",
+}
+
+// IsExcludedSysvar reports whether a CCU system variable never enters the
+// hub model. It is the single definition of that rule: the fetch path
+// applies it once, so every north-bound plane (REST, MQTT discovery,
+// Matter, external clients) sees the same catalogue. Callers pass the
+// wire values of both fields — SysVar.getAll carries an ID for every
+// variable, so there is no name-only entry point to under-filter with.
+func IsExcludedSysvar(name, id string) bool {
+	if slices.Contains(excludedSysvarIDs, id) {
+		return true
+	}
 	for _, marker := range excludedSysvarMarkers {
-		if len(name) >= len(marker) {
-			for i := 0; i <= len(name)-len(marker); i++ {
-				if name[i:i+len(marker)] == marker {
-					return true
-				}
-			}
+		if strings.Contains(name, marker) {
+			return true
 		}
 	}
 	return false
-}
-
-// CleanSysvarNames filters a slice of sysvar names, removing any that match
-// [IsExcludedSysvar].
-//
-// The function allocates a new slice; the input is not modified.
-func CleanSysvarNames(names []string) []string {
-	out := make([]string, 0, len(names))
-	for _, n := range names {
-		if !IsExcludedSysvar(n) {
-			out = append(out, n)
-		}
-	}
-	return out
 }
 
 // sysvarParamValue converts the raw JSON-decoded param value to the

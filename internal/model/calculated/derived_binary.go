@@ -115,30 +115,6 @@ func NewWindowOpenSensor() *DerivedBinarySensor {
 	)
 }
 
-// NewSmokeAlarmSensor is a convenience constructor for SMOKE_DETECTOR
-// Derived sensors. The on-set strictly mirrors
-// `SMOKE_DETECTOR_ALARM_STATUS` mapping (derived_binary_sensor.py:194):
-// PRIMARY_ALARM and SECONDARY_ALARM (the device alarms or relays a
-// peer's primary alarm). INTRUSION_ALARM is *not* a smoke alarm — it
-// is exposed by [NewIntrusionAlarmSensor] separately.
-func NewSmokeAlarmSensor() *DerivedBinarySensor {
-	return NewDerivedBinarySensor(
-		hmenum.CalculatedParameterSmokeAlarm,
-		[]string{"PRIMARY_ALARM", "SECONDARY_ALARM"},
-		[]string{"IDLE_OFF", "IDLE_ON", "INTRUSION_ALARM"},
-	)
-}
-
-// NewIntrusionAlarmSensor is a convenience constructor for the HmIP-ASIR
-// family's INTRUSION state.
-func NewIntrusionAlarmSensor() *DerivedBinarySensor {
-	return NewDerivedBinarySensor(
-		hmenum.CalculatedParameterIntrusionAlarm,
-		[]string{"INTRUSION_ALARM"},
-		[]string{"IDLE_OFF", "IDLE_ON", "PRIMARY_ALARM", "SECONDARY_ALARM"},
-	)
-}
-
 // DerivedBinaryMapping records a per-model derived-binary registration.
 type DerivedBinaryMapping struct {
 	// Models is the prefix-match list of device models this mapping
@@ -195,7 +171,7 @@ var derivedBinaryRegistry = []DerivedBinaryMapping{
 		SourceParameter:     hmenum.ParameterSmokeDetectorAlarmStatus,
 		SourceChannelNo:     1,
 		CalculatedParameter: hmenum.CalculatedParameterSmokeAlarm,
-		OnValues:            []string{"PRIMARY_ALARM", "SECONDARY_ALARM"},
+		OnValues:            hmenum.SmokeDetectorAlarmStatusSmokeLabels(),
 		OffValues:           []string{"IDLE_OFF", "IDLE_ON", "INTRUSION_ALARM"},
 	},
 	{

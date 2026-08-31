@@ -56,7 +56,7 @@ const maxSimpleEntries = schedule.SimpleMaxSlot
 
 // maxClimateSlots is the max total slot count across all profiles + weekdays.
 // 13 slots × 7 weekdays × 6 profiles = 546.
-const maxClimateSlots = 13 * 7 * 6
+const maxClimateSlots = schedule.MaxClimateSlots * 7 * 6
 
 // ScheduleWriter is the outbound contract a non-climate ProfileDataPoint
 // uses to dispatch SetScheduleEnabled writes onto the wire. Identical
@@ -736,20 +736,30 @@ func (dp *ProfileDataPoint) SyncScheduleEnabled(state map[string]bool) {
 //
 // rawValue is the wire value as delivered by the CCU callback — typically
 // uint32, int, or float64 depending on the transport and HmIP generation.
-// Unrecognised types and nil are silently ignored.
+//
+// Three inputs leave the state untouched rather than deriving a verdict from
+// them:
+//
+//   - an unrecognised type or nil, which carries no bitfield at all;
+//   - a device with no registered target channels, because the enabled map is
+//     keyed by what the device advertises and a decode over synthetic keys
+//     would publish channels the device never claimed;
+//   - a negative value. The mask occupies bits 0..23 only, so the sign bit is
+//     never legitimately set; reinterpreting the bit pattern would report
+//     every channel locked and ignoring the sign would report every channel
+//     enabled, and both fabricate a full-scale verdict from an out-of-contract
+//     value.
 func (dp *ProfileDataPoint) SyncChannelLocksFromWire(rawValue any) {
 	dp.mu.RLock()
 	atc := dp.availableTargetChannels
 	dp.mu.RUnlock()
 
-	var keys []string
-	if len(atc) > 0 {
-		keys = make([]string, 0, len(atc))
-		for k := range atc {
-			keys = append(keys, k)
-		}
-	} else {
-		keys = AllChannelKeys()
+	if len(atc) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(atc))
+	for k := range atc {
+		keys = append(keys, k)
 	}
 
 	var locks uint32
@@ -757,21 +767,25 @@ func (dp *ProfileDataPoint) SyncChannelLocksFromWire(rawValue any) {
 	case uint32:
 		locks = v
 	case int:
-		if v >= 0 {
-			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
+		if v < 0 {
+			return
 		}
+		locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
 	case int32:
-		if v >= 0 {
-			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
+		if v < 0 {
+			return
 		}
+		locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
 	case int64:
-		if v >= 0 {
-			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
+		if v < 0 {
+			return
 		}
+		locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
 	case float64:
-		if v >= 0 {
-			locks = uint32(v)
+		if v < 0 {
+			return
 		}
+		locks = uint32(v)
 	default:
 		return
 	}

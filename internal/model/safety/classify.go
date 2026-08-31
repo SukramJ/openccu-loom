@@ -22,6 +22,8 @@ type Classification struct {
 	// A non-nil list is exhaustive: any value outside it is inactive,
 	// including values the device may add in a later firmware. That is
 	// the safe direction — an unknown value must not raise an alarm.
+	// [ActiveFromRaw] applies that rule; this field is the fallback
+	// label set for a source nobody enrolled.
 	ActiveValues []string
 	// Preferred marks the data point a consumer should enrol when a
 	// device offers several sources for the same class. The calculated
@@ -30,31 +32,12 @@ type Classification struct {
 	Preferred bool
 }
 
-// Active reports whether raw is an active value under c. Callers pass
-// the ENUM label for enumerated parameters and the coerced boolean for
-// boolean ones; the two cases never mix on one parameter.
-func (c Classification) Active(label string, on bool) bool {
-	if len(c.ActiveValues) == 0 {
-		return on
-	}
-	for _, v := range c.ActiveValues {
-		if v == label {
-			return true
-		}
-	}
-	return false
-}
-
 // smokeActiveValues are the SMOKE_DETECTOR_ALARM_STATUS labels that
-// mean "this detector sensed smoke".
-//
-// INTRUSION_ALARM is deliberately absent although it sits at index 2 of
-// the value list [IDLE_OFF, PRIMARY_ALARM, INTRUSION_ALARM,
-// SECONDARY_ALARM] and would therefore pass a naive "index != 0" test.
-// It means the opposite of a fire: the installation drove this smoke
-// detector as a *siren* for an intrusion alarm. Treating it as smoke
-// makes the domain report its own siren command as the cause of a fire.
-var smokeActiveValues = []string{"PRIMARY_ALARM", "SECONDARY_ALARM"}
+// mean "this detector sensed smoke". The set itself lives in
+// [hmenum.SmokeDetectorAlarmStatusSmokeLabels], which carries why
+// INTRUSION_ALARM is not one of them; the classifier is one of its two
+// consumers, not a second definition.
+var smokeActiveValues = hmenum.SmokeDetectorAlarmStatusSmokeLabels()
 
 // waterStateActiveValues are the WATERDETECTIONSENSOR STATE labels that
 // mean "water present" — value list [DRY, WET, WATER].

@@ -167,15 +167,23 @@ func TestLockHADiscoveryPayload_PayloadOpenOnlyForIP(t *testing.T) {
 	}
 }
 
+// TestLockHADiscoveryPayload_LockUnlockPayloads pins that an IP lock
+// advertises the LOCK_TARGET_LEVEL ENUM labels, i.e. exactly the tokens
+// [Lock.sendIP] writes. It previously pinned the positional indices
+// "0"/"1", which restated the VALUE_LIST order that neither the payload
+// builder nor the discovery context can read.
 func TestLockHADiscoveryPayload_LockUnlockPayloads(t *testing.T) {
 	t.Parallel()
-	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
+	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: true})
 	_, body := r.lock.HADiscoveryPayload(discoveryCtx{})
 
-	if v, _ := body["payload_lock"].(string); v != "0" {
-		t.Errorf("payload_lock = %q, want %q", v, "0")
+	if v, _ := body["payload_lock"].(string); v != ipTargetLocked {
+		t.Errorf("payload_lock = %q, want %q", v, ipTargetLocked)
 	}
-	if v, _ := body["payload_unlock"].(string); v != "1" {
-		t.Errorf("payload_unlock = %q, want %q", v, "1")
+	if v, _ := body["payload_unlock"].(string); v != ipTargetUnlocked {
+		t.Errorf("payload_unlock = %q, want %q", v, ipTargetUnlocked)
+	}
+	if v, _ := body["payload_open"].(string); v != ipTargetOpen {
+		t.Errorf("payload_open = %q, want %q", v, ipTargetOpen)
 	}
 }

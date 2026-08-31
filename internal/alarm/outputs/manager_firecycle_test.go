@@ -589,6 +589,7 @@ func TestFireCycle_SirenChannelEnrolledUnderBothClassesFiresOneMergedWrite(t *te
 	dev := sirenAt(t, h, asirChannel)
 	dev.setValueLists(
 		[]string{"DISABLE_ACOUSTIC_SIGNAL", "FREQ_HIGH"},
+		"DISABLE_ACOUSTIC_SIGNAL",
 		[]string{"DISABLE_OPTICAL_SIGNAL", "BLINKING_ALTERNATELY_REPEATING"},
 	)
 
@@ -639,6 +640,7 @@ func TestFireCycle_SilentPolicyKeepsTheSharedSirenChannelMute(t *testing.T) {
 	dev := sirenAt(t, h, asirChannel)
 	dev.setValueLists(
 		[]string{"DISABLE_ACOUSTIC_SIGNAL", "FREQ_HIGH"},
+		"DISABLE_ACOUSTIC_SIGNAL",
 		[]string{"DISABLE_OPTICAL_SIGNAL", "BLINKING_ALTERNATELY_REPEATING"},
 	)
 

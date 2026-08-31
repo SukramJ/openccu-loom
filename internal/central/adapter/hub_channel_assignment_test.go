@@ -348,8 +348,8 @@ func TestAssignHubChannelsEnergyCounterNameShape(t *testing.T) {
 	c.ModelRegistry.Put(d)
 
 	const name = "svEnergyCounter_14884_000858A994D482:7"
-	if sysvarIsExcluded(name, "1234") {
-		t.Fatalf("sysvarIsExcluded(%q) = true, want false — the energy-counter family is user-visible", name)
+	if hub.IsExcludedSysvar(name, "1234") {
+		t.Fatalf("hub.IsExcludedSysvar(%q) = true, want false — the energy-counter family is user-visible", name)
 	}
 
 	sv := hub.NewSysvar("ccu-01", name, "", hmenum.HubValueTypeFloat, nil)
