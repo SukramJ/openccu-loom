@@ -105,6 +105,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   statements are about that corpus, not about all firmware, which is why the
   cap is a named constant and the drop is logged.
 
+### Changed
+
+- **REST `APIVersion` 7.27.0 → 7.28.0.** Additive: `assets/schemas/enums.json`
+  gains `SmokeDetectorAlarmStatus`, the enum the folded smoke label set is
+  typed with. No endpoint, field or payload shape changed. Downstream
+  generated clients (`openccu-loom-client`, the Node-RED contrib) pick the
+  enum up on their next sync.
+
 ### Removed
 
 - **Exported model copies that nothing ran.** `ClientCoordinator.PrimaryClient`
