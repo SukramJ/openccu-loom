@@ -60,11 +60,12 @@ func (s *stubLinkFormSchema) GetLinkFormSchema(_ context.Context, _, _, _ string
 
 // stubLinkProfiles implements [LinkProfilesProvider].
 type stubLinkProfiles struct {
-	profiles []map[string]any
+	profiles        []map[string]any
+	activeProfileID int
 }
 
-func (s *stubLinkProfiles) GetLinkProfiles(_ context.Context, _, _, _ string) ([]map[string]any, error) {
-	return s.profiles, nil
+func (s *stubLinkProfiles) GetLinkProfiles(_ context.Context, _, _, _ string) (profiles []map[string]any, activeID int, err error) {
+	return s.profiles, s.activeProfileID, nil
 }
 
 func (s *stubLinkProfiles) TestLinkProfile(_ context.Context, _, _, _ string, profileID int) (map[string]any, error) {
@@ -345,14 +346,16 @@ func TestMissingLinksGetProfiles_WiredPath(t *testing.T) {
 		{"id": 1, "name": "Standard"},
 		{"id": 2, "name": "Nacht"},
 	}
-	r := newMissingRouter(MissingCommandsConfig{LinkProfiles: &stubLinkProfiles{profiles: profs}})
+	// activeProfileID is non-zero so this asserts the handler forwards the
+	// provider's derived value rather than hard-coding a literal.
+	r := newMissingRouter(MissingCommandsConfig{LinkProfiles: &stubLinkProfiles{profiles: profs, activeProfileID: 2}})
 	out := dispatchMissing(t, r, "links.get_profiles", map[string]any{
 		"interface_id":             "HmIP-RF",
 		"sender_channel_address":   "ABC0001:1",
 		"receiver_channel_address": "DEF0002:1",
 	})
-	if out["active_profile_id"] != float64(0) {
-		t.Fatalf("expected active_profile_id=0, got %v", out["active_profile_id"])
+	if out["active_profile_id"] != float64(2) {
+		t.Fatalf("expected active_profile_id=2, got %v", out["active_profile_id"])
 	}
 	list, ok := out["profiles"].([]any)
 	if !ok || len(list) != 2 {

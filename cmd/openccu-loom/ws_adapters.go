@@ -213,7 +213,7 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 
 		// L02 + L03: links.get_profiles + links.test_profile —
 		// LinkProfilesAdapter wraps linkprofile.Store.
-		LinkProfiles: adapter.NewLinkProfilesAdapter(w.registry, w.linkProfiles),
+		LinkProfiles: adapter.NewLinkProfilesAdapter(w.registry, w.linkProfiles, w.paramsets),
 
 		// L04: paramset.determine — ParameterDeterminerAdapter resolves via registry.
 		ParameterDeterminer: adapter.NewParameterDeterminerAdapter(w.registry, w.valueWriter),

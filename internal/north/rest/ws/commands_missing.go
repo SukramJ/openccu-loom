@@ -80,7 +80,7 @@ type LinkFormSchemaProvider interface {
 // (websocket_api.py:1123) and `ws_test_link_profile` (websocket_api.py:2643).
 // Implemented by LinkProfilesAdapter.
 type LinkProfilesProvider interface {
-	GetLinkProfiles(ctx context.Context, receiverChannelType, senderChannelType, locale string) ([]map[string]any, error)
+	GetLinkProfiles(ctx context.Context, receiverChannelAddress, senderChannelAddress, locale string) (profiles []map[string]any, activeID int, err error)
 	TestLinkProfile(ctx context.Context, interfaceID, senderAddr, receiverAddr string, profileID int) (map[string]any, error)
 }
 
@@ -376,6 +376,11 @@ func linksGetFormSchemaHandler(p LinkFormSchemaProvider) CommandHandler {
 //	"receiver_channel_address": str, "locale"?: str }
 //
 // Response: { "profiles": [...] | null, "active_profile_id": int }
+//
+// active_profile_id is derived, not stored: the link's current LINK
+// paramset is read and matched against the archive's constraint sets.
+// Zero means no profile matched, and equally that the current values
+// could not be read — an unknown state has no known active profile.
 func linksGetProfilesHandler(p LinkProfilesProvider) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var req struct {
@@ -393,13 +398,13 @@ func linksGetProfilesHandler(p LinkProfilesProvider) CommandHandler {
 		if req.Locale == "" {
 			req.Locale = "en"
 		}
-		profiles, err := p.GetLinkProfiles(ctx, req.ReceiverChannel, req.SenderChannel, req.Locale)
+		profiles, activeID, err := p.GetLinkProfiles(ctx, req.ReceiverChannel, req.SenderChannel, req.Locale)
 		if err != nil {
 			return nil, fmt.Errorf("links.get_profiles: %w", err)
 		}
 		return map[string]any{
 			"profiles":          profiles,
-			"active_profile_id": 0,
+			"active_profile_id": activeID,
 		}, nil
 	}
 }

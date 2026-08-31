@@ -8,6 +8,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`links.get_profiles` always reported no active profile, because the field
+  was a literal.** The handler returned `"active_profile_id": 0` without ever
+  computing it, so the SPA told every operator that no link profile was in
+  effect regardless of what the device was actually configured with — and
+  since the answer was never derived, nothing could disagree with it.
+
+  The active profile is not a stored fact. It is derived by reading the link's
+  current LINK paramset and matching those values against the archive's
+  constraint sets, which is what the CCU-side reference does before it answers
+  the same question. The adapter had no way to read them: it held the registry
+  and the profile store and nothing else. It now takes a paramset reader as
+  well, declared as a port in the package that consumes it.
+
+  Zero keeps its meaning and gains a second one, stated rather than implied: no
+  profile matched, and equally that the current values could not be read. A
+  link whose state is unknown has no *known* active profile, so an unreadable
+  link reports none rather than guessing.
+
+  No contract moves — the response carries the same two fields it always did.
+  One of them is now true.
+
+### Fixed
+
 - **The surviving profile store answered the same question two ways, and had
   lost two capabilities with the one that was deleted.** `internal/store/linkprofile`
   became the single decoder of the shared profiles archive when the
