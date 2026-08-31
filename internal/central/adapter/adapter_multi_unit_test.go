@@ -1227,8 +1227,8 @@ func TestScheduleQueryAdapter_WithDomain_SetDeviceActiveProfileUnknown(t *testin
 func TestLinkProfilesAdapter_NilStore_GetLinkProfiles(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	a := NewLinkProfilesAdapter(reg, nil)
-	result, err := a.GetLinkProfiles(context.Background(), "CHAN:1", "PEER:1", "en")
+	a := NewLinkProfilesAdapter(reg, nil, nil)
+	result, _, err := a.GetLinkProfiles(context.Background(), "CHAN:1", "PEER:1", "en")
 	if err != nil {
 		t.Fatalf("GetLinkProfiles with nil store: %v", err)
 	}
@@ -1240,7 +1240,7 @@ func TestLinkProfilesAdapter_NilStore_GetLinkProfiles(t *testing.T) {
 func TestLinkProfilesAdapter_NilStore_TestLinkProfile(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	a := NewLinkProfilesAdapter(reg, nil)
+	a := NewLinkProfilesAdapter(reg, nil, nil)
 	_, err := a.TestLinkProfile(context.Background(), "HmIP-RF", "SENDER:1", "RECV:1", 1)
 	if err == nil {
 		t.Error("expected error for nil store")
@@ -1249,7 +1249,7 @@ func TestLinkProfilesAdapter_NilStore_TestLinkProfile(t *testing.T) {
 
 func TestLinkProfilesAdapter_NilRegistry_ResolveChannelType(t *testing.T) {
 	t.Parallel()
-	a := NewLinkProfilesAdapter(nil, nil)
+	a := NewLinkProfilesAdapter(nil, nil, nil)
 	// resolveChannelType with nil registry must not panic and returns "".
 	got := a.resolveChannelType("DEV:1")
 	if got != "" {
@@ -11815,7 +11815,7 @@ func TestLinkProfilesAdapter_TestLinkProfile_Success(t *testing.T) {
 		},
 	})
 
-	adapter := NewLinkProfilesAdapter(reg, store)
+	adapter := NewLinkProfilesAdapter(reg, store, nil)
 	result, err := adapter.TestLinkProfile(context.Background(), "HmIP-RF", "B48LPDEV01:1", "B48LPDEV01:1", 1)
 	if err != nil {
 		t.Fatalf("TestLinkProfile: unexpected error: %v", err)

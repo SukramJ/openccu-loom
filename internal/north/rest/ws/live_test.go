@@ -2476,8 +2476,8 @@ func TestMissingLinksGetProfilesError(t *testing.T) {
 
 type stubLinkProfilesErr struct{}
 
-func (s *stubLinkProfilesErr) GetLinkProfiles(_ context.Context, _, _, _ string) ([]map[string]any, error) {
-	return nil, errors.New("not implemented")
+func (s *stubLinkProfilesErr) GetLinkProfiles(_ context.Context, _, _, _ string) (profiles []map[string]any, activeID int, err error) {
+	return nil, 0, errors.New("not implemented")
 }
 
 func (s *stubLinkProfilesErr) TestLinkProfile(_ context.Context, _, _, _ string, _ int) (map[string]any, error) {

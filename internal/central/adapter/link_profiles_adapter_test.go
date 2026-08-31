@@ -17,13 +17,16 @@ import (
 // and no error when the store is nil.
 func TestLinkProfilesAdapter_NilStore(t *testing.T) {
 	t.Parallel()
-	a := NewLinkProfilesAdapter(nil, nil)
-	profs, err := a.GetLinkProfiles(context.Background(), "VCU0001:1", "VCU0002:1", "en")
+	a := NewLinkProfilesAdapter(nil, nil, nil)
+	profs, activeID, err := a.GetLinkProfiles(context.Background(), "VCU0001:1", "VCU0002:1", "en")
 	if err != nil {
 		t.Fatalf("GetLinkProfiles: unexpected error: %v", err)
 	}
 	if profs != nil {
 		t.Fatalf("expected nil profiles, got %v", profs)
+	}
+	if activeID != 0 {
+		t.Fatalf("expected active id 0, got %d", activeID)
 	}
 }
 
@@ -31,8 +34,8 @@ func TestLinkProfilesAdapter_NilStore(t *testing.T) {
 // when the store has no profiles registered for the given pair.
 func TestLinkProfilesAdapter_EmptyStore(t *testing.T) {
 	t.Parallel()
-	a := NewLinkProfilesAdapter(nil, linkprofile.New())
-	profs, err := a.GetLinkProfiles(context.Background(), "VCU0001:1", "VCU0002:1", "en")
+	a := NewLinkProfilesAdapter(nil, linkprofile.New(), nil)
+	profs, _, err := a.GetLinkProfiles(context.Background(), "VCU0001:1", "VCU0002:1", "en")
 	if err != nil {
 		t.Fatalf("GetLinkProfiles: unexpected error: %v", err)
 	}
@@ -89,8 +92,8 @@ func TestLinkProfilesAdapter_ReturnsProfilesAsMapSlice(t *testing.T) {
 	dSender.AddChannel("VCU0002:1", 1, senderType, hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dSender)
 
-	a := NewLinkProfilesAdapter(reg, store)
-	profs, err := a.GetLinkProfiles(context.Background(), "VCU0001:1", "VCU0002:1", "en")
+	a := NewLinkProfilesAdapter(reg, store, nil)
+	profs, _, err := a.GetLinkProfiles(context.Background(), "VCU0001:1", "VCU0002:1", "en")
 	if err != nil {
 		t.Fatalf("GetLinkProfiles: %v", err)
 	}
@@ -110,7 +113,7 @@ func TestLinkProfilesAdapter_ReturnsProfilesAsMapSlice(t *testing.T) {
 // store's stub returns ErrUnsupported.
 func TestLinkProfilesAdapter_TestLinkProfile_Unsupported(t *testing.T) {
 	t.Parallel()
-	a := NewLinkProfilesAdapter(nil, linkprofile.New())
+	a := NewLinkProfilesAdapter(nil, linkprofile.New(), nil)
 	result, err := a.TestLinkProfile(context.Background(), "HmIP-RF", "VCU0001:1", "VCU0002:1", 1)
 	if err != nil {
 		t.Fatalf("TestLinkProfile: unexpected error: %v", err)
@@ -127,13 +130,113 @@ func TestLinkProfilesAdapter_TestLinkProfile_Unsupported(t *testing.T) {
 	}
 }
 
+// fakeLinkParamsetReader returns a fixed values map regardless of the
+// channel/peer addresses requested, so the test controls exactly what
+// activeProfileID sees without touching a real transport.
+type fakeLinkParamsetReader struct {
+	values map[string]any
+}
+
+func (f *fakeLinkParamsetReader) GetLinkParamset(_ context.Context, _, _ string) (map[string]any, error) {
+	return f.values, nil
+}
+
+// TestLinkProfilesAdapter_ActiveProfileID_DerivedFromLinkParamset drives the
+// active-profile derivation through the real composition path: a real
+// linkprofile.New() archive store, a real central.Registry with real
+// devices/channels, and NewLinkProfilesAdapter — never seeding the active id
+// directly. The expected id and the fixture values are both read from the
+// archive via GetProfileByID, never hard-coded, so this fails if the
+// archive's profile 5 for this pair ever changes shape.
+func TestLinkProfilesAdapter_ActiveProfileID_DerivedFromLinkParamset(t *testing.T) {
+	t.Parallel()
+	const (
+		receiverType = "ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER"
+		senderType   = "KEY_TRANSCEIVER"
+		profileID    = 5
+	)
+
+	store := linkprofile.New()
+	p, ok := store.GetProfileByID(receiverType, senderType, profileID)
+	if !ok {
+		t.Fatalf("GetProfileByID(%s, %s, %d): not found in embedded archive", receiverType, senderType, profileID)
+	}
+	fixed := p.FixedParams()
+	if len(fixed) == 0 {
+		t.Fatalf("profile %d has no fixed params to derive a match from", p.ID)
+	}
+
+	buildAdapter := func(reader LinkParamsetReader) *LinkProfilesAdapter {
+		c, err := central.New(central.Config{Name: "ccu-link-active"})
+		if err != nil {
+			t.Fatalf("central.New: %v", err)
+		}
+		reg := central.NewRegistry()
+		_ = reg.Register(c)
+
+		dReceiver := device.New(device.Config{
+			Address: "VCU1001", Interface: hmenum.InterfaceHmIPRF, InterfaceID: "HmIP-RF",
+		})
+		dReceiver.AddChannel("VCU1001:1", 1, receiverType, hmenum.ParamsetKeyValues)
+		c.ModelRegistry.Put(dReceiver)
+
+		dSender := device.New(device.Config{
+			Address: "VCU1002", Interface: hmenum.InterfaceHmIPRF, InterfaceID: "HmIP-RF",
+		})
+		dSender.AddChannel("VCU1002:1", 1, senderType, hmenum.ParamsetKeyValues)
+		c.ModelRegistry.Put(dSender)
+
+		return NewLinkProfilesAdapter(reg, store, reader)
+	}
+
+	// Arm 1: reader returns the profile's own fixed values → the store
+	// must match them back to the same profile id.
+	values := make(map[string]any, len(fixed))
+	for k, v := range fixed {
+		values[k] = v
+	}
+	a := buildAdapter(&fakeLinkParamsetReader{values: values})
+	_, activeID, err := a.GetLinkProfiles(context.Background(), "VCU1001:1", "VCU1002:1", "en")
+	if err != nil {
+		t.Fatalf("GetLinkProfiles: %v", err)
+	}
+	if activeID != p.ID {
+		t.Fatalf("active id = %d, want %d (from GetProfileByID)", activeID, p.ID)
+	}
+
+	// Arm 2: reader returns values matching no profile's constraint set.
+	noMatch := map[string]any{}
+	for k := range fixed {
+		noMatch[k] = float64(999)
+	}
+	a = buildAdapter(&fakeLinkParamsetReader{values: noMatch})
+	_, activeID, err = a.GetLinkProfiles(context.Background(), "VCU1001:1", "VCU1002:1", "en")
+	if err != nil {
+		t.Fatalf("GetLinkProfiles: %v", err)
+	}
+	if activeID != 0 {
+		t.Fatalf("active id for non-matching values = %d, want 0", activeID)
+	}
+
+	// Arm 3: nil reader is the documented nil-tolerant path — no values
+	// can be read, so the active id must be reported as none.
+	a = buildAdapter(nil)
+	_, activeID, err = a.GetLinkProfiles(context.Background(), "VCU1001:1", "VCU1002:1", "en")
+	if err != nil {
+		t.Fatalf("GetLinkProfiles: %v", err)
+	}
+	if activeID != 0 {
+		t.Fatalf("active id with nil reader = %d, want 0", activeID)
+	}
+}
+
 // ============================================================
 // LinkProfilesAdapter.resolveChannelType
 // ============================================================
 
 func TestResolveChannelTypeNilRegistry(t *testing.T) {
 	t.Parallel()
-	a := NewLinkProfilesAdapter(nil, nil)
+	a := NewLinkProfilesAdapter(nil, nil, nil)
 	got := a.resolveChannelType("DEV001:1")
 	if got != "" {
 		t.Errorf("nil registry = %q, want empty", got)
@@ -143,7 +246,7 @@ func TestResolveChannelTypeNilRegistry(t *testing.T) {
 func TestResolveChannelTypeEmptyAddr(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	a := NewLinkProfilesAdapter(reg, nil)
+	a := NewLinkProfilesAdapter(reg, nil, nil)
 	got := a.resolveChannelType("")
 	if got != "" {
 		t.Errorf("empty addr = %q, want empty", got)
@@ -153,7 +256,7 @@ func TestResolveChannelTypeEmptyAddr(t *testing.T) {
 func TestResolveChannelTypeDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	a := NewLinkProfilesAdapter(reg, nil)
+	a := NewLinkProfilesAdapter(reg, nil, nil)
 	got := a.resolveChannelType("NOSUCHDEV:1")
 	if got != "" {
 		t.Errorf("device not found = %q, want empty", got)
@@ -171,7 +274,7 @@ func TestResolveChannelTypeBareDeviceAddr(t *testing.T) {
 	dev := device.New(device.Config{Address: "LPDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-PS"})
 	c.ModelRegistry.Put(dev)
 
-	a := NewLinkProfilesAdapter(reg, nil)
+	a := NewLinkProfilesAdapter(reg, nil, nil)
 	// Bare device address (no colon) → returns device.Model
 	got := a.resolveChannelType("LPDEV001")
 	if got != "HmIP-PS" {
@@ -191,7 +294,7 @@ func TestResolveChannelTypeChannelFound(t *testing.T) {
 	dev.AddChannel("LPDEV002:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 
-	a := NewLinkProfilesAdapter(reg, nil)
+	a := NewLinkProfilesAdapter(reg, nil, nil)
 	got := a.resolveChannelType("LPDEV002:1")
 	if got != "SWITCH_VIRTUAL_RECEIVER" {
 		t.Errorf("channel found = %q, want SWITCH_VIRTUAL_RECEIVER", got)
@@ -210,7 +313,7 @@ func TestResolveChannelTypeChannelNotFound(t *testing.T) {
 	// No channel added
 	c.ModelRegistry.Put(dev)
 
-	a := NewLinkProfilesAdapter(reg, nil)
+	a := NewLinkProfilesAdapter(reg, nil, nil)
 	// Channel suffix :9 doesn't exist → returns ""
 	got := a.resolveChannelType("LPDEV003:9")
 	if got != "" {
