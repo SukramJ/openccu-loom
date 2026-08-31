@@ -70,22 +70,30 @@ func TestWSLinkQuery_LinkableChannels_WithRegistry_DeviceNotFound_Errors(t *test
 	}
 }
 
-func TestWSLinkQuery_GetLinkParamset_NonNilDomain_Errors(t *testing.T) {
+func TestWSLinkQuery_GetLinkParamset_NonNilParamsets_Errors(t *testing.T) {
 	t.Parallel()
+	// The LINK paramset read is routed through ParamsetsDomain, not
+	// LinksDomain — this must reach that domain (device-not-found error
+	// from the ParamsetsDomain lookup) rather than the "not wired" guard.
 	reg := buildTestRegistry(t, "ccu-01")
-	domain := adapter.NewLinksDomain(reg, nil, nil)
-	q := &wsLinkQuery{domain: domain, registry: reg}
+	paramsets := adapter.NewParamsetsDomain(reg, nil)
+	q := &wsLinkQuery{registry: reg, paramsets: paramsets}
 	_, err := q.GetLinkParamset(context.Background(), "A:0", "B:0")
-	_ = err
+	if err == nil {
+		t.Fatal("expected error for unknown device")
+	}
 }
 
-func TestWSLinkQuery_PutLinkParamset_NonNilDomain_Errors(t *testing.T) {
+func TestWSLinkQuery_PutLinkParamset_NonNilParamsets_Errors(t *testing.T) {
 	t.Parallel()
+	// Same routing as above, for the write side.
 	reg := buildTestRegistry(t, "ccu-01")
-	domain := adapter.NewLinksDomain(reg, nil, nil)
-	q := &wsLinkQuery{domain: domain, registry: reg}
+	paramsets := adapter.NewParamsetsDomain(reg, nil)
+	q := &wsLinkQuery{registry: reg, paramsets: paramsets}
 	err := q.PutLinkParamset(context.Background(), "A:0", "B:0", nil)
-	_ = err
+	if err == nil {
+		t.Fatal("expected error for unknown device")
+	}
 }
 
 // ── wsDeviceQuery GetParamset non-nil path ────────────────────────────────────

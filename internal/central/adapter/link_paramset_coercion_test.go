@@ -178,24 +178,6 @@ func TestParamsetsDomainPutLinkParamsetCoercesValues(t *testing.T) {
 	assertLinkParamsetCoerced(t, be.putValues)
 }
 
-// A2: LinksDomain.PutLinkParamset — the WS route — coerces the same way.
-func TestLinksDomainPutLinkParamsetCoercesValues(t *testing.T) {
-	t.Parallel()
-	be := &linkCoercionFakeBackend{}
-	reg, w := buildLinkCoercionFixture(t, be)
-	domain := NewLinksDomain(reg, w, nil)
-
-	if err := domain.PutLinkParamset(
-		context.Background(), "LNK0001:4", "PEER0001:1", linkParamsetTestValues(),
-	); err != nil {
-		t.Fatalf("PutLinkParamset: %v", err)
-	}
-	if !be.putCalled {
-		t.Fatal("backend PutLinkParamset was not called")
-	}
-	assertLinkParamsetCoerced(t, be.putValues)
-}
-
 // A3: when the descriptor fetch fails, values reach the backend unchanged
 // — the soft-fail path coerceParamsetValues already implements.
 func TestPutLinkParamsetPassesThroughUnchangedOnDescriptorError(t *testing.T) {
