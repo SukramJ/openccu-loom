@@ -754,12 +754,18 @@ func paramsetPutHandler(w ParamsetWriter, locks EditLockVerifier) CommandHandler
 			return nil, NewCommandError(CommandErrorBadRequest, "values must not be empty")
 		}
 		psKey := hmenum.ParamsetKey(p.Paramset)
-		// Strict edit-lock enforcement mirrors the REST gate: MASTER and
-		// LINK are configuration writes that require holding the lock.
-		// The lock key mirrors the SPA's channel:{addr}:{key} format;
-		// this WS path carries no peer suffix (per-peer LINK writes use
-		// the REST link-ps route), so it locks the whole set.
-		if locks != nil && (psKey == hmenum.ParamsetKeyMaster || psKey == hmenum.ParamsetKeyLink) {
+		// LINK is not writable here, and never was. A LINK paramset belongs
+		// to a channel PAIR, so its values are addressed by the partner
+		// channel; this command carries no partner, so the key reached the
+		// wire as the literal string "LINK", which addresses no link. Use
+		// `links.put_paramset`, which takes the peer.
+		if psKey == hmenum.ParamsetKeyLink {
+			return nil, NewCommandError(CommandErrorBadRequest,
+				"paramset_key LINK is not writable here: a LINK paramset is addressed by its peer channel — use links.put_paramset with address and peer_address")
+		}
+		// Strict edit-lock enforcement mirrors the REST gate: MASTER is a
+		// configuration write and requires holding the lock.
+		if locks != nil && psKey == hmenum.ParamsetKeyMaster {
 			if !locks.Verify("channel:"+p.Channel+":"+string(psKey), p.EditToken) {
 				return nil, NewCommandError(CommandErrorLocked,
 					"edit lock required for "+string(psKey)+" write; open an edit session and pass edit_token")

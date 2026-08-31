@@ -10,6 +10,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **REST `APIVersion` 8.0.0 → 9.0.0.** Breaking, on the WebSocket surface:
+  `links.put_paramset` now requires an `edit_token`, and `paramset.put` refuses
+  `paramset_key: "LINK"`. Neither is visible to a schema diff, so both are
+  recorded in the surface guard's value-semantics list. 8.0.0 was never tagged,
+  so no released version carried either shape.
+
 - **REST `APIVersion` 7.28.0 → 8.0.0.** Breaking: three operations and four
   schemas were removed. An installed `openccu-loom-client` refuses to connect
   on a major mismatch regardless of whether it used this surface, so it and
@@ -23,6 +29,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enum up on their next sync.
 
 ### Fixed
+
+- **A link paramset could be written over WebSocket with no edit lock at all,
+  and the two lock grammars did not exclude each other.** REST has always
+  required a lock for `PUT /devices/{addr}/link-ps/{peer}`, keyed
+  `channel:{addr}:LINK:{peer}`. The WebSocket command that writes the same
+  paramset, `links.put_paramset`, took no verifier and enforced nothing. Its
+  sibling `paramset.put` did lock LINK writes, but keyed them
+  `channel:{addr}:LINK` without the peer — and the session registry compares
+  opaque strings, so holding the channel-wide lock never excluded anyone
+  holding a per-link one. Two clients could write the same link at the same
+  time, each believing it held the lock.
+
+  There is one grammar now, `channel:{addr}:LINK:{peer}`, and
+  `links.put_paramset` enforces it. The peer belongs in the key because it
+  belongs in the paramset: two links on one channel are two resources, and
+  locking the channel would block an editor working on a different partner.
+
+- **`paramset.put` accepted a LINK paramset key it could never write.** A LINK
+  paramset belongs to a channel pair and its values are addressed by the
+  partner channel. That command has no partner argument, so the key reached
+  the wire as the literal string `LINK` and addressed no link. It is refused
+  now, with an error naming `links.put_paramset`, which has always carried the
+  peer. No caller used the branch — checked across the SPA, this repository's
+  tests and the generated client packages.
 
 - **The WebSocket route wrote LINK paramsets through a second domain that
   applied none of the corrections the REST route applies.** There were two

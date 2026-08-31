@@ -124,6 +124,9 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		DefinitionExport: w.definitionExport,
 		Hub:              &wsHubQuery{hub: w.hub, registry: w.registry, deviceAdmin: w.deviceAdmin},
 		Links:            &wsLinkQuery{domain: w.linksDomain, registry: w.registry, paramsets: w.paramsets},
+		// EditLocks: the same shared registry paramset.put uses, so a lock
+		// opened over REST is honoured over WS and the other way round.
+		EditLocks: w.editSessions,
 		// ScheduleQueryAdapter already satisfies ws.ScheduleQuery — no wrapper needed.
 		Schedules: schedQueryAdapter,
 		// Sessions: wired via configui.SessionStore stored in wsCommandWiring.

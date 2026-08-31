@@ -971,9 +971,10 @@ func (f fakeEditLocks) Verify(key, token string) bool {
 }
 
 // TestExtendedParamsetPut_EditLockEnforced asserts that paramset.put
-// gates MASTER/LINK writes behind EditLockVerifier.Verify using the
+// gates MASTER writes behind EditLockVerifier.Verify using the
 // "channel:{channel_address}:{paramset_key}" lock key, while VALUES
-// writes remain ungated.
+// writes remain ungated. LINK is refused before the lock check ever
+// runs — see TestExtendedParamsetPut_RefusesLink.
 func TestExtendedParamsetPut_EditLockEnforced(t *testing.T) {
 	pw := &stubParamsetWriter{}
 	r := NewRouter()
@@ -1038,6 +1039,49 @@ func TestExtendedParamsetPut_EditLockEnforced(t *testing.T) {
 	}
 	if len(pw.calls) != 2 {
 		t.Fatalf("VALUES write: expected 2 total writes, got %d", len(pw.calls))
+	}
+}
+
+// TestExtendedParamsetPut_RefusesLink asserts that paramset.put rejects
+// paramset_key LINK before ever calling ParamsetWriter — a LINK paramset
+// belongs to a channel pair and is addressed by the partner channel, which
+// this command cannot carry; use links.put_paramset instead. A MASTER
+// write with a valid token must still succeed, so the guard cannot pass by
+// refusing everything.
+func TestExtendedParamsetPut_RefusesLink(t *testing.T) {
+	pw := &stubParamsetWriter{}
+	r := NewRouter()
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{
+		Paramsets: pw,
+		EditLocks: fakeEditLocks{key: "channel:ABC0001:1:MASTER", token: "good-token"},
+	})
+
+	raw, _ := json.Marshal(map[string]any{
+		"channel_address": "ABC0001:1",
+		"paramset_key":    "LINK",
+		"values":          map[string]any{"SHORT_ACTION_TYPE": 1},
+		"edit_token":      "good-token",
+	})
+	res := r.Dispatch(opCtx(), "paramset.put", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("LINK write: expected code %q, got %+v", CommandErrorBadRequest, res.Error)
+	}
+	if len(pw.calls) != 0 {
+		t.Fatalf("LINK write must not reach ParamsetWriter; got %d calls", len(pw.calls))
+	}
+
+	raw, _ = json.Marshal(map[string]any{
+		"channel_address": "ABC0001:1",
+		"paramset_key":    "MASTER",
+		"values":          map[string]any{"CTRL_MODE": 1},
+		"edit_token":      "good-token",
+	})
+	res = r.Dispatch(opCtx(), "paramset.put", raw)
+	if res.Error != nil {
+		t.Fatalf("MASTER write: unexpected error: %+v", res.Error)
+	}
+	if len(pw.calls) != 1 {
+		t.Fatalf("MASTER write: expected 1 write, got %d", len(pw.calls))
 	}
 }
 
