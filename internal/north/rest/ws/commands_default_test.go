@@ -1709,6 +1709,81 @@ func TestWSLinksPutParamset_MissingPeer(t *testing.T) {
 	}
 }
 
+// TestWSLinksPutParamset_EditLockEnforced asserts that links.put_paramset
+// gates the write behind EditLockVerifier.Verify using the per-link lock
+// key "channel:{address}:LINK:{peer_address}" — not the channel-wide key
+// "channel:{address}:LINK", which addresses a different resource and must
+// not satisfy the per-link gate.
+func TestWSLinksPutParamset_EditLockEnforced(t *testing.T) {
+	t.Parallel()
+
+	rawArgs, _ := json.Marshal(map[string]any{
+		"address":      "0001ABCD:1",
+		"peer_address": "0002EFGH:1",
+		"parameters":   map[string]any{"SHORT_ACTION_TYPE": float64(1)},
+	})
+
+	// a) no token, verifier present: locked, no write reaches LinkQuery.
+	links := &stubLinks{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{
+		Links:     links,
+		EditLocks: fakeEditLocks{key: "channel:0001ABCD:1:LINK:0002EFGH:1", token: "good-token"},
+	})
+	res := r.Dispatch(opCtx(), "links.put_paramset", rawArgs)
+	if res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("no token: expected code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if links.putParamsetAddr != "" {
+		t.Fatalf("no token: write must not reach LinkQuery, got addr %q", links.putParamsetAddr)
+	}
+
+	// b) a token valid for the per-link key: the write reaches LinkQuery.
+	links = &stubLinks{}
+	r = NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{
+		Links:     links,
+		EditLocks: fakeEditLocks{key: "channel:0001ABCD:1:LINK:0002EFGH:1", token: "good-token"},
+	})
+	withToken, _ := json.Marshal(map[string]any{
+		"address":      "0001ABCD:1",
+		"peer_address": "0002EFGH:1",
+		"parameters":   map[string]any{"SHORT_ACTION_TYPE": float64(1)},
+		"edit_token":   "good-token",
+	})
+	res = r.Dispatch(opCtx(), "links.put_paramset", withToken)
+	if res.Error != nil {
+		t.Fatalf("valid per-link token: unexpected error: %+v", res.Error)
+	}
+	if links.putParamsetAddr != "0001ABCD:1" || links.putParamsetPeer != "0002EFGH:1" {
+		t.Fatalf("valid per-link token: write not forwarded, got addr=%q peer=%q",
+			links.putParamsetAddr, links.putParamsetPeer)
+	}
+
+	// c) a token valid only for the channel-wide key (no peer): still
+	// refused. The old channel-wide grammar must not satisfy the new
+	// per-link gate.
+	links = &stubLinks{}
+	r = NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{
+		Links:     links,
+		EditLocks: fakeEditLocks{key: "channel:0001ABCD:1:LINK", token: "channel-token"},
+	})
+	channelWide, _ := json.Marshal(map[string]any{
+		"address":      "0001ABCD:1",
+		"peer_address": "0002EFGH:1",
+		"parameters":   map[string]any{"SHORT_ACTION_TYPE": float64(1)},
+		"edit_token":   "channel-token",
+	})
+	res = r.Dispatch(opCtx(), "links.put_paramset", channelWide)
+	if res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("channel-wide token: expected code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if links.putParamsetAddr != "" {
+		t.Fatalf("channel-wide token: write must not reach LinkQuery, got addr %q", links.putParamsetAddr)
+	}
+}
+
 func TestSchedulesClimateGetSet(t *testing.T) {
 	sched := &stubSchedules{schedule: map[string]any{"P1": map[string]any{}}}
 	r := NewRouter()

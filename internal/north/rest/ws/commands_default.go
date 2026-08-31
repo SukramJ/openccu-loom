@@ -324,7 +324,12 @@ type DefaultCommandsConfig struct {
 	Devices        DeviceQuery
 	Hub            HubQuery
 	Links          LinkQuery
-	Schedules      ScheduleQuery
+	// EditLocks enforces the per-link edit lock on `links.put_paramset`,
+	// the same strict gate REST applies to PUT /devices/{addr}/link-ps/{peer}.
+	// Nil disables enforcement (test-only); production wires the shared REST
+	// edit-session registry so REST and WS share one lock namespace.
+	EditLocks EditLockVerifier
+	Schedules ScheduleQuery
 	// Backups backs `backups.trigger`, the central-scoped create-and-
 	// download backup command. Nil skips the command; the legacy
 	// `backup.trigger`/`backup.status` pair (backed by Hub) is unaffected.
@@ -398,7 +403,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		router.Register("links.remove", linksRemoveHandler(cfg.Links))
 		router.Register("links.linkable_channels", linksLinkableChannelsHandler(cfg.Links))
 		router.Register("links.get_paramset", linksGetParamsetHandler(cfg.Links))
-		router.Register("links.put_paramset", linksPutParamsetHandler(cfg.Links))
+		router.Register("links.put_paramset", linksPutParamsetHandler(cfg.Links, cfg.EditLocks))
 		router.Register("links.activate_paramset", linksActivateParamsetHandler(cfg.Links))
 	}
 
@@ -1284,6 +1289,9 @@ type linkPutParamsetArgs struct {
 	Address     string         `json:"address"`
 	PeerAddress string         `json:"peer_address"`
 	Parameters  map[string]any `json:"parameters"`
+	// EditToken carries the edit-lock token. The lock key is
+	// channel:{address}:LINK:{peer_address} — per link, not per channel.
+	EditToken string `json:"edit_token"`
 }
 
 // linksGetParamsetHandler implements `links.get_paramset`.
@@ -1311,7 +1319,7 @@ func linksGetParamsetHandler(q LinkQuery) CommandHandler {
 // Mirrors Python `ws_put_link_paramset` (websocket_api.py:1387).
 // Input: {address, peer_address, parameters}.
 // Output: {success: true}.
-func linksPutParamsetHandler(q LinkQuery) CommandHandler {
+func linksPutParamsetHandler(q LinkQuery, locks EditLockVerifier) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linkPutParamsetArgs
 		if err := decodeOrEmpty(raw, &args); err != nil {
@@ -1322,6 +1330,19 @@ func linksPutParamsetHandler(q LinkQuery) CommandHandler {
 		}
 		if args.Parameters == nil {
 			args.Parameters = map[string]any{}
+		}
+		// A LINK paramset write is a configuration write and holds the same
+		// lock REST holds for it. The key carries the peer, because the
+		// paramset does: two links on one channel are two resources, and
+		// locking the channel would block an editor working on a different
+		// partner. A nil verifier disables enforcement — the test-only
+		// escape hatch every command here shares.
+		if locks != nil {
+			key := "channel:" + args.Address + ":" + string(hmenum.ParamsetKeyLink) + ":" + args.PeerAddress
+			if !locks.Verify(key, args.EditToken) {
+				return nil, NewCommandError(CommandErrorLocked,
+					"edit lock required for LINK write; open an edit session for "+key+" and pass edit_token")
+			}
 		}
 		if err := q.PutLinkParamset(ctx, args.Address, args.PeerAddress, args.Parameters); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "put_link_paramset: "+err.Error())
