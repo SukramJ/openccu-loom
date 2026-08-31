@@ -2278,78 +2278,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/{addr}/channels/{no}/master-profiles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List master profiles for one channel
-         * @description Master profiles available for the channel's (device_type,
-         *     channel_type) pair — resolved from the channel's owning device's
-         *     model and the channel's own type. Shares the domain call
-         *     (`masterprofile.Store.Profiles`) with the WS
-         *     `master_profiles.list` command. An unknown pair (no profiles
-         *     catalogued for this device/channel type) returns an empty array,
-         *     not 404.
-         */
-        get: operations["listMasterProfiles"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/devices/{addr}/channels/{no}/master-profiles/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Full parameter set of a single master profile
-         * @description Shares the domain call (`masterprofile.Store.Profile`) with the
-         *     WS `master_profiles.get` command.
-         */
-        get: operations["getMasterProfile"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/devices/{addr}/channels/{no}/master-profiles/match": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Match observed values against a channel's master-profile constraints
-         * @description Matches the `current_values` in the request body against the
-         *     master-profile constraint set for the channel's (device_type,
-         *     channel_type) pair and returns the active profile id (0 = Expert
-         *     / no match). Shares the domain call
-         *     (`masterprofile.Store.MatchActiveProfile`) with the WS
-         *     `master_profiles.match` command.
-         */
-        post: operations["matchMasterProfile"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/devices/{addr}/channels/{no}/schedule": {
         parameters: {
             query?: never;
@@ -7075,36 +7003,6 @@ export interface components {
             /** @description Include (true) / exclude (false) the channel from the week-program schedule. */
             enabled: boolean;
         };
-        /** @description One entry in `GET .../master-profiles` — the list shape (no full parameter map). */
-        MasterProfileSummary: {
-            id: number;
-            /** @description Localised profile name. */
-            name: string;
-            /** @description Localised profile description. */
-            description: string;
-            /** @description Number of MASTER parameters this profile sets. */
-            param_count: number;
-        };
-        /** @description Full master-profile shape returned by `GET .../master-profiles/{id}`. */
-        MasterProfile: {
-            id: number;
-            /** @description Locale-keyed profile name (e.g. `{"en": "Eco", "de": "Eco"}`). */
-            name: {
-                [key: string]: string;
-            };
-            /** @description Locale-keyed profile description. */
-            description: {
-                [key: string]: string;
-            };
-            /** @description MASTER parameter name to constraint. */
-            params: {
-                [key: string]: {
-                    /** @description Usually "fixed"; other kinds appear sporadically. */
-                    constraint_type?: string;
-                    value?: unknown;
-                };
-            };
-        };
         InterfaceState: {
             id: string;
             name: string;
@@ -10195,14 +10093,6 @@ export interface components {
         LoginRequest: {
             username: string;
             password: string;
-        };
-        MatchMasterProfileRequest: {
-            current_values?: {
-                [key: string]: unknown;
-            };
-        };
-        MatchMasterProfileResponse: {
-            active_id: number;
         };
         MatterFactoryResetRequest: {
             /** @enum {string} */
@@ -13738,88 +13628,6 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
-        };
-    };
-    listMasterProfiles: {
-        parameters: {
-            query?: {
-                /** @description Locale for the localised name/description. Defaults to "en". */
-                locale?: string;
-            };
-            header?: never;
-            path: {
-                addr: string;
-                no: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Master profiles for the channel (may be empty) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MasterProfileSummary"][];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    getMasterProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                addr: string;
-                no: number;
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Master profile */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MasterProfile"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    matchMasterProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                addr: string;
-                no: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["MatchMasterProfileRequest"];
-            };
-        };
-        responses: {
-            /** @description Active profile id (0 = no match) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchMasterProfileResponse"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
         };
     };
     getChannelSchedule: {

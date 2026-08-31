@@ -1,5 +1,5 @@
 {
- "api_version": "7.28.0",
+ "api_version": "8.0.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -79,8 +79,6 @@
   "GET /devices/{addr}/channels/{no}/event-groups": "listChannelEventGroups",
   "GET /devices/{addr}/channels/{no}/flags": "getChannelFlags",
   "GET /devices/{addr}/channels/{no}/linkable-channels": "linkableChannels",
-  "GET /devices/{addr}/channels/{no}/master-profiles": "listMasterProfiles",
-  "GET /devices/{addr}/channels/{no}/master-profiles/{id}": "getMasterProfile",
   "GET /devices/{addr}/channels/{no}/schedule": "getChannelSchedule",
   "GET /devices/{addr}/channels/{no}/team-candidates": "getDeviceTeamCandidates",
   "GET /devices/{addr}/channels/{no}/ui-schema": "getUiSchema",
@@ -208,7 +206,6 @@
   "POST /devices/{addr}/cdps/{name}/{operation}": "invokeCustomDataPoint",
   "POST /devices/{addr}/central-links": "createCentralLinks",
   "POST /devices/{addr}/channels/{no}/config/import": "importChannelConfig",
-  "POST /devices/{addr}/channels/{no}/master-profiles/match": "matchMasterProfile",
   "POST /devices/{addr}/channels/{no}/paramsets/{key}/determine": "determineParameter",
   "POST /devices/{addr}/channels/{no}/reload": "reloadChannel",
   "POST /devices/{addr}/channels/{no}/schedule/active-profile": "setChannelActiveProfile",
@@ -1440,24 +1437,6 @@
   "MQTTReloadResponse": [
    "reloaded:boolean",
    "took_ms:integer"
-  ],
-  "MasterProfile": [
-   "description:object",
-   "id:integer",
-   "name:object",
-   "params:object"
-  ],
-  "MasterProfileSummary": [
-   "description:string",
-   "id:integer",
-   "name:string",
-   "param_count:integer"
-  ],
-  "MatchMasterProfileRequest": [
-   "current_values:object"
-  ],
-  "MatchMasterProfileResponse": [
-   "active_id:integer"
   ],
   "MatterCommissioningProgressPayload": [
    "message:string",

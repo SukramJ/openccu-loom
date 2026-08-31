@@ -32,7 +32,6 @@ import (
 	// runs. See [internal/model/custom/builtins].
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
-	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -768,7 +767,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	customDPDispatcher := adapter.NewCustomDPDispatcher(reg).SetAuditRecorder(auditRec)
 	roomFunctionAdmin := adapter.NewRoomFunctionAdminDomain(reg)
 	uiSchemaAdapter := adapter.NewUISchemaAdapter(reg, valueWriter, translations, easymode, profiles)
-	masterProfilesStore := masterprofile.New()
 	// linkProfilesStore holds easymode link profiles, loaded lazily from the
 	// embedded archives when a (receiver, sender) channel-type pair is first
 	// requested. The WS layer returns profiles immediately once the pair is
@@ -819,7 +817,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		deviceAdmin:      deviceAdminDomain,
 		paramsets:        paramsetsDomain,
 		customDP:         customDPDispatcher,
-		masterProfiles:   masterProfilesStore,
 		linkProfiles:     linkProfilesStore,
 		valueWriter:      valueWriter,
 		registry:         reg,
@@ -907,7 +904,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		incidents:              adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
 		alarm:                  alarmSvc,
 		security:               securitySvc,
-		masterProfiles:         masterProfilesStore,
 		sysStatusBuf:           sysStatusBuf,
 		visFilter:              visFilter,
 		metricsReg:             metricsReg,

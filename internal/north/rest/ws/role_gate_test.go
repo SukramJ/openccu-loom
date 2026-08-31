@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/configui"
-	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 )
 
 // stubAlarmPanel satisfies AlarmPanelQuery for registration-only tests.
@@ -175,7 +174,6 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		ChangeHistoryClearer: &stubChangeHistoryClearer{},
 		Central:              &stubCentral{},
 		ExtendedHub:          &stubExtendedHub{},
-		MasterProfiles:       masterprofile.New(),
 		ThrottleStats:        &stubThrottleStats{},
 		CacheClearer:         &stubCacheClearer{},
 		DeviceStatistics:     &stubDeviceStats{},

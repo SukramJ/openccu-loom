@@ -33,7 +33,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	securitypkg "github.com/SukramJ/openccu-loom/internal/security"
-	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -110,19 +109,7 @@ func (fakeDeviceIndex) Device(string) (*device.Device, bool) { return nil, false
 func (fakeDeviceIndex) CentralOf(string) string              { return "" }
 func (fakeDeviceIndex) SerialSuffix(string) string           { return "" }
 
-type fakeMasterProfilesService struct{}
-
-func (fakeMasterProfilesService) Profiles(string, string) ([]masterprofile.Profile, error) {
-	return nil, nil
-}
-
 func (fakeDeviceIndex) Released(string) bool { return true }
-
-func (fakeMasterProfilesService) Profile(string, string, int) (masterprofile.Profile, error) {
-	return masterprofile.Profile{}, nil
-}
-
-func (fakeMasterProfilesService) MatchActiveProfile(string, string, map[string]any) int { return 0 }
 
 type fakeUISchemaService struct{}
 
@@ -648,7 +635,6 @@ func fullyWiredRouterDeps() rest.Deps {
 		Diagrams:                fakeDiagramConfigService{},
 		Areas:                   fakeAreaAdmin{},
 		Devices:                 fakeDeviceIndex{},
-		MasterProfiles:          fakeMasterProfilesService{},
 		UISchema:                fakeUISchemaService{},
 		Links:                   fakeLinksService{},
 		Schedules:               fakeScheduleService{},

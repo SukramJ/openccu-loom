@@ -2362,27 +2362,6 @@ func TestExtendedCentralReconcileError(t *testing.T) {
 	}
 }
 
-// TestExtendedMasterProfilesGetMissingDeviceType exercises the bad_request path.
-func TestExtendedMasterProfilesGetMissingDeviceType(t *testing.T) {
-	r, _, _, _, _, _ := newRouterWithExtended()
-	raw, _ := json.Marshal(map[string]any{"channel_type": "KEY", "id": 1})
-	res := r.Dispatch(context.Background(), "master_profiles.get", raw)
-	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
-		t.Fatalf("want bad_request, got %+v", res.Error)
-	}
-}
-
-// TestExtendedMasterProfilesApplyMissingFields exercises the bad_request path.
-func TestExtendedMasterProfilesApplyMissingFields(t *testing.T) {
-	r, _, _, _, _, _ := newRouterWithExtended()
-	// Missing both device_type and channel_address.
-	raw, _ := json.Marshal(map[string]any{"id": 1})
-	res := r.Dispatch(opCtx(), "master_profiles.apply", raw)
-	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
-		t.Fatalf("want bad_request, got %+v", res.Error)
-	}
-}
-
 // We need to add error fields to stubChangeHistory and stubCentral.
 // Since these are defined in commands_extended_test.go (same package) we
 // can't redefine them here. Instead we shadow them via a different approach:

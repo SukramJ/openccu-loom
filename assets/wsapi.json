@@ -949,52 +949,6 @@
    }
   },
   {
-   "category": "master_profiles",
-   "description": "Apply a stored master profile to a channel by writing its fixed parameters. This is a MASTER paramset write and is gated behind the same per-resource edit lock as paramset.put: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:MASTER) or the write is rejected with a 'locked' command error.",
-   "name": "master_profiles.apply",
-   "args": {
-    "device_type": "string",
-    "channel_type": "string",
-    "channel_address": "string",
-    "id": "integer",
-    "edit_token": "string"
-   },
-   "result": {
-    "applied": "integer",
-    "param_count": "integer"
-   }
-  },
-  {
-   "category": "master_profiles",
-   "description": "Return the full parameter set of a single master profile by device type and id.",
-   "name": "master_profiles.get",
-   "args": {
-    "device_type": "string",
-    "channel_type": "string?",
-    "id": "integer?"
-   }
-  },
-  {
-   "category": "master_profiles",
-   "description": "List available master profiles, optionally filtered by device type and channel type.",
-   "name": "master_profiles.list",
-   "args": {
-    "device_type": "string?",
-    "channel_type": "string?",
-    "locale": "string?"
-   }
-  },
-  {
-   "category": "master_profiles",
-   "description": "Match observed parameter values against the master-profile constraint set and return the active profile ID (0 = Expert / no match).",
-   "name": "master_profiles.match",
-   "args": {
-    "device_type": "string",
-    "channel_type": "string?",
-    "current_values": "object?"
-   }
-  },
-  {
    "category": "paramsets",
    "description": "Copy a paramset (VALUES or MASTER) from a source channel to a target channel by reading + writing the values. Distinct from links.copy (peer-to-peer link-entry copy). Mirrors Python ws_copy_paramset (websocket_api.py:916). Closes parity_audit gap L-7015.",
    "name": "paramset.copy",

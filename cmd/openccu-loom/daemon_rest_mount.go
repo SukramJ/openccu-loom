@@ -35,7 +35,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
 	"github.com/SukramJ/openccu-loom/internal/security"
-	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
@@ -116,12 +115,7 @@ type restMountDeps struct {
 	alarm *alarm.Service
 	// security is the Security & Safety domain backing /security. Nil
 	// when the persistence tier is unavailable.
-	security *security.Service
-	// masterProfiles backs the read-only master-profiles REST routes
-	// (GET .../master-profiles[/{id}], POST .../master-profiles/match) —
-	// the same *masterprofile.Store instance the WS
-	// master_profiles.list/get/match commands are wired against.
-	masterProfiles         *masterprofile.Store
+	security               *security.Service
 	sysStatusBuf           *handlers.SystemStatusBuffer
 	visFilter              filter.VisibilitySet
 	metricsReg             *metrics.Registry
@@ -337,7 +331,6 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Alarm:                   alarmPanelFrom(d.alarm),
 		Security:                securityDomainFrom(d.security),
 		AlarmCodes:              alarmCodeAdminFrom(d.alarm),
-		MasterProfiles:          d.masterProfiles,
 		SystemStatus:            d.sysStatusBuf,
 		Labels:                  adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
 		EntityNames:             entityNameCatalogueFrom(d.catalogs),

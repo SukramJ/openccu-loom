@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 7.28.0
+  version: 8.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3122,84 +3122,6 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
 
-  /devices/{addr}/channels/{no}/master-profiles:
-    get:
-      operationId: listMasterProfiles
-      summary: List master profiles for one channel
-      description: |
-        Master profiles available for the channel's (device_type,
-        channel_type) pair — resolved from the channel's owning device's
-        model and the channel's own type. Shares the domain call
-        (`masterprofile.Store.Profiles`) with the WS
-        `master_profiles.list` command. An unknown pair (no profiles
-        catalogued for this device/channel type) returns an empty array,
-        not 404.
-      tags: [devices]
-      parameters:
-        - { in: path, name: addr, required: true, schema: { type: string } }
-        - { in: path, name: "no", required: true, schema: { type: integer } }
-        - in: query
-          name: locale
-          schema: { type: string }
-          description: Locale for the localised name/description. Defaults to "en".
-      responses:
-        "200":
-          description: Master profiles for the channel (may be empty)
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/MasterProfileSummary" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /devices/{addr}/channels/{no}/master-profiles/{id}:
-    get:
-      operationId: getMasterProfile
-      summary: Full parameter set of a single master profile
-      description: |
-        Shares the domain call (`masterprofile.Store.Profile`) with the
-        WS `master_profiles.get` command.
-      tags: [devices]
-      parameters:
-        - { in: path, name: addr, required: true, schema: { type: string } }
-        - { in: path, name: "no", required: true, schema: { type: integer } }
-        - { in: path, name: id, required: true, schema: { type: integer } }
-      responses:
-        "200":
-          description: Master profile
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MasterProfile" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /devices/{addr}/channels/{no}/master-profiles/match:
-    post:
-      operationId: matchMasterProfile
-      summary: Match observed values against a channel's master-profile constraints
-      description: |
-        Matches the `current_values` in the request body against the
-        master-profile constraint set for the channel's (device_type,
-        channel_type) pair and returns the active profile id (0 = Expert
-        / no match). Shares the domain call
-        (`masterprofile.Store.MatchActiveProfile`) with the WS
-        `master_profiles.match` command.
-      tags: [devices]
-      parameters:
-        - { in: path, name: addr, required: true, schema: { type: string } }
-        - { in: path, name: "no", required: true, schema: { type: integer } }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MatchMasterProfileRequest"
-      responses:
-        "200":
-          description: Active profile id (0 = no match)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MatchMasterProfileResponse"
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "404": { $ref: "#/components/responses/NotFound" }
 
   /devices/{addr}/channels/{no}/schedule:
     get:
@@ -10107,37 +10029,6 @@ components:
         enabled:
           type: boolean
           description: Include (true) / exclude (false) the channel from the week-program schedule.
-    MasterProfileSummary:
-      type: object
-      required: [id, name, description, param_count]
-      description: One entry in `GET .../master-profiles` — the list shape (no full parameter map).
-      properties:
-        id: { type: integer }
-        name: { type: string, description: Localised profile name. }
-        description: { type: string, description: Localised profile description. }
-        param_count: { type: integer, description: Number of MASTER parameters this profile sets. }
-    MasterProfile:
-      type: object
-      required: [id, name, description, params]
-      description: Full master-profile shape returned by `GET .../master-profiles/{id}`.
-      properties:
-        id: { type: integer }
-        name:
-          type: object
-          additionalProperties: { type: string }
-          description: 'Locale-keyed profile name (e.g. `{"en": "Eco", "de": "Eco"}`).'
-        description:
-          type: object
-          additionalProperties: { type: string }
-          description: Locale-keyed profile description.
-        params:
-          type: object
-          description: MASTER parameter name to constraint.
-          additionalProperties:
-            type: object
-            properties:
-              constraint_type: { type: string, description: 'Usually "fixed"; other kinds appear sporadically.' }
-              value: {}
     InterfaceState:
       type: object
       required: [id, name, connected, interface]
@@ -14477,17 +14368,6 @@ components:
       properties:
         username: { type: string }
         password: { type: string }
-    MatchMasterProfileRequest:
-      type: object
-      properties:
-        current_values:
-          type: object
-          additionalProperties: true
-    MatchMasterProfileResponse:
-      type: object
-      required: [active_id]
-      properties:
-        active_id: { type: integer }
     MatterFactoryResetRequest:
       type: object
       required: [confirm]

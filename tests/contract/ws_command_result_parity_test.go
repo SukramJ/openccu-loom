@@ -35,7 +35,7 @@ var wsCommandResultExemptions = map[string]string{}
 // Entries are expected to disappear, and a new command that returns a
 // payload without declaring one fails outright — the backlog can shrink
 // but never grow unnoticed. Its size is the finding: `wsapi.json` is the
-// only description of this surface a client has, and for these 82 the
+// only description of this surface a client has, and for these 79 the
 // answer is "read the daemon's source".
 var wsCommandsAwaitingResultShape = map[string]string{
 	"addon_update.check":                  "",
@@ -97,9 +97,6 @@ var wsCommandsAwaitingResultShape = map[string]string{
 	"links.put_paramset":                  "",
 	"links.remove":                        "",
 	"links.set_info":                      "",
-	"master_profiles.get":                 "",
-	"master_profiles.list":                "",
-	"master_profiles.match":               "",
 	"paramset.description":                "",
 	"paramset.get":                        "",
 	"programs.list":                       "",
