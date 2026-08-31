@@ -117,6 +117,15 @@ type readParamsetOut struct {
 	Values map[string]any `json:"values"`
 }
 
+type readLinkParamsetIn struct {
+	ReceiverChannelAddress string `json:"receiver_channel_address" jsonschema:"the channel address the link terminates on, e.g. 0001D3C99C1234:1"`
+	SenderChannelAddress   string `json:"sender_channel_address" jsonschema:"the peer channel address on the other end of the link"`
+}
+
+type readLinkParamsetOut struct {
+	Values map[string]any `json:"values"`
+}
+
 type getHealthIn struct{}
 
 type healthComponentSummary struct {
@@ -135,10 +144,6 @@ type getHealthOut struct {
 	// metrics rather than here.
 	Gauges map[string]float64 `json:"gauges,omitempty"`
 }
-
-// parseParamsetKey accepts the two operator-facing paramset keys. LINK
-// is intentionally excluded — it needs a peer address and a different
-// tool shape.
 
 // resolveDataPoint resolves the VALUES data point for a channel address +
 // parameter through the device model, returning nil when the model does
@@ -161,6 +166,12 @@ func resolveDataPoint(devices DeviceLister, channelAddress, parameterName string
 	return ch.Parameter(hmenum.Parameter(parameterName))
 }
 
+// parseParamsetKey accepts the two channel-scoped paramset keys, MASTER
+// and VALUES. LINK is deliberately not returned here: a LINK paramset is
+// identified by a channel PAIR (receiver + sender), which this
+// single-string signature has no way to carry, so LINK reads and writes go
+// through their own tools (read_link_paramset, write_link_paramset) and
+// LINK edit-lock keys are built by [editLockKey] instead of this parser.
 func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
 	switch strings.ToUpper(strings.TrimSpace(s)) {
 	case "MASTER":
@@ -169,6 +180,27 @@ func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
 		return hmenum.ParamsetKeyValues, true
 	default:
 		return "", false
+	}
+}
+
+// editLockKey builds the edit-lock registry key for a MASTER or LINK edit
+// session. LINK is keyed by the channel pair —
+// channel:{address}:LINK:{peer} — the same grammar links.put_paramset and
+// links.apply_profile enforce over WS, because a LINK paramset belongs to
+// a channel pair: two links on one channel are two independent resources,
+// and locking the channel alone would block an editor working a different
+// partner. MASTER keeps the channel-only key.
+func editLockKey(keyName, address, peer string) (string, error) {
+	switch keyName {
+	case "MASTER":
+		return "channel:" + address + ":" + string(hmenum.ParamsetKeyMaster), nil
+	case "LINK":
+		if peer == "" {
+			return "", errors.New("peer_address is required when key is LINK")
+		}
+		return "channel:" + address + ":" + string(hmenum.ParamsetKeyLink) + ":" + peer, nil
+	default:
+		return "", fmt.Errorf("key must be MASTER or LINK, got %q", keyName)
 	}
 }
 
@@ -199,6 +231,7 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	}
 	if d.Paramsets != nil {
 		registerReadParamset(s, d)
+		registerReadLinkParamset(s, d)
 	}
 	if d.Health != nil {
 		registerGetHealth(s, d)
@@ -441,6 +474,30 @@ func registerReadParamset(s *mcpsdk.Server, d Deps) {
 	})
 }
 
+// registerReadLinkParamset implements `read_link_paramset`, the LINK
+// counterpart of read_paramset. LINK has no fixed key string — the CCU
+// addresses it by the peer channel — so this tool takes the channel pair
+// explicitly rather than a `key` argument. Reads are always available, no
+// edit lock required. Mirrors WS `links.get_paramset`
+// (commands_default.go, linksGetParamsetHandler).
+func registerReadLinkParamset(s *mcpsdk.Server, d Deps) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name:        "read_link_paramset",
+		Description: "Read a device's LINK paramset for one channel pair: the configuration a direct link carries between receiver_channel_address and sender_channel_address.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in readLinkParamsetIn) (*mcpsdk.CallToolResult, readLinkParamsetOut, error) {
+		receiver := strings.TrimSpace(in.ReceiverChannelAddress)
+		sender := strings.TrimSpace(in.SenderChannelAddress)
+		if receiver == "" || sender == "" {
+			return nil, readLinkParamsetOut{}, errors.New("receiver_channel_address and sender_channel_address are required")
+		}
+		values, err := d.Paramsets.GetLinkParamset(ctx, receiver, sender)
+		if err != nil {
+			return nil, readLinkParamsetOut{}, fmt.Errorf("read link paramset: %w", err)
+		}
+		return nil, readLinkParamsetOut{Values: values}, nil
+	})
+}
+
 func registerGetHealth(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "get_health",
@@ -492,9 +549,30 @@ type writeParamsetOut struct {
 	OK bool `json:"ok"`
 }
 
+type writeLinkParamsetIn struct {
+	CentralName            string         `json:"central_name" jsonschema:"the CCU that owns the receiver channel (required; must match its central)"`
+	ReceiverChannelAddress string         `json:"receiver_channel_address" jsonschema:"the channel address the link terminates on, e.g. 0001D3C99C1234:1"`
+	SenderChannelAddress   string         `json:"sender_channel_address" jsonschema:"the peer channel address on the other end of the link"`
+	Values                 map[string]any `json:"values" jsonschema:"the parameter→value map to write to the LINK paramset"`
+	// EditToken carries the edit-lock token for the per-pair key
+	// channel:{receiver_channel_address}:LINK:{sender_channel_address}.
+	// Open it with open_edit_session (key LINK, peer_address set to
+	// sender_channel_address).
+	EditToken string `json:"edit_token,omitempty" jsonschema:"edit-lock token for the receiver/sender pair; obtain it by opening an edit session with key LINK and peer_address set to sender_channel_address"`
+}
+
+type writeLinkParamsetOut struct {
+	OK bool `json:"ok"`
+}
+
 type openEditSessionIn struct {
 	Address string `json:"address" jsonschema:"the channel address to lock, e.g. 0001D3C99C1234:1"`
-	Key     string `json:"key" jsonschema:"the paramset key to lock: MASTER"`
+	Key     string `json:"key" jsonschema:"the paramset key to lock: MASTER or LINK"`
+	// PeerAddress is required when Key is LINK: it is the sender channel
+	// of the pair, and together with Address (the receiver) builds the
+	// per-pair lock key channel:{address}:LINK:{peer_address}. Ignored
+	// for MASTER.
+	PeerAddress string `json:"peer_address,omitempty" jsonschema:"required when key is LINK: the peer (sender) channel address the lock is scoped to"`
 }
 
 type openEditSessionOut struct {
@@ -508,9 +586,12 @@ type openEditSessionOut struct {
 }
 
 type closeEditSessionIn struct {
-	Address   string `json:"address" jsonschema:"the channel address the session was opened for"`
-	Key       string `json:"key" jsonschema:"the paramset key the session was opened for: MASTER"`
-	EditToken string `json:"edit_token" jsonschema:"the token open_edit_session returned"`
+	Address string `json:"address" jsonschema:"the channel address the session was opened for"`
+	Key     string `json:"key" jsonschema:"the paramset key the session was opened for: MASTER or LINK"`
+	// PeerAddress is required when Key is LINK, matching the value passed
+	// to open_edit_session — see openEditSessionIn.PeerAddress.
+	PeerAddress string `json:"peer_address,omitempty" jsonschema:"required when key is LINK: the peer (sender) channel address the session was opened for"`
+	EditToken   string `json:"edit_token" jsonschema:"the token open_edit_session returned"`
 }
 
 type closeEditSessionOut struct {
@@ -538,6 +619,7 @@ func registerWriteTools(s *mcpsdk.Server, d Deps) {
 	}
 	if d.Paramsets != nil {
 		registerWriteParamset(s, d)
+		registerWriteLinkParamset(s, d)
 	}
 	if d.EditLocks != nil {
 		registerOpenEditSession(s, d)
@@ -609,7 +691,7 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "write_paramset",
-		Description: "Write a device paramset (MASTER configuration or VALUES state). Requires central_name; the named central must own the device.",
+		Description: "Write a device paramset (MASTER configuration or VALUES state). Requires central_name; the named central must own the device. LINK is not supported here — a LINK paramset belongs to a channel pair; use write_link_paramset.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in writeParamsetIn) (*mcpsdk.CallToolResult, writeParamsetOut, error) {
 		central := strings.TrimSpace(in.CentralName)
 		address := strings.TrimSpace(in.Address)
@@ -619,6 +701,11 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		if len(in.Values) == 0 {
 			return nil, writeParamsetOut{}, errors.New("values must not be empty")
 		}
+		if strings.EqualFold(strings.TrimSpace(in.Key), "LINK") {
+			return nil, writeParamsetOut{}, errors.New(
+				"key LINK is not supported by write_paramset; a LINK paramset belongs to a channel pair — use write_link_paramset instead",
+			)
+		}
 		key, ok := parseParamsetKey(in.Key)
 		if !ok {
 			return nil, writeParamsetOut{}, fmt.Errorf("key must be MASTER or VALUES, got %q", in.Key)
@@ -626,16 +713,17 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(address)); owner != central {
 			return nil, writeParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
 		}
-		// Strict edit-lock enforcement for configuration paramsets, mirroring
-		// the REST enforceEditLock gate and the WS paramset.put handler:
-		// MASTER (and LINK, though parseParamsetKey keeps LINK unreachable
-		// here) are configuration writes that require holding the per-channel
-		// edit lock, so a write another editor's open session is protected
-		// against cannot arrive through this sibling instead. Verify returns
-		// false when no session holds the lock and when the token does not
-		// match, so the lock is required always — not only under contention.
-		// A nil verifier disables enforcement (test-only escape hatch).
-		if d.EditLocks != nil && (key == hmenum.ParamsetKeyMaster || key == hmenum.ParamsetKeyLink) {
+		// Strict edit-lock enforcement for MASTER configuration writes,
+		// mirroring the REST enforceEditLock gate and the WS paramset.put
+		// handler: MASTER is a configuration write that requires holding the
+		// per-channel edit lock, so a write another editor's open session is
+		// protected against cannot arrive through this sibling instead.
+		// Verify returns false when no session holds the lock and when the
+		// token does not match, so the lock is required always — not only
+		// under contention. A nil verifier disables enforcement (test-only
+		// escape hatch). LINK never reaches this point — it is refused
+		// above, before a key is even parsed.
+		if d.EditLocks != nil && key == hmenum.ParamsetKeyMaster {
 			lockKey := "channel:" + address + ":" + string(key)
 			if !d.EditLocks.Verify(lockKey, strings.TrimSpace(in.EditToken)) {
 				return nil, writeParamsetOut{}, fmt.Errorf(
@@ -662,6 +750,54 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 	})
 }
 
+// registerWriteLinkParamset implements `write_link_paramset`, the LINK
+// counterpart write_paramset refuses to perform (ADR 0069). It routes
+// through the same [ParamsetService.PutLinkParamset] method the WS
+// `links.put_paramset` handler calls (linksPutParamsetHandler,
+// commands_default.go) — there is exactly one LINK write path in this
+// daemon, and this tool does not become a second one.
+func registerWriteLinkParamset(s *mcpsdk.Server, d Deps) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name:        "write_link_paramset",
+		Description: "Write a device's LINK paramset for one channel pair. Requires central_name; the named central must own the receiver channel (receiver_channel_address). Configuration write — requires the per-pair edit lock (open_edit_session with key LINK and peer_address set to sender_channel_address).",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in writeLinkParamsetIn) (*mcpsdk.CallToolResult, writeLinkParamsetOut, error) {
+		central := strings.TrimSpace(in.CentralName)
+		receiver := strings.TrimSpace(in.ReceiverChannelAddress)
+		sender := strings.TrimSpace(in.SenderChannelAddress)
+		if central == "" || receiver == "" || sender == "" {
+			return nil, writeLinkParamsetOut{}, errors.New("central_name, receiver_channel_address and sender_channel_address are required")
+		}
+		if len(in.Values) == 0 {
+			return nil, writeLinkParamsetOut{}, errors.New("values must not be empty")
+		}
+		// Same multi-CCU ownership check write_paramset performs, on the
+		// receiver channel — the peer may live behind a different
+		// interface, but the write itself targets the receiver's backend.
+		if owner := d.Devices.CentralOf(hmtypes.DeviceAddress(receiver)); owner != central {
+			return nil, writeLinkParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", receiver, owner, central)
+		}
+		// A LINK write is configuration and holds the same per-pair lock
+		// links.put_paramset enforces over WS and PUT
+		// /devices/{addr}/link-ps/{peer} enforces over REST:
+		// channel:{receiver}:LINK:{sender}, never the channel-wide
+		// MASTER-style key. A nil verifier disables enforcement (test-only
+		// escape hatch).
+		if d.EditLocks != nil {
+			lockKey := "channel:" + receiver + ":" + string(hmenum.ParamsetKeyLink) + ":" + sender
+			if !d.EditLocks.Verify(lockKey, strings.TrimSpace(in.EditToken)) {
+				return nil, writeLinkParamsetOut{}, fmt.Errorf(
+					"edit lock required for LINK write on %s; open an edit session for %s and pass edit_token", receiver, lockKey,
+				)
+			}
+		}
+		ctx = reqctx.WithOperation(ctx, "mcp:link-paramset-write")
+		if err := d.Paramsets.PutLinkParamset(ctx, receiver, sender, in.Values); err != nil {
+			return nil, writeLinkParamsetOut{}, fmt.Errorf("write link paramset: %w", err)
+		}
+		return nil, writeLinkParamsetOut{OK: true}, nil
+	})
+}
+
 // editLockSubject is the fixed identity open_edit_session records on
 // the lock it opens. REST/WS sessions record the caller's authenticated
 // subject; MCP write tools have no per-call human identity of their
@@ -671,32 +807,36 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 const editLockSubject = "mcp"
 
 // registerOpenEditSession implements `open_edit_session`, the MCP-side
-// counterpart of REST `POST /sessions/edit` and the seam write_paramset's
-// MASTER/LINK gate needs: without a way to mint a token, that gate makes
-// every MASTER write unreachable over MCP even though it never rejects a
-// legitimate one over REST or WS.
+// counterpart of REST `POST /sessions/edit` and the seam write_paramset /
+// write_link_paramset's MASTER/LINK gate needs: without a way to mint a
+// token, that gate makes every MASTER or LINK write unreachable over MCP
+// even though it never rejects a legitimate one over REST or WS. LINK
+// requires peer_address — without it, opening a lock for LINK would either
+// fail or silently fall back to a channel-wide key, and the channel-wide
+// grammar was retired (a LINK paramset belongs to a channel pair; two
+// links on one channel are two independent resources).
 func registerOpenEditSession(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name: "open_edit_session",
-		Description: "Acquire the per-channel edit lock a MASTER write_paramset call requires. " +
-			"Returns a token to pass as write_paramset's edit_token, and the deadline the lock " +
-			"expires at if not renewed. Call close_edit_session when done, or let it expire.",
+		Description: "Acquire the edit lock a MASTER write_paramset or LINK write_link_paramset call requires " +
+			"(pass peer_address for LINK). Returns a token to pass as the write tool's edit_token, and the " +
+			"deadline the lock expires at if not renewed. Call close_edit_session when done, or let it expire.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in openEditSessionIn) (*mcpsdk.CallToolResult, openEditSessionOut, error) {
 		address := strings.TrimSpace(in.Address)
 		if address == "" {
 			return nil, openEditSessionOut{}, errors.New("address is required")
 		}
-		key, ok := parseParamsetKey(in.Key)
-		if !ok || key != hmenum.ParamsetKeyMaster {
-			return nil, openEditSessionOut{}, fmt.Errorf("key must be MASTER, got %q", in.Key)
+		keyName := strings.ToUpper(strings.TrimSpace(in.Key))
+		lockKey, err := editLockKey(keyName, address, strings.TrimSpace(in.PeerAddress))
+		if err != nil {
+			return nil, openEditSessionOut{}, err
 		}
-		lockKey := "channel:" + address + ":" + string(key)
 		lock, opened := d.EditLocks.Open(lockKey, editLockSubject)
 		if !opened {
-			return nil, openEditSessionOut{Key: string(key)},
-				fmt.Errorf("edit lock for %s %s is already held by another session; retry once it is released or expires", address, key)
+			return nil, openEditSessionOut{Key: keyName},
+				fmt.Errorf("edit lock for %s is already held by another session; retry once it is released or expires", lockKey)
 		}
-		return nil, openEditSessionOut{Opened: true, Token: lock.Token, Key: string(key), Expires: lock.Expires}, nil
+		return nil, openEditSessionOut{Opened: true, Token: lock.Token, Key: keyName, Expires: lock.Expires}, nil
 	})
 }
 
@@ -705,21 +845,21 @@ func registerOpenEditSession(s *mcpsdk.Server, d Deps) {
 func registerCloseEditSession(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "close_edit_session",
-		Description: "Release an edit lock opened by open_edit_session, e.g. once a write_paramset MASTER write completes.",
+		Description: "Release an edit lock opened by open_edit_session, e.g. once a write_paramset MASTER write or write_link_paramset LINK write completes.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in closeEditSessionIn) (*mcpsdk.CallToolResult, closeEditSessionOut, error) {
 		address := strings.TrimSpace(in.Address)
 		if address == "" {
 			return nil, closeEditSessionOut{}, errors.New("address is required")
 		}
-		key, ok := parseParamsetKey(in.Key)
-		if !ok || key != hmenum.ParamsetKeyMaster {
-			return nil, closeEditSessionOut{}, fmt.Errorf("key must be MASTER, got %q", in.Key)
+		keyName := strings.ToUpper(strings.TrimSpace(in.Key))
+		lockKey, err := editLockKey(keyName, address, strings.TrimSpace(in.PeerAddress))
+		if err != nil {
+			return nil, closeEditSessionOut{}, err
 		}
 		token := strings.TrimSpace(in.EditToken)
 		if token == "" {
 			return nil, closeEditSessionOut{}, errors.New("edit_token is required")
 		}
-		lockKey := "channel:" + address + ":" + string(key)
 		closed := d.EditLocks.Close(lockKey, token)
 		return nil, closeEditSessionOut{Closed: closed}, nil
 	})

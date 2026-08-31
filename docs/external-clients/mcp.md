@@ -180,8 +180,17 @@ Notes:
 
 - `set_datapoint` writes at `CommandPriorityHigh` — the same priority
   the REST API uses for user-initiated writes.
-- `LINK` paramsets are intentionally **not** exposed (they need a peer
-  address and a different tool shape). Only `MASTER` and `VALUES`.
+- `LINK` paramsets have their own pair of tools rather than a key on the
+  generic ones: `read_link_paramset` and `write_link_paramset`, both taking
+  `receiver_channel_address` and `sender_channel_address`. A LINK paramset
+  belongs to a channel *pair* and its values are addressed by the partner,
+  so `read_paramset` / `write_paramset` keep to `MASTER` and `VALUES` and
+  refuse `LINK` with an error naming the link tool.
+- A `LINK` write is a configuration change and holds a lock keyed
+  `channel:{receiver}:LINK:{sender}` — per link, not per channel, because two
+  links on one channel are two resources. `open_edit_session` takes
+  `key: "LINK"` together with `peer_address` to acquire it; `LINK` without a
+  peer is an error rather than a channel-wide lock.
 - A `MASTER` `write_paramset` call is a configuration change and is
   gated behind the same per-channel edit lock REST and WebSocket
   clients use: call `open_edit_session` first, pass the returned
@@ -401,7 +410,7 @@ multi-CCU deployment.
 | `401 Unauthorized` | Missing/invalid `Authorization` header. Check the API token and that you send it on every request. |
 | Write tools missing from `tools/list` | `allow_writes` is `false`, or the relevant subsystem (writer/paramsets/hubs) isn't wired. |
 | `device X belongs to central "A", not "B"` | The `central_name` you passed doesn't own that device. Fix the name (see `get_device`'s reported central). |
-| `key must be MASTER or VALUES` | `read_paramset` / `write_paramset` only accept those two keys; `LINK` is not exposed. |
+| `key must be MASTER or VALUES` | `read_paramset` / `write_paramset` accept those two keys only. For `LINK`, use `read_link_paramset` / `write_link_paramset`, which take the channel pair. |
 | `mcp.v1` absent from `GET /info` | Server isn't enabled, or the daemon wasn't restarted after the config change. |
 
 ---

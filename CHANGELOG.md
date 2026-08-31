@@ -10,6 +10,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **MCP can read and write LINK paramsets, and stopped carrying a branch that
+  could not run.** Its `write_paramset` tested for a LINK key its own parser
+  rejected — the comment said as much — and would have built the channel-wide
+  lock key that the rest of the surface has since retired. Both are gone.
+
+  LINK gets its own pair of tools rather than a key on the generic ones, the
+  shape the WebSocket surface already uses: `read_link_paramset` and
+  `write_link_paramset`, each taking the receiver and sender channel address.
+  A LINK paramset belongs to a channel pair and its values are addressed by
+  the partner, so a peer argument on a tool whose other two paramset kinds
+  have no partner would have been a field that means nothing two thirds of the
+  time — and a second write path beside the one this series just consolidated.
+
+  `open_edit_session` accepts `LINK` together with a peer and builds
+  `channel:{receiver}:LINK:{sender}`; `LINK` without a peer is an error rather
+  than a quietly channel-wide lock. Both new tools route through the same
+  domain method REST and WebSocket use, so the visibility gate, the descriptor
+  coercion and the audit entry apply there too.
+
+  No MCP equivalent of `links.apply_profile` yet — a deliberate gap, not an
+  oversight.
+
 - **`links.test_profile` is gone; `links.apply_profile` replaces it, and
   `APIVersion` moves 9.0.0 → 10.0.0.** The old command claimed to apply a
   profile, named its response field `applied_values`, and wrote nothing — the
