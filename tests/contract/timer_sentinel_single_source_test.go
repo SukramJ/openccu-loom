@@ -52,7 +52,7 @@ func TestTimerSentinelHasOneDeclaration(t *testing.T) {
 	const root = "../.."
 	var found []string
 
-	inspect := func(rel string, path string) {
+	inspect := func(rel, path string) {
 		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if err != nil {
 			t.Errorf("parse %s: %v", rel, err)

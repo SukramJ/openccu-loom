@@ -11,6 +11,7 @@ package safety
 // list does not cover is a device speaking a vocabulary this daemon
 // does not know. Collapsing both into one "unresolved" flag makes the
 // transient case log the permanent case's message forever.
+// loom:reachable:reason="the third return of ActiveFromRaw, carried through internal/security/subscribe.go sourceActive and warnUnresolvedActivation and through the alarm engine's activation path, where it selects the unresolved-value log line; a numeric type whose methods production never calls, which the analyzer's type heuristic cannot see used"
 type ActivationResolution int
 
 const (

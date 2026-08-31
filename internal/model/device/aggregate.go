@@ -517,7 +517,7 @@ func (d *Device) HasSubDevices() bool {
 // virtual-remote pseudo-devices. Their press parameters are real,
 // clickable actions (HA exposes them as buttons); on physical devices the
 // same parameters are pure event emitters. The model set itself lives in
-// [hmenum.VirtualRemoteModels], because callers holding only a wire
+// [hmenum.IsVirtualRemoteModel], because callers holding only a wire
 // device-type string classify against the same rule.
 func (d *Device) IsVirtualRemote() bool {
 	return hmenum.IsVirtualRemoteModel(d.Model)

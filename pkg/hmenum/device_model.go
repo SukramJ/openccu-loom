@@ -3,7 +3,7 @@
 
 package hmenum
 
-// VirtualRemoteModels enumerates the pseudo-device MODELS the CCU exposes as
+// virtualRemoteModels enumerates the pseudo-device MODELS the CCU exposes as
 // "virtual remotes". They are not real radio peers — they only forward press
 // events from the WebUI or from scripts onto the bus, so they carry press
 // parameters without any physical button behind them.
@@ -18,7 +18,7 @@ package hmenum
 // This is the MODEL axis. The virtual-remote ADDRESS roots are a different
 // datum with a different home (internal/routingkey), and they feed published
 // identity (unique ids, retained MQTT topics); do not merge the two sets.
-var VirtualRemoteModels = map[string]struct{}{
+var virtualRemoteModels = map[string]struct{}{
 	"HM-RCV-50":   {},
 	"HMW-RCV-50":  {},
 	"HmIP-RCV-50": {},
@@ -29,6 +29,6 @@ var VirtualRemoteModels = map[string]struct{}{
 // aggregate because callers that classify a raw wire device-type string have
 // no device object in hand.
 func IsVirtualRemoteModel(model string) bool {
-	_, ok := VirtualRemoteModels[model]
+	_, ok := virtualRemoteModels[model]
 	return ok
 }

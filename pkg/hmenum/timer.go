@@ -15,6 +15,7 @@ package hmenum
 // internal/model/custom/siren/testdata/hmip_mp3p_sound_receiver_values.json
 // declares DURATION_UNIT as ENUM with VALUE_LIST ["S", "M", "H", "10MS"],
 // which is where the three constants below get their numbers.
+// loom:reachable:reason="the ordinal type of the CCU DURATION_UNIT wire field: internal/model/custom/mixins.go converts TimerUnitSeconds/Minutes/Hours to int32 at four sites in the timer promotion, and internal/model/combined/timer.go carries it as toTimerUnit's return; a numeric type whose methods production never calls, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
 type TimerUnit int
 
 // TimerUnit values, in DURATION_UNIT VALUE_LIST order.

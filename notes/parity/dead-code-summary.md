@@ -1,24 +1,24 @@
 # Dead-Code Summary
 
-Generated: ec5b1fb9
-HEAD: ec5b1fb9
+Generated: 59a6c634
+HEAD: 59a6c634
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30095 |
-| Reachable | 5173 |
-| Whitelisted | 21905 |
-| **Unreachable** | **3017** |
+| Total Exported | 30246 |
+| Reachable | 5270 |
+| Whitelisted | 21965 |
+| **Unreachable** | **3011** |
 
 ## Top-20 Packages by Dead Code
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
-| internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
+| internal/client/backends | 6 | 45 | 4 |
 | internal/central/adapter | 4 | 99 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
@@ -29,13 +29,13 @@ HEAD: ec5b1fb9
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 14 |
-| internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 61 | 46 |
+| internal/model/hub | 2 | 65 | 46 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
-| internal/routingkey | 2 | 0 | 2 |
-| pkg/hmenum | 2 | 105 | 46 |
+| pkg/hmenum | 2 | 105 | 44 |
 | pkg/hmerr | 2 | 5 | 38 |
+| cmd/openccu-loom | 0 | 2 | 0 |
+| internal/addonupdate | 0 | 18 | 18 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -63,8 +63,6 @@ HEAD: ec5b1fb9
 | internal/central/events | WithPriority | internal/central/events/bus.go | 59 |
 | internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
 | internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
-| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 184 |
-| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 184 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
@@ -75,8 +73,6 @@ HEAD: ec5b1fb9
 | internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
 | internal/model/device | GenerateTranslationKey | internal/model/device/naming.go | 39 |
 | internal/model/device | GenerateTranslationKey | internal/model/device/naming.go | 39 |
-| internal/model/event | Sources | internal/model/event/event.go | 76 |
-| internal/model/event | Sources | internal/model/event/event.go | 76 |
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 308 |
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 308 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
@@ -87,18 +83,22 @@ HEAD: ec5b1fb9
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 109 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 109 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 106 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 106 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 108 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 108 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 105 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 105 |
+| internal/payload | For | internal/payload/payload.go | 39 |
+| internal/payload | For | internal/payload/payload.go | 39 |
+| internal/payload | Merge | internal/payload/payload.go | 115 |
+| internal/payload | Merge | internal/payload/payload.go | 115 |
 
 ## Full By-Package Breakdown
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
-| internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
+| internal/client/backends | 6 | 45 | 4 |
 | internal/central/adapter | 4 | 99 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
@@ -109,12 +109,10 @@ HEAD: ec5b1fb9
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 14 |
-| internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 61 | 46 |
+| internal/model/hub | 2 | 65 | 46 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
-| internal/routingkey | 2 | 0 | 2 |
-| pkg/hmenum | 2 | 105 | 46 |
+| pkg/hmenum | 2 | 105 | 44 |
 | pkg/hmerr | 2 | 5 | 38 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 | internal/addonupdate | 0 | 18 | 18 |
@@ -147,7 +145,7 @@ HEAD: ec5b1fb9
 | internal/metrics/wiring | 0 | 7 | 0 |
 | internal/model/alarmpanel | 0 | 1 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
-| internal/model/combined | 0 | 8 | 0 |
+| internal/model/combined | 0 | 6 | 0 |
 | internal/model/custom | 0 | 49 | 10 |
 | internal/model/custom/climate | 0 | 8 | 18 |
 | internal/model/custom/cover | 0 | 18 | 18 |
@@ -159,6 +157,7 @@ HEAD: ec5b1fb9
 | internal/model/custom/valve | 0 | 2 | 0 |
 | internal/model/datapoint | 0 | 3 | 0 |
 | internal/model/device/definitionexport | 0 | 6 | 2 |
+| internal/model/event | 0 | 5 | 0 |
 | internal/model/group | 0 | 14 | 0 |
 | internal/model/naming | 0 | 2 | 4 |
 | internal/model/safety | 0 | 2 | 0 |
@@ -194,6 +193,7 @@ HEAD: ec5b1fb9
 | internal/north/ui | 0 | 1 | 0 |
 | internal/orderedjson | 0 | 5 | 0 |
 | internal/restapi | 0 | 5 | 0 |
+| internal/routingkey | 0 | 0 | 2 |
 | internal/scheduler | 0 | 4 | 0 |
 | internal/security | 0 | 7 | 0 |
 | internal/store/devicedetails | 0 | 2 | 0 |

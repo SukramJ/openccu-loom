@@ -12,6 +12,7 @@ import "slices"
 // description declares, in its order. The device's own value list is
 // the only authority on this vocabulary; a label no paramset carries
 // does not get a constant here, however plausible it looks.
+// loom:reachable:reason="the type of the four SMOKE_DETECTOR_ALARM_STATUS constants whose string values build SmokeDetectorAlarmStatusSmokeLabels, read in production by the smoke active-value set in internal/model/safety and by the derived SMOKE_ALARM mapping in internal/model/calculated; a string type whose methods production never calls, which the analyzer's type heuristic cannot see used"
 type SmokeDetectorAlarmStatus string
 
 // SmokeDetectorAlarmStatus values, in VALUE_LIST order.

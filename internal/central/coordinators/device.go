@@ -710,7 +710,7 @@ type VirtualRemoteEntry struct {
 // for backward compatibility; new code should prefer [GetVirtualRemotes].
 //
 // Which device types count as virtual remotes is decided by
-// [hmenum.VirtualRemoteModels] — one exact model per bus family (BidCos-RF,
+// [hmenum.IsVirtualRemoteModel] — one exact model per bus family (BidCos-RF,
 // BidCos-Wired, HmIP-RF), so the result covers Wired-Bus and IP-RF
 // interfaces alike.
 func (c *DeviceCoordinator) GetVirtualRemoteAddresses(iface hmtypes.WireInterfaceID) []string {
