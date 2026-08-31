@@ -85,7 +85,7 @@ func buildSysvarCreatorFixture(t *testing.T) (
 	w := clientpkg.NewValueWriter()
 	w.Register("ccu-01", "HmIP-RF", ops)
 
-	// Register a minimal client entry so PrimaryClient() returns non-nil.
+	// Register a minimal client entry so the CCU backend lookup finds one.
 	ic := newTestInterfaceClient(t, "ccu-01", "HmIP-RF", 5)
 	if err := c.Clients.Register(&coordinators.ClientEntry{
 		InterfaceID: "HmIP-RF",
@@ -178,7 +178,7 @@ func TestSysvarCreatorNoPrimaryClientReturnsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	// No clients registered — PrimaryClient returns nil.
+	// No clients registered — no CCU backend can be resolved.
 	WireSysvarCreator(c, clientpkg.NewValueWriter())
 
 	_, err = c.Hub.CreateSysvarBool(context.Background(), "x", false)

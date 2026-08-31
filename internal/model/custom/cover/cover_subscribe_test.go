@@ -37,6 +37,13 @@ func levelDP(address string, w cover.Writer) *generic.Float {
 	})
 }
 
+// TestCoverSubscribeRoutesDirectionUpdates covers the schema-less shape:
+// no profile group, motion on the cover's own channel. The resolver's
+// own-channel fallback answers that case, so this test cannot tell a
+// schema-resolved binding from an own-channel lookup — which is why it
+// stayed green while the two disagreed on every HmIP cover. The
+// distinguishing case needs a real device topology and lives in
+// tests/contract/cover_motion_channel_test.go.
 func TestCoverSubscribeRoutesDirectionUpdates(t *testing.T) {
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel("ABC0001:1", 1, "BLIND", hmenum.ParamsetKeyValues)

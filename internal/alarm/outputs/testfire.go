@@ -69,8 +69,10 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 		}
 		on := sirencdp.OnConfig{Duration: testFireDuration}
 		if opticalOnly || inst.row.Class == hmenum.AlarmOutputClassOpticalSiren {
-			if tones := dev.AvailableTones(); len(tones) > 0 {
-				off := tones[0]
+			// A silent test fire is still one atomic write: the
+			// acoustic half has to name the device's disable
+			// selection, or the write re-sends the tone selected last.
+			if off, ok := disableAcousticSelection(dev); ok {
 				on.AcousticSelection = &off
 			}
 			p := inst.cfg.OpticalPattern

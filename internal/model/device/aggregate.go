@@ -513,46 +513,59 @@ func (d *Device) HasSubDevices() bool {
 
 // ─── RelevantForCentralLinkManagement ────────────────────────────────
 
-// virtualRemoteModels enumerates pseudo-device models the CCU exposes as
-// "virtual remotes". These are not real radio peers — they only forward
-// press events from the WebUI / scripts onto the bus. Including them in
-// central-link management would have the CCU attempt to add KEY_*-source
-// links onto a device that has no physical button to press, so we skip
-// them at the dispatch boundary.
-var virtualRemoteModels = map[string]struct{}{
-	"HM-RCV-50":   {},
-	"HMW-RCV-50":  {},
-	"HmIP-RCV-50": {},
+// IsVirtualRemote reports whether this device is one of the CCU's
+// virtual-remote pseudo-devices. Their press parameters are real,
+// clickable actions (HA exposes them as buttons); on physical devices the
+// same parameters are pure event emitters. The model set itself lives in
+// [hmenum.IsVirtualRemoteModel], because callers holding only a wire
+// device-type string classify against the same rule.
+func (d *Device) IsVirtualRemote() bool {
+	return hmenum.IsVirtualRemoteModel(d.Model)
 }
 
-// IsVirtualRemote reports whether this device is one of the CCU's
-// virtual-remote pseudo-devices (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50).
-// Their press parameters are real, clickable actions (HA exposes them
-// as buttons); on physical devices the same parameters are pure event
-// emitters.
-func (d *Device) IsVirtualRemote() bool {
-	_, ok := virtualRemoteModels[d.Model]
-	return ok
+// Reason tokens returned by [Device.CentralLinkEligibility] when a device is
+// not a candidate for central-link management. They travel verbatim to the
+// operator through the REST/WS status surface, so each names the conjunct
+// that actually failed instead of one catch-all: an eligible interface that
+// carries a virtual remote is not an "unsupported interface".
+const (
+	// CentralLinkReasonInterfaceUnsupported marks an interface that has no
+	// concept of CCU press-event link management.
+	CentralLinkReasonInterfaceUnsupported = "interface_unsupported"
+	// CentralLinkReasonVirtualRemote marks a virtual-remote pseudo-device on
+	// an otherwise eligible interface.
+	CentralLinkReasonVirtualRemote = "virtual_remote"
+)
+
+// CentralLinkEligibility reports whether this device is a candidate for CCU
+// central-link management and, when it is not, the reason token to surface.
+//
+// Eligible means the device's interface is one of BidCos-RF, BidCos-Wired or
+// HmIP-RF AND the device's model is not a virtual-remote pseudo-device.
+// VirtualDevices and CUxD devices use a different event dispatch path; a
+// virtual remote has no physical button, so linking a KEY_* source onto it
+// asks the CCU to wire up a press that can never happen.
+//
+// The reason is produced here rather than re-derived by the dispatching
+// adapter, so the rule stays in one place.
+func (d *Device) CentralLinkEligibility() (eligible bool, reason string) {
+	switch d.Interface { //nolint:exhaustive // VirtualDevices and CUxD do not participate in CCU link management
+	case hmenum.InterfaceBidCosRF, hmenum.InterfaceBidCosWired, hmenum.InterfaceHmIPRF:
+		// fall through to the model filter
+	default:
+		return false, CentralLinkReasonInterfaceUnsupported
+	}
+	if d.IsVirtualRemote() {
+		return false, CentralLinkReasonVirtualRemote
+	}
+	return true, ""
 }
 
 // RelevantForCentralLinkManagement reports whether this device is a candidate
-// for CCU central-link management.
-//
-// Returns true when the device's interface is one of BidCos-RF, BidCos-Wired
-// or HmIP-RF AND the device's model is not a virtual-remote pseudo-device.
-// VirtualDevices and CUxD devices do not participate in CCU press-event link
-// management — they use a different event dispatch path.
+// for CCU central-link management, discarding the reason token.
 func (d *Device) RelevantForCentralLinkManagement() bool {
-	switch d.Interface { //nolint:exhaustive // VirtualDevices and CUxD do not participate in CCU link management
-	case hmenum.InterfaceBidCosRF, hmenum.InterfaceBidCosWired, hmenum.InterfaceHmIPRF:
-		// fall through to model filter
-	default:
-		return false
-	}
-	if _, isVirtualRemote := virtualRemoteModels[d.Model]; isVirtualRemote {
-		return false
-	}
-	return true
+	eligible, _ := d.CentralLinkEligibility()
+	return eligible
 }
 
 // ─── GetDataPoints ───────────────────────────────────────────────────

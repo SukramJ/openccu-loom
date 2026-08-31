@@ -466,8 +466,7 @@ func (m *Manager) sirenOnConfig(
 			// device's disable default so the atomic write cannot
 			// re-trigger one (partial paramset writes are ignored by
 			// the hardware).
-			if tones := dev.AvailableTones(); len(tones) > 0 {
-				off := tones[0]
+			if off, ok := disableAcousticSelection(dev); ok {
 				on.AcousticSelection = &off
 			}
 		}

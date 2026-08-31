@@ -9,23 +9,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-func TestPrimaryClientCandidateInterfaces(t *testing.T) {
-	want := map[hmenum.Interface]struct{}{
-		hmenum.InterfaceHmIPRF:      {},
-		hmenum.InterfaceBidCosRF:    {},
-		hmenum.InterfaceBidCosWired: {},
-	}
-	for iface := range want {
-		if _, ok := hmenum.PrimaryClientCandidateInterfaces[iface]; !ok {
-			t.Errorf("PrimaryClientCandidateInterfaces missing %s", iface)
-		}
-	}
-	if len(hmenum.PrimaryClientCandidateInterfaces) != len(want) {
-		t.Errorf("PrimaryClientCandidateInterfaces size = %d, want %d",
-			len(hmenum.PrimaryClientCandidateInterfaces), len(want))
-	}
-}
-
 func TestInterfaceRPCServerType_XMLRPCInterfaces(t *testing.T) {
 	// XML-RPC interfaces must map to RPCServerTypeXMLRPC.
 	xmlrpc := []hmenum.Interface{

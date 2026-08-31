@@ -127,64 +127,14 @@ func TestClientCoordinator_PollClientsProperty(t *testing.T) {
 	}
 }
 
-// ── 3. test_get_primary_client_returns_cached ─────────────────────────────────
+// ── 3+4. test_get_primary_client_returns_cached / _selects_from_candidates ───
 //
-// Python: coordinator._primary_client caches the first-call result.
-// Go: PrimaryClient() recomputes each call (no cache field).  The Go
-// equivalent guarantee is deterministic: the same entry is always returned
-// because List() is sorted by interface ID.  We verify call-over-call
-// consistency with an unchanged registry.
-
-func TestClientCoordinator_GetPrimaryClientReturnsDeterministic(t *testing.T) {
-	t.Parallel()
-	cc, bus := newClientCoordinatorWithBus(t)
-
-	e := newClientLifecycleEntry(bus, "HmIP-RF", hmenum.InterfaceHmIPRF)
-	if err := cc.Register(e); err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-
-	p1 := cc.PrimaryClient()
-	p2 := cc.PrimaryClient()
-
-	// Both calls must return nil (the entry has no *client.InterfaceClient).
-	// The key property is that consecutive calls with an unchanged registry
-	// are stable.
-	if p1 != p2 {
-		t.Fatal("PrimaryClient() returned different values on consecutive calls — not stable")
-	}
-}
-
-// ── 4. test_get_primary_client_selects_from_candidates ───────────────────────
-//
-// Python: primary_client selects the first client whose .interface is in
-// PRIMARY_CLIENT_CANDIDATE_INTERFACES.
-// Go: PrimaryClient() returns entries[0].Client from the sorted list — the
-// first-by-interface-ID entry.  We verify that when two entries are
-// registered, the one with the lexically-first interface ID is selected (i.e.
-// "BidCos-RF" before "HmIP-RF").
-
-func TestClientCoordinator_GetPrimaryClientSelectsFirst(t *testing.T) {
-	t.Parallel()
-	cc, bus := newClientCoordinatorWithBus(t)
-
-	_ = cc.Register(newClientLifecycleEntry(bus, "HmIP-RF", hmenum.InterfaceHmIPRF))
-	_ = cc.Register(newClientLifecycleEntry(bus, "BidCos-RF", hmenum.InterfaceBidCosRF))
-
-	// List() is sorted: BidCos-RF < HmIP-RF.
-	list := cc.List()
-	if len(list) == 0 {
-		t.Fatal("List() returned empty slice")
-	}
-	if list[0].InterfaceID != "BidCos-RF" {
-		t.Fatalf("first entry = %q, want BidCos-RF (sorted)", list[0].InterfaceID)
-	}
-	// PrimaryClient() must align with List()[0].
-	// Both entries have nil Client pointers, so PrimaryClient() is nil —
-	// the assertion is that it does not panic and returns the nil from
-	// entries[0].Client (which is the first-sorted entry's client).
-	_ = cc.PrimaryClient() // must not panic
-}
+// No Go mirror. `ClientCoordinator.PrimaryClient` and its candidate-interface
+// preference set were removed: the rule that actually picks the client for
+// sysvar / program / backup / CCU-maintenance calls is `primaryBackendOf` in
+// internal/central/adapter, which selects by backend kind plus the operator's
+// `primary_interface` pin rather than by interface identity. That rule is
+// covered by hub_wiring_primary_backend_test.go.
 
 // ── 5. test_calculate_startup_retry_delay ─────────────────────────────────────
 //

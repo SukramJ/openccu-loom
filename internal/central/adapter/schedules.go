@@ -78,27 +78,39 @@ var ErrNoScheduleBackend = errors.New("schedules: no backend for device")
 // pkg/hmerr rather than here.
 var ErrNoSchedule = hmerr.ErrNoSchedule
 
-// Wochentage in der CCU-Reihenfolge. Muss mit dem Frontend-Ordering
-// synchron bleiben (das Grid rendert in dieser Reihenfolge).
-var scheduleWeekdays = []string{
-	"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY",
+// scheduleWeekdays is the CCU paramset spelling of the weekday set, in
+// the domain's Monday-first order. It is derived, not restated: the CCU
+// key spells the day in full uppercase English, and which seven words
+// those are is a fact of the schedule domain, not of this adapter.
+var scheduleWeekdays = weekdayNames()
+
+func weekdayNames() []string {
+	out := make([]string, 0, len(schedule.Weekdays))
+	for _, w := range schedule.Weekdays {
+		out = append(out, string(w))
+	}
+	return out
 }
 
 // slotPattern matches a single schedule-paramset key. Capture groups:
 //  1. Profile index (1..6) — EMPTY for the prefix-less schema
 //  2. Field (ENDTIME or TEMPERATURE)
 //  3. Weekday name
-//  4. Slot number (1..13)
+//  4. Slot number — the ordinal is matched open-ended here and
+//     bounded by [schedule.MaxClimateSlots] in [parseClimateSchedule]
 //
 // The P<n>_ prefix is optional: classic BidCos thermostats
 // (HM-CC-RT-DN, HM-CC-RT-DN-BoM) carry a single week profile as bare
 // ENDTIME_<DAY>_<N> / TEMPERATURE_<DAY>_<N> keys in the device-level
 // MASTER paramset, with no profile prefix and no dedicated channel.
 // A bare key is treated as profile P1 throughout. The weekday
-// alternation is pinned so bare device-master keys like
-// TEMPERATURE_OFFSET never match.
+// alternation is pinned — it is built from [scheduleWeekdays] rather
+// than a wildcard — so bare device-master keys like TEMPERATURE_OFFSET
+// never match.
 var slotPattern = regexp.MustCompile(
-	`^(?:P([1-6])_)?(ENDTIME|TEMPERATURE)_(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)_([0-9]+)$`,
+	`^(?:P([1-6])_)?(ENDTIME|TEMPERATURE)_(` +
+		strings.Join(weekdayNames(), "|") +
+		`)_([0-9]+)$`,
 )
 
 // climateScheduleChannelTypes lists the channel types that carry the
@@ -462,7 +474,7 @@ func (s *SchedulesDomain) GetClimateSchedule(
 		Device:  deviceAddress,
 	}
 	if hasScheduleParams(values) {
-		dto, err := parseClimateSchedule(values)
+		dto, err := parseClimateSchedule(ctx, values)
 		if err != nil {
 			return nil, err
 		}
@@ -645,28 +657,10 @@ const (
 	lockPermissionDurationFactor = 31 // -> sentinel "always"
 )
 
-// detectLockMode: channels with "1_" prefix indicate door_lock mode.
-func detectLockMode(targetChannels []string) string {
-	for _, ch := range targetChannels {
-		if strings.HasPrefix(ch, "1_") {
-			return "door_lock"
-		}
-	}
-	return "user_permission"
-}
-
 // detectLockAction reverses the wire encoding to its canonical label.
 // Falls back to "lock_autorelock_start" (the zero-value encoding) when nothing matches.
 func detectLockAction(level float64, durBase, durFactor int) string {
 	return string(schedule.DetectLockAction(level, durBase, durFactor))
-}
-
-// detectLockPermission reads the LEVEL flag (>= 0.5 → granted).
-func detectLockPermission(level float64) string {
-	if level >= 0.5 {
-		return "granted"
-	}
-	return "not_granted"
 }
 
 // parseSimpleSchedule extracts active slots from the raw paramset.
@@ -733,13 +727,14 @@ func parseSimpleScheduleWithDomain(raw map[string]any, domain string) []hmapi.Si
 	// stripped entry.
 	for i := range entries {
 		e := &entries[i]
-		e.LockMode = detectLockMode(e.TargetChannels)
+		mode := schedule.DetectLockMode(e.TargetChannels)
+		e.LockMode = string(mode)
 		dBase, dFactor := lookupSlotDuration(raw, e.SlotNo)
-		switch e.LockMode {
-		case "door_lock":
+		switch mode {
+		case schedule.LockModeDoorLock:
 			e.LockAction = detectLockAction(e.Level, dBase, dFactor)
-		case "user_permission":
-			e.Permission = detectLockPermission(e.Level)
+		case schedule.LockModeUserPermission:
+			e.Permission = string(schedule.DetectLockPermission(e.Level))
 		}
 	}
 	return entries
@@ -1178,7 +1173,18 @@ type slotVals struct {
 // structured DTO. Unknown keys are ignored. Raises ErrNoSchedule when
 // no P<n>_ENDTIME/TEMPERATURE key is present so the caller can surface
 // "no schedule support" as an HTTP 404.
-func parseClimateSchedule(raw map[string]any) (*hmapi.ClimateSchedule, error) {
+//
+// A cell whose ordinal lies outside 1..[schedule.MaxClimateSlots] is not
+// part of the schedule: it has nowhere to be written back, and the
+// week-profile reader in [weekprofile.ParseClimateRawParamset] already
+// discards it. Keeping it here would let the REST/WS surface and the MQTT
+// climate payload describe the same channel differently. The ordinal
+// bound is not enforced by [slotPattern], so it is applied here, and the
+// dropped key is logged rather than discarded in silence — on the fleet
+// the in-process CCU simulator models no paramset carries such an
+// ordinal, so the log line is the only evidence a firmware outside that
+// corpus would leave.
+func parseClimateSchedule(ctx context.Context, raw map[string]any) (*hmapi.ClimateSchedule, error) {
 	collected := make(map[slotKey]*slotVals)
 	for name, v := range raw {
 		m := slotPattern.FindStringSubmatch(name)
@@ -1192,6 +1198,15 @@ func parseClimateSchedule(raw map[string]any) (*hmapi.ClimateSchedule, error) {
 			profile, _ = strconv.Atoi(m[1])
 		}
 		slot, _ := strconv.Atoi(m[4])
+		if slot < 1 || slot > schedule.MaxClimateSlots {
+			slog.DebugContext(
+				ctx, "schedules.parse_climate.slot_ordinal_out_of_range",
+				slog.String("parameter", name),
+				slog.Int("slot", slot),
+				slog.Int("max_slot", schedule.MaxClimateSlots),
+			)
+			continue
+		}
 		k := slotKey{profile: profile, weekday: m[3], slot: slot}
 		sv := collected[k]
 		if sv == nil {
@@ -1215,7 +1230,7 @@ func parseClimateSchedule(raw map[string]any) (*hmapi.ClimateSchedule, error) {
 		return nil, ErrNoSchedule
 	}
 
-	// Gruppieren nach (profile, weekday), dann vereinfachen.
+	// Group by (profile, weekday), then simplify.
 	type weekdayIn struct {
 		slots map[int]*slotVals
 	}
@@ -1258,26 +1273,26 @@ func parseClimateSchedule(raw map[string]any) (*hmapi.ClimateSchedule, error) {
 
 // simplifyWeekday compresses the 13-slot representation into a
 // base-temperature + explicit-periods form (the "simple" schedule
-// shape). The base temperature is picked as the most frequent
-// temperature across the day, weighted by slot duration — same
-// Heuristic
+// shape). The base temperature is the temperature holding the most
+// minutes of the day, decided by
+// [schedule.IdentifyBaseTemperatureFromSegments] so that this read path
+// and the week-profile read path cannot report different bases for the
+// same paramset; every stretch that is not the base becomes an explicit
+// period.
 func simplifyWeekday(slots map[int]*slotVals) hmapi.ClimateWeekday {
-	// Sortierte Slot-Nummern.
+	// Slot numbers in ascending order.
 	nums := make([]int, 0, len(slots))
 	for n := range slots {
 		nums = append(nums, n)
 	}
 	sort.Ints(nums)
 
-	// Weight-by-duration, um die "base temperature" zu finden.
+	// Flatten to time-ordered stretches. A cell without both wire values,
+	// or one that does not advance past the previous end, carries no
+	// stretch at all — this normalisation is specific to the flat
+	// paramset and stays here; only the winner rule below is shared.
 	prevEnd := 0
-	weight := make(map[float64]int)
-	type flat struct {
-		startMin int
-		endMin   int
-		temp     float64
-	}
-	flatSlots := make([]flat, 0, len(nums))
+	flatSlots := make([]schedule.TempSegment, 0, len(nums))
 	for _, n := range nums {
 		sv := slots[n]
 		if !sv.hasEnd || !sv.hasTemp {
@@ -1286,49 +1301,30 @@ func simplifyWeekday(slots map[int]*slotVals) hmapi.ClimateWeekday {
 		if sv.endtime <= prevEnd {
 			continue
 		}
-		duration := sv.endtime - prevEnd
-		// Round temperature for grouping (0.5 °C grid is typical).
-		rounded := math.Round(sv.temperature*2) / 2
-		weight[rounded] += duration
-		flatSlots = append(flatSlots, flat{
-			startMin: prevEnd,
-			endMin:   sv.endtime,
-			temp:     sv.temperature,
+		flatSlots = append(flatSlots, schedule.TempSegment{
+			StartMin:    prevEnd,
+			EndMin:      sv.endtime,
+			Temperature: sv.temperature,
 		})
 		prevEnd = sv.endtime
 	}
 
-	base := 0.0
-	bestWeight := -1
-	// Tie-break: niedrigere Temperatur gewinnt (klassische Heizungs-
-	// night temperature), so that "setback" becomes the base and the
-	// explicitly named periods are the heating phases.
-	keys := make([]float64, 0, len(weight))
-	for k := range weight {
-		keys = append(keys, k)
-	}
-	sort.Float64s(keys)
-	for _, k := range keys {
-		if weight[k] > bestWeight {
-			bestWeight = weight[k]
-			base = k
-		}
-	}
+	base := schedule.IdentifyBaseTemperatureFromSegments(flatSlots)
 
 	// Periods are all slot ranges whose temperature is NOT the base,
 	// merged into contiguous blocks.
 	periods := make([]hmapi.ClimatePeriod, 0)
 	for i := 0; i < len(flatSlots); {
-		if math.Abs(flatSlots[i].temp-base) < 1e-6 {
+		if math.Abs(flatSlots[i].Temperature-base) < 1e-6 {
 			i++
 			continue
 		}
-		start := flatSlots[i].startMin
-		end := flatSlots[i].endMin
-		temp := flatSlots[i].temp
+		start := flatSlots[i].StartMin
+		end := flatSlots[i].EndMin
+		temp := flatSlots[i].Temperature
 		j := i + 1
-		for j < len(flatSlots) && math.Abs(flatSlots[j].temp-temp) < 1e-6 && flatSlots[j].startMin == end {
-			end = flatSlots[j].endMin
+		for j < len(flatSlots) && math.Abs(flatSlots[j].Temperature-temp) < 1e-6 && flatSlots[j].StartMin == end {
+			end = flatSlots[j].EndMin
 			j++
 		}
 		periods = append(periods, hmapi.ClimatePeriod{
@@ -1478,7 +1474,8 @@ type rawSlot struct {
 	temp   float64
 }
 
-// expandWeekday fills 13 slots from base temperature + periods. The
+// expandWeekday fills [schedule.MaxClimateSlots] slots from base
+// temperature + periods. The
 // simple form may have gaps (times where no period is defined); those
 // default to the base temperature. Overlapping periods abort.
 func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
@@ -1502,13 +1499,13 @@ func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 	}
 
 	// Walk through the day and collect (endMin, temp) stretches, then
-	// pad to exactly 13 slots by repeating the last (24:00, base)
-	// entry.
+	// pad to exactly [schedule.MaxClimateSlots] slots by repeating the
+	// last (24:00, base) entry.
 	type stretch struct {
 		end  int
 		temp float64
 	}
-	stretches := make([]stretch, 0, 14)
+	stretches := make([]stretch, 0, schedule.MaxClimateSlots+1)
 	cursor := 0
 	for _, p := range periods {
 		pStart := minutesFromTime(p.StartTime)
@@ -1525,12 +1522,13 @@ func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 	if len(stretches) == 0 {
 		stretches = append(stretches, stretch{end: 1440, temp: wd.BaseTemperature})
 	}
-	if len(stretches) > 13 {
-		return nil, fmt.Errorf("too many periods: yielded %d slots, max 13", len(stretches))
+	if len(stretches) > schedule.MaxClimateSlots {
+		return nil, fmt.Errorf("too many periods: yielded %d slots, max %d",
+			len(stretches), schedule.MaxClimateSlots)
 	}
-	// Pad mit (24:00, base) bis zu 13 Slots.
-	out := make([]rawSlot, 13)
-	for i := range 13 {
+	// Pad with (24:00, base) up to the full slot count.
+	out := make([]rawSlot, schedule.MaxClimateSlots)
+	for i := range schedule.MaxClimateSlots {
 		if i < len(stretches) {
 			out[i] = rawSlot{endMin: stretches[i].end, temp: stretches[i].temp}
 		} else {
@@ -1594,34 +1592,27 @@ func coerceFloat(v any) (float64, bool) {
 	return 0, false
 }
 
+// formatMinutes renders a raw ENDTIME the device reported. It clamps
+// rather than failing, because this is the READ direction: a device that
+// already holds an out-of-range minute count still has to render. The
+// write direction must not clamp — see [minutesFromTime].
 func formatMinutes(m int) string {
-	if m < 0 {
-		m = 0
+	m = max(m, 0)
+	m = min(m, schedule.ClimateEndOfDayMinutes)
+	out, err := schedule.FormatClimateTime(m)
+	if err != nil {
+		return schedule.ClimateEndOfDay
 	}
-	if m > 24*60 {
-		m = 24 * 60
-	}
-	return fmt.Sprintf("%02d:%02d", m/60, m%60)
+	return out
 }
 
+// minutesFromTime is the -1-sentinel form of [schedule.ParseClimateTime].
+// The sentinel is kept because [expandWeekday] sorts periods by start time
+// before it validates them, and a comparator has to stay total.
 func minutesFromTime(s string) int {
-	if s == "24:00" {
-		return 1440
-	}
-	before, after, ok := strings.Cut(s, ":")
-	if !ok {
-		return -1
-	}
-	h, err := strconv.Atoi(before)
+	m, err := schedule.ParseClimateTime(s)
 	if err != nil {
 		return -1
 	}
-	m, err := strconv.Atoi(after)
-	if err != nil {
-		return -1
-	}
-	if h < 0 || h > 24 || m < 0 || m > 59 {
-		return -1
-	}
-	return h*60 + m
+	return m
 }

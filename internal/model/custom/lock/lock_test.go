@@ -338,7 +338,7 @@ func TestLockAddressReturnsChannelAddress(t *testing.T) {
 }
 
 // TestLockIPLockSendsTargetLevelLocked verifies that Lock() on a KindIP
-// lock sends LOCK_TARGET_LEVEL = ipTargetLocked (0).
+// lock sends LOCK_TARGET_LEVEL = ipTargetLocked.
 func TestLockIPLockSendsTargetLevelLocked(t *testing.T) {
 	t.Parallel()
 

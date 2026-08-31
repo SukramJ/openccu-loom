@@ -361,8 +361,9 @@ func TestBinarySensorQuantityByDeviceAndParam(t *testing.T) {
 		{"HM-Sen-RD-O", "STATE", hmenum.QuantityMoisture},
 		{"HM-Sec-Win", "WORKING", hmenum.QuantityRunning},
 
-		// Window-group multi-model
-		{"HmIP-SWD", "STATE", hmenum.QuantityWindow},
+		// Window-group multi-model. HmIP-SWD is absent on purpose and is
+		// asserted negatively below: it is the water sensor, and under a
+		// prefix walk it would also swallow the whole HmIP-SWD* family.
 		{"HmIP-SWDO", "STATE", hmenum.QuantityWindow},
 		{"HmIP-SWDM", "STATE", hmenum.QuantityWindow},
 		{"HM-Sec-SC", "STATE", hmenum.QuantityWindow},
@@ -381,6 +382,13 @@ func TestBinarySensorQuantityByDeviceAndParam(t *testing.T) {
 					tc.deviceModel, tc.parameter, got, tc.want)
 			}
 		})
+	}
+	// The water sensor must not inherit the window rule from the shorter
+	// model prefix. See notes/parity/by_design.md, BD-Safety-SWDWindowRuleDropped.
+	if got := BinarySensorQuantityByDeviceAndParam("HmIP-SWD", "STATE"); got != "" {
+		t.Errorf("BinarySensorQuantityByDeviceAndParam(%q, %q) = %q, want no classification: "+
+			"HmIP-SWD is the water sensor and is excluded from the prefix-matched window rule",
+			"HmIP-SWD", "STATE", got)
 	}
 }
 
@@ -427,5 +435,44 @@ func TestBinarySensorQuantityForHMSecSDSmoke(t *testing.T) {
 	got := BinarySensorQuantityFor("HM-Sec-SD", "STATE")
 	if got != hmenum.QuantitySmoke {
 		t.Errorf("HM-Sec-SD/STATE: got %q, want %q", got, hmenum.QuantitySmoke)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Derived climate readings — classified through the same table as the wire
+// parameters so that every plane reads one answer per parameter name.
+// ---------------------------------------------------------------------------
+
+func TestMetadataByParamDerivedClimateReadings(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		param string
+		want  Metadata
+	}{
+		{"DEW_POINT", Metadata{Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous}},
+		{"FROST_POINT", Metadata{Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous}},
+		{"APPARENT_TEMPERATURE", Metadata{Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous}},
+		{"PARTY_TEMPERATURE", Metadata{Quantity: hmenum.QuantityTemperature, ValueBehavior: hmenum.ValueBehaviorInstantaneous}},
+		// K and kJ/kg are absent from the unit fallback, so without an
+		// entry here these two would carry no value behavior at all.
+		{"DEW_POINT_SPREAD", Metadata{ValueBehavior: hmenum.ValueBehaviorInstantaneous}},
+		{"ENTHALPY", Metadata{ValueBehavior: hmenum.ValueBehaviorInstantaneous}},
+	}
+	for _, tc := range cases {
+		if got := MetadataByParam(tc.param); got != tc.want {
+			t.Errorf("MetadataByParam(%q) = %+v, want %+v", tc.param, got, tc.want)
+		}
+	}
+}
+
+// TestMetadataByParamOperatingVoltageLevelIsABatteryLevel pins the
+// percentage-of-nominal reading as a battery charge level rather than a raw
+// voltage: it is the value the device-availability path treats as the
+// battery indicator.
+func TestMetadataByParamOperatingVoltageLevelIsABatteryLevel(t *testing.T) {
+	t.Parallel()
+	want := Metadata{Quantity: hmenum.QuantityBattery, ValueBehavior: hmenum.ValueBehaviorInstantaneous}
+	if got := MetadataByParam("OPERATING_VOLTAGE_LEVEL"); got != want {
+		t.Fatalf("MetadataByParam(OPERATING_VOLTAGE_LEVEL) = %+v, want %+v", got, want)
 	}
 }

@@ -159,9 +159,20 @@ var widgetDispatchFuncs = map[string][]string{
 	// (it delegates to dispatchColorTempLight and special-cases
 	// "set_effect" via an if-statement), and its set_effect/label surface
 	// is already covered by dispatchEffectLight / dispatchRGBWLight below.
+	// The HmIP-MP3P status LED is excluded for the same reason: its
+	// on/off semantics are registrations on the light model's
+	// ServiceRegistry, so it needs no dispatch* function of its own and
+	// routes through dispatchFixedColorLight.
+	//
+	// Scope note: turn_on / turn_off / set_level are defined on that same
+	// ServiceRegistry, so the extractor below sees their operation names
+	// but no param keys. A widget that sent a param key with one of those
+	// three operations would therefore be reported as unaccepted even
+	// though the model reads it. What those three actually accept is
+	// pinned by TestLightSetLevelPayloadIsSingleSourced instead.
 	"LightTile.svelte": {
 		"dispatchLight", "dispatchColorLight", "dispatchColorTempLight",
-		"dispatchFixedColorLight", "dispatchSoundPlayerLED",
+		"dispatchFixedColorLight",
 		"dispatchEffectLight", "dispatchRGBWLight",
 	},
 	"ClimateTile.svelte": {"dispatchClimate"},

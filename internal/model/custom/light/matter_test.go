@@ -498,7 +498,7 @@ func TestLevelInvokeMoveToLevelWithOnOffMap(t *testing.T) {
 // positive TransitionTime (tenths of a second, Matter §1.6.7.1) on
 // MoveToLevel (0x00) and MoveToLevelWithOnOff (0x04) is delegated to
 // the device as one atomic put_paramset carrying LEVEL + RAMP_TIME
-// (30 tenths → 3.0 s) + the ON_TIME=NotUsed sentinel, mirroring how
+// (30 tenths → 3.0 s) + the ON_TIME=TimerNotUsed sentinel, mirroring how
 // matter.js LevelControlServer.ts:297-303 (moveToLevelLogic) derives a
 // transition rate from a truthy transition time.
 func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
@@ -525,10 +525,10 @@ func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
 			if ramp := got[string(hmenum.ParameterRampTime)].(float64); ramp != 3.0 {
 				t.Errorf("RAMP_TIME=%v, want 3.0 (30 tenths of a second)", ramp)
 			}
-			// ON_TIME=NotUsed must accompany a stand-alone ramp so the CCU
+			// ON_TIME=TimerNotUsed must accompany a stand-alone ramp so the CCU
 			// does not overlay an implicit off-timer.
-			if on := got[string(hmenum.ParameterOnTime)].(float64); on != NotUsed {
-				t.Errorf("ON_TIME=%v, want NotUsed (%v)", on, NotUsed)
+			if on := got[string(hmenum.ParameterOnTime)].(float64); on != custom.TimerNotUsed {
+				t.Errorf("ON_TIME=%v, want TimerNotUsed (%v)", on, custom.TimerNotUsed)
 			}
 			if l.MatterDataVersion() == versionBefore {
 				t.Error("ramped MoveToLevel must bump the cluster data version")
@@ -563,8 +563,8 @@ func TestLevelInvokeMoveToLevelWithOnOffTransitionToMinRampsOff(t *testing.T) {
 	if ramp := got[string(hmenum.ParameterRampTime)].(float64); ramp != 3.0 {
 		t.Errorf("RAMP_TIME=%v, want 3.0", ramp)
 	}
-	if on := got[string(hmenum.ParameterOnTime)].(float64); on != NotUsed {
-		t.Errorf("ON_TIME=%v, want NotUsed (%v)", on, NotUsed)
+	if on := got[string(hmenum.ParameterOnTime)].(float64); on != custom.TimerNotUsed {
+		t.Errorf("ON_TIME=%v, want TimerNotUsed (%v)", on, custom.TimerNotUsed)
 	}
 }
 

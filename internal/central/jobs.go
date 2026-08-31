@@ -245,14 +245,17 @@ func defaultRefreshClientData(unit *Unit) func(ctx context.Context) error {
 // Only used inside this file.
 var timeNow = time.Now
 
-// isOperational returns true when unit's central state machine is in RUNNING
-// or DEGRADED — the two states where background jobs should execute.
+// isOperational reports whether background jobs may execute for unit. Which
+// lifecycle states count as operational is owned by the state machine's own
+// IsOperational predicate, not by the scheduler wiring: this wrapper only adds
+// the nil-safety that method cannot carry, because it locks the state
+// machine's mutex and would panic on a nil receiver. Restating the state set
+// here would re-create the second definition this delegation folds away.
 func isOperational(unit *Unit) bool {
 	if unit == nil || unit.StateMachine == nil {
 		return false
 	}
-	s := unit.StateMachine.State()
-	return s == hmenum.CentralStateRunning || s == hmenum.CentralStateDegraded
+	return unit.StateMachine.IsOperational()
 }
 
 // hasConnectionIssue returns true when at least one registered client is not
@@ -272,7 +275,7 @@ func hasConnectionIssue(unit *Unit) bool {
 }
 
 // gatedRun wraps fn so it only executes when the central is operational
-// (RUNNING or DEGRADED) AND has no connection issues. Pass
+// (see [isOperational]) AND has no connection issues. Pass
 // skipOnConnectionIssue=false for connection-management jobs that must
 // fire regardless of client health (e.g. check_connection itself).
 func gatedRun(unit *Unit, skipOnConnectionIssue bool, fn func(context.Context) error) func(context.Context) error {
@@ -428,6 +431,10 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 		Interval:   hbInterval,
 		RunOnStart: false,
 		Run: func(_ context.Context) error {
+			// Deliberately RUNNING-only, not the operational set the job
+			// gate uses: DEGRADED means the daemon still serves traffic but
+			// must report unhealthy, so this comparison must not be folded
+			// onto isOperational.
 			running := unit.StateMachine != nil && unit.StateMachine.State() == hmenum.CentralStateRunning
 			// Zero registered clients means the central is still in its
 			// gated-startup wait — the southbound bring-up only registers
@@ -579,9 +586,9 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 		registered = append(registered, "central.check_connection")
 	}
 
-	// All jobs below are gated: they only run when the central is
-	// RUNNING or DEGRADED and when there is no connection issue
-	// . The connection-check job above is exempt from the
+	// All jobs below are gated: they only run while the central is
+	// operational (see [isOperational]) and when there is no connection
+	// issue. The connection-check job above is exempt from the
 	// connection-issue gate because it is responsible for detecting
 	// issues in the first place.
 

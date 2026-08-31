@@ -12,23 +12,10 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// RelevantInitParameters lists the Channel-0 parameters that must be
-// loaded during bootstrap regardless of what the initial device-data
-// fetch returns. These three Channel-0 parameters drive the daemon's
-// availability tracking; if fetch_all_device_data fails to include
-// them, the daemon would default to "reachable" until the first push
-// event ever arrives. Loading them explicitly during bootstrap closes
-// that gap.
-var relevantInitParameters = []hmenum.Parameter{
-	hmenum.ParameterConfigPending,
-	hmenum.ParameterStickyUnreach,
-	hmenum.ParameterUnreach,
-}
-
 // seedRelevantInitParameters runs through every device of the given interface
 // and triggers a [Device.LoadValue] for each parameter in
-// [relevantInitParameters] on Channel 0 — but only when the parameter is not
-// yet observed (the rega seed already had a value). This is a best-effort
+// [hmenum.RelevantInitParameters] on Channel 0 — but only when the
+// parameter is not yet observed (the rega seed already had a value). This is a best-effort
 // pass: failures are logged at debug level so a single CCU misbehaving on one
 // device does not abort the bootstrap of the rest.
 func seedRelevantInitParameters(ctx context.Context, unit *central.Unit, iface hmenum.Interface, logger *slog.Logger) {
@@ -51,7 +38,7 @@ func seedRelevantInitParameters(ctx context.Context, unit *central.Unit, iface h
 		if ch == nil {
 			continue
 		}
-		for _, p := range relevantInitParameters {
+		for _, p := range hmenum.RelevantInitParameters {
 			dp := ch.Parameter(p)
 			if dp == nil {
 				// Channel does not carry this parameter — skip.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestEnumSelectResolvesAnIndexAgainstItsValueList pins the
@@ -104,7 +105,7 @@ func TestTimerStatePayloadRendersFractionalAndClampedSeconds(t *testing.T) {
 	t.Run("fractional", func(t *testing.T) {
 		t.Parallel()
 		timer := combined.NewTimer("VCU0000001:1", nil, "DURATION_VALUE", "DURATION_UNIT")
-		timer.OnComponents(1.5, combined.TimerUnitSeconds)
+		timer.OnComponents(1.5, hmenum.TimerUnitSeconds)
 		state, observed := timer.CombinedStatePayload()
 		if !observed || state != "1.5" {
 			t.Fatalf("state = (%q, %v), want (\"1.5\", true)", state, observed)
@@ -114,7 +115,7 @@ func TestTimerStatePayloadRendersFractionalAndClampedSeconds(t *testing.T) {
 	t.Run("negative is clamped", func(t *testing.T) {
 		t.Parallel()
 		timer := combined.NewTimer("VCU0000001:1", nil, "DURATION_VALUE", "DURATION_UNIT")
-		timer.OnComponents(-5, combined.TimerUnitSeconds)
+		timer.OnComponents(-5, hmenum.TimerUnitSeconds)
 		state, observed := timer.CombinedStatePayload()
 		if !observed || state != "0" {
 			t.Fatalf("state = (%q, %v), want (\"0\", true)", state, observed)

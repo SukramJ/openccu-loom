@@ -2240,12 +2240,20 @@ func (b *EventBridge) publishDeviceInfo(ctx context.Context, centralName, iface 
 	notePublish(ctx, bridge.PublishDeviceInfo(ctx, centralName, iface, d.Address, &info))
 }
 
-// publishDeviceDiagnostics aggregates the maintenance-channel DPs
-// (RSSI_DEVICE / RSSI_PEER / DUTY_CYCLE / LOW_BAT / UNREACH
-// STICKY_UNREACH / CONFIG_PENDING / UPDATE_PENDING) into one
-// retained `<addr>/diagnostics` topic. The same DPs continue to be
-// published individually under channels/0/values/<param>/state for
-// granular subscribers — this is a convenience aggregate.
+// publishDeviceDiagnostics aggregates the device-level (channel-0)
+// maintenance DPs into one retained `<addr>/diagnostics` topic. The
+// membership is [hmenum.DeviceChannel0Parameters] — the same
+// classification the model layer uses — so the aggregate cannot fall
+// behind the enumeration by carrying its own hand-kept name list; the
+// CCU families spell some of these two ways (LOW_BAT / LOWBAT,
+// DUTY_CYCLE / DUTYCYCLE) and both spellings are members.
+//
+// Each parameter keeps its own lower-cased JSON key, matching the
+// distinct field names pkg/hmenum declares per spelling: the daemon
+// nowhere treats the two spellings as synonyms, so this plane does not
+// invent that merge either. The same DPs continue to be published
+// individually under channels/0/values/<param>/state for granular
+// subscribers — this is a convenience aggregate.
 func (b *EventBridge) publishDeviceDiagnostics(ctx context.Context, centralName, iface string, d *device.Device) {
 	if b.mqtt == nil || d == nil {
 		return
@@ -2259,14 +2267,10 @@ func (b *EventBridge) publishDeviceDiagnostics(ctx context.Context, centralName,
 		if ch.Number != 0 {
 			continue
 		}
-		for _, param := range []string{
-			"RSSI_DEVICE", "RSSI_PEER", "DUTY_CYCLE",
-			"LOW_BAT", "UNREACH", "STICKY_UNREACH",
-			"CONFIG_PENDING", "UPDATE_PENDING",
-		} {
-			if dp := ch.Parameter(hmenum.Parameter(param)); dp != nil {
+		for param := range hmenum.DeviceChannel0Parameters {
+			if dp := ch.Parameter(param); dp != nil {
 				if raw, observed := dp.RawValue(); observed {
-					diag[strings.ToLower(param)] = raw
+					diag[strings.ToLower(string(param))] = raw
 				}
 			}
 		}
@@ -3162,13 +3166,14 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 			OnAnyUpdate(func(old, next any)) func()
 			RawValue() (any, bool)
 		}); ok {
-			availableKeys := orderedTargetKeys(wp.AvailableTargetChannels())
+			// Decoding the bitfield is a domain rule of the week-profile
+			// data point (it owns the bit table and the inverted-bit
+			// semantics), so the bridge only says which data point feeds
+			// it and when. Resolving the key set inside the model also
+			// means a target channel registered after this pass is still
+			// picked up, which snapshotting the keys here did not do.
 			applyLocks := func(raw any) {
-				v, vok := rawLocksToUint32(raw)
-				if !vok {
-					return
-				}
-				wp.SyncScheduleEnabled(weekprofile.ParseChannelLocks(v, availableKeys))
+				wp.SyncChannelLocksFromWire(raw)
 			}
 			if raw, observed := anyDP.RawValue(); observed {
 				applyLocks(raw)
@@ -3376,8 +3381,8 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 }
 
 // orderedTargetKeys returns the keys of channels in canonical
-// (`<actor>_<sub>`) order — needed so ParseChannelLocks consumes a
-// stable enumeration that matches the bitfield positions.
+// (`<actor>_<sub>`) order — the publication order of the per-channel
+// schedule switches, which must not depend on Go's map iteration.
 func orderedTargetKeys(channels map[string]weekprofile.TargetChannelInfo) []string {
 	if len(channels) == 0 {
 		return nil
@@ -3388,26 +3393,6 @@ func orderedTargetKeys(channels map[string]weekprofile.TargetChannelInfo) []stri
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// rawLocksToUint32 decodes the wire-level WEEK_PROGRAM_CHANNEL_LOCKS
-// value to a uint32 bitfield. CCU sends it as INTEGER, but the wire
-// parser may surface it as int / int32 / int64 / float64 depending on
-// transport. Returns (0, false) for an unexpected type.
-func rawLocksToUint32(v any) (uint32, bool) {
-	switch x := v.(type) {
-	case int:
-		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional; see #20
-	case int32:
-		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional; see #20
-	case int64:
-		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional; see #20
-	case uint32:
-		return x, true
-	case float64:
-		return uint32(x), true
-	}
-	return 0, false
 }
 
 // scheduleDomainForChannel resolves the user-facing schedule domain of a

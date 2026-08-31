@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -342,7 +343,7 @@ func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving
 	}
 	switch b.Kind {
 	case BlindKindHM:
-		s := hmLevelCombined(wireL, wireT)
+		s := parameter.ConvertHMLevelToCPV(wireL) + "," + parameter.ConvertHMLevelToCPV(wireT)
 		if err := b.writer.SetValue(ctx, b.Address(), hmenum.ParameterLevelCombined, s, priority); err != nil {
 			return fmt.Errorf("blind: LEVEL_COMBINED: %w", err)
 		}
@@ -390,7 +391,7 @@ func (b *Blind) Stop(ctx context.Context, priority hmenum.CommandPriority) error
 //
 // - BlindKindHM: writes LEVEL_COMBINED as the string "0xHH,0xHH" where each
 // byte encodes `int(position * 100 * 2)` in 4-digit hex notation (e.g.
-// level=1.0, tilt=0.5 → "0xc8,0x64"). See [hmLevelCombined].
+// level=1.0, tilt=0.5 → "0xc8,0x64"). See [parameter.ConvertHMLevelToCPV].
 // - BlindKindIP: writes COMBINED_PARAMETER as the string "L2=<tilt_pct>,L=<level_pct>"
 // — tilt first, both values are integer 0..100 (position-percent).
 func (b *Blind) SetCombined(ctx context.Context, level, tilt float64, priority hmenum.CommandPriority) error {
@@ -573,24 +574,4 @@ func (b *Blind) CurrentChannelTiltPosition() (custom.Position, bool) {
 		v = 1 - v
 	}
 	return custom.NewPosition(v), true
-}
-
-// hmLevelCombined encodes two blind-axis positions into the HM wire format
-// expected by LEVEL_COMBINED: a comma-separated pair of 4-digit lowercase hex
-// values where each byte = int(position * 100 * 2).
-//
-// Examples:
-//   - level=1.0, tilt=1.0 → "0xc8,0xc8"
-//   - level=1.0, tilt=0.0 → "0xc8,0x00"
-//   - level=0.5, tilt=0.5 → "0x64,0x64"
-//
-// The product is rounded, not truncated: 0.29, 0.57 and 0.58 land just
-// below an exact half-percent step in binary64, so truncation moved the
-// blind one 0.5 % step below the commanded position while the HmIP
-// branch of the same switch (and internal/client/backends EncodeHMLevel,
-// the twin encoder) rounded half-up.
-func hmLevelCombined(level, tilt float64) string {
-	lByte := int(math.Round(level * 100 * 2))
-	tByte := int(math.Round(tilt * 100 * 2))
-	return fmt.Sprintf("0x%02x,0x%02x", lByte, tByte)
 }

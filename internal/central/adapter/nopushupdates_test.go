@@ -3,9 +3,11 @@
 
 // NoPushUpdates pipeline invariant: when the backend reports
 // Capabilities.RPCCallback==false the pipeline must stamp
-// Config.NoPushUpdates=true on every produced DP so RequiresPolling()
-// returns true for both VALUES and MASTER paramsets. The mirror case
-// (RPCCallback==true) must leave VALUES DPs polling-free.
+// Spec.NoPushUpdates=true on every produced DP, VALUES and MASTER
+// alike. The mirror case (RPCCallback==true) must leave the flag
+// unset. The pipeline is the only place that can observe the backend
+// capability at ingest time, so this is the only site where the stamp
+// can be pinned.
 
 package adapter
 
@@ -16,6 +18,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -70,14 +73,9 @@ func newNoPushHydratingBackend() *noPushFakeOps {
 	}
 }
 
-// pollingDP is a narrow interface for checking RequiresPolling on any DP type.
-type pollingDP interface {
-	RequiresPolling() bool
-}
-
 // TestPipelineNoPushUpdatesForPollOnlyBackend verifies that when the pipeline
 // ingests devices from a backend whose Capabilities.RPCCallback is false,
-// every VALUES and MASTER data point has RequiresPolling()==true.
+// every VALUES and MASTER data point carries NoPushUpdates=true.
 func TestPipelineNoPushUpdatesForPollOnlyBackend(t *testing.T) {
 	t.Parallel()
 
@@ -105,30 +103,29 @@ func TestPipelineNoPushUpdatesForPollOnlyBackend(t *testing.T) {
 	if valDP == nil {
 		t.Fatal("LEVEL data point not found on VALUES paramset")
 	}
-	pdp, ok := valDP.(pollingDP)
+	pdp, ok := valDP.(*generic.Float)
 	if !ok {
-		t.Fatalf("LEVEL DP does not implement RequiresPolling (type %T)", valDP)
+		t.Fatalf("LEVEL DP is not a *generic.Float (type %T)", valDP)
 	}
-	if !pdp.RequiresPolling() {
-		t.Error("LEVEL (VALUES) RequiresPolling() must be true when RPCCallback=false")
+	if !pdp.NoPushUpdates {
+		t.Error("LEVEL (VALUES) NoPushUpdates must be true when RPCCallback=false")
 	}
 
 	masterDP := ch.MasterParameter("ARR_TIMEOUT")
 	if masterDP == nil {
 		t.Fatal("ARR_TIMEOUT data point not found on MASTER paramset")
 	}
-	mpdp, ok := masterDP.(pollingDP)
+	mpdp, ok := masterDP.(*generic.Float)
 	if !ok {
-		t.Fatalf("ARR_TIMEOUT DP does not implement RequiresPolling (type %T)", masterDP)
+		t.Fatalf("ARR_TIMEOUT DP is not a *generic.Float (type %T)", masterDP)
 	}
-	if !mpdp.RequiresPolling() {
-		t.Error("ARR_TIMEOUT (MASTER) RequiresPolling() must be true when RPCCallback=false")
+	if !mpdp.NoPushUpdates {
+		t.Error("ARR_TIMEOUT (MASTER) NoPushUpdates must be true when RPCCallback=false")
 	}
 }
 
 // TestPipelineNoPushUpdatesNotSetForPushBackend verifies that a backend
-// with Capabilities.RPCCallback==true does NOT set NoPushUpdates, so
-// VALUES DPs report RequiresPolling()==false.
+// with Capabilities.RPCCallback==true does NOT set NoPushUpdates.
 func TestPipelineNoPushUpdatesNotSetForPushBackend(t *testing.T) {
 	t.Parallel()
 
@@ -158,11 +155,11 @@ func TestPipelineNoPushUpdatesNotSetForPushBackend(t *testing.T) {
 	if valDP == nil {
 		t.Fatal("LEVEL data point not found")
 	}
-	pdp, ok := valDP.(pollingDP)
+	pdp, ok := valDP.(*generic.Float)
 	if !ok {
-		t.Fatalf("LEVEL DP does not implement RequiresPolling (type %T)", valDP)
+		t.Fatalf("LEVEL DP is not a *generic.Float (type %T)", valDP)
 	}
-	if pdp.RequiresPolling() {
-		t.Error("LEVEL (VALUES) RequiresPolling() must be false when RPCCallback=true")
+	if pdp.NoPushUpdates {
+		t.Error("LEVEL (VALUES) NoPushUpdates must be false when RPCCallback=true")
 	}
 }

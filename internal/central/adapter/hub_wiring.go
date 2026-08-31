@@ -1131,26 +1131,6 @@ func parseSysvarDescription(raw string) (cleaned string, isExtended bool) {
 	return strings.TrimSpace(out), isExtended
 }
 
-// sysvarIsExcluded reports whether a CCU system variable never enters the
-// hub model. Mirrors the reference stack's two hard filters, applied at
-// fetch time so every plane (REST, MQTT discovery, Matter, external
-// clients) sees the same catalogue:
-//   - names carrying "OldVal"/"pcCCUID" are CCU calculation scratch values
-//     (model/hub/hub.py `_EXCLUDED`)
-//   - the fixed IDs 40/41 (alarm/service messages) are surfaced through
-//     dedicated hub singletons (const.py `IGNORE_SYSVARS_BY_ID`)
-func sysvarIsExcluded(name, id string) bool {
-	if id == "40" || id == "41" {
-		return true
-	}
-	for _, token := range []string{"OldVal", "pcCCUID"} {
-		if strings.Contains(name, token) {
-			return true
-		}
-	}
-	return false
-}
-
 func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h *hub.Hub, writer hub.SysvarWriter, opts hubScanOptions) error {
 	if !opts.enableSysvarScan {
 		return nil
@@ -1199,7 +1179,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 	freshNames := make(map[string]struct{}, len(vars))
 	for i := range vars {
 		v := &vars[i]
-		if v.Name == "" || sysvarIsExcluded(v.Name, v.ID) {
+		if v.Name == "" || hub.IsExcludedSysvar(v.Name, v.ID) {
 			continue
 		}
 		// Same rule as for programs: the INTERNAL marker is itself a

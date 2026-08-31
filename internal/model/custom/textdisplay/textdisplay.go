@@ -749,29 +749,6 @@ func (t *TextDisplay) WriteWithSound(
 	return t.Commit(ctx, priority)
 }
 
-// convertRepetitions maps a numeric repetition count to the CCU VALUE_LIST
-// label used by the REPETITIONS parameter:
-//
-//   - 0  → "NO_REPETITION"
-//   - -1 → "INFINITE_REPETITIONS"
-//   - 1..18 → "REPETITIONS_001" .. "REPETITIONS_018"
-//
-// Values outside [-1, 18] return an empty string so the caller can detect
-// the out-of-range case without an extra error path.
-func convertRepetitions(n int) string {
-	const maxRep = 18
-	switch {
-	case n == 0:
-		return "NO_REPETITION"
-	case n == -1:
-		return "INFINITE_REPETITIONS"
-	case n >= 1 && n <= maxRep:
-		return fmt.Sprintf("REPETITIONS_%03d", n)
-	default:
-		return ""
-	}
-}
-
 // aggregate builds the [custom.AggregateView] over the TextDisplay's only
 // observable sub-DP: the optional BURST_LIMIT_WARNING binary sensor. When
 // no binary sensor has been wired, the view has no slots and IsRefreshed

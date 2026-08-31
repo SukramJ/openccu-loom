@@ -514,6 +514,14 @@ func (l *Lock) send(ctx context.Context, cmd command, priority hmenum.CommandPri
 // The CCU XML-RPC interface accepts both integer indices and string labels
 // for ENUM parameters. String labels are used here for parity with the
 // reference implementation and for clarity in CCU logs.
+//
+// These three constants are the single definition of "which
+// LOCK_TARGET_LEVEL value performs which lock operation": both
+// [Lock.sendIP] and the HA discovery payload ([Lock.HADiscoveryPayload])
+// read them, so the daemon's own write and a Home-Assistant-originated
+// write carry the same token. Spelling the discovery payload as the
+// positional indices instead would restate the rule against a VALUE_LIST
+// order nothing on that path can read.
 const (
 	ipTargetLocked   = "LOCKED"
 	ipTargetUnlocked = "UNLOCKED"

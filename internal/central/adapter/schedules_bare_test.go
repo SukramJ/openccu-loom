@@ -38,7 +38,7 @@ func fixtureBareMonday() map[string]any {
 // is parsed as the single profile P1.
 func TestParseClimateScheduleBareTreatedAsP1(t *testing.T) {
 	t.Parallel()
-	got, err := parseClimateSchedule(fixtureBareMonday())
+	got, err := parseClimateSchedule(t.Context(), fixtureBareMonday())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

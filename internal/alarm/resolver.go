@@ -15,6 +15,7 @@ import (
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	switchcdp "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/safety"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -174,35 +175,15 @@ func (r *sensorReader) CurrentActive(_ context.Context, row sqlitestore.AlarmSen
 	}
 	// Restore must reach the same verdict as the live event path, or a
 	// sensor reads active while running and inactive after a restart.
-	// Both resolve through resolveActive; the row carries the config, so
-	// no service state is needed here.
+	// Both resolve through [safety.ActiveFromRaw]; the row carries the
+	// config, so no service state is needed here.
 	cfg, err := engine.ParseSensorConfig(row.ConfigJSON)
 	if err != nil {
-		// An unparsable config falls back to the historical rule, the
-		// same way the routing index does.
-		return normalizeActive(raw)
+		// An unparsable config falls back to the default rule, the same
+		// way the routing index does.
+		active, known, _ = safety.ActiveFromRaw(nil, raw, nil)
+		return active, known
 	}
-	active, known, _ = resolveActive(activationRule{labels: cfg.ActiveValues}, raw, p.ParameterData().ValueList)
+	active, known, _ = safety.ActiveFromRaw(cfg.ActiveValues, raw, p.ParameterData().ValueList)
 	return active, known
-}
-
-// normalizeActive maps a wire value onto the binary sensor-activation
-// semantics: booleans map directly (open/motion true), integer enums
-// (rotary handles: 0 closed, 1 tilted, 2 open) activate on any
-// non-zero position.
-func normalizeActive(raw any) (active, known bool) {
-	switch v := raw.(type) {
-	case bool:
-		return v, true
-	case int:
-		return v != 0, true
-	case int32:
-		return v != 0, true
-	case int64:
-		return v != 0, true
-	case float64:
-		return v != 0, true
-	default:
-		return false, false
-	}
 }

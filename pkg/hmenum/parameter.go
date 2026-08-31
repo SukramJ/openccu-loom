@@ -278,6 +278,19 @@ var DeviceChannel0Parameters = map[Parameter]struct{}{
 	ParameterDutycycle:     {},
 }
 
+// RelevantInitParameters lists the channel-0 parameters a bootstrap pass
+// must load explicitly, in the order they are fetched. They are a strict
+// subset of [DeviceChannel0Parameters] and drive the daemon's availability
+// tracking: the bulk device-data fetch does not always include them, so
+// without an explicit load the daemon would report "reachable" until the
+// first push event ever arrives.
+// loom:reachable:reason="ranged over in production at internal/central/adapter/relevant_init.go:41 and internal/central/adapter/unobserved_sweep.go:103, the two paths that fetch channel-0 init values at boot and on the unobserved sweep; a package-level slice, which the analyzer counts as reachable only through a function of its own package"
+var RelevantInitParameters = []Parameter{
+	ParameterConfigPending,
+	ParameterStickyUnreach,
+	ParameterUnreach,
+}
+
 // IsDeviceLevel reports whether p is a channel-0 device-level parameter.
 func (p Parameter) IsDeviceLevel() bool {
 	_, ok := DeviceChannel0Parameters[p]

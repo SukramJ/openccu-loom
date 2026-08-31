@@ -6,6 +6,126 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The domain core duplicated itself in 34 places, and eight of the copies
+  had already drifted.** Three earlier audits read the north adapters against
+  one rule — an adapter must not re-derive what the model owns — and fixed 37
+  violations. None of them asked whether the core duplicates *itself*, because
+  they were all standing outside it. This pass did: 532 non-test files across
+  `internal/{central,model,store,alarm,security,parameter,config,history}` and
+  `pkg`. Target-system knowledge in the core came back zero — no HA
+  vocabulary, no MQTT topic syntax, no Matter semantics, no REST field name —
+  so the hexagonal boundary holds. The inside did not.
+
+  The one with a live safety consequence: **the sensor-activation rule existed
+  three times and two of the copies disagreed.** For an integer wire value
+  whose index the declared `VALUE_LIST` does not cover — a firmware that added
+  a value, a stale paramset cache, a CUxD channel with a short list — the
+  alarm engine read it inactive while the security domain read it active. Same
+  device, same wire value, opposite verdicts on the two safety surfaces, each
+  side internally consistent and neither logging a thing. The third copy sat
+  in `internal/model/safety`, wrote the correct invariant down in its own
+  comment, and had no production caller at all. The rule now lives there once.
+  An unresolvable value is inactive — the value list is exhaustive, and
+  `INTRUSION_ALARM` inside the smoke value list is the installation reading
+  back its own siren command, not a fire — and it is now logged rather than
+  silently swallowed.
+
+  Folding the rule does not fold its inputs, so the second half matters as
+  much: for an enrolled data point the operator's `active_values` now win in
+  both domains, with the classifier table as the fallback for unenrolled
+  sources. Narrowing a smoke detector's active values previously narrowed the
+  alarm engine alone while the security plane carried on with the defaults.
+
+  Other copies that had already drifted, each now single-sourced and pinned by
+  a cross-site guard:
+
+  - The `CONFIG_PENDING` settle leg ran per interface while REST advertised it
+    per device, so HmIP thermostats behind a VirtualDevices group — which REST
+    already reported as `master_pushes_config_pending` — kept a stale MASTER
+    cache and stale retained `schedule_data` after every write.
+  - Central-link eligibility excluded virtual remotes in the model and did not
+    in the adapter that dispatches, so `HM-RCV-50` and its two siblings
+    advertised link buttons and issued `ReportValueUsage` against a
+    pseudo-device with no physical key.
+  - The HA light command payload was implemented twice; the dispatcher copy
+    had no colour handling, so `set_level` with a colour turned the lamp on
+    and dropped the colour on REST, WebSocket and the MQTT custom-DP topic.
+  - The channel-0 diagnostics topic was hand-listed and omitted the classic
+    `LOWBAT` / `DUTYCYCLE` spellings that `pkg/hmenum` declares, so on classic
+    BidCos devices the retained aggregate shipped without a low-battery and
+    without a duty-cycle field while the per-parameter topics carried both.
+  - The climate `HH:MM` grammar existed four times with four acceptance sets.
+    `24:30` reached the device as 1470 minutes, was read back as `24:00` on
+    REST and dropped entirely on the week-profile plane. It is now refused.
+  - Base-temperature derivation existed three times with two roundings and two
+    tie-breaks; the encoding of `LEVEL_COMBINED` five times with two
+    roundings; the `REPETITIONS` wire label three times with three fallbacks;
+    the 13-slot climate limit and the CCU weekday list once per package.
+
+  Where two copies disagreed, the winner was chosen against the CCU-side
+  reference rather than by preference, and named in the fold: earliest slot
+  wins a base-temperature tie, the fallback base is 18.0 rather than 0.0,
+  `LEVEL_COMBINED` rounds rather than truncates, `level`→percent truncates.
+
+- **A reference defect that a fold briefly reproduced: `HmIP-SWD → STATE →
+  window`.** The CCU-side reference lists `HmIP-SWD` in the tuple that maps
+  `STATE` onto the window quantity, beside `HmIP-SWDO` and `HmIP-SWDM`. Model
+  matching there is a prefix walk on both sides, so `HmIP-SWD` is not a seventh
+  model in that list: it is a prefix covering the whole `HmIP-SWDO*` /
+  `HmIP-SWDM*` family — which the entries beside it already cover — plus the one
+  device that carries the name exactly, the water sensor. The shorter prefix
+  adds no contact and one leak detector, and this project has always excluded
+  it.
+
+  Single-sourcing the quantity tables moved the rule to `internal/parameter`
+  and carried the reference's row along with it, so `device_class` for
+  `HmIP-SWD` / `STATE` briefly resolved to `window` again. The existing guard
+  stayed green throughout, because it asserted the negative against the MQTT
+  *table* while the value on the wire comes from the domain. The exclusion is
+  restored in both tables that reach the wire — `applyEntityDescription`
+  overwrites `device_class` from the HA-registry table after discovery has set
+  the domain's answer, so removing it from one alone would not have been the
+  exclusion — and the guard now takes the negative on
+  `resolveBinarySensorDeviceClass`, the path the payload actually travels.
+  Inert either way today: `HmIP-SWD` declares no `STATE` parameter.
+
+- **Two folds that had been left open for want of a measurement.** The
+  week-profile slot predicate existed twice with disjoint acceptance sets, and
+  the permissive copy decided which MASTER parameters the pipeline drops
+  *entirely* — no data point, no topic, no `un_ignore.txt` recovery. Adopting
+  the strict grammar needed a fact nobody had: does any shipping device carry a
+  `P<1-6>_` key that is not a slot cell? Across the 399 paramset descriptions
+  in the device-simulator corpus there are none, and the largest climate slot
+  ordinal that occurs is 13. Both folds landed on that measurement: a
+  `P<1-6>_` key that the parser cannot consume is no longer dropped, and the
+  REST climate read path now caps at the same 13-slot constant the model uses,
+  logging each discarded key by name rather than truncating in silence. Both
+  statements are about that corpus, not about all firmware, which is why the
+  cap is a named constant and the drop is logged.
+
+### Changed
+
+- **REST `APIVersion` 7.27.0 → 7.28.0.** Additive: `assets/schemas/enums.json`
+  gains `SmokeDetectorAlarmStatus`, the enum the folded smoke label set is
+  typed with. No endpoint, field or payload shape changed. Downstream
+  generated clients (`openccu-loom-client`, the Node-RED contrib) pick the
+  enum up on their next sync.
+
+### Removed
+
+- **Exported model copies that nothing ran.** `ClientCoordinator.PrimaryClient`
+  and both spellings of the primary-client candidate set, `RequiresPolling`,
+  `CleanSysvarNames`, `backends.EncodeHMLevel`, `value.ConvertHMLevelToCPV`
+  and `Classification.Active` were exported, documented, unit-tested and had
+  zero production callers, while the daemon ran a private copy elsewhere. The
+  tests that covered them were the most misleading state in the codebase: each
+  pinned its own copy against its own literal, so both halves stayed green
+  while they disagreed. `RequiresPolling`'s six green cases ran against a key
+  shape production never produces — on real keys it answered `false`
+  everywhere.
+
 ## [0.71.0] - 2026-08-30
 
 ### Fixed

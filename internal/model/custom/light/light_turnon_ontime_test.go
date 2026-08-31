@@ -6,7 +6,6 @@ package light
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -46,7 +45,7 @@ func newRGBWLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *
 // that carries DURATION_VALUE/DURATION_UNIT, matching the real HmIP-BSL
 // signal-light channel (godevccu paramset_descriptions/HmIP-BSL.json,
 // channel :8). FixedColorLight sets resetsOnTimeOnTurnOn=true, so plain
-// TurnOn on this rig must emit the NotUsed sentinel via put_paramset.
+// TurnOn on this rig must emit the TimerNotUsed sentinel via put_paramset.
 func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWriter) *FixedColorLight {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "SIG0001"})
@@ -72,7 +71,7 @@ func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWri
 // a LEVEL write and does not send any put_paramset containing ON_TIME or
 // DURATION parameters. This is the regression guard for bug #3210: before the
 // fix, resetsOnTimeOnTurnOn was unintentionally true for RGBW lights, causing
-// the NotUsed sentinel to be included in every plain TurnOn and making the
+// the TimerNotUsed sentinel to be included in every plain TurnOn and making the
 // device switch off again immediately.
 func TestRGBWLightPlainTurnOnDoesNotSendOnTime(t *testing.T) {
 	w := &putWriter{}
@@ -134,7 +133,11 @@ func TestFixedColorLightPlainTurnOnSendsNotUsedSentinel(t *testing.T) {
 		t.Errorf("put_paramset carries ON_TIME on a channel whose timer is the "+
 			"DURATION pair; the CCU faults the whole call. payload: %v", got)
 	}
-	wantValue, wantUnit := custom.EncodeTimerDuration(time.Duration(NotUsed * float64(time.Second)))
+	// The expectation is written out rather than derived from
+	// custom.EncodeTimerDuration: deriving it from the encoder under test
+	// would make the assertion agree with any encoding the encoder happens
+	// to produce. 111600 s stays 111600 in the hours slot (ordinal 2).
+	const wantValue, wantUnit = int32(111600), int32(2)
 	if got[string(hmenum.ParameterDurationValue)] != wantValue {
 		t.Errorf("DURATION_VALUE=%v, want the disabled-timer sentinel %v; payload: %v",
 			got[string(hmenum.ParameterDurationValue)], wantValue, got)

@@ -320,13 +320,25 @@ func TestFeedSinkDedup(t *testing.T) {
 	}
 }
 
+// TestIntrusionAlarmAndSmokeAlarmSensors drives the two
+// SMOKE_DETECTOR_ALARM_STATUS derived sensors the way the device
+// pipeline builds them — from the registry mapping — so the label sets
+// are asserted where production reads them and nowhere else.
 func TestIntrusionAlarmAndSmokeAlarmSensors(t *testing.T) {
-	ia := NewIntrusionAlarmSensor()
+	im, ok := LookupDerivedBinaryMappingByParam(hmenum.CalculatedParameterIntrusionAlarm)
+	if !ok {
+		t.Fatal("no derived-binary mapping for CALCULATED INTRUSION_ALARM")
+	}
+	ia := MakeDerivedBinarySensor(im)
 	ia.OnLabel("INTRUSION_ALARM")
 	if v, _ := ia.Value(); !v {
 		t.Fatal("intrusion alarm")
 	}
-	sa := NewSmokeAlarmSensor()
+	sm, ok := LookupDerivedBinaryMappingByParam(hmenum.CalculatedParameterSmokeAlarm)
+	if !ok {
+		t.Fatal("no derived-binary mapping for CALCULATED SMOKE_ALARM")
+	}
+	sa := MakeDerivedBinarySensor(sm)
 	sa.OnLabel("IDLE_OFF")
 	if v, ok := sa.Value(); !ok || v {
 		t.Fatalf("idle off → %v ok=%v", v, ok)

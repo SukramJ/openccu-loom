@@ -154,7 +154,8 @@ func (l *Lock) invokeLockCommand(ctx context.Context, params map[string]any, pri
 // skeleton. HA lock platform uses a single command_topic with
 // payload_lock / payload_unlock — not separate lock/unlock topics.
 //
-// command_topic is Kind-aware: IP locks write LOCK_TARGET_LEVEL (0/1/2)
+// command_topic is Kind-aware: IP locks write LOCK_TARGET_LEVEL (the
+// ENUM labels [ipTargetLocked] / [ipTargetUnlocked] / [ipTargetOpen])
 // and RF locks write STATE (false/true), both real VALUES parameters
 // reachable by a wire-parameter topic. Button locks have no such
 // parameter — their slot is GLOBAL_BUTTON_LOCK in MASTER — so they use
@@ -188,10 +189,15 @@ func (l *Lock) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component str
 		payloadLock = commandTokenLock
 		payloadUnlock = commandTokenUnlock
 	default: // KindIP
-		// HmIP locks use LOCK_TARGET_LEVEL ENUM: 0 = lock, 1 = unlock, 2 = open.
+		// HmIP locks use the LOCK_TARGET_LEVEL ENUM. The advertised
+		// payloads are the same labels [Lock.sendIP] writes, so a
+		// command originating in Home Assistant and one originating in
+		// the daemon reach the CCU in the same form. Labels also make
+		// the payload independent of the VALUE_LIST order, which no
+		// code on this path can see.
 		commandTopic = ctx.WireParameterCommandTopic("LOCK_TARGET_LEVEL")
-		payloadLock = "0"
-		payloadUnlock = "1"
+		payloadLock = ipTargetLocked
+		payloadUnlock = ipTargetUnlocked
 	}
 
 	body = map[string]any{
@@ -215,9 +221,9 @@ func (l *Lock) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component str
 		"optimistic": false,
 	}
 	// Door-opener (HmIP-DLD) — only IP locks expose the short-time unlock
-	// action via LOCK_TARGET_LEVEL=2. RF/Button locks have no open action.
+	// action, via LOCK_TARGET_LEVEL. RF/Button locks have no open action.
 	if l.Capabilities.SupportsOpen && l.Kind == KindIP {
-		body["payload_open"] = "2"
+		body["payload_open"] = ipTargetOpen
 	}
 	return "lock", body
 }

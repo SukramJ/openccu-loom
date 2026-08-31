@@ -175,8 +175,10 @@ func (c *LinkCoordinator) GetLinkableChannels(ctx context.Context, deviceAddress
 
 // GetLinksForLocale lists every direct link a device participates in,
 // filtered by role and sorted by (sender, receiver). locale is currently
-// reserved for future i18n label translation; role filters the result:
-// "" = all, "sender" = only outgoing links, "receiver" = only incoming.
+// reserved for future i18n label translation; role is matched verbatim
+// against [DeviceLink.Direction], so the accepted set is the direction
+// vocabulary the north-bound contract serialises: "" = all,
+// "outgoing" = links the device sends on, "incoming" = links it receives.
 func (c *LinkCoordinator) GetLinksForLocale(ctx context.Context, deviceAddress, locale, role string) ([]DeviceLink, error) {
 	links, err := c.GetLinks(ctx, deviceAddress)
 	if err != nil {

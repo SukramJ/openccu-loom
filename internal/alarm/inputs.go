@@ -40,7 +40,7 @@ func (s *Service) rebuildIndexes(ctx context.Context) error {
 		}
 		dpIndex[dpKey(row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter)] = sensorBinding{
 			id:             row.ID,
-			rule:           activationRule{labels: cfg.ActiveValues},
+			activeValues:   cfg.ActiveValues,
 			centralName:    row.CentralName,
 			interfaceID:    row.InterfaceID,
 			channelAddress: row.ChannelAddress,
@@ -415,22 +415,6 @@ func splitDevKey(key string) (centralName, deviceAddr string, ok bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
-}
-
-// paramValueActive normalizes a wire value onto binary activation
-// semantics (bool direct; integer enums like rotary-handle positions
-// activate on non-zero).
-func paramValueActive(v hmtypes.ParamValue) (active, known bool) {
-	switch v.Kind {
-	case hmtypes.ValueKindBool:
-		return v.Bool, true
-	case hmtypes.ValueKindInt:
-		return v.Int != 0, true
-	case hmtypes.ValueKindFloat:
-		return v.Float != 0, true
-	default:
-		return false, false
-	}
 }
 
 // paramValueBool extracts a strict boolean.

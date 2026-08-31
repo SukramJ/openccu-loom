@@ -7,52 +7,18 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/model/safety"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
-
-// activationRule decides whether a wire value counts as an activation
-// for one enrolled sensor.
-//
-// With no configured labels it reproduces the historical rule exactly —
-// booleans map directly, numbers activate on non-zero — so an existing
-// enrollment never changes meaning. With labels it admits only those
-// values, which is what keeps an enumerated parameter from reporting
-// the alarm system's own output back as an input.
-//
-// Both the live event path and the restore path resolve through this
-// one type. They used to carry separate copies of the rule
-// (paramValueActive and normalizeActive), and a divergence between them
-// would mean a sensor reads active while running and inactive after a
-// restart, or the reverse.
-type activationRule struct {
-	// labels are the configured active value labels. Empty selects the
-	// historical rule.
-	labels []string
-}
-
-// configured reports whether the rule narrows activation at all.
-func (r activationRule) configured() bool { return len(r.labels) > 0 }
-
-// matches reports whether label is one of the configured active values.
-// Matching is exact: a value list is a fixed vocabulary, and a
-// case-insensitive match would silently accept a label the device never
-// emits.
-func (r activationRule) matches(label string) bool {
-	for _, l := range r.labels {
-		if l == label {
-			return true
-		}
-	}
-	return false
-}
 
 // sensorBinding is the routing entry of one enrolled data point.
 type sensorBinding struct {
 	// id is the enrolled sensor row ID.
 	id string
-	// rule narrows which values count as an activation.
-	rule activationRule
+	// activeValues are the operator's enrolled active value labels.
+	// Empty selects the default rule.
+	activeValues []string
 	// centralName, interfaceID, channelAddress and parameter identify
 	// the data point, so the enum resolution can find its value list.
 	centralName    string
@@ -146,74 +112,39 @@ func (e *enumResolver) shouldWarn(key string) bool {
 	return true
 }
 
-// resolveActive applies a rule to a raw wire value. valueList maps an
-// enumeration index onto its label; an empty list means no mapping is
-// available.
-//
-// The fallback when a configured rule cannot be applied — an
-// enumeration whose value list is unavailable — is the historical rule,
-// not "inactive". For an intrusion sensor that direction produces a
-// false alarm; the other direction produces a hazard detector that
-// silently never fires. Callers surface the condition in the log rather
-// than merely surviving it.
-//
-// resolved reports whether the configured rule was actually applied, so
-// a caller can tell a deliberate verdict from a fallback.
-func resolveActive(rule activationRule, raw any, valueList []string) (activeNow, known, resolved bool) {
-	if !rule.configured() {
-		activeNow, known = normalizeActive(raw)
-		return activeNow, known, true
-	}
-	if label, ok := raw.(string); ok {
-		return rule.matches(label), true, true
-	}
-	idx, isInt := rawInt(raw)
-	if !isInt || len(valueList) == 0 {
-		// A configured value list on a non-enumerated parameter is a
-		// misconfiguration, and a missing list is a model gap; neither
-		// is a reason to stop reporting.
-		activeNow, known = normalizeActive(raw)
-		return activeNow, known, false
-	}
-	// An index outside the declared list cannot be an intended active
-	// value. Reporting it inactive is safe because the list is
-	// exhaustive by construction. Scanning rather than indexing keeps
-	// the bound self-evident; a value list has a handful of entries.
-	for i, label := range valueList {
-		if i == idx {
-			return rule.matches(label), true, true
-		}
-	}
-	return false, true, true
-}
-
-// rawInt narrows the integer wire kinds onto an index.
-func rawInt(raw any) (int, bool) {
-	switch v := raw.(type) {
-	case int:
-		return v, true
-	case int32:
-		return int(v), true
-	case int64:
-		return int(v), true
-	default:
-		return 0, false
-	}
-}
-
 // active decides whether a wire value is an activation for the binding.
+//
+// The rule itself lives in [safety.ActiveFromRaw] — one home for both
+// this domain and the security plane, because a sensor that reads
+// active in one and inactive in the other is a contradiction no
+// operator can resolve. What stays here is the surfacing: a configured
+// narrowing that could not be applied is logged once per data point
+// rather than merely survived.
 func (s *Service) active(b sensorBinding, v hmtypes.ParamValue) (activeNow, known bool) {
-	if !b.rule.configured() {
-		return paramValueActive(v)
+	if len(b.activeValues) == 0 {
+		// Fast path for the unnarrowed majority: it reaches the same
+		// verdict, and it skips the value-list resolution, whose cache
+		// miss walks registry → unit → channel → parameter under a
+		// lock for a value the rule would not consult anyway.
+		activeNow, known, _ = safety.ActiveFromRaw(nil, v.Unwrap(), nil)
+		return activeNow, known
 	}
-	activeNow, known, resolved := resolveActive(b.rule, v.Unwrap(), s.enums.valueList(b))
-	if !resolved {
-		key := dpKey(b.centralName, b.interfaceID, b.channelAddress, b.parameter)
-		if s.enums.shouldWarn(key) {
-			s.log.Warn("alarm sensor active_values unresolvable: no value list for the parameter, falling back to the default rule",
-				"sensor", b.id, "central", b.centralName,
-				"channel", b.channelAddress, "parameter", b.parameter)
-		}
+	activeNow, known, res := safety.ActiveFromRaw(b.activeValues, v.Unwrap(), s.enums.valueList(b))
+	if res == safety.ActivationApplied {
+		return activeNow, known
 	}
+	key := dpKey(b.centralName, b.interfaceID, b.channelAddress, b.parameter)
+	if !s.enums.shouldWarn(key) {
+		return activeNow, known
+	}
+	if res == safety.ActivationIndexOutOfRange {
+		s.log.Warn("alarm sensor reported a value outside the declared value list; counted as inactive",
+			"sensor", b.id, "central", b.centralName,
+			"channel", b.channelAddress, "parameter", b.parameter, "value", v.Unwrap())
+		return activeNow, known
+	}
+	s.log.Warn("alarm sensor active_values unresolvable: no value list for the parameter, falling back to the default rule",
+		"sensor", b.id, "central", b.centralName,
+		"channel", b.channelAddress, "parameter", b.parameter)
 	return activeNow, known
 }

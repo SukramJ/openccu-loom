@@ -56,16 +56,6 @@ func newFakeLoader() *fakeLoader {
 	}
 }
 
-func (f *fakeLoader) setGetValue(address string, parameter hmenum.Parameter, value any, err error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	key := address + ":" + string(parameter)
-	f.getValueResult[key] = value
-	if err != nil {
-		f.getValueErr[key] = err
-	}
-}
-
 func (f *fakeLoader) setGetParamset(address string, key hmenum.ParamsetKey, result map[string]any, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

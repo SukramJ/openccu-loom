@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -21,27 +22,9 @@ import (
 // generic DPs.
 const ParameterDuration hmenum.Parameter = "DURATION"
 
-// TimerUnit names the three unit slots the CCU's timer pairs use.
-type TimerUnit int
-
-// TimerUnit values. The numeric order matches the CCU enum (0 s, 1 m,
-// 2 h) so the int32 cast stays safe.
-const (
-	TimerUnitSeconds TimerUnit = 0
-	TimerUnitMinutes TimerUnit = 1
-	TimerUnitHours   TimerUnit = 2
-)
-
 // timerUpperBoundSeconds is the threshold above which seconds are
 // re-expressed as minutes, and analogously for minutes→hours.
 const timerUpperBoundSeconds = 16343
-
-// timerNotUsed is the sentinel value the CCU sends to signal that
-// a timer is disabled. When this value is encountered, RecalcUnit
-// returns it unchanged with TimerUnitHours so the CCU re-interprets
-// the sentinel correctly without silent unit-conversion artefacts.
-// Mirrors _TIMER_NOT_USED in mixins.py.
-const timerNotUsed = 111600.0
 
 // Timer combines a value + unit pair into one "seconds" value. On
 // read it exposes the last observed seconds payload; on write it
@@ -138,7 +121,7 @@ func (t *Timer) Subscribe(ch *device.Channel) func() {
 		return nil
 	}
 	// Capture the value parameter's default at subscribe time so Default()
-	// can return it. The default is stored as seconds using TimerUnitSeconds.
+	// can return it. The default is stored as seconds using hmenum.TimerUnitSeconds.
 	if dp, ok := any(ch.Parameter(t.ValueParameter)).(timerDefaultProvider); ok {
 		if def := dp.Default(); def != nil {
 			if f, fok := toFloat64(def); fok {
@@ -193,18 +176,18 @@ func toFloat64(v any) (float64, bool) {
 	return 0, false
 }
 
-func toTimerUnit(v any) (TimerUnit, bool) {
+func toTimerUnit(v any) (hmenum.TimerUnit, bool) {
 	switch x := v.(type) {
 	case int:
-		return TimerUnit(x), true
+		return hmenum.TimerUnit(x), true
 	case int32:
-		return TimerUnit(x), true
+		return hmenum.TimerUnit(x), true
 	case int64:
-		return TimerUnit(x), true
+		return hmenum.TimerUnit(x), true
 	case float64:
-		return TimerUnit(int(x)), true
+		return hmenum.TimerUnit(int(x)), true
 	}
-	return TimerUnitSeconds, false
+	return hmenum.TimerUnitSeconds, false
 }
 
 // Value returns the last observed duration.
@@ -245,7 +228,7 @@ func (t *Timer) ValueSeconds() (float64, bool) {
 
 // OnComponents feeds a (rawValue, unit) pair from the wire. The
 // combined data point stores the computed seconds.
-func (t *Timer) OnComponents(rawValue float64, unit TimerUnit) {
+func (t *Timer) OnComponents(rawValue float64, unit hmenum.TimerUnit) {
 	seconds := toSeconds(rawValue, unit)
 	t.mu.Lock()
 	prev := t.seconds
@@ -382,35 +365,35 @@ func (t *Timer) SendDefault(
 //	> 16343 s  → minutes
 //	> 16343 min → hours
 //
-// The sentinel value 111600 (timerNotUsed) is returned unchanged with
-// TimerUnitHours so the CCU re-interprets the "disabled" marker
+// The sentinel value [custom.TimerNotUsed] is returned unchanged with
+// hmenum.TimerUnitHours so the CCU re-interprets the "disabled" marker
 // correctly without unit-conversion artefacts.
 //
 // loom:reachable:reason="called by Timer.SetDuration to pick the correct unit before writing to the CCU"
-func RecalcUnit(seconds float64) (float64, TimerUnit) {
-	if seconds == timerNotUsed {
-		return seconds, TimerUnitHours
+func RecalcUnit(seconds float64) (float64, hmenum.TimerUnit) {
+	if seconds == custom.TimerNotUsed {
+		return seconds, hmenum.TimerUnitHours
 	}
 	if seconds < 0 {
 		seconds = 0
 	}
 	if seconds <= timerUpperBoundSeconds {
-		return seconds, TimerUnitSeconds
+		return seconds, hmenum.TimerUnitSeconds
 	}
 	minutes := seconds / 60
 	if minutes <= timerUpperBoundSeconds {
-		return minutes, TimerUnitMinutes
+		return minutes, hmenum.TimerUnitMinutes
 	}
-	return seconds / 3600, TimerUnitHours
+	return seconds / 3600, hmenum.TimerUnitHours
 }
 
-func toSeconds(rawValue float64, unit TimerUnit) float64 {
+func toSeconds(rawValue float64, unit hmenum.TimerUnit) float64 {
 	switch unit {
-	case TimerUnitMinutes:
+	case hmenum.TimerUnitMinutes:
 		return rawValue * 60
-	case TimerUnitHours:
+	case hmenum.TimerUnitHours:
 		return rawValue * 3600
-	case TimerUnitSeconds:
+	case hmenum.TimerUnitSeconds:
 		return rawValue
 	}
 	return rawValue

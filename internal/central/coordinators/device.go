@@ -690,20 +690,6 @@ func (c *DeviceCoordinator) CheckForNewDeviceAddresses(iface hmtypes.WireInterfa
 	return out
 }
 
-// isVirtualRemoteType reports whether deviceType identifies a CCU virtual-
-// remote device. The virtual-remote channel receives click events that should
-// not be routed to a real device.
-//
-// Three model families are recognised across the three bus protocols:
-// BidCos-RF (HM-RCV-50), BidCos-Wired (HMW-RCV-50), and HmIP-RF
-// (HmIP-RCV-50). All three must be matched so that GetVirtualRemoteAddresses
-// returns the correct set for Wired-Bus and IP-RF interfaces.
-func isVirtualRemoteType(deviceType string) bool {
-	return strings.HasPrefix(deviceType, "HM-RCV-") ||
-		strings.HasPrefix(deviceType, "HMW-RCV-") ||
-		strings.HasPrefix(deviceType, "HmIP-RCV-")
-}
-
 // VirtualRemoteEntry carries the address and child-channel list for one
 // virtual-remote device. Mirrors the richer return type that
 // Get_virtual_remotes returns
@@ -722,12 +708,17 @@ type VirtualRemoteEntry struct {
 // all virtual-remote devices registered for iface. Returns nil when
 // there are none. This is the original string-slice variant preserved
 // for backward compatibility; new code should prefer [GetVirtualRemotes].
+//
+// Which device types count as virtual remotes is decided by
+// [hmenum.IsVirtualRemoteModel] — one exact model per bus family (BidCos-RF,
+// BidCos-Wired, HmIP-RF), so the result covers Wired-Bus and IP-RF
+// interfaces alike.
 func (c *DeviceCoordinator) GetVirtualRemoteAddresses(iface hmtypes.WireInterfaceID) []string {
 	all := c.descs.All(iface)
 	var out []string
 	for i := range all {
 		d := all[i]
-		if !strings.Contains(d.Address, ":") && isVirtualRemoteType(d.Type) {
+		if !strings.Contains(d.Address, ":") && hmenum.IsVirtualRemoteModel(d.Type) {
 			out = append(out, d.Address)
 		}
 	}
@@ -742,7 +733,7 @@ func (c *DeviceCoordinator) GetVirtualRemotes(iface hmtypes.WireInterfaceID) []V
 	var out []VirtualRemoteEntry
 	for i := range all {
 		d := all[i]
-		if strings.Contains(d.Address, ":") || !isVirtualRemoteType(d.Type) {
+		if strings.Contains(d.Address, ":") || !hmenum.IsVirtualRemoteModel(d.Type) {
 			continue
 		}
 		entry := VirtualRemoteEntry{

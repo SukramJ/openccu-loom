@@ -250,3 +250,47 @@ func TestEncodeTimerDurationThreshold(t *testing.T) {
 		})
 	}
 }
+
+// TestEncodeTimerDurationTruncatesTowardZero pins the rounding rule for a
+// promoted timer duration: the fractional part is dropped, never rounded to
+// nearest. The threshold table above cannot tell the two apart, because
+// 16344 s → 272.4 min truncates and rounds to the same 272. The cases here
+// all carry a fraction above .5, so a nearest-rounding encoder would return a
+// value one larger. Rationale and the reference citation:
+// notes/parity/by_design.md, entry BD-Timer-PromotionTruncates.
+func TestEncodeTimerDurationTruncatesTowardZero(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		label      string
+		d          time.Duration
+		wantV      int32
+		wantUnit   int32
+		wouldRound int32
+	}{
+		// 16373 / 60 = 272.883… → truncates to 272; rounding gives 273.
+		{"16373s→(272,M)", time.Duration(16373) * time.Second, 272, 1, 273},
+		// 16350 / 60 = 272.5 → truncates to 272; rounding gives 273.
+		{"16350s→(272,M)", time.Duration(16350) * time.Second, 272, 1, 273},
+		// 58834 / 60 = 980.566… → truncates to 980; rounding gives 981.
+		{"58834s→(980,M)", time.Duration(58834) * time.Second, 980, 1, 981},
+	}
+	for _, c := range cases {
+		t.Run(c.label, func(t *testing.T) {
+			t.Parallel()
+			v, u := EncodeTimerDuration(c.d)
+			if u != c.wantUnit {
+				t.Fatalf("EncodeTimerDuration(%v) unit = %d, want %d", c.d, u, c.wantUnit)
+			}
+			if v == c.wouldRound {
+				t.Fatalf("EncodeTimerDuration(%v) = %d: the encoder rounded to nearest; "+
+					"the CCU-side reference truncates toward zero and wants %d",
+					c.d, v, c.wantV)
+			}
+			if v != c.wantV {
+				t.Fatalf("EncodeTimerDuration(%v) = %d, want %d (truncated toward zero)",
+					c.d, v, c.wantV)
+			}
+		})
+	}
+}

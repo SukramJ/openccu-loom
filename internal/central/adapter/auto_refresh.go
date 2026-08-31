@@ -27,21 +27,20 @@ import (
 // reaction time.
 const configPendingSettleDelay = 10 * time.Second
 
-// isHmIPInterface reports whether iface belongs to the HmIP product
-// family. The HmIP-RF interface serves both HmIP-RF and HmIP-Wired
-// devices on the CCU and signals a completed MASTER write through the
-// CONFIG_PENDING True→False transition; it does not need a
-// MasterPoller. Classic HM interfaces (BidCos-RF, BidCos-Wired,
-// VirtualDevices, CUxD) do not emit CONFIG_PENDING reliably and use a
-// post-write poll instead.
-func isHmIPInterface(iface hmenum.Interface) bool {
-	return iface == hmenum.InterfaceHmIPRF
-}
-
 // wireConfigPendingHook installs the CONFIG_PENDING True→False handler on
-// the central's EventCoordinator. Only HmIP (RF + Wired) channels emit
+// the central's EventCoordinator. Only HmIP (RF + Wired) devices emit
 // CONFIG_PENDING reliably; classic HM devices use the MasterPoller path
-// instead. The hook discriminates by interface.
+// instead.
+//
+// The discrimination is the device-level one from
+// [hmenum.PushesConfigPendingFor] — the same verdict the REST device
+// surface advertises to the SPA as `master_pushes_config_pending` —
+// unioned with the interface-level [hmenum.Interface.PushesConfigPending].
+// The product-group half is what lets an HmIP-flavoured device hosted on
+// the VirtualDevices interface (an HmIP-HEATING group, say) reach the
+// settle leg at all; the interface half keeps every device that is
+// gated in today from losing it when its model name resolves to a
+// classic product group.
 //
 // What runs after a CONFIG_PENDING settle:
 //
@@ -83,7 +82,7 @@ func wireConfigPendingHook(
 	getterFor func(interfaceID string) backends.MasterGetter,
 	logger *slog.Logger,
 ) {
-	if unit == nil || unit.Events == nil {
+	if unit == nil || unit.Events == nil || unit.ModelRegistry == nil {
 		return
 	}
 	unit.Events.SetOnConfigSettled(func(interfaceID, deviceAddress string) {
@@ -93,11 +92,18 @@ func wireConfigPendingHook(
 		// keyed by it. Only the product-family discrimination needs the bare
 		// interface, so derive it rather than casting the wire id — the cast
 		// never matched on a named central and silenced the whole handler.
-		if !isHmIPInterface(BareInterfaceFromWireID(unit.Name(), interfaceID)) {
-			return
-		}
+		//
+		// The device is fetched before the discrimination because the
+		// product group only exists on the device record. The interface
+		// taken is the delivering one, not device.Interface: the backend
+		// that just reported the settle is the one whose CONFIG_PENDING
+		// semantics apply.
 		dev, ok := unit.ModelRegistry.Get(deviceAddress)
 		if !ok || dev == nil {
+			return
+		}
+		iface := BareInterfaceFromWireID(unit.Name(), interfaceID)
+		if !hmenum.PushesConfigPendingFor(iface, dev.ProductGroup) && !iface.PushesConfigPending() {
 			return
 		}
 		SafeGo("auto_refresh.config_pending."+dev.Address, func() {
@@ -234,8 +240,19 @@ func applyMasterValuesToChannel(ch *device.Channel, values map[string]any) {
 // newMasterPollerForInterface constructs a [backends.MasterPoller] for a
 // classic HM interface and wires its OnRefresh callback to push fresh
 // MASTER values back through the channel model via
-// [device.Channel.Refresh]. Returns nil when iface is an HmIP interface
-// — those use CONFIG_PENDING instead.
+// [device.Channel.Refresh]. Returns nil for an interface that pushes
+// CONFIG_PENDING ([hmenum.Interface.PushesConfigPending]) — those use
+// the CONFIG_PENDING settle path instead.
+//
+// The decision is per interface because the poller is constructed once
+// per interface and has no device in scope. The settle gate in
+// [wireConfigPendingHook] is per device, so an HmIP-flavoured device on
+// a non-pushing interface (an HmIP-HEATING group on VirtualDevices) is
+// served by both paths: it keeps this interface's post-write poll and
+// additionally gets the settle-driven targeted MASTER read. The cost is
+// one extra cached getParamset(MASTER) per write on that device class;
+// narrowing it would mean making the refresh hook per device, which is a
+// device-pipeline API change rather than a classification fix.
 //
 // `masterValues` / `interfaceID` / `centralName`: when all three are
 // usable, refreshed MASTER values land in the persistent cache so a
@@ -250,7 +267,7 @@ func newMasterPollerForInterface(
 	interfaceID, centralName string,
 	logger *slog.Logger,
 ) *backends.MasterPoller {
-	if isHmIPInterface(iface) {
+	if iface.PushesConfigPending() {
 		return nil
 	}
 	poller := backends.NewMasterPoller(getter)

@@ -86,7 +86,7 @@ func TestTimerSubscribeCombinesValueAndUnit(t *testing.T) {
 		t.Fatal("the timer reported a duration with only the value observed")
 	}
 
-	unit.OnEvent(int32(combined.TimerUnitMinutes))
+	unit.OnEvent(int32(hmenum.TimerUnitMinutes))
 	seconds, observed := timer.ValueSeconds()
 	if !observed {
 		t.Fatal("the timer reported nothing with both halves observed")
@@ -132,7 +132,7 @@ func TestTimerSubscribeSeedsFromAlreadyObservedValues(t *testing.T) {
 	value := newIntParam(ch, address, "DURATION_VALUE")
 	unit := newIntParam(ch, address, "DURATION_UNIT")
 	value.OnEvent(90)
-	unit.OnEvent(int32(combined.TimerUnitSeconds))
+	unit.OnEvent(int32(hmenum.TimerUnitSeconds))
 
 	timer := combined.NewTimer(address, nil, "DURATION_VALUE", "DURATION_UNIT")
 	unsub := timer.Subscribe(ch)

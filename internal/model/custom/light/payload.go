@@ -5,9 +5,11 @@ package light
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -110,6 +112,13 @@ func onOff(on bool) string {
 // toNumber coerces JSON-decoded numerics to float64. JSON numbers always
 // decode to float64, but callers (REST handlers, test fakes) may pass
 // int / int32 / int64 directly, so be generous in what we accept.
+//
+// json.Number and numeric strings are accepted as well: this handler is
+// the single definition behind both the MQTT command topic and the
+// REST/WS custom-DP invoke plane, and the latter's third-party callers
+// have always been able to send `{"brightness":"128"}`. Narrowing here
+// would silently break them. It also lines the coercion up with
+// [payload.ParamFloat64], which accepts strings too.
 func toNumber(v any) (float64, error) {
 	switch x := v.(type) {
 	case float64:
@@ -122,6 +131,20 @@ func toNumber(v any) (float64, error) {
 		return float64(x), nil
 	case int64:
 		return float64(x), nil
+	case json.Number:
+		f, err := x.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("%w: %q", payload.ErrServiceInvalidParam, x.String())
+		}
+		return f, nil
+	case string:
+		// strconv.ParseFloat rejects trailing garbage such as "42xyz"
+		// instead of silently truncating it.
+		f, err := strconv.ParseFloat(x, 64)
+		if err != nil {
+			return 0, fmt.Errorf("%w: %q", payload.ErrServiceInvalidParam, x)
+		}
+		return f, nil
 	}
 	return 0, payload.ErrServiceInvalidParam
 }
@@ -204,6 +227,17 @@ func (l *Light) applyHALightAttributes(
 			return err
 		}
 	}
+	return l.applyHAColorTempAndEffect(ctx, params, priority)
+}
+
+// applyHAColorTempAndEffect routes the non-colour half of an HA
+// JSON-schema light command. Split out from [Light.applyHALightAttributes]
+// because a light whose turn-on writes COLOR atomically (the HmIP-MP3P
+// status LED) has already consumed the `color` key by the time the
+// remaining attributes have to be routed.
+func (l *Light) applyHAColorTempAndEffect(
+	ctx context.Context, params map[string]any, priority hmenum.CommandPriority,
+) error {
 	if kelvin, ok := haColorTempKelvin(params); ok {
 		if err := l.Invoke(ctx, "set_kelvin", map[string]any{"kelvin": kelvin}, priority); err != nil {
 			return err
@@ -227,63 +261,7 @@ func (l *Light) registerLightServices() {
 	l.RegisterService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return l.TurnOff(ctx, priority)
 	})
-	l.RegisterServiceWithArg("set_level", "level", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
-		// `set_level` accepts several payload shapes — the HA-Discovery
-		// builder advertises this method as the Light's single
-		// `command_topic`, so HA's `mqtt-light schema=json` component
-		// sends the rich form, one object per user action:
-		//
-		//	{"state":"ON","brightness":<0-255>}     — turn on at brightness
-		//	{"state":"OFF"}                         — turn off
-		//	{"brightness":<0-255>}                  — set brightness only
-		//	{"state":"ON","color":{"h":H,"s":S}}    — pick a colour
-		//	{"state":"ON","color_temp_kelvin":K}    — pick a colour temperature
-		//	{"state":"ON","effect":"<label>"}       — pick an effect
-		//	{"level":<0-1>}                         — legacy scalar form
-		//
-		// The colour / colour-temperature / effect keys travel on the same
-		// topic as on/off and brightness, so this handler has to apply them
-		// as well: dropping them makes an HA colour pick silently do
-		// nothing but toggle the lamp.
-		if state, ok := params["state"]; ok {
-			s, _ := state.(string)
-			switch s {
-			case "OFF", "off", "Off":
-				// Colour / effect keys are irrelevant for a switch-off.
-				return l.TurnOff(ctx, priority)
-			case "ON", "on", "On":
-				if br, hasBr := params["brightness"]; hasBr {
-					if f, err := toNumber(br); err == nil {
-						if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
-							return err
-						}
-						return l.applyHALightAttributes(ctx, params, priority)
-					}
-				}
-				if err := l.TurnOn(ctx, priority); err != nil {
-					return err
-				}
-				return l.applyHALightAttributes(ctx, params, priority)
-			}
-		}
-		if br, hasBr := params["brightness"]; hasBr {
-			if f, err := toNumber(br); err == nil {
-				if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
-					return err
-				}
-				return l.applyHALightAttributes(ctx, params, priority)
-			}
-		}
-		if hasHALightAttributes(params) {
-			return l.applyHALightAttributes(ctx, params, priority)
-		}
-		// Legacy scalar form: {"level": 0.5}.
-		v, err := payload.ParamFloat64(params, "level")
-		if err != nil {
-			return err
-		}
-		return l.SetLevel(ctx, v, priority)
-	})
+	l.RegisterServiceWithArg("set_level", "level", l.applyHASetLevel)
 	l.RegisterService("set_timer_on_time", func(_ context.Context, params map[string]any, _ hmenum.CommandPriority) error {
 		d, err := payload.ParamFloat64(params, "seconds")
 		if err != nil {
@@ -292,6 +270,81 @@ func (l *Light) registerLightServices() {
 		l.SetTimerOnTime(time.Duration(d * float64(time.Second)))
 		return nil
 	})
+}
+
+// applyHASetLevel is the single definition of what an HA JSON-schema
+// light command means, shared by every plane that can send one: it backs
+// the `set_level` service method (the command_topic HA itself posts to)
+// and the REST / WebSocket / MQTT custom-DP invoke plane reaches the same
+// code through [payload.ServiceRegistry.Invoke]. Two copies of this
+// ladder used to exist and had drifted — the second one dropped colour,
+// colour temperature and effect on the floor.
+//
+// `set_level` accepts several payload shapes, one object per user action:
+//
+//	{"state":"ON","brightness":<0-255>}     — turn on at brightness
+//	{"state":"OFF"}                         — turn off
+//	{"brightness":<0-255>}                  — set brightness only
+//	{"state":"ON","color":{"h":H,"s":S}}    — pick a colour
+//	{"state":"ON","color_temp_kelvin":K}    — pick a colour temperature
+//	{"state":"ON","effect":"<label>"}       — pick an effect
+//	{"level":<0-1>}                         — legacy scalar form
+//
+// The colour / colour-temperature / effect keys travel on the same topic
+// as on/off and brightness, so this handler has to apply them as well:
+// dropping them makes a colour pick silently do nothing but toggle the
+// lamp.
+//
+// The state literal is matched case-insensitively because that is what
+// the REST/WS plane has always accepted; narrowing it would reject
+// payloads that work today.
+func (l *Light) applyHASetLevel(
+	ctx context.Context, params map[string]any, priority hmenum.CommandPriority,
+) error {
+	if state, ok := params["state"]; ok {
+		s, _ := state.(string)
+		switch strings.ToUpper(s) {
+		case "OFF":
+			// Colour / effect keys are irrelevant for a switch-off.
+			return l.TurnOff(ctx, priority)
+		case "ON":
+			if br, hasBr := params["brightness"]; hasBr {
+				if f, err := toNumber(br); err == nil {
+					if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
+						return err
+					}
+					return l.applyHALightAttributes(ctx, params, priority)
+				}
+			}
+			if err := l.TurnOn(ctx, priority); err != nil {
+				return err
+			}
+			return l.applyHALightAttributes(ctx, params, priority)
+		}
+	}
+	if br, hasBr := params["brightness"]; hasBr {
+		if f, err := toNumber(br); err == nil {
+			if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
+				return err
+			}
+			return l.applyHALightAttributes(ctx, params, priority)
+		}
+	}
+	if hasHALightAttributes(params) {
+		return l.applyHALightAttributes(ctx, params, priority)
+	}
+	// Legacy scalar form: {"level": 0.5}.
+	v, err := payload.ParamFloat64(params, "level")
+	if err != nil {
+		return err
+	}
+	// LEVEL is a 0..1 wire fraction. An out-of-range value is a caller
+	// bug the device cannot honour, so it is rejected at the boundary
+	// rather than forwarded to the wire.
+	if v < 0 || v > 1 {
+		return fmt.Errorf("%w: %q value %v out of range [0, 1]", payload.ErrServiceInvalidParam, "level", v)
+	}
+	return l.SetLevel(ctx, v, priority)
 }
 
 // --- ColorLight ---

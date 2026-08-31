@@ -267,7 +267,11 @@ func (s *Service) indexUnit(u *central.Unit, overrides map[string]sqlitestore.Se
 				src.valueList = dp.ParameterData().ValueList
 				src.silentPanic = silentPanicFromConfig(enrolled[key])
 				if raw, ok := dp.RawValue(); ok {
-					if active, known := activeFromRaw(src.activeValues, raw,
+					// The seed takes the verdict but never the warning:
+					// this loop walks every data point of every device on
+					// every rebuild, so an unresolved value would be
+					// logged here long before any event carries it.
+					if active, known, _ := safety.ActiveFromRaw(src.activeValues, raw,
 						dp.ParameterData().ValueList); known && active {
 						seed[key] = true
 					}
@@ -349,6 +353,15 @@ func (s *Service) classify(centralName, model, channelType, channelAddress, inte
 		// whole fleet.
 		src.relevant = cls.Class.Hazard() || deviceRelevant
 	}
+	// An enrolled source follows the operator's own selection — the same
+	// labels the alarm engine applies to it. The classifier table is a
+	// heuristic over the device model, the enrolment is a decision
+	// somebody made about this installation, and two planes reading one
+	// contact through different label sets is a contradiction an
+	// operator can neither see nor resolve.
+	if labels := enrollmentActiveValues(enrollment); len(labels) > 0 {
+		src.activeValues = labels
+	}
 	src.ref.Class = src.class
 	if !src.class.Valid() {
 		return indexedSource{}, false
@@ -358,6 +371,21 @@ func (s *Service) classify(centralName, model, channelType, channelAddress, inte
 	}
 	// The source is indexed either way; relevance decides aggregation.
 	return src, true
+}
+
+// enrollmentActiveValues reads the operator's active-value selection out
+// of the enrolment's opaque config document. It returns nil for an
+// unenrolled or unparsable row, which leaves the classifier's labels
+// standing — the same fallback the alarm engine's routing index takes.
+func enrollmentActiveValues(row sqlitestore.AlarmSensorRow) []string {
+	if row.ID == "" {
+		return nil
+	}
+	cfg, err := engine.ParseSensorConfig(row.ConfigJSON)
+	if err != nil {
+		return nil
+	}
+	return cfg.ActiveValues
 }
 
 // silentPanicFromConfig resolves the covert-trigger flag out of the

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ─── IsUnitFixed ────────────────────────────────────────────────────────
@@ -122,114 +121,6 @@ func TestHasStatusParameterClearedByEmptyName(t *testing.T) {
 	dp.SetStatusParameter("", nil)
 	if dp.HasStatusParameter() {
 		t.Fatal("HasStatusParameter() must be false after SetStatusParameter with an empty name")
-	}
-}
-
-// ─── RequiresPolling ─────────────────────────────────────────────────────────
-//
-// RequiresPolling() mirrors the two-part Python condition (data_point.py:1033).
-
-// TestRequiresPolllingValuesParamsetReturnsFalse verifies that a VALUES
-// paramset DP on a push-capable interface does not require polling — VALUES
-// parameters are pushed via CCU callbacks.
-func TestRequiresPolllingValuesParamsetReturnsFalse(t *testing.T) {
-	t.Parallel()
-
-	dp := NewDataPoint[float64](baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead))
-	// baseCfg sets ParamsetKeyValues by default; NoPushUpdates defaults to false.
-	if dp.RequiresPolling() {
-		t.Fatal("RequiresPolling() must be false for VALUES paramset on a push-capable interface")
-	}
-}
-
-// TestRequiresPolllingHMBidCosRFMasterReturnsTrue verifies that a MASTER
-// paramset DP on a BidCos-RF (HM) interface requires polling — the CCU does
-// not push MASTER changes for classic HomeMatic devices.
-func TestRequiresPolllingHMBidCosRFMasterReturnsTrue(t *testing.T) {
-	t.Parallel()
-
-	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead)
-	cfg.Key = hmtypes.DataPointKey{
-		InterfaceID:    string(hmenum.ProductGroupHM), // "BidCos-RF"
-		ChannelAddress: "A:1",
-		ParamsetKey:    hmenum.ParamsetKeyMaster,
-		Parameter:      string(hmenum.ParameterLevel),
-	}
-	dp := NewDataPoint[float64](cfg)
-	if !dp.RequiresPolling() {
-		t.Fatal("RequiresPolling() must be true for MASTER paramset on BidCos-RF (HM)")
-	}
-}
-
-// TestRequiresPolllingHMWBidCosWiredMasterReturnsTrue verifies that a MASTER
-// paramset DP on a BidCos-Wired (HMW) interface requires polling.
-func TestRequiresPolllingHMWBidCosWiredMasterReturnsTrue(t *testing.T) {
-	t.Parallel()
-
-	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead)
-	cfg.Key = hmtypes.DataPointKey{
-		InterfaceID:    string(hmenum.ProductGroupHmW), // "BidCos-Wired"
-		ChannelAddress: "A:1",
-		ParamsetKey:    hmenum.ParamsetKeyMaster,
-		Parameter:      string(hmenum.ParameterLevel),
-	}
-	dp := NewDataPoint[float64](cfg)
-	if !dp.RequiresPolling() {
-		t.Fatal("RequiresPolling() must be true for MASTER paramset on BidCos-Wired (HMW)")
-	}
-}
-
-// TestRequiresPolllingHmIPMasterReturnsFalse verifies that a MASTER paramset
-// DP on an HmIP-RF interface does NOT require polling (only HM/HMW MASTER
-// needs polling; HmIP-RF pushes MASTER changes).
-func TestRequiresPolllingHmIPMasterReturnsFalse(t *testing.T) {
-	t.Parallel()
-
-	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead)
-	cfg.Key = hmtypes.DataPointKey{
-		InterfaceID:    string(hmenum.ProductGroupHmIP), // "HmIP-RF"
-		ChannelAddress: "A:1",
-		ParamsetKey:    hmenum.ParamsetKeyMaster,
-		Parameter:      string(hmenum.ParameterLevel),
-	}
-	dp := NewDataPoint[float64](cfg)
-	if dp.RequiresPolling() {
-		t.Fatal("RequiresPolling() must be false for MASTER paramset on HmIP-RF (push-capable, non-HM/HMW)")
-	}
-}
-
-// TestRequiresPolllingNoPushUpdatesMakesValuesRequirePolling verifies that
-// when Config.NoPushUpdates is true every parameter (including VALUES)
-// requires polling — the interface cannot push.
-func TestRequiresPolllingNoPushUpdatesMakesValuesRequirePolling(t *testing.T) {
-	t.Parallel()
-
-	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead)
-	cfg.NoPushUpdates = true
-	// ParamsetKey is VALUES (the default) — would normally return false.
-	dp := NewDataPoint[float64](cfg)
-	if !dp.RequiresPolling() {
-		t.Fatal("RequiresPolling() must be true for VALUES paramset when NoPushUpdates=true")
-	}
-}
-
-// TestRequiresPolllingNoPushUpdatesAndMasterAlsoRequiresPolling verifies
-// that when NoPushUpdates is true a MASTER DP also requires polling
-// (condition 1 short-circuits regardless of paramset or interface).
-func TestRequiresPolllingNoPushUpdatesAndMasterAlsoRequiresPolling(t *testing.T) {
-	t.Parallel()
-
-	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead)
-	cfg.NoPushUpdates = true
-	cfg.Key = hmtypes.DataPointKey{
-		InterfaceID:    string(hmenum.ProductGroupHmIP),
-		ChannelAddress: "A:1",
-		ParamsetKey:    hmenum.ParamsetKeyMaster,
-		Parameter:      string(hmenum.ParameterLevel),
-	}
-	dp := NewDataPoint[float64](cfg)
-	if !dp.RequiresPolling() {
-		t.Fatal("RequiresPolling() must be true when NoPushUpdates=true regardless of paramset")
 	}
 }
 

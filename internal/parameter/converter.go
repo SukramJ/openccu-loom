@@ -246,19 +246,32 @@ func isBoolTrueString(s string) bool {
 	return false
 }
 
-// ConvertHMLevelToCPV converts a float-level value (0.0–1.0) to the
-// hexadecimal combined-parameter-value string used by the CCU for
-// LEVEL_COMBINED writes.
+// ConvertHMLevelToCPV converts a blind-axis level (0.0–1.0) to the
+// hexadecimal combined-parameter-value byte the CCU expects inside a
+// LEVEL_COMBINED write: `position * 200` in lowercase two-digit hex,
+// i.e. one byte per axis over a 0.5 %-per-step grid.
 //
-// Python format('#04x') produces a minimum total width of 4 including
-// the "0x" prefix, so values 0–255 are always at least 4 chars:
+//	0.0 → "0x00"    0.5 → "0x64"    1.0 → "0xc8"
 //
-//	0.0 → "0x00" (int(0*200) = 0)
-//	0.5 → "0x64" (int(0.5*200) = 100)
-//	1.0 → "0xc8" (int(1.0*200) = 200)
+// The product is rounded, not truncated. Exact half-percent positions
+// are not representable in binary64 and several of them land just below
+// their integer product — 0.29*200 is 57.99999999999999, 0.57 and 0.58
+// behave the same way — so truncation moves the blind one 0.5 % step
+// below the commanded position. Rounding is a deliberate divergence
+// from the reference expression `int(value * 100 * 2)`, which carries
+// that artefact.
+//
+// The input is clamped to [0,1] because the wire grammar has no room
+// for anything else: an out-of-range level would render as "0x12c" or
+// "0x-14" and break the two-byte LEVEL_COMBINED string for the axis
+// that was in range as well. Out-of-range input is corrected here, not
+// rejected, because the encoder has no channel to report on.
 func ConvertHMLevelToCPV(value float64) string {
-	n := int(value * 100 * 2)
-	// Produce the same output as Python's format(n, '#04x'):
-	// minimum total width 4 including "0x" prefix → minimum 2 hex digits.
-	return fmt.Sprintf("0x%02x", n)
+	switch {
+	case value < 0:
+		value = 0
+	case value > 1:
+		value = 1
+	}
+	return fmt.Sprintf("0x%02x", int(math.Round(value*100*2)))
 }

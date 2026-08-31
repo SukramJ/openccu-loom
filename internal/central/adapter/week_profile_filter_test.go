@@ -10,6 +10,11 @@ import "testing"
 // positives here would silently hide unrelated config parameters from
 // the UI / MQTT; false negatives would re-introduce the ~84 ghost
 // topics per thermostat the filter is meant to suppress.
+//
+// The Schema-A verdicts are the model's
+// ([weekprofile.IsClimateSlotName]); the cases below record what the
+// hydration path does with them. The effect that matters is asserted in
+// TestWeekProfileSlotHydrationDropsOnlyDecodableCells.
 func TestIsWeekProfileSlotParameter(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -43,7 +48,15 @@ func TestIsWeekProfileSlotParameter(t *testing.T) {
 		{"missing underscore", "P1FOO", false},
 		{"lowercase suffix (not CCU style)", "P1_temperature", false},
 		{"P1_ alone (no body)", "P1_", false}, // prefix with empty body — invalid CCU shape, reject
-		{"P1_X minimal body", "P1_X", true},   // shortest valid form
+
+		// Schema-A near-misses: the profile prefix alone is not a cell.
+		// Suppression here is a drop, so a key the week-profile parser
+		// cannot decode must stay a normal parameter.
+		{"P1_X (prefix, no cell body)", "P1_X", false},
+		{"P1_LEVEL_MONDAY_1 (unknown field)", "P1_LEVEL_MONDAY_1", false},
+		{"P1 slot ordinal past the CCU limit", "P1_ENDTIME_MONDAY_14", false},
+		{"P1 slot ordinal zero", "P1_TEMPERATURE_MONDAY_0", false},
+		{"P1 last valid slot ordinal", "P1_ENDTIME_MONDAY_13", true},
 
 		// Schema B (classic HM, single profile) — bare names without P-prefix.
 		{"bare ENDTIME monday slot 1", "ENDTIME_MONDAY_1", true},

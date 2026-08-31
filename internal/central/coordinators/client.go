@@ -157,53 +157,6 @@ func (c *ClientCoordinator) Interfaces() []hmenum.Interface {
 	return out
 }
 
-// primaryCandidateInterfaces is the ordered preference set used by
-// PrimaryClient to select the best-suited client for sysvar / program
-// calls. HmIP-RF → BidCos-RF → BidCos-Wired in descending preference;
-// CUxD and other interfaces can only serve as fallbacks because they
-// do not support system variable / program RPC calls.
-var primaryCandidateInterfaces = []hmenum.Interface{
-	hmenum.InterfaceHmIPRF,
-	hmenum.InterfaceBidCosRF,
-	hmenum.InterfaceBidCosWired,
-}
-
-// PrimaryClient returns the best available client for sysvar and program
-// calls. The candidate set is searched in preference order (HmIP-RF →
-// BidCos-RF → BidCos-Wired); within the candidate set the first connected
-// client wins. If no candidate is connected, the first connected non-candidate
-// is returned as a fallback. Returns nil when no clients are registered.
-func (c *ClientCoordinator) PrimaryClient() *client.InterfaceClient {
-	entries := c.List()
-	if len(entries) == 0 {
-		return nil
-	}
-	// Build a lookup for fast candidate detection.
-	candidateSet := make(map[hmenum.Interface]struct{}, len(primaryCandidateInterfaces))
-	for _, iface := range primaryCandidateInterfaces {
-		candidateSet[iface] = struct{}{}
-	}
-	// Build an interface → entry map.
-	byIface := make(map[hmenum.Interface]*ClientEntry, len(entries))
-	for _, e := range entries {
-		byIface[e.Interface] = e
-	}
-	// Preferred candidates first.
-	for _, iface := range primaryCandidateInterfaces {
-		if e, ok := byIface[iface]; ok && e.Connected() {
-			return e.Client
-		}
-	}
-	// Fallback: first connected non-candidate.
-	for _, e := range entries {
-		if _, isCandidate := candidateSet[e.Interface]; !isCandidate && e.Connected() {
-			return e.Client
-		}
-	}
-	// Fallback: first entry regardless of connection state (original behaviour).
-	return entries[0].Client
-}
-
 // AllClientsActive returns true when every registered client reports
 // CONNECTED. Returns false when no clients are registered.
 func (c *ClientCoordinator) AllClientsActive() bool {

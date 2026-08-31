@@ -3427,6 +3427,27 @@
       ]
     },
     {
+      "name": "SmokeDetectorAlarmStatus",
+      "values": [
+        {
+          "go_name": "SmokeDetectorAlarmStatusIdleOff",
+          "wire_value": "IDLE_OFF"
+        },
+        {
+          "go_name": "SmokeDetectorAlarmStatusIntrusionAlarm",
+          "wire_value": "INTRUSION_ALARM"
+        },
+        {
+          "go_name": "SmokeDetectorAlarmStatusPrimaryAlarm",
+          "wire_value": "PRIMARY_ALARM"
+        },
+        {
+          "go_name": "SmokeDetectorAlarmStatusSecondaryAlarm",
+          "wire_value": "SECONDARY_ALARM"
+        }
+      ]
+    },
+    {
       "name": "SourceOfDeviceCreation",
       "values": [
         {

@@ -122,8 +122,18 @@ func TestConvertHMLevelToCPV(t *testing.T) {
 		want  string
 	}{
 		{0.0, "0x00"},
-		{0.5, "0x64"}, // int(0.5*100*2) = 100 → 0x64
-		{1.0, "0xc8"}, // int(1.0*100*2) = 200 → 0xc8
+		{0.5, "0x64"}, // 0.5*200 = 100 → 0x64
+		{1.0, "0xc8"}, // 1.0*200 = 200 → 0xc8
+		// Positions whose *200 product lands just below its integer in
+		// binary64. Truncation would emit the step below the commanded
+		// one (0x39 / 0x71 / 0x73).
+		{0.29, "0x3a"},
+		{0.57, "0x72"},
+		{0.58, "0x74"},
+		// Out-of-range input is clamped so the byte can never grow a
+		// third hex digit or a minus sign and break the wire grammar.
+		{-0.5, "0x00"},
+		{1.5, "0xc8"},
 	}
 	for _, tc := range cases {
 		got := parameter.ConvertHMLevelToCPV(tc.level)

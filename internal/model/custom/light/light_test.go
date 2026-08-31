@@ -191,10 +191,10 @@ func TestLightTurnOffWithRampAtomicPutParamset(t *testing.T) {
 	if got[string(hmenum.ParameterLevel)].(float64) != 0 {
 		t.Errorf("LEVEL=%v want 0", got[string(hmenum.ParameterLevel)])
 	}
-	// ON_TIME=NotUsed must accompany the ramp so the CCU does not silently
+	// ON_TIME=TimerNotUsed must accompany the ramp so the CCU does not silently
 	// overlay an implicit off-timer.
-	if got[string(hmenum.ParameterOnTime)].(float64) != NotUsed {
-		t.Errorf("ON_TIME=%v want NotUsed (%v)", got[string(hmenum.ParameterOnTime)], NotUsed)
+	if got[string(hmenum.ParameterOnTime)].(float64) != custom.TimerNotUsed {
+		t.Errorf("ON_TIME=%v want TimerNotUsed (%v)", got[string(hmenum.ParameterOnTime)], custom.TimerNotUsed)
 	}
 }
 
@@ -325,36 +325,6 @@ func TestConvertFlashTimeToOnTimeList(t *testing.T) {
 		got := ConvertFlashTimeToOnTimeList(tc.input)
 		if got != tc.want {
 			t.Errorf("ConvertFlashTimeToOnTimeList(%d)=%q, want %q", tc.input, got, tc.want)
-		}
-	}
-}
-
-// TestConvertRepetitions verifies that repetitions mapping.
-func TestConvertRepetitions(t *testing.T) {
-	cases := []struct {
-		input int
-		want  string
-		ok    bool
-	}{
-		{0, "NO_REPETITION", true},
-		{-1, "INFINITE_REPETITIONS", true},
-		{1, "REPETITIONS_001", true},
-		{18, "REPETITIONS_018", true},
-		{5, "REPETITIONS_005", true},
-		{19, "", false},
-		{-2, "", false},
-	}
-	for _, tc := range cases {
-		got, err := ConvertRepetitions(tc.input)
-		if tc.ok {
-			if err != nil {
-				t.Errorf("ConvertRepetitions(%d) unexpected error: %v", tc.input, err)
-			}
-			if got != tc.want {
-				t.Errorf("ConvertRepetitions(%d)=%q, want %q", tc.input, got, tc.want)
-			}
-		} else if err == nil {
-			t.Errorf("ConvertRepetitions(%d) expected error, got %q", tc.input, got)
 		}
 	}
 }

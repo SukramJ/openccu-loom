@@ -5,6 +5,7 @@ package custom
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -123,20 +124,80 @@ func PutParamsetForce(
 // to minutes.
 const timeUnitThreshold = 16343
 
-// TimerNotUsed is the magic sentinel value
-// used". When this exact float64 is encoded, the result is (111600, H) so
-// the device can distinguish "not set" from any ordinary duration.
-const timerNotUsed = 111600.0
+// TimerNotUsed is the sentinel duration, in seconds, that marks a timer
+// parameter of the ON_TIME / RAMP_TIME / DURATION family as "not used".
+// When this exact float64 is encoded the result is (111600, H) — the value
+// stays unchanged and the unit is forced to hours, because 111600 hours is
+// roughly 554 days and can never collide with a real duration, so the device
+// can distinguish "timer disabled" from any ordinary duration.
+//
+// It is not a universal CCU constant: the authoritative per-parameter source
+// is the parameter descriptor's SPECIAL entry with ID NOT_USED, and other
+// parameters carry other values there. This constant is the one that the
+// timer family agrees on, and it is declared once so the encoder and the
+// combined-timer write path cannot drift apart.
+const TimerNotUsed = 111600.0
 
-// EncodeTimerDuration maps a time.Duration onto a (value, unit) pair matching
-// the CCU's combined-timer enum convention (0 = seconds, 1 = minutes, 2 =
-// hours). Used by Light.SetOnTime / Light.SetRampTime, Siren.TurnOn duration,
+// RepetitionsNone and RepetitionsInfinite are the two boundary labels of the
+// REPETITIONS parameter's VALUE_LIST, and MaxRepetitions is the highest count
+// the label grammar can express.
+const (
+	RepetitionsNone     = "NO_REPETITION"
+	RepetitionsInfinite = "INFINITE_REPETITIONS"
+	MaxRepetitions      = 18
+)
+
+// RepetitionsLabel maps a repetition count onto the REPETITIONS VALUE_LIST
+// label the CCU expects:
+//
+//   - 0     → "NO_REPETITION"
+//   - -1    → "INFINITE_REPETITIONS"
+//   - 1..18 → "REPETITIONS_001" .. "REPETITIONS_018"
+//
+// Any other count returns an error, because the grammar cannot express it.
+// Declared once so the profiles that write REPETITIONS from a numeric count
+// — the sound-player LED and the text display — cannot drift apart on the
+// label a given count maps to.
+//
+// Which of those labels a concrete device accepts is the narrower question and
+// is not answered here: a device's own REPETITIONS VALUE_LIST may stop well
+// short of 18 (the captured HmIP-MP3P and HmIP-WRCD descriptions both end at
+// REPETITIONS_014), so a caller that holds the device list should still check
+// membership before writing. TextDisplay.WriteWithSound does exactly that.
+func RepetitionsLabel(n int) (string, error) {
+	switch {
+	case n == 0:
+		return RepetitionsNone, nil
+	case n == -1:
+		return RepetitionsInfinite, nil
+	case n >= 1 && n <= MaxRepetitions:
+		return fmt.Sprintf("REPETITIONS_%03d", n), nil
+	default:
+		return "", fmt.Errorf("repetitions must be -1 (infinite), 0 (none), or 1-%d, got %d", MaxRepetitions, n)
+	}
+}
+
+// EncodeTimerDuration maps a time.Duration onto the (value, unit) pair the
+// CCU's combined timers take. The unit is a [hmenum.TimerUnit] ordinal, handed
+// back as int32 because every caller stages it straight into a wire paramset.
+// Used by Light.SetOnTime / Light.SetRampTime, Siren.TurnOn duration,
 // Switch.TurnOn(on_time) etc.
 //
 // Threshold semantics : the encoder uses _TIME_UNIT_THRESHOLD = 16343 as the
 // bucket boundary, not 60 or 3600. So 61 s → (61, S), not (1, M). The
 // promotion chain is: if seconds > 16343 → convert to minutes; then if
 // minutes > 16343 → convert to hours. Exact sentinel 111600 s → (111600, H).
+//
+// Rounding : a promoted value is TRUNCATED toward zero, never rounded, so
+// 16373 s → (272, M) and not (273, M). That is reference-parity, not an
+// artefact of the int32 cast. The CCU-side reference promotes in floating
+// point (`recalc_unit_timer` divides and keeps the fraction) and only loses
+// the fraction at the write boundary, where a float staged onto an INTEGER
+// parameter goes through Python's `int()` — which truncates toward zero.
+// DURATION_VALUE is an INTEGER parameter, so every promoted duration takes
+// that path. The reference file/line citation is in
+// notes/parity/by_design.md, entry BD-Timer-PromotionTruncates.
+// Pinned by TestEncodeTimerDurationTruncatesTowardZero.
 func EncodeTimerDuration(d time.Duration) (value, unit int32) {
 	secs := d.Seconds()
 	const maxInt32 = float64(int64(^uint32(0) >> 1))
@@ -150,22 +211,22 @@ func EncodeTimerDuration(d time.Duration) (value, unit int32) {
 		return int32(v) //nolint:gosec // bounded above; see #20
 	}
 	if secs <= 0 {
-		return 0, 0
+		return 0, int32(hmenum.TimerUnitSeconds)
 	}
-	// Special sentinel: timerNotUsed → (111600, H) so the device
+	// Special sentinel: TimerNotUsed → (111600, H) so the device
 	// distinguishes "timer disabled" from any real duration.
-	if secs == timerNotUsed {
-		return clamp(secs), 2
+	if secs == TimerNotUsed {
+		return clamp(secs), int32(hmenum.TimerUnitHours)
 	}
 	t := secs
-	u := int32(0) // seconds
+	u := int32(hmenum.TimerUnitSeconds)
 	if t > timeUnitThreshold {
 		t /= 60
-		u = 1 // minutes
+		u = int32(hmenum.TimerUnitMinutes)
 	}
 	if t > timeUnitThreshold {
 		t /= 60
-		u = 2 // hours
+		u = int32(hmenum.TimerUnitHours)
 	}
 	return clamp(t), u
 }

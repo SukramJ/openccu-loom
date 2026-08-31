@@ -273,31 +273,6 @@ func TestDomainFromActorTypeUnknown(t *testing.T) {
 }
 
 // ============================================================
-// detectLockMode tests
-// ============================================================
-
-func TestDetectLockModeDoorLock(t *testing.T) {
-	t.Parallel()
-	if got := detectLockMode([]string{"1_LOCK", "2_UNLOCK"}); got != "door_lock" {
-		t.Errorf("detectLockMode([1_LOCK,...]) = %q, want door_lock", got)
-	}
-}
-
-func TestDetectLockModeUserPermission(t *testing.T) {
-	t.Parallel()
-	if got := detectLockMode([]string{"2_LOCK", "3_UNLOCK"}); got != "user_permission" {
-		t.Errorf("detectLockMode([2_...]) = %q, want user_permission", got)
-	}
-}
-
-func TestDetectLockModeEmpty(t *testing.T) {
-	t.Parallel()
-	if got := detectLockMode(nil); got != "user_permission" {
-		t.Errorf("detectLockMode(nil) = %q, want user_permission", got)
-	}
-}
-
-// ============================================================
 // detectLockAction tests
 // ============================================================
 
@@ -320,38 +295,6 @@ func TestDetectLockActionFallback(t *testing.T) {
 	got := detectLockAction(999.0, 999, 999)
 	if got != "lock_autorelock_start" {
 		t.Errorf("unknown combination → %q, want lock_autorelock_start", got)
-	}
-}
-
-// ============================================================
-// detectLockPermission tests
-// ============================================================
-
-func TestDetectLockPermissionGranted(t *testing.T) {
-	t.Parallel()
-	if got := detectLockPermission(1.0); got != "granted" {
-		t.Errorf("level=1.0 → %q, want granted", got)
-	}
-}
-
-func TestDetectLockPermissionBoundary(t *testing.T) {
-	t.Parallel()
-	if got := detectLockPermission(0.5); got != "granted" {
-		t.Errorf("level=0.5 → %q, want granted", got)
-	}
-}
-
-func TestDetectLockPermissionNotGranted(t *testing.T) {
-	t.Parallel()
-	if got := detectLockPermission(0.0); got != "not_granted" {
-		t.Errorf("level=0.0 → %q, want not_granted", got)
-	}
-}
-
-func TestDetectLockPermissionBelowBoundary(t *testing.T) {
-	t.Parallel()
-	if got := detectLockPermission(0.4); got != "not_granted" {
-		t.Errorf("level=0.4 → %q, want not_granted", got)
 	}
 }
 

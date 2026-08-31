@@ -124,6 +124,14 @@ func TestLookupBinarySensorRuleWindowContacts(t *testing.T) {
 	if d, ok := LookupBinarySensorRule("HmIP-SWD", "STATE"); ok {
 		t.Fatalf("HmIP-SWD/STATE: resolved to device_class=%q, want no rule", d.DeviceClass)
 	}
+	// The table alone is not the exclusion. device_class is resolved through
+	// the domain, so a model-side table that lists the shorter prefix defeats
+	// this exclusion while the assertion above still passes. Assert the
+	// negative on the path the discovery payload actually takes.
+	if got := resolveBinarySensorDeviceClass("HmIP-SWD", "STATE"); got != "" {
+		t.Fatalf("HmIP-SWD/STATE resolved to device_class=%q through the domain, want none: "+
+			"the water sensor must not inherit the window rule from a shorter model prefix", got)
+	}
 }
 
 func TestLookupNumberRuleHmwIo12FrequencyMHz(t *testing.T) {

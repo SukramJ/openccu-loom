@@ -71,7 +71,8 @@ func EncodeLockAction(action LockAction) (level float64, durBase, durFactor int,
 // belongs to actor 1 (channel IDs starting with "1_"); otherwise it returns
 // [LockModeUserPermission].
 //
-// Mirrors detectLockMode in the adapter layer.
+// Sole owner of the rule: the REST/WS read path and the week-profile read
+// path both call this, so a lock slot cannot get two different verdicts.
 func DetectLockMode(targetChannels []string) LockMode {
 	for _, ch := range targetChannels {
 		if len(ch) >= 2 && ch[0] == '1' && ch[1] == '_' {
@@ -84,7 +85,8 @@ func DetectLockMode(targetChannels []string) LockMode {
 // DetectLockPermission maps a LEVEL value to [LockPermissionAllowed] (>= 0.5)
 // or [LockPermissionDenied] (< 0.5).
 //
-// Mirrors detectLockPermission in the adapter layer.
+// Sole owner of the threshold: both read paths call this rather than
+// restating 0.5, so the boundary moves in one place.
 func DetectLockPermission(level float64) LockPermission {
 	if level >= lockPermissionThreshold {
 		return LockPermissionAllowed

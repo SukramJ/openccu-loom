@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -40,14 +41,6 @@ var onTimeListValues = [...]struct {
 // indefinitely".
 const permanentlyOn = "PERMANENTLY_ON"
 
-// NoRepetition / infiniteRepetitions mirror
-// _NO_REPETITION / _INFINITE_REPETITIONS constants.
-const (
-	noRepetition        = "NO_REPETITION"
-	infiniteRepetitions = "INFINITE_REPETITIONS"
-	maxRepetitions      = 18
-)
-
 // ConvertFlashTimeToOnTimeList maps a flash duration in milliseconds to the
 // nearest ON_TIME_LIST VALUE_LIST entry. 0 / negative / > 5000 ms all yield
 // "PERMANENTLY_ON".
@@ -65,23 +58,6 @@ func ConvertFlashTimeToOnTimeList(flashTimeMS int) string {
 		}
 	}
 	return best
-}
-
-// ConvertRepetitions maps a repetitions integer to a REPETITIONS VALUE_LIST
-// label. 0 → "NO_REPETITION", -1 → "INFINITE_REPETITIONS", 1..18 →
-// "REPETITIONS_001" .. "REPETITIONS_018". Returns an error for values outside
-// the range -1..18.
-func ConvertRepetitions(repetitions int) (string, error) {
-	switch {
-	case repetitions == 0:
-		return noRepetition, nil
-	case repetitions == -1:
-		return infiniteRepetitions, nil
-	case repetitions >= 1 && repetitions <= maxRepetitions:
-		return fmt.Sprintf("REPETITIONS_%03d", repetitions), nil
-	default:
-		return "", fmt.Errorf("soundplayer-led: repetitions must be -1 (infinite), 0 (none), or 1-%d, got %d", maxRepetitions, repetitions)
-	}
 }
 
 // LedOnConfig bundles optional arguments for [SoundPlayerLED.TurnOn].
@@ -155,7 +131,112 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 	if led.direction != nil {
 		_ = led.direction.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
 	}
+	// The embedded chain registers turn_on / turn_off / set_level only
+	// when the LEVEL Float resolved (see [New]); without it there is
+	// nothing to override and the LED has no write path either.
+	if led.Float != nil {
+		led.registerSoundPlayerLEDServices()
+	}
 	return led
+}
+
+// registerSoundPlayerLEDServices substitutes the LED's own atomic writes
+// for the three inherited on/off operations.
+//
+// The plain [Light.TurnOn] the embedded FixedColorLight would run writes
+// LEVEL only, which leaves COLOR at BLACK — the LED stays dark — and lets
+// a previously commanded flash pattern (ON_TIME_LIST_1 / REPETITIONS)
+// survive a turn-off. [SoundPlayerLED.TurnOn] / [SoundPlayerLED.TurnOff]
+// bundle COLOR, ON_TIME_LIST_1, REPETITIONS and ON_TIME into one
+// put_paramset instead.
+//
+// OverrideService rather than RegisterService: the whole embedded chain
+// shares one ServiceRegistry, so re-registering an inherited name would
+// trip its duplicate-registration panic at device-discovery time.
+func (l *SoundPlayerLED) registerSoundPlayerLEDServices() {
+	l.OverrideService("turn_on", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		return l.TurnOn(ctx, ledOnConfigFromParams(params), l.Writer, l.Address(), priority)
+	})
+	l.OverrideService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
+		return l.TurnOff(ctx, l.Writer, l.Address(), priority)
+	})
+	l.OverrideService("set_level", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		if state, ok := params["state"].(string); ok {
+			switch strings.ToUpper(state) {
+			case "OFF":
+				return l.TurnOff(ctx, l.Writer, l.Address(), priority)
+			case "ON":
+				if err := l.TurnOn(ctx, ledOnConfigFromParams(params), l.Writer, l.Address(), priority); err != nil {
+					return err
+				}
+				// `color` is consumed by the atomic write above; the
+				// remaining HA attributes are not axes a fixed-colour
+				// LED advertises, so route them and let the registry
+				// answer for them.
+				return l.applyHAColorTempAndEffect(ctx, params, priority)
+			}
+		}
+		// Every other shape (brightness-only, the legacy scalar level)
+		// is a plain LEVEL adjust and keeps the inherited semantics.
+		return l.applyHASetLevel(ctx, params, priority)
+	})
+}
+
+// ledOnConfigFromParams builds a [LedOnConfig] from a service method's
+// params. Every field is optional, matching LedOnConfig's own documented
+// zero-value defaults (0 brightness → full, nil HSColor → keep the
+// current colour, 0 on/ramp time → no timer, 0 repetitions → none, 0
+// flash time → PERMANENTLY_ON); a param that is present but the wrong
+// type is ignored rather than rejected, so a caller that only wants a
+// plain turn-on can omit all of them.
+//
+// Both colour spellings are read: the flat `hue` / `saturation` pair a
+// REST or SPA caller sends, and the `color:{"h":…,"s":…}` object of an HA
+// JSON-schema light command. Reading only the flat pair would drop the
+// colour of every HA colour pick on this LED.
+func ledOnConfigFromParams(p map[string]any) LedOnConfig {
+	var cfg LedOnConfig
+	if raw, ok := p["brightness"]; ok {
+		if f, err := toNumber(raw); err == nil {
+			cfg.Brightness = uint8(min(max(f, 0), 255))
+		}
+	}
+	if hueRaw, ok := p["hue"]; ok {
+		if hue, err := toNumber(hueRaw); err == nil {
+			sat := 100.0
+			if satRaw, ok2 := p["saturation"]; ok2 {
+				if s, err2 := toNumber(satRaw); err2 == nil {
+					sat = s
+				}
+			}
+			cfg.HSColor = &[2]float64{hue, sat}
+		}
+	} else if c, ok := p["color"]; ok {
+		if hue, sat, valid := haColorHS(c); valid {
+			cfg.HSColor = &[2]float64{float64(hue), sat}
+		}
+	}
+	if raw, ok := p["on_time"]; ok {
+		if f, err := toNumber(raw); err == nil {
+			cfg.OnTime = f
+		}
+	}
+	if raw, ok := p["ramp_time"]; ok {
+		if f, err := toNumber(raw); err == nil {
+			cfg.RampTime = f
+		}
+	}
+	if raw, ok := p["repetitions"]; ok {
+		if n, err := toNumber(raw); err == nil {
+			cfg.Repetitions = int(n)
+		}
+	}
+	if raw, ok := p["flash_time_ms"]; ok {
+		if n, err := toNumber(raw); err == nil {
+			cfg.FlashTimeMS = int(n)
+		}
+	}
+	return cfg
 }
 
 // ActivityState returns the LED channel's current DIRECTION /
@@ -207,7 +288,7 @@ func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr stri
 // - COLOR: resolved from cfg.HSColor via [HSToFixedColor], or
 // kept as current color (defaulting to WHITE if unset/black).
 // - ON_TIME_LIST_1: [ConvertFlashTimeToOnTimeList](cfg.FlashTimeMS).
-// - REPETITIONS: [ConvertRepetitions](cfg.Repetitions).
+// - REPETITIONS: [custom.RepetitionsLabel](cfg.Repetitions).
 // - RAMP_TIME: cfg.RampTime seconds.
 // - ON_TIME: cfg.OnTime seconds (or deferred timer via
 // [Light.SetTimerOnTime]).
@@ -234,10 +315,12 @@ func (l *SoundPlayerLED) TurnOn(ctx context.Context, cfg LedOnConfig, w custom.W
 	// Flash time → ON_TIME_LIST label.
 	flashValue := ConvertFlashTimeToOnTimeList(cfg.FlashTimeMS)
 
-	// Repetitions → label (ignore conversion errors, fall back to NO_REPETITION).
-	repValue, _ := ConvertRepetitions(cfg.Repetitions)
-	if repValue == "" {
-		repValue = noRepetition
+	// Repetitions → label. A count the grammar cannot express is operator
+	// input the device would reject; failing the whole command surfaces it
+	// instead of quietly turning the LED on with a different repeat count.
+	repValue, err := custom.RepetitionsLabel(cfg.Repetitions)
+	if err != nil {
+		return fmt.Errorf("soundplayer-led: %w", err)
 	}
 
 	// OnTime from deferred timer or cfg.OnTime.
