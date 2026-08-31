@@ -24,12 +24,18 @@ verdict that must not be dressed up as agreement.
 
 ## Result
 
+The heaviest reported contradiction was withdrawn after being measured against
+the live CCU, and one more rested on a phrase the code does not use. What
+survives is smaller than the first pass suggested, and the pass is still worth
+its cost: it produced two hardware-confirmed facts about a wire parameter that
+had only ever been reasoned about.
+
 | Decision | Verdict |
 |---|---|
 | Climate endtime grammar | **contradicted in one half** |
 | 13-slot climate limit | confirmed; a secondary assumption contradicted |
 | `LEVEL_COMBINED` rounding | confirmed |
-| `WEEK_PROGRAM_CHANNEL_LOCKS` | **contradicted** |
+| `WEEK_PROGRAM_CHANNEL_LOCKS` | reported contradicted, **withdrawn after measurement** |
 | `DURATION_VALUE` / timer sentinel | **contradicted** |
 | Smoke labels · sysvar exclusion | mixed — see the correction below |
 
@@ -84,7 +90,59 @@ rule rests entirely on the port's `_EXCLUDED` list.
 
 Ranked by what would misbehave.
 
-### 1. The `WEEK_PROGRAM_CHANNEL_LOCKS` bit map is not a 24-bit actor grid
+### 1. WITHDRAWN — the `WEEK_PROGRAM_CHANNEL_LOCKS` finding does not survive measurement
+
+This was reported as the heaviest contradiction. All three of its parts were
+checked afterwards, two against the live CCU, and none holds. It is recorded in
+full because a finding that collapses deserves the same care as one that
+stands — and because the way it collapsed is instructive.
+
+**The bit width is 24, measured.** Writing `WPTCLS=2147483647` (bits 0..30) to
+`00536409A5E82D:19`, an HmIP-WRC6-230, and reading back gives `0x00FFFFFF` —
+bits 0..23 exactly. The device masks to a 24-bit field, which is the width of
+this project's own table (8 actors x 3 sub-channels). The claim that drove the
+finding, that the highest bit the CCU ever emits is 9, is refused by the
+hardware: bit 23 is accepted and held. The original value 0 was restored.
+
+**The mode values are ours, measured twice.** On `0008DA499C8ADA:7` (HmIP-BDT),
+`WPTCLS=1,WPTCL=0` sets bit 0 and `WPTCL=2` clears it. So `WPTCL=0` is MANU and
+`WPTCL=2` is AUTO, exactly the enum order this project implements. A community
+report giving "HmIP-BDT: Auto = 0, Manual = 1" is wrong for that device.
+Confirmed again on the WRC6-230. Both devices restored to 0.
+
+**The write shape is ours.** `COMBINED_PARAMETER` carrying `WPTCLS=...,WPTCL=...`
+is accepted and changes the value; the claim that this string lives only inside
+a `getConfigString()` helper is not what the hardware does.
+
+**Why the firmware evidence looked otherwise.** The `Math.pow(2, index)` flat
+ordinal really is in the firmware, at
+`src/webui/www_source/ise/js/iseHmIPWeeklyProgram_AccessReceiver.js` — not under
+`www/`, which is why a first search missed it. But
+`www/rega/esp/controls/hmip_weekly_program.fn:75-85` selects that renderer by
+device label, for `HmIP-DLD`, `-DLD-A`, `-DLD-S`, `-DLP`, `-DLP-A`, `-DLP-AS`
+and `-DLP-WS` only. Every other device gets the generic
+`iseHmIPWeeklyProgram.js`, which contains no `pow`, no `bit` and no `LOCK` at
+all. The flat ordinal is the DOOR-LOCK rule; for the dimmer, switch and optical
+families the firmware renders no channel locks and says nothing about the
+mapping.
+
+**What remains genuinely open.** The 24-bit width fits the 8x3 grid and does not
+fit a scheme needing ten bits for this device, but it does not by itself prove
+which key addresses which channel. Deciding that would need a week program
+configured on the device, one bit set, and observation of which channel stops
+following it — an intervention in a working installation over time, not a read.
+It was not done.
+
+**The lesson, which is the same one this session kept relearning.** The reader's
+citations were real; the question they answered was not the one being asked. It
+read a renderer without establishing which devices reach it. Four of my own
+measurements in the same session failed the same way — a device built without
+channels, groups counted per profile instead of per device, a bite on a caching
+helper rather than the line the behaviour rests on, and a read-back that echoes
+whatever was written. Each source was sound. Each question was slightly beside
+the point.
+
+### 1b. What the original finding claimed, kept for the record
 
 `internal/model/weekprofile/channel_keys.go` maps `<actor>_<sub>` keys onto bits
 0..23. The firmware's own weekly-program UI treats the bit as the **ordinal of
