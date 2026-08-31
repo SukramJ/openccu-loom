@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 3ce820bd
-HEAD: 3ce820bd
+Generated: 7e8fed27
+HEAD: 7e8fed27
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30178 |
+| Total Exported | 30191 |
 | Reachable | 5265 |
-| Whitelisted | 21906 |
-| **Unreachable** | **3007** |
+| Whitelisted | 21915 |
+| **Unreachable** | **3011** |
 
 ## Top-20 Packages by Dead Code
 
@@ -201,7 +201,7 @@ HEAD: 3ce820bd
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 110 | 30 |
-| pkg/hmapi | 0 | 159 | 16 |
+| pkg/hmapi | 0 | 163 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |
