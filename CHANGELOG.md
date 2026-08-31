@@ -6,7 +6,41 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.71.0] - 2026-08-31
+
+### Changed
+
+- **REST `APIVersion` 7.28.0 → 8.0.0.** Breaking: three operations and four
+  schemas were removed. An installed `openccu-loom-client` refuses to connect
+  on a major mismatch regardless of whether it used this surface, so it and
+  `node-red-contrib-openccu-loom` resync after this ships.
+
+
+- **REST `APIVersion` 7.27.0 → 7.28.0.** Additive: `assets/schemas/enums.json`
+  gains `SmokeDetectorAlarmStatus`, the enum the folded smoke label set is
+  typed with. No endpoint, field or payload shape changed. Downstream
+  generated clients (`openccu-loom-client`, the Node-RED contrib) pick the
+  enum up on their next sync.
+
 ### Fixed
+
+- **Every LINK paramset write sent the wrong wire type for all but one
+  parameter.** The XML-RPC encoder maps a Go `float64` to `<double>`, and the
+  MASTER/VALUES write path has always corrected for that by coercing each value
+  against the paramset descriptor first. Neither LINK write path did — not the
+  REST route, not the WebSocket one — so whatever a caller handed in reached the
+  CCU with its Go type rather than its declared one.
+
+  Measured on a real device's link paramset (45 parameters on an HmIP-PS):
+  30 ENUM, 12 INTEGER, 2 BOOL, 1 FLOAT. A caller passing decoded-JSON numbers —
+  which is every caller, since JSON has one number type — therefore sent the
+  wrong type for 44 of the 45. The one FLOAT was right by accident.
+
+  The rule was not missing, only unapplied: the coercion helper's own doc
+  comment describes this exact failure. Both LINK paths now call it. The
+  deliberate soft path is kept — when the descriptor cannot be fetched the
+  values pass through unchanged, so a CCU outage stays a backend error rather
+  than becoming a write rejection.
 
 - **`links.get_profiles` always reported no active profile, because the field
   was a literal.** The handler returned `"active_profile_id": 0` without ever
@@ -29,7 +63,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   No contract moves — the response carries the same two fields it always did.
   One of them is now true.
 
-### Fixed
 
 - **The surviving profile store answered the same question two ways, and had
   lost two capabilities with the one that was deleted.** `internal/store/linkprofile`
@@ -62,51 +95,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   question, and a surface keyed by a channel pair cannot offer the operator a
   choice without it.
 
-### Removed
-
-- **`master_profiles.*` and its store, because the surface was reading the
-  wrong archive.** ADR 0069 established what the profiles archive actually is:
-  link-paramset data. The generator reads the CCU firmware's LINK easymode tree
-  (`<RECEIVER>/<SENDER>.tcl`) and explicitly skips its MASTER tree, and the CCU
-  writes it with the peer channel address as the paramset key. OpenCCU-Loom fed
-  that file into a store keyed by device model, which no archive is named
-  after — so every call returned an empty list or a not-found.
-
-  The apply path was worse than a misnomer, and worse than the ADR first said.
-  `device_type` is a caller-supplied string that reaches the loader unvalidated
-  and becomes a filename, so what the lookup rejected was not *any* input but a
-  device *model*. A client sending a receiver channel type — `ACTOR_WINDOW`,
-  say, which is a real archive name — loaded a real archive, resolved a real
-  profile, and wrote its fixed parameters into that channel's own MASTER
-  paramset on a live CCU. It required an authenticated session holding the edit
-  lock on the target channel, and no shipped client sends a channel type in a
-  field named `device_type`, which is why it was never seen.
-
-  Removed rather than re-keyed: re-keying alone would have turned a defect that
-  needs an undocumented argument into one that fires on the documented one. The
-  three REST routes, four WebSocket commands, four OpenAPI schemas and the
-  `internal/store/masterprofile` package are gone. The MASTER-profile
-  capability the surface claimed already exists elsewhere and correctly —
-  `internal/central/adapter/uischema_adapter.go` synthesises it from
-  `ccudata.ChannelMetadata.MasterProfile`, the easymode extract that *is* the
-  MASTER-side source — and is untouched.
-
-  The replacement is a write operation on the existing `links.*` category,
-  which already carries the pair-keyed read side (`links.get_profiles`,
-  `links.test_profile`) and already resolves both channel addresses. It lands
-  in a following change together with the matcher capabilities `linkprofile`
-  must absorb. The MCP surface gains nothing here because it never carried a
-  profile verb, and its paramset-key parser accepts only `MASTER` and `VALUES`;
-  teaching it `LINK` belongs with the write operation, not with this removal.
-
-### Changed
-
-- **REST `APIVersion` 7.28.0 → 8.0.0.** Breaking: three operations and four
-  schemas were removed. An installed `openccu-loom-client` refuses to connect
-  on a major mismatch regardless of whether it used this surface, so it and
-  `node-red-contrib-openccu-loom` resync after this ships.
-
-### Fixed
 
 - **The domain core duplicated itself in 34 places, and eight of the copies
   had already drifted.** Three earlier audits read the north adapters against
@@ -205,30 +193,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   statements are about that corpus, not about all firmware, which is why the
   cap is a named constant and the drop is logged.
 
-### Changed
-
-- **REST `APIVersion` 7.27.0 → 7.28.0.** Additive: `assets/schemas/enums.json`
-  gains `SmokeDetectorAlarmStatus`, the enum the folded smoke label set is
-  typed with. No endpoint, field or payload shape changed. Downstream
-  generated clients (`openccu-loom-client`, the Node-RED contrib) pick the
-  enum up on their next sync.
-
-### Removed
-
-- **Exported model copies that nothing ran.** `ClientCoordinator.PrimaryClient`
-  and both spellings of the primary-client candidate set, `RequiresPolling`,
-  `CleanSysvarNames`, `backends.EncodeHMLevel`, `value.ConvertHMLevelToCPV`
-  and `Classification.Active` were exported, documented, unit-tested and had
-  zero production callers, while the daemon ran a private copy elsewhere. The
-  tests that covered them were the most misleading state in the codebase: each
-  pinned its own copy against its own literal, so both halves stayed green
-  while they disagreed. `RequiresPolling`'s six green cases ran against a key
-  shape production never produces — on real keys it answered `false`
-  everywhere.
-
-## [0.71.0] - 2026-08-30
-
-### Fixed
 
 - **Sixteen more adapters answered domain questions for themselves.** A third
   audit pass, with per-file read receipts so coverage is demonstrable rather
@@ -313,6 +277,55 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   parity guard rather than folded in blind.
 
   API version 7.27.0: hmenum gains QuantityDoor, which is additive.
+
+### Removed
+
+- **`master_profiles.*` and its store, because the surface was reading the
+  wrong archive.** ADR 0069 established what the profiles archive actually is:
+  link-paramset data. The generator reads the CCU firmware's LINK easymode tree
+  (`<RECEIVER>/<SENDER>.tcl`) and explicitly skips its MASTER tree, and the CCU
+  writes it with the peer channel address as the paramset key. OpenCCU-Loom fed
+  that file into a store keyed by device model, which no archive is named
+  after — so every call returned an empty list or a not-found.
+
+  The apply path was worse than a misnomer, and worse than the ADR first said.
+  `device_type` is a caller-supplied string that reaches the loader unvalidated
+  and becomes a filename, so what the lookup rejected was not *any* input but a
+  device *model*. A client sending a receiver channel type — `ACTOR_WINDOW`,
+  say, which is a real archive name — loaded a real archive, resolved a real
+  profile, and wrote its fixed parameters into that channel's own MASTER
+  paramset on a live CCU. It required an authenticated session holding the edit
+  lock on the target channel, and no shipped client sends a channel type in a
+  field named `device_type`, which is why it was never seen.
+
+  Removed rather than re-keyed: re-keying alone would have turned a defect that
+  needs an undocumented argument into one that fires on the documented one. The
+  three REST routes, four WebSocket commands, four OpenAPI schemas and the
+  `internal/store/masterprofile` package are gone. The MASTER-profile
+  capability the surface claimed already exists elsewhere and correctly —
+  `internal/central/adapter/uischema_adapter.go` synthesises it from
+  `ccudata.ChannelMetadata.MasterProfile`, the easymode extract that *is* the
+  MASTER-side source — and is untouched.
+
+  The replacement is a write operation on the existing `links.*` category,
+  which already carries the pair-keyed read side (`links.get_profiles`,
+  `links.test_profile`) and already resolves both channel addresses. It lands
+  in a following change together with the matcher capabilities `linkprofile`
+  must absorb. The MCP surface gains nothing here because it never carried a
+  profile verb, and its paramset-key parser accepts only `MASTER` and `VALUES`;
+  teaching it `LINK` belongs with the write operation, not with this removal.
+
+
+- **Exported model copies that nothing ran.** `ClientCoordinator.PrimaryClient`
+  and both spellings of the primary-client candidate set, `RequiresPolling`,
+  `CleanSysvarNames`, `backends.EncodeHMLevel`, `value.ConvertHMLevelToCPV`
+  and `Classification.Active` were exported, documented, unit-tested and had
+  zero production callers, while the daemon ran a private copy elsewhere. The
+  tests that covered them were the most misleading state in the codebase: each
+  pinned its own copy against its own literal, so both halves stayed green
+  while they disagreed. `RequiresPolling`'s six green cases ran against a key
+  shape production never produces — on real keys it answered `false`
+  everywhere.
 
 ## [0.70.0] - 2026-08-30
 
