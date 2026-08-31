@@ -32,6 +32,7 @@ import (
 // LinkParamsetReader reads the LINK paramset of one (channel, peer)
 // pair. Declared here rather than imported because this package is the
 // consumer; [ParamsetsDomain] satisfies it.
+// loom:reachable:reason="the type of LinkProfilesAdapter.paramsets and of NewLinkProfilesAdapter's third parameter, wired in production at cmd/openccu-loom/ws_adapters.go to the paramsets domain; an interface production holds as a struct field rather than calling through a named variable, which the analyzer's type heuristic cannot see used"
 type LinkParamsetReader interface {
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 }
@@ -43,6 +44,7 @@ type LinkParamsetReader interface {
 // [LinkParamsetReader] because most callers of this adapter need only the
 // read side; [LinkProfilesAdapter.ApplyLinkProfile] type-asserts the shared
 // paramsets collaborator to this interface at call time.
+// loom:reachable:reason="the target of the type assertion in ApplyLinkProfile that narrows the reader port to its write half; an interface reached only through an assertion, which the analyzer's type heuristic cannot see used"
 type LinkParamsetWriter interface {
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
 }

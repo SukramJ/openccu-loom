@@ -83,6 +83,7 @@ type ParamConstraint struct {
 
 // Profile is one link-profile entry: a numeric id, a localised name,
 // and the LINK-paramset values to apply.
+// loom:reachable:reason="the element type of what GetLinkProfiles and GetProfileByID return and the receiver of FixedParams and ApplyValues, all called from internal/central/adapter/link_profiles_adapter.go; a struct production reaches only as a slice element, which the analyzer's type heuristic cannot see used"
 type Profile struct {
 	// ID is the profile number as defined in the
 	ID int `json:"id"`
@@ -178,6 +179,7 @@ func localised(m map[string]string, locale string) string {
 //
 // Use [New] to construct a store. The zero value is safe for reads but
 // returns empty results and ErrUnsupported for all lookups.
+// loom:reachable:reason="held as LinkProfilesAdapter.store and as the second parameter of NewLinkProfilesAdapter, constructed at cmd/openccu-loom/ws_adapters.go and passed there on every boot; the analyzer counted it reachable through TestLinkProfile until that method was removed, and it reaches the remaining methods through the adapter's field rather than a named variable"
 type Store struct {
 	mu      sync.Mutex
 	aliases map[string]string               // receiverType → canonical receiverType
