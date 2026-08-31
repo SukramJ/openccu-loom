@@ -184,13 +184,47 @@ editor. A server-side re-validation of posted `ENDTIME_*` values was looked for
 and not located, so this is the CCU's UX contract, not proof of a device-level
 refusal.
 
-### 3. `111600.0` is a range maximum labelled "unlimited", not a "not used" marker
+### 3. WITHDRAWN — `111600.0` is a not-used marker after all
 
-The firmware shows `111600` as the top of the float `ON_TIME` / `OFF_TIME` /
-`LENGTH_OF_OFF` range, labelled `${unlimited}` — and as `${inactive}` for
-`DOOR_LOCK_TIME` only. No file in either tree contains both `111600` and
-`DURATION`. Our naming ("timer disabled sentinel") reads the value as a marker
-where the firmware treats it as a bound with a per-parameter label.
+**This finding is retracted.** It was checked against the device-descriptor
+corpus after the note was written, and the corpus refutes it.
+
+What the finding said: the firmware shows `111600` as the top of the float
+`ON_TIME` / `OFF_TIME` / `LENGTH_OF_OFF` range, labelled `${unlimited}` — and as
+`${inactive}` for `DOOR_LOCK_TIME` only — so our naming ("timer disabled
+sentinel") reads a bound as a marker.
+
+What the descriptors say. `SPECIAL.NOT_USED` is a real per-parameter entry,
+present on 33 parameters across the corpus. For the four parameters at issue:
+
+| Parameter | `SPECIAL.NOT_USED` | `MAX` |
+|---|---|---|
+| `SHORT_ON_TIME`, `SHORT_OFF_TIME` | 111600.0 | 108000.0 |
+| `LONG_ON_TIME`, `LONG_OFF_TIME` | 111600.0 | 108000.0 |
+
+The sentinel is **above** the declared maximum. It is out of band by
+construction, which is what makes it usable as a marker at all — the reading our
+constant and its comment already carried. The `range 0.0 - 111600.0` the finding
+read is the easymode TCL profile surface, where the same number is an inclusive
+end; that is a different surface, and it is not why the constant exists.
+
+**Why the check went wrong, since that is the reusable part.** It read one
+surface — the WebUI's own range labels — and concluded about another, the
+paramset descriptors that the parameter's semantics actually live in. The
+citations were correct and the surface was the wrong one. That is the third
+instance of the same failure in this note, and the one that got furthest,
+because a firmware hit reads as authoritative regardless of which question it
+answers.
+
+**What the check did surface, and this part stands.** Chasing the finding turned
+up a divergence nothing had recorded: six wired types — `HMW-IO-12-Sw7-DR`,
+`HMW-IO-SR-FM`, `HMW-LC-Bl1-DR`, `HMW-LC-Bl1-DR-2`, `HMW-LC-Dim1L-DR`,
+`HMW-LC-Sw2-DR` — declare `NOT_USED = 16383000.0` for those same four
+parameters. They are LINK paramset parameters; both consumers of
+`custom.TimerNotUsed` serve the HmIP `DURATION` family and never reach them, so
+**there is no live defect today**. A future LINK-profile writer must read
+`SPECIAL.NOT_USED` rather than reuse the constant. Recorded in the constant's
+own comment (PR #674).
 
 ### 4. Slot 13 is not a terminator
 
