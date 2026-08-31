@@ -69,12 +69,25 @@ type ValueWriter interface {
 	) error
 }
 
-// ParamsetService reads and writes device paramsets (MASTER / VALUES).
-// Same contract as the REST ParamsetService; the read half backs
-// read_paramset, the write half backs the gated write_paramset.
+// ParamsetService reads and writes device paramsets (MASTER / VALUES) and
+// LINK paramsets keyed by a receiver/sender channel pair. The MASTER/VALUES
+// half backs read_paramset / the gated write_paramset; the LINK half backs
+// read_link_paramset / the gated write_link_paramset (ADR 0069). The
+// production implementation, *adapter.ParamsetsDomain, already carries
+// GetLinkParamset / PutLinkParamset — the same domain method the WS
+// links.get_paramset / links.put_paramset handlers call — so no additional
+// composition-root wiring is needed to light up the LINK half; it rides the
+// existing Deps.Paramsets seam.
 type ParamsetService interface {
 	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
 	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
+	// GetLinkParamset reads the LINK paramset on channelAddress keyed by
+	// peerAddress. Unlike MASTER/VALUES, LINK has no fixed key string —
+	// the CCU addresses it by the peer channel — so the pair is explicit.
+	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
+	// PutLinkParamset writes values to the LINK paramset on channelAddress
+	// keyed by peerAddress.
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
 }
 
 // HealthReader exposes the daemon's component-health view (CCU

@@ -31,6 +31,12 @@ type fakeParamsets struct {
 	store    map[string]map[string]any // address:key → values
 	putCalls []putParamsetCall
 	err      error
+
+	// linkStore, putLinkCalls back the LINK half: GetLinkParamset /
+	// PutLinkParamset. Keyed by "channelAddress|peerAddress" so a test can
+	// pin the exact pair a call reaches the domain with.
+	linkStore    map[string]map[string]any
+	putLinkCalls []putLinkParamsetCall
 }
 
 type putParamsetCall struct {
@@ -39,8 +45,14 @@ type putParamsetCall struct {
 	values  map[string]any
 }
 
+type putLinkParamsetCall struct {
+	channelAddress string
+	peerAddress    string
+	values         map[string]any
+}
+
 func newFakeParamsets() *fakeParamsets {
-	return &fakeParamsets{store: make(map[string]map[string]any)}
+	return &fakeParamsets{store: make(map[string]map[string]any), linkStore: make(map[string]map[string]any)}
 }
 
 func (f *fakeParamsets) seed(address string, key hmenum.ParamsetKey, values map[string]any) {
@@ -60,6 +72,21 @@ func (f *fakeParamsets) PutParamset(_ context.Context, address string, key hmenu
 		return f.err
 	}
 	f.putCalls = append(f.putCalls, putParamsetCall{address: address, key: key, values: values})
+	return nil
+}
+
+func (f *fakeParamsets) GetLinkParamset(_ context.Context, channelAddress, peerAddress string) (map[string]any, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.linkStore[channelAddress+"|"+peerAddress], nil
+}
+
+func (f *fakeParamsets) PutLinkParamset(_ context.Context, channelAddress, peerAddress string, values map[string]any) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.putLinkCalls = append(f.putLinkCalls, putLinkParamsetCall{channelAddress: channelAddress, peerAddress: peerAddress, values: values})
 	return nil
 }
 

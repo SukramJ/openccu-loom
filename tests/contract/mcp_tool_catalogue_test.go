@@ -196,6 +196,14 @@ func (mcpNoopParamsets) PutParamset(context.Context, string, hmenum.ParamsetKey,
 	return nil
 }
 
+func (mcpNoopParamsets) GetLinkParamset(context.Context, string, string) (map[string]any, error) {
+	return nil, nil
+}
+
+func (mcpNoopParamsets) PutLinkParamset(context.Context, string, string, map[string]any) error {
+	return nil
+}
+
 type mcpNoopHealth struct{}
 
 func (mcpNoopHealth) Overall() health.Status       { return health.StatusHealthy }
