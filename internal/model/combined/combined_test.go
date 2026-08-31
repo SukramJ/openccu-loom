@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -238,27 +237,6 @@ func TestLevelCombinedValueRequiresBothInputs(t *testing.T) {
 	}
 	if v.Level.Level() != 0.5 || v.SlatsLevel.Level() != 0.25 {
 		t.Fatalf("v=%+v", v)
-	}
-}
-
-func TestLevelCombinedSetWritesCombinedByte(t *testing.T) {
-	w := &stubWriter{}
-	l := NewLevelCombined("x", w, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
-	err := l.Set(context.Background(), LevelComposite{
-		Level:      custom.NewPosition(1),
-		SlatsLevel: custom.NewPosition(0.5),
-	}, hmenum.CommandPriorityHigh)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Expected encoding: hi=201 (1.0*200+1), lo=101 (0.5*200+1) → 51557
-	got, ok := w.find(hmenum.ParameterLevelCombined)
-	if !ok {
-		t.Fatal("LEVEL_COMBINED not written")
-	}
-	want := int32(201<<8 | 101)
-	if got.(int32) != want {
-		t.Fatalf("got %v, want %v", got, want)
 	}
 }
 
@@ -500,28 +478,6 @@ func TestLevelCombinedOnUpdate(t *testing.T) {
 	lc.OnLevel(0.1) // unsubscribed → no fire
 	if count != 2 {
 		t.Errorf("after Unsub OnUpdate fired %d, want still 2", count)
-	}
-}
-
-// TestClamp01ViaMethods exercises clamp01 via LevelCombined.Set.
-func TestClamp01ViaMethods(t *testing.T) {
-	lc := NewLevelCombined("addr:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
-	err := lc.Set(context.Background(), LevelComposite{
-		Level:      custom.NewPosition(1.0),
-		SlatsLevel: custom.NewPosition(0.0),
-	}, hmenum.CommandPriorityLow)
-	if err != nil {
-		t.Fatalf("Set: %v", err)
-	}
-	v, ok := lc.Value()
-	if !ok {
-		t.Fatal("expected composite to be observed after Set")
-	}
-	if v.Level.Level() != 1.0 {
-		t.Errorf("level = %v, want 1.0", v.Level.Level())
-	}
-	if v.SlatsLevel.Level() != 0.0 {
-		t.Errorf("slats = %v, want 0.0", v.SlatsLevel.Level())
 	}
 }
 

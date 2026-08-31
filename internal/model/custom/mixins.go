@@ -127,15 +127,22 @@ const timeUnitThreshold = 16343
 // TimerNotUsed is the sentinel duration, in seconds, that marks a timer
 // parameter of the ON_TIME / RAMP_TIME / DURATION family as "not used".
 // When this exact float64 is encoded the result is (111600, H) — the value
-// stays unchanged and the unit is forced to hours, because 111600 hours is
-// roughly 554 days and can never collide with a real duration, so the device
-// can distinguish "timer disabled" from any ordinary duration.
+// stays unchanged and the unit is forced to hours, so the device can
+// distinguish "timer disabled" from any ordinary duration.
+//
+// It is deliberately out of band rather than a range maximum: across the
+// device corpus the parameters carrying it declare MAX 108000.0, so 111600.0
+// is unreachable as a real duration. (The identical number also appears as an
+// inclusive range end in the CCU's own easymode profiles — a different
+// surface, and not the reason this constant exists.)
 //
 // It is not a universal CCU constant: the authoritative per-parameter source
 // is the parameter descriptor's SPECIAL entry with ID NOT_USED, and other
-// parameters carry other values there. This constant is the one that the
-// timer family agrees on, and it is declared once so the encoder and the
-// combined-timer write path cannot drift apart.
+// parameters carry other values there — the wired HMW-* family declares
+// 16383000.0 for SHORT_/LONG_ON_TIME and SHORT_/LONG_OFF_TIME. Those are LINK
+// paramset parameters that no current path encodes, so a writer reaching them
+// must read SPECIAL.NOT_USED instead of reusing this constant. It is declared
+// once so the encoder and the combined-timer write path cannot drift apart.
 const TimerNotUsed = 111600.0
 
 // RepetitionsNone and RepetitionsInfinite are the two boundary labels of the
