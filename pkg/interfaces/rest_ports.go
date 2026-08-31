@@ -313,11 +313,11 @@ type RPCRecorderService interface {
 // the schedule channel from the device automatically.
 type ScheduleService interface {
 	GetClimateSchedule(ctx context.Context, deviceAddress string, channelNo int) (*hmapi.ClimateSchedule, error)
-	PutClimateSchedule(ctx context.Context, deviceAddress string, channelNo int, schedule *hmapi.ClimateSchedule) error
+	PutClimateSchedule(ctx context.Context, deviceAddress string, channelNo int, schedule *hmapi.ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error)
 	SetActiveProfile(ctx context.Context, deviceAddress string, channelNo int, profile string) error
 
 	GetClimateScheduleAuto(ctx context.Context, deviceAddress string) (*hmapi.ClimateSchedule, error)
-	PutClimateScheduleAuto(ctx context.Context, deviceAddress string, schedule *hmapi.ClimateSchedule) error
+	PutClimateScheduleAuto(ctx context.Context, deviceAddress string, schedule *hmapi.ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error)
 	SetActiveProfileAuto(ctx context.Context, deviceAddress, profile string) error
 	FindScheduleChannel(ctx context.Context, deviceAddress string) (int, error)
 

@@ -41,8 +41,12 @@ func TestWeekprofileSlotsClimateTimeGrammarIsOneAcceptanceSet(t *testing.T) {
 		{in: "08:30", accept: true, minutes: 510},
 		{in: "23:59", accept: true, minutes: 1439},
 		{in: "24:00", accept: true, minutes: 1440},
-		{in: "24:01", accept: false},
-		{in: "24:30", accept: false},
+		// An hour of 24 with a non-zero minute is corrected, not refused:
+		// every layer must land on 23:55, which is what makes it one
+		// acceptance set rather than a clamp in whichever layer happens to
+		// see the value first. 24:00 above keeps 1440, the terminator.
+		{in: "24:01", accept: true, minutes: 1435},
+		{in: "24:30", accept: true, minutes: 1435},
 		{in: "25:00", accept: false},
 		{in: "12:60", accept: false},
 		{in: "8:5", accept: false},

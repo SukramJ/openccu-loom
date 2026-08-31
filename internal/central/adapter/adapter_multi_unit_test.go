@@ -1105,7 +1105,7 @@ func TestScheduleQueryAdapter_NilDomain_GetClimateSchedule(t *testing.T) {
 func TestScheduleQueryAdapter_NilDomain_SetClimateSchedule(t *testing.T) {
 	t.Parallel()
 	a := NewScheduleQueryAdapter(nil)
-	err := a.SetClimateSchedule(context.Background(), "DEV:1", map[string]any{"kind": "climate"})
+	_, err := a.SetClimateSchedule(context.Background(), "DEV:1", map[string]any{"kind": "climate"})
 	if err == nil {
 		t.Error("expected error for nil domain")
 	}
@@ -1132,7 +1132,7 @@ func TestScheduleQueryAdapter_NilDomain_GetDeviceSchedule(t *testing.T) {
 func TestScheduleQueryAdapter_NilDomain_SetDeviceSchedule(t *testing.T) {
 	t.Parallel()
 	a := NewScheduleQueryAdapter(nil)
-	err := a.SetDeviceSchedule(context.Background(), "DEV", map[string]any{"kind": "climate"})
+	_, err := a.SetDeviceSchedule(context.Background(), "DEV", map[string]any{"kind": "climate"})
 	if err == nil {
 		t.Error("expected error for nil domain")
 	}
@@ -5652,7 +5652,7 @@ func TestPutClimateScheduleAuto_FindChannelFails(t *testing.T) {
 	reg := central.NewRegistry()
 	w := client.NewValueWriter()
 	s := NewSchedulesDomain(reg, w)
-	err := s.PutClimateScheduleAuto(context.Background(), "NODEV", &hmapi.ClimateSchedule{})
+	_, err := s.PutClimateScheduleAuto(context.Background(), "NODEV", &hmapi.ClimateSchedule{})
 	if err == nil {
 		t.Error("expected error from PutClimateScheduleAuto with no device")
 	}
@@ -5804,7 +5804,7 @@ func TestPutClimateScheduleAuto_Success(t *testing.T) {
 		Domain:        "switch",
 		SimpleEntries: []hmapi.SimpleScheduleEntry{},
 	}
-	err = s.PutClimateScheduleAuto(context.Background(), "PCA1DEV01B25", sched)
+	_, err = s.PutClimateScheduleAuto(context.Background(), "PCA1DEV01B25", sched)
 	// Any error (e.g. "no schedule params") is still OK for coverage — the key
 	// is that the Auto path itself ran (line 222 was hit).
 	_ = err
@@ -6611,13 +6611,13 @@ func TestScheduleQueryAdapter_NilDomain(t *testing.T) {
 	if _, err := a.GetClimateSchedule(context.Background(), "DEV:1"); err == nil {
 		t.Error("GetClimateSchedule: expected error for nil domain")
 	}
-	if err := a.SetClimateSchedule(context.Background(), "DEV:1", map[string]any{}); err == nil {
+	if _, err := a.SetClimateSchedule(context.Background(), "DEV:1", map[string]any{}); err == nil {
 		t.Error("SetClimateSchedule: expected error for nil domain")
 	}
 	if _, err := a.GetDeviceSchedule(context.Background(), "DEV"); err == nil {
 		t.Error("GetDeviceSchedule: expected error for nil domain")
 	}
-	if err := a.SetDeviceSchedule(context.Background(), "DEV", map[string]any{}); err == nil {
+	if _, err := a.SetDeviceSchedule(context.Background(), "DEV", map[string]any{}); err == nil {
 		t.Error("SetDeviceSchedule: expected error for nil domain")
 	}
 	if err := a.SetDeviceActiveProfile(context.Background(), "DEV", "P1"); err == nil {
@@ -7186,7 +7186,7 @@ func TestScheduleQueryAdapter_SetClimateScheduleSuccess(t *testing.T) {
 	// An empty profile map should produce a valid (empty) ClimateSchedule DTO
 	// that PutClimateSchedule may accept or reject — either is fine, we just
 	// want to hit the mapToSchedule call (line 51) and return path.
-	err := a.SetClimateSchedule(context.Background(), "SQASCS1DEV01B29:1", map[string]any{})
+	_, err := a.SetClimateSchedule(context.Background(), "SQASCS1DEV01B29:1", map[string]any{})
 	// May succeed or fail depending on domain validation; we only care
 	// that the code path is exercised without panic.
 	_ = err
@@ -7348,7 +7348,7 @@ func TestPutClimateSchedule_ResolveError(t *testing.T) {
 	dto := &hmapi.ClimateSchedule{
 		Kind: "climate",
 	}
-	err := s.PutClimateSchedule(context.Background(), "PCS1DEV01B29", 1, dto)
+	_, err := s.PutClimateSchedule(context.Background(), "PCS1DEV01B29", 1, dto)
 	if err == nil {
 		t.Fatal("expected error from PutClimateSchedule with no backend")
 	}
@@ -7676,7 +7676,7 @@ func TestSchedulesDomain_GetClimateScheduleAuto_NilRegistry_ReturnsErr(t *testin
 func TestSchedulesDomain_PutClimateScheduleAuto_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	sd := &SchedulesDomain{registry: nil}
-	err := sd.PutClimateScheduleAuto(context.Background(), "DEV001", &hmapi.ClimateSchedule{Kind: "climate"})
+	_, err := sd.PutClimateScheduleAuto(context.Background(), "DEV001", &hmapi.ClimateSchedule{Kind: "climate"})
 	if err == nil {
 		t.Error("expected error for nil registry in PutClimateScheduleAuto")
 	}
@@ -7694,7 +7694,7 @@ func TestSchedulesDomain_SetActiveProfileAuto_NilRegistry_ReturnsErr(t *testing.
 func TestSchedulesDomain_PutClimateSchedule_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	sd := &SchedulesDomain{registry: nil}
-	err := sd.PutClimateSchedule(context.Background(), "DEV001", 1, &hmapi.ClimateSchedule{Kind: "climate"})
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV001", 1, &hmapi.ClimateSchedule{Kind: "climate"})
 	if err == nil {
 		t.Error("expected error for nil registry in PutClimateSchedule")
 	}
@@ -8357,7 +8357,7 @@ func TestPutClimateSchedule_SerializeError(t *testing.T) {
 			},
 		},
 	}
-	err := s.PutClimateSchedule(context.Background(), "PCSSerErr1DEV31", 1, dto)
+	_, err := s.PutClimateSchedule(context.Background(), "PCSSerErr1DEV31", 1, dto)
 	if err == nil {
 		t.Fatal("expected error from PutClimateSchedule with invalid weekday")
 	}
@@ -8372,7 +8372,7 @@ func TestPutClimateSchedule_UnknownKind(t *testing.T) {
 	dto := &hmapi.ClimateSchedule{
 		Kind: "invalid_kind",
 	}
-	err := s.PutClimateSchedule(context.Background(), "PCSUnkind1DEV31", 1, dto)
+	_, err := s.PutClimateSchedule(context.Background(), "PCSUnkind1DEV31", 1, dto)
 	if err == nil {
 		t.Fatal("expected error for unknown kind")
 	}
@@ -8390,7 +8390,7 @@ func TestPutClimateSchedule_EmptyPayload(t *testing.T) {
 		Kind:     "climate",
 		Profiles: map[string]hmapi.ClimateProfile{},
 	}
-	err := s.PutClimateSchedule(context.Background(), "PCSEmpty1DEV31", 1, dto)
+	_, err := s.PutClimateSchedule(context.Background(), "PCSEmpty1DEV31", 1, dto)
 	if err == nil {
 		t.Fatal("expected error for empty payload")
 	}
@@ -8569,7 +8569,7 @@ func TestScheduleQueryAdapter_SetDeviceScheduleSuccess(t *testing.T) {
 	s := buildSchedulesDomainNoBackend(t, "ccu-b31-sdss1", "SDSS1DEV01B31")
 	a := NewScheduleQueryAdapter(s)
 	// A valid-but-empty profile map → mapToSchedule succeeds, domain call fails.
-	err := a.SetDeviceSchedule(context.Background(), "SDSS1DEV01B31", map[string]any{
+	_, err := a.SetDeviceSchedule(context.Background(), "SDSS1DEV01B31", map[string]any{
 		"kind": "climate",
 	})
 	// Expecting an error from the domain (no backend) but no panic.
@@ -9447,7 +9447,7 @@ func TestSetClimateSchedule_MarshalError(t *testing.T) {
 	bad := map[string]any{
 		"key": make(chan int),
 	}
-	err := a.SetClimateSchedule(context.Background(), "SCSMARSHAL1DEV35:1", bad)
+	_, err := a.SetClimateSchedule(context.Background(), "SCSMARSHAL1DEV35:1", bad)
 	if err == nil {
 		t.Fatal("expected error from SetClimateSchedule with unmarshalable map")
 	}
@@ -9465,7 +9465,7 @@ func TestSetDeviceSchedule_MarshalError(t *testing.T) {
 	bad := map[string]any{
 		"key": make(chan int),
 	}
-	err := a.SetDeviceSchedule(context.Background(), "SDSMARSHAL1DEV35", bad)
+	_, err := a.SetDeviceSchedule(context.Background(), "SDSMARSHAL1DEV35", bad)
 	if err == nil {
 		t.Fatal("expected error from SetDeviceSchedule with unmarshalable map")
 	}
@@ -12927,7 +12927,7 @@ func TestSchedulesDomain_PutClimateSchedule_NilPayload_ReturnsErr(t *testing.T) 
 	f := buildBoost7Fixture(t)
 	sd := newSchedulesDomainForTest(t, f.reg, f.writer)
 	// "UNKNOWN" device causes resolve to fail with "not found".
-	err := sd.PutClimateSchedule(context.Background(), "UNKNOWN", 1, &hmapi.ClimateSchedule{Kind: "climate"})
+	_, err := sd.PutClimateSchedule(context.Background(), "UNKNOWN", 1, &hmapi.ClimateSchedule{Kind: "climate"})
 	if err == nil {
 		t.Error("expected error for unknown device in PutClimateSchedule")
 	}
@@ -12938,7 +12938,7 @@ func TestSchedulesDomain_PutClimateSchedule_NilSchedule_ReturnsErr(t *testing.T)
 	f := buildBoost7Fixture(t)
 	sd := newSchedulesDomainForTest(t, f.reg, f.writer)
 	// With a known device, nil schedule should return error after resolve succeeds.
-	err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, nil)
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, nil)
 	if err == nil {
 		t.Error("expected error for nil schedule payload in PutClimateSchedule")
 	}
@@ -12948,7 +12948,7 @@ func TestSchedulesDomain_PutClimateSchedule_UnknownKind_ReturnsErr(t *testing.T)
 	t.Parallel()
 	f := buildBoost7Fixture(t)
 	sd := newSchedulesDomainForTest(t, f.reg, f.writer)
-	err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, &hmapi.ClimateSchedule{Kind: "badkind"})
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, &hmapi.ClimateSchedule{Kind: "badkind"})
 	if err == nil {
 		t.Error("expected error for unknown kind in PutClimateSchedule")
 	}
@@ -12959,7 +12959,7 @@ func TestSchedulesDomain_PutClimateSchedule_KnownDevice_NilSchedule_ReturnsErr(t
 	f := buildBoost7Fixture(t)
 	sd := newSchedulesDomainForTest(t, f.reg, f.writer)
 	// DEV002 is in registry; nil schedule returns "nil payload" error.
-	err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, nil)
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, nil)
 	if err == nil {
 		t.Error("expected error for nil schedule payload")
 	}
@@ -13434,7 +13434,7 @@ func TestSchedulesDomain_PutClimateSchedule_ClimateKind_HappyPath(t *testing.T) 
 			},
 		},
 	}
-	err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
 	if err != nil {
 		t.Fatalf("PutClimateSchedule climate: %v", err)
 	}
@@ -13460,7 +13460,7 @@ func TestSchedulesDomain_PutClimateSchedule_SimpleKind_HappyPath(t *testing.T) {
 			},
 		},
 	}
-	err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
 	if err != nil {
 		t.Fatalf("PutClimateSchedule simple: %v", err)
 	}
@@ -13480,7 +13480,7 @@ func TestSchedulesDomain_PutClimateSchedule_EmptyKind_TreatedAsClimate(t *testin
 		Kind:     "",
 		Profiles: map[string]hmapi.ClimateProfile{},
 	}
-	err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
 	if err == nil {
 		t.Error("expected error for empty climate schedule")
 	}
@@ -13510,7 +13510,7 @@ func TestSchedulesDomain_PutClimateSchedule_BackendPutError(t *testing.T) {
 			},
 		},
 	}
-	err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
+	_, err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
 	if err == nil {
 		t.Error("expected error when backend.PutParamset fails")
 	}
@@ -14934,7 +14934,7 @@ func TestPutClimateScheduleNilPayload(t *testing.T) {
 	reg := central.NewRegistry()
 	s := NewSchedulesDomain(reg, nil)
 	// Schedule is nil → error
-	err := s.PutClimateSchedule(context.Background(), "DEV001", 1, nil)
+	_, err := s.PutClimateSchedule(context.Background(), "DEV001", 1, nil)
 	// Will fail at resolve (not found) before nil check, but that's OK
 	_ = err
 }

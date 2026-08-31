@@ -139,7 +139,7 @@ func TestPutClimateScheduleDropsSlotsTheDeviceDoesNotDeclare(t *testing.T) {
 			},
 		},
 	}
-	if err := sd.PutClimateSchedule(context.Background(), "DEVCF1", 1, sched); err != nil {
+	if _, err := sd.PutClimateSchedule(context.Background(), "DEVCF1", 1, sched); err != nil {
 		t.Fatalf("PutClimateSchedule: %v", err)
 	}
 

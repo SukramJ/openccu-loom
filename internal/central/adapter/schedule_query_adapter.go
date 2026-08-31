@@ -44,14 +44,16 @@ func (a *ScheduleQueryAdapter) GetClimateSchedule(ctx context.Context, channelAd
 
 // SetClimateSchedule decodes the payload into a *hmapi.ClimateSchedule
 // and writes it back via the domain.
-func (a *ScheduleQueryAdapter) SetClimateSchedule(ctx context.Context, channelAddress string, profile map[string]any) error {
+func (a *ScheduleQueryAdapter) SetClimateSchedule(
+	ctx context.Context, channelAddress string, profile map[string]any,
+) ([]hmapi.ClimateTimeCorrection, error) {
 	if a.domain == nil {
-		return errors.New("schedule_query_adapter: nil domain")
+		return nil, errors.New("schedule_query_adapter: nil domain")
 	}
 	deviceAddress, channelNo := splitChannelAddress(channelAddress)
 	dto, err := mapToSchedule(profile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return a.domain.PutClimateSchedule(ctx, deviceAddress, channelNo, dto)
 }
@@ -81,13 +83,15 @@ func (a *ScheduleQueryAdapter) GetDeviceSchedule(ctx context.Context, deviceAddr
 
 // SetDeviceSchedule auto-resolves the schedule channel and writes the
 // schedule.
-func (a *ScheduleQueryAdapter) SetDeviceSchedule(ctx context.Context, deviceAddress string, profile map[string]any) error {
+func (a *ScheduleQueryAdapter) SetDeviceSchedule(
+	ctx context.Context, deviceAddress string, profile map[string]any,
+) ([]hmapi.ClimateTimeCorrection, error) {
 	if a.domain == nil {
-		return errors.New("schedule_query_adapter: nil domain")
+		return nil, errors.New("schedule_query_adapter: nil domain")
 	}
 	dto, err := mapToSchedule(profile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return a.domain.PutClimateScheduleAuto(ctx, deviceAddress, dto)
 }

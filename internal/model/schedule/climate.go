@@ -373,6 +373,14 @@ const ClimateEndOfDay = "24:00"
 // midnight.
 const ClimateEndOfDayMinutes = 24 * 60
 
+// ClimateLastMinuteOfDay is the largest wall-clock time a climate slot can
+// carry before [ClimateEndOfDay] takes over: 23:55, in minutes since
+// midnight. It is the value the CCU's own climate editor substitutes for a
+// typed hour of 24 (www/webui/webui.js:49052, `if (hour == 24) {hour = "23";
+// min = "55";}`), which runs before that editor validates and writes the
+// corrected string back into the field.
+const ClimateLastMinuteOfDay = 23*60 + 55
+
 // ParseClimateTime is the single acceptance set for climate schedule
 // times and converts one to minutes since midnight.
 //
@@ -384,22 +392,64 @@ const ClimateEndOfDayMinutes = 24 * 60
 // layer can read back.
 //
 // Accepted: a one- or two-digit hour 0..23, a colon, a two-digit minute
-// 0..59; plus the literal [ClimateEndOfDay]. Nothing else — in particular
-// no hour above 23 other than the end-of-day marker itself.
+// 0..59; the literal [ClimateEndOfDay]; and an hour of exactly 24 with a
+// non-zero minute, which is corrected rather than refused — see
+// [ParseClimateTimeCorrecting] for why, and use that entry point when the
+// correction has to reach the operator.
 func ParseClimateTime(s string) (int, error) {
+	m, _, err := ParseClimateTimeCorrecting(s)
+	return m, err
+}
+
+// ParseClimateTimeCorrecting is [ParseClimateTime] plus the one correction
+// the grammar performs. When applied is non-empty, s was accepted in the
+// corrected form applied, and a caller that can reach the operator must say
+// so — a silently corrected schedule is the failure this whole grammar
+// exists to prevent, only moved one layer out.
+//
+// The single correction is an hour of 24 with a non-zero minute:
+// "24:01".."24:59" become [ClimateLastMinuteOfDay]. That is what the CCU's
+// own editor does to the same input, so refusing it rejected a value the
+// device's native surface accepts.
+//
+// Two boundaries of that rule are deliberate and are not the editor's
+// behaviour:
+//
+//   - [ClimateEndOfDay] itself is NOT corrected. The editor clamps it to
+//     23:55 too, but 1440 is the firmware's own weekday terminator
+//     (www/config/easymodes/etc/hmipChannelConfigDialogs.tcl:3009,
+//     `if {$timeout == 1440} then { break; }`), and the older HM-CC-TC path
+//     skips the editor clamp entirely, so there a typed 24:00 is a genuine
+//     1440. Correcting it would destroy the terminator.
+//   - An hour of 25 or above stays an error, matching the range check the
+//     firmware does apply (endtime > 0 && endtime <= 1440).
+//
+// Bound on the evidence, stated rather than glossed: the clamp was read off
+// the WebUI editor. A server-side re-validation of posted ENDTIME_* values
+// was looked for and not located, so this follows the CCU's UX contract, not
+// a proven device-level refusal.
+func ParseClimateTimeCorrecting(s string) (minutes int, applied string, err error) {
 	if s == ClimateEndOfDay {
-		return ClimateEndOfDayMinutes, nil
+		return ClimateEndOfDayMinutes, "", nil
 	}
 	before, after, ok := strings.Cut(s, ":")
 	if !ok {
-		return 0, fmt.Errorf("invalid time %q", s)
+		return 0, "", fmt.Errorf("invalid time %q", s)
 	}
-	h, hOK := parseClockField(before, 1, 2, 23)
+	h, hOK := parseClockField(before, 1, 2, 24)
 	m, mOK := parseClockField(after, 2, 2, 59)
 	if !hOK || !mOK {
-		return 0, fmt.Errorf("invalid time %q", s)
+		return 0, "", fmt.Errorf("invalid time %q", s)
 	}
-	return h*60 + m, nil
+	if h == 24 {
+		// m > 0 here: "24:00" returned above.
+		corrected, ferr := FormatClimateTime(ClimateLastMinuteOfDay)
+		if ferr != nil {
+			return 0, "", ferr
+		}
+		return ClimateLastMinuteOfDay, corrected, nil
+	}
+	return h*60 + m, "", nil
 }
 
 // parseClockField reads a zero-padded decimal field of minLen..maxLen

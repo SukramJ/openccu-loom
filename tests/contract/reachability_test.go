@@ -359,7 +359,14 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // point: without a ceiling, `make reachability` regenerating a snapshot with
 // two hundred more dead identifiers than the last one produced a green test
 // run and a diff nobody had a reason to read closely.
-const reachabilityUnreachableCeiling = 3007
+// Raised 3007 -> 3011 for the two climate-correction wire DTOs
+// (hmapi.ClimateScheduleWriteResult, hmapi.ClimateTimeCorrection). They are
+// constructed in internal/north/rest/handlers/schedules.go and serialised to
+// the wire, but the analysis cannot see through JSON marshalling, so every
+// payload type in pkg/hmapi/rest_contract.go lands here -- 94 of them,
+// hmapi.ClimateSchedule and hmapi.ClimatePeriod among them. These two join
+// that established class; no new production dead code came with them.
+const reachabilityUnreachableCeiling = 3011
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's

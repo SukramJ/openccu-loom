@@ -211,7 +211,7 @@ func TestPutClimateScheduleFailsWhenDescriptionUnreadable(t *testing.T) {
 			}},
 		},
 	}
-	err := domain.PutClimateSchedule(context.Background(), "0001ABCD", 1, sched)
+	_, err := domain.PutClimateSchedule(context.Background(), "0001ABCD", 1, sched)
 	if !errors.Is(err, descErr) {
 		t.Fatalf("PutClimateSchedule err = %v, want the description read error", err)
 	}

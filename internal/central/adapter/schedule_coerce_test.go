@@ -221,7 +221,7 @@ func TestScheduleQueryAdapterNilDomain(t *testing.T) {
 	if _, err := a.GetClimateSchedule(context.Background(), "DEV:1"); err == nil {
 		t.Error("GetClimateSchedule nil domain must error")
 	}
-	if err := a.SetClimateSchedule(context.Background(), "DEV:1", nil); err == nil {
+	if _, err := a.SetClimateSchedule(context.Background(), "DEV:1", nil); err == nil {
 		t.Error("SetClimateSchedule nil domain must error")
 	}
 	if err := a.SetActiveProfile(context.Background(), "DEV:1", 1); err == nil {
@@ -230,7 +230,7 @@ func TestScheduleQueryAdapterNilDomain(t *testing.T) {
 	if _, err := a.GetDeviceSchedule(context.Background(), "DEV001"); err == nil {
 		t.Error("GetDeviceSchedule nil domain must error")
 	}
-	if err := a.SetDeviceSchedule(context.Background(), "DEV001", nil); err == nil {
+	if _, err := a.SetDeviceSchedule(context.Background(), "DEV001", nil); err == nil {
 		t.Error("SetDeviceSchedule nil domain must error")
 	}
 	if err := a.SetDeviceActiveProfile(context.Background(), "DEV001", "P1"); err == nil {

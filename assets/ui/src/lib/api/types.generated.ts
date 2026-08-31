@@ -8944,6 +8944,32 @@ export interface components {
             output_behaviour?: number;
         };
         /**
+         * @description Result of a schedule write. `corrections` is present only when the
+         *     stored schedule differs from the submitted one, which happens when a
+         *     time was accepted in a corrected form rather than refused: an hour of
+         *     24 with a non-zero minute is stored as 23:55, matching what the CCU's
+         *     own climate editor does to the same input. A client that renders
+         *     schedules must surface these, because its own copy is no longer what
+         *     the device holds.
+         */
+        ScheduleWriteResult: {
+            corrections?: components["schemas"]["ScheduleTimeCorrection"][];
+        };
+        ScheduleTimeCorrection: {
+            /** @description Profile key, e.g. P1 */
+            profile: string;
+            /** @description Weekday key, e.g. MONDAY */
+            weekday: string;
+            /** @description 0-based index into the submitted periods list */
+            period: number;
+            /** @enum {string} */
+            field: "start_time" | "end_time";
+            /** @description The submitted value */
+            requested: string;
+            /** @description The value actually stored */
+            applied: string;
+        };
+        /**
          * @description Unified schedule DTO. ``kind`` is ``climate`` (thermostat
          *     week-program, carried in ``profiles``) or ``simple`` (switch /
          *     dimmer / astro program, carried in ``simple_entries``).
@@ -13673,12 +13699,18 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Scheduled */
+            /**
+             * @description Scheduled. The body lists any schedule time that was stored in a
+             *     corrected form; it is empty when the schedule was written exactly
+             *     as submitted.
+             */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScheduleWriteResult"];
+                };
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
@@ -13755,12 +13787,18 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Scheduled */
+            /**
+             * @description Scheduled. The body lists any schedule time that was stored in a
+             *     corrected form; it is empty when the schedule was written exactly
+             *     as submitted.
+             */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScheduleWriteResult"];
+                };
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];

@@ -6,6 +6,42 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **A climate end time with an hour of 24 is now stored as 23:55 and reported,
+  instead of being refused.** The CCU's own climate editor rewrites a typed
+  hour of 24 to 23:55 before it validates
+  (`www/webui/webui.js:49052`), so refusing `24:30` rejected a value the
+  device's native surface accepts. The grammar now accepts it in the corrected
+  form — and says so, which is the half that matters: a schedule quietly
+  stored differently from the one submitted is the same class of defect as the
+  slot that used to disappear on the next read.
+
+  `PUT /devices/{addr}/channels/{no}/schedule` and
+  `PUT /devices/{addr}/schedule` keep returning `202`, now with a body:
+  `{"corrections": [...]}`, each entry naming profile, weekday, period, field,
+  the requested value and the applied one. The body is empty when nothing was
+  corrected. The WebSocket commands `schedules.climate.set` and
+  `schedules.device.set` gain the same optional `corrections` key on their
+  result. Both are additive — API version 10.0.0 → 10.1.0, wsapi 1.8 → 1.9.
+
+  Two boundaries are deliberately *not* the editor's behaviour. `24:00` is not
+  corrected: 1440 is the firmware's own weekday terminator
+  (`hmipChannelConfigDialogs.tcl:3009`), and the older HM-CC-TC path skips the
+  editor clamp entirely, so clamping it would destroy the terminator. An hour
+  of 25 or above stays an error, matching the range check the firmware does
+  apply. The clamp was read off the WebUI editor; a server-side re-validation
+  of posted `ENDTIME_*` values was looked for and not located, so this follows
+  the CCU's UX contract rather than a proven device-level refusal.
+
+- **The fifth `LEVEL_COMBINED` encoder is gone.** `LevelCombined.Set` packed
+  two fractions into an `int32` as `(hi<<8)|lo` with a `value * 200 + 1`
+  convention, while the parameter's descriptor declares
+  `hexstring_bytearray` and the live writer renders it as a hex string. It had
+  no production caller and satisfied no interface, so it was deleted rather
+  than corrected. The read side is unchanged. Its unit test had pinned the
+  wrong convention as expected, which is how it survived.
+
 ## [0.71.0] - 2026-08-31
 
 ### Changed

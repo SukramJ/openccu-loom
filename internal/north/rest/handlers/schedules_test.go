@@ -43,8 +43,8 @@ func (s *stubScheduleService) GetClimateSchedule(_ context.Context, _ string, _ 
 	return s.getResult, s.getErr
 }
 
-func (s *stubScheduleService) PutClimateSchedule(_ context.Context, _ string, _ int, _ *ClimateSchedule) error {
-	return s.putErr
+func (s *stubScheduleService) PutClimateSchedule(_ context.Context, _ string, _ int, _ *ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error) {
+	return nil, s.putErr
 }
 
 func (s *stubScheduleService) SetActiveProfile(_ context.Context, _ string, _ int, _ string) error {
@@ -55,8 +55,8 @@ func (s *stubScheduleService) GetClimateScheduleAuto(_ context.Context, _ string
 	return s.autoGetResult, s.autoGetErr
 }
 
-func (s *stubScheduleService) PutClimateScheduleAuto(_ context.Context, _ string, _ *ClimateSchedule) error {
-	return s.autoPutErr
+func (s *stubScheduleService) PutClimateScheduleAuto(_ context.Context, _ string, _ *ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error) {
+	return nil, s.autoPutErr
 }
 
 func (s *stubScheduleService) SetActiveProfileAuto(_ context.Context, _, _ string) error {
