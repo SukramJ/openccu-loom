@@ -51,10 +51,10 @@ import (
 )
 
 // profileFS serves the archives from the shared metadata module. The
-// files used to be duplicated into this package (and into masterprofile),
-// which meant a data refresh reached the module but not these copies: they
-// still carried the CCU's HTML references and the pre-3.89.5 constraint set
-// long after the module had moved on.
+// files used to be duplicated into this package, which meant a data
+// refresh reached the module but not this copy: it still carried the
+// CCU's HTML references and the pre-3.89.5 constraint set long after the
+// module had moved on.
 var profileFS = ccudata.ProfilesFS()
 
 // aliasFile is the receiver-type alias table, alongside the archives.
@@ -82,8 +82,7 @@ type ParamConstraint struct {
 }
 
 // Profile is one link-profile entry: a numeric id, a localised name,
-// and the LINK-paramset values to apply. The shape mirrors
-// masterprofile.Profile so the UI can use a shared rendering path.
+// and the LINK-paramset values to apply.
 type Profile struct {
 	// ID is the profile number as defined in the
 	ID int `json:"id"`

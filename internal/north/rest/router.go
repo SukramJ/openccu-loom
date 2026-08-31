@@ -139,13 +139,6 @@ type Deps struct {
 	// finds no entry falls back to its own token either way.
 	EntityNames handlers.EntityNameCatalogue
 	Metrics     *metrics.Registry
-	// MasterProfiles backs the read-only master-profile discovery routes:
-	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles
-	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles/{id}
-	//   POST /api/v1/devices/{addr}/channels/{no}/master-profiles/match
-	// Nil disables all three (404). Shares the domain call with the WS
-	// `master_profiles.list/get/match` commands.
-	MasterProfiles handlers.MasterProfilesService
 	// UISchema produces the data-driven rendering descriptor the SPA
 	// consumes at /api/v1/devices/{addr}/channels/{no}/ui-schema.
 	UISchema handlers.UISchemaService
@@ -881,24 +874,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// channel's week-program participation.
 				pr.With(op).Put("/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}",
 					handlers.PutWeekProfileChannelLock(d.Devices))
-				if d.MasterProfiles != nil {
-					// list/get/match are viewer-accessible, mirroring the WS
-					// master_profiles.list/get/match classification (readOnlyCommands
-					// in internal/north/rest/ws/commands.go) — no role gate. Nested
-					// under d.Devices != nil because the handlers resolve
-					// device_type/channel_type from the channel's owning device.
-					pr.Get("/devices/{addr}/channels/{no}/master-profiles",
-						handlers.ListMasterProfiles(d.Devices, d.MasterProfiles))
-					pr.Get("/devices/{addr}/channels/{no}/master-profiles/{id}",
-						handlers.GetMasterProfile(d.Devices, d.MasterProfiles))
-					pr.Post("/devices/{addr}/channels/{no}/master-profiles/match",
-						handlers.MatchMasterProfile(d.Devices, d.MasterProfiles))
-				}
 			}
 			if d.ParameterDeterminer != nil {
 				// Read one parameter's live value from the device (the MASTER
 				// editor's "Determine" button). A read, so no edit-lock token —
-				// but it triggers a device round-trip like master-profiles/match.
+				// but it triggers a device round-trip all the same.
 				pr.Post("/devices/{addr}/channels/{no}/paramsets/{key}/determine",
 					handlers.DetermineParameter(d.ParameterDeterminer))
 			}

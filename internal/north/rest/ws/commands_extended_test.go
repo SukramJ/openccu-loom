@@ -14,7 +14,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/configui"
-	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -252,12 +251,11 @@ func newRouterWithExtended() (*Router, *stubDevices, *stubParamsetWriter, *stubC
 	central := &stubCentral{}
 	ehub := &stubExtendedHub{}
 	RegisterExtendedCommands(r, ExtendedCommandsConfig{
-		Devices:        devs,
-		Paramsets:      pw,
-		ChangeHistory:  hist,
-		Central:        central,
-		ExtendedHub:    ehub,
-		MasterProfiles: masterprofile.New(),
+		Devices:       devs,
+		Paramsets:     pw,
+		ChangeHistory: hist,
+		Central:       central,
+		ExtendedHub:   ehub,
 	})
 	return r, devs, pw, hist, central, ehub
 }
@@ -631,50 +629,6 @@ func TestExtendedParamsetPut(t *testing.T) {
 	}, "values must not be empty")
 }
 
-func TestExtendedMasterProfilesListAndGet(t *testing.T) {
-	r, _, _, _, _, _ := newRouterWithExtended()
-	out := dispatch(t, r, "master_profiles.list", map[string]any{}).(map[string]any)
-	if dts, ok := out["device_types"].([]string); !ok || len(dts) == 0 {
-		t.Fatalf("master_profiles.list (no args) should return device_types, got %v", out)
-	}
-	out = dispatch(t, r, "master_profiles.list", map[string]any{
-		"device_type": "BLIND",
-		"locale":      "de",
-	}).(map[string]any)
-	profiles := out["profiles"].([]map[string]any)
-	if len(profiles) == 0 {
-		t.Fatalf("BLIND should have profiles")
-	}
-	getOut := dispatch(t, r, "master_profiles.get", map[string]any{
-		"device_type": "BLIND",
-		"id":          0,
-	}).(masterprofile.Profile)
-	if getOut.ID != 0 {
-		t.Fatalf("expected id=0, got %d", getOut.ID)
-	}
-}
-
-func TestExtendedMasterProfilesApply(t *testing.T) {
-	r, _, pw, _, _, _ := newRouterWithExtended()
-	dispatch(t, r, "master_profiles.apply", map[string]any{
-		"device_type":     "BLIND",
-		"channel_address": "ABC0001:1",
-		"id":              1,
-	})
-	if len(pw.calls) != 1 {
-		t.Fatalf("apply should issue PutParamset")
-	}
-	if pw.calls[0].key.ChannelAddress != "ABC0001:1" {
-		t.Fatalf("wrong channel: %s", pw.calls[0].key.ChannelAddress)
-	}
-	if string(pw.calls[0].key.ParamsetKey) != "MASTER" {
-		t.Fatalf("expected MASTER paramset, got %s", pw.calls[0].key.ParamsetKey)
-	}
-	if len(pw.calls[0].values) == 0 {
-		t.Fatalf("expected master profile params to be applied")
-	}
-}
-
 func TestExtendedChangeHistoryList(t *testing.T) {
 	r, _, _, _, _, _ := newRouterWithExtended()
 	out := dispatch(t, r, "change_history.list", map[string]any{"limit": 50}).(map[string]any)
@@ -842,14 +796,12 @@ func TestExtendedRouterCountsNewCommands(t *testing.T) {
 	want := []string{
 		"device.rename", "device.rename_channel", "device.install_mode",
 		"paramset.put",
-		"master_profiles.list", "master_profiles.get", "master_profiles.apply",
-		"master_profiles.match",
 		"change_history.list",
 		"central.info", "central.connectivity", "central.system_health", "central.reconcile",
 		"service_messages.disable",
 	}
-	if len(want) != 14 {
-		t.Fatalf("expected 14 new commands, got %d", len(want))
+	if len(want) != 10 {
+		t.Fatalf("expected 10 new commands, got %d", len(want))
 	}
 	registered := make(map[string]bool, len(names))
 	for _, n := range names {
@@ -943,26 +895,6 @@ func TestWSParamsetFormSchema_MissingAddressReturnsError(t *testing.T) {
 	if res.Error == nil {
 		t.Fatal("expected error for missing address")
 	}
-}
-
-// TestExtendedMasterProfilesMatchDispatch exercises the master_profiles.match
-// handler end-to-end through the Router. The store has BLIND profiles with
-// known fixed-param values; we feed a current_values map that satisfies
-// profile id=1 and verify active_id=1 is returned.
-func TestExtendedMasterProfilesMatchDispatch(t *testing.T) {
-	r, _, _, _, _, _ := newRouterWithExtended()
-
-	// No match: empty current_values → active_id=0 (no match / Expert).
-	out := dispatch(t, r, "master_profiles.match", map[string]any{
-		"device_type":    "BLIND",
-		"current_values": map[string]any{},
-	}).(map[string]any)
-	if _, ok := out["active_id"]; !ok {
-		t.Fatalf("master_profiles.match: response must contain active_id, got %v", out)
-	}
-
-	// Missing device_type must return an error.
-	dispatchExpectErr(t, r, "master_profiles.match", map[string]any{}, "device_type is required")
 }
 
 // ---------------------------------------------------------------------------
@@ -1106,52 +1038,6 @@ func TestExtendedParamsetPut_EditLockEnforced(t *testing.T) {
 	}
 	if len(pw.calls) != 2 {
 		t.Fatalf("VALUES write: expected 2 total writes, got %d", len(pw.calls))
-	}
-}
-
-// TestExtendedMasterProfilesApply_EditLockEnforced asserts that
-// master_profiles.apply passes through the same per-resource edit lock as
-// paramset.put. It writes the profile's fixed parameters into the channel's
-// MASTER paramset — the exact write paramset.put answers "locked" for — so an
-// ungated apply silently clobbers what another operator is staging in an open
-// edit session.
-func TestExtendedMasterProfilesApply_EditLockEnforced(t *testing.T) {
-	pw := &stubParamsetWriter{}
-	r := NewRouter()
-	RegisterExtendedCommands(r, ExtendedCommandsConfig{
-		Paramsets:      pw,
-		MasterProfiles: masterprofile.New(),
-		EditLocks:      fakeEditLocks{key: "channel:ABC0001:1:MASTER", token: "good-token"},
-	})
-
-	args := map[string]any{"device_type": "BLIND", "channel_address": "ABC0001:1", "id": 1}
-	raw, _ := json.Marshal(args)
-	res := r.Dispatch(opCtx(), "master_profiles.apply", raw)
-	if res.Error == nil || res.Error.Code != CommandErrorLocked {
-		t.Fatalf("apply without edit_token: expected code %q, got %+v", CommandErrorLocked, res.Error)
-	}
-	if len(pw.calls) != 0 {
-		t.Fatalf("apply without edit_token must not be forwarded; got %d calls", len(pw.calls))
-	}
-
-	args["edit_token"] = "wrong-token"
-	raw, _ = json.Marshal(args)
-	res = r.Dispatch(opCtx(), "master_profiles.apply", raw)
-	if res.Error == nil || res.Error.Code != CommandErrorLocked {
-		t.Fatalf("apply with wrong edit_token: expected code %q, got %+v", CommandErrorLocked, res.Error)
-	}
-	if len(pw.calls) != 0 {
-		t.Fatalf("apply with wrong edit_token must not be forwarded; got %d calls", len(pw.calls))
-	}
-
-	args["edit_token"] = "good-token"
-	raw, _ = json.Marshal(args)
-	res = r.Dispatch(opCtx(), "master_profiles.apply", raw)
-	if res.Error != nil {
-		t.Fatalf("apply with the correct edit_token: unexpected error: %+v", res.Error)
-	}
-	if len(pw.calls) != 1 {
-		t.Fatalf("apply with the correct edit_token: expected 1 write, got %d", len(pw.calls))
 	}
 }
 

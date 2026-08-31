@@ -6,6 +6,50 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **`master_profiles.*` and its store, because the surface was reading the
+  wrong archive.** ADR 0069 established what the profiles archive actually is:
+  link-paramset data. The generator reads the CCU firmware's LINK easymode tree
+  (`<RECEIVER>/<SENDER>.tcl`) and explicitly skips its MASTER tree, and the CCU
+  writes it with the peer channel address as the paramset key. OpenCCU-Loom fed
+  that file into a store keyed by device model, which no archive is named
+  after — so every call returned an empty list or a not-found.
+
+  The apply path was worse than a misnomer, and worse than the ADR first said.
+  `device_type` is a caller-supplied string that reaches the loader unvalidated
+  and becomes a filename, so what the lookup rejected was not *any* input but a
+  device *model*. A client sending a receiver channel type — `ACTOR_WINDOW`,
+  say, which is a real archive name — loaded a real archive, resolved a real
+  profile, and wrote its fixed parameters into that channel's own MASTER
+  paramset on a live CCU. It required an authenticated session holding the edit
+  lock on the target channel, and no shipped client sends a channel type in a
+  field named `device_type`, which is why it was never seen.
+
+  Removed rather than re-keyed: re-keying alone would have turned a defect that
+  needs an undocumented argument into one that fires on the documented one. The
+  three REST routes, four WebSocket commands, four OpenAPI schemas and the
+  `internal/store/masterprofile` package are gone. The MASTER-profile
+  capability the surface claimed already exists elsewhere and correctly —
+  `internal/central/adapter/uischema_adapter.go` synthesises it from
+  `ccudata.ChannelMetadata.MasterProfile`, the easymode extract that *is* the
+  MASTER-side source — and is untouched.
+
+  The replacement is a write operation on the existing `links.*` category,
+  which already carries the pair-keyed read side (`links.get_profiles`,
+  `links.test_profile`) and already resolves both channel addresses. It lands
+  in a following change together with the matcher capabilities `linkprofile`
+  must absorb. The MCP surface gains nothing here because it never carried a
+  profile verb, and its paramset-key parser accepts only `MASTER` and `VALUES`;
+  teaching it `LINK` belongs with the write operation, not with this removal.
+
+### Changed
+
+- **REST `APIVersion` 7.28.0 → 8.0.0.** Breaking: three operations and four
+  schemas were removed. An installed `openccu-loom-client` refuses to connect
+  on a major mismatch regardless of whether it used this surface, so it and
+  `node-red-contrib-openccu-loom` resync after this ships.
+
 ### Fixed
 
 - **The domain core duplicated itself in 34 places, and eight of the copies

@@ -60,7 +60,6 @@ declare -A TIER_CORE=(
     [internal/store/sqlite]=84         # current ~87 (coverpkg; hovers near the floor across runs)
     [internal/store/visibility]=88     # current 91.3
     [internal/store/patches]=95        # current 98.9
-    [internal/store/masterprofile]=92  # current 95.1
     [internal/scheduler]=97            # current 100.0
     [internal/health]=90               # current 93.4
     [internal/i18n]=92                 # current 95.3

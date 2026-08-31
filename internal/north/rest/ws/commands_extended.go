@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
-	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -84,8 +83,8 @@ type ParamsetReader interface {
 // EditLockVerifier reports whether `token` currently holds the edit
 // lock for a resource `key`. It mirrors the REST strict edit-lock
 // gate so every WS command that writes a configuration paramset —
-// `paramset.put` and `master_profiles.apply` — enforces the same
-// contract as `PUT /devices/{addr}/paramsets/{key}`. *handlers.EditSessions
+// `paramset.put` — enforces the same contract as
+// `PUT /devices/{addr}/paramsets/{key}`. *handlers.EditSessions
 // satisfies it. A nil verifier disables enforcement — a test-only
 // escape hatch; the production mount always wires the shared registry
 // (see cmd/openccu-loom/ws_adapters.go).
@@ -241,8 +240,8 @@ type ExtendedCommandsConfig struct {
 	Devices   DeviceWriter
 	Paramsets ParamsetWriter
 	// EditLocks enforces the strict per-resource edit lock on the
-	// commands that write a configuration paramset — `paramset.put`
-	// (MASTER/LINK keys) and `master_profiles.apply` (always MASTER).
+	// commands that write a configuration paramset — `paramset.put`,
+	// which carries the MASTER and LINK keys alike.
 	// Nil disables enforcement (test-only); production wires the shared
 	// REST edit-session registry so REST and WS share one lock namespace.
 	EditLocks     EditLockVerifier
@@ -251,7 +250,6 @@ type ExtendedCommandsConfig struct {
 	ChangeHistoryClearer ChangeHistoryClearer
 	Central              CentralInfo
 	ExtendedHub          ExtendedHub
-	MasterProfiles       *masterprofile.Store
 	// ThrottleStats backs `ccu.throttle_stats`.
 	ThrottleStats ThrottleStats
 	// CacheClearer backs `ccu.cache_clear`.
@@ -328,12 +326,6 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	registerDeviceCommands(router, cfg.Devices)
 	if cfg.Paramsets != nil {
 		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
-	}
-	if cfg.MasterProfiles != nil {
-		router.Register("master_profiles.list", masterProfilesListHandler(cfg.MasterProfiles))
-		router.Register("master_profiles.get", masterProfilesGetHandler(cfg.MasterProfiles))
-		router.Register("master_profiles.apply", masterProfilesApplyHandler(cfg.MasterProfiles, cfg.Paramsets, cfg.EditLocks))
-		router.Register("master_profiles.match", masterProfilesMatchHandler(cfg.MasterProfiles))
 	}
 	// --- Reports zweit ---
 	registerReportCommands(router, cfg)
@@ -778,147 +770,6 @@ func paramsetPutHandler(w ParamsetWriter, locks EditLockVerifier) CommandHandler
 			return nil, fmt.Errorf("paramset.put: %w", err)
 		}
 		return map[string]any{"written": len(p.Values)}, nil
-	}
-}
-
-func masterProfilesListHandler(s *masterprofile.Store) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			DeviceType  string `json:"device_type"`
-			ChannelType string `json:"channel_type"`
-			Locale      string `json:"locale"`
-		}
-		if err := decodeOrEmpty(raw, &p); err != nil {
-			return nil, err
-		}
-		if p.DeviceType == "" {
-			types, err := s.DeviceTypes()
-			if err != nil {
-				return nil, err
-			}
-			return map[string]any{"device_types": types}, nil
-		}
-		profiles, err := s.Profiles(p.DeviceType, p.ChannelType)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]map[string]any, 0, len(profiles))
-		for _, prof := range profiles {
-			out = append(out, map[string]any{
-				"id":          prof.ID,
-				"name":        prof.LocalisedName(p.Locale),
-				"description": prof.LocalisedDescription(p.Locale),
-				"param_count": len(prof.Params),
-			})
-		}
-		return map[string]any{"profiles": out}, nil
-	}
-}
-
-func masterProfilesGetHandler(s *masterprofile.Store) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			DeviceType  string `json:"device_type"`
-			ChannelType string `json:"channel_type"`
-			ID          int    `json:"id"`
-		}
-		if err := decodeOrEmpty(raw, &p); err != nil {
-			return nil, err
-		}
-		if p.DeviceType == "" {
-			return nil, NewCommandError(CommandErrorBadRequest, "device_type is required")
-		}
-		prof, err := s.Profile(p.DeviceType, p.ChannelType, p.ID)
-		if err != nil {
-			return nil, err
-		}
-		return prof, nil
-	}
-}
-
-// masterProfilesMatchHandler implements the `master_profiles.match` WebSocket
-// command.
-//
-// Request payload:
-//
-// { "device_type": "HmIP-eTRV", (required) "channel_type": "CLIMATECONTROL",
-// (optional, default "KEY") "current_values": { "MODE": 1,
-// "SETPOINT_TEMPERATURE": 19.0 } }
-//
-// Response:
-//
-// { "active_id": 2 } // 0 means "no profile matches" (Expert)
-func masterProfilesMatchHandler(s *masterprofile.Store) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			DeviceType    string         `json:"device_type"`
-			ChannelType   string         `json:"channel_type"`
-			CurrentValues map[string]any `json:"current_values"`
-		}
-		if err := decodeOrEmpty(raw, &p); err != nil {
-			return nil, err
-		}
-		if p.DeviceType == "" {
-			return nil, NewCommandError(CommandErrorBadRequest, "device_type is required")
-		}
-		id := s.MatchActiveProfile(p.DeviceType, p.ChannelType, p.CurrentValues)
-		return map[string]any{"active_id": id}, nil
-	}
-}
-
-func masterProfilesApplyHandler(s *masterprofile.Store, w ParamsetWriter, locks EditLockVerifier) CommandHandler {
-	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct {
-			DeviceType     string `json:"device_type"`
-			ChannelType    string `json:"channel_type"`
-			ChannelAddress string `json:"channel_address"`
-			ID             int    `json:"id"`
-			// EditToken carries the edit-lock token, as on `paramset.put`:
-			// applying a profile is a MASTER write on the target channel.
-			EditToken string `json:"edit_token"`
-		}
-		if err := decodeOrEmpty(raw, &p); err != nil {
-			return nil, err
-		}
-		if p.DeviceType == "" || p.ChannelAddress == "" {
-			return nil, NewCommandError(CommandErrorBadRequest, "device_type and channel_address are required")
-		}
-		// Applying a profile writes the channel's MASTER paramset, so it runs
-		// through the same strict edit-lock gate as `paramset.put`. Without it
-		// the lock guarantees nothing: the write another editor's open session
-		// is protected against arrives through this sibling command instead.
-		if locks != nil {
-			key := "channel:" + p.ChannelAddress + ":" + string(hmenum.ParamsetKeyMaster)
-			if !locks.Verify(key, p.EditToken) {
-				return nil, NewCommandError(CommandErrorLocked,
-					"edit lock required for MASTER write; open an edit session and pass edit_token")
-			}
-		}
-		prof, err := s.Profile(p.DeviceType, p.ChannelType, p.ID)
-		if err != nil {
-			return nil, err
-		}
-		if w == nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "paramset writer not configured")
-		}
-		// Apply only "fixed"-constraint profile params via PutParamset
-		// (partial write). Non-profile parameters on the target channel
-		// are NOT touched because PutParamset is a sparse merge on the
-		// CCU side: the CCU only updates the keys present in the map,
-		// leaving all other MASTER parameters at their current device
-		// values. The sparse dict avoids a pre-read and carries no
-		// data-loss risk for parameters outside the profile.
-		// Which parameters a profile pins is the store's answer, and it is
-		// the same answer its matcher uses. This path used to select only the
-		// literal "fixed" while the matcher also counts an absent
-		// constraint_type, so a profile could be reported as applied while a
-		// parameter it had been matched on kept its old device value.
-		values := prof.FixedParams()
-		key := configui.SessionKey{ChannelAddress: p.ChannelAddress, ParamsetKey: hmenum.ParamsetKeyMaster}
-		if err := w.PutParamset(ctx, key, values); err != nil {
-			return nil, fmt.Errorf("master_profiles.apply: %w", err)
-		}
-		return map[string]any{"applied": p.ID, "param_count": len(values)}, nil
 	}
 }
 

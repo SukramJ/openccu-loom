@@ -33,7 +33,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
-	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -55,7 +54,6 @@ type wsCommandWiring struct {
 	deviceAdmin      *adapter.DeviceAdminDomain
 	paramsets        *adapter.ParamsetsDomain
 	customDP         *adapter.CustomDPDispatcher
-	masterProfiles   *masterprofile.Store
 	linkProfiles     *linkprofile.Store
 	valueWriter      *clientpkg.ValueWriter
 	registry         *central.Registry
@@ -153,8 +151,7 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		Paramsets: &wsParamsetWriter{domain: w.paramsets},
 		// EditLocks: shared registry — MASTER/LINK paramset.put writes
 		// must hold the edit lock, mirroring the REST strict gate.
-		EditLocks:      w.editSessions,
-		MasterProfiles: w.masterProfiles,
+		EditLocks: w.editSessions,
 		// CacheClearer: wired — delegates to the cachereset.Service (ADR 0042).
 		CacheClearer: wsCacheClearerFrom(w.cacheResetSvc),
 		AddonUpdater: w.addonUpdater,
