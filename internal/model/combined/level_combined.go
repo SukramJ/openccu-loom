@@ -4,9 +4,7 @@
 package combined
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -212,33 +210,6 @@ func (l *LevelCombined) OnSlatsLevel(v float64) {
 	l.fire(observed, nowObserved, prev, next)
 }
 
-// Set writes a new composite position as a single LEVEL_COMBINED
-// command. The CCU expects the encoded byte
-//
-//	value = (int(level*200 + 1)<<8) | int(slats*200 + 1)
-//
-// matching the eQ-3 on-wire convention for HmIP blinds.
-func (l *LevelCombined) Set(ctx context.Context, c LevelComposite, priority hmenum.CommandPriority) error {
-	level := clamp01(c.Level.Level())
-	slats := clamp01(c.SlatsLevel.Level())
-
-	encoded := encodeLevelCombined(level, slats)
-	if err := l.Writer.SetValue(ctx, l.Address, l.CombinedWriteParameter, encoded, priority); err != nil {
-		return fmt.Errorf("levelcombined: write: %w", err)
-	}
-
-	l.mu.Lock()
-	prev, observed := l.snapshotLocked()
-	l.level = custom.NewPosition(level)
-	l.slatsLevel = custom.NewPosition(slats)
-	l.hasLevel = true
-	l.hasSlats = true
-	next, nowObserved := l.snapshotLocked()
-	l.mu.Unlock()
-	l.fire(observed, nowObserved, prev, next)
-	return nil
-}
-
 // OnUpdate registers a change handler fired once both inputs are
 // observed.
 func (l *LevelCombined) OnUpdate(fn func(old, next LevelComposite)) func() {
@@ -300,26 +271,4 @@ func (l *LevelCombined) fire(wasObserved, nowObserved bool, prev, next LevelComp
 			cb(prev, next)
 		}
 	}
-}
-
-// encodeLevelCombined converts two 0..1 fractions into the byte-pair
-// LEVEL_COMBINED wire encoding (high byte = level, low byte = slats;
-// each byte follows the CCU "value * 200 + 1" convention).
-func encodeLevelCombined(level, slats float64) int32 {
-	// Clamp defensively; callers should have clamped already.
-	level = clamp01(level)
-	slats = clamp01(slats)
-	hi := int32(level*200) + 1
-	lo := int32(slats*200) + 1
-	return (hi << 8) | lo
-}
-
-func clamp01(v float64) float64 {
-	if v < 0 {
-		return 0
-	}
-	if v > 1 {
-		return 1
-	}
-	return v
 }
