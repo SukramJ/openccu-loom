@@ -75,7 +75,7 @@ func TestScheduleBareSchemaRoundTrip(t *testing.T) {
 	mon.Periods = nil
 	p1.Weekdays["MONDAY"] = mon
 	dto.Profiles["P1"] = p1
-	if err := domain.PutClimateScheduleAuto(ctx, dev.Address, dto); err != nil {
+	if _, err := domain.PutClimateScheduleAuto(ctx, dev.Address, dto); err != nil {
 		t.Fatalf("PutClimateScheduleAuto(%s): %v", dev.Address, err)
 	}
 

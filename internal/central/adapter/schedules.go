@@ -251,10 +251,10 @@ func (s *SchedulesDomain) GetClimateScheduleAuto(
 // PutClimateScheduleAuto resolves the schedule channel before writing.
 func (s *SchedulesDomain) PutClimateScheduleAuto(
 	ctx context.Context, deviceAddress string, sched *hmapi.ClimateSchedule,
-) error {
+) ([]hmapi.ClimateTimeCorrection, error) {
 	channelNo, err := s.FindScheduleChannel(ctx, deviceAddress)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return s.PutClimateSchedule(ctx, deviceAddress, channelNo, sched)
 }
@@ -327,7 +327,7 @@ func (s *SchedulesDomain) CopyClimateProfile(
 			fmt.Sprintf("P%d", dstProfile): profile,
 		},
 	}
-	if err := s.PutClimateSchedule(ctx, dstDevice, dstChannelNo, dst); err != nil {
+	if _, err := s.PutClimateSchedule(ctx, dstDevice, dstChannelNo, dst); err != nil {
 		return fmt.Errorf("schedules: copy_profile write destination: %w", err)
 	}
 	return nil
@@ -448,7 +448,7 @@ func (s *SchedulesDomain) CopySchedule(
 	// Clear the destination-resolved channel reference; PutClimateScheduleAuto
 	// resolves the destination's own channel and serialises by kind.
 	src.Channel = hmapi.ScheduleChannelRef{}
-	if err := s.PutClimateScheduleAuto(ctx, dstDeviceAddress, src); err != nil {
+	if _, err := s.PutClimateScheduleAuto(ctx, dstDeviceAddress, src); err != nil {
 		return fmt.Errorf("schedules: copy write destination: %w", err)
 	}
 	return nil
@@ -963,14 +963,17 @@ func isCCUScheduleFalsePositive(err error) bool {
 // are zeroed out so deletions take effect.
 func (s *SchedulesDomain) PutClimateSchedule(
 	ctx context.Context, deviceAddress string, channelNo int, sched *hmapi.ClimateSchedule,
-) error {
+) ([]hmapi.ClimateTimeCorrection, error) {
 	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if sched == nil {
-		return errors.New("schedules: nil payload")
+		return nil, errors.New("schedules: nil payload")
 	}
+	// Before serialisation: the corrections have to be collected while the
+	// submitted representation is still intact.
+	corrections := normalizeClimateScheduleTimes(sched)
 	var raw map[string]any
 	// The MASTER paramset description drives two decisions below:
 	// which schedule fields the device advertises (unsupported keys are
@@ -978,7 +981,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	// (prefix-less) schema.
 	descKeys, err := scheduleDescKeys(ctx, backend, channelAddr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	switch sched.Kind {
 	case "simple":
@@ -1013,18 +1016,18 @@ func (s *SchedulesDomain) PutClimateSchedule(
 			raw = filterClimateScheduleByDescKeys(raw, descKeys)
 		}
 	default:
-		return fmt.Errorf("schedules: unknown kind %q", sched.Kind)
+		return nil, fmt.Errorf("schedules: unknown kind %q", sched.Kind)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(raw) == 0 {
-		return errors.New("schedules: empty payload")
+		return nil, errors.New("schedules: empty payload")
 	}
 	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, raw,
 		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		if !isCCUScheduleFalsePositive(err) {
-			return err
+			return nil, err
 		}
 		// CCU bug: putParamset on SWITCH_WEEK_PROFILE / climate channels
 		// returns fault -5 ("Invalid parameter or value") even when the
@@ -1047,7 +1050,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 		ChannelNo:     channelNo,
 		Note:          sched.Kind,
 	})
-	return nil
+	return corrections, nil
 }
 
 // SetActiveProfile writes the ACTIVE_PROFILE data point. Most

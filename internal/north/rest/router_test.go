@@ -146,8 +146,8 @@ func (fakeScheduleService) GetClimateSchedule(_ context.Context, _ string, _ int
 	return &handlers.ClimateSchedule{}, nil
 }
 
-func (fakeScheduleService) PutClimateSchedule(_ context.Context, _ string, _ int, _ *handlers.ClimateSchedule) error {
-	return nil
+func (fakeScheduleService) PutClimateSchedule(_ context.Context, _ string, _ int, _ *handlers.ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error) {
+	return nil, nil
 }
 
 func (fakeScheduleService) SetActiveProfile(_ context.Context, _ string, _ int, _ string) error {
@@ -158,8 +158,8 @@ func (fakeScheduleService) GetClimateScheduleAuto(_ context.Context, _ string) (
 	return &handlers.ClimateSchedule{}, nil
 }
 
-func (fakeScheduleService) PutClimateScheduleAuto(_ context.Context, _ string, _ *handlers.ClimateSchedule) error {
-	return nil
+func (fakeScheduleService) PutClimateScheduleAuto(_ context.Context, _ string, _ *handlers.ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error) {
+	return nil, nil
 }
 func (fakeScheduleService) SetActiveProfileAuto(_ context.Context, _, _ string) error { return nil }
 func (fakeScheduleService) FindScheduleChannel(_ context.Context, _ string) (int, error) {

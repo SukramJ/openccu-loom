@@ -140,11 +140,15 @@ func PutSchedule(svc ScheduleService) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if err := svc.PutClimateSchedule(r.Context(), addr, no, &body); err != nil {
+		corrections, err := svc.PutClimateSchedule(r.Context(), addr, no, &body)
+		if err != nil {
 			writeScheduleError(w, r, err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		// 202 now carries a body. It is empty in the ordinary case; when it is
+		// not, the stored schedule differs from the submitted one and the
+		// client has to show that rather than assume its own copy is current.
+		JSON(w, http.StatusAccepted, hmapi.ClimateScheduleWriteResult{Corrections: corrections})
 	}
 }
 
@@ -183,11 +187,12 @@ func PutScheduleAuto(svc ScheduleService) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if err := svc.PutClimateScheduleAuto(r.Context(), addr, &body); err != nil {
+		corrections, err := svc.PutClimateScheduleAuto(r.Context(), addr, &body)
+		if err != nil {
 			writeScheduleError(w, r, err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		JSON(w, http.StatusAccepted, hmapi.ClimateScheduleWriteResult{Corrections: corrections})
 	}
 }
 

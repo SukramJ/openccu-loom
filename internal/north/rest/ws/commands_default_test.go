@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -1444,10 +1445,10 @@ func (s *stubSchedules) GetClimateSchedule(_ context.Context, _ string) (map[str
 	return s.schedule, s.getErr
 }
 
-func (s *stubSchedules) SetClimateSchedule(_ context.Context, channelAddress string, profile map[string]any) error {
+func (s *stubSchedules) SetClimateSchedule(_ context.Context, channelAddress string, profile map[string]any) ([]hmapi.ClimateTimeCorrection, error) {
 	s.setChannel = channelAddress
 	s.setProfile = profile
-	return s.setErr
+	return nil, s.setErr
 }
 
 func (s *stubSchedules) SetActiveProfile(_ context.Context, channelAddress string, profileIndex int) error {
@@ -1461,10 +1462,10 @@ func (s *stubSchedules) GetDeviceSchedule(_ context.Context, deviceAddress strin
 	return s.schedule, s.deviceGetErr
 }
 
-func (s *stubSchedules) SetDeviceSchedule(_ context.Context, deviceAddress string, profile map[string]any) error {
+func (s *stubSchedules) SetDeviceSchedule(_ context.Context, deviceAddress string, profile map[string]any) ([]hmapi.ClimateTimeCorrection, error) {
 	s.deviceSet = deviceAddress
 	s.deviceSetProfile = profile
-	return s.deviceSetErr
+	return nil, s.deviceSetErr
 }
 
 func (s *stubSchedules) SetDeviceActiveProfile(_ context.Context, deviceAddress, profile string) error {

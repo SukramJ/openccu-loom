@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -122,7 +123,7 @@ type ScheduleQuery interface {
 	// channel.
 	GetClimateSchedule(ctx context.Context, channelAddress string) (map[string]any, error)
 	// SetClimateSchedule writes a climate week-program back.
-	SetClimateSchedule(ctx context.Context, channelAddress string, profile map[string]any) error
+	SetClimateSchedule(ctx context.Context, channelAddress string, profile map[string]any) ([]hmapi.ClimateTimeCorrection, error)
 	// SetActiveProfile selects which P1..P3 profile is currently
 	// active for a thermostat channel.
 	SetActiveProfile(ctx context.Context, channelAddress string, profileIndex int) error
@@ -133,7 +134,7 @@ type ScheduleQuery interface {
 	// SetDeviceSchedule writes the schedule (climate or simple,
 	// distinguished by profile["kind"]) back to whichever channel of
 	// the device carries it.
-	SetDeviceSchedule(ctx context.Context, deviceAddress string, profile map[string]any) error
+	SetDeviceSchedule(ctx context.Context, deviceAddress string, profile map[string]any) ([]hmapi.ClimateTimeCorrection, error)
 	// SetDeviceActiveProfile selects the active climate profile
 	// ("P1".."P6") on the resolved schedule channel.
 	SetDeviceActiveProfile(ctx context.Context, deviceAddress, profile string) error
@@ -1464,10 +1465,17 @@ func schedulesClimateSetHandler(q ScheduleQuery) CommandHandler {
 		if args.Profile == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "profile required")
 		}
-		if err := q.SetClimateSchedule(ctx, args.ChannelAddress, args.Profile); err != nil {
+		corrections, err := q.SetClimateSchedule(ctx, args.ChannelAddress, args.Profile)
+		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "set_climate_schedule: "+err.Error())
 		}
-		return map[string]any{"saved": true, "channel_address": args.ChannelAddress}, nil
+		out := map[string]any{"saved": true, "channel_address": args.ChannelAddress}
+		// Only present when the stored schedule differs from the submitted one,
+		// so a client that never sends a correctable time never sees the key.
+		if len(corrections) > 0 {
+			out["corrections"] = corrections
+		}
+		return out, nil
 	}
 }
 
@@ -1536,10 +1544,15 @@ func schedulesDeviceSetHandler(q ScheduleQuery) CommandHandler {
 		if args.Profile == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "profile required")
 		}
-		if err := q.SetDeviceSchedule(ctx, args.DeviceAddress, args.Profile); err != nil {
+		corrections, err := q.SetDeviceSchedule(ctx, args.DeviceAddress, args.Profile)
+		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "set_device_schedule: "+err.Error())
 		}
-		return map[string]any{"saved": true, "device_address": args.DeviceAddress}, nil
+		out := map[string]any{"saved": true, "device_address": args.DeviceAddress}
+		if len(corrections) > 0 {
+			out["corrections"] = corrections
+		}
+		return out, nil
 	}
 }
 

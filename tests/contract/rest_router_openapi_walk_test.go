@@ -147,8 +147,8 @@ func (fakeScheduleService) GetClimateSchedule(context.Context, string, int) (*ha
 	return &handlers.ClimateSchedule{}, nil
 }
 
-func (fakeScheduleService) PutClimateSchedule(context.Context, string, int, *handlers.ClimateSchedule) error {
-	return nil
+func (fakeScheduleService) PutClimateSchedule(context.Context, string, int, *handlers.ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error) {
+	return nil, nil
 }
 
 func (fakeScheduleService) SetActiveProfile(context.Context, string, int, string) error { return nil }
@@ -157,8 +157,8 @@ func (fakeScheduleService) GetClimateScheduleAuto(context.Context, string) (*han
 	return &handlers.ClimateSchedule{}, nil
 }
 
-func (fakeScheduleService) PutClimateScheduleAuto(context.Context, string, *handlers.ClimateSchedule) error {
-	return nil
+func (fakeScheduleService) PutClimateScheduleAuto(context.Context, string, *handlers.ClimateSchedule) ([]hmapi.ClimateTimeCorrection, error) {
+	return nil, nil
 }
 
 func (fakeScheduleService) SetActiveProfileAuto(context.Context, string, string) error { return nil }

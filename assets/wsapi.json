@@ -1,5 +1,5 @@
 {
- "version": "1.8",
+ "version": "1.9",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -1112,7 +1112,7 @@
   },
   {
    "category": "schedules",
-   "description": "Write a climate week-program back to a thermostat channel.",
+   "description": "Write a climate week-program back to a thermostat channel. The result carries \"corrections\" only when the stored schedule differs from the submitted one: a time with an hour of 24 and a non-zero minute is stored as 23:55, matching the CCU's own climate editor. Each entry names profile, weekday, period (0-based), field (start_time|end_time), requested and applied.",
    "name": "schedules.climate.set",
    "args": {
     "channel_address": "string",
@@ -1147,7 +1147,7 @@
   },
   {
    "category": "schedules",
-   "description": "Write a schedule back to the resolved schedule channel of a device.",
+   "description": "Write a schedule back to the resolved schedule channel of a device. Carries the same optional \"corrections\" list as schedules.climate.set.",
    "name": "schedules.device.set",
    "args": {
     "device_address": "string",

@@ -490,6 +490,32 @@ type ClimateWeekday struct {
 	Periods         []ClimatePeriod `json:"periods"`
 }
 
+// ClimateTimeCorrection records one schedule time that was accepted in a
+// corrected form rather than refused. It exists because the CCU's own climate
+// editor silently rewrites an hour of 24 to 23:55, so refusing that input
+// rejected a value the device's native surface accepts — but accepting it
+// without saying so would hand the operator a schedule that differs from the
+// one they submitted, with nothing anywhere to show it.
+//
+// Weekday and Period locate the value in the submitted payload; Field is
+// "start_time" or "end_time".
+type ClimateTimeCorrection struct {
+	Profile   string `json:"profile"`
+	Weekday   string `json:"weekday"`
+	Period    int    `json:"period"`
+	Field     string `json:"field"`
+	Requested string `json:"requested"`
+	Applied   string `json:"applied"`
+}
+
+// ClimateScheduleWriteResult is the body of a successful climate-schedule
+// write. Corrections is empty when the schedule was written exactly as
+// submitted; a client that renders schedules must surface any entry it
+// contains, because the stored schedule no longer matches its own copy.
+type ClimateScheduleWriteResult struct {
+	Corrections []ClimateTimeCorrection `json:"corrections,omitempty"`
+}
+
 // ClimatePeriod is one non-base-temperature stretch.
 type ClimatePeriod struct {
 	StartTime   string  `json:"start_time"`
