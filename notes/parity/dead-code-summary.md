@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 59a6c634
-HEAD: 59a6c634
+Generated: 1624845e
+HEAD: 1624845e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30246 |
-| Reachable | 5270 |
-| Whitelisted | 21965 |
-| **Unreachable** | **3011** |
+| Total Exported | 30178 |
+| Reachable | 5265 |
+| Whitelisted | 21906 |
+| **Unreachable** | **3007** |
 
 ## Top-20 Packages by Dead Code
 
@@ -197,8 +197,7 @@ HEAD: 59a6c634
 | internal/scheduler | 0 | 4 | 0 |
 | internal/security | 0 | 7 | 0 |
 | internal/store/devicedetails | 0 | 2 | 0 |
-| internal/store/linkprofile | 0 | 1 | 1 |
-| internal/store/masterprofile | 0 | 4 | 2 |
+| internal/store/linkprofile | 0 | 2 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 110 | 30 |

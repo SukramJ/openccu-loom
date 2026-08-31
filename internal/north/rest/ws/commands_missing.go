@@ -20,6 +20,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ─── interfaces ──────────────────────────────────────────────────────────────
@@ -75,13 +76,16 @@ type LinkFormSchemaProvider interface {
 	GetLinkFormSchema(ctx context.Context, interfaceID, receiverChannelAddr, senderChannelAddr string) (map[string]any, error)
 }
 
-// LinkProfilesProvider is the read surface for `links.get_profiles` and
-// `links.test_profile`. Mirrors Python `ws_get_link_profiles`
-// (websocket_api.py:1123) and `ws_test_link_profile` (websocket_api.py:2643).
-// Implemented by LinkProfilesAdapter.
+// LinkProfilesProvider is the read + apply surface for `links.get_profiles`
+// and `links.apply_profile`. Mirrors Python `ws_get_link_profiles`
+// (websocket_api.py:1123); `links.apply_profile` has no Python
+// counterpart — see ADR 0069. Implemented by LinkProfilesAdapter.
 type LinkProfilesProvider interface {
 	GetLinkProfiles(ctx context.Context, receiverChannelAddress, senderChannelAddress, locale string) (profiles []map[string]any, activeID int, err error)
-	TestLinkProfile(ctx context.Context, interfaceID, senderAddr, receiverAddr string, profileID int) (map[string]any, error)
+	// ApplyLinkProfile writes the named profile's value set to the LINK
+	// paramset on (receiverChannelAddress, senderChannelAddress) and
+	// returns the number of parameters written.
+	ApplyLinkProfile(ctx context.Context, receiverChannelAddress, senderChannelAddress string, profileID int) (int, error)
 }
 
 // ParameterDeterminer is the write/read surface for `paramset.determine`.
@@ -124,8 +128,14 @@ type MissingCommandsConfig struct {
 	ScheduleEnabler ScheduleEnabler
 	// LinkFormSchema backs `links.get_form_schema` (stub).
 	LinkFormSchema LinkFormSchemaProvider
-	// LinkProfiles backs `links.get_profiles` and `links.test_profile` (stub).
+	// LinkProfiles backs `links.get_profiles` and `links.apply_profile`.
 	LinkProfiles LinkProfilesProvider
+	// EditLocks enforces the per-resource edit lock on `links.apply_profile`,
+	// the same strict gate `paramset.put` and REST's PUT
+	// /devices/{addr}/link-ps/{peer} apply to LINK writes. A nil verifier
+	// disables enforcement — a test-only escape hatch; the production mount
+	// always wires the shared registry.
+	EditLocks EditLockVerifier
 	// ParameterDeterminer backs `paramset.determine` (stub).
 	ParameterDeterminer ParameterDeterminer
 }
@@ -174,10 +184,10 @@ func RegisterMissingCommands(router *Router, cfg MissingCommandsConfig) {
 
 	if cfg.LinkProfiles != nil {
 		router.Register("links.get_profiles", linksGetProfilesHandler(cfg.LinkProfiles))
-		router.Register("links.test_profile", linksTestProfileHandler(cfg.LinkProfiles))
+		router.Register("links.apply_profile", linksApplyProfileHandler(cfg.LinkProfiles, cfg.EditLocks))
 	} else {
 		router.Register("links.get_profiles", stubHandler("ws: links.get_profiles: link-profile provider not configured in this deployment"))
-		router.Register("links.test_profile", stubHandler("ws: links.test_profile: link-profile provider not configured in this deployment"))
+		router.Register("links.apply_profile", stubHandler("ws: links.apply_profile: link-profile provider not configured in this deployment"))
 	}
 
 	if cfg.ParameterDeterminer != nil {
@@ -409,34 +419,52 @@ func linksGetProfilesHandler(p LinkProfilesProvider) CommandHandler {
 	}
 }
 
-// linksTestProfileHandler implements `links.test_profile`.
-// Temporarily applies a link profile's default values to the link paramset.
-// Mirrors Python `ws_test_link_profile` (websocket_api.py:2643).
+// linksApplyProfileHandler implements `links.apply_profile`.
+// Writes a link profile's value set (fixed constraints plus the defaults of
+// its loose constraints — see [linkprofile.Profile.ApplyValues]) to the LINK
+// paramset. See ADR 0069 for why this replaces the former
+// `master_profiles.apply` / `links.test_profile`. A LINK write is
+// configuration, so the caller must hold the per-resource edit lock, keyed
+// exactly like `paramset.put`'s LINK arm and REST's PUT
+// /devices/{addr}/link-ps/{peer}.
 //
-// Request: { "interface_id": str, "sender_channel_address": str,
+// Request: { "interface_id"?: str, "sender_channel_address": str,
 //
-//	"receiver_channel_address": str, "profile_id": int }
+//	"receiver_channel_address": str, "profile_id": int, "edit_token": str }
 //
-// Response: { "success": true, "applied_values": map }
-func linksTestProfileHandler(p LinkProfilesProvider) CommandHandler {
+// Response: { "success": true, "profile_id": int, "written": int }
+func linksApplyProfileHandler(p LinkProfilesProvider, locks EditLockVerifier) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var req struct {
 			InterfaceID     string `json:"interface_id"`
 			SenderChannel   string `json:"sender_channel_address"`
 			ReceiverChannel string `json:"receiver_channel_address"`
 			ProfileID       int    `json:"profile_id"`
+			EditToken       string `json:"edit_token"`
 		}
 		if err := decodeOrEmpty(raw, &req); err != nil {
 			return nil, err
 		}
-		if req.InterfaceID == "" || req.SenderChannel == "" || req.ReceiverChannel == "" {
-			return nil, NewCommandError(CommandErrorBadRequest, "interface_id, sender_channel_address, and receiver_channel_address are required")
+		if req.SenderChannel == "" || req.ReceiverChannel == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "sender_channel_address and receiver_channel_address are required")
 		}
-		result, err := p.TestLinkProfile(ctx, req.InterfaceID, req.SenderChannel, req.ReceiverChannel, req.ProfileID)
+		if locks != nil {
+			lockKey := "channel:" + req.ReceiverChannel + ":" + string(hmenum.ParamsetKeyLink) + ":" + req.SenderChannel
+			if !locks.Verify(lockKey, req.EditToken) {
+				return nil, NewCommandError(CommandErrorLocked,
+					"edit lock required for LINK write; open an edit session and pass edit_token")
+			}
+		}
+		written, err := p.ApplyLinkProfile(ctx, req.ReceiverChannel, req.SenderChannel, req.ProfileID)
 		if err != nil {
-			return nil, fmt.Errorf("links.test_profile: %w", err)
+			return nil, fmt.Errorf("links.apply_profile: %w", err)
 		}
-		return result, nil
+		return map[string]any{
+			"success":      true,
+			"profile_id":   req.ProfileID,
+			"written":      written,
+			"interface_id": req.InterfaceID,
+		}, nil
 	}
 }
 

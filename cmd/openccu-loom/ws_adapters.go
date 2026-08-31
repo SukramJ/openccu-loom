@@ -214,9 +214,15 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// L01: links.get_form_schema — ParamsetsDomain now has GetLinkFormSchema.
 		LinkFormSchema: w.paramsets,
 
-		// L02 + L03: links.get_profiles + links.test_profile —
-		// LinkProfilesAdapter wraps linkprofile.Store.
+		// L02 + L03: links.get_profiles + links.apply_profile —
+		// LinkProfilesAdapter wraps linkprofile.Store; the same
+		// *adapter.ParamsetsDomain instance backs both the LINK read and
+		// the LINK write ADR 0069 requires.
 		LinkProfiles: adapter.NewLinkProfilesAdapter(w.registry, w.linkProfiles, w.paramsets),
+		// links.apply_profile is a LINK configuration write and shares the
+		// same strict edit-lock registry as paramset.put and REST's LINK
+		// route.
+		EditLocks: w.editSessions,
 
 		// L04: paramset.determine — ParameterDeterminerAdapter resolves via registry.
 		ParameterDeterminer: adapter.NewParameterDeterminerAdapter(w.registry, w.valueWriter),

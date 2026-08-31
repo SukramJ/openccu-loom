@@ -5,7 +5,6 @@ package linkprofile_test
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -276,49 +275,76 @@ func TestGetLinkProfiles_MutatingResultDoesNotAffectCache(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestLinkProfile
+// Profile.ApplyValues
 // ---------------------------------------------------------------------------
 
-func TestTestLinkProfile_KnownProfile(t *testing.T) {
+// TestApplyValues_FixedAndDefaultedLooseParams verifies against the real
+// embedded archive that ApplyValues returns every fixed constraint's value
+// plus the default of every non-fixed constraint that carries one, and
+// nothing else. ACTOR_WINDOW/SHUTTER_CONTACT profile id=3 has a known shape:
+// fixed constraints, two range constraints with a default
+// (SHORT_ON_LEVEL, SHORT_COND_VALUE_HI), and one list constraint without a
+// default (SHORT_MULTIEXECUTE).
+func TestApplyValues_FixedAndDefaultedLooseParams(t *testing.T) {
 	t.Parallel()
 	s := linkprofile.New()
-	result, err := s.TestLinkProfile(context.Background(), "DIMMER", "KEY", 1)
-	if err != nil {
-		t.Fatalf("TestLinkProfile(DIMMER, KEY, 1): %v", err)
-	}
-	if len(result) == 0 {
-		t.Fatal("expected non-empty applied_values for profile id=1")
-	}
-	v, ok := result["SHORT_ACTION_TYPE"]
+	p, ok := s.GetProfileByID("ACTOR_WINDOW", "SHUTTER_CONTACT", 3)
 	if !ok {
-		t.Fatal("expected SHORT_ACTION_TYPE in result")
+		t.Fatal("GetProfileByID(ACTOR_WINDOW, SHUTTER_CONTACT, 3): expected found=true")
 	}
-	if v.(float64) != 1.0 {
-		t.Fatalf("expected SHORT_ACTION_TYPE=1.0, got %v", v)
+
+	// Build the expected set independently from the same profile's Params,
+	// mirroring the documented rule rather than hardcoding literals.
+	wantFixed := 0
+	wantLooseWithDefault := 0
+	for _, c := range p.Params {
+		switch {
+		case c.ConstraintType == "fixed" && c.Value != nil:
+			wantFixed++
+		case c.ConstraintType != "fixed" && c.Default != nil:
+			wantLooseWithDefault++
+		}
+	}
+	if wantFixed == 0 || wantLooseWithDefault == 0 {
+		t.Fatalf("archive shape assumption broke: fixed=%d looseWithDefault=%d", wantFixed, wantLooseWithDefault)
+	}
+
+	got := p.ApplyValues()
+	if len(got) != wantFixed+wantLooseWithDefault {
+		t.Fatalf("ApplyValues: expected %d entries (fixed=%d + defaulted-loose=%d), got %d: %v",
+			wantFixed+wantLooseWithDefault, wantFixed, wantLooseWithDefault, len(got), got)
+	}
+	for name, c := range p.Params {
+		v, present := got[name]
+		switch {
+		case c.ConstraintType == "fixed" && c.Value != nil:
+			if !present || v.(float64) != *c.Value {
+				t.Fatalf("ApplyValues: fixed param %s: expected %v, got %v (present=%v)", name, *c.Value, v, present)
+			}
+		case c.ConstraintType != "fixed" && c.Default != nil:
+			if !present || v.(float64) != *c.Default {
+				t.Fatalf("ApplyValues: defaulted loose param %s: expected %v, got %v (present=%v)", name, *c.Default, v, present)
+			}
+		default:
+			if present {
+				t.Fatalf("ApplyValues: param %s (type=%s, no default) must be absent, got %v", name, c.ConstraintType, v)
+			}
+		}
+	}
+
+	// SHORT_MULTIEXECUTE is the documented limitation: a list constraint
+	// without a default must not appear in the applied value set.
+	if _, present := got["SHORT_MULTIEXECUTE"]; present {
+		t.Fatal("ApplyValues: SHORT_MULTIEXECUTE (list, no default) must be absent")
 	}
 }
 
-func TestTestLinkProfile_UnknownType_ReturnsErrUnsupported(t *testing.T) {
+func TestApplyValues_NoParams(t *testing.T) {
 	t.Parallel()
-	s := linkprofile.New()
-	_, err := s.TestLinkProfile(context.Background(), "NONEXISTENT_TYPE", "KEY", 1)
-	if err == nil {
-		t.Fatal("expected ErrUnsupported, got nil")
-	}
-	if !errors.Is(err, linkprofile.ErrUnsupported) {
-		t.Fatalf("expected ErrUnsupported, got %v", err)
-	}
-}
-
-func TestTestLinkProfile_UnknownID_ReturnsErrUnsupported(t *testing.T) {
-	t.Parallel()
-	s := linkprofile.New()
-	_, err := s.TestLinkProfile(context.Background(), "DIMMER", "KEY", 9999)
-	if err == nil {
-		t.Fatal("expected ErrUnsupported for unknown id, got nil")
-	}
-	if !errors.Is(err, linkprofile.ErrUnsupported) {
-		t.Fatalf("expected ErrUnsupported, got %v", err)
+	p := linkprofile.Profile{}
+	got := p.ApplyValues()
+	if len(got) != 0 {
+		t.Fatalf("expected empty value set for a profile with no params, got %v", got)
 	}
 }
 
@@ -758,16 +784,6 @@ func TestGetLinkProfiles_NilStore(t *testing.T) {
 	}
 }
 
-// TestTestLinkProfile_NilStore exercises the nil-Store guard in TestLinkProfile.
-func TestTestLinkProfile_NilStore(t *testing.T) {
-	t.Parallel()
-	var s *linkprofile.Store
-	_, err := s.TestLinkProfile(context.Background(), "DIMMER", "KEY", 1)
-	if !errors.Is(err, linkprofile.ErrUnsupported) {
-		t.Fatalf("nil Store TestLinkProfile: expected ErrUnsupported, got %v", err)
-	}
-}
-
 // TestMatchActiveProfile_NilStore exercises the nil-Store guard in MatchActiveProfile.
 func TestMatchActiveProfile_NilStore(t *testing.T) {
 	t.Parallel()
@@ -775,17 +791,6 @@ func TestMatchActiveProfile_NilStore(t *testing.T) {
 	id := s.MatchActiveProfile("DIMMER", "KEY", map[string]any{})
 	if id != 0 {
 		t.Fatalf("nil Store MatchActiveProfile: expected 0, got %d", id)
-	}
-}
-
-// TestTestLinkProfile_UnknownSenderType exercises the path where the
-// receiver bucket is found but the sender type is absent.
-func TestTestLinkProfile_UnknownSenderType(t *testing.T) {
-	t.Parallel()
-	s := linkprofile.New()
-	_, err := s.TestLinkProfile(context.Background(), "DIMMER", "UNKNOWN_SENDER_TYPE_XYZ", 1)
-	if !errors.Is(err, linkprofile.ErrUnsupported) {
-		t.Fatalf("unknown sender: expected ErrUnsupported, got %v", err)
 	}
 }
 

@@ -1237,11 +1237,11 @@ func TestLinkProfilesAdapter_NilStore_GetLinkProfiles(t *testing.T) {
 	}
 }
 
-func TestLinkProfilesAdapter_NilStore_TestLinkProfile(t *testing.T) {
+func TestLinkProfilesAdapter_NilStore_ApplyLinkProfile(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	a := NewLinkProfilesAdapter(reg, nil, nil)
-	_, err := a.TestLinkProfile(context.Background(), "HmIP-RF", "SENDER:1", "RECV:1", 1)
+	_, err := a.ApplyLinkProfile(context.Background(), "RECV:1", "SENDER:1", 1)
 	if err == nil {
 		t.Error("expected error for nil store")
 	}
@@ -11715,13 +11715,13 @@ func TestResolveSenderType_EmptyRaw(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// link_profiles_adapter.go: TestLinkProfile success path
+// link_profiles_adapter.go: ApplyLinkProfile success path
 // ---------------------------------------------------------------------------
 
-// TestLinkProfilesAdapter_TestLinkProfile_Success exercises lines 116-121 of
-// link_profiles_adapter.go: a matching profile is found in the store →
-// the success map with "success": true is returned.
-func TestLinkProfilesAdapter_TestLinkProfile_Success(t *testing.T) {
+// TestLinkProfilesAdapter_ApplyLinkProfile_Success exercises the success
+// path of ApplyLinkProfile: a matching profile is found in the store and
+// its value set reaches the writer.
+func TestLinkProfilesAdapter_ApplyLinkProfile_Success(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	c, err := central.New(central.Config{Name: "ccu-b48-linkprof"})
@@ -11756,16 +11756,20 @@ func TestLinkProfilesAdapter_TestLinkProfile_Success(t *testing.T) {
 		},
 	})
 
-	adapter := NewLinkProfilesAdapter(reg, store, nil)
-	result, err := adapter.TestLinkProfile(context.Background(), "HmIP-RF", "B48LPDEV01:1", "B48LPDEV01:1", 1)
+	fake := &fakeLinkParamsetReadWriter{}
+	adapter := NewLinkProfilesAdapter(reg, store, fake)
+	written, err := adapter.ApplyLinkProfile(context.Background(), "B48LPDEV01:1", "B48LPDEV01:1", 1)
 	if err != nil {
-		t.Fatalf("TestLinkProfile: unexpected error: %v", err)
+		t.Fatalf("ApplyLinkProfile: unexpected error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if written != 1 {
+		t.Fatalf("expected 1 parameter written, got %d", written)
 	}
-	if success, ok := result["success"]; !ok || success != true {
-		t.Errorf("expected success=true in result, got %v", result)
+	if !fake.putCalled {
+		t.Fatal("expected PutLinkParamset to be called")
+	}
+	if got, ok := fake.putValues["ON_TIME"]; !ok || got != 1.0 {
+		t.Errorf("expected ON_TIME=1.0 in written values, got %v", fake.putValues)
 	}
 }
 

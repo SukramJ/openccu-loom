@@ -58,22 +58,33 @@ func (s *stubLinkFormSchema) GetLinkFormSchema(_ context.Context, _, _, _ string
 	return map[string]any{"fields": []any{}}, nil
 }
 
-// stubLinkProfiles implements [LinkProfilesProvider].
+// stubLinkProfiles implements [LinkProfilesProvider]. applyCalls records
+// every ApplyLinkProfile invocation so lock-enforcement tests can assert
+// the write never reached the provider.
 type stubLinkProfiles struct {
 	profiles        []map[string]any
 	activeProfileID int
+	applyWritten    int
+	applyErr        error
+	applyCalls      []struct {
+		receiver, sender string
+		profileID        int
+	}
 }
 
 func (s *stubLinkProfiles) GetLinkProfiles(_ context.Context, _, _, _ string) (profiles []map[string]any, activeID int, err error) {
 	return s.profiles, s.activeProfileID, nil
 }
 
-func (s *stubLinkProfiles) TestLinkProfile(_ context.Context, _, _, _ string, profileID int) (map[string]any, error) {
-	return map[string]any{
-		"success":        true,
-		"applied_values": map[string]any{},
-		"profile_id":     profileID,
-	}, nil
+func (s *stubLinkProfiles) ApplyLinkProfile(_ context.Context, receiverChannelAddress, senderChannelAddress string, profileID int) (int, error) {
+	s.applyCalls = append(s.applyCalls, struct {
+		receiver, sender string
+		profileID        int
+	}{receiverChannelAddress, senderChannelAddress, profileID})
+	if s.applyErr != nil {
+		return 0, s.applyErr
+	}
+	return s.applyWritten, nil
 }
 
 // stubParameterDeterminer implements [ParameterDeterminer].
@@ -279,7 +290,7 @@ func TestMissingStubCommandsReturnError(t *testing.T) {
 		"schedules.set_enabled",
 		"links.get_form_schema",
 		"links.get_profiles",
-		"links.test_profile",
+		"links.apply_profile",
 		"paramset.determine",
 	}
 	for _, name := range stubs {
@@ -366,11 +377,12 @@ func TestMissingLinksGetProfiles_WiredPath(t *testing.T) {
 		"required")
 }
 
-// ─── links.test_profile (wired) ─────────────────────────────────────────────
+// ─── links.apply_profile (wired) ────────────────────────────────────────────
 
-func TestMissingLinksTestProfile_WiredPath(t *testing.T) {
-	r := newMissingRouter(MissingCommandsConfig{LinkProfiles: &stubLinkProfiles{}})
-	out := dispatchMissing(t, r, "links.test_profile", map[string]any{
+func TestMissingLinksApplyProfile_WiredPath(t *testing.T) {
+	p := &stubLinkProfiles{applyWritten: 3}
+	r := newMissingRouter(MissingCommandsConfig{LinkProfiles: p})
+	out := dispatchMissing(t, r, "links.apply_profile", map[string]any{
 		"interface_id":             "HmIP-RF",
 		"sender_channel_address":   "ABC0001:1",
 		"receiver_channel_address": "DEF0002:1",
@@ -378,6 +390,61 @@ func TestMissingLinksTestProfile_WiredPath(t *testing.T) {
 	})
 	if out["success"] != true {
 		t.Fatalf("expected success=true, got %v", out["success"])
+	}
+	if out["written"] != float64(3) {
+		t.Fatalf("expected written=3, got %v", out["written"])
+	}
+	if len(p.applyCalls) != 1 {
+		t.Fatalf("expected 1 ApplyLinkProfile call, got %d", len(p.applyCalls))
+	}
+	// G2: the receiver address is the channel, the sender address is the peer.
+	if p.applyCalls[0].receiver != "DEF0002:1" || p.applyCalls[0].sender != "ABC0001:1" {
+		t.Fatalf("ApplyLinkProfile(receiver, sender) = (%s, %s), want (DEF0002:1, ABC0001:1)",
+			p.applyCalls[0].receiver, p.applyCalls[0].sender)
+	}
+	dispatchExpectErr(t, r, "links.apply_profile",
+		map[string]any{"interface_id": "HmIP-RF"},
+		"required")
+}
+
+// TestMissingLinksApplyProfile_EditLockEnforced is the bite proof for G3:
+// no token → CommandErrorLocked and the write never reaches the provider;
+// a valid per-link token → the write lands.
+func TestMissingLinksApplyProfile_EditLockEnforced(t *testing.T) {
+	p := &stubLinkProfiles{applyWritten: 1}
+	const lockKey = "channel:DEF0002:1:LINK:ABC0001:1"
+	r := newMissingRouter(MissingCommandsConfig{
+		LinkProfiles: p,
+		EditLocks:    fakeEditLocks{key: lockKey, token: "good-token"},
+	})
+
+	// 1. No edit_token: locked, no write recorded.
+	raw, _ := json.Marshal(map[string]any{
+		"sender_channel_address":   "ABC0001:1",
+		"receiver_channel_address": "DEF0002:1",
+		"profile_id":               7,
+	})
+	res := r.Dispatch(opCtx(), "links.apply_profile", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("no edit_token: expected code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if len(p.applyCalls) != 0 {
+		t.Fatalf("no edit_token: write must not reach the provider, got %d calls", len(p.applyCalls))
+	}
+
+	// 2. Valid edit_token for the exact receiver/sender pair: write lands.
+	raw, _ = json.Marshal(map[string]any{
+		"sender_channel_address":   "ABC0001:1",
+		"receiver_channel_address": "DEF0002:1",
+		"profile_id":               7,
+		"edit_token":               "good-token",
+	})
+	res = r.Dispatch(opCtx(), "links.apply_profile", raw)
+	if res.Error != nil {
+		t.Fatalf("valid edit_token: unexpected error: %+v", res.Error)
+	}
+	if len(p.applyCalls) != 1 {
+		t.Fatalf("valid edit_token: expected 1 write, got %d", len(p.applyCalls))
 	}
 }
 
@@ -472,7 +539,7 @@ func TestMissingAllNineCommandsRegistered(t *testing.T) {
 		"system.user_permissions",
 		"links.get_form_schema",
 		"links.get_profiles",
-		"links.test_profile",
+		"links.apply_profile",
 		"paramset.determine",
 	}
 	if len(want) != 9 {

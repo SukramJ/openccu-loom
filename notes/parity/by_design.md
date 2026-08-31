@@ -4051,6 +4051,33 @@ compatible cross-type swaps; rejecting one after the CCU already performed
 it would strand Loom's model. A cross-type replace is logged
 (`device_coordinator.replace_device.cross_type`) and proceeds.
 
+### BD-Links-ApplyProfileNotTestProfile — the write is called apply, not test
+
+`homematicip_local` exposes the link-profile write as `ws_test_link_profile`
+(`custom_components/homematicip_local/websocket_api.py`), whose own docstring
+says what it does: "Test a link profile by temporarily applying it. This writes
+the profile's default values to the link paramset so the user can observe the
+effect." OpenCCU-Loom calls the same operation `links.apply_profile`.
+
+The divergence is from the HA integration, not from the origin, and it corrects
+that layer rather than departing from the CCU. The firmware keeps two separate
+operations and names them apart:
+
+- `www/config/ic_ifacecmd.cgi` `cmd_set_profile` → `base_put_profile` →
+  `putParamset $address $peer` — writing the profile. Its failure message is
+  "Fehler beim Speichern des Profils".
+- `www/config/ic_ifacecmd.cgi` `cmd_activateLinkParamset` →
+  `activateLinkParamset $receiver $sender false` — triggering it so the operator
+  can observe the effect. Its messages say the profile was "ausgelöst".
+
+Both concepts already exist here under names that match the firmware:
+`links.apply_profile` is the write, `links.activate_paramset` is the trigger.
+Folding the write under the word "test" would have made the pair unreadable —
+the name would suggest the trigger while the behaviour is the write.
+
+Should the HA integration's naming ever be re-imported wholesale, this rename
+must be reapplied.
+
 ### BD-Safety-SWDWindowRuleDropped — the reference's `HmIP-SWD → STATE → window` rule is a defect and is not reproduced
 
 `../aiohomematic/aiohomematic/model/data_point_metadata.py:290-303` lists
