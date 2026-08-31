@@ -6,6 +6,39 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The surviving profile store answered the same question two ways, and had
+  lost two capabilities with the one that was deleted.** `internal/store/linkprofile`
+  became the single decoder of the shared profiles archive when the
+  wrongly-keyed second decoder went. Four things needed doing before that was
+  true rather than merely arranged:
+
+  An unknown receiver channel type produced `ErrUnsupported` on the first call
+  and a silent empty result on every call after it. The loader wrote a nil
+  entry into the same cache the hit-check reads, so the second call found a
+  key, treated it as a hit, and returned no error. Same input, two answers,
+  decided by call order. Unknown types now answer identically every time.
+
+  Profiles registered under a receiver-type alias were unreachable: the
+  registration wrote the raw spelling while every lookup resolved the alias
+  first. Three of the archive's receiver types are aliases, so anything
+  registered under `OPTICAL_SIGNAL_RECEIVER`, `SWITCH_TRANSCEIVER` or
+  `UNIVERSAL_LIGHT_RECEIVER` was written where nothing would look for it.
+
+  Constraint matching compared floats exactly. A MASTER value that arrives as
+  18.5000001 against a declared constraint of 18.5 failed to match, and one
+  failed constraint disqualifies the whole profile — so a device would report
+  no active profile rather than the right one. Fixed and list constraints now
+  compare with the relative tolerance the archive's other reader used
+  (`|a-b| <= 1e-6·max(|a|,|b|,1)`); range constraints compare with bounds
+  rather than equality and were left alone.
+
+  And the store gained `SenderTypes`, the counterpart to `ReceiverTypes`: which
+  sender channel types pair with a given receiver. Nothing could answer that
+  question, and a surface keyed by a channel pair cannot offer the operator a
+  choice without it.
+
 ### Removed
 
 - **`master_profiles.*` and its store, because the surface was reading the

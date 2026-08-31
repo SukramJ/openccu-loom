@@ -638,6 +638,92 @@ func TestMatchActiveProfile_RangeNoMinMax(t *testing.T) {
 	}
 }
 
+// TestMatchActiveProfile_FloatTolerance exercises the relative float
+// tolerance in profileMatches's "fixed" arm against the real embedded
+// archive. DIMMER/KEY profile id=1 has SHORT_ACTION_TYPE fixed at 1.0
+// (pinned by TestEmbeddedData_DimmerKeyProfile1FixedParams); an observed
+// value that differs only by float noise must still match.
+func TestMatchActiveProfile_FloatTolerance(t *testing.T) {
+	t.Parallel()
+	s := linkprofile.New()
+	exact := s.MatchActiveProfile("DIMMER", "KEY", map[string]any{"SHORT_ACTION_TYPE": 1.0})
+	if exact == 0 {
+		t.Fatal("exact observed value 1.0 should match a profile (Expert fallback returned)")
+	}
+	nearExact := s.MatchActiveProfile("DIMMER", "KEY", map[string]any{"SHORT_ACTION_TYPE": 1.0000001})
+	if nearExact != exact {
+		t.Fatalf("observed value within float tolerance of the fixed constraint should match the same profile: exact=%d nearExact=%d", exact, nearExact)
+	}
+}
+
+// TestSenderTypes_RealReceiver pins SenderTypes against the real embedded
+// DIMMER_VIRTUAL_RECEIVER archive: the returned buckets must be exactly the
+// archive file's top-level JSON keys, sorted.
+func TestSenderTypes_RealReceiver(t *testing.T) {
+	t.Parallel()
+	s := linkprofile.New()
+	types, err := s.SenderTypes("DIMMER_VIRTUAL_RECEIVER")
+	if err != nil {
+		t.Fatalf("SenderTypes(DIMMER_VIRTUAL_RECEIVER): %v", err)
+	}
+	want := []string{
+		"ACCELERATION_TRANSCEIVER", "ACCESS_TRANSCEIVER", "COND_SWITCH_TRANSMITTER",
+		"KEY_TRANSCEIVER", "MULTI_MODE_INPUT_TRANSMITTER",
+		"PASSAGE_DETECTOR_DIRECTION_TRANSMITTER", "PRESENCEDETECTOR_TRANSCEIVER",
+		"RAIN_DETECTION_TRANSMITTER", "ROTARY_HANDLE_TRANSCEIVER", "SHUTTER_CONTACT",
+		"SWITCH_TRANSCEIVER", "WATER_DETECTION_TRANSMITTER",
+	}
+	if !slices.Equal(types, want) {
+		t.Fatalf("SenderTypes(DIMMER_VIRTUAL_RECEIVER) = %v, want %v", types, want)
+	}
+}
+
+// TestSenderTypes_AliasResolvesToTarget verifies SenderTypes resolves the
+// receiver-type alias the same way load does: OPTICAL_SIGNAL_RECEIVER has
+// no archive of its own and must return DIMMER_VIRTUAL_RECEIVER's buckets.
+func TestSenderTypes_AliasResolvesToTarget(t *testing.T) {
+	t.Parallel()
+	s := linkprofile.New()
+	viaAlias, err := s.SenderTypes("OPTICAL_SIGNAL_RECEIVER")
+	if err != nil {
+		t.Fatalf("SenderTypes(OPTICAL_SIGNAL_RECEIVER): %v", err)
+	}
+	viaTarget, err := s.SenderTypes("DIMMER_VIRTUAL_RECEIVER")
+	if err != nil {
+		t.Fatalf("SenderTypes(DIMMER_VIRTUAL_RECEIVER): %v", err)
+	}
+	if !slices.Equal(viaAlias, viaTarget) {
+		t.Fatalf("SenderTypes via alias = %v, want target's buckets %v", viaAlias, viaTarget)
+	}
+}
+
+// TestRegister_AliasSpellingReachableUnderBothNames verifies that a pair
+// registered under a receiver-type alias spelling is found under both the
+// alias and its canonical archive name — the two lookup paths must agree.
+func TestRegister_AliasSpellingReachableUnderBothNames(t *testing.T) {
+	t.Parallel()
+	s := linkprofile.New()
+	profs := []linkprofile.Profile{{ID: 1, Name: map[string]string{"en": "Toggle"}}}
+	// SWITCH_TRANSCEIVER -> SWITCH_VIRTUAL_RECEIVER per _receiver_type_aliases.json.
+	s.Register("SWITCH_TRANSCEIVER", "KEY", profs)
+
+	viaAlias, err := s.GetLinkProfiles(context.Background(), "SWITCH_TRANSCEIVER", "KEY", "en")
+	if err != nil {
+		t.Fatalf("GetLinkProfiles via alias spelling: %v", err)
+	}
+	if len(viaAlias) != 1 || viaAlias[0].ID != 1 {
+		t.Fatalf("expected the registered profile via alias spelling, got %v", viaAlias)
+	}
+
+	viaCanonical, err := s.GetLinkProfiles(context.Background(), "SWITCH_VIRTUAL_RECEIVER", "KEY", "en")
+	if err != nil {
+		t.Fatalf("GetLinkProfiles via canonical spelling: %v", err)
+	}
+	if len(viaCanonical) != 1 || viaCanonical[0].ID != 1 {
+		t.Fatalf("expected the registered profile via canonical spelling, got %v", viaCanonical)
+	}
+}
+
 // TestNew_InvalidAliasJSONFallsBackGracefully exercises the error branch in
 // New() by verifying that the store still works when the embedded aliases
 // JSON cannot be decoded. We cannot inject bad JSON into the embedded file,

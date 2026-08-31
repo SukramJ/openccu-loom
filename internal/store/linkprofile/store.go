@@ -156,6 +156,7 @@ type Store struct {
 	mu      sync.Mutex
 	aliases map[string]string               // receiverType → canonical receiverType
 	cache   map[string]map[string][]Profile // effectiveReceiverType → senderType → []Profile
+	missing map[string]struct{}             // effectiveReceiverType confirmed to have no archive
 }
 
 // New constructs a [Store] backed by the package's embedded
@@ -164,6 +165,7 @@ func New() *Store {
 	s := &Store{
 		aliases: make(map[string]string),
 		cache:   make(map[string]map[string][]Profile),
+		missing: make(map[string]struct{}),
 	}
 	// Load aliases once at construction time. Failure is non-fatal —
 	// aliasing is best-effort; the raw type will still be tried.
@@ -309,16 +311,22 @@ func (s *Store) TestLinkProfile(_ context.Context, receiverChannelType, senderCh
 // Register pre-loads profiles for a (receiverChannelType, senderChannelType)
 // pair. Primarily used in tests and by the profile-generator script
 // when populating the store from embedded data.
+//
+// receiverChannelType is resolved through the same alias table as [load],
+// so a pair registered under an alias spelling is reachable under both the
+// alias and its canonical target — matching every lookup path.
 func (s *Store) Register(receiverChannelType, senderChannelType string, profs []Profile) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	effective := s.effectiveReceiver(receiverChannelType)
 	if s.cache == nil {
 		s.cache = make(map[string]map[string][]Profile)
 	}
-	if _, ok := s.cache[receiverChannelType]; !ok {
-		s.cache[receiverChannelType] = make(map[string][]Profile)
+	if _, ok := s.cache[effective]; !ok {
+		s.cache[effective] = make(map[string][]Profile)
 	}
-	s.cache[receiverChannelType][senderChannelType] = profs
+	s.cache[effective][senderChannelType] = profs
+	delete(s.missing, effective)
 }
 
 // ReceiverTypes returns all receiver channel types for which the embedded
@@ -338,8 +346,35 @@ func (s *Store) ReceiverTypes() ([]string, error) {
 	return out, nil
 }
 
+// SenderTypes returns the sorted sender-channel-type buckets present in one
+// receiver's archive — the top-level JSON keys of its .json.gz file. This is
+// the pair-keyed counterpart to [Store.ReceiverTypes]: a caller offering an
+// operator a choice of link partners needs to know which sender types a
+// given receiver actually has profiles for.
+//
+// receiverChannelType is resolved through the same alias table as [load], so
+// callers can pass either the alias or the canonical archive name.
+func (s *Store) SenderTypes(receiverChannelType string) ([]string, error) {
+	bucket, err := s.load(receiverChannelType)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(bucket))
+	for senderType := range bucket {
+		out = append(out, senderType)
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
 // load reads (and caches) the profile archive for one receiver channel type.
 // Receiver-type aliases are applied before the lookup.
+//
+// An effective receiver type with no archive is recorded in s.missing so
+// every subsequent call for the same type answers with the same
+// (nil, ErrUnsupported) result — a plain nil cache entry cannot carry that
+// distinction, because the zero value of a missing map key ("not cached
+// yet") and a cached "no data" result are the same nil.
 func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 	if receiverChannelType == "" {
 		return nil, errors.New("linkprofile: empty receiver channel type")
@@ -348,13 +383,18 @@ func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, known := s.missing[effective]; known {
+		return nil, fmt.Errorf("%w: %s", ErrUnsupported, effective)
+	}
 	if cached, ok := s.cache[effective]; ok {
 		return cached, nil
 	}
 	f, err := profileFS.Open(effective + ".json.gz")
 	if err != nil {
-		// Cache a nil sentinel so we don't retry on every call.
-		s.cache[effective] = nil
+		if s.missing == nil {
+			s.missing = make(map[string]struct{})
+		}
+		s.missing[effective] = struct{}{}
 		return nil, fmt.Errorf("%w: %s", ErrUnsupported, effective)
 	}
 	defer func() { _ = f.Close() }()
@@ -402,14 +442,14 @@ func profileMatches(params map[string]ParamConstraint, current map[string]any) b
 		}
 		switch c.ConstraintType {
 		case "fixed":
-			if c.Value != nil && num != *c.Value {
+			if c.Value != nil && !floatsEqual(num, *c.Value) {
 				return false
 			}
 		case "list":
 			if len(c.Values) == 0 {
 				continue
 			}
-			found := slices.Contains(c.Values, num)
+			found := slices.ContainsFunc(c.Values, func(v float64) bool { return floatsEqual(num, v) })
 			if !found {
 				return false
 			}
@@ -437,6 +477,17 @@ func profileSpecificity(params map[string]ParamConstraint) float64 {
 		}
 	}
 	return float64(fixed) - float64(loose)*100
+}
+
+// floatsEqual reports whether a and b are equal within a relative
+// tolerance, so a live paramset read that round-trips through float32
+// or a wire encoding still matches an archive constraint written with
+// more precision than the transport preserves. Every other constraint
+// type in profileMatches keeps strict equality — only float comparisons
+// carry this kind of representational noise.
+func floatsEqual(a, b float64) bool {
+	scale := math.Max(math.Max(math.Abs(a), math.Abs(b)), 1.0)
+	return math.Abs(a-b) <= 1e-6*scale
 }
 
 // toFloat64 narrows whatever the CCU returned (int / float / string)
