@@ -123,7 +123,7 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		Devices:          deviceQuery,
 		DefinitionExport: w.definitionExport,
 		Hub:              &wsHubQuery{hub: w.hub, registry: w.registry, deviceAdmin: w.deviceAdmin},
-		Links:            &wsLinkQuery{domain: w.linksDomain, registry: w.registry},
+		Links:            &wsLinkQuery{domain: w.linksDomain, registry: w.registry, paramsets: w.paramsets},
 		// ScheduleQueryAdapter already satisfies ws.ScheduleQuery — no wrapper needed.
 		Schedules: schedQueryAdapter,
 		// Sessions: wired via configui.SessionStore stored in wsCommandWiring.
@@ -306,6 +306,14 @@ func (w *wsHubMessageCounts) HubMessageCounts() (serviceMessages, alarmMessages 
 type wsLinkQuery struct {
 	domain   *adapter.LinksDomain
 	registry *central.Registry
+	// paramsets carries the LINK paramset read and write. LinksDomain
+	// owns the link topology — listing, adding and removing links — but
+	// the paramset behind a link is a paramset like any other, and
+	// ParamsetsDomain is the one path that applies the visibility gate,
+	// coerces against the descriptor and records the changed values in
+	// the audit entry. WS used to reach the backend through LinksDomain
+	// and skipped all three.
+	paramsets *adapter.ParamsetsDomain
 }
 
 func (w *wsLinkQuery) ListLinks(ctx context.Context, deviceAddress string) ([]map[string]any, error) {
@@ -385,20 +393,20 @@ func (w *wsLinkQuery) LinkableChannels(ctx context.Context, deviceAddress string
 	return nil, fmt.Errorf("ws: device not found: %s", deviceAddress)
 }
 
-// GetLinkParamset bridges to LinksDomain.GetLinkParamset.
+// GetLinkParamset bridges to ParamsetsDomain, the single LINK paramset path.
 func (w *wsLinkQuery) GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error) {
-	if w.domain == nil {
-		return nil, errors.New("ws: links domain not wired")
+	if w.paramsets == nil {
+		return nil, errors.New("ws: paramsets domain not wired")
 	}
-	return w.domain.GetLinkParamset(ctx, channelAddress, peerAddress)
+	return w.paramsets.GetLinkParamset(ctx, channelAddress, peerAddress)
 }
 
-// PutLinkParamset bridges to LinksDomain.PutLinkParamset.
+// PutLinkParamset bridges to ParamsetsDomain, the single LINK paramset path.
 func (w *wsLinkQuery) PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error {
-	if w.domain == nil {
-		return errors.New("ws: links domain not wired")
+	if w.paramsets == nil {
+		return errors.New("ws: paramsets domain not wired")
 	}
-	return w.domain.PutLinkParamset(ctx, channelAddress, peerAddress, values)
+	return w.paramsets.PutLinkParamset(ctx, channelAddress, peerAddress, values)
 }
 
 // ── wsHubQuery ──────────────────────────────────────────────────────────────

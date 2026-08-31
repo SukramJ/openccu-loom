@@ -24,6 +24,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The WebSocket route wrote LINK paramsets through a second domain that
+  applied none of the corrections the REST route applies.** There were two
+  paths to the same write. REST went through `ParamsetsDomain`, which consults
+  the visibility gate, coerces values against the paramset descriptor and
+  records the changed values in its audit entry. WebSocket went through
+  `LinksDomain`, which did none of the three. There is one path now;
+  `LinksDomain` keeps what is genuinely its own, the link topology.
+
+  Two of the three gains are unqualified: a LINK write over WebSocket now
+  reaches the CCU with each value's declared type rather than as a double, and
+  its audit entry names what changed instead of only that something did.
+
+  The third is narrower than it looks, and saying so is the point. The gate
+  refuses a LINK write only when the whole device model is ignored — the
+  per-parameter arm answers "not ignored" for every paramset other than VALUES
+  and MASTER, matching the reference. So the WebSocket path was missing a
+  model-level authorization, not a per-parameter one. The comment on
+  `gateDecidesWrites` claimed otherwise and has been corrected; it named the
+  operator's ignore configuration as the LINK authority, which was never true.
+
 - **Every LINK paramset write sent the wrong wire type for all but one
   parameter.** The XML-RPC encoder maps a Go `float64` to `<double>`, and the
   MASTER/VALUES write path has always corrected for that by coercing each value

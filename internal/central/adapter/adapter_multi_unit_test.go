@@ -6135,47 +6135,6 @@ func TestSetLinkInfo_ForwardsArgsAndRecordsAudit(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetLinkParamset — backend not found (line 214-215)
-// ---------------------------------------------------------------------------
-
-func TestGetLinkParamset_NoBackend(t *testing.T) {
-	t.Parallel()
-	domain, _ := buildLinksFixtureNoBackend(t, "ccu-b26-glp1", "GLP1DEV01B26")
-	_, err := domain.GetLinkParamset(context.Background(), "GLP1DEV01B26:1", "PEER:1")
-	if !errors.Is(err, ErrNoLinkBackend) {
-		t.Errorf("expected ErrNoLinkBackend, got %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// PutLinkParamset — backend not found (line 228-229)
-// ---------------------------------------------------------------------------
-
-func TestPutLinkParamset_NoBackend(t *testing.T) {
-	t.Parallel()
-	domain, _ := buildLinksFixtureNoBackend(t, "ccu-b26-plp1", "PLP1DEV01B26")
-	err := domain.PutLinkParamset(context.Background(), "PLP1DEV01B26:1", "PEER:1", map[string]any{"V": 1})
-	if !errors.Is(err, ErrNoLinkBackend) {
-		t.Errorf("expected ErrNoLinkBackend, got %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// PutLinkParamset — backend.PutLinkParamset error (line 231-233)
-// ---------------------------------------------------------------------------
-
-func TestPutLinkParamset_BackendPutError(t *testing.T) {
-	t.Parallel()
-	putErr := errors.New("put link paramset fail")
-	b := &linksBackend{putLinkParamErr: putErr}
-	domain := buildLinksFixtureWithBackend(t, "ccu-b26-plp2", "PLP2DEV01B26", b)
-	err := domain.PutLinkParamset(context.Background(), "PLP2DEV01B26:1", "PEER:1", map[string]any{"V": 1})
-	if !errors.Is(err, putErr) {
-		t.Errorf("expected putErr, got %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // LinkableChannels — a candidate carrying no link roles is excluded
 // even when the source channel is absent (WS device-address probe): the
 // directional presence fallback requires the candidate to have roles.
@@ -7676,24 +7635,6 @@ func TestLinksDomain_RemoveLink_NilRegistry_ReturnsErr(t *testing.T) {
 	err := d.RemoveLink(context.Background(), "DEV001:1", "PEER001:1")
 	if err == nil {
 		t.Error("expected error for nil registry in RemoveLink")
-	}
-}
-
-func TestLinksDomain_GetLinkParamset_NilRegistry_ReturnsErr(t *testing.T) {
-	t.Parallel()
-	d := &LinksDomain{registry: nil}
-	_, err := d.GetLinkParamset(context.Background(), "DEV001:1", "PEER001:1")
-	if err == nil {
-		t.Error("expected error for nil registry in GetLinkParamset")
-	}
-}
-
-func TestLinksDomain_PutLinkParamset_NilRegistry_ReturnsErr(t *testing.T) {
-	t.Parallel()
-	d := &LinksDomain{registry: nil}
-	err := d.PutLinkParamset(context.Background(), "DEV001:1", "PEER001:1", map[string]any{"K": "V"})
-	if err == nil {
-		t.Error("expected error for nil registry in PutLinkParamset")
 	}
 }
 
@@ -12326,34 +12267,6 @@ func TestLinksDomain_RemoveLink_HappyPath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LinksDomain.GetLinkParamset — happy path
-// ---------------------------------------------------------------------------
-
-func TestLinksDomain_GetLinkParamset_HappyPath(t *testing.T) {
-	t.Parallel()
-	ld, _, _, _, _ := buildLinksFixture(t)
-	// fakeOperations.GetLinkParamset returns nil,nil (empty map).
-	result, err := ld.GetLinkParamset(context.Background(), "DEV001:1", "PEER001:1")
-	if err != nil {
-		t.Fatalf("GetLinkParamset: %v", err)
-	}
-	_ = result
-}
-
-// ---------------------------------------------------------------------------
-// LinksDomain.PutLinkParamset — happy path
-// ---------------------------------------------------------------------------
-
-func TestLinksDomain_PutLinkParamset_HappyPath(t *testing.T) {
-	t.Parallel()
-	ld, _, _, _, _ := buildLinksFixture(t)
-	err := ld.PutLinkParamset(context.Background(), "DEV001:1", "PEER001:1", map[string]any{"COND_VALUE_TRUE": 1})
-	if err != nil {
-		t.Fatalf("PutLinkParamset: %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // linkClientAdapter.GetLinks — happy path
 // ---------------------------------------------------------------------------
 
@@ -15201,24 +15114,6 @@ func TestLinksDomainRemoveLinkNilRegistry(t *testing.T) {
 	t.Parallel()
 	d := NewLinksDomain(nil, nil, nil)
 	err := d.RemoveLink(context.Background(), "DEV:1", "DEV2:1")
-	if err == nil {
-		t.Fatal("expected error for nil registry")
-	}
-}
-
-func TestLinksDomainGetLinkParamsetNilRegistry(t *testing.T) {
-	t.Parallel()
-	d := NewLinksDomain(nil, nil, nil)
-	_, err := d.GetLinkParamset(context.Background(), "DEV:1", "DEV2:1")
-	if err == nil {
-		t.Fatal("expected error for nil registry")
-	}
-}
-
-func TestLinksDomainPutLinkParamsetNilRegistry(t *testing.T) {
-	t.Parallel()
-	d := NewLinksDomain(nil, nil, nil)
-	err := d.PutLinkParamset(context.Background(), "DEV:1", "DEV2:1", nil)
 	if err == nil {
 		t.Fatal("expected error for nil registry")
 	}

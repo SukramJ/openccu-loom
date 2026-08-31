@@ -498,9 +498,19 @@ func (p *ParamsetsDomain) PutLinkParamset(
 // gateDecidesWrites reports whether the VisibilityGate is the authority on
 // whether a write to key may proceed.
 //
-// VALUES and LINK: yes. The gate's VALUES arm is the operator's ignore /
-// un-ignore configuration plus the static hide lists, which is exactly an
-// "is this parameter exposed at all" question.
+// VALUES: yes. The gate's VALUES arm is the operator's ignore / un-ignore
+// configuration plus the static hide lists, which is exactly an "is this
+// parameter exposed at all" question.
+//
+// LINK: yes, but only on one axis, and the difference is worth knowing
+// before relying on it. [ParameterDecider.computeIgnored] answers "not
+// ignored" for every paramset other than VALUES and MASTER, matching the
+// reference decider, which handles those two and falls through. So no LINK
+// parameter is ever refused for being hidden. What can still refuse a LINK
+// write is [ModelValidator.IsModelIgnored] — the whole model, every channel,
+// every parameter. Routing LINK through the gate is therefore a model-level
+// authorization, not a per-parameter one; the per-parameter lookup runs and
+// cannot change the answer.
 //
 // MASTER: no. The gate's MASTER arm is the data-point-CREATION whitelist —
 // it decides which of a channel's ~25 configuration parameters become north-
