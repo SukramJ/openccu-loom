@@ -35,9 +35,31 @@ var wsCommandResultExemptions = map[string]string{}
 // Entries are expected to disappear, and a new command that returns a
 // payload without declaring one fails outright — the backlog can shrink
 // but never grow unnoticed. Its size is the finding: `wsapi.json` is the
-// only description of this surface a client has, and for these 79 the
-// answer is "read the daemon's source".
+// only description of this surface a client has, and for these the answer
+// is "read the daemon's source".
+//
+// Sixteen of the entries were invisible until the resolver below learned
+// to consider every registration of a command rather than the last one it
+// parsed. Commands whose provider may be absent are registered twice — the
+// real handler and a stub that only errors — and the stub was winning, so
+// the guard asked "does this return a payload?" of the wrong function.
 var wsCommandsAwaitingResultShape = map[string]string{
+	"ccu.device_statistics":               "",
+	"ccu.throttle_stats":                  "",
+	"central.connectivity":                "",
+	"central.reconcile":                   "",
+	"change_history.clear":                "",
+	"change_history.list":                 "",
+	"incidents.clear":                     "",
+	"links.get_form_schema":               "",
+	"links.get_profiles":                  "",
+	"paramset.copy":                       "",
+	"paramset.determine":                  "",
+	"paramset.form_schema":                "",
+	"schedules.set_enabled":               "",
+	"service_messages.disable":            "",
+	"service_messages.suppressed":         "",
+	"service_messages.unsuppress":         "",
 	"addon_update.check":                  "",
 	"addon_update.install":                "",
 	"alarm_messages.ack":                  "",
@@ -161,18 +183,31 @@ func TestWSCommandResultsMatchTheirHandlers(t *testing.T) {
 			continue
 		}
 		_, backlogged := wsCommandsAwaitingResultShape[name]
-		publishes, ok := handlers[fn]
+		// A command is often registered twice: the real handler when its
+		// provider is wired, and a stub that only errors when it is not.
+		// It publishes when ANY registration does — measuring the last one
+		// seen would report the stub's "returns nothing" for a command whose
+		// real handler returns a payload.
+		var publishes, ok bool
+		for _, h := range fn {
+			p, known := handlers[h]
+			if !known {
+				continue
+			}
+			ok = true
+			publishes = publishes || p
+		}
 		if !ok {
-			unresolved = append(unresolved, name+" (handler "+fn+" not found)")
+			unresolved = append(unresolved, name+" (no handler found among "+strings.Join(fn, ", ")+")")
 			continue
 		}
 		switch {
 		case publishes && !hasResult:
 			if !backlogged {
-				undeclared = append(undeclared, name+" -> "+fn)
+				undeclared = append(undeclared, name+" -> "+strings.Join(fn, "/"))
 			}
 		case !publishes && hasResult:
-			overdeclared = append(overdeclared, name+" -> "+fn)
+			overdeclared = append(overdeclared, name+" -> "+strings.Join(fn, "/"))
 		}
 	}
 
@@ -204,7 +239,7 @@ func TestWSCommandResultsMatchTheirHandlers(t *testing.T) {
 // wsCommandHandlers returns, per handler-constructor name, whether its
 // returned CommandHandler ever yields a non-nil payload, plus the
 // command -> constructor mapping taken from the Register call sites.
-func wsCommandHandlers(t *testing.T, dir string) (publishes map[string]bool, registered map[string]string) {
+func wsCommandHandlers(t *testing.T, dir string) (publishes map[string]bool, registered map[string][]string) {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -212,7 +247,7 @@ func wsCommandHandlers(t *testing.T, dir string) (publishes map[string]bool, reg
 	}
 	fset := token.NewFileSet()
 	publishes = map[string]bool{}
-	registered = map[string]string{}
+	registered = map[string][]string{}
 
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
@@ -244,7 +279,7 @@ func wsCommandHandlers(t *testing.T, dir string) (publishes map[string]bool, reg
 				return true
 			}
 			if id, ok := inner.Fun.(*ast.Ident); ok {
-				registered[name] = id.Name
+				registered[name] = append(registered[name], id.Name)
 			}
 			return true
 		})

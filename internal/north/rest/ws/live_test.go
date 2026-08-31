@@ -2443,17 +2443,17 @@ func (s *stubLinkFormSchemaErr) GetLinkFormSchema(_ context.Context, _, _, _ str
 	return nil, errors.New("not implemented")
 }
 
-// TestMissingLinksTestProfileError exercises the error path.
-func TestMissingLinksTestProfileError(t *testing.T) {
+// TestMissingLinksApplyProfileError exercises the error path.
+func TestMissingLinksApplyProfileError(t *testing.T) {
 	r := NewRouter()
-	r.Register("links.test_profile", linksTestProfileHandler(&stubLinkProfilesErr{}))
+	r.Register("links.apply_profile", linksApplyProfileHandler(&stubLinkProfilesErr{}, nil))
 	raw, _ := json.Marshal(map[string]any{
 		"interface_id":             "HmIP-RF",
 		"sender_channel_address":   "S:1",
 		"receiver_channel_address": "R:1",
 		"profile_id":               1,
 	})
-	res := r.Dispatch(context.Background(), "links.test_profile", raw)
+	res := r.Dispatch(context.Background(), "links.apply_profile", raw)
 	if res.Error == nil {
 		t.Fatalf("expected error, got %+v", res.Data)
 	}
@@ -2480,8 +2480,8 @@ func (s *stubLinkProfilesErr) GetLinkProfiles(_ context.Context, _, _, _ string)
 	return nil, 0, errors.New("not implemented")
 }
 
-func (s *stubLinkProfilesErr) TestLinkProfile(_ context.Context, _, _, _ string, _ int) (map[string]any, error) {
-	return nil, errors.New("not implemented")
+func (s *stubLinkProfilesErr) ApplyLinkProfile(_ context.Context, _, _ string, _ int) (int, error) {
+	return 0, errors.New("not implemented")
 }
 
 // TestMissingParamsetDetermineError exercises the error path.

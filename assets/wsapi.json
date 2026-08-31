@@ -940,13 +940,20 @@
   },
   {
    "category": "links",
-   "description": "Temporarily apply a link profile's default values to a link paramset for preview. Mirrors Python ws_test_link_profile (websocket_api.py:2643). Stub until Phase-11.",
-   "name": "links.test_profile",
+   "description": "Write a link profile to the LINK paramset of (receiver_channel_address, sender_channel_address). The value set is the profile's fixed constraint values plus the declared defaults of its loose constraints; a loose constraint carrying no default is not written, so the device keeps its current value for it. One consequence is worth knowing before building on this: applying a profile does not guarantee that a later links.get_profiles reports it as the active one, because the parameters that distinguish sibling profiles are frequently loose without a default. This is a configuration write and requires the per-resource edit lock: pass edit_token issued by POST /sessions/edit with key channel:{receiver_channel_address}:LINK:{sender_channel_address}, or the write is rejected with a 'locked' command error.",
+   "name": "links.apply_profile",
    "args": {
-    "interface_id": "string",
+    "interface_id": "string?",
     "sender_channel_address": "string",
     "receiver_channel_address": "string",
-    "profile_id": "integer?"
+    "profile_id": "integer",
+    "edit_token": "string"
+   },
+   "result": {
+    "success": "boolean",
+    "profile_id": "integer",
+    "written": "integer",
+    "interface_id": "string"
    }
   },
   {

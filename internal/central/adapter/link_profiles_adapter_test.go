@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -108,25 +109,113 @@ func TestLinkProfilesAdapter_ReturnsProfilesAsMapSlice(t *testing.T) {
 	}
 }
 
-// TestLinkProfilesAdapter_TestLinkProfile_Unsupported verifies that
-// TestLinkProfile returns a non-error map with unsupported=true when the
-// store's stub returns ErrUnsupported.
-func TestLinkProfilesAdapter_TestLinkProfile_Unsupported(t *testing.T) {
+// fakeLinkParamsetReadWriter implements both LinkParamsetReader and
+// LinkParamsetWriter so ApplyLinkProfile tests can inspect the exact
+// (channel, peer, values) triple the write reaches.
+type fakeLinkParamsetReadWriter struct {
+	getValues map[string]any
+
+	putCalled  bool
+	putChannel string
+	putPeer    string
+	putValues  map[string]any
+}
+
+func (f *fakeLinkParamsetReadWriter) GetLinkParamset(_ context.Context, _, _ string) (map[string]any, error) {
+	return f.getValues, nil
+}
+
+func (f *fakeLinkParamsetReadWriter) PutLinkParamset(_ context.Context, channelAddress, peerAddress string, values map[string]any) error {
+	f.putCalled = true
+	f.putChannel = channelAddress
+	f.putPeer = peerAddress
+	f.putValues = values
+	return nil
+}
+
+// TestLinkProfilesAdapter_ApplyLinkProfile_ValueSetAndPair is the bite proof
+// for ADR 0069's write path. It reads the expected value set out of the
+// real embedded archive (ACTOR_WINDOW/SHUTTER_CONTACT profile id=3 — known
+// to carry fixed constraints, loose constraints with a default, and one
+// loose constraint without one: SHORT_MULTIEXECUTE), never as hardcoded
+// literals, and asserts the write lands with the receiver as the channel
+// and the sender as the peer — the exact pair ADR 0069 documents getting
+// backwards as the reachable defect.
+func TestLinkProfilesAdapter_ApplyLinkProfile_ValueSetAndPair(t *testing.T) {
 	t.Parallel()
-	a := NewLinkProfilesAdapter(nil, linkprofile.New(), nil)
-	result, err := a.TestLinkProfile(context.Background(), "HmIP-RF", "VCU0001:1", "VCU0002:1", 1)
+	const (
+		receiverType = "ACTOR_WINDOW"
+		senderType   = "SHUTTER_CONTACT"
+		profileID    = 3
+	)
+
+	store := linkprofile.New()
+	profile, found := store.GetProfileByID(receiverType, senderType, profileID)
+	if !found {
+		t.Fatalf("archive fixture missing: GetProfileByID(%s, %s, %d)", receiverType, senderType, profileID)
+	}
+	wantValues := profile.ApplyValues()
+	if len(wantValues) == 0 {
+		t.Fatal("archive fixture has no applyable values; pick another profile")
+	}
+	if _, present := wantValues["SHORT_MULTIEXECUTE"]; present {
+		t.Fatal("test fixture assumption broke: SHORT_MULTIEXECUTE (list, no default) must be absent from ApplyValues")
+	}
+
+	c, _ := central.New(central.Config{Name: "ccu-01"})
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+
+	dReceiver := device.New(device.Config{Address: "VCU1001", Interface: hmenum.InterfaceHmIPRF, InterfaceID: "HmIP-RF"})
+	dReceiver.AddChannel("VCU1001:1", 1, receiverType, hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(dReceiver)
+
+	dSender := device.New(device.Config{Address: "VCU1002", Interface: hmenum.InterfaceHmIPRF, InterfaceID: "HmIP-RF"})
+	dSender.AddChannel("VCU1002:1", 1, senderType, hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(dSender)
+
+	fake := &fakeLinkParamsetReadWriter{}
+	a := NewLinkProfilesAdapter(reg, store, fake)
+
+	written, err := a.ApplyLinkProfile(context.Background(), "VCU1001:1", "VCU1002:1", profileID)
 	if err != nil {
-		t.Fatalf("TestLinkProfile: unexpected error: %v", err)
+		t.Fatalf("ApplyLinkProfile: %v", err)
 	}
-	if result == nil {
-		t.Fatal("TestLinkProfile: expected non-nil result map")
+	if written != len(wantValues) {
+		t.Fatalf("ApplyLinkProfile: written=%d, want %d", written, len(wantValues))
 	}
-	unsupported, ok := result["unsupported"]
-	if !ok {
-		t.Fatal("TestLinkProfile: result missing 'unsupported' key")
+	if !fake.putCalled {
+		t.Fatal("ApplyLinkProfile: PutLinkParamset was never called")
 	}
-	if unsupported != true {
-		t.Fatalf("TestLinkProfile: unsupported = %v; want true", unsupported)
+	if fake.putChannel != "VCU1001:1" {
+		t.Fatalf("PutLinkParamset channel = %q, want receiver %q", fake.putChannel, "VCU1001:1")
+	}
+	if fake.putPeer != "VCU1002:1" {
+		t.Fatalf("PutLinkParamset peer = %q, want sender %q", fake.putPeer, "VCU1002:1")
+	}
+	if len(fake.putValues) != len(wantValues) {
+		t.Fatalf("PutLinkParamset values count = %d, want %d: got %v", len(fake.putValues), len(wantValues), fake.putValues)
+	}
+	for k, want := range wantValues {
+		got, ok := fake.putValues[k]
+		if !ok || got != want {
+			t.Fatalf("PutLinkParamset values[%s] = %v (present=%v), want %v", k, got, ok, want)
+		}
+	}
+}
+
+// TestLinkProfilesAdapter_ApplyLinkProfile_UnknownProfile verifies that an
+// unknown profile id reports ErrUnsupported and never reaches the writer.
+func TestLinkProfilesAdapter_ApplyLinkProfile_UnknownProfile(t *testing.T) {
+	t.Parallel()
+	fake := &fakeLinkParamsetReadWriter{}
+	a := NewLinkProfilesAdapter(nil, linkprofile.New(), fake)
+	_, err := a.ApplyLinkProfile(context.Background(), "VCU0001:1", "VCU0002:1", 99999)
+	if !errors.Is(err, linkprofile.ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+	if fake.putCalled {
+		t.Fatal("PutLinkParamset must not be called for an unknown profile")
 	}
 }
 

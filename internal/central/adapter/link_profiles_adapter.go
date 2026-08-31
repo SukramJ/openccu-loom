@@ -36,6 +36,17 @@ type LinkParamsetReader interface {
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 }
 
+// LinkParamsetWriter writes the LINK paramset of one (channel, peer) pair —
+// the single write path ADR 0069 names: it applies the visibility gate,
+// coerces against the descriptor, and records the changed values in the
+// audit entry. [ParamsetsDomain] satisfies it. Declared separately from
+// [LinkParamsetReader] because most callers of this adapter need only the
+// read side; [LinkProfilesAdapter.ApplyLinkProfile] type-asserts the shared
+// paramsets collaborator to this interface at call time.
+type LinkParamsetWriter interface {
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+}
+
 // LinkProfilesAdapter implements ws.LinkProfilesProvider.
 //
 // Construct with [NewLinkProfilesAdapter]; the zero value is not
@@ -117,42 +128,40 @@ func (a *LinkProfilesAdapter) activeProfileID(
 	return a.store.MatchActiveProfile(receiverType, senderType, values)
 }
 
-// TestLinkProfile implements ws.LinkProfilesProvider.
+// ApplyLinkProfile implements ws.LinkProfilesProvider.
 //
 // Resolves receiver and sender channel addresses to their channel types,
-// then fetches the fixed parameter values for the given profileID from the
-// Embedded Returns a success map with applied_values
-// when the profile is found, or a non-error map with unsupported=true when
-// no profile data exists for the channel-type pair.
-func (a *LinkProfilesAdapter) TestLinkProfile(
+// looks up the named profile, and writes its value set — see
+// [linkprofile.Profile.ApplyValues] for exactly what that set contains —
+// through [ParamsetsDomain.PutLinkParamset], the single LINK write path
+// (ADR 0069): the receiver channel address is the paramset's channel, the
+// sender channel address is its peer. Returns the number of parameters
+// written.
+func (a *LinkProfilesAdapter) ApplyLinkProfile(
 	ctx context.Context,
-	interfaceID, senderAddr, receiverAddr string,
+	receiverChannelAddr, senderChannelAddr string,
 	profileID int,
-) (map[string]any, error) {
+) (int, error) {
 	if a.store == nil {
-		return nil, errors.New("link profiles: store not wired")
+		return 0, errors.New("link profiles: store not wired")
 	}
-	receiverType := a.resolveChannelType(receiverAddr)
-	senderType := a.resolveChannelType(senderAddr)
+	writer, ok := a.paramsets.(LinkParamsetWriter)
+	if !ok || writer == nil {
+		return 0, errors.New("link profiles: paramset writer not wired")
+	}
+	receiverType := a.resolveChannelType(receiverChannelAddr)
+	senderType := a.resolveChannelType(senderChannelAddr)
 
-	result, err := a.store.TestLinkProfile(ctx, receiverType, senderType, profileID)
-	if err != nil {
-		if errors.Is(err, linkprofile.ErrUnsupported) {
-			return map[string]any{
-				"success":        false,
-				"applied_values": map[string]any{},
-				"profile_id":     profileID,
-				"unsupported":    true,
-			}, nil
-		}
-		return nil, fmt.Errorf("link profiles: test: %w", err)
+	profile, found := a.store.GetProfileByID(receiverType, senderType, profileID)
+	if !found {
+		return 0, fmt.Errorf("linkprofile: profile id=%d not found for %s/%s: %w",
+			profileID, receiverType, senderType, linkprofile.ErrUnsupported)
 	}
-	return map[string]any{
-		"success":        true,
-		"applied_values": result,
-		"profile_id":     profileID,
-		"interface_id":   interfaceID,
-	}, nil
+	values := profile.ApplyValues()
+	if err := writer.PutLinkParamset(ctx, receiverChannelAddr, senderChannelAddr, values); err != nil {
+		return 0, fmt.Errorf("link profiles: apply: %w", err)
+	}
+	return len(values), nil
 }
 
 // resolveChannelType looks up the channel type for the given address.

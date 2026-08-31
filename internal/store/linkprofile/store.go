@@ -120,6 +120,32 @@ func (p Profile) FixedParams() map[string]float64 {
 	return out
 }
 
+// ApplyValues returns the value set written to the LINK paramset when this
+// profile is applied: every "fixed" constraint's Value, plus the Default of
+// every non-fixed ("list" or "range") constraint that carries one. Nothing
+// else is written.
+//
+// Applying a profile does not necessarily make it the profile a later read
+// (see [Store.MatchActiveProfile]) reports as active. The parameters that
+// distinguish sibling profiles are frequently "list" constraints without a
+// default: SWITCH_VIRTUAL_RECEIVER/KEY_TRANSCEIVER's profiles carry
+// SHORT_JT_ON as list [1,3] for one profile and list [4,6] for another,
+// neither carrying a default, so applying either profile leaves that
+// parameter at whatever the device already held. Choosing a value for it
+// here would mean inventing one the archive does not carry.
+func (p Profile) ApplyValues() map[string]any {
+	out := make(map[string]any, len(p.Params))
+	for name, c := range p.Params {
+		switch {
+		case c.ConstraintType == "fixed" && c.Value != nil:
+			out[name] = *c.Value
+		case c.ConstraintType != "fixed" && c.Default != nil:
+			out[name] = *c.Default
+		}
+	}
+	return out
+}
+
 // cloneProfile returns a deep-enough copy of p: the Name, Description and
 // Params maps are cloned so a caller mutating the returned Profile cannot
 // reach into the store's cached copy (the cache holds the only slice
@@ -273,39 +299,6 @@ func (s *Store) MatchActiveProfile(receiverChannelType, senderChannelType string
 		}
 	}
 	return bestID
-}
-
-// TestLinkProfile returns the fixed parameter values for the profile
-// identified by (receiverChannelType, senderChannelType, id). The
-// caller (the adapter) is responsible for looking up the channel types
-// from the addresses before calling here.
-//
-// Returns ErrUnsupported when no profile data exists for the pair,
-// and a descriptive error when the id is not found within the set.
-func (s *Store) TestLinkProfile(_ context.Context, receiverChannelType, senderChannelType string, id int) (map[string]any, error) {
-	if s == nil {
-		return nil, ErrUnsupported
-	}
-	bucket, err := s.load(receiverChannelType)
-	if err != nil || bucket == nil {
-		return nil, ErrUnsupported
-	}
-	profs, ok := bucket[senderChannelType]
-	if !ok || len(profs) == 0 {
-		return nil, ErrUnsupported
-	}
-	for _, p := range profs {
-		if p.ID == id {
-			fixed := p.FixedParams()
-			out := make(map[string]any, len(fixed))
-			for k, v := range fixed {
-				out[k] = v
-			}
-			return out, nil
-		}
-	}
-	return nil, fmt.Errorf("linkprofile: profile id=%d not found for %s/%s: %w",
-		id, receiverChannelType, senderChannelType, ErrUnsupported)
 }
 
 // Register pre-loads profiles for a (receiverChannelType, senderChannelType)
