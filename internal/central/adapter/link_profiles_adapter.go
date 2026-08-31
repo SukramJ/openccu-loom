@@ -67,7 +67,7 @@ func NewLinkProfilesAdapter(r *central.Registry, s *linkprofile.Store, p LinkPar
 func (a *LinkProfilesAdapter) GetLinkProfiles(
 	ctx context.Context,
 	receiverChannelAddr, senderChannelAddr, locale string,
-) ([]map[string]any, int, error) {
+) (profiles []map[string]any, activeID int, err error) {
 	if a.store == nil {
 		return nil, 0, nil
 	}
@@ -81,7 +81,7 @@ func (a *LinkProfilesAdapter) GetLinkProfiles(
 	if len(profs) == 0 {
 		return nil, 0, nil
 	}
-	activeID := a.activeProfileID(ctx, receiverChannelAddr, senderChannelAddr, receiverType, senderType)
+	activeID = a.activeProfileID(ctx, receiverChannelAddr, senderChannelAddr, receiverType, senderType)
 	// Convert []linkprofile.Profile → []map[string]any via JSON so the
 	// WS layer gets a uniform opaque shape.
 	raw, err := json.Marshal(profs)
