@@ -10,6 +10,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`links.test_profile` is gone; `links.apply_profile` replaces it, and
+  `APIVersion` moves 9.0.0 → 10.0.0.** The old command claimed to apply a
+  profile, named its response field `applied_values`, and wrote nothing — the
+  store call behind it was a pure lookup. It was the unfinished stub its own
+  comment announced, and nothing called it.
+
+  The new one writes, through the single LINK paramset path, so the visibility
+  gate, the descriptor coercion and the audit entry all apply. It takes the
+  per-link edit token.
+
+  The name follows the CCU rather than the port. The firmware keeps two
+  operations apart — writing a profile and triggering it so the operator can
+  observe the effect — and this daemon already exposes the second correctly as
+  `links.activate_paramset`. Folding the write under the word "test" would have
+  made the pair unreadable.
+
+  One limit is worth knowing before building on it: the written set is the
+  profile's fixed values plus the declared defaults of its loose constraints. A
+  loose constraint carrying no default is left at the device's current value,
+  and those are frequently the parameters that tell sibling profiles apart — so
+  applying a profile does not guarantee that a later read reports it as the
+  active one. Picking a value there would mean inventing one that neither the
+  archive nor the reference carries.
+
 - **REST `APIVersion` 8.0.0 → 9.0.0.** Breaking, on the WebSocket surface:
   `links.put_paramset` now requires an `edit_token`, and `paramset.put` refuses
   `paramset_key: "LINK"`. Neither is visible to a schema diff, so both are
