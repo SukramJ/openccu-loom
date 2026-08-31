@@ -69,13 +69,28 @@ the prose is worth correcting upstream.
 
 ## Consequences
 
-`master_profiles.apply` is a latent defect, not merely a misnamed one. It
+`master_profiles.apply` is a reachable defect, not merely a misnamed one. It
 resolves `FixedParams()` from link-profile data and writes them into
 `SessionKey{ChannelAddress: …, ParamsetKey: hmenum.ParamsetKeyMaster}` — a
 link-derived constraint set written into a channel's own MASTER paramset on a
-live device. It is inert today only because the lookup never returns anything.
-**Re-keying without changing the write would activate it.** That is why the
-rebuild is one change, not two.
+live device.
+
+It is dead only for the input the field name invites. `device_type` is a
+caller-supplied string that reaches `Store.load` unvalidated and becomes a
+filename (`internal/store/masterprofile/store.go:232`
+`path.Join(s.prefix, deviceType+".json.gz")`), so what the lookup rejects is
+not "any input" but "a device model" — measured: none of the 65 archive
+basenames matches any of the 529 device-model literals in this repository,
+while all 65 are receiver channel types. A client that sends
+`device_type: "ACTOR_WINDOW"` therefore loads a real archive, resolves a real
+profile, and writes it. The path is gated by an edit lock on the target
+channel (`commands_extended.go:890-896`), so it needs an authenticated session
+holding that lock — it is not anonymous — but it is reachable today, on
+`main`, against a live CCU.
+
+Re-keying without changing the write would turn a defect that needs an
+undocumented argument into one that fires on the documented one. That is why
+the rebuild is one change, not two.
 
 The rebuild, deliberately kept out of the fold that found it:
 
