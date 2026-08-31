@@ -17,6 +17,15 @@ import (
 // Inverted bit semantics: a SET bit means the channel is LOCKED
 // (schedule disabled); a CLEAR bit means the channel is ENABLED.
 // [ParseChannelLocks] handles the inversion.
+//
+// What is measured and what is not, because the difference decides how much
+// this table can be trusted. Measured on live hardware: the CCU masks
+// WEEK_PROGRAM_CHANNEL_LOCKS to 24 bits (0x00FFFFFF), which fits the 8×3 grid
+// and rules out a narrower scheme. NOT established: which key addresses which
+// channel. Deciding that needs a week program configured on a device with one
+// bit set and an observation of which channel stops following it — an
+// intervention in a working installation, not a read, and it has not been
+// done. So a wrong entry here would be invisible to every test we have.
 var channelKeyBitmask = map[string]uint32{
 	"1_1": 1 << 0,  // 1
 	"1_2": 1 << 1,  // 2
@@ -238,6 +247,27 @@ func FilterRawScheduleByFields(raw map[string]any, supported []hmenum.ScheduleFi
 //
 // The CCU processes WPTCLS first (which channels to affect), then
 // WPTCL (what mode to set them to) — both in a single atomic setValue.
+//
+// Why the mode is binary although the parameter is a three-value ENUM.
+// WEEK_PROGRAM_TARGET_CHANNEL_LOCK declares
+// ["MANU_MODE", "AUTO_MODE_WITH_RESET", "AUTO_MODE_WITHOUT_RESET"] on every
+// device that carries it, so index 1 is inside the declared range. It is
+// skipped deliberately: the CCU's own weekly-program editor comments that
+// option out of its select, and the firmware's own label for it reads
+// "Wochenprogramm: Auto mit Reset (Reset ohne Funktion)" / "week program:
+// Auto with reset (reset without function)". The vendor states the reset
+// does nothing, which makes index 1 a no-op variant of index 2 rather than a
+// third behaviour an operator could choose between.
+//
+// Bound on the firmware evidence for the format itself: this
+// `WPTCLS=…,WPTCL=…` string appears in the CCU tree exactly once, in a
+// getConfigString() helper that nothing calls, and not at all in the
+// deployed www/ tree; the firmware's own live write is an
+// Interface.putParamset on VALUES carrying the mode NAME as a string
+// alongside WEEK_PROGRAM_TARGET_CHANNEL_LOCKS as an int. The format is kept
+// because it was verified on real hardware — WPTCL=0 selected MANU and
+// WPTCL=2 selected AUTO on two devices — which outranks a reading of the
+// CCU's web UI about what a device accepts.
 func BuildCombinedParameterValue(bitmask uint32, enabled bool) string {
 	mode := 0
 	if enabled {
