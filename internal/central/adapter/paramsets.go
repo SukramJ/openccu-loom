@@ -469,7 +469,14 @@ func (p *ParamsetsDomain) PutLinkParamset(
 		return err
 	}
 	before, _ := b.GetLinkParamset(ctx, channelAddress, peerAddress)
-	if err := b.PutLinkParamset(ctx, channelAddress, peerAddress, values); err != nil {
+	// Coerce against the LINK descriptor for the same reason as the
+	// MASTER/VALUES path in [coerceParamsetValues]: a decoded-JSON number is
+	// always float64, and the XML-RPC encoder maps that straight to <double>.
+	wire, validErr := coerceParamsetValues(ctx, b, channelAddress, hmenum.ParamsetKeyLink, values)
+	if validErr != nil {
+		return validErr
+	}
+	if err := b.PutLinkParamset(ctx, channelAddress, peerAddress, wire); err != nil {
 		return err
 	}
 	// Touch the LINK paramset once to flush any caches the CCU may

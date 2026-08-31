@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -373,7 +374,14 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}
-	if err := backend.PutLinkParamset(ctx, channelAddress, peerAddress, values); err != nil {
+	// Coerce against the LINK descriptor for the same reason as the
+	// MASTER/VALUES path in [coerceParamsetValues]: a decoded-JSON number is
+	// always float64, and the XML-RPC encoder maps that straight to <double>.
+	wire, validErr := coerceParamsetValues(ctx, backend, channelAddress, hmenum.ParamsetKeyLink, values)
+	if validErr != nil {
+		return validErr
+	}
+	if err := backend.PutLinkParamset(ctx, channelAddress, peerAddress, wire); err != nil {
 		return err
 	}
 	d.audit.Record(audit.Entry{
