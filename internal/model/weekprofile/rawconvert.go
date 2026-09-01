@@ -727,13 +727,32 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 }
 
 // decodeWireDuration renders a DURATION / RAMP_TIME (base, factor) pair
-// as a duration string, or "" when the pair carries no duration.
+// as a duration string, or "" when the pair carries no timed duration.
 //
-// Factors above [MaxTimeBaseFactor] are read as "unset". The CCU parks
-// factor 31 on slots that have no duration — it is the firmware default
-// and the lock domain's "permanent" sentinel — but rejects a write of
-// any factor past 30 with fault -5. Surfacing such a value would offer
-// the operator a duration the device then refuses to take back.
+// Factors above [MaxTimeBaseFactor] are read as carrying no duration. The
+// CCU parks (base 7, factor 31) on every slot that has none: on an HmIP-PS
+// with no week program configured, all 75 slots read back exactly that.
+//
+// What this comment used to claim, and what measurement says. It justified
+// the swallow with "the CCU rejects a write of any factor past 30 with
+// fault -5". That is false. Writing 31 to 01_WP_DURATION_FACTOR over
+// XML-RPC succeeds and reads back as 31, and so does 32 — a value past the
+// declared MAX and past the five-bit field. The CCU does not validate this
+// field's bound on putParamset at all, so nothing here is refused and the
+// original justification never held.
+//
+// The real reason to keep swallowing it is different, and narrower: (7, 31)
+// is the CCU's own encoding for "Dauerhaft" — its weekly-program editor
+// writes exactly that pair for the first of its two options
+// (www/config/easymodes/js/HmIPWeeklyProgram.js) — and this function's
+// return type is a duration string, which has no way to say "permanent"
+// rather than "for this long". Rendering it as 31h would offer the operator
+// a timed duration the device does not hold.
+//
+// So the value is not surfaced because the TYPE cannot carry it, not
+// because the device refuses it. Giving it a representation is a contract
+// change, and until then a caller sees the same empty string for "no
+// duration" and for "permanent".
 func decodeWireDuration(base, factor int) string {
 	if factor <= 0 || factor > MaxTimeBaseFactor {
 		return ""
