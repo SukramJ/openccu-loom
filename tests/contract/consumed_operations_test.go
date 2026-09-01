@@ -5,7 +5,6 @@ package contract
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -188,7 +187,7 @@ func loadAPISurfaceBaseline(t *testing.T) apiSurface {
 		t.Fatalf("parse %s: %v", path, err)
 	}
 	if len(baseline.Operations) == 0 {
-		t.Fatal(fmt.Sprintf("%s holds no operations", path))
+		t.Fatalf("%s holds no operations", path)
 	}
 	return baseline
 }
