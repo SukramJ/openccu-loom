@@ -967,21 +967,59 @@ func TargetChannelsBitmaskToList(mask int) []string {
 // Duration / ramp-time encoding helpers
 // ---------------------------------------------------------------------------
 
-// MaxTimeBaseFactor is the largest DURATION_FACTOR / RAMP_TIME_FACTOR the CCU
-// firmware accepts. The encoder promotes to a larger TimeBase rather than emit
-// a factor above this cap, and the reader treats anything above it as "no
-// duration". Mirrors `_MAX_DURATION_FACTOR` in schedule_models.py.
+// MaxTimeBaseFactor is the largest DURATION_FACTOR / RAMP_TIME_FACTOR that
+// denotes a real duration. The encoder promotes to a larger TimeBase rather
+// than emit a factor above it, and the reader treats anything above it as
+// carrying no timed duration.
+//
+// It is NOT the largest value the firmware accepts, which is what this comment
+// used to claim on the port's authority: every device in the descriptor corpus
+// declares DURATION_FACTOR as MIN 0 / MAX 31. 31 is inside the declared range
+// and is spoken for: with base 7 it is what the CCU writes for "Dauerhaft"
+// (see [permanentFactor]). That is why 30 caps a timed duration rather than
+// the field.
 const MaxTimeBaseFactor = 30
 
-// permanentBase and permanentFactor are the pair the CCU firmware parks
-// on a slot that carries no duration, and the encoding the lock domain
-// uses for "until further notice" — an auto-relock end, an unlock, or a
-// standing user permission.
+// permanentBase and permanentFactor are what the CCU writes for "Dauerhaft"
+// — the encoding the lock domain uses for "until further notice": an
+// auto-relock end, an unlock, or a standing user permission.
 //
-// It sits one past [MaxTimeBaseFactor] on purpose: the device stores it
-// but rejects a write of any *other* factor above the cap. The encoder
-// therefore passes this one pair through verbatim so a lock schedule
-// read from the CCU can be saved again.
+// The name is the CCU's own, not an interpretation. Its weekly-program editor
+// offers a two-option select per switch point, and choosing the first writes
+// exactly this pair (www/config/easymodes/js/HmIPWeeklyProgram.js):
+//
+//	<option value='0'>optionPermanent</option>   // "Dauerhaft"
+//	<option value='1'>optionEnterValue</option>
+//	...
+//	if (parseInt(value) == 0) { factorElm.val(31); baseElm.val(7); }
+//
+// It sits one past [MaxTimeBaseFactor] because it is the top of the encoding,
+// not because the firmware special-cases it. (DURATION_BASE, DURATION_FACTOR)
+// is the CCU's `float_configtime` conversion split across two parameters:
+// value 0..31 in five bits, base an index into the factor table below. Base 7
+// is 3600 s, so 31 x 3600 = 111600 is the largest duration the pair can carry
+// — one step above the 30 x 3600 = 108000 that the time parameters declare as
+// their logical MAX, which is what leaves it free to mean something else.
+//
+// The same number carries a DIFFERENT label on a different parameter family,
+// and the two must not be folded: on the LINK-paramset time parameters
+// (SHORT_/LONG_ON_TIME and friends) the descriptor labels 111600 as
+// SPECIAL.NOT_USED, not as permanent (see
+// [github.com/SukramJ/openccu-loom/internal/model/custom.TimerNotUsed]). One
+// encoding ceiling, two surfaces, two names — "the timer never expires" and
+// "the timer is not applied" happen to coincide physically, but only one of
+// them is what each surface says.
+//
+// Firmware: src/libhsscomm/HSSTypeConversionFloatConfigtime.cpp in
+// OpenCCU-Base, DEFAULT_FACTORS and value_size.
+//
+// This is a property of the current encoding, not a permanent one. What would
+// show it had moved: a device declaring DURATION_FACTOR MAX above 31, or a
+// time parameter whose SPECIAL.NOT_USED is no longer factor_max x top_factor.
+// Either makes both this pair and [MaxTimeBaseFactor] wrong at once.
+//
+// The encoder passes this one pair through verbatim so a lock schedule read
+// from the CCU can be saved again.
 const (
 	permanentBase   = 7 // HOUR_1
 	permanentFactor = 31
@@ -990,8 +1028,15 @@ const (
 // timeBaseTable maps a CCU TimeBase integer to (unit string, multiplier in that
 // unit, base expressed in 100ms units). `mult` converts a factor to a concrete
 // duration for decoding; `in100ms` is the encoder's divisor. Ordered by
-// ascending granularity. Mirrors `TimeBase` enum + `_TIME_BASE_IN_100MS` in
-// schedule_models.py:208.
+// ascending granularity.
+//
+// This table is the firmware's own, not the port's. The CCU declares the same
+// eight steps twice: as DEFAULT_FACTORS {0.1, 1, 5, 10, 60, 300, 600, 3600} in
+// src/libhsscomm/HSSTypeConversionFloatConfigtime.cpp (OpenCCU-Base), and as
+// DURATION_BASE's VALUE_LIST {BASE_100_MS, BASE_1_S, BASE_5_S, BASE_10_S,
+// BASE_1_M, BASE_5_M, BASE_10_M, BASE_1_H} on every device in the descriptor
+// corpus that carries the parameter. The two agree element for element, so an
+// index here means the same thing the device means by it.
 var timeBaseTable = []struct {
 	id      int
 	unit    string

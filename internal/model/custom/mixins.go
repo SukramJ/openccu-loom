@@ -122,6 +122,17 @@ func PutParamsetForce(
 // 3600: 61 seconds stays in the seconds bucket (value=61, unit=S) because 61
 // < 16343; only when the seconds value exceeds 16343 does the encoder promote
 // to minutes.
+//
+// The number is the device's own: DURATION_VALUE is declared INTEGER with
+// MIN 0 / MAX 16343 across the descriptor corpus. Promoting only once the
+// value would exceed the declared maximum is therefore the field's rule, not
+// a convention inherited from the port.
+//
+// DURATION_VALUE / DURATION_UNIT is a different encoding from the
+// (DURATION_BASE, DURATION_FACTOR) pair the schedule layer uses: its unit list
+// is {S, M, H} — {S, M, H, 10MS} on most devices — not the eight-step factor
+// table. The firmware's float_configtime rounding does not govern it, so the
+// rounding rule here still rests on the port.
 const timeUnitThreshold = 16343
 
 // TimerNotUsed is the sentinel duration, in seconds, that marks a timer
