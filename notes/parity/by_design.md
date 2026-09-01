@@ -4214,6 +4214,65 @@ in. Two things address that without splitting the budget:
 store with the login route — a separate machine-account realm, say — the shared
 bucket stops being justified and should split with it.
 
+### BD-WeekProfile-CombinedStringOverPutParamset — the schedule toggle is written as a combined string, not the firmware's two-member putParamset
+
+The CCU's own weekly-program editor toggles a channel's schedule with an
+`Interface.putParamset` on VALUES carrying two members —
+`WEEK_PROGRAM_TARGET_CHANNEL_LOCK` as a **string** (the mode name) and
+`WEEK_PROGRAM_TARGET_CHANNEL_LOCKS` as an **int**
+(`src/webui/www_source/ise/js/iseHmIPWeeklyProgram_AccessReceiver.js:98-99`).
+OpenCCU-Loom writes a single `COMBINED_PARAMETER` value instead, in the
+`WPTCLS=<bitmask>,WPTCL=<mode>` form
+(`internal/model/weekprofile/channel_keys.go` `BuildCombinedParameterValue`).
+
+That string does exist in the firmware, but only in a helper nothing calls —
+`getConfigString()` at `:390` of the same file. Checked with a control: a
+sibling method of the same object, `getMainHtml`, is invoked five times, so
+the search shape does find callers when they exist; `getConfigString` occurs
+exactly once, at its own definition. The deployed `www/` tree contains no
+`WPTCLS` at all.
+
+The divergence is kept because it is verified where it matters. Writing
+`WPTCL=0` selected MANU and `WPTCL=2` selected AUTO on two live devices,
+which is evidence about what a device accepts; the dead helper is evidence
+about the CCU's web UI, and the two are not the same question. The combined
+form is also atomic in one `setValue`, where the putParamset shape needs the
+mask and the mode to agree across two members.
+
+What this entry does NOT claim: that the putParamset shape would fail. It was
+never tried. If the combined write ever turns out to be rejected by a device
+family, the firmware's own shape is the documented fallback and is already
+described above.
+
+### BD-WeekProfile-AutoWithResetSkipped — the third WPTCL mode is not offered
+
+`WEEK_PROGRAM_TARGET_CHANNEL_LOCK` declares
+`["MANU_MODE", "AUTO_MODE_WITH_RESET", "AUTO_MODE_WITHOUT_RESET"]` with
+`MIN = MANU_MODE` and `MAX = AUTO_MODE_WITHOUT_RESET` — unanimously across
+all 45 device types in the corpus that carry it, and confirmed by a live read
+of an HMIP-PS at `00021BE9957782:6`. Index 1 is therefore inside the declared
+range. OpenCCU-Loom's surface is a boolean enable/disable and emits only 0
+and 2.
+
+This is not an oversight and not a gap in evidence. The CCU's own editor
+comments that option out of its select in both places it builds one
+(`iseHmIPWeeklyProgram_AccessReceiver.js:230`, `:280`), and the firmware's own
+label says why:
+
+> `stringTableWeekProgramTargetChannelLockAutoReset` =
+> "Wochenprogramm: Auto mit Reset (Reset ohne Funktion)" /
+> "week program: Auto with reset (reset without function)"
+
+The vendor states the reset has no function, which makes index 1 a no-op
+variant of index 2 rather than a third behaviour an operator could choose
+between. Offering it would widen the north-bound contract from a toggle to a
+three-valued mode in exchange for a choice the manufacturer labels as inert.
+
+Should a device family ever be found where the reset does something, this is
+the entry to revisit — and the measurement that would settle it is a write of
+index 1 to a named device followed by an observation of the channel's
+behaviour, not another read.
+
 ### BD-Timer-PromotionTruncates — a promoted combined-timer duration is truncated toward zero, not rounded
 
 **Decision.** `custom.EncodeTimerDuration`

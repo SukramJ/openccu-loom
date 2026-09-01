@@ -108,6 +108,15 @@ func normalizeWeekdaySlots(ws weekdaySlots) weekdaySlots {
 // fillUpWeekdaySlots pads ws to exactly 13 slots by appending "24:00"
 // entries with the given fill temperature. Any slots beyond 13 are trimmed.
 //
+// The padding is about filling the paramset, not about marking the end: the
+// CCU terminates a weekday by VALUE at whatever ordinal it occurs — its
+// reader breaks on the first slot whose ENDTIME is 1440
+// (www/config/easymodes/etc/hmipChannelConfigDialogs.tcl:3009) — and slot 13
+// is schema-identical to slots 5..12. A day whose slot 3 already ends at
+// 1440 is complete; nothing makes the thirteenth special. So the trailing
+// entries this appends are inert padding behind a terminator that has
+// already fired, not a terminator themselves.
+//
 // Mirrors `_fillup_weekday_data` `week_profile.py`.
 func fillUpWeekdaySlots(fillTemp float64, ws weekdaySlots) weekdaySlots {
 	out := make(weekdaySlots, slotCount)

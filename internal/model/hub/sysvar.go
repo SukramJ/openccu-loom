@@ -148,8 +148,15 @@ func (s *Sysvar) registerSysvarServices() {
 // the previous reading, and is never hub data (the reference stack's
 // model/hub/hub.py `_EXCLUDED`).
 //
-//   - "OldVal" — internal change-detection helper created by the CCU.
-//   - "pcCCUID" — internal CCU device-ID variable.
+//   - "OldVal" — internal change-detection helper created by the CCU. The
+//     name occurs throughout the CCU firmware, so this one is verified.
+//   - "pcCCUID" — inherited from the reference stack's own exclusion list
+//     (model/hub/hub.py). The name does not occur anywhere in the CCU
+//     firmware tree, checked with a control (searching the same trees for
+//     "OldVal" does find it), so what the variable is remains the
+//     reference's claim rather than something established here. The entry
+//     stays because excluding a name no CCU produces costs nothing; what is
+//     removed is the assertion about its meaning.
 var excludedSysvarMarkers = []string{
 	"OldVal",
 	"pcCCUID",
