@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 436.
+Guards without a doc comment: 7 of 437.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -161,6 +161,7 @@ Guards without a doc comment: 7 of 436.
 | TestI18nCatalogParity | i18n_catalog_keys_test.go | TestI18nCatalogParity enforces that every locale carries the same key set — missing keys are treated as a release blocker. |
 | TestIsOperationalJobGateFollowsStateMachinePredicate | is_operational_job_gate_test.go | TestIsOperationalJobGateFollowsStateMachinePredicate pins the scheduler's job gate to the central state machine's own operational predicate. |
 | TestIsOperationalJobGateSurvivesMissingStateMachine | is_operational_job_gate_test.go | TestIsOperationalJobGateSurvivesMissingStateMachine pins the nil-safety the scheduler's wrapper exists to carry: the state machine's predicate locks its own mutex, so a unit without a state machine must be answered by the wrapper rather than reaching the method. |
+| TestJSONRPCCallsUseTheDeclaredArgumentNames | jsonrpc_declared_arguments_test.go | TestJSONRPCCallsUseTheDeclaredArgumentNames reads the production sources and checks the parameter keys near every named-parameter JSON-RPC call against the CCU's own registry. |
 | TestJSONRPCClientHoldsExactlyOneCCUSession | jsonrpc_session_contract_test.go | TestJSONRPCClientHoldsExactlyOneCCUSession locks the core invariant: one jsonrpc.Client occupies exactly ONE slot in the CCU's session pool for its entire life, no matter how many calls it makes or how long it runs. |
 | TestJSONRPCClientReleasesSessionOnLogout | jsonrpc_session_contract_test.go | TestJSONRPCClientReleasesSessionOnLogout locks that a client which shuts down hands its slot back. |
 | TestBlindLevelCombinedSurvivesTheShippedDecoder | level_combined_encoding_test.go | TestBlindLevelCombinedSurvivesTheShippedDecoder feeds the string the blind wrote into the decoder that actually runs on the callback path (backends.ParseCombinedParameter) and requires the commanded position back within half a wire quantum. |

@@ -645,10 +645,10 @@ func (b *CcuBackend) CreateSystemVariableEnum(ctx context.Context, name string, 
 		joined.WriteString(v)
 	}
 	raw, err := b.json.Call(ctx, "SysVar.createEnum", map[string]any{
-		"name":      name,
-		"valueList": joined.String(),
-		"internal":  0,
-		"chnID":     -1,
+		"name":     name,
+		"valList":  joined.String(),
+		"internal": 0,
+		"chnID":    -1,
 	})
 	if err != nil {
 		return nil, err

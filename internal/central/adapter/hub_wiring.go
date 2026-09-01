@@ -2163,27 +2163,27 @@ func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCrea
 				"name":     spec.Name,
 				"init_val": 0,
 				"internal": 0,
-				"chn_id":   chnID,
+				"chnID":    chnID,
 			}, nil)
 		case "FLOAT":
 			params := map[string]any{
 				"name":     spec.Name,
 				"internal": 0,
-				"chn_id":   chnID,
+				"chnID":    chnID,
 			}
 			if spec.Min != "" {
-				params["min_value"] = spec.Min
+				params["minValue"] = spec.Min
 			}
 			if spec.Max != "" {
-				params["max_value"] = spec.Max
+				params["maxValue"] = spec.Max
 			}
 			return w.json.Call(ctx, "SysVar.createFloat", params, nil)
 		case "ENUM":
 			return w.json.Call(ctx, "SysVar.createEnum", map[string]any{
-				"name":       spec.Name,
-				"value_list": strings.Join(spec.ValueList, ";"),
-				"internal":   0,
-				"chn_id":     chnID,
+				"name":     spec.Name,
+				"valList":  strings.Join(spec.ValueList, ";"),
+				"internal": 0,
+				"chnID":    chnID,
 			}, nil)
 		}
 	}
