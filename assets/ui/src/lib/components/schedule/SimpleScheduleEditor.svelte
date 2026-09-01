@@ -617,17 +617,41 @@
                   <span class="text-slate-600 dark:text-slate-400">
                     {t("schedule.duration")}
                   </span>
+                  <!--
+                    Two controls, mirroring the CCU's own weekly-program
+                    editor: it offers "Dauerhaft" or an entered value, and
+                    writes (base 7, factor 31) for the first. The daemon
+                    carries that pair as the reserved word "permanent"; the
+                    empty string keeps its separate meaning of "leave the
+                    device's duration untouched", which is why choosing
+                    "value" clears the field rather than defaulting it.
+                  -->
                   <div class="w-32">
-                    <Input
-                      type="text"
-                      placeholder={t("schedule.duration_placeholder")}
-                      value={entry.duration ?? ""}
-                      oninput={(e) =>
+                    <Select
+                      options={[
+                        { value: "value", label: t("schedule.duration.enter") },
+                        { value: "permanent", label: t("schedule.duration.permanent") },
+                      ]}
+                      value={entry.duration === "permanent" ? "permanent" : "value"}
+                      onValueChange={(v) =>
                         patch(idx, {
-                          duration: (e.target as HTMLInputElement).value || undefined,
+                          duration: v === "permanent" ? "permanent" : undefined,
                         })}
                     />
                   </div>
+                  {#if entry.duration !== "permanent"}
+                    <div class="w-32">
+                      <Input
+                        type="text"
+                        placeholder={t("schedule.duration_placeholder")}
+                        value={entry.duration ?? ""}
+                        oninput={(e) =>
+                          patch(idx, {
+                            duration: (e.target as HTMLInputElement).value || undefined,
+                          })}
+                      />
+                    </div>
+                  {/if}
                 </label>
               {/if}
 
@@ -637,16 +661,31 @@
                     {t("schedule.ramp_time")}
                   </span>
                   <div class="w-32">
-                    <Input
-                      type="text"
-                      placeholder={t("schedule.ramp_placeholder")}
-                      value={entry.ramp_time ?? ""}
-                      oninput={(e) =>
+                    <Select
+                      options={[
+                        { value: "value", label: t("schedule.duration.enter") },
+                        { value: "permanent", label: t("schedule.duration.permanent") },
+                      ]}
+                      value={entry.ramp_time === "permanent" ? "permanent" : "value"}
+                      onValueChange={(v) =>
                         patch(idx, {
-                          ramp_time: (e.target as HTMLInputElement).value || undefined,
+                          ramp_time: v === "permanent" ? "permanent" : undefined,
                         })}
                     />
                   </div>
+                  {#if entry.ramp_time !== "permanent"}
+                    <div class="w-32">
+                      <Input
+                        type="text"
+                        placeholder={t("schedule.ramp_placeholder")}
+                        value={entry.ramp_time ?? ""}
+                        oninput={(e) =>
+                          patch(idx, {
+                            ramp_time: (e.target as HTMLInputElement).value || undefined,
+                          })}
+                      />
+                    </div>
+                  {/if}
                 </label>
               {/if}
 
