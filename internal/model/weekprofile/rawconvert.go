@@ -969,20 +969,29 @@ func TargetChannelsBitmaskToList(mask int) []string {
 
 // MaxTimeBaseFactor is the largest DURATION_FACTOR / RAMP_TIME_FACTOR that
 // denotes a real duration. The encoder promotes to a larger TimeBase rather
-// than emit a factor above it, and the reader treats anything above it as "no
-// duration".
+// than emit a factor above it, and the reader treats anything above it as
+// carrying no timed duration.
 //
 // It is NOT the largest value the firmware accepts, which is what this comment
 // used to claim on the port's authority: every device in the descriptor corpus
 // declares DURATION_FACTOR as MIN 0 / MAX 31. 31 is inside the declared range
-// and is spoken for — see [permanentFactor] — which is why 30 is the cap on a
-// duration rather than on the field.
+// and is spoken for: with base 7 it is what the CCU writes for "Dauerhaft"
+// (see [permanentFactor]). That is why 30 caps a timed duration rather than
+// the field.
 const MaxTimeBaseFactor = 30
 
-// permanentBase and permanentFactor are the pair the CCU firmware parks
-// on a slot that carries no duration, and the encoding the lock domain
-// uses for "until further notice" — an auto-relock end, an unlock, or a
-// standing user permission.
+// permanentBase and permanentFactor are what the CCU writes for "Dauerhaft"
+// — the encoding the lock domain uses for "until further notice": an
+// auto-relock end, an unlock, or a standing user permission.
+//
+// The name is the CCU's own, not an interpretation. Its weekly-program editor
+// offers a two-option select per switch point, and choosing the first writes
+// exactly this pair (www/config/easymodes/js/HmIPWeeklyProgram.js):
+//
+//	<option value='0'>optionPermanent</option>   // "Dauerhaft"
+//	<option value='1'>optionEnterValue</option>
+//	...
+//	if (parseInt(value) == 0) { factorElm.val(31); baseElm.val(7); }
 //
 // It sits one past [MaxTimeBaseFactor] because it is the top of the encoding,
 // not because the firmware special-cases it. (DURATION_BASE, DURATION_FACTOR)
@@ -990,9 +999,16 @@ const MaxTimeBaseFactor = 30
 // value 0..31 in five bits, base an index into the factor table below. Base 7
 // is 3600 s, so 31 x 3600 = 111600 is the largest duration the pair can carry
 // — one step above the 30 x 3600 = 108000 that the time parameters declare as
-// their logical MAX, which is exactly what makes it usable as a marker. The
-// same 111600 turns up as SPECIAL.NOT_USED on the LINK-paramset time
-// parameters (see [github.com/SukramJ/openccu-loom/internal/model/custom.TimerNotUsed]).
+// their logical MAX, which is what leaves it free to mean something else.
+//
+// The same number carries a DIFFERENT label on a different parameter family,
+// and the two must not be folded: on the LINK-paramset time parameters
+// (SHORT_/LONG_ON_TIME and friends) the descriptor labels 111600 as
+// SPECIAL.NOT_USED, not as permanent (see
+// [github.com/SukramJ/openccu-loom/internal/model/custom.TimerNotUsed]). One
+// encoding ceiling, two surfaces, two names — "the timer never expires" and
+// "the timer is not applied" happen to coincide physically, but only one of
+// them is what each surface says.
 //
 // Firmware: src/libhsscomm/HSSTypeConversionFloatConfigtime.cpp in
 // OpenCCU-Base, DEFAULT_FACTORS and value_size.

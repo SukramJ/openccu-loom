@@ -41,8 +41,10 @@ Three things follow that were separately unexplained in our code.
 ### 1. `111600` is the top of that encoding, not an arbitrary marker
 
 `31 x 3600 = 111600`. The time parameters declare a logical `MAX` of
-`30 x 3600 = 108000`. So the sentinel is the one value the encoding can
-represent that the logical range excludes — constructed, not chosen.
+`30 x 3600 = 108000`. So the value is the one the encoding can represent that
+the logical range excludes — which is what leaves it free to carry a meaning
+instead of a duration. Constructed, not chosen. WHAT it means differs per
+surface; see section 3.
 
 The wired family repeats the construction with a wider value field:
 `(2^14 - 1) x 1000 = 16383000`, which is exactly the `SPECIAL.NOT_USED` those
@@ -64,11 +66,40 @@ conversion split across two parameters instead of packed into one integer.
 `internal/model/weekprofile/rawconvert.go` cited `_TIME_BASE_IN_100MS` in
 `schedule_models.py` for this. It now cites the origin.
 
-### 3. `permanentBase=7, permanentFactor=31` stops being a quirk
+### 3. `permanentBase=7, permanentFactor=31` is the CCU's own "Dauerhaft"
 
 Base 7 is the 3600 s factor; factor 31 is the 5-bit maximum. The pair is
-`111600` again. The comment said it "sits one past the cap on purpose"; the
-reason is that it *is* the cap of the encoding.
+`111600` again — and the CCU names it. Its weekly-program editor offers two
+options per switch point, and choosing the first writes exactly this pair
+(`www/config/easymodes/js/HmIPWeeklyProgram.js`):
+
+```js
+result += "<option value='0'>" + translateKey('optionPermanent')  + "</option>";
+result += "<option value='1'>" + translateKey('optionEnterValue') + "</option>";
+...
+if (parseInt(value) == 0) { factorElm.val(31); baseElm.val(7); }
+```
+
+`"optionPermanently" : "Dauerhaft"` in `translate.lang.option.js`, and a second
+site writes the same pair straight onto `_WP_DURATION_BASE` /
+`_WP_DURATION_FACTOR`.
+
+So `permanentBase` / `permanentFactor` was named right all along, and better
+grounded than this note's first draft, which called the pair a "no-duration"
+marker throughout. **The correction matters beyond wording**, and it is the
+same mistake this project keeps catching — one encoding ceiling, two surfaces,
+two names:
+
+| Surface | Parameters | The CCU's own label for 111600 |
+|---|---|---|
+| Weekly program | `DURATION_BASE` / `DURATION_FACTOR` | **Dauerhaft** — the editor's own select |
+| LINK paramset | `SHORT_/LONG_ON_TIME`, delays, ramps | **`SPECIAL.NOT_USED`** — the descriptor's own field |
+
+"The timer never expires" and "the timer is not applied" coincide physically,
+which is exactly why folding them is tempting and wrong: each surface states
+one of them, and neither states the other. This one was caught in review, not
+by me — I had carried the descriptor's label across to a surface that uses a
+different one, which is the same shape as the finding this series withdrew.
 
 ### What the operator side says about the same number
 
@@ -120,8 +151,8 @@ derivation above rests on them.
 
 **`MaxTimeBaseFactor = 30` is not "the largest the CCU firmware accepts."**
 Every device in the corpus declares `DURATION_FACTOR` as `MIN 0 / MAX 31`. 31
-is inside the declared range and is spoken for as the no-duration pair, so 30
-is the cap on a *duration*, not on the field. The claim came from the port
+is inside the declared range and is spoken for: with base 7 it is what the
+editor writes for "Dauerhaft". So 30 caps a timed *duration*, not the field. The claim came from the port
 (`_MAX_DURATION_FACTOR`); the behaviour is right and the justification was not.
 
 **The firmware does not hard-code that bound at all.** `hmipWeeklyProgramDevice.tcl:29-30`
