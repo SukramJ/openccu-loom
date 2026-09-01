@@ -206,7 +206,7 @@
                 >
                   {t("ccu_host.safe_mode.action")}
                 </Button>
-                <!-- Recovery lives on OpenCCU / RaspberryMatic only. The
+                <!-- Recovery lives on OpenCCU only. The
                      button is hidden rather than disabled on a stock CCU3:
                      there is nothing the operator could do to enable it. -->
                 {#if e.recovery_mode_supported}

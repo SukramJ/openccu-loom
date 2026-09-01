@@ -119,7 +119,7 @@ type InfoResponse struct {
 	Commit    string `json:"commit"`
 	BuildDate string `json:"build_date"`
 	// AddonBuild reports whether this binary was built as the
-	// CCU/RaspberryMatic add-on. Support surfaces (the SPA About
+	// CCU/OpenCCU add-on. Support surfaces (the SPA About
 	// page) show it so "where does the daemon run?" is answerable
 	// from a screenshot.
 	AddonBuild bool   `json:"addon_build"`

@@ -14,7 +14,7 @@ import (
 // controlPanelHelper is the CCU platform helper that maintains
 // /etc/config/hm_addons.cfg — the file the WebUI's control panel
 // (config/control_panel.cgi) renders one button per entry from. It is the
-// ONLY helper name that exists on CCU3 / RaspberryMatic / OpenCCU firmware;
+// ONLY helper name that exists on CCU3 / OpenCCU firmware;
 // invoking any other name leaves the add-on without its control-panel tile,
 // and because the call is guarded by an `-x` probe the miss is silent.
 const controlPanelHelper = "/bin/updateAddonConfig.tcl"
@@ -54,7 +54,7 @@ func TestCCUAddonRegistersControlPanelEntry(t *testing.T) {
 			needles: []string{
 				controlPanelHelper,
 				"-d ${ADDON_ID}",
-				// RemoveConfigPage is a RaspberryMatic/OpenCCU addition, so
+				// RemoveConfigPage is an OpenCCU addition, so
 				// the fallback must probe for it before calling it.
 				"info procs ::HomeMatic::Addon::RemoveConfigPage",
 				"::HomeMatic::Addon::RemoveConfigPage",

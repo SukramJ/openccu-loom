@@ -152,7 +152,7 @@ func (a *CCUMaintenanceDomain) EnterSafeMode(ctx context.Context, centralName st
 }
 
 // EnterRecoveryMode restarts the CCU behind the named central into its
-// recovery system. Only OpenCCU / RaspberryMatic firmware implements it;
+// recovery system. Only OpenCCU firmware implements it;
 // a stock CCU3 answers with a JSON-RPC error, which is propagated rather
 // than swallowed so the operator learns the action did nothing.
 func (a *CCUMaintenanceDomain) EnterRecoveryMode(ctx context.Context, centralName string) error {

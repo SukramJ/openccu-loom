@@ -2,13 +2,20 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 SukramJ.
 #
-# CCU / RaspberryMatic add-on install + update hook. The CCU's
+# CCU / OpenCCU add-on install + update hook. The CCU's
 # "Additional Software" page unpacks the tarball and runs this script
 # with the platform identifier as $1 (CCU2 / HM-RASPBERRYMATIC / CCU3).
 #
+# HM-RASPBERRYMATIC is what OpenCCU still passes -- see
+# buildroot-external/overlay/base/bin/install_addon and the recovery path in
+# package/recovery-system/.../fwinstall.sh, both of which call
+# `update_script HM-RASPBERRYMATIC`, and release/LATEST-VERSION.js which
+# carries the same product key. It is a value we RECEIVE, not a name we give,
+# so it stays; HM-OPENCCU is accepted alongside for the day that changes.
+#
 # The tarball ships both ARM builds (openccu-loom.armv7 + .arm64); the
 # matching one is selected here from `uname -m` so a single package
-# installs on CCU3 (armv7l) and 64-bit RaspberryMatic (aarch64).
+# installs on CCU3 (armv7l) and 64-bit OpenCCU (aarch64).
 
 set -e
 
@@ -24,18 +31,18 @@ WWW_DIR=/usr/local/etc/config/addons/www/${ADDON_ID}
 
 # Mount the writable partition that holds /usr/local across reboots.
 if [ "$1" = "" ]; then
-  echo "${ADDON_NAME} requires CCU3 or RaspberryMatic"
+  echo "${ADDON_NAME} requires CCU3 or OpenCCU"
   lcdtool "Add-On needs CCU3/RM    " 2>/dev/null || true
   exit 1
 elif [ "$1" = "CCU2" ]; then
-  echo "${ADDON_NAME} requires CCU3 or RaspberryMatic (CCU2 is unsupported)"
+  echo "${ADDON_NAME} requires CCU3 or OpenCCU (CCU2 is unsupported)"
   exit 1
-elif [ "$1" = "HM-RASPBERRYMATIC" ] || [ "$1" = "CCU3" ]; then
-  echo "Installing on CCU3 / RaspberryMatic"
+elif [ "$1" = "HM-RASPBERRYMATIC" ] || [ "$1" = "HM-OPENCCU" ] || [ "$1" = "CCU3" ]; then
+  echo "Installing on CCU3 / OpenCCU"
   mount /usr/local 2>/dev/null || true
 fi
 
-# Select the binary for this CPU architecture. RaspberryMatic ships for
+# Select the binary for this CPU architecture. OpenCCU ships for
 # armv7 (CCU3 / Pi), aarch64 (64-bit Pi) and x86-64 (OVA / generic).
 ARCH=$(uname -m)
 case "${ARCH}" in
@@ -106,14 +113,14 @@ register_menu
 sync
 echo "Installed ${ADDON_NAME} (${ADDON_BIN})"
 
-# RaspberryMatic / OpenCCU run this script live via /bin/install_addon
+# OpenCCU runs this script live via /bin/install_addon
 # and honour the exit code: 0 = installed without reboot, 10 = reboot
 # required. Nothing here needs a boot-time hook (no ReGa patch, no
 # interface registration), so start the daemon in place and hand the
 # new monit config to the running monit instead of rebooting the CCU.
 # monit (active mode) is the supervisor, so a failed inline start is
 # recovered on its next cycle — hence the tolerant `|| true`.
-if [ "$1" = "HM-RASPBERRYMATIC" ]; then
+if [ "$1" = "HM-RASPBERRYMATIC" ] || [ "$1" = "HM-OPENCCU" ]; then
   ${RCD_DIR}/${ADDON_ID} init 2>/dev/null || true
   if [ -x /usr/bin/monit ]; then
     monit reload 2>/dev/null || true

@@ -9,7 +9,7 @@
 # OpenCCU-Loom
 
 **OpenCCU-Loom** is a standalone Go daemon that talks to Homematic and
-HomematicIP CCUs (CCU2, CCU3, RaspberryMatic, OpenCCU) over XML-RPC,
+HomematicIP CCUs (CCU2, CCU3, OpenCCU, OpenCCU) over XML-RPC,
 BIN-RPC and JSON-RPC — and exposes them through MQTT, a REST +
 WebSocket API, a web Config UI, a native Matter bridge and an MCP
 server. It runs several CCUs at once, administers them (pairing,
@@ -139,7 +139,7 @@ re-runnable setup wizard. Surfaces as a Home Assistant
   on the network via SSDP.
 - **Packaging** — single static binary (`CGO_ENABLED=0`) for Linux
   amd64 / arm64 / armv7, a multi-arch Docker image, two Home Assistant
-  add-ons (daemon + remote ingress proxy), and a CCU/RaspberryMatic
+  add-ons (daemon + remote ingress proxy), and a CCU/OpenCCU
   add-on that **updates itself**
   ([ADR 0057](./docs/adr/0057-addon-self-update.md)).
 
@@ -200,7 +200,7 @@ and on `:8119`; state persists in the add-on's `/data`. A second add-on,
 proxies a daemon running elsewhere into the same sidebar.
 → [`packaging/ha-addon/README.md`](packaging/ha-addon/README.md)
 
-### CCU / RaspberryMatic add-on
+### CCU / OpenCCU add-on
 
 Runs the daemon directly on the CCU, defaults to CCU-delegated login,
 and can update itself from the project's GitHub releases.
@@ -281,7 +281,7 @@ owns the CCU connection and how devices travel from there.
 MQTT Discovery, the loom backend and the Matter bridge each create their
 own HA entities, so exactly **one** of them per device. Wherever that
 lands, the recommended place to *run* the daemon is **on the CCU**
-(CCU / RaspberryMatic add-on): the chatty XML-RPC/BIN-RPC hop stays on
+(CCU / OpenCCU add-on): the chatty XML-RPC/BIN-RPC hop stays on
 loopback, callback addressing resolves itself, and HA restarts stop
 touching the Homematic side. The full scenario catalogue, combination
 matrix, anti-patterns and migration paths are in

@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 SukramJ.
 #
-# Assemble the CCU / RaspberryMatic add-on tarball:
+# Assemble the CCU / OpenCCU add-on tarball:
 #   openccu-loom-ccu-<version>.tar.gz
 #
 # The tarball bundles every supported build (amd64 + arm64 + armv7); the
 # add-on's update_script picks the matching one from `uname -m` at install
-# time, mirroring RaspberryMatic's own platform matrix (x86-64 OVA /
+# time, mirroring OpenCCU's own platform matrix (x86-64 OVA /
 # generic, 64-bit Pi, CCU3 / 32-bit Pi).
 #
 # Usage:

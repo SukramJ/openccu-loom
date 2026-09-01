@@ -22,11 +22,11 @@ Three constraints frame the decision:
 
 1. **Distribution channels**: OpenCCU-Loom ships as a Docker container,
    a Home Assistant Add-on (also a container under the supervisor), and
-   a CCU/RaspberryMatic Addon (tarball into the CCU filesystem). All
+   a CCU/OpenCCU Addon (tarball into the CCU filesystem). All
    three are *packaged units*. The "single static binary" property is
    therefore valuable but not load-bearing — it's a build-output
    convenience, not a deployment requirement.
-2. **Resource envelope**: the CCU3 / RaspberryMatic Addon path runs on
+2. **Resource envelope**: the CCU3 / OpenCCU Addon path runs on
    1 GB RAM, ARMv7 / Cortex-A7. Anything that adds a Node.js or Rust
    runtime there has to justify ~50–100 MB resident.
 3. **Device reality**: the device population this daemon targets is

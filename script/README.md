@@ -46,7 +46,7 @@ ccu_data:
 
 ### Why the output files are not committed
 
-The archives contain strings derived from OCCU/RaspberryMatic
+The archives contain strings derived from OCCU/OpenCCU
 firmware. We respect their redistribution terms by not vendoring
 the artefacts into this repository. Operators either run the
 extractor themselves or copy the `.json.gz` from an existing

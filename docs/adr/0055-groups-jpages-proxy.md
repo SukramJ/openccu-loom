@@ -109,7 +109,7 @@ group-wiring matrix in Go.
   responses as opaque errors surfaced to the operator, rather than
   parsing HMServer internals.
 - Group administration requires a CCU that actually runs HMServer with
-  jpages reachable (the standard RaspberryMatic / OpenCCU / CCU3 case).
+  jpages reachable (the standard OpenCCU / CCU3 case).
   Homegear and any sealed-CCU setup do not offer it; those backends
   report the capability as unavailable rather than failing mid-write.
 - The proxy inherits the JSON-RPC session's lifecycle for free: renewal,

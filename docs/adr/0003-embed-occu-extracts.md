@@ -74,7 +74,7 @@ additional concerns.
 ### Layer 2 — eQ-3 HomeMatic Software License
 
 The remaining archives are derivative works of OCCU / OpenCCU /
-RaspberryMatic source material. They inherit the upstream
+OpenCCU source material. They inherit the upstream
 **eQ-3 HomeMatic Software License** (LicenseDE.txt). Headline:
 
 - Free for **private, non-commercial** use.

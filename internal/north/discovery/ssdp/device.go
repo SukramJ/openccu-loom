@@ -111,9 +111,15 @@ func parseDeviceDescription(body []byte, locationURL string) (DiscoveredCCU, boo
 // Homematic-family central. The reference discovery filters on manufacturer
 // ("OpenCCU"); we also accept classic eQ-3 CCUs so a real CCU2/CCU3 is found,
 // matching this project's "OpenCCU + classic" discovery scope (ADR 0046).
+//
+// "openccu" alone covers a current central: OpenCCU patches the UPnP resource
+// to MANUFACTURER = MODEL_NAME = "OpenCCU"
+// (buildroot-external/patches/occu/0001-OpenCCU.patch). The unpatched OCCU
+// base sets a "HomeMatic Central …" title instead, so the "homematic" needle
+// is what still finds an installation predating that patch.
 func isCentralManufacturer(manufacturer, modelName, friendlyName string) bool {
 	hay := strings.ToLower(manufacturer + " " + modelName + " " + friendlyName)
-	for _, needle := range []string{"openccu", "eq-3", "eq3", "homematic", "raspberrymatic"} {
+	for _, needle := range []string{"openccu", "eq-3", "eq3", "homematic"} {
 		if strings.Contains(hay, needle) {
 			return true
 		}

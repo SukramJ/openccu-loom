@@ -1411,7 +1411,7 @@ paths:
       description: |
         Self-update status of the daemon's own CCU add-on package.
         Only meaningful on platforms with the firmware-side installer
-        (`/bin/install_addon`, i.e. OpenCCU / RaspberryMatic); elsewhere
+        (`/bin/install_addon`, i.e. OpenCCU); elsewhere
         `supported` is false and the check/install verbs answer 404.
       responses:
         "200":
@@ -1794,7 +1794,7 @@ paths:
       summary: Restart a CCU into its recovery system
       tags: [system]
       description: >
-        Restarts the CCU into the separate recovery system reachable on the CCU's own address. OpenCCU / RaspberryMatic only - a stock CCU3 has no such method and the error is reported rather than swallowed.
+        Restarts the CCU into the separate recovery system reachable on the CCU's own address. OpenCCU only - a stock CCU3 has no such method and the error is reported rather than swallowed.
         Admin-gated and audited. Answers 202 once the CCU accepted the
         request; 422 when the central's backend cannot host the action
         (CUxD, Homegear, or a firmware without the method).
@@ -8270,7 +8270,7 @@ components:
         addon_build:
           type: boolean
           description: |
-            True when this binary was built as the CCU/RaspberryMatic
+            True when this binary was built as the CCU/OpenCCU
             add-on (it then runs on the CCU itself). False for the
             standalone binary, Docker image, and HA add-on builds.
         uptime: { type: string }
@@ -8607,7 +8607,7 @@ components:
           type: boolean
           description: |
             Whether this CCU offers a recovery system
-            (`POST .../recovery-mode`). True for OpenCCU / RaspberryMatic
+            (`POST .../recovery-mode`). True for OpenCCU
             firmware, false for a stock CCU3 and while the product is not
             yet known — so a client hides the action rather than offering
             one that cannot work.

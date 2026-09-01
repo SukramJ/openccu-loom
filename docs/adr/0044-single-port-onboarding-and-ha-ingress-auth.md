@@ -195,6 +195,6 @@ so Ingress is admin-only), **off** in a plain build / Docker image. An explicit
 `true`/`false` still overrides. The trust chain is unchanged (supervised + real
 `RemoteAddr` in the subnet + `X-Ingress-Path`; a real token/session still wins),
 so it remains inert outside genuine Supervisor traffic — including the
-CCU/RaspberryMatic add-on, which is supervised but not reached through Ingress.
+CCU/OpenCCU add-on, which is supervised but not reached through Ingress.
 Net effect: opening the add-on via the HA panel logs the operator straight in as
 admin, with no setup or login page, and the first-run redirect never triggers.

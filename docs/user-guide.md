@@ -65,17 +65,17 @@ daemon of its own — it proxies an instance running elsewhere (Docker,
 CCU add-on) into the same sidebar panel. Layout and build details:
 [`packaging/ha-addon/README.md`](https://github.com/SukramJ/openccu-loom/blob/main/packaging/ha-addon/README.md).
 
-### CCU / RaspberryMatic add-on
+### CCU / OpenCCU add-on
 
 Runs the daemon directly on the CCU. Download
 `openccu-loom-ccu-<version>.tar.gz` from the
 [releases page](https://github.com/SukramJ/openccu-loom/releases) and
 install it under **Settings → Control panel → Additional software**.
-On RaspberryMatic / OpenCCU the add-on installs and starts in place with
+On OpenCCU the add-on installs and starts in place with
 no reboot; stock CCU3 firmware restarts its WebUI as part of every
 add-on install.
 
-Supported platforms are CCU3 (armv7l) and RaspberryMatic / OpenCCU in
+Supported platforms are CCU3 (armv7l) and OpenCCU in
 all flavours (armv7l, aarch64, x86-64). CCU1 and CCU2 are not supported.
 
 Two behaviours are specific to this install: it defaults to

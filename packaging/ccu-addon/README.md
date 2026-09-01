@@ -1,6 +1,6 @@
-# OpenCCU-Loom — CCU / RaspberryMatic Add-on
+# OpenCCU-Loom — CCU / OpenCCU Add-on
 
-This directory holds the CCU / RaspberryMatic add-on packaging for
+This directory holds the CCU / OpenCCU add-on packaging for
 OpenCCU-Loom. The release pipeline assembles it into
 `openccu-loom-ccu-<version>.tar.gz`, attached to each GitHub release.
 
@@ -9,7 +9,7 @@ OpenCCU-Loom. The release pipeline assembles it into
 1. Download `openccu-loom-ccu-<version>.tar.gz` from the
    [releases page](https://github.com/SukramJ/openccu-loom/releases).
 2. On the CCU web UI: **Settings → Control panel → Additional software**,
-   choose the tarball, and install. On RaspberryMatic / OpenCCU the
+   choose the tarball, and install. On OpenCCU the
    add-on installs and starts in place — **no reboot**. Only the stock
    CCU3 firmware reboots: its WebUI restarts unconditionally on every
    add-on install and performs the installation during that boot.
@@ -18,7 +18,7 @@ OpenCCU-Loom. The release pipeline assembles it into
    configured through the UI; add a central pointing at `127.0.0.1` to
    bridge the local CCU.
 
-Supported platforms: **CCU3** (armv7l) and **RaspberryMatic** in all its
+Supported platforms: **CCU3** (armv7l) and **OpenCCU** in all its
 flavours — armv7l (32-bit Pi), aarch64 (64-bit Pi), and x86-64 (OVA /
 generic / Proxmox). CCU1 / CCU2 are not supported.
 

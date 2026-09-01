@@ -1229,10 +1229,10 @@ func TestHubDeviceBlockWithHubInfo(t *testing.T) {
 // and that subsequent hub Discovery payloads reflect the populated info.
 func TestWithHubInfoFluentSetsHub(t *testing.T) {
 	t.Parallel()
-	info := HubInfo{Model: "RaspberryMatic", Version: "3.79.1", Serial: "RPI-9999", URL: "http://rpi.home"}
+	info := HubInfo{Model: "OpenCCU", Version: "3.79.1", Serial: "RPI-9999", URL: "http://rpi.home"}
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu").WithHubInfo(info)
-	if db.Hub.Model != "RaspberryMatic" {
-		t.Errorf("Hub.Model=%q want RaspberryMatic", db.Hub.Model)
+	if db.Hub.Model != "OpenCCU" {
+		t.Errorf("Hub.Model=%q want OpenCCU", db.Hub.Model)
 	}
 	// Verify the info flows into a hub Discovery item.
 	item := db.BuildInstallModeSensorDiscovery("ccu", "HmIP-RF")
@@ -1242,8 +1242,8 @@ func TestWithHubInfoFluentSetsHub(t *testing.T) {
 	var payload map[string]any
 	_ = json.Unmarshal(item.Payload, &payload)
 	dev, _ := payload["device"].(map[string]any)
-	if dev["model"] != "RaspberryMatic" {
-		t.Errorf("device.model=%v want RaspberryMatic", dev["model"])
+	if dev["model"] != "OpenCCU" {
+		t.Errorf("device.model=%v want OpenCCU", dev["model"])
 	}
 	if dev["sw_version"] != "3.79.1" {
 		t.Errorf("device.sw_version=%v want 3.79.1", dev["sw_version"])

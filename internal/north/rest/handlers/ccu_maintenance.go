@@ -157,7 +157,7 @@ func PostCCUSafeMode(svc CCUHostActionPort, rec audit.Recorder) http.HandlerFunc
 }
 
 // PostCCURecoveryMode restarts the named CCU into its recovery system.
-// OpenCCU / RaspberryMatic only; a stock CCU3 has no such method and the
+// OpenCCU only; a stock CCU3 has no such method and the
 // resulting error is propagated rather than swallowed.
 func PostCCURecoveryMode(svc CCUHostActionPort, rec audit.Recorder) http.HandlerFunc {
 	return ccuHostActionHandler(svc, rec, ccuActionRecoveryMode)

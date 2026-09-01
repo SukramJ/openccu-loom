@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 SukramJ.
 #
-# CCU / RaspberryMatic rc.d service script for OpenCCU-Loom. Started by
+# CCU / OpenCCU rc.d service script for OpenCCU-Loom. Started by
 # the CCU at boot via `init`, supervised by monit (see
 # etc/monit-openccu-loom.cfg), and driven from the add-on web page.
 
@@ -109,7 +109,7 @@ info() {
 # /etc/config/hm_addons.cfg. Mirrors the registration in update_script:
 # platform helper first, the HomeMatic Tcl API as the fallback. The API
 # call is guarded by an `info procs` probe because RemoveConfigPage is a
-# RaspberryMatic/OpenCCU addition — stock firmware only ships
+# OpenCCU addition — stock firmware only ships
 # AddConfigPage, and an unguarded call would abort the uninstall.
 unregister_menu_tcl() {
   cat <<EOF

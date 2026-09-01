@@ -27,7 +27,7 @@
 //
 //   - openccu-loom's source (this package) is MIT.
 //   - The raw extract archives are derivative works of OCCU /
-//     RaspberryMatic and inherit the eQ-3 HomeMatic Software License
+//     OpenCCU and inherit the eQ-3 HomeMatic Software License
 //     (free for private, non-commercial use).
 //   - The curated `translation_custom/*.json` and
 //     `profiles/_receiver_type_aliases.json` are authored by

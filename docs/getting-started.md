@@ -12,7 +12,7 @@ full operator walkthrough see the [User Guide](user-guide.md).
 
 ## Prerequisites
 
-- A reachable Homematic / HomematicIP CCU (CCU2, CCU3, RaspberryMatic,
+- A reachable Homematic / HomematicIP CCU (CCU2, CCU3, OpenCCU,
   or OpenCCU) on your network.
 - Docker, **or** a Go 1.26+ toolchain to build the binary — neither is
   needed for the two add-on installs below.
@@ -51,13 +51,13 @@ full operator walkthrough see the [User Guide](user-guide.md).
     elsewhere into the same sidebar. See
     [`packaging/ha-addon/README.md`](https://github.com/SukramJ/openccu-loom/blob/main/packaging/ha-addon/README.md).
 
-=== "CCU / RaspberryMatic add-on"
+=== "CCU / OpenCCU add-on"
 
     Download `openccu-loom-ccu-<version>.tar.gz` from the
     [releases page](https://github.com/SukramJ/openccu-loom/releases)
     and install it on the CCU under **Settings → Control panel →
     Additional software**. Supported platforms are CCU3 (armv7l) and
-    RaspberryMatic / OpenCCU (armv7l, aarch64, x86-64); CCU1 and CCU2
+    OpenCCU (armv7l, aarch64, x86-64); CCU1 and CCU2
     are not supported.
 
     This install defaults to CCU-delegated login and can update itself
@@ -88,7 +88,7 @@ only binds when `north.matter.enabled` is `true`.
    no admin user exists. Create the first admin account there.
 3. Sign in at `/login`. OIDC is supported when configured.
 
-On the CCU / RaspberryMatic add-on the default is CCU-delegated login:
+On the CCU / OpenCCU add-on the default is CCU-delegated login:
 you sign in with your existing CCU account instead of creating a
 separate account. See [Authentication](admin/auth.md).
 

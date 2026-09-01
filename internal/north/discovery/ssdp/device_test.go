@@ -83,13 +83,13 @@ func TestParseDeviceDescription(t *testing.T) {
 			name: "empty friendlyName — falls back to manufacturer",
 			body: `<?xml version="1.0" encoding="UTF-8"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0"><URLBase>http://10.0.0.2</URLBase><device>
-<friendlyName></friendlyName><manufacturer>RaspberryMatic</manufacturer>
-<modelName>RaspberryMatic</modelName><modelDescription>Serial1234567890</modelDescription>
+<friendlyName></friendlyName><manufacturer>OpenCCU</manufacturer>
+<modelName>OpenCCU</modelName><modelDescription>Serial1234567890</modelDescription>
 <UDN>uuid:upnp-Basic-1_0-Serial1234567890</UDN></device></root>`,
 			locationURL: "http://10.0.0.2/upnp/basic_dev.cgi",
 			wantOK:      true,
 			wantSerial:  "1234567890",
-			wantName:    "RaspberryMatic",
+			wantName:    "OpenCCU",
 			wantHost:    "10.0.0.2",
 		},
 		{
@@ -170,7 +170,7 @@ func TestCentralName(t *testing.T) {
 		{"OpenCCU - Hausanlage", "OpenCCU", "Hausanlage"},
 		{"HomeMatic Central - 0001ABC", "eq-3", "0001ABC"},
 		{"OpenCCU - ", "OpenCCU", "-"}, // " - " found but empty tail → strips "OpenCCU " prefix, leaving "-"
-		{"RaspberryMatic", "RaspberryMatic", "RaspberryMatic"},
+		{"OpenCCU", "OpenCCU", "OpenCCU"},
 		{"", "OpenCCU", "OpenCCU"},
 		{"", "", "CCU"},
 		{"OpenCCU Keller", "OpenCCU", "Keller"},
@@ -229,7 +229,7 @@ func TestIsCentralManufacturer(t *testing.T) {
 		{"", "", "HomeMatic Central - Test", true},
 		{"Sonos", "Play:1", "Sonos Speaker", false},
 		{"Philips", "Hue", "Hue Bridge", false},
-		{"", "RaspberryMatic", "", true},
+		{"", "OpenCCU", "", true},
 	}
 
 	for _, tc := range tests {
