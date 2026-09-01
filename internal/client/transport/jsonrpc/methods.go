@@ -78,15 +78,30 @@ func (c *Client) RenameDevice(ctx context.Context, iseID, newName string) error 
 // SetLinkInfo updates the name and description of a direct-link between two
 // channels on the given interface.
 //
-// Wire: Interface.setLinkInfo, params: {interface, senderAddress,
-// receiverAddress, name, description}.
+// Wire: Interface.setLinkInfo, params: {interface, sender, receiver, name,
+// description}.
+//
+// The two address keys are the SHORT form, and deliberately not the ones
+// [Client.GetLinkInfo] uses. The CCU's own method registry is asymmetric here
+// (www/api/methods.conf):
+//
+//	Interface.setLinkInfo ARGUMENTS {_session_id_ interface sender receiver name description}
+//	Interface.getLinkInfo ARGUMENTS {_session_id_ interface senderAddress receiverAddress}
+//
+// and interface/setlinkinfo.tcl reads $args(sender) / $args(receiver).
+// Sending senderAddress/receiverAddress leaves a declared argument unset,
+// checkArguments rejects the call, and a rename fails upstream — which it did.
+//
+// This is a deliberate divergence from the reference, which sends the long
+// form for both (json_rpc.py `_JsonKey.SENDER_ADDRESS = "senderAddress"`).
+// The firmware is the origin for a wire parameter name.
 func (c *Client) SetLinkInfo(ctx context.Context, iface, sender, receiver, name, description string) error {
 	return c.Call(ctx, "Interface.setLinkInfo", map[string]any{
-		"interface":       iface,
-		"senderAddress":   sender,
-		"receiverAddress": receiver,
-		"name":            name,
-		"description":     description,
+		"interface":   iface,
+		"sender":      sender,
+		"receiver":    receiver,
+		"name":        name,
+		"description": description,
 	}, nil)
 }
 

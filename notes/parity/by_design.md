@@ -4273,6 +4273,43 @@ the entry to revisit — and the measurement that would settle it is a write of
 index 1 to a named device followed by an observation of the channel's
 behaviour, not another read.
 
+### BD-Links-SetLinkInfoUsesTheShortAddressKeys — the rename sends `sender`/`receiver`, not `senderAddress`/`receiverAddress`
+
+`aiohomematic` sends the long address keys for `Interface.setLinkInfo`
+(`aiohomematic/client/json_rpc.py`: `_JsonKey.SENDER_ADDRESS = "senderAddress"`,
+`RECEIVER_ADDRESS = "receiverAddress"`, used by `set_link_info`). OpenCCU-Loom
+sends the short form. This is not a style choice — the long form does not work.
+
+The CCU's own method registry is asymmetric between the getter and the setter
+(`www/api/methods.conf`):
+
+```
+Interface.setLinkInfo
+  ARGUMENTS {_session_id_ interface sender receiver name description}
+
+Interface.getLinkInfo
+  ARGUMENTS {_session_id_ interface senderAddress receiverAddress}
+```
+
+and `www/api/methods/interface/setlinkinfo.tcl` reads `$args(sender)` /
+`$args(receiver)`. The dispatcher builds `args` with
+`array set args $JSONRPC(PARAMS)` and then runs `checkArguments`, which tests
+`[info exists args($argName)]` for each declared argument. Sending the long
+form therefore leaves two declared arguments unset and the call is rejected
+before it reaches the interface process.
+
+Observed as a user-facing failure: renaming a direct link on an HmIP-WRC6
+returned `502` from `PATCH /devices/{addr}/links`. It is not an encoding
+problem — the name's characters never matter, because the call fails on its
+argument list.
+
+`GetLinkInfo` keeps the long form, because that is what its own entry
+declares. The two must not be unified.
+
+Our `AddLink` / `RemoveLink` are unaffected: they go over XML-RPC with
+positional arguments, where no parameter name exists to get wrong. That is
+also why link creation worked while renaming did not.
+
 ### BD-Timer-PromotionTruncates — a promoted combined-timer duration is truncated toward zero, not rounded
 
 **Decision.** `custom.EncodeTimerDuration`
