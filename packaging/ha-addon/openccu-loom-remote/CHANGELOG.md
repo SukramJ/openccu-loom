@@ -12,6 +12,14 @@ per-sensor override), and a garage door no longer shows as permanently moving
 in Home Assistant, Apple Home or Google Home when the drive reports an unknown
 door state. No action required.
 
+A note for anyone driving schedules through the REST or WebSocket API rather
+than the web UI: a climate end time with an hour of 24 ("24:30") used to be
+refused. It is now stored as 23:55 — which is what the CCU's own editor does
+with the same input — and the write reports the correction back, so a client
+can show that what was stored differs from what was sent. "24:00" keeps its
+meaning as the end-of-day marker. Nothing changes for the web UI, which cannot
+enter such a time.
+
 # 0.70.0
 
 A channel now carries its device-trigger event groups inline, so clients
