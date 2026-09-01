@@ -1,5 +1,30 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.72.0
+
+Schedules gain a value they were missing: a switch point the device holds
+permanently. The CCU's own weekly-program editor calls it "Dauerhaft"; until
+now this daemon reported it as an empty duration, so a client could not tell a
+slot that never expires from one carrying no duration at all, and had no way
+to set one. Both are distinct now.
+
+Two CCU communication fixes, both invisible until they bit: creating a plain
+BOOL, FLOAT or ENUM system variable failed, and so did every enum variable
+creation, because five calls sent argument names the CCU does not declare. A
+second family of calls addressed device links with keys the CCU rejects the
+same way. If either had failed for you, it works now — no action required.
+
+For anyone driving the REST or WebSocket API directly: three response shapes
+stopped declaring themselves closed to unknown fields. This only matters to
+generated clients, which turned that declaration into a strict decoder and
+would reject a whole response the next time a field was added. Nothing on the
+wire changed, so nothing you receive today looks different. The openccu-loom
+Python client picks the tolerance up with its next release; until then it
+behaves exactly as before.
+
+The product name in the interface and documentation now reads OpenCCU
+throughout. Cosmetic — no setting, topic or identifier moved.
+
 ## 0.71.0
 
 Two fixes you may notice: an alarm entry countdown now reports the delay the
