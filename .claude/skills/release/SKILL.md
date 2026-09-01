@@ -55,3 +55,18 @@ make lint && make test && make contract
 
 Then commit (`git commit -s`), open the PR, let CI go green, merge, and tag
 `vX.Y.Z` on the merge commit. Never tag before the add-on versions match.
+
+## 6. The release is not finished at the tag
+
+`release.yml` dispatches `daemon-release` to `openccu-loom-client`, which opens
+a regeneration PR and stops — deliberately: no version bump, no auto-merge.
+That PR moves generated types only. Whether the hand-written layer needs to
+follow (a response that gained a field, a caller that caches what it wrote) is
+a separate judgement, and nothing fails while it is skipped.
+
+The runbook lives in that repo, as its `daemon-update` skill:
+<https://github.com/SukramJ/openccu-loom-client/blob/main/.claude/skills/daemon-update/SKILL.md>
+
+Check `node-red-contrib-openccu-loom` too. It pins `SUPPORTED_API_MAJOR` in
+`lib/client.js`; a major bump here makes every server node warn until it is
+raised there.
