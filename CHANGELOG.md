@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The former product name is gone from the code base; everything says
+  OpenCCU.** Docs, ADRs, comments, the SPA's runtime label and the OpenAPI
+  descriptions. Three things deliberately keep the old string, because there
+  it is an address or a value we receive rather than a name we give: the
+  `HM-RASPBERRYMATIC` add-on platform identifier (which OpenCCU still passes,
+  and which is now accepted alongside `HM-OPENCCU`), external URLs, and the
+  released changelog entries.
+
+  API version 10.1.0 -> 10.2.0. Nothing about the surface moved — the
+  descriptions did, and the contract guard requires at least a minor bump for
+  any change to a contract asset.
+
 ### Fixed
 
 - **Creating a plain BOOL / FLOAT / ENUM system variable failed, and so did
