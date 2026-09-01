@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 437.
+Guards without a doc comment: 7 of 441.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -85,6 +85,8 @@ Guards without a doc comment: 7 of 437.
 | TestRecoveryContractSuccessResetsConsecutiveFailures | connection_recovery_contract_test.go | TestRecoveryContractSuccessResetsConsecutiveFailures pins the reset contract. |
 | TestRecoveryContractSuccessfulCycleResetsConsecutive | connection_recovery_contract_test.go | TestRecoveryContractSuccessfulCycleResetsConsecutive pins the success-cycle flow. |
 | TestRecoveryContractThirdFailureDelay | connection_recovery_contract_test.go | TestRecoveryContractThirdFailureDelay pins the 2-failure step. |
+| TestConsumedOperationsAreServed | consumed_operations_test.go | TestConsumedOperationsAreServed is the manifest's own soundness check, and it runs before anything is classified against it. |
+| TestRemovedOperationsAreReportedAgainstWhatClientsCall | consumed_operations_test.go | TestRemovedOperationsAreReportedAgainstWhatClientsCall answers the question the version number could not: is a removal one a client would notice? It does not decide the bump — TestAPISurfaceChangesCarryTheRightBump owns that, and still demands a major for any removal. |
 | TestConvertableParameterSetsAgree | convertable_parameter_parity_test.go | TestConvertableParameterSetsAgree pins the two parallel definitions of the convertable-parameter set to the same membership. |
 | TestCoordinatorMinimumLOC | coordinator_size_test.go | TestCoordinatorMinimumLOC is a gutting tripwire for the coordinator package: it fails when a coordinator loses most of its body, which is what "we deleted behaviour and nothing noticed" looks like from the outside. |
 | TestCoordinatorSetIsStable | coordinator_size_test.go | TestCoordinatorSetIsStable lists every coordinator file we expect to exist. |
@@ -215,6 +217,7 @@ Guards without a doc comment: 7 of 437.
 | TestOpenAPIEnumsCoverEveryEmittedValue | openapi_enum_coverage_test.go | TestOpenAPIEnumsCoverEveryEmittedValue is the drift detector for hand-written enum lists in assets/openapi.yaml. |
 | TestNoRequestOrResponseBodyIsWrittenInline | openapi_inline_schema_test.go | TestNoRequestOrResponseBodyIsWrittenInline pins that a body with properties lives in `components/schemas` and is reached by `$ref`. |
 | TestEverySuccessResponseDeclaresASchema | openapi_response_schema_test.go | TestEverySuccessResponseDeclaresASchema walks every 200/201 response in the specification and fails when one declares no schema and is not listed above with a reason. |
+| TestResponseSchemasToleratePlusFields | openapi_response_tolerance_test.go | TestResponseSchemasToleratePlusFields keeps every schema a client decodes a *response* through open to unknown properties. |
 | TestOpenAPISpecIsValid | openapi_schema_test.go | TestOpenAPISpecIsValid runs the full kin-openapi validator on assets/openapi.yaml, verifying the spec is structurally valid. |
 | TestOpenAPIDeclaresMVPEndpoints | openapi_test.go | — (no doc comment) |
 | TestOpenAPIManagementPathsPresent | openapi_test.go | TestOpenAPIManagementPathsPresent pins the management and live-edit paths in the spec so a future router rename or refactor cannot silently drift away from the production OpenAPI validator middleware. |
@@ -452,6 +455,7 @@ Guards without a doc comment: 7 of 437.
 | TestEveryBroadcastPayloadIsFieldChecked | ws_payload_field_parity_test.go | TestEveryBroadcastPayloadIsFieldChecked asserts that every payload named by a broadcast in assets/wsapi.json is either registered above or recorded as declared elsewhere. |
 | TestWSPayloadStructsMatchOpenAPISchemaFields | ws_payload_field_parity_test.go | TestWSPayloadStructsMatchOpenAPISchemaFields pins every registered broadcast payload struct to the fields of its OpenAPI component schema, in both directions. |
 | TestWSPayloadsDeclaredElsewhereStayUnreachable | ws_payload_field_parity_test.go | TestWSPayloadsDeclaredElsewhereStayUnreachable keeps the coverage-hole list honest. |
+| TestWSSurfaceChangesCarryTheRightBump | ws_surface_bump_test.go | TestWSSurfaceChangesCarryTheRightBump holds the WebSocket surface to the same policy the REST surface follows: a removal, rename or retype is a major bump, an addition is a minor one. |
 | TestWSBroadcastPayloadsHaveOpenAPISchema | wsapi_openapi_payload_parity_test.go | TestWSBroadcastPayloadsHaveOpenAPISchema asserts that every `kind: "broadcast"` entry in assets/wsapi.json names a non-empty `payload` and that the named schema exists under `components.schemas` in assets/openapi.yaml. |
 | TestWSCommandCatalogParity | wsapi_schema_test.go | TestWSCommandCatalogParity verifies that every non-broadcast entry in assets/wsapi.json (the client-callable commands) has a matching handler registered in the WS router source files. |
 | TestWSCommandsMatchPinnedSchema | wsapi_schema_test.go | TestWSCommandsMatchPinnedSchema asserts that the set of command names extracted from the source files matches the set pinned in assets/wsapi.json exactly. |
