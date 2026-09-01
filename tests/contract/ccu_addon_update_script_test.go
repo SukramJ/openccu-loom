@@ -26,12 +26,12 @@ const updateScriptStub = "#!/bin/sh\nexit 0\n"
 const updateScriptUnameStub = "#!/bin/sh\ncase \"$1\" in\n  -m) echo armv7l ;;\n  *) echo unknown ;;\nesac\nexit 0\n"
 
 // TestCCUAddonUpdateScriptExitCodeContract locks the exit-code contract
-// RaspberryMatic/OpenCCU's /bin/install_addon relies on: 0 means "installed
+// OpenCCU's /bin/install_addon relies on: 0 means "installed
 // without reboot", 10 means "reboot required" and anything else means the
 // platform identifier ($1) was rejected outright. This is the exact
 // contract that regressed in the 0.27.1 bugfix (see CHANGELOG.md) — a
 // silent flip between 0 and 10 reboots CCU3 needlessly or leaves a
-// RaspberryMatic install half-started.
+// OpenCCU install half-started.
 //
 // The subprocess environment is hermetic: PATH is pointed at stub
 // replacements for every external command the script invokes
@@ -54,7 +54,7 @@ func TestCCUAddonUpdateScriptExitCodeContract(t *testing.T) {
 	workDir := writeUpdateScriptFixtures(t)
 
 	cases := []struct {
-		// name documents the platform identifier the CCU/RaspberryMatic
+		// name documents the platform identifier the CCU/OpenCCU
 		// installer passes as $1.
 		name     string
 		arg      string
@@ -62,7 +62,7 @@ func TestCCUAddonUpdateScriptExitCodeContract(t *testing.T) {
 	}{
 		{name: "unset platform identifier is rejected", arg: "", wantCode: 1},
 		{name: "CCU2 is unsupported", arg: "CCU2", wantCode: 1},
-		{name: "RaspberryMatic installs inline, no reboot", arg: "HM-RASPBERRYMATIC", wantCode: 0},
+		{name: "OpenCCU installs inline, no reboot", arg: "HM-RASPBERRYMATIC", wantCode: 0},
 		{name: "stock CCU3 requires a reboot", arg: "CCU3", wantCode: 10},
 	}
 

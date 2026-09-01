@@ -6,7 +6,7 @@
 ## Context
 
 Installing or updating the CCU add-on requires the manual WebUI round
-trip (download → upload → install). On OpenCCU / RaspberryMatic the
+trip (download → upload → install). On OpenCCU the
 WebUI is only a frontend: it stages the archive as
 `/usr/local/tmp/new_addon.tar.gz` and runs the firmware's
 `/bin/install_addon`, which unpacks, optionally verifies embedded

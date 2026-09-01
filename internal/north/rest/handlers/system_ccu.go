@@ -30,7 +30,7 @@ type SystemCCUEntry struct {
 	// Available reports the central's last-known connectivity
 	// (true after a successful XML-RPC init handshake).
 	Available bool `json:"available"`
-	// Model surfaces SystemInfo.Model (CCU2 / CCU3 / RaspberryMatic / …).
+	// Model surfaces SystemInfo.Model (CCU2 / CCU3 / OpenCCU / …).
 	Model string `json:"model,omitempty"`
 	// Version surfaces SystemInfo.Version (CCU software version).
 	Version string `json:"version,omitempty"`
@@ -68,7 +68,7 @@ type SystemCCUEntry struct {
 	Timezone  string   `json:"timezone,omitempty"`
 	// RecoveryModeSupported reports whether this CCU offers a recovery
 	// system. Derived from the product label rather than probed: recovery
-	// is an OpenCCU / RaspberryMatic feature, and a stock CCU3 has no such
+	// is an OpenCCU feature, and a stock CCU3 has no such
 	// JSON-RPC method. False while the product is still unknown, so a
 	// client hides the action instead of offering one that cannot work.
 	RecoveryModeSupported bool `json:"recovery_mode_supported"`

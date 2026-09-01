@@ -1,7 +1,7 @@
 # OpenCCU-Loom — Home Assistant Add-on
 
 OpenCCU-Loom is a standalone bridge that connects Homematic CCUs (CCU3,
-RaspberryMatic) to MQTT, a REST + WebSocket API, and a built-in Config UI.
+OpenCCU) to MQTT, a REST + WebSocket API, and a built-in Config UI.
 It runs as a native HA add-on and is accessible directly from the HA sidebar.
 
 > **Which integration path should you run?** The daemon can feed Home

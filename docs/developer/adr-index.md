@@ -65,7 +65,7 @@ The table below catalogues every ADR. Each entry links to the record itself.
 | [0054](../adr/0054-remote-ingress-proxy-addon.md) | Remote ingress proxy add-on | OpenCCU-Loom Remote: an HA Ingress panel for remote instances via token injection, instead of the local-only Ingress passthrough. |
 | [0055](../adr/0055-groups-jpages-proxy.md) | Heating groups via the CCU jpages proxy | Heating-group administration goes through the CCU's own jpages endpoints, the only interface that drives the member roster. |
 | [0056](../adr/0056-room-areas-and-zone-naming.md) | Room areas, and the zone/area naming split | Operator-defined areas group CCU rooms one level up; the alarm partition is renamed "zone" to free the word. |
-| [0057](../adr/0057-addon-self-update.md) | CCU add-on self-update | The CCU/RaspberryMatic add-on updates itself through the firmware's own `install_addon` path, with no WebUI round trip. |
+| [0057](../adr/0057-addon-self-update.md) | CCU add-on self-update | The CCU/OpenCCU add-on updates itself through the firmware's own `install_addon` path, with no WebUI round trip. |
 | [0058](../adr/0058-mdns-ccu-serials.md) | mDNS TXT carries the configured CCU serials | Partially supersedes ADR 0021: the TXT record advertises the configured serials so clients can match before authenticating. |
 | [0059](../adr/0059-security-safety-mqtt-plane.md) | The Security & Safety MQTT plane | Extends ADR 0052: hazard classes aggregate across centrals, so they get daemon-level topics too. |
 | [0060](../adr/0060-loom-prefixed-interface-ids.md) | `loom`-prefixed CCU-facing interface ids | Partially supersedes ADR 0024: the wire-boundary `InitInterfaceID` carries a `loom` prefix and drops the repeated central name. |

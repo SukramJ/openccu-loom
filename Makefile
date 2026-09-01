@@ -549,7 +549,7 @@ release: ## goreleaser snapshot (local test build)
 	$(GORELEASER) release --snapshot --clean
 
 .PHONY: ccu-addon
-ccu-addon: ui-build ## package the CCU/RaspberryMatic add-on tarball into dist/
+ccu-addon: ui-build ## package the CCU/OpenCCU add-on tarball into dist/
 	script/build_ccu_addon.sh $(VERSION)
 
 .PHONY: ha-addon

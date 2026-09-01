@@ -19,7 +19,7 @@ import (
 // page (the "CCU is not yet ready" splash) polls this exact CGI in a JS
 // loop and only proceeds once the body is the literal "OK".
 // It is part of the OCCU package, so it works uniformly across eQ-3
-// CCU2/CCU3, RaspberryMatic and OpenCCU — the only manufacturer-sanctioned,
+// CCU2/CCU3, OpenCCU and OpenCCU — the only manufacturer-sanctioned,
 // SSH-free, cross-variant "system fully started" signal.
 const checkRegaPath = "/ise/checkrega.cgi"
 

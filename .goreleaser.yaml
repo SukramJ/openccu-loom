@@ -23,7 +23,7 @@ builds:
       - -X github.com/SukramJ/openccu-loom/internal/build.Commit={{.ShortCommit}}
       - -X github.com/SukramJ/openccu-loom/internal/build.BuildDate={{.Date}}
     # Dev builds drop darwin/windows to save resources. The three linux
-    # arches stay: the CCU/RaspberryMatic add-on (build_ccu_addon.sh) bundles
+    # arches stay: the CCU/OpenCCU add-on (build_ccu_addon.sh) bundles
     # amd64 + arm64 + armv7 and must not be changed. Re-add darwin/windows
     # here to restore the full release matrix.
     goos: [linux]

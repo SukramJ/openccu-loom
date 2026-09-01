@@ -32,7 +32,7 @@
 
   <!-- ── left: the CCU ──────────────────────────────────────────────── -->
   <rect class="panel" x="20" y="46" width="270" height="120" rx="10"/>
-  <text class="card-name" x="40" y="76">CCU3 · RaspberryMatic</text>
+  <text class="card-name" x="40" y="76">CCU3 · OpenCCU</text>
   <text class="card-name" x="40" y="97">CCU2 · OpenCCU</text>
   <text class="card-sub"  x="40" y="122">The central you already own —</text>
   <text class="card-sub"  x="40" y="140">unchanged, no firmware patching.</text>

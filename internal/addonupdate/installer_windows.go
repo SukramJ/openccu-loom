@@ -10,7 +10,7 @@ import "os/exec"
 // detachProcess is a no-op on Windows, which has no session concept and no
 // Setsid field on syscall.SysProcAttr — referencing it does not compile.
 //
-// Nothing is lost: self-update is gated on the CCU / RaspberryMatic add-on
+// Nothing is lost: self-update is gated on the CCU / OpenCCU add-on
 // capability (ADR 0057), so this runner never executes on Windows. The
 // platform only has to build, which is what the nightly cross-platform job
 // checks. Should a Windows install path ever exist, the equivalent is

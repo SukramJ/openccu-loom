@@ -10,7 +10,7 @@ import (
 )
 
 // InstallerPath is the firmware-provided installer every OpenCCU /
-// RaspberryMatic add-on host exposes. Stock eQ-3 CCU3 firmware has no
+// OpenCCU add-on host exposes. Stock eQ-3 CCU3 firmware has no
 // such binary (ADR 0057 §Context), which is exactly the signal the
 // capability probe keys on.
 const InstallerPath = "/bin/install_addon"

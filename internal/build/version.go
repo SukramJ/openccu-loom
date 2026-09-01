@@ -23,7 +23,7 @@ var (
 	Commit = "none"
 	// BuildDate is the UTC RFC3339 timestamp of the build.
 	BuildDate = "unknown"
-	// AddonBuild is "true" only in the CCU/RaspberryMatic add-on build
+	// AddonBuild is "true" only in the CCU/OpenCCU add-on build
 	// (stamped by script/build_ccu_addon.sh). It flips defaults that
 	// only make sense when the daemon runs on the CCU itself — chiefly
 	// CCU-delegated authentication (ADR 0043). Default "false" so a

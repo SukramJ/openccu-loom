@@ -102,7 +102,7 @@ body:
       options:
         - OpenCCU
         - CCU3
-        - RaspberryMatic
+        - OpenCCU
         - piVCCU / debmatic
         - CCU2
         - Homegear
@@ -112,7 +112,7 @@ body:
     id: backend_version
     attributes:
       label: Backend version (if known)
-      placeholder: "e.g. 3.x.x / RaspberryMatic 3.7x"
+      placeholder: "e.g. 3.x.x / OpenCCU 3.7x"
 
   - type: input
     id: central_count

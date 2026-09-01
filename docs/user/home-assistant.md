@@ -41,7 +41,7 @@ Work down this list and stop at the first match.
    → That is [Scenario 9](#s9-the-config-ui-as-an-ha-panel) and it
    combines with every other scenario. It is not a device path.
 6. **Whichever path you picked: where should the daemon run?**
-   → **On the CCU**, via the CCU / RaspberryMatic add-on, unless one of
+   → **On the CCU**, via the CCU / OpenCCU add-on, unless one of
    the exceptions applies.
    [Recommended topology](#recommended-run-the-daemon-on-the-ccu)
 
@@ -336,7 +336,7 @@ at all.
 | Where the daemon runs | How the panel gets there |
 |---|---|
 | On the HA host | The **OpenCCU-Loom** add-on. Ingress handles authentication; `host_network: true` is required so the daemon can advertise a CCU-reachable callback IP. Keep `rest_port` at 8119 or the sidebar panel stops working. |
-| On the CCU / RaspberryMatic (*recommended*, see [below](#recommended-run-the-daemon-on-the-ccu)) | The CCU add-on runs the daemon next to the CCU (loopback hop, self-updating); the **OpenCCU-Loom Remote** add-on proxies its UI into the HA sidebar. |
+| On the CCU / OpenCCU (*recommended*, see [below](#recommended-run-the-daemon-on-the-ccu)) | The CCU add-on runs the daemon next to the CCU (loopback hop, self-updating); the **OpenCCU-Loom Remote** add-on proxies its UI into the HA sidebar. |
 | Anywhere else (Docker, a server, a second site) | Same as above: the **Remote** add-on, which also handles several daemon instances at once under `/i/<name>/`. |
 
 This is the answer to "the SPA as an alternative to the CCU WebUI panel":
@@ -425,7 +425,7 @@ the add-on uses `host_network: true`.
 | Topology | CCU hop | HA hop | Notes |
 |---|---|---|---|
 | **Daemon as HA add-on** | LAN | loopback | Simplest. Ingress panel included. Needs `host_network`. Daemon and HA share a fate: host down = both down. |
-| **Daemon on the CCU** (CCU/RaspberryMatic add-on) — *recommended* | **loopback** | LAN | Least LAN traffic on the noisy side, self-updating add-on, CCU-delegated login. HA reaches it via MQTT/REST and the Remote add-on for the panel. |
+| **Daemon on the CCU** (CCU/OpenCCU add-on) — *recommended* | **loopback** | LAN | Least LAN traffic on the noisy side, self-updating add-on, CCU-delegated login. HA reaches it via MQTT/REST and the Remote add-on for the panel. |
 | **Daemon on a separate host** (Docker, server, VM) | LAN | LAN | Both hops on the LAN. Best isolation, independent restarts. Use the Remote add-on for the panel. |
 
 Availability is the part people underestimate: with the daemon separate
@@ -435,7 +435,7 @@ touches nothing on the Homematic side at all.
 
 ### Recommended: run the daemon on the CCU
 
-If your CCU is a RaspberryMatic / OpenCCU box (or a CCU3) and you have no
+If your CCU is an OpenCCU box (or a CCU3) and you have no
 reason not to, **install the CCU add-on and run the daemon there**. It is
 the topology the split architecture was designed for.
 
@@ -458,7 +458,7 @@ the topology the split architecture was designed for.
   ([ADR 0057](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0057-addon-self-update.md)),
   and defaults to CCU-delegated login — so there is no second user
   database to maintain.
-- **Installing costs nothing on RaspberryMatic / OpenCCU** — the add-on
+- **Installing costs nothing on OpenCCU** — the add-on
   installs and starts in place, no reboot. (Stock CCU3 firmware reboots
   on every add-on install; that is the CCU WebUI's behaviour, not ours.)
 
@@ -471,7 +471,7 @@ the topology the split architecture was designed for.
 - **You want the heavy optional features on stronger hardware.** A stock
   CCU3 is the weakest supported platform (armv7l); the Matter bridge,
   measurement history across many data points and large device fleets are
-  more comfortable on RaspberryMatic on a Pi 4 / x86 box, or off-CCU
+  more comfortable on OpenCCU on a Pi 4 / x86 box, or off-CCU
   entirely. Start on the CCU, move if you actually feel it.
 - **Storage matters to you.** Persistent state (SQLite + files) lives in
   `/usr/local/addons/openccu-loom/var` — on the CCU's own SD card or

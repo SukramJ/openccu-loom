@@ -206,7 +206,7 @@ eQ-3 HomeMatic Software License — see ADR 0003.
 All criteria below were met at the 0.1.0 release and remain invariants
 for every subsequent release.
 
-- OpenCCU-Loom connects to a real CCU3/RaspberryMatic and to
+- OpenCCU-Loom connects to a real CCU3/OpenCCU and to
   `godevccu` without configuration drift.
 - Multi-CCU: a single daemon connects to ≥ 2 CCUs simultaneously,
   each with its own interface set, each scoped in topics and REST
@@ -229,7 +229,7 @@ for every subsequent release.
 
 Items that were explicitly out of scope for 0.1.0 but have since
 shipped: HA Add-on packaging (Q9, landed in 0.2.0 under
-`packaging/ha-addon/`) and CCU/RaspberryMatic Add-on packaging
+`packaging/ha-addon/`) and CCU/OpenCCU Add-on packaging
 (Q10, landed in 0.2.0 under `packaging/ccu-addon/`). Deep Homegear
 parity remains out of scope.
 
@@ -736,7 +736,7 @@ an ADR.
 | Q7 | Transport licensing | Native Go XML-RPC / BIN-RPC / JSON-RPC; project licensed MIT (ADR 0001) |
 | Q8 | Setup wizard scope | Admin user + CCU connection + language/theme (no MQTT in wizard) |
 | Q9 | HA Add-on packaging | Delivered post-0.1.0 — Home Assistant add-on (amd64/aarch64/armv7) built on the HA base image (s6-overlay + bashio), with Ingress (sidebar panel) + direct port, packaged from `packaging/ha-addon/`; the repo doubles as a HA add-on repository (root `repository.yaml`). Release build toggled by `BUILD_HA_ADDON` |
-| Q10 | RaspberryMatic Add-on | Delivered post-0.1.0 — CCU/RaspberryMatic add-on (amd64/arm64/armv7) packaged from `packaging/ccu-addon/` and attached to each release (ADR 0012 channel) |
+| Q10 | OpenCCU Add-on | Delivered post-0.1.0 — CCU/OpenCCU add-on (amd64/arm64/armv7) packaged from `packaging/ccu-addon/` and attached to each release (ADR 0012 channel) |
 | Q11 | Multi-CCU | Supported from 0.1.0 (ADR 0002) |
 | Q12 | Hot-reload | Logging (level, format) and CORS via file-watcher; **entire `north.mqtt` section is hot-swappable** (broker URL, credentials, topic base, discovery toggles) — applied automatically on file-watcher pickup or on demand via `POST /admin/mqtt/reload`. Structural CCU/Callback/REST listen changes still need restart |
 | Q13 | CUxD transport | Native BIN-RPC + BIN-RPC callback server. No MQTT workaround. |
@@ -892,7 +892,7 @@ Coverage producers in place:
 - **Area** — an operator-defined grouping of CCU rooms (a floor, an
   outbuilding). Lives only in the daemon; the CCU knows nothing of it.
   Not to be confused with an alarm **zone** (ADR 0056).
-- **CCU** — Central Control Unit (Homematic CCU3, RaspberryMatic,
+- **CCU** — Central Control Unit (Homematic CCU3, OpenCCU,
   OpenCCU).
 - **CUxD** — Custom-Universal-Extension-Driver, an HM extension
   daemon that exposes additional device classes via BIN-RPC.

@@ -1593,7 +1593,7 @@ func TestRouter_SystemCCU(t *testing.T) {
 				Name:                 "home",
 				Host:                 "192.0.2.29",
 				Available:            true,
-				Model:                "RaspberryMatic",
+				Model:                "OpenCCU",
 				Version:              "3.79.6.20240803",
 				ConfiguredInterfaces: []string{"HmIP-RF"},
 			},

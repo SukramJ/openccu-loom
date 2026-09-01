@@ -633,7 +633,7 @@ func (b *CcuBackend) GetDeviceDescription(ctx context.Context, address string) (
 // left a multi-megabyte archive behind in /usr/local/tmp until the next
 // run, and spent most of the caller's timeout budget on the half that was
 // discarded. It also made the flow depend on a helper script only OpenCCU
-// and RaspberryMatic ship, which the fallback then had to work around.
+// and OpenCCU ship, which the fallback then had to work around.
 //
 // Requires the HTTP download transport (SetDownloadFirmwareTransport). The
 // ReGa scripts stay in the catalogue for the hub's own trigger/status
@@ -849,7 +849,7 @@ func (b *CcuBackend) PoweroffCCU(ctx context.Context) (bool, error) {
 // reboot two seconds out, then answers `true` — so the response arrives
 // normally and neither call needs a connection error treated as success
 // (occu api/methods/{safemode,recoverymode}/enter.tcl). Recovery mode is
-// an OpenCCU / RaspberryMatic feature; a stock CCU3 has no such method
+// an OpenCCU feature; a stock CCU3 has no such method
 // and must fail loudly rather than silently doing nothing.
 func (b *CcuBackend) EnterSafeMode(ctx context.Context) error {
 	if b.json == nil {

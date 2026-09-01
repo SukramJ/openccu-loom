@@ -2243,7 +2243,7 @@ export type DaemonInfo = {
   version: string;
   commit: string;
   build_date: string;
-  // True when the daemon binary was built as the CCU/RaspberryMatic
+  // True when the daemon binary was built as the CCU/OpenCCU
   // add-on (i.e. it runs on the CCU itself).
   addon_build: boolean;
   uptime: string;

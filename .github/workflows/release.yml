@@ -14,7 +14,7 @@ env:
   CGO_ENABLED: "0"
   GO_VERSION: "1.26.6"
   NODE_VERSION: "24"
-  # Toggle the CCU/RaspberryMatic add-on packaging + upload. Set to
+  # Toggle the CCU/OpenCCU add-on packaging + upload. Set to
   # "false" to skip it for a release (or override per repo via the
   # BUILD_CCU_ADDON repository variable — see the step conditions).
   BUILD_CCU_ADDON: "true"
@@ -94,12 +94,12 @@ jobs:
           args: release --clean --release-notes=RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Package the CCU / RaspberryMatic add-on from goreleaser's
+      # Package the CCU / OpenCCU add-on from goreleaser's
       # cross-compiled binaries (the SPA is already embedded in them, since
       # the bundle was built before goreleaser ran) and attach the tarball
       # to the just-published release. goreleaser keeps each build output at
       # dist/openccu-loom_linux_<arch>/openccu-loom.
-      - name: build CCU/RaspberryMatic add-on
+      - name: build CCU/OpenCCU add-on
         if: ${{ vars.BUILD_CCU_ADDON != 'false' && env.BUILD_CCU_ADDON == 'true' }}
         run: |
           set -euo pipefail

@@ -4,7 +4,7 @@
 MQTT, a REST + WebSocket API, a web Config UI, and Matter.**
 
 OpenCCU-Loom talks to Homematic / HomematicIP CCUs (CCU2, CCU3,
-RaspberryMatic) over XML-RPC, BIN-RPC, and JSON-RPC, and exposes them
+OpenCCU) over XML-RPC, BIN-RPC, and JSON-RPC, and exposes them
 on the north side to standard protocols — so you can use your devices
 from MQTT, REST/WebSocket clients, a browser, or a Matter controller
 without running Home Assistant.

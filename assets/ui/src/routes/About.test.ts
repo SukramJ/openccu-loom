@@ -159,7 +159,7 @@ describe("About — happy path", () => {
 // ---------------------------------------------------------------------------
 
 describe("About — build variant", () => {
-  it("shows the CCU/RaspberryMatic add-on variant when addon_build is true", async () => {
+  it("shows the CCU/OpenCCU add-on variant when addon_build is true", async () => {
     mockInfo.mockResolvedValue(daemonInfo({ version: "9.9.1", addon_build: true }));
     mockGetSystemCCUs.mockResolvedValue([]);
     mockGetSystemUpdate.mockResolvedValue([]);

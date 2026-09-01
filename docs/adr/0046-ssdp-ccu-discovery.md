@@ -40,7 +40,7 @@ let the operator **adopt** or **ignore** each find.
    exit); stale entries expire after a few missed scans.
 
 2. **Manufacturer scope.** Accept `OpenCCU` **and** classic eQ-3 / HomeMatic /
-   RaspberryMatic centrals (a superset of homematicip_local's OpenCCU-only
+   OpenCCU centrals (a superset of homematicip_local's OpenCCU-only
    filter), so a real CCU2/CCU3 is found too.
 
 3. **Identity.** The stable id is the UDN serial
@@ -73,7 +73,7 @@ let the operator **adopt** or **ignore** each find.
 - A new always-on multicast scan loop. Bounded: one small datagram per
   interface per interval, results capped by what answers on the LAN.
 - The scope deliberately diverges from homematicip_local (OpenCCU-only) by
-  also accepting classic eQ-3 / HomeMatic / RaspberryMatic centrals.
+  also accepting classic eQ-3 / HomeMatic / OpenCCU centrals.
 - Multicast reachability varies by network topology (some container bridges
   drop it); the feature degrades to "no results", never to an error.
 

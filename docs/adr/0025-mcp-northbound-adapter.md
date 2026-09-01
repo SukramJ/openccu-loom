@@ -90,7 +90,7 @@ over its existing REST/WS contract (ADR 0020) and re-exposes it as MCP.
 - **Cons**: a second deployment unit, a second auth configuration
   (the sidecar needs a daemon token *and* its own MCP auth), and a
   second process to supervise on the resource-constrained CCU3 /
-  RaspberryMatic Addon path. The tool catalogue lives outside the
+  OpenCCU Addon path. The tool catalogue lives outside the
   repo, so it drifts from the REST/WS surface with no in-tree guard.
 
 ### Option C — do nothing (defer)
