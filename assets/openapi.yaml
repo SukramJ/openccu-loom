@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 10.3.0
+  version: 10.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -7637,7 +7637,6 @@ components:
     StartupCaptureConfig:
       type: object
       required: [enabled, duration_seconds, anonymise]
-      additionalProperties: false
       description: >-
         The stored startup-capture toggle as the daemon reports it. Every
         field is always present in responses; the write shape with its
@@ -12687,7 +12686,6 @@ components:
         corrections:
           type: array
           items: { $ref: "#/components/schemas/ScheduleTimeCorrection" }
-      additionalProperties: false
     ScheduleTimeCorrection:
       type: object
       required: [profile, weekday, period, field, requested, applied]
@@ -12700,7 +12698,6 @@ components:
           enum: [start_time, end_time]
         requested: { type: string, description: "The submitted value" }
         applied: { type: string, description: "The value actually stored" }
-      additionalProperties: false
     Schedule:
       type: object
       required: [channel, kind]

@@ -8,6 +8,58 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A daemon minor no longer breaks an installed client, and the WebSocket
+  surface is inventoried like the REST one.** Two halves of one problem: a
+  release could be additive by every check this repo runs and still leave
+  every deployed `openccu-loom-client` unable to decode a response.
+
+  Three response schemas — `StartupCaptureConfig`, `ScheduleWriteResult` and
+  its nested `ScheduleTimeCorrection` — declared `additionalProperties: false`.
+  A generator turns that into a strict model (`extra="forbid"` in the Python
+  client's wire layer), so adding a field to any of them was additive to the
+  surface inventory, additive to oasdiff, shipped as a minor — and rejected the
+  whole payload at the client. The keyword stays on `StartupCaptureConfigWrite`
+  and on every other request body, where the daemon is the decoder and an
+  unknown key is a caller's typo worth naming rather than ignoring. A new
+  guard, `TestResponseSchemasToleratePlusFields`, walks every schema reachable
+  from a response — transitively, which is how the nested one was found — and
+  refuses the closed form there.
+
+  The WebSocket half had no inventory at all. `assets/wsapi.json` carries 178
+  commands and the version policy covered them, but nothing diffed them: two of
+  the three most recent major bumps (`links.put_paramset` gaining a required
+  edit token, `links.test_profile` replaced by `links.apply_profile`) happened
+  entirely on that surface and were caught by review alone.
+  `TestWSSurfaceChangesCarryTheRightBump` pins command names and argument
+  shapes against a committed baseline and holds them to the same policy the
+  REST surface follows. Optionality is read from the `?` suffix the document
+  already uses, so the two directions are not symmetric: making a required
+  argument optional is additive, tightening an optional one back is breaking,
+  and a *new required* argument is breaking because every existing caller omits
+  it.
+
+  **A removal can now be weighed against what a client actually calls.** The
+  policy makes every removal a major bump and the Python client refused any
+  daemon whose major differed — both defensible alone, together a lockout: the
+  major moved 7 -> 8 -> 9 -> 10 inside one release window, and each of those
+  bumps removed surface no generated client referenced. Neither side could tell
+  the difference, because nothing recorded what a client consumes.
+  `openccu-loom-client` publishes that set now
+  (`spec/consumed_operations.json`, 169 of this document's 292 operations),
+  and `TestRemovedOperationsAreReportedAgainstWhatClientsCall` reads it when
+  the client repository is checked out beside this one. A removal the client
+  calls fails the guard as a real break; one it does not is reported as such
+  and left to the release's own judgement. The check skips — loudly, never as
+  a silent pass — when the manifest is absent, because "no manifest" must not
+  read as "nothing consumed", and `TestConsumedOperationsAreServed` refuses a
+  manifest naming operations this document does not serve, so a stale one
+  cannot answer for a current one.
+
+  API version 10.3.0 -> 10.4.0. No property moved, so no schema diff sees this;
+  what changed is how a generated client decodes three payloads, which is why
+  it is recorded in the surface guard's value-semantics list. The tolerance
+  reaches a client with its next regeneration, not retroactively.
+
 - **The former product name is gone from the code base; everything says
   OpenCCU.** Docs, ADRs, comments, the SPA's runtime label and the OpenAPI
   descriptions. Three things deliberately keep the old string, because there
