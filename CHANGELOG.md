@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Renaming a direct link failed with a 502.** `Interface.setLinkInfo` was
+  called with `senderAddress` / `receiverAddress`. The CCU declares the SHORT
+  form for that one method — `www/api/methods.conf` gives
+  `ARGUMENTS {_session_id_ interface sender receiver name description}`, and
+  `setlinkinfo.tcl` reads `$args(sender)` / `$args(receiver)` — so two declared
+  arguments were missing, `checkArguments` rejected the call, and the rename
+  never reached the interface process.
+
+  The CCU's own registry is asymmetric here: `Interface.getLinkInfo` really
+  does take `senderAddress` / `receiverAddress`, and that call was correct all
+  along. The two are now distinct on purpose
+  (`BD-Links-SetLinkInfoUsesTheShortAddressKeys`).
+
+  Not an encoding problem: the name's characters never mattered, because the
+  call failed on its argument list before any value was read. Adding and
+  removing links were unaffected — they go over XML-RPC with positional
+  arguments, which is why creating a link worked while renaming it did not.
+
+  This is a deliberate divergence from the reference, which sends the long form
+  for both.
+
 ## [0.71.0] - 2026-09-01
 
 ### Changed

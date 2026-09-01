@@ -120,16 +120,32 @@ func TestSetLinkInfo(t *testing.T) {
 	if err := c.SetLinkInfo(context.Background(), "BidCos-RF", "HEQ0123456:1", "HEQ0654321:1", "my-link", "desc"); err != nil {
 		t.Fatalf("SetLinkInfo: %v", err)
 	}
+	// The names are the CCU's own, and they are NOT the ones getLinkInfo
+	// uses. www/api/methods.conf in the firmware declares:
+	//
+	//	Interface.setLinkInfo ARGUMENTS {_session_id_ interface sender receiver name description}
+	//	Interface.getLinkInfo ARGUMENTS {_session_id_ interface senderAddress receiverAddress}
+	//
+	// and setlinkinfo.tcl reads $args(sender) / $args(receiver). Sending the
+	// long form leaves a declared argument unset, checkArguments rejects the
+	// call, and the rename fails upstream.
 	checks := map[string]string{
-		"interface":       "BidCos-RF",
-		"senderAddress":   "HEQ0123456:1",
-		"receiverAddress": "HEQ0654321:1",
-		"name":            "my-link",
-		"description":     "desc",
+		"interface":   "BidCos-RF",
+		"sender":      "HEQ0123456:1",
+		"receiver":    "HEQ0654321:1",
+		"name":        "my-link",
+		"description": "desc",
 	}
 	for k, want := range checks {
 		if got, _ := gotParams[k].(string); got != want {
 			t.Errorf("param %q = %q, want %q", k, got, want)
+		}
+	}
+	// The long form must NOT be sent: an argument the method does not declare
+	// is what this call used to carry instead of the one it needs.
+	for _, k := range []string{"senderAddress", "receiverAddress"} {
+		if _, present := gotParams[k]; present {
+			t.Errorf("param %q was sent; setLinkInfo declares the short form", k)
 		}
 	}
 }

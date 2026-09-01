@@ -986,18 +986,21 @@ func (b *CcuBackend) GetLinkInfo(ctx context.Context, iface, senderAddress, rece
 // SetLinkInfo implements Operations. Sets the name and description of a
 // direct link via JSON-RPC.
 //
-// Wire: Interface.setLinkInfo, params: {interface, senderAddress,
-// receiverAddress, name, description}. Mirrors json_rpc.py set_link_info.
+// Wire: Interface.setLinkInfo, params: {interface, sender, receiver, name,
+// description} — the SHORT address keys, which is what the CCU declares for
+// this method and not what it declares for getLinkInfo. See
+// [github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc.Client.SetLinkInfo]
+// for the firmware citation and why this diverges from the reference.
 func (b *CcuBackend) SetLinkInfo(ctx context.Context, iface, senderAddress, receiverAddress, name, description string) (bool, error) {
 	if b.json == nil {
 		return false, ErrUnsupported
 	}
 	_, err := b.json.Call(ctx, "Interface.setLinkInfo", map[string]any{
-		"interface":       iface,
-		"senderAddress":   senderAddress,
-		"receiverAddress": receiverAddress,
-		"name":            name,
-		"description":     description,
+		"interface":   iface,
+		"sender":      senderAddress,
+		"receiver":    receiverAddress,
+		"name":        name,
+		"description": description,
 	})
 	return err == nil, err
 }
