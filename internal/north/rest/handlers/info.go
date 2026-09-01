@@ -70,9 +70,12 @@ const (
 	CapabilityAlarm = "alarm.v1"
 	// CapabilityHistory is surfaced when the opt-in measurement-history
 	// feature is enabled (the same flag that mounts /history, /energy and
-	// /history/recording). The SPA gates its history-dependent surfaces —
-	// the Diagrams view (SV03) — on this token so they stay hidden when
-	// recording is off.
+	// /history/recording). It reports whether the history store exists, not
+	// whether recording is currently running: the token is set from
+	// historyStore != nil, and an operator pausing recording keeps both the
+	// store and this capability. The SPA gates its history-dependent
+	// surfaces — the Diagrams view (SV03) — on it, so they stay hidden on a
+	// daemon that has no history store at all.
 	CapabilityHistory = "history.v1"
 	// CapabilityAddonSelfUpdate is surfaced when the CCU add-on
 	// self-update platform capability check passed (ADR 0057: an
@@ -94,9 +97,13 @@ const (
 	// "wrong path" — both answer 404.
 	CapabilityWebhookInbound = "webhook.inbound.v1"
 	// CapabilityDiagrams is surfaced when the diagram CRUD surface is
-	// mounted. The SPA gated its diagram panel on history.v1 as a stand-in
-	// because no token existed; that proxy breaks the moment an operator
-	// turns recording off while keeping their saved diagrams.
+	// mounted. It exists because the diagram panel needs two independent
+	// things — measurement history to chart, and the app database that holds
+	// the definitions — and before this token the SPA could only ask about
+	// the first. It gates on both now, which is why the panel disappears when
+	// either is missing rather than rendering a view that then refuses
+	// itself. The two resolve to the same database today; they are wired
+	// separately so that stays an implementation detail.
 	CapabilityDiagrams = "diagrams.v1"
 	// CapabilityAdminPersistence is surfaced when the persistence-backed
 	// admin surface is mounted — stored users, tokens, centrals, config
