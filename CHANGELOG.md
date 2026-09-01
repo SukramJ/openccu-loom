@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.71.0] - 2026-09-01
+
 ### Changed
 
 - **A climate end time with an hour of 24 is now stored as 23:55 and reported,
@@ -41,10 +43,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   no production caller and satisfied no interface, so it was deleted rather
   than corrected. The read side is unchanged. Its unit test had pinned the
   wrong convention as expected, which is how it survived.
-
-## [0.71.0] - 2026-08-31
-
-### Changed
 
 - **MCP can read and write LINK paramsets, and stopped carrying a branch that
   could not run.** Its `write_paramset` tested for a LINK key its own parser
