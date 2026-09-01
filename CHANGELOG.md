@@ -8,6 +8,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Creating a plain BOOL / FLOAT / ENUM system variable failed, and so did
+  every `SysVar.createEnum`.** The same defect class as the link rename, found
+  by sweeping every named-parameter JSON-RPC call against the CCU's own
+  registry (`www/api/methods.conf`) rather than waiting for the next report.
+
+  Five call sites sent a name the CCU does not declare, so `checkArguments`
+  rejected the call before it reached ReGa:
+
+  | Method | Sent | Declared |
+  |---|---|---|
+  | `SysVar.createEnum` (3 sites) | `valueList` / `value_list` | `valList` |
+  | `SysVar.createBool`, `createFloat`, `createEnum` (hub writer) | `chn_id` | `chnID` |
+  | `SysVar.createFloat` (hub writer) | `min_value`, `max_value` | `minValue`, `maxValue` |
+
+  The hub writer's JSON-RPC path is the primary one for sysvars without a
+  unit, description or custom value labels, so that is what an operator hit.
+
+  A new contract guard now pins every named-parameter call against the
+  registry, and fails on the wrong spelling being *present* as well as on the
+  right one being absent — the wrong name was always a plausible neighbour.
+
 - **Renaming a direct link failed with a 502.** `Interface.setLinkInfo` was
   called with `senderAddress` / `receiverAddress`. The CCU declares the SHORT
   form for that one method — `www/api/methods.conf` gives

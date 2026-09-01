@@ -422,8 +422,8 @@ func TestCcuCreateSystemVariableEnumDispatch(t *testing.T) {
 	if params["name"] != "myEnum" {
 		t.Fatalf("name=%v", params["name"])
 	}
-	if params["valueList"] != "Off;On;Auto" {
-		t.Fatalf("valueList=%v, want Off;On;Auto", params["valueList"])
+	if params["valList"] != "Off;On;Auto" {
+		t.Fatalf("valList=%v, want Off;On;Auto", params["valList"])
 	}
 }
 
@@ -440,8 +440,8 @@ func TestCcuCreateSystemVariableEnumSingleValue(t *testing.T) {
 		t.Fatal("no args")
 	}
 	params := args[0].(map[string]any)
-	if params["valueList"] != "Only" {
-		t.Fatalf("valueList=%v, want Only", params["valueList"])
+	if params["valList"] != "Only" {
+		t.Fatalf("valList=%v, want Only", params["valList"])
 	}
 }
 

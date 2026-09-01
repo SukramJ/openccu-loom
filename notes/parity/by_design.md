@@ -4306,6 +4306,12 @@ argument list.
 `GetLinkInfo` keeps the long form, because that is what its own entry
 declares. The two must not be unified.
 
+The same sweep found four more of these, all in the sysvar creators:
+`SysVar.createEnum` declares `valList` (we sent `valueList`), and the hub
+writer sent `chn_id`, `min_value`, `max_value` where the registry declares
+`chnID`, `minValue`, `maxValue`. `TestJSONRPCCallsUseTheDeclaredArgumentNames`
+now pins the whole set.
+
 Our `AddLink` / `RemoveLink` are unaffected: they go over XML-RPC with
 positional arguments, where no parameter name exists to get wrong. That is
 also why link creation worked while renaming did not.

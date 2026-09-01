@@ -699,8 +699,8 @@ func TestCreateSystemVariableEnum(t *testing.T) {
 	if n, _ := gotParams["name"].(string); n != "scene" {
 		t.Errorf("name=%q, want scene", n)
 	}
-	if vl, _ := gotParams["valueList"].(string); vl != "off;relax;bright" {
-		t.Errorf("valueList=%q, want off;relax;bright", vl)
+	if vl, _ := gotParams["valList"].(string); vl != "off;relax;bright" {
+		t.Errorf("valList=%q, want off;relax;bright", vl)
 	}
 }
 

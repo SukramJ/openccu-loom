@@ -439,14 +439,16 @@ func (c *Client) CreateSystemVariableBool(ctx context.Context, name string, init
 // CreateSystemVariableEnum creates a new enum system variable on the CCU.
 // valueList is joined as a semicolon-separated string (CCU wire format).
 //
-// Wire: SysVar.createEnum, params: {name, valueList, internal, chnID}.
+// Wire: SysVar.createEnum, params: {name, valList, internal, chnID} — the
+// key is valList, which is what www/api/methods.conf declares and what
+// sysvar/createenum.tcl's ReGa script reads (`sv.ValueList( valList )`).
 func (c *Client) CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error) {
 	var result map[string]any
 	if err := c.Call(ctx, "SysVar.createEnum", map[string]any{
-		"name":      name,
-		"valueList": joinSemicolon(valueList),
-		"internal":  0,
-		"chnID":     -1,
+		"name":     name,
+		"valList":  joinSemicolon(valueList),
+		"internal": 0,
+		"chnID":    -1,
 	}, &result); err != nil {
 		return nil, err
 	}

@@ -242,7 +242,7 @@ func TestCreateSysvarFloatUsesJSONRPC(t *testing.T) {
 		t.Fatalf("expected 1 createFloat call, got %d", got)
 	}
 	got := m.lastCreate.Load()
-	if got == nil || (*got)["min_value"] != "0" || (*got)["max_value"] != "100" {
+	if got == nil || (*got)["minValue"] != "0" || (*got)["maxValue"] != "100" {
 		t.Fatalf("create params = %v", got)
 	}
 }
@@ -259,7 +259,7 @@ func TestCreateSysvarEnumUsesJSONRPC(t *testing.T) {
 		t.Fatalf("expected 1 createEnum call, got %d", got)
 	}
 	got := m.lastCreate.Load()
-	if got == nil || (*got)["value_list"] != "a;b;c" {
+	if got == nil || (*got)["valList"] != "a;b;c" {
 		t.Fatalf("create params = %v", got)
 	}
 }
@@ -912,12 +912,12 @@ func TestUpdateSysvarIndependentFlags(t *testing.T) {
 // Device.listAllDetail, the CCU's only address→ise-id source; the mock
 // server serves no Interface.getIseIDByAddress, exactly as real firmware
 // does not, so a writer reaching for that method fails here the way it
-// fails on a CCU. The native create path threads the id into chn_id (no
+// fails on a CCU. The native create path threads the id into chnID (no
 // longer hard-coded -1); the Rega paths bind it into the script's
 // ##channel## slot.
 
 // A BOOL create with a channel address resolves the address and threads the
-// numeric ise id into SysVar.createBool's chn_id (replacing the -1 default).
+// numeric ise id into SysVar.createBool's chnID (replacing the -1 default).
 func TestCreateSysvarChannelResolvesIntoNativeChnID(t *testing.T) {
 	m := newSysvarMock(t)
 	m.setFleet(map[string]string{"ABC0000001": "5677", "ABC0000001:3": "5678"})
@@ -933,8 +933,8 @@ func TestCreateSysvarChannelResolvesIntoNativeChnID(t *testing.T) {
 		t.Fatalf("expected 1 Device.listAllDetail call, got %d", got)
 	}
 	got := m.lastCreate.Load()
-	if got == nil || (*got)["chn_id"] != float64(5678) {
-		t.Fatalf("create chn_id = %v, want 5678", got)
+	if got == nil || (*got)["chnID"] != float64(5678) {
+		t.Fatalf("create chnID = %v, want 5678", got)
 	}
 }
 
@@ -952,8 +952,8 @@ func TestCreateSysvarChannelResolvesDeviceAddress(t *testing.T) {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	got := m.lastCreate.Load()
-	if got == nil || (*got)["chn_id"] != float64(5677) {
-		t.Fatalf("create chn_id = %v, want 5677", got)
+	if got == nil || (*got)["chnID"] != float64(5677) {
+		t.Fatalf("create chnID = %v, want 5677", got)
 	}
 }
 
@@ -979,7 +979,7 @@ func TestCreateSysvarChannelViaRegaBindsResolvedID(t *testing.T) {
 	}
 }
 
-// A create without a channel leaves chn_id at the unassigned -1 default and
+// A create without a channel leaves chnID at the unassigned -1 default and
 // never resolves an address.
 func TestCreateSysvarNoChannelKeepsUnassigned(t *testing.T) {
 	m := newSysvarMock(t)
@@ -992,8 +992,8 @@ func TestCreateSysvarNoChannelKeepsUnassigned(t *testing.T) {
 		t.Fatalf("no channel must not resolve an address, got %d calls", got)
 	}
 	got := m.lastCreate.Load()
-	if got == nil || (*got)["chn_id"] != float64(-1) {
-		t.Fatalf("create chn_id = %v, want -1", got)
+	if got == nil || (*got)["chnID"] != float64(-1) {
+		t.Fatalf("create chnID = %v, want -1", got)
 	}
 }
 
