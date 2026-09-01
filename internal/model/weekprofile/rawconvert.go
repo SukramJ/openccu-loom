@@ -754,6 +754,9 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 // change, and until then a caller sees the same empty string for "no
 // duration" and for "permanent".
 func decodeWireDuration(base, factor int) string {
+	if base == permanentBase && factor == permanentFactor {
+		return PermanentDuration
+	}
 	if factor <= 0 || factor > MaxTimeBaseFactor {
 		return ""
 	}
@@ -1095,6 +1098,27 @@ var durationUnitIn100ms = map[string]float64{
 // opposite intent.
 const ZeroDuration = "0ms"
 
+// PermanentDuration is the string form of the (base 7, factor 31) pair — the
+// CCU's own encoding for a switch point that does not expire.
+//
+// It is a reserved word rather than a duration because it is not one: the
+// pair means "until something else changes it", and every other value of this
+// field means "for this long". The CCU's weekly-program editor offers exactly
+// that choice, two options per switch point, and writes this pair for the
+// first (www/config/easymodes/js/HmIPWeeklyProgram.js: option value 0 sets
+// factor 31, base 7; "optionPermanently" is labelled "Dauerhaft").
+//
+// It exists for the same reason [ZeroDuration] does. "" already means "leave
+// the device's duration alone" — [BuildSimpleRawParamset] writes a sparse
+// paramset — so without a spelling of its own, a permanent slot read back as
+// "" and was indistinguishable from a slot carrying no duration at all. The
+// operator saw an empty field on a switch point the device holds forever.
+//
+// The same pair and the same word cover RAMP_TIME: the CCU builds both
+// editors from one helper (`_getDurationRamptimeHTML`), so the encoding is
+// shared.
+const PermanentDuration = "permanent"
+
 // FormatTimeBaseFactor converts a (base, factor) pair from the CCU
 // paramset into a human-readable duration string used by [schedule.SimpleEntry].
 // Returns "" when the factor is negative or the base id is unknown, and
@@ -1143,6 +1167,9 @@ func FormatTimeBaseFactor(base, factor int) string {
 // payload: a bare number counts as seconds, "m" as minutes, and a
 // fractional value is accepted when it lands on a whole 100ms step.
 func ParseTimeBaseFactor(d string) (base, factor int, ok bool) {
+	if strings.EqualFold(strings.TrimSpace(d), PermanentDuration) {
+		return permanentBase, permanentFactor, true
+	}
 	total100ms, ok := durationIn100ms(d)
 	if !ok {
 		return 0, 0, false

@@ -8929,9 +8929,12 @@ export interface components {
             target_channels?: string[];
             level: number;
             level_2?: number;
-            /** @description Auto-revert time, as a whole number and a unit — "500ms", "10s", "65s", "5min", "1h". The value is exact: the CCU stores a (time base, factor) pair, and the string carries the factor multiplied out in that base's own unit rather than rounded to a larger one, so a 65-second slot reads "65s" and not "1min". Empty when the slot carries no duration. */
+            /**
+             * @description Auto-revert time, as a whole number and a unit — "500ms", "10s", "65s", "5min", "1h". The value is exact: the CCU stores a (time base, factor) pair, and the string carries the factor multiplied out in that base's own unit rather than rounded to a larger one, so a 65-second slot reads "65s" and not "1min". Empty when the slot carries no duration.
+             *     The reserved word `permanent` is the one value that is not a time: it means the switch point does not expire, and it is what the CCU's own weekly-program editor offers as the alternative to entering a duration. It reads back as `permanent` and is accepted on write (case-insensitively). Do not confuse it with the empty string, which means "leave the device's duration untouched".
+             */
             duration?: string;
-            /** @description Dimmer ramp time, same format and exactness rule as `duration`. */
+            /** @description Dimmer ramp time, same format and exactness rule as `duration`, including the reserved word `permanent` — the CCU builds both editors from one helper, so the encoding is shared. */
             ramp_time?: string;
             lock_mode?: string;
             lock_action?: string;

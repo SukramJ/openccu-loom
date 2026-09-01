@@ -788,14 +788,26 @@ func TestSerializeSimpleScheduleLockAutorelockEnd(t *testing.T) {
 	}
 }
 
-// TestParseSimpleScheduleHidesPermanentSentinel mirrors the user-facing
-// scenario: an outdoor outlet whose CCU-stored schedule has the firmware
-// default DURATION_FACTOR=31 in slot 2. parseSimpleSchedule must NOT
-// surface that as Duration="31h" because put_paramset rejects factor>30
-// (xml-rpc fault -5), so the SPA round-trip would explode on save.
-// Skipping the duration emission means the encoder later writes (0, 0)
-// — the canonical "no duration" wire encoding that the CCU accepts.
-func TestParseSimpleScheduleHidesPermanentSentinel(t *testing.T) {
+// TestParseSimpleScheduleSurfacesPermanentAsItsOwnValue mirrors the
+// user-facing scenario: an outdoor outlet whose CCU-stored schedule carries
+// (DURATION_BASE 7, DURATION_FACTOR 31) in slot 2. That pair is the CCU's own
+// encoding for "Dauerhaft" — its weekly-program editor writes exactly it for
+// the first of the two options it offers — so the slot must read back as the
+// reserved word, not as a duration and not as nothing.
+//
+// This test previously asserted the opposite, on two grounds that measurement
+// has since refuted. It said put_paramset rejects factor > 30 with fault -5:
+// writing 31 to a live CCU succeeds, and so does 32
+// (notes/audits/2026-09-01-duration-factor-write-measurement.md). And it said
+// hiding the value made the encoder write (0, 0): BuildSimpleRawParamset
+// emits no DURATION_* keys at all for an empty string, so the pair survived
+// by not being written — an accident of the sparse write, not a decision, and
+// one that showed the operator an empty field on a switch point the device
+// holds forever.
+//
+// "31h" would still be wrong, and that is the point of the reserved word: the
+// pair does not mean a 31-hour duration.
+func TestParseSimpleScheduleSurfacesPermanentAsItsOwnValue(t *testing.T) {
 	t.Parallel()
 	raw := map[string]any{
 		"02_WP_WEEKDAY":          int(1 << 2), // TUESDAY
@@ -811,11 +823,16 @@ func TestParseSimpleScheduleHidesPermanentSentinel(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("parseSimpleSchedule returned %d entries, want 1", len(entries))
 	}
-	if got := entries[0].Duration; got != "" {
-		t.Errorf("Duration = %q, want empty (sentinel must be hidden)", got)
+	if got := entries[0].Duration; got != weekprofile.PermanentDuration {
+		t.Errorf("Duration = %q, want %q", got, weekprofile.PermanentDuration)
 	}
-	if got := entries[0].RampTime; got != "" {
-		t.Errorf("RampTime = %q, want empty (sentinel must be hidden)", got)
+	if got := entries[0].RampTime; got != weekprofile.PermanentDuration {
+		t.Errorf("RampTime = %q, want %q", got, weekprofile.PermanentDuration)
+	}
+	// And it must not read as a duration: "31h" is the arithmetic of the pair,
+	// not its meaning.
+	if entries[0].Duration == "31h" {
+		t.Error("Duration = \"31h\": the pair was rendered as a time rather than as permanence")
 	}
 }
 
