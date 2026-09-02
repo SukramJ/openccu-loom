@@ -43,30 +43,61 @@ func normaliseOperationKey(key string) string {
 	return pathParameter.ReplaceAllString(key, "{}")
 }
 
+// requireManifestEnv makes an absent manifest a failure rather than a skip.
+// CI sets it; a contributor's laptop does not.
+//
+// It exists because the first version of these guards shipped without it and
+// was dead on arrival: the contract job checks out this repository only, so
+// both guards skipped in every CI run and had executed exactly once, on the
+// machine that wrote them. A guard that skips silently returns the same
+// result whether or not the thing it checks is true — the failure this
+// repository's rules name explicitly — and the bite proof did not catch it,
+// because a bite proof validates the mechanism and says nothing about whether
+// the mechanism is ever reached.
+//
+// So the skip is now a claim CI can refute. If the checkout step is renamed,
+// moved or dropped, the contract job fails with a message naming it instead of
+// quietly going green again.
+const requireManifestEnv = "CONTRACT_REQUIRE_CLIENT_MANIFEST"
+
 // findConsumedManifest locates the client's manifest, or reports why it could
 // not. The client repository is normally checked out beside this one, and
 // OPENCCU_LOOM_CLIENT_REPO overrides for CI and non-sibling layouts.
 //
-// Absence is a legitimate outcome, not a failure: a contributor with only this
+// Absence is a legitimate outcome locally: a contributor with only this
 // repository checked out must still be able to run the contract suite. What
 // absence must never do is silently pass as "nothing consumed" — that would
 // classify every removal as safe, which is the exact opposite of the truth and
-// worse than having no check at all.
+// worse than having no check at all. In CI, where the manifest is supposed to
+// be there, absence fails.
 func findConsumedManifest(t *testing.T) (path string, ok bool) {
 	t.Helper()
+	// An explicit override is the only candidate when it is set. Falling back
+	// to the sibling path behind it would mean a run that names one checkout
+	// and silently measures another — and on a developer's machine, where the
+	// sibling almost always exists, that fallback hides a wrong or missing
+	// override completely.
 	var candidates []string
 	if env := os.Getenv("OPENCCU_LOOM_CLIENT_REPO"); env != "" {
-		candidates = append(candidates, env)
+		candidates = []string{env}
+	} else {
+		_, thisFile, _, _ := runtime.Caller(0)
+		repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
+		candidates = append(candidates, filepath.Join(repoRoot, "..", "openccu-loom-client"))
 	}
-	_, thisFile, _, _ := runtime.Caller(0)
-	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
-	candidates = append(candidates, filepath.Join(repoRoot, "..", "openccu-loom-client"))
 
 	for _, repo := range candidates {
 		p := filepath.Join(repo, "spec", "consumed_operations.json")
 		if _, err := os.Stat(p); err == nil {
 			return p, true
 		}
+	}
+	if os.Getenv(requireManifestEnv) != "" {
+		t.Fatalf("%s is set but no client manifest was found under any of %v.\n"+
+			"The contract job is supposed to check out SukramJ/openccu-loom-client at its latest\n"+
+			"release tag and point OPENCCU_LOOM_CLIENT_REPO at it. If that step moved or was\n"+
+			"removed, these guards stop measuring anything — restore it rather than unsetting %s.",
+			requireManifestEnv, candidates, requireManifestEnv)
 	}
 	return "", false
 }
@@ -164,13 +195,90 @@ func TestRemovedOperationsAreReportedAgainstWhatClientsCall(t *testing.T) {
 			"every consumer a lockout for surface they never used:\n  %s",
 			manifest.ClientVersion, strings.Join(unconsumed, "\n  "))
 	}
-	if len(breaksAClient) > 0 {
-		t.Errorf("%d removed operation(s) are called by openccu-loom-client %s:\n  %s\n\n"+
-			"This is a real break, not a bookkeeping one. Keep the operation, or land the client's\n"+
-			"replacement first — a released daemon without it leaves every installed client\n"+
-			"failing at the call.",
-			len(breaksAClient), manifest.ClientVersion, strings.Join(breaksAClient, "\n  "))
+	var unexcused []string
+	for _, key := range breaksAClient {
+		if _, excused := removalsBreakingAConsumedClient[key]; !excused {
+			unexcused = append(unexcused, key)
+		}
 	}
+	if len(unexcused) > 0 {
+		t.Errorf("%d removed operation(s) are called by openccu-loom-client %s:\n  %s\n\n"+
+			"This is a real break, not a bookkeeping one. Keep the operation, land the client's\n"+
+			"replacement first, or — if the break is intended — record it in\n"+
+			"removalsBreakingAConsumedClient with the reason and where the client stops calling it.\n"+
+			"A released daemon without the operation leaves every installed client failing at the call.",
+			len(unexcused), manifest.ClientVersion, strings.Join(unexcused, "\n  "))
+	}
+}
+
+// removalsBreakingAConsumedClient records removals taken deliberately while the
+// released client still calls them.
+//
+// It exists so the guard above can stay red by default without creating the
+// cross-repo ordering it was built to remove. Without an escape the only way
+// past a legitimate breaking change would be to release the client first — the
+// hand-off this whole mechanism exists to make unnecessary. With one, the
+// decision is written down instead of taken silently.
+//
+// An entry is a statement about a *released* client, so it stops being true on
+// its own: once a client that no longer calls the operation is released, the
+// guard sees no break and the entry is dead weight. Delete it then —
+// [TestExcusedRemovalsAreStillBreaking] fails on an entry that no longer
+// describes a break, for the same reason the wiring ratchet refuses an entry
+// whose setter has gained a caller: a list that keeps entries it no longer
+// needs stops meaning what it says.
+//
+// Key: "METHOD /path/{}" exactly as the surface inventory spells it. Value:
+// why the removal was taken anyway, and where the client stops calling it.
+var removalsBreakingAConsumedClient = map[string]string{}
+
+// TestExcusedRemovalsAreStillBreaking keeps the escape list from outliving its
+// entries.
+//
+// An excuse is only sound while the removal it excuses is actually detected.
+// Once the client stops calling the operation — or the operation comes back —
+// the entry exempts nothing, and a stale exemption is worse than none: it reads
+// as a known, accepted break long after the break is gone.
+func TestExcusedRemovalsAreStillBreaking(t *testing.T) {
+	if len(removalsBreakingAConsumedClient) == 0 {
+		return
+	}
+	path, ok := findConsumedManifest(t)
+	if !ok {
+		t.Skip("openccu-loom-client not checked out beside this repo (set OPENCCU_LOOM_CLIENT_REPO)")
+	}
+	manifest := loadConsumedManifest(t, path)
+	consumed := map[string]bool{}
+	for _, op := range manifest.Operations {
+		consumed[normaliseOperationKey(op)] = true
+	}
+	baseline := loadAPISurfaceBaseline(t)
+	current := buildAPISurface(loadOpenAPISpec(t))
+
+	for _, key := range sortedExcuseKeys() {
+		_, gone := baseline.Operations[key]
+		_, back := current.Operations[key]
+		switch {
+		case !gone:
+			t.Errorf("removalsBreakingAConsumedClient[%q] names an operation the committed baseline "+
+				"does not have — nothing is being excused; drop the entry", key)
+		case back:
+			t.Errorf("removalsBreakingAConsumedClient[%q] names an operation the specification serves "+
+				"again — the break is over; drop the entry", key)
+		case !consumed[normaliseOperationKey(key)]:
+			t.Errorf("removalsBreakingAConsumedClient[%q] names an operation openccu-loom-client %s "+
+				"no longer calls — the break is over; drop the entry", key, manifest.ClientVersion)
+		}
+	}
+}
+
+func sortedExcuseKeys() []string {
+	keys := make([]string, 0, len(removalsBreakingAConsumedClient))
+	for k := range removalsBreakingAConsumedClient {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // loadAPISurfaceBaseline reads the committed REST inventory, the same file
