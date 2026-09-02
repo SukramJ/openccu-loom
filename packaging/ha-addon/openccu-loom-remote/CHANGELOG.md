@@ -4,6 +4,22 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.72.2
+
+Fixed: on some devices a schedule switch point acted on a different channel
+than the one selected. The daemon worked out the channel position itself
+instead of reading the numbering the CCU uses, and the two only agree when a
+device numbers its switchable channels straight through from the first one.
+Devices that skip numbers — several lock, wall-switch and window models do —
+were affected. The channel is read from the device now.
+
+If a schedule of yours appeared to act on the wrong channel, it will act on the
+one you picked after this update. Schedules on unaffected devices are unchanged,
+and nothing needs to be re-entered.
+
+Also fixed: where the channel numbering cannot be determined at all, the target
+channel is left untouched on write rather than set to a guess.
+
 # 0.72.1
 
 Nothing you will notice, and that is the honest summary.

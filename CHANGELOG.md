@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.72.2] - 2026-09-02
+
 ### Fixed
 
 - **Target channels were addressed by a formula the CCU does not use, and it
