@@ -947,11 +947,13 @@ func toFloat(v any) float64 {
 // and 3 of the HmIP-FWI", so bit index = virtual channel number - 1.
 //
 // This table therefore COMPUTES what the CCU looks up, and it is correct only
-// while a device lays its virtual channels out actor-major in groups of three
-// — which the editor's own `maxVirtCounter = 3` is consistent with but does
-// not prove. A device numbering them otherwise would be silently mis-addressed
-// here, and no test in this repository would notice: the same gap the
-// channelKeyBitmask table carries.
+// while a device lays its virtual channels out actor-major in groups of three.
+// The editor does not assume that: `maxVirtCounter = (this.isWGTC) ? 4 : 3`
+// (same file, line 3285), and `isWGTC` is every device type whose id contains
+// HmIP-WGTC (line 284). So the counterexample is not hypothetical — the
+// firmware names one, and this table mis-addresses it, silently, with no test
+// here that would notice. The same gap the channelKeyBitmask table carries,
+// with one device family already known to fall in it.
 //
 // Settling it needs a device: one bit set, and an observation of which channel
 // stops following its program.

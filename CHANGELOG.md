@@ -6,6 +6,53 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.72.1] - 2026-09-02
+
+### Fixed
+
+- **BIN-RPC encoded a negative double one unit in the last place away from what
+  the firmware writes.** The packing had been asserted with no source; it is
+  the firmware's, `src/libXmlRpc/src/XmlRpcValue.cpp`, which encodes with
+  `int(frexp(value, &exponent) * double(1<<30))`. C's `int()` truncates toward
+  zero and this used `math.Floor`, so the two agree on positives and on
+  negatives landing on a mantissa boundary and differ elsewhere — `-0.1` encodes
+  as `-858993459` there and `-858993460` here, about 1.2e-10 apart. Too small
+  to observe on any device, and a divergence from the origin for no reason.
+  Now `math.Trunc`.
+
+- **Four rules that rested on the port now cite the firmware that defines
+  them.** A confirmation is worth as much as a contradiction when the thing
+  being confirmed had no source of its own. The RF-lock STATE inversion is
+  settled in both directions by the CCU's own WebUI (`stState == 1` lights
+  "open", the close button writes 0) — the descriptor cannot settle it, because
+  STATE is a bare BOOL with no VALUE_LIST on every HM-Sec-Key variant. The
+  HM-Sec-Win LEVEL comment was right about the behaviour and wrong about the
+  wire: `-0.005` is the descriptor's SPECIAL value LOCKED, not "fully closed",
+  and `0.0` is the ordinary minimum, not "slightly open". Both had described
+  the domain remap while reading as if they described the device.
+  TARGET_CHANNELS is recorded as narrowed rather than settled, because it is.
+
+- **A known mis-addressing is written down as known.** The bit-position table
+  for TARGET_CHANNELS computes `3*(actor-1) + (sub-1)`, and its comment called
+  the grouping-of-three assumption something the firmware "is consistent with
+  but does not prove". The firmware is more specific than that: its weekly-
+  program editor sets `maxVirtCounter = (this.isWGTC) ? 4 : 3`, so every device
+  type whose id contains HmIP-WGTC groups in fours and is mis-addressed by this
+  table — silently, with no test here that would notice. Behaviour is unchanged;
+  the caveat now names the device family instead of leaving it hypothetical.
+  Settling it still needs a device.
+
+- **Two contract guards had never run.** The consumed-operations guards added
+  in 0.72.0 compare a removal against the operations `openccu-loom-client`
+  actually calls, and skip when that repository is not checked out beside this
+  one — which it never was in CI, so both skipped in every run and the suite
+  was green either way. The contract job checks the client out at its latest
+  release tag now, and an absent manifest fails the job instead of skipping, so
+  the hole cannot reopen unnoticed. A deliberate removal that breaks a released
+  client has a written escape (`removalsBreakingAConsumedClient`) rather than
+  forcing a cross-repo release order.
+
+
 ## [0.72.0] - 2026-09-01
 
 ### Changed
