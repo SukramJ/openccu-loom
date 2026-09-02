@@ -32,6 +32,21 @@ import (
 // added a translation instead of using the one in
 // [weekprofile.ParseSimpleRawParamset] / [weekprofile.BuildSimpleRawParamset].
 
+// wireParityBits gives every raw fixture in this file the same
+// TARGET_CHANNELS bit map: 24 keys ("1_1".."24_1") at bits 0..23, covering
+// every position the field can carry so the "all target channels" case
+// exercises the full width. The parity guard is about the wire format, not
+// about a real device's channel layout, so a synthetic 24-channel map is
+// honest here — what matters is that both surfaces below resolve the SAME
+// map, never that it matches an actual device.
+var wireParityBits = func() weekprofile.TargetChannelBits {
+	bits := make(weekprofile.TargetChannelBits, 24)
+	for i := range 24 {
+		bits[fmt.Sprintf("%d_1", i+1)] = uint(i)
+	}
+	return bits
+}()
+
 // wireEntry is the comparable projection of one schedule entry, reached
 // from either surface. Slot number included so ordering differences
 // surface as content differences rather than as index shifts.
@@ -74,7 +89,7 @@ func joinSortedWire(in []string) string {
 
 // wireEntriesFromREST projects the REST/WS surface onto [wireEntry].
 func wireEntriesFromREST(raw map[string]any) []wireEntry {
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, wireParityBits)
 	out := make([]wireEntry, 0, len(entries))
 	for i := range entries {
 		e := entries[i]
@@ -102,7 +117,7 @@ func wireEntriesFromREST(raw map[string]any) []wireEntry {
 // wireEntriesFromWeekProfile projects the week-profile model onto [wireEntry].
 func wireEntriesFromWeekProfile(t *testing.T, raw map[string]any) []wireEntry {
 	t.Helper()
-	s, err := weekprofile.ParseSimpleRawParamset(raw)
+	s, err := weekprofile.ParseSimpleRawParamset(raw, wireParityBits)
 	if err != nil {
 		t.Fatalf("ParseSimpleRawParamset: %v", err)
 	}
@@ -307,17 +322,17 @@ func TestSimpleScheduleWriteAgreesAcrossSurfaces(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			restEntries := parseSimpleSchedule(tc.raw)
-			restRaw, err := serializeSimpleSchedule(restEntries, 0)
+			restEntries := parseSimpleSchedule(tc.raw, wireParityBits)
+			restRaw, err := serializeSimpleSchedule(restEntries, 0, wireParityBits)
 			if err != nil {
 				t.Fatalf("serializeSimpleSchedule: %v", err)
 			}
 
-			s, err := weekprofile.ParseSimpleRawParamset(tc.raw)
+			s, err := weekprofile.ParseSimpleRawParamset(tc.raw, wireParityBits)
 			if err != nil {
 				t.Fatalf("ParseSimpleRawParamset: %v", err)
 			}
-			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, 0)
+			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, 0, wireParityBits)
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}
@@ -345,15 +360,15 @@ func TestSimpleScheduleDeactivationSweepAgrees(t *testing.T) {
 		t.Run(fmt.Sprintf("bound_%d", bound), func(t *testing.T) {
 			t.Parallel()
 
-			restRaw, err := serializeSimpleSchedule(parseSimpleSchedule(raw), bound)
+			restRaw, err := serializeSimpleSchedule(parseSimpleSchedule(raw, wireParityBits), bound, wireParityBits)
 			if err != nil {
 				t.Fatalf("serializeSimpleSchedule: %v", err)
 			}
-			s, err := weekprofile.ParseSimpleRawParamset(raw)
+			s, err := weekprofile.ParseSimpleRawParamset(raw, wireParityBits)
 			if err != nil {
 				t.Fatalf("ParseSimpleRawParamset: %v", err)
 			}
-			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, bound)
+			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, bound, wireParityBits)
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}
@@ -433,11 +448,11 @@ func TestSimpleScheduleConditionRoundTripAgrees(t *testing.T) {
 			"01_WP_CONDITION":    id,
 			"01_WP_ASTRO_TYPE":   1,
 		}
-		restEntries := parseSimpleSchedule(raw)
+		restEntries := parseSimpleSchedule(raw, wireParityBits)
 		if len(restEntries) != 1 {
 			t.Fatalf("condition %d: REST parsed %d entries", id, len(restEntries))
 		}
-		s, err := weekprofile.ParseSimpleRawParamset(raw)
+		s, err := weekprofile.ParseSimpleRawParamset(raw, wireParityBits)
 		if err != nil {
 			t.Fatalf("condition %d: ParseSimpleRawParamset: %v", id, err)
 		}

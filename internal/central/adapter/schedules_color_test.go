@@ -37,7 +37,7 @@ func TestParseSimpleSchedule_ColorPreserved(t *testing.T) {
 		"04" + wpColorType:   0,
 		"04" + wpColorValue:  0,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
@@ -72,7 +72,7 @@ func TestSerializeSimpleSchedule_ColorGluedToSlot(t *testing.T) {
 			Level:    0.5,
 		},
 	}
-	raw, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot)
+	raw, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestSerializeSimpleSchedule_ColorZeroEmitted(t *testing.T) {
 		Level:      1.0,
 		ColorType:  ptrInt(0),
 		ColorValue: ptrInt(0),
-	}}, schedule.SimpleMaxSlot)
+	}}, schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -120,13 +120,13 @@ func TestSimpleSchedule_ColorRoundTripAcrossReorder(t *testing.T) {
 		"03" + wpColorType:   1,
 		"03" + wpColorValue:  4200,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
 	// Relocate the switch point to slot 7.
 	entries[0].SlotNo = 7
-	out, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot)
+	out, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}

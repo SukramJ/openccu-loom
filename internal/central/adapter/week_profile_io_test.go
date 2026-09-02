@@ -169,28 +169,58 @@ func TestBindClimateScheduleIONilNoop(t *testing.T) {
 	bindClimateScheduleIO(nil, nil)
 }
 
+// lockTargetChannelBits pins "1_1" (the door-lock actor) at the real
+// device's channel 1 and "2_1" (the permission actor) at channel 2 — bit =
+// channel number - 1, mirroring [weekprofile.TargetChannelBitsFrom]. Tests
+// below register the matching [weekprofile.TargetChannelInfo] on the
+// channel's WeekProfile so the loader resolves the same map the fixture was
+// encoded with.
+var lockTargetChannelBits = weekprofile.TargetChannelBits{"1_1": 0, "2_1": 1}
+
 // lockScheduleRawParamset builds a two-slot lock MASTER paramset: slot 1 is a
 // door-lock "unlock_autorelock_end" action (LEVEL=1.0, DURATION 7/31 sentinel,
 // actor 1_1), slot 2 a user-permission "granted" slot (LEVEL=1.0, actor 2_1).
 // The duration sentinel (factor 31) is what [weekprofile.ParseSimpleRawParamset]
 // drops, so the loader must decode the action from the raw values.
 func lockScheduleRawParamset() map[string]any {
+	ch1Mask, _ := weekprofile.TargetChannelsListToBitmask([]string{"1_1"}, lockTargetChannelBits)
+	ch2Mask, _ := weekprofile.TargetChannelsListToBitmask([]string{"2_1"}, lockTargetChannelBits)
 	return map[string]any{
 		"01_WP_WEEKDAY":         weekprofile.WeekdayListToBitmask([]schedule.Weekday{schedule.WeekdayMonday}),
 		"01_WP_FIXED_HOUR":      7,
 		"01_WP_FIXED_MINUTE":    30,
 		"01_WP_LEVEL":           1.0,
-		"01_WP_TARGET_CHANNELS": weekprofile.TargetChannelsListToBitmask([]string{"1_1"}),
+		"01_WP_TARGET_CHANNELS": ch1Mask,
 		"01_WP_DURATION_BASE":   7,
 		"01_WP_DURATION_FACTOR": 31,
 		"02_WP_WEEKDAY":         weekprofile.WeekdayListToBitmask([]schedule.Weekday{schedule.WeekdayTuesday}),
 		"02_WP_FIXED_HOUR":      8,
 		"02_WP_FIXED_MINUTE":    0,
 		"02_WP_LEVEL":           1.0,
-		"02_WP_TARGET_CHANNELS": weekprofile.TargetChannelsListToBitmask([]string{"2_1"}),
+		"02_WP_TARGET_CHANNELS": ch2Mask,
 		"02_WP_DURATION_BASE":   7,
 		"02_WP_DURATION_FACTOR": 31,
 	}
+}
+
+// attachLockWeekProfile registers lockTargetChannelBits' source channels on
+// ch, the way production wiring resolves TARGET_CHANNELS bit positions from
+// the device's own channel numbers (see targetChannelBits in
+// week_profile_io.go). Without this the loader's bits map is nil and every
+// TARGET_CHANNELS-derived lock field in these fixtures decodes empty.
+func attachLockWeekProfile(ch *device.Channel) *weekprofile.ProfileDataPoint {
+	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		CentralName:    "Test",
+		ChannelAddress: ch.Address,
+		ScheduleType:   weekprofile.ScheduleTypeDefault,
+		ProfileCount:   1,
+	})
+	wp.SetAvailableTargetChannels(map[string]weekprofile.TargetChannelInfo{
+		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary"},
+		"2_1": {ChannelNo: 2, ChannelAddress: ch.Address, ChannelType: "secondary"},
+	})
+	ch.AttachWeekProfile(wp)
+	return wp
 }
 
 // TestDefaultChannelLoaderDecodesLockFields pins that a lock-domain loader
@@ -201,6 +231,7 @@ func TestDefaultChannelLoaderDecodesLockFields(t *testing.T) {
 	t.Parallel()
 	ch := &device.Channel{Address: "VCU000LOCK:10"}
 	ch.SetRefresher(&wpFakeRefresher{response: lockScheduleRawParamset()})
+	attachLockWeekProfile(ch)
 
 	lockLoader := &defaultChannelLoader{ch: ch, domain: "lock"}
 	s, err := lockLoader.Load(context.Background())
@@ -247,12 +278,7 @@ func TestBindDefaultScheduleIOThreadsDomain(t *testing.T) {
 	t.Parallel()
 	ch := &device.Channel{Address: "VCU000LOCK:10"}
 	ch.SetRefresher(&wpFakeRefresher{response: lockScheduleRawParamset()})
-	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
-		CentralName:    "Test",
-		ChannelAddress: ch.Address,
-		ScheduleType:   weekprofile.ScheduleTypeDefault,
-		ProfileCount:   1,
-	})
+	wp := attachLockWeekProfile(ch)
 	bindDefaultScheduleIO(ch, wp, "lock")
 	if wp.Simple() == nil {
 		t.Fatal("bindDefaultScheduleIO must attach a Simple profile")

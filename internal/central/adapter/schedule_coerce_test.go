@@ -265,7 +265,7 @@ func TestSerializeSimpleScheduleWithDomainNonLock(t *testing.T) {
 			Level:    1.0,
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot)
+	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain switch: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestSerializeSimpleScheduleWithDomainLock(t *testing.T) {
 					LockAction: string(action),
 				},
 			}
-			m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedule.SimpleMaxSlot)
+			m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedule.SimpleMaxSlot, nil)
 			if err != nil {
 				t.Fatalf("serializeSimpleScheduleWithDomain lock: %v", err)
 			}
@@ -325,7 +325,7 @@ func TestSerializeSimpleScheduleWithDomainError(t *testing.T) {
 	entries := []hmapi.SimpleScheduleEntry{
 		{SlotNo: 0, Weekdays: []string{"MONDAY"}, Time: "07:00"},
 	}
-	_, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot)
+	_, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Fatal("expected error for slot_no=0")
 	}
