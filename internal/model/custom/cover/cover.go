@@ -315,11 +315,21 @@ func (c *Cover) Position() (custom.Position, bool) {
 		// HM-Sec-Win level → domain remap. Mirrors
 		// `CustomDpWindowDrive.current_position`
 		// (`model/custom/cover.py:254-262`).
+		//
+		// What the two wire values are, per the device's own descriptor:
+		// LEVEL is FLOAT MIN 0.0 / MAX 1.0 with SPECIAL {LOCKED: -0.005}. So
+		// -0.005 is the device's declared LOCKED state, not simply "the most
+		// closed value", and 0.0 is the ordinary minimum rather than a
+		// special. The remap below is therefore a DOMAIN decision, not a
+		// reading of the wire: it presents locked as fully closed, and lifts
+		// the ordinary minimum to 0.01 so the two stay distinguishable in a
+		// single position number. Keep that in mind before treating either
+		// constant as a wire fact.
 		switch v {
 		case wdClosedLevel:
-			v = closedLevel // wire -0.005 → fully closed
+			v = closedLevel // wire -0.005 (SPECIAL.LOCKED) → fully closed
 		case closedLevel:
-			v = 0.01 // wire 0.0 → slightly open
+			v = 0.01 // wire 0.0 (MIN) → slightly open, so LOCKED keeps 0
 		}
 	}
 	if c.Capabilities.InvertedControl {
@@ -384,8 +394,8 @@ func (c *Cover) OnLevel(level float64) {
 // ([Config.WindowDrive] == true), the level is remapped.
 // (`model/custom/cover.py:264-281`):
 //
-//	target == 0          → wire -0.005   (fully closed)
-//	0 < target ≤ 0.01    → wire 0.0      (slightly open, gasket-safe)
+//	target == 0          → wire -0.005   (the device's SPECIAL.LOCKED)
+//	0 < target ≤ 0.01    → wire 0.0      (the declared MIN, gasket-safe)
 //	otherwise            → wire = target (pass-through)
 func (c *Cover) SetPosition(ctx context.Context, target float64, priority hmenum.CommandPriority) error {
 	if math.IsNaN(target) || math.IsInf(target, 0) {

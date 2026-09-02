@@ -198,8 +198,13 @@ not expressible through this path.
 
 ## Candidates this pass did not settle
 
-The four inventories are in the scratchpad; 42 ranked candidates, of which the
-highest-ranked unsettled ones are worth a later pass:
+*Correction: this section originally said "the four inventories are in the
+scratchpad". They were not — the agents returned their tables inline and
+nothing was written out, so the sentence pointed at a file that never existed.
+The five highest-ranked candidates are named below and were settled in a
+follow-up pass ([2026-09-02](./2026-09-02-inventory-leftovers.md)).*
+
+Five candidates, all ranked "a wrong value here reaches a device":
 
 - BIN-RPC double packing `mantissa * 2^exp / 2^30` — asserted in a comment
   with no source; the codec exists in the OCCU tree.

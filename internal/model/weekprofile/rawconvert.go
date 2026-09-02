@@ -935,8 +935,26 @@ func toFloat(v any) float64 {
 // ---------------------------------------------------------------------------
 
 // targetChannelBitPos maps the "actor_sub" channel key to its bitmask
-// bit position (0-indexed). Mirrors the Python channel ordering used by
-// `_list_to_bitwise` for TARGET_CHANNELS.
+// bit position (0-indexed): 3*(actor-1) + (sub-1).
+//
+// What the firmware settles and what it does not. Its weekly-program editor
+// does NOT compute a position — it reads one, from the label rendered beside
+// each target-channel checkbox
+// (www/config/easymodes/js/HmIPWeeklyProgram.js: `var bit =
+// parseInt(jQuery(this).prev().text())`), and that label is the device's
+// virtual channel number. The same file confirms the offset by example:
+// `isBitSet(val, 1) || isBitSet(val, 2)` is commented "the virtual channels 2
+// and 3 of the HmIP-FWI", so bit index = virtual channel number - 1.
+//
+// This table therefore COMPUTES what the CCU looks up, and it is correct only
+// while a device lays its virtual channels out actor-major in groups of three
+// — which the editor's own `maxVirtCounter = 3` is consistent with but does
+// not prove. A device numbering them otherwise would be silently mis-addressed
+// here, and no test in this repository would notice: the same gap the
+// channelKeyBitmask table carries.
+//
+// Settling it needs a device: one bit set, and an observation of which channel
+// stops following its program.
 var targetChannelBitPos = map[string]uint{
 	"1_1": 0, "1_2": 1, "1_3": 2,
 	"2_1": 3, "2_2": 4, "2_3": 5,

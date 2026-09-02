@@ -220,6 +220,22 @@ func writeArray(w io.Writer, a xmlrpc.ArrayValue) error {
 //
 //	value = mantissa * 2^exp / 2^30
 //
+// The formula is the firmware's own. OpenCCU-Base
+// src/libXmlRpc/src/XmlRpcValue.cpp encodes with
+//
+//	mantissa = int(frexp(value, &exponent) * double(1<<30))
+//
+// and decodes with `ldexp(double(mantissa)/double(1<<30), exponent)`, so the
+// exponent is frexp's — the one that normalises the mantissa into [0.5, 1) —
+// and 2^30 is the scale.
+//
+// The truncation is the firmware's too, and it is NOT a floor. C's int()
+// truncates toward zero, which differs from math.Floor on a negative value
+// that does not land on a mantissa boundary: -0.1 encodes as -858993459
+// there and as -858993460 under a floor, a difference of one unit in the last
+// place (~1.2e-10 on that value). Matching it keeps this encoder
+// bit-identical to the origin rather than merely close.
+//
 // Zero is encoded as (0, 0) rather than running the logarithm. NaN and
 // Inf are rejected — CUxD never sends them and the format cannot
 // represent them precisely.
@@ -234,7 +250,7 @@ func encodeDouble(val float64) (mantissa, exponent int32, err error) {
 		return 0, 0, nil
 	}
 	exp := math.Floor(math.Log(math.Abs(val))/math.Ln2) + 1
-	mant := math.Floor((val * math.Pow(2, -exp)) * mantissaScale)
+	mant := math.Trunc((val * math.Pow(2, -exp)) * mantissaScale)
 	if exp < math.MinInt32 || exp > math.MaxInt32 {
 		return 0, 0, fmt.Errorf("binrpc: exponent out of range: %g", exp)
 	}

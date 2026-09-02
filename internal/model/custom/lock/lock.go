@@ -323,8 +323,14 @@ func (l *Lock) SubDataPointKeys() []hmtypes.DataPointKey {
 
 // LockState returns the current lock state. IP locks read LOCK_STATE
 // (string enum); RF / Button locks invert the bool STATE wire
-// Value (false → locked, true → unlocked) — mirrors
-// `CustomDpRfLock` semantics.
+// Value (false → locked, true → unlocked).
+//
+// The inversion is the firmware's, not an artefact of the port. OpenCCU-Base
+// src/webui/www_source/ise/js/iseButtonsKeyMatic.js lights the "open" button
+// on `opts.stState == 1` and the "closed" one otherwise, and its handlers
+// write the same way round — `onClickClose` sends STATE 0, `onClickOpen`
+// sends 1. The device descriptor cannot settle this: STATE is declared a bare
+// BOOL with no VALUE_LIST on every HM-Sec-Key variant.
 func (l *Lock) LockState() (State, bool) {
 	if l.boolStateDp != nil {
 		v, ok := l.boolStateDp.Value()
