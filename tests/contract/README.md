@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 441.
+Guards without a doc comment: 7 of 442.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -86,6 +86,7 @@ Guards without a doc comment: 7 of 441.
 | TestRecoveryContractSuccessfulCycleResetsConsecutive | connection_recovery_contract_test.go | TestRecoveryContractSuccessfulCycleResetsConsecutive pins the success-cycle flow. |
 | TestRecoveryContractThirdFailureDelay | connection_recovery_contract_test.go | TestRecoveryContractThirdFailureDelay pins the 2-failure step. |
 | TestConsumedOperationsAreServed | consumed_operations_test.go | TestConsumedOperationsAreServed is the manifest's own soundness check, and it runs before anything is classified against it. |
+| TestExcusedRemovalsAreStillBreaking | consumed_operations_test.go | TestExcusedRemovalsAreStillBreaking keeps the escape list from outliving its entries. |
 | TestRemovedOperationsAreReportedAgainstWhatClientsCall | consumed_operations_test.go | TestRemovedOperationsAreReportedAgainstWhatClientsCall answers the question the version number could not: is a removal one a client would notice? It does not decide the bump — TestAPISurfaceChangesCarryTheRightBump owns that, and still demands a major for any removal. |
 | TestConvertableParameterSetsAgree | convertable_parameter_parity_test.go | TestConvertableParameterSetsAgree pins the two parallel definitions of the convertable-parameter set to the same membership. |
 | TestCoordinatorMinimumLOC | coordinator_size_test.go | TestCoordinatorMinimumLOC is a gutting tripwire for the coordinator package: it fails when a coordinator loses most of its body, which is what "we deleted behaviour and nothing noticed" looks like from the outside. |

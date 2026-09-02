@@ -36,6 +36,10 @@ func TestRatchetReasonsAreNotDeferrals(t *testing.T) {
 		"eventsWithoutPublisher":          eventsWithoutPublisher,
 		"wiringSettersWithoutCaller":      wiringSettersWithoutCaller,
 		"registryWalkersWithoutAdoptSeam": registryWalkersWithoutAdoptSeam,
+		// Same shape, different subject: this one excuses a removal that breaks
+		// a released client, and "we will fix it later" is exactly the reason
+		// that must not stand there either.
+		"removalsBreakingAConsumedClient": removalsBreakingAConsumedClient,
 	}
 	for listName, entries := range ratchets {
 		for entry, reason := range entries {

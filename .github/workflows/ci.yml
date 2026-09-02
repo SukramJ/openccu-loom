@@ -344,7 +344,36 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      # The consumed-operations guards compare a removal against the operations
+      # openccu-loom-client actually calls, which only this repository's own
+      # contract job can do — and only if that manifest is on disk. Pinned to
+      # the client's latest RELEASE rather than its main: the question worth
+      # failing a build over is "would this removal break a client somebody is
+      # running", not one that is not published yet. The client's CI checks this
+      # repository out the same way round, at our latest release.
+      #
+      # CONTRACT_REQUIRE_CLIENT_MANIFEST turns the guards' local skip into a
+      # failure here. Without it these two guards were dead: they skipped in
+      # every run for want of the checkout below, and a green suite said nothing.
+      - name: Resolve the client's latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="$(gh release view --repo SukramJ/openccu-loom-client --json tagName --jq .tagName)"
+          echo "Pinning the consumed-operations manifest to openccu-loom-client ${TAG}"
+          echo "CLIENT_TAG=${TAG}" >> "$GITHUB_ENV"
+      - name: Check out the client for its consumed-operations manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: SukramJ/openccu-loom-client
+          ref: ${{ env.CLIENT_TAG }}
+          path: openccu-loom-client
+          persist-credentials: false
       - name: contract tests
+        env:
+          OPENCCU_LOOM_CLIENT_REPO: ${{ github.workspace }}/openccu-loom-client
+          CONTRACT_REQUIRE_CLIENT_MANIFEST: "1"
         run: make contract
       - name: wire-compare (reference snapshots are committed; no Python venv needed)
         run: make wire-compare
