@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.72.1
+
+Nothing you will notice, and that is the honest summary.
+
+A CUxD value sent over BIN-RPC could differ from what the CCU firmware itself
+writes, by about a ten-billionth of a unit on negative numbers. Too small to
+change what any device does; corrected anyway, because there was no reason to
+differ from the firmware. Four further rules about lock and window devices were
+re-checked against the CCU's own sources and came back confirmed — the rules
+were already right, only their justification pointed at the wrong place.
+
+Also fixed: two internal release checks that had never actually run. No effect
+on a running installation.
+
 ## 0.72.0
 
 Schedules gain a value they were missing: a switch point the device holds
