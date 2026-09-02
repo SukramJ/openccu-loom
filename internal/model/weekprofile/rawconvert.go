@@ -603,7 +603,7 @@ var conditionToInt = func() map[schedule.Condition]int {
 // instead of being displayed.
 //
 // Mirrors `DefaultWeekProfile.convert_raw_to_dict_schedule`.
-func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //nolint:gocyclo,funlen // flat per-field switch dispatch; length/complexity is field count, not control-flow depth
+func ParseSimpleRawParamset(raw map[string]any, bits TargetChannelBits) (*schedule.Simple, error) { //nolint:gocyclo,funlen // flat per-field switch dispatch; length/complexity is field count, not control-flow depth
 	type group struct {
 		weekday         int
 		fixedHour       int
@@ -702,7 +702,7 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 			Level2:             g.level2,
 			Condition:          g.condition,
 			AstroOffsetMinutes: g.astroOffset,
-			TargetChannels:     TargetChannelsBitmaskToList(g.targetChannels),
+			TargetChannels:     TargetChannelsBitmaskToList(g.targetChannels, bits),
 		}
 		// ASTRO_TYPE is only meaningful once the condition consults an
 		// astro event. The CCU carries the field on every group, so
@@ -782,7 +782,7 @@ func decodeWireDuration(base, factor int) string {
 // the REST/WS schedules domain maps its DTOs onto [schedule.Simple] and
 // calls this rather than encoding the paramset a second time. Errors
 // name the offending group so a REST caller gets a usable 4xx.
-func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) (map[string]any, error) { //nolint:gocyclo,gocognit,funlen // flat per-field emit; length/complexity is field count, not control-flow depth
+func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int, bits TargetChannelBits) (map[string]any, error) { //nolint:gocyclo,gocognit,funlen // flat per-field emit; length/complexity is field count, not control-flow depth
 	out := make(map[string]any, (deactivateUpTo+1)*4)
 	if s != nil {
 		for _, groupNo := range s.Slots() {
@@ -834,8 +834,11 @@ func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) (map[string]
 			}
 			out[prefix+"ASTRO_OFFSET"] = entry.AstroOffsetMinutes
 
-			// TARGET_CHANNELS bitmask.
-			out[prefix+"TARGET_CHANNELS"] = TargetChannelsListToBitmask(entry.TargetChannels)
+			// TARGET_CHANNELS bitmask. Withheld rather than guessed when the
+			// device's channels could not be resolved — see [TargetChannelBits].
+			if mask, ok := TargetChannelsListToBitmask(entry.TargetChannels, bits); ok {
+				out[prefix+"TARGET_CHANNELS"] = mask
+			}
 
 			// LEVEL_2 — only when explicitly set.
 			if entry.Level2 != nil {
@@ -934,73 +937,101 @@ func toFloat(v any) float64 {
 // Target-channel bitmask helpers
 // ---------------------------------------------------------------------------
 
-// targetChannelBitPos maps the "actor_sub" channel key to its bitmask
-// bit position (0-indexed): 3*(actor-1) + (sub-1).
+// TargetChannelBits maps an "actor_sub" channel key to its bit position in
+// the CCU's TARGET_CHANNELS mask.
 //
-// What the firmware settles and what it does not. Its weekly-program editor
-// does NOT compute a position — it reads one, from the label rendered beside
-// each target-channel checkbox
-// (www/config/easymodes/js/HmIPWeeklyProgram.js: `var bit =
-// parseInt(jQuery(this).prev().text())`), and that label is the device's
-// virtual channel number. The same file confirms the offset by example:
-// `isBitSet(val, 1) || isBitSet(val, 2)` is commented "the virtual channels 2
-// and 3 of the HmIP-FWI", so bit index = virtual channel number - 1.
+// The CCU does not compute this position and neither does this package any
+// more. Its weekly-program editor reads the device's own virtual-receiver
+// channel numbers and uses `number - 1` as the bit:
 //
-// This table therefore COMPUTES what the CCU looks up, and it is correct only
-// while a device lays its virtual channels out actor-major in groups of three.
-// The editor does not assume that: `maxVirtCounter = (this.isWGTC) ? 4 : 3`
-// (same file, line 3285), and `isWGTC` is every device type whose id contains
-// HmIP-WGTC (line 284). So the counterexample is not hypothetical — the
-// firmware names one, and this table mis-addresses it, silently, with no test
-// here that would notice. The same gap the channelKeyBitmask table carries,
-// with one device family already known to fall in it.
+//	valCheckBox = Math.pow(2, (self.virtualChannels[index] - 1))
+//	                        (www/config/easymodes/js/HmIPWeeklyProgram.js:2918)
+//	this.virtualChannels = getWPVirtualChannels(device.channels, expert)
+//	                        (same file, :394; the collector is at :200)
 //
-// Settling it needs a device: one bit set, and an observation of which channel
-// stops following its program.
-var targetChannelBitPos = map[string]uint{
-	"1_1": 0, "1_2": 1, "1_3": 2,
-	"2_1": 3, "2_2": 4, "2_3": 5,
-	"3_1": 6, "3_2": 7, "3_3": 8,
-	"4_1": 9, "4_2": 10, "4_3": 11,
-	"5_1": 12, "5_2": 13, "5_3": 14,
-	"6_1": 15, "6_2": 16, "6_3": 17,
-	"7_1": 18, "7_2": 19, "7_3": 20,
-	"8_1": 21, "8_2": 22, "8_3": 23,
+// A formula replaced that lookup here — 3*(actor-1) + (sub-1) — and it is only
+// right for a device whose virtual receivers run contiguously from channel 1.
+// The firmware carries explicit lists for several that do not: HmIP-BSL on
+// firmware 2 is [4,5,6,8,9,10,12,13,14] (7 and 11 are skipped), HmIP-WKP is
+// [1,3,5,7,9,11,13,15], HmIP-WGS is [7,9,10,11], HmIP-SMO230 is [10,11,12] and
+// a window drive is [2] — same file, :394-418. On each of those the formula
+// addressed a channel the operator did not pick, silently, on a real device.
+//
+// So the bit comes from the device now. The daemon already resolves each key
+// to a real channel for `available_target_channels`
+// (adapter.deriveTargetChannels), which is the same resolution the editor
+// performs, so nothing new has to be discovered — it only has to reach here.
+type TargetChannelBits map[string]uint
+
+// TargetChannelBitsFrom builds the bit map from the resolved target channels.
+//
+// Returns nil when nothing can be resolved. Callers treat that as "do not
+// write TARGET_CHANNELS at all" rather than falling back to the formula: an
+// unwritten optional field leaves the device holding what it had, while a
+// guessed one switches a channel nobody selected.
+func TargetChannelBitsFrom(channels map[string]TargetChannelInfo) TargetChannelBits {
+	if len(channels) == 0 {
+		return nil
+	}
+	out := make(TargetChannelBits, len(channels))
+	for key, info := range channels {
+		if info.ChannelNo < 1 {
+			continue
+		}
+		out[key] = uint(info.ChannelNo - 1)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // TargetChannelsListToBitmask encodes a slice of "actor_sub" channel
 // strings into the CCU TARGET_CHANNELS integer bitmask.
 // Mirrors Python `_list_to_bitwise` for ScheduleField.TARGET_CHANNELS.
-func TargetChannelsListToBitmask(channels []string) int {
-	mask := 0
-	for _, ch := range channels {
-		if bit, ok := targetChannelBitPos[ch]; ok {
-			mask |= 1 << bit
-		}
+func TargetChannelsListToBitmask(channels []string, bits TargetChannelBits) (mask int, ok bool) {
+	if bits == nil {
+		return 0, false
 	}
-	return mask
+	for _, ch := range channels {
+		bit, known := bits[ch]
+		if !known {
+			// A key the device does not resolve is not silently dropped into a
+			// mask that then means something else: the whole field is withheld,
+			// so the device keeps the targets it holds.
+			return 0, false
+		}
+		mask |= 1 << bit
+	}
+	return mask, true
 }
 
 // TargetChannelsBitmaskToList expands the CCU TARGET_CHANNELS integer
 // bitmask into a sorted "actor_sub" channel string slice.
 // Mirrors Python `_bitwise_to_list` for ScheduleField.TARGET_CHANNELS.
-func TargetChannelsBitmaskToList(mask int) []string {
-	if mask == 0 {
+func TargetChannelsBitmaskToList(mask int, bits TargetChannelBits) []string {
+	if mask == 0 || bits == nil {
 		return nil
 	}
-	// Ordered iteration: actors 1..8 × subs 1..3.
-	var out []string
-	for actor := 1; actor <= 8; actor++ {
-		for sub := 1; sub <= 3; sub++ {
-			key := fmt.Sprintf("%d_%d", actor, sub)
-			bit, ok := targetChannelBitPos[key]
-			if !ok {
-				continue
-			}
-			if mask&(1<<bit) != 0 {
-				out = append(out, key)
-			}
+	// Ordered by bit position, so the result is stable and reads the way the
+	// CCU's own editor lays the checkboxes out.
+	type keyed struct {
+		key string
+		bit uint
+	}
+	set := make([]keyed, 0, len(bits))
+	for key, bit := range bits {
+		if mask&(1<<bit) != 0 {
+			set = append(set, keyed{key: key, bit: bit})
 		}
+	}
+	sort.Slice(set, func(i, j int) bool { return set[i].bit < set[j].bit })
+	out := make([]string, 0, len(set))
+	for _, k := range set {
+		out = append(out, k.key)
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

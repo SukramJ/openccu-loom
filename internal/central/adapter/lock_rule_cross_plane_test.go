@@ -26,6 +26,15 @@ import (
 // neither plane is checked against its own copy of the rule. It bites when one
 // plane grows a private threshold or prefix rule again.
 
+// lockCrossPlaneBits pins the three actor_sub keys these fixtures use to the
+// real device channel numbers a lock-plus-permission device with virtual
+// receivers on channels 1, 2 and 3 would resolve (bit = channel number - 1,
+// see [weekprofile.TargetChannelBitsFrom]). Both read planes below must
+// resolve the same map for the cross-plane comparison to mean anything: the
+// REST leg takes it explicitly, the week-profile leg resolves it from the
+// channel's attached WeekProfile, mirroring production wiring.
+var lockCrossPlaneBits = weekprofile.TargetChannelBits{"1_1": 0, "2_1": 1, "1_3": 2}
+
 // lockRuleCrossPlaneCase is one raw-paramset fixture: the target channels
 // straddle the actor-1 prefix rule, the level straddles the permission
 // threshold, and the duration pair straddles the "permanent" sentinel that
@@ -73,12 +82,13 @@ func lockRuleCrossPlaneCases() []lockRuleCrossPlaneCase {
 
 // lockRuleCrossPlaneRaw builds the single-slot MASTER paramset both planes read.
 func lockRuleCrossPlaneRaw(c lockRuleCrossPlaneCase) map[string]any {
+	mask, _ := weekprofile.TargetChannelsListToBitmask(c.channels, lockCrossPlaneBits)
 	return map[string]any{
 		"01_WP_WEEKDAY":         weekprofile.WeekdayListToBitmask([]schedule.Weekday{schedule.WeekdayMonday}),
 		"01_WP_FIXED_HOUR":      7,
 		"01_WP_FIXED_MINUTE":    30,
 		"01_WP_LEVEL":           c.level,
-		"01_WP_TARGET_CHANNELS": weekprofile.TargetChannelsListToBitmask(c.channels),
+		"01_WP_TARGET_CHANNELS": mask,
 		"01_WP_DURATION_BASE":   c.durBase,
 		"01_WP_DURATION_FACTOR": c.durFactor,
 	}
@@ -97,6 +107,12 @@ func lockRuleCrossPlaneWeekProfileLoad(t *testing.T, raw map[string]any) *schedu
 		ScheduleType:   weekprofile.ScheduleTypeDefault,
 		ProfileCount:   1,
 	})
+	wp.SetAvailableTargetChannels(map[string]weekprofile.TargetChannelInfo{
+		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary"},
+		"2_1": {ChannelNo: 2, ChannelAddress: ch.Address, ChannelType: "secondary"},
+		"1_3": {ChannelNo: 3, ChannelAddress: ch.Address, ChannelType: "secondary"},
+	})
+	ch.AttachWeekProfile(wp)
 	bindDefaultScheduleIO(ch, wp, "lock")
 	if wp.Simple() == nil {
 		t.Fatal("bindDefaultScheduleIO did not attach a Simple profile")
@@ -122,7 +138,7 @@ func TestLockSlotVerdictAgreesAcrossReadPlanes(t *testing.T) {
 			t.Parallel()
 			raw := lockRuleCrossPlaneRaw(c)
 
-			restEntries := parseSimpleScheduleWithDomain(raw, "lock")
+			restEntries := parseSimpleScheduleWithDomain(raw, "lock", lockCrossPlaneBits)
 			if len(restEntries) != 1 {
 				t.Fatalf("REST leg: got %d entries, want 1", len(restEntries))
 			}

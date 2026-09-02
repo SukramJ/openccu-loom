@@ -486,7 +486,7 @@ func TestSimpleParamsetRoundTrip(t *testing.T) {
 		Level:    0.5,
 	})
 
-	raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+	raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -502,7 +502,7 @@ func TestSimpleParamsetRoundTrip(t *testing.T) {
 		t.Error("group 3 weekday must be zero")
 	}
 
-	got, err := ParseSimpleRawParamset(raw)
+	got, err := ParseSimpleRawParamset(raw, nil)
 	if err != nil {
 		t.Fatalf("ParseSimpleRawParamset: %v", err)
 	}
@@ -527,7 +527,7 @@ func TestSimpleParamsetColorRoundTrip(t *testing.T) {
 		"03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":  ct,
 		"03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE": cv,
 	}
-	s, err := ParseSimpleRawParamset(raw)
+	s, err := ParseSimpleRawParamset(raw, nil)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -539,7 +539,7 @@ func TestSimpleParamsetColorRoundTrip(t *testing.T) {
 		t.Fatalf("colour not parsed: %+v", entry)
 	}
 
-	out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+	out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -564,7 +564,7 @@ func TestParseSimpleRawParamsetSkipsInactiveGroups(t *testing.T) {
 		"05_WP_FIXED_MINUTE": 0,
 		"05_WP_LEVEL":        1.0,
 	}
-	got, err := ParseSimpleRawParamset(raw)
+	got, err := ParseSimpleRawParamset(raw, nil)
 	if err != nil {
 		t.Fatalf("ParseSimpleRawParamset: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestParseSimpleRawParamsetSkipsInactiveGroups(t *testing.T) {
 
 func TestBuildSimpleRawParamsetNilIsAllZeros(t *testing.T) {
 	t.Parallel()
-	raw, err := BuildSimpleRawParamset(nil, schedule.SimpleMaxSlot)
+	raw, err := BuildSimpleRawParamset(nil, schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -871,7 +871,7 @@ func TestBuildSimpleRawParamsetWritesEveryLockActionDuration(t *testing.T) {
 				TargetChannels: []string{"1_1"},
 			}
 
-			raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+			raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}

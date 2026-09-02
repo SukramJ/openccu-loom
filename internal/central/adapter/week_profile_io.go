@@ -115,6 +115,25 @@ func bindClimateScheduleIO(ch *device.Channel, wp *weekprofile.ProfileDataPoint)
 // lock_mode / lock_action / permission as combinations of those, so the loader
 // has to decode them explicitly for the read surfaces (MQTT Zeitplan attrs) to
 // show the real lock action rather than three permanent nulls.
+// targetChannelBits resolves the TARGET_CHANNELS bit positions for a schedule
+// channel from the device's own channel numbers.
+//
+// The map is the one already built for `available_target_channels`
+// ([deriveTargetChannels]), which is the same resolution the CCU's weekly-
+// program editor performs. Returns nil when the device yields none — the
+// encoder then withholds the field instead of computing a position that would
+// switch a channel the operator did not pick.
+func targetChannelBits(ch *device.Channel) weekprofile.TargetChannelBits {
+	if ch == nil {
+		return nil
+	}
+	wp := ch.WeekProfile()
+	if wp == nil {
+		return nil
+	}
+	return weekprofile.TargetChannelBitsFrom(wp.AvailableTargetChannels())
+}
+
 type defaultChannelLoader struct {
 	ch     *device.Channel
 	domain string
@@ -131,7 +150,7 @@ func (l *defaultChannelLoader) Load(ctx context.Context) (*schedule.Simple, erro
 	if err != nil {
 		return nil, fmt.Errorf("schedule.load.simple: GetParamset: %w", err)
 	}
-	s, err := weekprofile.ParseSimpleRawParamset(values)
+	s, err := weekprofile.ParseSimpleRawParamset(values, targetChannelBits(l.ch))
 	if err != nil {
 		return nil, fmt.Errorf("schedule.load.simple: parse raw paramset: %w", err)
 	}
@@ -186,7 +205,7 @@ func (sv *defaultChannelSaver) Save(ctx context.Context, s *schedule.Simple) err
 	if w == nil {
 		return ErrChannelNotWired
 	}
-	values, err := weekprofile.BuildSimpleRawParamset(s, sv.declaredGroups(ctx))
+	values, err := weekprofile.BuildSimpleRawParamset(s, sv.declaredGroups(ctx), targetChannelBits(sv.ch))
 	if err != nil {
 		return fmt.Errorf("schedule.save.simple: %w", err)
 	}

@@ -445,7 +445,9 @@ func TestParseSimpleScheduleWithDomainNonLock(t *testing.T) {
 		"01_WP_FIXED_MINUTE": 30,
 		"01_WP_LEVEL":        1.0,
 	}
-	entries := parseSimpleScheduleWithDomain(raw, "switch")
+	// Non-lock domain: target channels are not asserted here, so nil is
+	// honest — it just means TARGET_CHANNELS is not decoded.
+	entries := parseSimpleScheduleWithDomain(raw, "switch", nil)
 	if len(entries) != 1 {
 		t.Fatalf("got %d entries, want 1", len(entries))
 	}
@@ -454,6 +456,13 @@ func TestParseSimpleScheduleWithDomainNonLock(t *testing.T) {
 	}
 }
 
+// lockDomainBits pins a device whose door-lock actor is real channel 1
+// ("1_1") and permission actor is real channel 2 ("2_1") — bit = channel
+// number - 1, per [weekprofile.TargetChannelBitsFrom]. This is the map the
+// caller (targetChannelBitsFor) would resolve for such a device; it is not
+// derived from the old 3*(actor-1)+(sub-1) formula.
+var lockDomainBits = weekprofile.TargetChannelBits{"1_1": 0, "2_1": 1}
+
 func TestParseSimpleScheduleWithDomainLockDoorLock(t *testing.T) {
 	t.Parallel()
 	raw := map[string]any{
@@ -461,9 +470,9 @@ func TestParseSimpleScheduleWithDomainLockDoorLock(t *testing.T) {
 		"01_WP_FIXED_HOUR":      7,
 		"01_WP_FIXED_MINUTE":    30,
 		"01_WP_LEVEL":           0.0,
-		"01_WP_TARGET_CHANNELS": 1, // bit 0 → 1_1
+		"01_WP_TARGET_CHANNELS": 1, // bit 0 → 1_1 (channel 1)
 	}
-	entries := parseSimpleScheduleWithDomain(raw, "lock")
+	entries := parseSimpleScheduleWithDomain(raw, "lock", lockDomainBits)
 	if len(entries) != 1 {
 		t.Fatalf("got %d entries, want 1", len(entries))
 	}
@@ -479,9 +488,9 @@ func TestParseSimpleScheduleWithDomainLockUserPermission(t *testing.T) {
 		"01_WP_FIXED_HOUR":      7,
 		"01_WP_FIXED_MINUTE":    30,
 		"01_WP_LEVEL":           1.0,
-		"01_WP_TARGET_CHANNELS": 8, // bit 3 → 2_1 (channel 2)
+		"01_WP_TARGET_CHANNELS": 2, // bit 1 → 2_1 (channel 2)
 	}
-	entries := parseSimpleScheduleWithDomain(raw, "lock")
+	entries := parseSimpleScheduleWithDomain(raw, "lock", lockDomainBits)
 	if len(entries) != 1 {
 		t.Fatalf("got %d entries, want 1", len(entries))
 	}
@@ -564,12 +573,12 @@ func TestParseTimeBaseFactor(t *testing.T) {
 
 func TestDecodeEncodeTargetChannels(t *testing.T) {
 	t.Parallel()
-	// Encode "1_1" (bit 0) → 1, then decode back.
-	encoded := weekprofile.TargetChannelsListToBitmask([]string{"1_1"})
-	if encoded == 0 {
-		t.Fatal("TargetChannelsListToBitmask(1_1) = 0, want non-zero")
+	// Encode "1_1" (bit 0 for this device's bits map) → 1, then decode back.
+	encoded, ok := weekprofile.TargetChannelsListToBitmask([]string{"1_1"}, lockDomainBits)
+	if !ok || encoded == 0 {
+		t.Fatalf("TargetChannelsListToBitmask(1_1) = (%d, %v), want (non-zero, true)", encoded, ok)
 	}
-	decoded := weekprofile.TargetChannelsBitmaskToList(encoded)
+	decoded := weekprofile.TargetChannelsBitmaskToList(encoded, lockDomainBits)
 	found := slices.Contains(decoded, "1_1")
 	if !found {
 		t.Errorf("TargetChannelsBitmaskToList → %v, expected to contain 1_1", decoded)
@@ -578,15 +587,33 @@ func TestDecodeEncodeTargetChannels(t *testing.T) {
 
 func TestDecodeTargetChannelsZero(t *testing.T) {
 	t.Parallel()
-	if got := weekprofile.TargetChannelsBitmaskToList(0); len(got) != 0 {
+	if got := weekprofile.TargetChannelsBitmaskToList(0, lockDomainBits); len(got) != 0 {
 		t.Errorf("TargetChannelsBitmaskToList(0) = %v, want empty", got)
 	}
 }
 
 func TestEncodeTargetChannelsEmpty(t *testing.T) {
 	t.Parallel()
-	if got := weekprofile.TargetChannelsListToBitmask(nil); got != 0 {
-		t.Errorf("TargetChannelsListToBitmask(nil) = %d, want 0", got)
+	if got, ok := weekprofile.TargetChannelsListToBitmask(nil, lockDomainBits); got != 0 || !ok {
+		t.Errorf("TargetChannelsListToBitmask(nil) = (%d, %v), want (0, true)", got, ok)
+	}
+}
+
+func TestDecodeTargetChannelsNilBits(t *testing.T) {
+	t.Parallel()
+	// A device whose target channels could not be resolved (nil bits) must
+	// not fall back to a guessed formula: the field decodes empty.
+	if got := weekprofile.TargetChannelsBitmaskToList(1, nil); len(got) != 0 {
+		t.Errorf("TargetChannelsBitmaskToList(1, nil) = %v, want empty", got)
+	}
+}
+
+func TestEncodeTargetChannelsNilBits(t *testing.T) {
+	t.Parallel()
+	// Same for the encode direction: no bits map means the caller withholds
+	// TARGET_CHANNELS entirely rather than writing a guessed mask.
+	if _, ok := weekprofile.TargetChannelsListToBitmask([]string{"1_1"}, nil); ok {
+		t.Error("TargetChannelsListToBitmask([1_1], nil) ok = true, want false")
 	}
 }
 

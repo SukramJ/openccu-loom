@@ -8119,7 +8119,7 @@ func TestParseSimpleSchedule_Level2(t *testing.T) {
 		"01_WP_LEVEL":        0.7,
 		"01_WP_LEVEL_2":      0.3,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -8148,7 +8148,7 @@ func TestParseSimpleSchedule_AstroCondition(t *testing.T) {
 		"01_WP_ASTRO_TYPE":   1, // sunset
 		"01_WP_ASTRO_OFFSET": 15,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -8180,7 +8180,7 @@ func TestParseSimpleSchedule_Duration(t *testing.T) {
 		"01_WP_RAMP_TIME_BASE":   0,
 		"01_WP_RAMP_TIME_FACTOR": 5,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -8206,12 +8206,13 @@ func TestParseSimpleScheduleWithDomain_LockDomain(t *testing.T) {
 		"01_WP_FIXED_HOUR":      10,
 		"01_WP_FIXED_MINUTE":    0,
 		"01_WP_LEVEL":           0.0,
-		"01_WP_TARGET_CHANNELS": 1, // bit 0 = "1_1"
+		"01_WP_TARGET_CHANNELS": 1, // value irrelevant: nil bits below withhold TARGET_CHANNELS
 		"01_WP_DURATION_BASE":   2,
 		"01_WP_DURATION_FACTOR": 1,
 	}
-	// domain="lock" triggers the lock path
-	entries := parseSimpleScheduleWithDomain(raw, "lock")
+	// domain="lock" triggers the lock path; nil bits is fine here since the
+	// test only exercises "no panic", not a specific decoded TargetChannels.
+	entries := parseSimpleScheduleWithDomain(raw, "lock", nil)
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -10207,7 +10208,7 @@ func TestParseSimpleSchedule_AstroTypeBranch(t *testing.T) {
 		"1_WP_ASTRO_TYPE": 0, // 0 → "sunrise"
 		"1_WP_FIXED_HOUR": 8,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) == 0 {
 		t.Fatal("expected at least one SimpleScheduleEntry")
 	}
@@ -10225,7 +10226,7 @@ func TestParseSimpleSchedule_AstroTypeSunset(t *testing.T) {
 		"2_WP_CONDITION":  1, // "astro"
 		"2_WP_ASTRO_TYPE": 1, // 1 → "sunset"
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) == 0 {
 		t.Fatal("expected at least one SimpleScheduleEntry")
 	}
@@ -11154,7 +11155,7 @@ func TestParseSimpleSchedule_SlotNumberOverflow(t *testing.T) {
 	raw := map[string]any{
 		"99999999999999999999_WP_WEEKDAY": 1,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	// The overflow slot is skipped via continue → no entries.
 	if len(entries) != 0 {
 		t.Errorf("expected 0 entries after overflow slot, got %d", len(entries))

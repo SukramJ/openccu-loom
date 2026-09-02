@@ -6,6 +6,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Target channels were addressed by a formula the CCU does not use, and it
+  was wrong for every device whose channels are not numbered from 1 without
+  gaps.** The bit position in the TARGET_CHANNELS mask was computed as
+  `3*(actor-1) + (sub-1)`. The CCU computes nothing: its weekly-program editor
+  reads the device's own virtual-receiver channel numbers and uses
+  `number - 1` as the bit (`HmIPWeeklyProgram.js:2918`, list built at `:394`
+  by the collector at `:200`). The firmware carries explicit lists for devices
+  that do not run contiguously — HmIP-BSL on firmware 2 is
+  `[4,5,6,8,9,10,12,13,14]`, HmIP-WKP is `[1,3,5,7,9,11,13,15]`, HmIP-WGS is
+  `[7,9,10,11]`, HmIP-SMO230 is `[10,11,12]`, a window drive is `[2]`. On each
+  of those, a schedule slot addressed a channel the operator had not selected,
+  on real hardware, silently.
+
+  The bit comes from the device now, through the same resolution the daemon
+  already performs for `available_target_channels`. Where a device yields no
+  resolution the field is withheld rather than guessed: an unwritten optional
+  field leaves the device holding what it had, while a guessed one switches
+  something nobody picked. A single unresolvable key withholds the whole mask,
+  because a partial mask is a different selection rather than a smaller one.
+
+  Nothing had ever asserted a TARGET_CHANNELS value, in either direction —
+  which is how the formula survived. `TestTargetChannelBitsFollowTheDeviceNotAFormula`
+  pins the rule against the firmware's own device lists, and the old formula
+  fails every gapped one of them while still passing the contiguous case.
+
+- **Correction to 0.72.1.** That release's comment and changelog said the
+  firmware's `maxVirtCounter = (this.isWGTC) ? 4 : 3` showed HmIP-WGTC being
+  mis-addressed. That was not supported: the variable governs how many target
+  checkboxes are pre-checked (its own source comment cites SPHM-367,
+  "activate only the first virtual channel"), not how a bit is assigned, and
+  HmIP-WGTC appears in no channel list. The reasoning was right that the
+  formula was unsound and wrong about why. The entry above replaces it with
+  the rule read from the source.
+
+
 ## [0.72.1] - 2026-09-02
 
 ### Fixed

@@ -199,7 +199,7 @@ func fixtureSimpleScheduleHmIPPSM() map[string]any {
 
 func TestParseSimpleScheduleActiveSlots(t *testing.T) {
 	t.Parallel()
-	entries := parseSimpleSchedule(fixtureSimpleScheduleHmIPPSM())
+	entries := parseSimpleSchedule(fixtureSimpleScheduleHmIPPSM(), nil)
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 active slots, got %d: %+v", len(entries), entries)
 	}
@@ -224,7 +224,7 @@ func TestSerializeSimpleScheduleZeroesUnusedSlots(t *testing.T) {
 			Time:     "07:30",
 			Level:    1,
 		},
-	}, schedulemodel.SimpleMaxSlot)
+	}, schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -250,15 +250,22 @@ func TestSerializeSimpleScheduleRoundTrip(t *testing.T) {
 		{SlotNo: 1, Weekdays: []string{"MONDAY", "TUESDAY"}, Time: "06:30", Level: 1, Condition: "fixed_time"},
 		{SlotNo: 2, Weekdays: []string{"SATURDAY", "SUNDAY"}, Time: "08:00", Level: 0.5, Condition: "fixed_time"},
 	}
-	raw, err := serializeSimpleSchedule(in, schedulemodel.SimpleMaxSlot)
+	raw, err := serializeSimpleSchedule(in, schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
-	out := parseSimpleSchedule(raw)
+	out := parseSimpleSchedule(raw, nil)
 	if !reflect.DeepEqual(out, in) {
 		t.Errorf("round-trip mismatch:\n  got  %+v\n  want %+v", out, in)
 	}
 }
+
+// astroDurationTargetBits pins a device whose two virtual receivers are its
+// own real channels 1 and 2 — bit = channel number - 1, per
+// [weekprofile.TargetChannelBitsFrom]. Not the old 3*(actor-1)+(sub-1)
+// formula: that gave "2_1" bit 3, which only a device with contiguous
+// channels 1..4 would ever resolve to.
+var astroDurationTargetBits = weekprofile.TargetChannelBits{"1_1": 0, "2_1": 1}
 
 func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {
 	t.Parallel()
@@ -276,7 +283,7 @@ func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {
 			RampTime:           "500ms",
 		},
 	}
-	raw, err := serializeSimpleSchedule(in, schedulemodel.SimpleMaxSlot)
+	raw, err := serializeSimpleSchedule(in, schedulemodel.SimpleMaxSlot, astroDurationTargetBits)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -289,9 +296,9 @@ func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {
 	if raw["01_WP_ASTRO_OFFSET"] != -15 {
 		t.Errorf("ASTRO_OFFSET: got %v, want -15", raw["01_WP_ASTRO_OFFSET"])
 	}
-	// Target channels: 1_1 = bit 0 (=1), 2_1 = bit 3 (=8) → 9
-	if raw["01_WP_TARGET_CHANNELS"] != 9 {
-		t.Errorf("TARGET_CHANNELS: got %v, want 9", raw["01_WP_TARGET_CHANNELS"])
+	// Target channels: 1_1 = bit 0 (=1), 2_1 = bit 1 (=2) → 3
+	if raw["01_WP_TARGET_CHANNELS"] != 3 {
+		t.Errorf("TARGET_CHANNELS: got %v, want 3", raw["01_WP_TARGET_CHANNELS"])
 	}
 	// Duration "10s" → base SEC_10 (3) × factor 1 OR base SEC_1 (1) × factor 10. Heuristic picks largest.
 	dBase := raw["01_WP_DURATION_BASE"].(int)
@@ -306,7 +313,7 @@ func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {
 			raw["01_WP_RAMP_TIME_BASE"], raw["01_WP_RAMP_TIME_FACTOR"])
 	}
 	// Re-parse should recover everything.
-	out := parseSimpleSchedule(raw)
+	out := parseSimpleSchedule(raw, astroDurationTargetBits)
 	if len(out) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(out))
 	}
@@ -527,7 +534,7 @@ func baseEntry(slot int) hmapi.SimpleScheduleEntry {
 func TestSerializeSimpleScheduleSlotOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(0) // slot 0 is out of range
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("slot 0 must error")
 	}
@@ -540,12 +547,12 @@ func TestSerializeSimpleScheduleSlotTooHigh(t *testing.T) {
 	// the device declares up to schedulemodel.SimpleMaxSlot groups and edits
 	// all of them. Only past the model's limit is out of range.
 	if _, err := serializeSimpleSchedule(
-		[]hmapi.SimpleScheduleEntry{baseEntry(25)}, schedulemodel.SimpleMaxSlot,
+		[]hmapi.SimpleScheduleEntry{baseEntry(25)}, schedulemodel.SimpleMaxSlot, nil,
 	); err != nil {
 		t.Errorf("slot 25 must serialize: %v", err)
 	}
 	if _, err := serializeSimpleSchedule(
-		[]hmapi.SimpleScheduleEntry{baseEntry(schedulemodel.SimpleMaxSlot + 1)}, schedulemodel.SimpleMaxSlot,
+		[]hmapi.SimpleScheduleEntry{baseEntry(schedulemodel.SimpleMaxSlot + 1)}, schedulemodel.SimpleMaxSlot, nil,
 	); err == nil {
 		t.Errorf("slot %d must error", schedulemodel.SimpleMaxSlot+1)
 	}
@@ -555,7 +562,7 @@ func TestSerializeSimpleScheduleDuplicateSlot(t *testing.T) {
 	t.Parallel()
 	e1 := baseEntry(1)
 	e2 := baseEntry(1)
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e1, e2}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e1, e2}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("duplicate slot must error")
 	}
@@ -565,7 +572,7 @@ func TestSerializeSimpleScheduleNoWeekday(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Weekdays = nil // empty weekday list
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("no weekday must error")
 	}
@@ -575,7 +582,7 @@ func TestSerializeSimpleScheduleInvalidTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Time = "not-a-time"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("invalid time must error")
 	}
@@ -585,7 +592,7 @@ func TestSerializeSimpleScheduleUnknownCondition(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Condition = "NOT_A_REAL_CONDITION_X99"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("unknown condition must error")
 	}
@@ -595,7 +602,7 @@ func TestSerializeSimpleScheduleUnknownAstroType(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroType = "moonrise" // not sunrise or sunset
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("unknown astro_type must error")
 	}
@@ -605,7 +612,7 @@ func TestSerializeSimpleScheduleAstroOffsetOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroOffsetMinutes = 800 // > 720
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("astro offset > 720 must error")
 	}
@@ -615,7 +622,7 @@ func TestSerializeSimpleScheduleAstroOffsetNegativeOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroOffsetMinutes = -800 // < -720
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("astro offset < -720 must error")
 	}
@@ -625,7 +632,7 @@ func TestSerializeSimpleScheduleSunsetAstroType(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroType = "sunset"
-	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("sunset astro_type: %v", err)
 	}
@@ -639,7 +646,7 @@ func TestSerializeSimpleScheduleLevel2NonNil(t *testing.T) {
 	e := baseEntry(1)
 	level2 := 0.75
 	e.Level2 = &level2
-	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("Level2 non-nil: %v", err)
 	}
@@ -652,7 +659,7 @@ func TestSerializeSimpleScheduleInvalidDuration(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Duration = "not-a-duration"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("invalid duration must error")
 	}
@@ -662,7 +669,7 @@ func TestSerializeSimpleScheduleInvalidRampTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.RampTime = "not-a-ramp"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err == nil {
 		t.Error("invalid ramp_time must error")
 	}
@@ -672,7 +679,7 @@ func TestSerializeSimpleScheduleValidRampTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.RampTime = "10s"
-	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("valid ramp_time: %v", err)
 	}
@@ -776,7 +783,7 @@ func TestSerializeSimpleScheduleLockAutorelockEnd(t *testing.T) {
 			LockAction: "lock_autorelock_end",
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedulemodel.SimpleMaxSlot)
+	m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain lock autorelock_end: %v", err)
 	}
@@ -819,7 +826,7 @@ func TestParseSimpleScheduleSurfacesPermanentAsItsOwnValue(t *testing.T) {
 		"02_WP_RAMP_TIME_BASE":   7,
 		"02_WP_RAMP_TIME_FACTOR": 31,
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) != 1 {
 		t.Fatalf("parseSimpleSchedule returned %d entries, want 1", len(entries))
 	}
@@ -848,7 +855,7 @@ func TestParseSimpleScheduleEmitsValidDuration(t *testing.T) {
 		"03_WP_DURATION_BASE":   4,  // MIN_1
 		"03_WP_DURATION_FACTOR": 10, // -> 10min
 	}
-	entries := parseSimpleSchedule(raw)
+	entries := parseSimpleSchedule(raw, nil)
 	if len(entries) != 1 {
 		t.Fatalf("parseSimpleSchedule returned %d entries, want 1", len(entries))
 	}
@@ -874,7 +881,7 @@ func TestSerializeSimpleScheduleSwitchEmptyDuration(t *testing.T) {
 			Level:    1.0,
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedulemodel.SimpleMaxSlot)
+	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain switch: %v", err)
 	}
@@ -910,7 +917,7 @@ func TestSerializeSimpleScheduleSwitchWithDuration(t *testing.T) {
 			Duration: "5min",
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedulemodel.SimpleMaxSlot)
+	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedulemodel.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain switch 5min: %v", err)
 	}

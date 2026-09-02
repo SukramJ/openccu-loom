@@ -509,7 +509,7 @@ func TestSimpleParamsetConvertRawToDictSchedule(t *testing.T) {
 		"INVALID_FORMAT":     42, // skipped
 		"01_INVALID":         42, // skipped
 	}
-	got, err := ParseSimpleRawParamset(raw)
+	got, err := ParseSimpleRawParamset(raw, nil)
 	if err != nil {
 		t.Fatalf("ParseSimpleRawParamset: %v", err)
 	}
@@ -546,7 +546,7 @@ func TestSimpleParamsetFiltersInactive(t *testing.T) {
 		"01_WP_FIXED_MINUTE": 0,
 		// no WEEKDAY → defaults to 0 → inactive
 	}
-	got, err := ParseSimpleRawParamset(raw)
+	got, err := ParseSimpleRawParamset(raw, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestSimpleParamsetBuildDictToRaw(t *testing.T) {
 	if err := ss.Put(1, entry); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	got, err := BuildSimpleRawParamset(ss, schedule.SimpleMaxSlot)
+	got, err := BuildSimpleRawParamset(ss, schedule.SimpleMaxSlot, nil)
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -620,7 +620,7 @@ func TestSimpleRawParamsetRoundTripsGroupsAboveTwentyFour(t *testing.T) {
 				fmt.Sprintf("%02d_WP_LEVEL", group):           1.0,
 				fmt.Sprintf("%02d_WP_TARGET_CHANNELS", group): 1,
 			}
-			s, err := ParseSimpleRawParamset(raw)
+			s, err := ParseSimpleRawParamset(raw, nil)
 			if err != nil {
 				t.Fatalf("ParseSimpleRawParamset: %v", err)
 			}
@@ -634,7 +634,7 @@ func TestSimpleRawParamsetRoundTripsGroupsAboveTwentyFour(t *testing.T) {
 
 			// And back out again: a schedule that survives the read must
 			// survive the write, or an operator opening it loses it.
-			out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+			out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}
@@ -660,7 +660,7 @@ func TestBuildSimpleRawParamsetHonoursTheDeactivationBound(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 
-	out, err := BuildSimpleRawParamset(s, 69)
+	out, err := BuildSimpleRawParamset(s, 69, nil)
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -673,7 +673,7 @@ func TestBuildSimpleRawParamsetHonoursTheDeactivationBound(t *testing.T) {
 
 	// Bound 0 means "device unknown": write the active groups, touch
 	// nothing else.
-	none, err := BuildSimpleRawParamset(s, 0)
+	none, err := BuildSimpleRawParamset(s, 0, nil)
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}

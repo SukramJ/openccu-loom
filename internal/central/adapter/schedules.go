@@ -489,7 +489,7 @@ func (s *SchedulesDomain) GetClimateSchedule(
 	}
 	if hasSimpleScheduleParams(values) {
 		domain := s.detectScheduleDomain(deviceAddress, channelNo)
-		entries := parseSimpleScheduleWithDomain(values, domain)
+		entries := parseSimpleScheduleWithDomain(values, domain, s.targetChannelBitsFor(deviceAddress, channelNo))
 		return &hmapi.ClimateSchedule{
 			Channel:       chRef,
 			Kind:          "simple",
@@ -519,6 +519,35 @@ func hasColorScheduleParams(raw map[string]any) bool {
 // classify the schedule into one of the user-facing buckets. Same
 // Idea as
 // which fields the SPA editor shows.
+// targetChannelBitsFor resolves the TARGET_CHANNELS bit positions for a
+// schedule channel, the same way [detectScheduleDomain] resolves its domain.
+//
+// The positions are the device's own virtual-receiver channel numbers minus
+// one — what the CCU's weekly-program editor reads rather than computes. A
+// device that yields none returns nil, and the encoder then withholds the
+// field instead of guessing a position; see [weekprofile.TargetChannelBits].
+func (s *SchedulesDomain) targetChannelBitsFor(deviceAddress string, scheduleChannelNo int) weekprofile.TargetChannelBits {
+	if s.registry == nil {
+		return nil
+	}
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
+		if !ok {
+			continue
+		}
+		ch := dev.Channel(fmt.Sprintf("%s:%d", deviceAddress, scheduleChannelNo))
+		if ch == nil {
+			return nil
+		}
+		wp := ch.WeekProfile()
+		if wp == nil {
+			return nil
+		}
+		return weekprofile.TargetChannelBitsFrom(wp.AvailableTargetChannels())
+	}
+	return nil
+}
+
 func (s *SchedulesDomain) detectScheduleDomain(deviceAddress string, scheduleChannelNo int) string {
 	if s.registry == nil {
 		return ""
@@ -712,8 +741,8 @@ func stripUnsupportedFields(entries []hmapi.SimpleScheduleEntry, domain string) 
 	}
 }
 
-func parseSimpleScheduleWithDomain(raw map[string]any, domain string) []hmapi.SimpleScheduleEntry {
-	entries := parseSimpleSchedule(raw)
+func parseSimpleScheduleWithDomain(raw map[string]any, domain string, bits weekprofile.TargetChannelBits) []hmapi.SimpleScheduleEntry {
+	entries := parseSimpleSchedule(raw, bits)
 	stripUnsupportedFields(entries, domain)
 	if domain != "lock" {
 		return entries
@@ -761,8 +790,8 @@ func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationF
 // implementations of the same format, which meant every defect in it had
 // to be found twice — Sunday's bit, the group limit and six of the eight
 // condition names each cost a release that way.
-func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry {
-	s, err := weekprofile.ParseSimpleRawParamset(raw)
+func parseSimpleSchedule(raw map[string]any, bits weekprofile.TargetChannelBits) []hmapi.SimpleScheduleEntry {
+	s, err := weekprofile.ParseSimpleRawParamset(raw, bits)
 	if err != nil {
 		// The parser reports the CCU's data as it finds it and has no
 		// failure mode of its own; an error here means the paramset was
@@ -860,7 +889,7 @@ func simpleScheduleToDomain(entries []hmapi.SimpleScheduleEntry) (*schedule.Simp
 // SPA users edit the friendly fields, the wire ends up consistent
 // With.
 func serializeSimpleScheduleWithDomain(
-	entries []hmapi.SimpleScheduleEntry, domain string, deactivateUpTo int,
+	entries []hmapi.SimpleScheduleEntry, domain string, deactivateUpTo int, bits weekprofile.TargetChannelBits,
 ) (map[string]any, error) {
 	if domain == "lock" {
 		// Apply the lock encoding *before* serialising so the
@@ -871,7 +900,7 @@ func serializeSimpleScheduleWithDomain(
 		}
 		entries = mapped
 	}
-	return serializeSimpleSchedule(entries, deactivateUpTo)
+	return serializeSimpleSchedule(entries, deactivateUpTo, bits)
 }
 
 // applyLockEncoding rewrites a lock slot's level / duration / target_channels
@@ -914,12 +943,12 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 // mapped onto [schedule.Simple] and encoded by
 // [weekprofile.BuildSimpleRawParamset], which is the daemon's only
 // encoder for this format.
-func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo int) (map[string]any, error) {
+func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo int, bits weekprofile.TargetChannelBits) (map[string]any, error) {
 	s, err := simpleScheduleToDomain(entries)
 	if err != nil {
 		return nil, fmt.Errorf("schedules: %w", err)
 	}
-	raw, err := weekprofile.BuildSimpleRawParamset(s, deactivateUpTo)
+	raw, err := weekprofile.BuildSimpleRawParamset(s, deactivateUpTo, bits)
 	if err != nil {
 		return nil, fmt.Errorf("schedules: %w", err)
 	}
@@ -985,7 +1014,8 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	}
 	switch sched.Kind {
 	case "simple":
-		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain, highestScheduleGroup(descKeys))
+		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain, highestScheduleGroup(descKeys),
+			s.targetChannelBitsFor(deviceAddress, channelNo))
 		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
 			// Filter out schedule fields the device does not advertise in its
 			// MASTER paramset description. Devices like HmIP-DLD expose only a
