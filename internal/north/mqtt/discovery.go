@@ -1007,9 +1007,21 @@ func localisedEnumOptions(ev Event) ([]any, bool) {
 // forever, with no error anywhere. Every door / window contact in the
 // fleet is one of these.
 //
-// Two-entry lists map first→off, second→on, which is the same shape that
-// makes the model classify such a descriptor as binary in the first place
-// (CLOSED/OPEN, DRY/RAIN, STABLE/NOT_STABLE). A longer list has no correct
+// Two-entry lists map first→off, second→on. That holds for the descriptors
+// which reach this function, and NOT for two-entry enums in general — the
+// distinction is the whole content of the rule.
+//
+// Measured over the device-descriptor corpus: of 81 distinct two-entry
+// VALUE_LISTs only 29 put an inactive-looking label first, and one is
+// literally {ON, OFF}. Restricted to what can become a binary sensor —
+// two entries, in VALUES, not writable — all 14 do: NORMAL, STABLE,
+// NO_ERROR (nine variants), CLOSED, DRY. The counterexamples are writable
+// config and action selects, which never take this path.
+//
+// So the rule is sound where it is applied and would be wrong one step
+// wider. It also rests on the standing assumption under every enum-index
+// decision here: that a VALUE_LIST delivered over XML-RPC is ordered by
+// ordinal, which no firmware source consulted so far states. A longer list has no correct
 // declaration — HA offers exactly one on and one off token — so it keeps
 // the boolean pair rather than silently claiming two of its values;
 // no descriptor in the fleet reaches that branch.
