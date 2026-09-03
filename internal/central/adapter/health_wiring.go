@@ -25,10 +25,8 @@ var healthNoteKeys = map[string]string{
 	"breaker closed":              "health.note.breaker_closed",
 	"breaker half-open":           "health.note.breaker_half_open",
 	"breaker open":                "health.note.breaker_open",
-	"breaker open (escalated)":    "health.note.breaker_open_escalated",
 	"recovery started":            "health.note.recovery_started",
 	"recovery completed":          "health.note.recovery_completed",
-	"recovery failed (escalated)": "health.note.recovery_failed_escalated",
 }
 
 // noteKeyFor returns the i18n key for a static health note, or "" for an
@@ -75,6 +73,22 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 		}
 		return interfaceID
 	}
+	// reportUnhealthy states an unhealthy condition rather than sampling one:
+	// a client that failed or stopped, a breaker that opened, a recovery that
+	// gave up. The tracker's flap-damping is right for a probe and wrong here,
+	// and these sites used to force it by recording twice with an invented
+	// "(escalated)" note — re-encoding the tracker's threshold at the call
+	// site and leaving a history sample for something that never happened.
+	reportUnhealthy := func(interfaceID, note string) {
+		tr.RecordUnhealthy(component(interfaceID), health.Sample{Note: note, NoteKey: noteKeyFor(note)})
+		events.Publish(bus, hmevent.ConnectionHealthChangedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: centralName,
+			InterfaceID: interfaceID,
+			IsHealthy:   false,
+		})
+	}
+
 	record := func(interfaceID string, healthy bool, note string) {
 		tr.Record(component(interfaceID), health.Sample{Healthy: healthy, Note: note, NoteKey: noteKeyFor(note)})
 		// Recovery telemetry for the bus; the tracker above is what every
@@ -118,10 +132,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 				record(e.InterfaceID, false, fmt.Sprintf("client %s", e.To))
 			case hmenum.ClientStateFailed,
 				hmenum.ClientStateStopped:
-				record(e.InterfaceID, false, fmt.Sprintf("client %s", e.To))
-				// Hit the same component a second time so the tracker escalates DEGRADED
-				// → UNHEALTHY immediately.
-				record(e.InterfaceID, false, fmt.Sprintf("client %s (escalated)", e.To))
+				reportUnhealthy(e.InterfaceID, fmt.Sprintf("client %s", e.To))
 			}
 		}),
 
@@ -136,8 +147,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 			case hmenum.CircuitStateHalfOpen:
 				record(e.InterfaceID, false, "breaker half-open")
 			case hmenum.CircuitStateOpen:
-				record(e.InterfaceID, false, "breaker open")
-				record(e.InterfaceID, false, "breaker open (escalated)")
+				reportUnhealthy(e.InterfaceID, "breaker open")
 			}
 		}),
 
@@ -156,8 +166,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 		}),
 
 		events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) {
-			record(e.InterfaceID, false, fmt.Sprintf("recovery failed: %s (attempts=%d)", e.Reason, e.Attempts))
-			record(e.InterfaceID, false, "recovery failed (escalated)")
+			reportUnhealthy(e.InterfaceID, fmt.Sprintf("recovery failed: %s (attempts=%d)", e.Reason, e.Attempts))
 			tr.SetRecoveryFlag(e.InterfaceID, false)
 		}),
 

@@ -32,6 +32,13 @@ func (t *fakeTracker) Record(_ string, s health.Sample) {
 	t.samples = append(t.samples, s)
 }
 
+// RecordUnhealthy records like Record; the fake keeps no status, so the
+// distinction the tracker draws is not observable here.
+func (t *fakeTracker) RecordUnhealthy(name string, s health.Sample) {
+	s.Healthy = false
+	t.Record(name, s)
+}
+
 func (t *fakeTracker) snapshot() []health.Sample {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -89,18 +96,20 @@ func TestProbeOnce_ConnectedRecordsHealthy(t *testing.T) {
 	}
 }
 
-func TestProbeOnce_DisconnectedNeverConnected_RecordsEscalated(t *testing.T) {
+func TestProbeOnce_DisconnectedNeverConnected_ReportsUnhealthyOnce(t *testing.T) {
 	t.Parallel()
 	c := &fakeConn{connected: false}
 	tr := &fakeTracker{}
 	probeOnce(c, tr)
 	got := tr.snapshot()
-	// Disconnected emits two samples per the double-sample flap-damp.
-	if len(got) != 2 {
-		t.Fatalf("samples=%d, want 2", len(got))
+	// One sample: a disconnect is reported, not sampled, so the tracker takes
+	// it at once. This used to emit a second sample carrying an invented
+	// "(escalated)" note purely to clear the flap-damping.
+	if len(got) != 1 {
+		t.Fatalf("samples=%d, want 1", len(got))
 	}
-	if got[0].Healthy || got[1].Healthy {
-		t.Fatalf("both samples must be unhealthy: %+v", got)
+	if got[0].Healthy {
+		t.Fatalf("sample must be unhealthy: %+v", got)
 	}
 	if !strings.Contains(got[0].Note, "never connected") {
 		t.Fatalf("first note=%q, want 'never connected'", got[0].Note)
@@ -114,8 +123,8 @@ func TestProbeOnce_DisconnectedWithLastOK_RecordsLastOKTimestamp(t *testing.T) {
 	tr := &fakeTracker{}
 	probeOnce(c, tr)
 	got := tr.snapshot()
-	if len(got) != 2 {
-		t.Fatalf("samples=%d, want 2", len(got))
+	if len(got) != 1 {
+		t.Fatalf("samples=%d, want 1", len(got))
 	}
 	if !strings.Contains(got[0].Note, "2026-05-24T18:00:00") {
 		t.Fatalf("first note missing last_ok timestamp: %q", got[0].Note)

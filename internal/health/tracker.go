@@ -212,6 +212,31 @@ func (t *Tracker) clientLocked(name string) *ClientHealth {
 // The sample is appended to the per-component history ring (capped at
 // the tracker's [WithHistorySize]); older samples are evicted FIFO.
 func (t *Tracker) Record(name string, sample Sample) {
+	t.record(name, sample, true)
+}
+
+// RecordUnhealthy records a sample that states an unhealthy condition rather
+// than observing one, so it takes effect at once instead of being flap-damped
+// to DEGRADED.
+//
+// [Record] damps deliberately: a probe's single failure may be noise, so it
+// takes two consecutive ones to reach UNHEALTHY. An event that reports the
+// condition — a client that failed or stopped, a circuit breaker that opened,
+// a recovery that gave up — is not a sample, and callers used to force it
+// through by recording twice, the second time with an invented "(escalated)"
+// note. That re-encoded this threshold at every call site and left a history
+// sample describing something that never happened.
+//
+// The Healthy field is ignored; a caller reaching for this method has already
+// decided. Everything else behaves as [Record].
+func (t *Tracker) RecordUnhealthy(name string, sample Sample) {
+	sample.Healthy = false
+	t.record(name, sample, false)
+}
+
+// record is the shared body of [Record] and [RecordUnhealthy]. damp selects
+// whether the first unhealthy sample after a healthy run is held at DEGRADED.
+func (t *Tracker) record(name string, sample Sample, damp bool) {
 	if sample.Timestamp.IsZero() {
 		sample.Timestamp = t.clk.Now()
 	}
@@ -220,7 +245,7 @@ func (t *Tracker) Record(name string, sample Sample) {
 	status := statusFromSample(sample)
 	// Flap-damp: a single unhealthy sample after a healthy run yields
 	// DEGRADED; two consecutive unhealthy samples escalate to UNHEALTHY.
-	if known && !sample.Healthy && prev.Status == StatusHealthy {
+	if damp && known && !sample.Healthy && prev.Status == StatusHealthy {
 		status = StatusDegraded
 	}
 	t.components[name] = Component{Name: name, Status: status, LastSample: sample}

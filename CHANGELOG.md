@@ -29,6 +29,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The escalation threshold was rebuilt at five call sites.** `health.Tracker`
+  flap-damps deliberately: a probe's first failing sample yields DEGRADED, and
+  only a second consecutive one escalates. Five callers needed the opposite —
+  they were not sampling but reporting a condition (a client that failed or
+  stopped, a breaker that opened, a recovery that gave up, an unbound Matter
+  listener, a disconnected MQTT client) — and forced it by recording twice, the
+  second time with an invented `(escalated)` note. That re-encoded the
+  tracker's rule at every site and left a sample in the health history
+  describing something that never happened; two of those phantom notes even had
+  their own i18n keys.
+
+  `Tracker.RecordUnhealthy` is the missing entry point. The five sites report
+  once now, with their own note, and the phantom notes and their translation
+  keys are gone. `Record` keeps its damping unchanged, which the guard pins
+  alongside.
+
 - **An RF week-program pointer resolved one profile too low.** The
   subscription that keeps the active profile current called the parameter-less
   `SyncProfilePointer`, which guesses which parameter a value came from by its
