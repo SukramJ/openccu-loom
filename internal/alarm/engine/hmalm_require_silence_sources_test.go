@@ -18,7 +18,12 @@ import (
 // the requirement for every pre-authenticated source: the operator
 // surfaces carry a session, and a keypad or remote press is
 // authenticated by its slot/binding match and carries no PIN that could
-// be typed. Only the anonymous planes — MQTT, sysvar — are gateable.
+// be typed. Only anonymous sources are gateable, and this table covers
+// both of the anonymous tokens the daemon uses anywhere in the alarm
+// path. Whether either one reaches a silence verb in production is a
+// question about callers, which this test cannot see — sysvar in fact
+// only arms and disarms. TestSilenceGatesAreOfferedOnlyWhereTheyBite
+// (tests/contract) measures that half.
 //
 // The asymmetry is invisible from the config document, so it is stated
 // on the field (see CodePolicy.RequireSilence) and measured here: an

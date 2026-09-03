@@ -111,12 +111,23 @@ func IsOperatorSource(source string) bool {
 // isOperatorSource keeps the package-internal call sites terse.
 func isOperatorSource(source string) bool { return IsOperatorSource(source) }
 
-// isPreAuthenticatedSource reports whether source arrives already
-// authenticated (operator session or hardware binding) and therefore
-// bypasses the code requirement in authorize.
-func isPreAuthenticatedSource(source string) bool {
+// IsPreAuthenticatedSource reports whether source arrives already
+// authenticated — an operator session, or a hardware binding the intent
+// router has already matched — and therefore bypasses the engine-side
+// code requirement.
+//
+// Exported so a surface can tell whether a per-source code gate it wants
+// to offer would do anything. [CodePolicy.RequireSilence] accepts and
+// persists an entry for any source, and silently ignores it for these:
+// the operator surfaces carry a session, and a keypad or remote press
+// carries no PIN that could be typed. Offering such a switch shows the
+// operator a protection that is not there.
+func IsPreAuthenticatedSource(source string) bool {
 	return isOperatorSource(source) || source == CodeSourceKeypad || source == CodeSourceRemote
 }
+
+// isPreAuthenticatedSource keeps the package-internal call sites terse.
+func isPreAuthenticatedSource(source string) bool { return IsPreAuthenticatedSource(source) }
 
 // NotReadyError reports a refused arm together with the blocking
 // sensors, so surfaces can render the bypass sheet.

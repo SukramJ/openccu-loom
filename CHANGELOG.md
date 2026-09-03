@@ -57,6 +57,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Two of the three silence-code switches were stored and ignored.** The
+  alarm policies view offered a per-source "require code to silence" gate for
+  `mqtt`, `keypad` and `remote`. The engine drops that requirement for every
+  pre-authenticated source, so only `mqtt` could ever gate anything: an
+  operator session carries its own second factor, and a keypad or remote press
+  is authenticated by its slot or binding match and carries no PIN that could
+  be typed. An operator who enabled either switch was shown a protection that
+  was not there — and `keypad` never reaches the silence verb at all, since
+  the intent router uses it for arming and disarming only.
+
+  The view now offers `mqtt` alone. Nothing changes for a stored
+  configuration: an entry for another source was already inert, and stays
+  accepted, so no existing zone document is rewritten.
+
+  `TestSilenceGatesAreOfferedOnlyWhereTheyBite` derives both halves from the
+  sources — which source strings reach a silence verb anywhere in the daemon,
+  and which of those the engine can gate — so the view and the engine cannot
+  drift apart again. The field's own documentation named `sysvar` as gateable;
+  sysvar arms and disarms and never silences.
+
 - **The capture archive's redaction was documented as the opposite of what it
   does.** Two config comments and the REST contract said `anonymise` hashes
   "device-address-shaped values". It hashes the operator-identifying attributes

@@ -18,13 +18,14 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 451.
+Guards without a doc comment: 7 of 452.
 
 | Guard | File | Holds |
 |---|---|---|
 | TestChangelogsAreEnglish | addon_changelog_language_test.go | TestChangelogsAreEnglish fails when a changelog block is written in German. |
 | TestAddressSplittingHasOneSource | address_rule_single_source_test.go | TestAddressSplittingHasOneSource fails when a package grows its own device-address parser. |
 | TestEdgeTriggerPressRepublishesOnRepeat | alarm_edge_trigger_event_test.go | TestEdgeTriggerPressRepublishesOnRepeat pins the alarm keypad/remote contract: an edge-trigger parameter (PRESS_*, CODE_ID, CODE_STATE) must publish a DataPointValueChangedEvent on every emission — even a repeated identical value — rather than being collapsed by the event coordinator's value-unchanged deduplication. |
+| TestSilenceGatesAreOfferedOnlyWhereTheyBite | alarm_silence_sources_test.go | TestSilenceGatesAreOfferedOnlyWhereTheyBite pins the operator-facing half of [engine.CodePolicy.RequireSilence] to the engine's own behaviour. |
 | TestAlarmS5CriticalCommandProbesOpenCircuit | alarm_siren_safety_test.go | TestAlarmS5CriticalCommandProbesOpenCircuit pins the S5 exception in the reliability layer: a CommandPriorityCritical call (the alarm engine's stop/silence path) is attempted as a single probe even while the interface circuit breaker is OPEN, while non-critical traffic keeps being shed. |
 | TestAlarmS6SilenceAndDisarmNeverStateGated | alarm_siren_safety_test.go | TestAlarmS6SilenceAndDisarmNeverStateGated pins the S3/S6 rule at the engine surface: silence and disarm succeed from every state-machine position — they are role-gated by surfaces, never state-gated by the engine, and no confirmation step exists between the verb and its effect. |
 | TestAlarmWSPayloadStructsMatchOpenAPISchemas | alarm_ws_payload_parity_test.go | TestAlarmWSPayloadStructsMatchOpenAPISchemas pins the alarm broadcast payload structs to their OpenAPI component schemas: every schema property must exist as a JSON field on the Go struct, every Go field must be documented, and every required property must not be omitempty. |

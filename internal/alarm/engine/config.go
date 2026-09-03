@@ -107,9 +107,15 @@ type CodePolicy struct {
 	// CodeSourceHmcli) carry a session, and CodeSourceKeypad /
 	// CodeSourceRemote are authenticated by the slot or binding match
 	// and carry no PIN that could be typed — so an entry keyed on one of
-	// those is accepted, persisted and inert. What remains gateable is
-	// what arrives anonymously: "mqtt", "sysvar". Pinned by
+	// those is accepted, persisted and inert. Pinned by
 	// TestRequireSilenceGatesOnlyAnonymousSources.
+	//
+	// Of the anonymous sources the engine could gate, only "mqtt"
+	// reaches a silence verb at all: "sysvar" arms and disarms, and the
+	// keypad intent router likewise never silences. So "mqtt" is the one
+	// key that changes anything today, which is what the alarm policies
+	// view offers — pinned from both sides by
+	// TestSilenceGatesAreOfferedOnlyWhereTheyBite.
 	RequireSilence map[string]bool `json:"require_silence,omitempty"`
 }
 
