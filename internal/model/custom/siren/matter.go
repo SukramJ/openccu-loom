@@ -125,6 +125,13 @@ const (
 
 	matterCmdOff uint32 = 0x00
 	matterCmdOn  uint32 = 0x01
+	// matterCmdToggle carries conformance "!OFFONLY" (matter.js
+	// on-off.element.ts:39): mandatory on every OnOff cluster that does not
+	// advertise the OffOnly feature, which this projection does not. It was
+	// omitted on the grounds that a siren has no toggle in its wire surface —
+	// but conformance asks what the cluster must accept, not what the device
+	// spells, and the three sibling OnOff projections all carry it.
+	matterCmdToggle uint32 = 0x02
 	// LT (Lighting) feature-gated OnOff commands — mandatory once LT is
 	// advertised. matter.js on-off.element.ts:41,46,51 mark all three
 	// conformance "LT".
@@ -322,6 +329,16 @@ func (s sirenOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any,
 		err = s.s.TurnOff(ctx, priority)
 	case matterCmdOn:
 		err = s.s.TurnOn(ctx, OnConfig{}, priority)
+	case matterCmdToggle:
+		// An unobserved siren is treated as silent, so a first Toggle raises
+		// the alarm rather than doing nothing — the same reading the switch
+		// projection applies.
+		active, observed := s.s.IsActive()
+		if observed && active {
+			err = s.s.TurnOff(ctx, priority)
+		} else {
+			err = s.s.TurnOn(ctx, OnConfig{}, priority)
+		}
 	case matterCmdOffWithEffect:
 		// OffWithEffect (LT, mandatory): no dimming-effect engine on a
 		// siren, so the effect identifier/variant are ignored and the
@@ -371,12 +388,18 @@ func (s sirenOnOffServer) MatterAttributes() []uint32 {
 // three LT-mandatory commands so AcceptedCommandList is populated for
 // chip-tool / Apple Home conformance reads. matter.js on-off.element.ts:
 // Off (0x00, M), On (0x01), OffWithEffect (0x40, LT),
-// OnWithRecallGlobalScene (0x41, LT), OnWithTimedOff (0x42, LT). Toggle
-// (0x02) is absent — Siren has no toggle command in its wire surface.
+// OnWithRecallGlobalScene (0x41, LT), OnWithTimedOff (0x42, LT).
+//
+// Toggle (0x02) carries conformance "!OFFONLY" and this cluster does not
+// advertise OffOnly, so it is mandatory here. It used to be omitted because a
+// siren has no toggle in its wire surface; conformance asks what the cluster
+// accepts, not what the device spells, and a controller that finds a mandatory
+// command missing can abort the commissioning.
 func (s sirenOnOffServer) MatterAcceptedCommands() []uint32 {
 	return []uint32{
 		matterCmdOff,
 		matterCmdOn,
+		matterCmdToggle,
 		matterCmdOffWithEffect,
 		matterCmdOnWithRecallGlobalScene,
 		matterCmdOnWithTimedOff,

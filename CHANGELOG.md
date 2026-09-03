@@ -29,6 +29,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The siren's OnOff cluster omitted a mandatory command.** matter.js gives
+  `Toggle` conformance `!OFFONLY` (`on-off.element.ts:39`) — mandatory on any
+  OnOff cluster that does not advertise the OffOnly feature, and this
+  projection advertises LT and nothing else. It was left out on the grounds
+  that a siren has no toggle in its wire surface, but conformance asks what
+  the cluster must accept, not what the device spells; the three sibling OnOff
+  projections all carry it. A controller that finds a mandatory command
+  missing can abort the commissioning. `Toggle` is accepted now and raises the
+  alarm when it is silent, silences it when it is sounding.
+
+- **Two fault codes were documented as something the CCU does not do.**
+  `XMLRPCFaultDutyCycle` cited a code string `INSUFFICIENT_DUTYCYCLE` that
+  appears nowhere in the CCU sources; the fault is raised in exactly one place,
+  `RFDevice::UpdateFirmware` (`src/rfd/RFDevice.cpp:1492`), and never on a
+  value-write path. `XMLRPCFaultTransmissionPending` was described as the CCU
+  being busy with a previous command — it means the device is unreachable and
+  the command has been persisted as pending configuration, cleared when the
+  device next makes contact rather than by waiting. Both comments now say what
+  the firmware does, and `DEVICE_OUT_OF_RANGE` is labelled unverified because
+  that string is not in the sources either.
+
 - **A link profile matched on the SPA and not in the store, or the reverse.**
   "Does this profile match the channel's current values" was implemented twice
   — once on the raw JSON the link schema carries, once on the decoded values
