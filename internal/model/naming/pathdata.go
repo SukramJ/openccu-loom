@@ -463,6 +463,12 @@ func (p PathData) DiscoveryObjectID(suffix string) string {
 	return fmt.Sprintf("%d_%s", p.ChannelNo, strings.ToLower(TopicSafe(suffix)))
 }
 
+// DiscoveryTopicPrefix is HA's MQTT-Discovery root. The producer below
+// and the retained-config sweeps in the MQTT adapter must agree on it
+// byte for byte: a sweep spelled one character differently matches
+// nothing, and every retired entity keeps its retained config forever.
+const DiscoveryTopicPrefix = "homeassistant/"
+
 // DiscoveryConfigTopic returns the canonical HA-Discovery retained
 // config topic `homeassistant/<component>/<node_id>/<object_id>/config`.
 //
@@ -475,7 +481,7 @@ func (p PathData) DiscoveryObjectID(suffix string) string {
 // inputs produce a malformed topic — the caller must validate first.
 func DiscoveryConfigTopic(component, nodeID, objectID string) string {
 	return fmt.Sprintf(
-		"homeassistant/%s/%s/%s/config",
+		DiscoveryTopicPrefix+"%s/%s/%s/config",
 		TopicSafe(component), TopicSafe(nodeID), TopicSafe(objectID),
 	)
 }

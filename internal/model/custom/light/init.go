@@ -204,7 +204,7 @@ func applyGroupLevel(l *Light, ch *device.Channel, rebased custom.RebasedChannel
 		if param == "" {
 			continue
 		}
-		groupCh := siblingChannel(ch, chNo)
+		groupCh := ch.Sibling(chNo)
 		if groupCh == nil {
 			continue
 		}
@@ -216,19 +216,6 @@ func applyGroupLevel(l *Light, ch *device.Channel, rebased custom.RebasedChannel
 }
 
 // siblingChannel returns the channel of ch's device carrying number no.
-func siblingChannel(ch *device.Channel, no int) *device.Channel {
-	dev := ch.Device()
-	if dev == nil {
-		return nil
-	}
-	for _, sibling := range dev.Channels() {
-		if sibling.Number == no {
-			return sibling
-		}
-	}
-	return nil
-}
-
 // newDimmerConstructor builds a plain dimmable Light.
 func newDimmerConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	l := New(configFromChannel(ch, custom.LightCapabilities{Dimmable: true}, rebased))
@@ -362,7 +349,7 @@ func programChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig
 		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterProgram {
 			continue
 		}
-		if sibling := siblingChannel(ch, chNo); sibling != nil {
+		if sibling := ch.Sibling(chNo); sibling != nil {
 			return sibling
 		}
 	}
@@ -384,7 +371,7 @@ func colorChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) 
 		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterColor {
 			continue
 		}
-		if sibling := siblingChannel(ch, chNo); sibling != nil {
+		if sibling := ch.Sibling(chNo); sibling != nil {
 			return sibling
 		}
 	}
@@ -405,7 +392,7 @@ func whitePointChannel(ch *device.Channel, rebased custom.RebasedChannelGroupCon
 		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterLevel {
 			continue
 		}
-		if sibling := siblingChannel(ch, chNo); sibling != nil {
+		if sibling := ch.Sibling(chNo); sibling != nil {
 			return sibling
 		}
 	}

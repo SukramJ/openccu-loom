@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -253,6 +254,54 @@ func (e *SimpleEntry) Validate() error {
 	return nil
 }
 
+// UnsupportedFieldsFor reports which of the three optional schedule fields a
+// category rejects: level_2, ramp_time and duration.
+//
+// It is the single catalogue of that fact. [SimpleEntry.ValidateFor] enforces
+// it on the write path, and the schedule adapter strips the same set off a
+// parsed entry on the read path — the CCU's COMBINED_PARAMETER carries fields
+// a given channel type never uses, and an entry that keeps them fails the
+// validator on the way back in. Two spellings of this table drift into a read
+// that emits a field the write then rejects.
+//
+// A category with no schedule constraints supports all three.
+func UnsupportedFieldsFor(category hmenum.DataPointCategory) (level2, rampTime, duration bool) {
+	switch category { //nolint:exhaustive // only categories with schedule constraints are listed
+	case hmenum.DataPointCategorySwitch:
+		return true, true, false
+	case hmenum.DataPointCategoryLight:
+		return true, false, false
+	case hmenum.DataPointCategoryCover:
+		return false, true, true
+	case hmenum.DataPointCategoryValve:
+		return true, true, false
+	case hmenum.DataPointCategoryLock:
+		return true, true, true
+	default:
+		return false, false, false
+	}
+}
+
+// rejectUnsupportedFields reports the fields the entry carries that
+// [UnsupportedFieldsFor] says the category does not accept.
+func (e *SimpleEntry) rejectUnsupportedFields(category hmenum.DataPointCategory) error {
+	noLevel2, noRampTime, noDuration := UnsupportedFieldsFor(category)
+	var offending []string
+	if noLevel2 && e.Level2 != nil {
+		offending = append(offending, "level_2")
+	}
+	if noRampTime && e.RampTime != "" {
+		offending = append(offending, "ramp_time")
+	}
+	if noDuration && e.Duration != "" {
+		offending = append(offending, "duration")
+	}
+	if len(offending) == 0 {
+		return nil
+	}
+	return fmt.Errorf("schedule/%s: %s not supported", category, strings.Join(offending, "/"))
+}
+
 // ValidateFor enforces category-specific rules on top of [Validate].
 func (e *SimpleEntry) ValidateFor(category hmenum.DataPointCategory) error {
 	if err := e.Validate(); err != nil {
@@ -263,30 +312,9 @@ func (e *SimpleEntry) ValidateFor(category hmenum.DataPointCategory) error {
 		if e.Level != 0 && e.Level != 1 {
 			return fmt.Errorf("schedule/switch: level must be 0 or 1, got %v", e.Level)
 		}
-		if e.Level2 != nil {
-			return errors.New("schedule/switch: level_2 not supported")
-		}
-		if e.RampTime != "" {
-			return errors.New("schedule/switch: ramp_time not supported")
-		}
-	case hmenum.DataPointCategoryLight:
-		if e.Level2 != nil {
-			return errors.New("schedule/light: level_2 not supported")
-		}
-	case hmenum.DataPointCategoryCover:
-		if e.RampTime != "" {
-			return errors.New("schedule/cover: ramp_time not supported")
-		}
-		if e.Duration != "" {
-			return errors.New("schedule/cover: duration not supported")
-		}
-	case hmenum.DataPointCategoryValve:
-		if e.Level2 != nil {
-			return errors.New("schedule/valve: level_2 not supported")
-		}
-		if e.RampTime != "" {
-			return errors.New("schedule/valve: ramp_time not supported")
-		}
+		return e.rejectUnsupportedFields(category)
+	case hmenum.DataPointCategoryLight, hmenum.DataPointCategoryCover, hmenum.DataPointCategoryValve:
+		return e.rejectUnsupportedFields(category)
 	case hmenum.DataPointCategoryLock:
 		if e.LockMode == "" {
 			return errors.New("schedule/lock: lock_mode required")
@@ -309,9 +337,7 @@ func (e *SimpleEntry) ValidateFor(category hmenum.DataPointCategory) error {
 		default:
 			return fmt.Errorf("schedule/lock: unknown mode %q", e.LockMode)
 		}
-		if e.Level2 != nil || e.RampTime != "" || e.Duration != "" {
-			return errors.New("schedule/lock: level_2/ramp_time/duration not supported")
-		}
+		return e.rejectUnsupportedFields(category)
 	}
 	return nil
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -159,7 +160,7 @@ func (s *FilesystemBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, 
 			continue
 		}
 		name := e.Name()
-		if !strings.HasSuffix(name, ".sbk") {
+		if !strings.HasSuffix(name, sbk.Extension) {
 			continue
 		}
 		info, err := e.Info()
@@ -172,7 +173,7 @@ func (s *FilesystemBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, 
 			// empty file for download and lets Restore push it to a CCU.
 			continue
 		}
-		id := strings.TrimSuffix(name, ".sbk")
+		id := strings.TrimSuffix(name, sbk.Extension)
 		out = append(out, hmapi.BackupEntry{
 			ID:        id,
 			Bytes:     info.Size(),
@@ -340,7 +341,7 @@ func (s *FilesystemBackupStorage) namePathForID(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSuffix(archive, ".sbk") + backupNameSuffix, nil
+	return strings.TrimSuffix(archive, sbk.Extension) + backupNameSuffix, nil
 }
 
 // Delete implements [BackupStorage]. A missing file is not an error.
@@ -368,7 +369,7 @@ func (s *FilesystemBackupStorage) pathForID(id string) (string, error) {
 	if strings.ContainsAny(id, "/\\") || id == "" || id == "." || id == ".." {
 		return "", fmt.Errorf("backup: invalid id %q", id)
 	}
-	path := filepath.Clean(filepath.Join(s.Dir, id+".sbk"))
+	path := filepath.Clean(filepath.Join(s.Dir, id+sbk.Extension))
 	if !strings.HasPrefix(path, filepath.Clean(s.Dir)+string(filepath.Separator)) {
 		return "", fmt.Errorf("backup: invalid id %q", id)
 	}

@@ -282,13 +282,16 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 			}
 			address := hmtypes.ChannelAddress(dev.Address, member.ChannelNo)
 			name := fmt.Sprintf("Channel %d", member.ChannelNo)
+			synthetic := true
 			if ch := dev.Channel(address); ch != nil && ch.Name() != "" {
 				name = ch.Name()
+				synthetic = false
 			}
 			out[key] = weekprofile.TargetChannelInfo{
 				ChannelNo:      member.ChannelNo,
 				ChannelAddress: address,
 				Name:           name,
+				NameSynthetic:  synthetic,
 				ChannelType:    chType,
 			}
 		}

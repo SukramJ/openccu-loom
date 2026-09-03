@@ -465,4 +465,4 @@ func TestHubFetchInboxDataFetcherError(t *testing.T) {
 	}
 }
 
-// ─── WrapSysvar for new types ────────────────────────────────────────────────
+// ─── Sysvar data points for the newer value types ────────────────────────────

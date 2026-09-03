@@ -30,6 +30,13 @@ import (
 	"strings"
 )
 
+// Extension is the filename suffix of a CCU system-backup archive. It is the
+// one place the daemon decides what a backup file is called: the filesystem
+// store recognises stored archives by it and builds their paths with it, and
+// it is the suffix of both filenames that leave the daemon — the HTTP
+// download name and the restore multipart name.
+const Extension = ".sbk"
+
 // Member names inside the archive, as written by the CCU.
 const (
 	memberConfig    = "usr_local.tar.gz"

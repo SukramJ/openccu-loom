@@ -83,7 +83,7 @@ func TestCombinedProjectionsDeclineWithoutAContext(t *testing.T) {
 	t.Parallel()
 	projections := []payload.CombinedProjection{
 		combined.NewTimer("VCU0000001:1", nil, "DURATION_VALUE", "DURATION_UNIT"),
-		combined.NewLevelCombined("VCU0000001:1", nil, "LEVEL", "LEVEL_2", "LEVEL_COMBINED"),
+		combined.NewLevelCombined("VCU0000001:1", "LEVEL", "LEVEL_2"),
 		combined.NewHSColor("VCU0000001:1", nil, "HUE", "SATURATION"),
 	}
 	for _, p := range projections {

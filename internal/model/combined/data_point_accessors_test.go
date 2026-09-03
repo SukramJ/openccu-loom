@@ -162,9 +162,7 @@ func TestTimerHasUnitFalseWhenNoUnitParam(t *testing.T) {
 // DataPointNamePostfix, HasDataPoints, IsStatusValid, ModifiedAt,
 // RefreshedAt.
 func TestLevelCombinedP2Methods(t *testing.T) {
-	lc := NewLevelCombined("addr", nil,
-		hmenum.ParameterLevel, hmenum.ParameterLevel2,
-		hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("addr", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 
 	if got := lc.ParamsetKey(); got != string(hmenum.ParamsetKeyCombined) {
 		t.Errorf("ParamsetKey()=%q, want COMBINED", got)
@@ -219,8 +217,7 @@ func TestCombinedDPIsReadableIsWritable(t *testing.T) {
 		t.Error("Timer.IsWritable() must be true")
 	}
 
-	lc := NewLevelCombined("addr", nil,
-		hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("addr", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if lc.IsReadable() {
 		t.Error("LevelCombined.IsReadable() must be false")
 	}

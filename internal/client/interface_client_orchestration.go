@@ -27,6 +27,7 @@ import (
 	paramconvert "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -63,11 +64,11 @@ func (c *ReconnectConfig) applyDefaults() {
 }
 
 // reconnectJitterFraction bounds the random wiggle applied to the reconnect
-// backoff. Mirrors the retrier's ±20% jitter (internal/client/reliability/
-// retry.go applyJitter): without it every interface of one central computes
-// the same deterministic backoff and reconnects in lockstep, hammering a
-// just-booted CCU (thundering herd).
-const reconnectJitterFraction = 0.2
+// backoff. It reads the same [hmreliability.RetryJitterFraction] the retrier
+// applies (internal/client/reliability/retry.go applyJitter): without jitter
+// every interface of one central computes the same deterministic backoff and
+// reconnects in lockstep, hammering a just-booted CCU (thundering herd).
+const reconnectJitterFraction = hmreliability.RetryJitterFraction
 
 // reconnectDelay computes the wait before a reconnect attempt:
 // InitialDelay * BackoffFactor^attempts, capped at MaxDelay, then perturbed

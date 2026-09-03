@@ -11,15 +11,18 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// MaxCacheAgeSec is MAX_CACHE_AGE from py (10 s).
-// The load gate uses MAX_CACHE_AGE/3 ≈ 3 s, matching details.py:126.
-const maxCacheAgeSec = 10
-
-// loadWindow is the cache-age gate: skip reload unless the cache is
-// older than this. Mirrors `int(MAX_CACHE_AGE / 3)` from details.py.
-const loadWindow = time.Duration(maxCacheAgeSec/3) * time.Second
+// loadWindow is the cache-age gate: skip a reload unless the cache is
+// older than this. It is a third of [hmtypes.MaxCacheAge], which is the
+// one declaration of that ceiling — a private copy here would let the
+// gate keep a stale window after the ceiling moved.
+//
+// The division deliberately happens in whole seconds, not on the
+// Duration: a third of 10 s is 3 s here, not 3.333 s, which is the gate
+// this loader has always applied.
+const loadWindow = (hmtypes.MaxCacheAge / time.Second / 3) * time.Second
 
 // jsonClientLike is the narrow slice of the JSON-RPC Client that the
 // Loader actually calls. Defined here (consumer package) so tests can
@@ -98,7 +101,7 @@ func NewLoader(cache *Cache, client jsonClientLike, centralName string, logger *
 // cache. It mirrors details.py:123-141.
 //
 // When directCall is false, the call is skipped if the cache was
-// refreshed within the last [loadWindow] (= MAX_CACHE_AGE/3 ≈ 3 s).
+// refreshed within the last [loadWindow] (a third of [hmtypes.MaxCacheAge]).
 // When directCall is true, the load always runs.
 func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:funlen // single-purpose device-details loader with many paramset/channel branches
 	if !directCall {

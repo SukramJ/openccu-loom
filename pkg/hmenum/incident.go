@@ -110,18 +110,6 @@ const (
 // String returns the wire representation.
 func (t DeviceTriggerEventType) String() string { return string(t) }
 
-// Short returns the last dotted component of the event type, useful as
-// a short slug in logs and MQTT topics.
-func (t DeviceTriggerEventType) Short() string {
-	s := string(t)
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == '.' {
-			return s[i+1:]
-		}
-	}
-	return s
-}
-
 // ServiceMessageType mirrors the CCU's AlType numeric classification.
 type ServiceMessageType int
 

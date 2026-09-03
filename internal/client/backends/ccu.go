@@ -66,6 +66,9 @@ type CcuBackend struct {
 	// correct install-mode wire call: HmIP-RF uses Interface.setInstallModeHMIP
 	// while all other interfaces use Interface.setInstallMode.
 	ifaceType hmenum.Interface
+
+	// ccuTZ is the CCU's IANA zone, wired by [CcuBackend.SetCCUTimezone].
+	ccuTZ string
 }
 
 // NewCcuBackend constructs a backend. `ann` announces the callback
@@ -116,6 +119,30 @@ func (b *CcuBackend) SetSessionRenewer(fn func(ctx context.Context) (string, err
 // that go directly through XML-RPC or JSON-RPC.
 func (b *CcuBackend) SetScriptRunner(r ScriptRunner) {
 	b.rega = r
+}
+
+// SetCCUTimezone wires the CCU's IANA zone (BackendInfo.Timezone). The
+// com-test timestamps the ReGa scripts return are offset-free CCU-local wall
+// clock — the firmware renders LastTestCompletedTime() through
+// TimeStamp.fn::TimeStampToString3, which slices fixed character offsets and
+// applies no conversion — so they cannot be turned into an instant without
+// knowing which zone they were written in. Empty falls back to time.Local,
+// which is right only when the daemon and the CCU share a zone.
+func (b *CcuBackend) SetCCUTimezone(name string) {
+	b.ccuTZ = name
+}
+
+// ccuLocation resolves the wired CCU zone, falling back to the daemon's local
+// zone when none is wired or the name does not resolve.
+func (b *CcuBackend) ccuLocation() *time.Location {
+	if b.ccuTZ == "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(b.ccuTZ)
+	if err != nil {
+		return time.Local
+	}
+	return loc
 }
 
 // Kind implements Operations.

@@ -57,6 +57,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Low-severity audit findings, final batch: 24 more, and the last of the
+  open ones.** The remaining set was the cross-package half — findings whose
+  fix reached into two or three packages at once, which is why they came last.
+
+  - *Backup archives are recognised by one constant.* The `.sbk` suffix was
+    spelled nine times across storage, restore and the REST download; a
+    mismatch would have made a written archive invisible to the list that
+    finds it.
+  - *Ping and pong now share one caller-id grammar.* The producer built the
+    id and the PONG parser took it apart with a separator of its own, and two
+    comments described that id as `<iface>` when the wire carries a triple.
+  - *A missing hook is reported instead of silently succeeding.* Five hub
+    coordinator methods returned nil when their write hook was never wired,
+    so an unwired program execution looked exactly like a successful one.
+  - *The profile-key grammar has one owner.* Five spellings, three of them
+    accepting `P01` and two not. Which form to keep was measured, not chosen:
+    no zero-padded profile key exists anywhere in the firmware tree or the
+    descriptor corpus, so the strict two-character form changes no reachable
+    input.
+
+  The `system.listMethods` advertisement, the `schedules.active_profile.set`
+  base, the CCU-timezone wiring seam and the localizable "event received"
+  health note each needed a decision or a file the fixing agent could not
+  reach; they are done here. `MaxDiscriminator` had picked up a Matter-spec
+  section citation on its way out of the config validator — it now cites
+  matter.js, which is what this project's rule requires.
+
 - **Low-severity audit findings, second batch: 62 more fixed across the model,
   client, alarm, config, pkg and north-bound packages.** The same classes as
   the first batch, plus three worth naming:

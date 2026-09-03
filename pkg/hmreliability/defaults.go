@@ -47,6 +47,10 @@ const (
 	RetryInitialBackoff = 2 * time.Second
 	// RetryMaxBackoff bounds exponential growth.
 	RetryMaxBackoff = 30 * time.Second
+	// RetryJitterFraction is the ±fraction of the computed delay applied
+	// as random wiggle, so parallel backoffs desynchronise instead of
+	// firing in lockstep.
+	RetryJitterFraction = 0.2
 	// RetryDutyCycleDelay is the wait inserted on XML-RPC fault -8.
 	//
 	// The fault is far narrower than "the CCU is duty-cycle limited": -8 is

@@ -334,7 +334,7 @@ func ccuArchiveName(u *central.Unit, at time.Time) string {
 	if host == "" || version == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s-%s-%s.sbk", host, version, at.Format("2006-01-02-1504"))
+	return fmt.Sprintf("%s-%s-%s%s", host, version, at.Format("2006-01-02-1504"), sbk.Extension)
 }
 
 // backupNameSegment sanitises one segment of a display filename. It is not

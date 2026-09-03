@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -1054,7 +1055,10 @@ func (m NorthMatter) WithDefaults() NorthMatter {
 		out.MDNSAdvertise = "zeroconf"
 	}
 	if out.Commissioning.Iterations == 0 {
-		out.Commissioning.Iterations = 1000
+		// The spec floor, taken from the package that owns the window
+		// the validator also checks against — a literal here could drift
+		// below its own validator and make the default unsavable.
+		out.Commissioning.Iterations = spake2.IterationsMin
 	}
 	return out
 }

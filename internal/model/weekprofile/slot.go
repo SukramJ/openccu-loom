@@ -148,9 +148,14 @@ func fillUpWeekdaySlots(fillTemp float64, ws weekdaySlots) weekdaySlots {
 // segment is reported as an explicit period between two loads of identical
 // data.
 //
-// Two quirks stay here because they are facts about the CCU paramset, not
-// about the rule: an unparsable end-time counts as end-of-day, and the first
-// "24:00" slot terminates the day (the remaining cells are padding).
+// The normalisation quirks stay here because they are facts about the CCU
+// paramset, not about the rule: a cell whose end time does not parse, or does
+// not advance past the previous cell's end, spans no known minutes and
+// therefore carries no segment at all; and the first "24:00" slot terminates
+// the day (the remaining cells are padding). The flat-paramset reader in
+// internal/central/adapter applies the same two drops — a cell counted as a
+// whole day on one side and dropped on the other reports two different base
+// temperatures for one device.
 //
 // Mirrors `identify_base_temperature` `week_profile.py`.
 func identifyBaseTemperature(ws weekdaySlots) float64 {
@@ -168,8 +173,8 @@ func identifyBaseTemperature(ws weekdaySlots) float64 {
 	prevMinutes := 0
 	for _, n := range ordered {
 		endMins := toMinutes(n.slot.EndTime)
-		if endMins < 0 {
-			endMins = schedule.ClimateEndOfDayMinutes
+		if endMins < 0 || endMins <= prevMinutes {
+			continue
 		}
 		segs = append(segs, schedule.TempSegment{
 			StartMin:    prevMinutes,

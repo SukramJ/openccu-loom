@@ -471,8 +471,9 @@ func (c *EventCoordinator) HandleRawEventNormalized(
 		if pp != nil {
 			// Forward the raw caller_id the CCU echoed in the PONG event. The
 			// hook (wired in pingpong_wiring) owns correlation: it knows the
-			// client identity, so it both extracts the "<iface>#<token>" token
-			// and verifies the embedded prefix is THIS interface's own ping
+			// client identity, so it both extracts the token from the
+			// "<instance>-<central>-<interface>#<token>" caller_id and
+			// verifies the embedded prefix is THIS interface's own ping
 			// prefix. The CCU broadcasts PONG events to every registered
 			// logic-layer client, so we also receive other instances' PONGs
 			// (e.g. "Otto-HmIP-RF#...") on our interface — those must not be
@@ -491,8 +492,9 @@ func (c *EventCoordinator) HandleRawEventNormalized(
 
 // SetPingPongTracker wires an optional hook that is called when a PONG
 // parameter arrives (before cache dispatch). The hook receives the event's
-// interfaceID and the raw caller_id the CCU echoed ("<iface>#<token>", or a
-// bare interface name for the lightweight liveness probe). The hook owns
+// interfaceID and the raw caller_id the CCU echoed — the wire-boundary
+// triple with a token, "<instance>-<central>-<interface>#<token>", or a bare
+// interface name for the lightweight liveness probe. The hook owns
 // correlation — it extracts the token and verifies the embedded prefix
 // identifies this interface — because that needs the client identity, which
 // lives in the wiring layer. Pass nil to detach.

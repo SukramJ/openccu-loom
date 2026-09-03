@@ -557,7 +557,7 @@ func (l *FixedColorLight) bindChannelColor(ch *device.Channel, rebased custom.Re
 		}
 		target := ch
 		if chNo != custom.AnyChannelOffset && chNo != ch.Number {
-			target = siblingChannel(ch, chNo)
+			target = ch.Sibling(chNo)
 		}
 		dp := custom.EnumSensorField(target, param)
 		if dp == nil {

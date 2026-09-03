@@ -208,13 +208,15 @@ func (s *stubSuppressor) SuppressServiceMessage(_ context.Context, iface, ch, pa
 	return s.err
 }
 
-// TestSuppressServiceMessageNoopWhenNotWired verifies that
-// SuppressServiceMessage returns nil without a suppressor wired.
-func TestSuppressServiceMessageNoopWhenNotWired(t *testing.T) {
+// TestSuppressServiceMessageReportsAnUnwiredSuppressor verifies that
+// SuppressServiceMessage reports the missing wire instead of reporting an
+// acknowledgement that never reached the CCU as success.
+func TestSuppressServiceMessageReportsAnUnwiredSuppressor(t *testing.T) {
 	t.Parallel()
 	hub := NewHubCoordinator("c1", events.NewBus())
-	if err := hub.SuppressServiceMessage(context.Background(), "HmIP-RF", "ABC0001234:1", "STICKY_UNREACH", true); err != nil {
-		t.Fatalf("expected nil, got %v", err)
+	err := hub.SuppressServiceMessage(context.Background(), "HmIP-RF", "ABC0001234:1", "STICKY_UNREACH", true)
+	if !errors.Is(err, ErrNoServiceMessageSuppressor) {
+		t.Fatalf("expected ErrNoServiceMessageSuppressor, got %v", err)
 	}
 }
 

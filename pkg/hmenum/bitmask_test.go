@@ -153,24 +153,6 @@ func TestRxModeHas(t *testing.T) {
 	}
 }
 
-func TestDeviceTriggerEventTypeShort(t *testing.T) {
-	cases := map[DeviceTriggerEventType]string{
-		DeviceTriggerEventTypeDeviceError: "device_error",
-		DeviceTriggerEventTypeImpulse:     "impulse",
-		DeviceTriggerEventTypeKeypress:    "keypress",
-	}
-	for k, want := range cases {
-		if got := k.Short(); got != want {
-			t.Errorf("%s.Short() = %q, want %q", k, got, want)
-		}
-	}
-	// No dot in the string → returns the full string.
-	plain := DeviceTriggerEventType("nodot")
-	if got := plain.Short(); got != "nodot" {
-		t.Errorf("nodot.Short() = %q, want %q", got, "nodot")
-	}
-}
-
 func TestConnectionStageDisplayName(t *testing.T) {
 	cases := map[ConnectionStage]string{
 		ConnectionStageLost:         "Connection Lost",

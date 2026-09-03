@@ -163,10 +163,8 @@ func NewBlind(cfg BlindConfig) *Blind {
 		lc := combined.NewLevelCombinedWithCentral(
 			cfg.Channel.CentralName(),
 			cfg.Channel.Address,
-			cfg.Writer,
 			hmenum.ParameterLevel,
 			tiltParam,
-			hmenum.ParameterLevelCombined,
 		)
 		cfg.Channel.AttachCalculatedDataPoint(lc)
 	}
@@ -314,10 +312,11 @@ func (b *Blind) acquireCommandLock(ctx context.Context) (release func(), acquire
 // single string write — tilt slot first, both values are integer 0..100
 // (position-percent).
 //
-// HM wire shape: `LEVEL_COMBINED` is a comma-separated hex string
-// `"0xHH,0xHH"` where each byte encodes `int(position * 100 * 2)` in the
-// 4-digit hex notation `#04x` (e.g. level=1.0, tilt=0.5 → "0xc8,0x64").
-// This matches the CCU wire format expected by HM blind actuators.
+// HM wire shape: `LEVEL_COMBINED` is a comma-separated pair of
+// per-axis bytes, each produced by [parameter.ConvertHMLevelToCPV]
+// (e.g. level=1.0, tilt=0.5 → "0xc8,0x64"). That encoder owns the
+// rounding rule; restating the expression here would be a second copy
+// that has already gone stale once.
 //
 // wasMoving reports that one of the two axes carried a CCU-unconfirmed
 // write the caller did not command itself, i.e. the blind is still moving
@@ -402,9 +401,9 @@ func (b *Blind) Stop(ctx context.Context, priority hmenum.CommandPriority) error
 // SetCombined commands both axes in a single CCU paramset write using the
 // format that matches the [BlindKind].
 //
-// - BlindKindHM: writes LEVEL_COMBINED as the string "0xHH,0xHH" where each
-// byte encodes `int(position * 100 * 2)` in 4-digit hex notation (e.g.
-// level=1.0, tilt=0.5 → "0xc8,0x64"). See [parameter.ConvertHMLevelToCPV].
+// - BlindKindHM: writes LEVEL_COMBINED as the string "0xHH,0xHH", each byte
+// produced by [parameter.ConvertHMLevelToCPV] (e.g. level=1.0, tilt=0.5 →
+// "0xc8,0x64").
 // - BlindKindIP: writes COMBINED_PARAMETER as the string "L2=<tilt_pct>,L=<level_pct>"
 // — tilt first, both values are integer 0..100 (position-percent).
 func (b *Blind) SetCombined(ctx context.Context, level, tilt float64, priority hmenum.CommandPriority) error {

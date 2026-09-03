@@ -412,6 +412,13 @@ func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen /
 		return xmlrpc.NilValue{}, nil
 	})
 
+	// replaceDevice must stay registered, and must stay visible to
+	// system.listMethods: HSSManager::PlatformInit probes our callback with
+	// system.listMethods and scans the returned array for exactly this name
+	// (OpenCCU-Base src/libhsscomm/HSSManager.cpp:255-267). A fault, a
+	// non-array, or a missing entry all silently yield
+	// supportReplaceDevice=false, after which a replaced device reaches us as
+	// deleteDevices + newDevices instead of replaceDevice (:321-331).
 	mux.Handle("replaceDevice", func(ctx context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
 		if len(params) != 3 {
 			return nil, fmt.Errorf("replaceDevice: want 3 params, got %d", len(params))

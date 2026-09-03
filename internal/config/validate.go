@@ -17,6 +17,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	mattersetup "github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 )
 
 // validateFieldRanges range-checks the config leaves whose out-of-range
@@ -130,20 +131,6 @@ func validateMCP(m *NorthMCP) error {
 	return m.ValidateMountPath()
 }
 
-// maxMatterDiscriminator is the largest 12-bit commissioning
-// discriminator (Matter §5.1.1.1). The config field is a uint16, so a
-// larger value is representable and would be truncated on the wire —
-// commissioners then browse an mDNS subtype nobody advertises.
-const maxMatterDiscriminator = 0xFFF
-
-// Matter PBKDF2 iteration bounds (Matter §3.10). Values outside the
-// window are rejected by a certified commissioner during PASE, which
-// presents to the operator as a pairing that aborts for no stated reason.
-const (
-	minMatterPBKDFIterations = 1000
-	maxMatterPBKDFIterations = 100000
-)
-
 // validateMatter checks the bridge's bind address and the commissioning
 // parameters a commissioner verifies against the spec.
 //
@@ -160,14 +147,21 @@ func validateMatter(m *NorthMatter) error {
 	if err := validateHostPort("north.matter.listen", m.Listen); err != nil {
 		return err
 	}
-	if m.Discriminator > maxMatterDiscriminator {
+	// The bounds are the owning packages' own declarations, not copies:
+	// the config field is a uint16, so an over-wide discriminator is
+	// representable here and would be truncated on the wire —
+	// commissioners then browse an mDNS subtype nobody advertises — and
+	// an iteration count outside the PBKDF window is rejected by a
+	// certified commissioner during PASE, which reaches the operator as
+	// a pairing that aborts for no stated reason.
+	if m.Discriminator > mattersetup.MaxDiscriminator {
 		return fmt.Errorf("config: north.matter.discriminator: out of range 0-%d (12-bit): %d",
-			maxMatterDiscriminator, m.Discriminator)
+			mattersetup.MaxDiscriminator, m.Discriminator)
 	}
 	if it := m.Commissioning.Iterations; it != 0 &&
-		(it < minMatterPBKDFIterations || it > maxMatterPBKDFIterations) {
+		(it < spake2.IterationsMin || it > spake2.IterationsMax) {
 		return fmt.Errorf("config: north.matter.commissioning.iterations: out of range %d-%d (0 selects the default): %d",
-			minMatterPBKDFIterations, maxMatterPBKDFIterations, it)
+			spake2.IterationsMin, spake2.IterationsMax, it)
 	}
 	if pc := m.Commissioning.Passcode; pc != 0 && !mattersetup.IsValidSetupPIN(pc) {
 		return fmt.Errorf(

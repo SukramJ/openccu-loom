@@ -6,7 +6,6 @@ package adapter
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -3362,7 +3361,7 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 	for _, key := range orderedTargetKeys(targets) {
 		info := targets[key]
 		label := b.tr("discovery.schedule_channel", "ch", strconv.Itoa(info.ChannelNo))
-		if info.Name != "" && info.Name != fmt.Sprintf("Channel %d", info.ChannelNo) {
+		if info.Name != "" && !info.NameSynthetic {
 			label = b.tr("discovery.schedule_named", "name", info.Name)
 		}
 		notePublish(ctx, bridge.PublishScheduleSwitchDiscovery(ctx, centralName, mqtt.ScheduleSwitchEvent{
@@ -3509,9 +3508,10 @@ func (b *EventBridge) publishScheduleEntityPayload(
 		attrs["schedule_domain"] = b.scheduleDomainForChannel(address, channelNo)
 	}
 	notePublish(ctx, bridge.PublishScheduleEntityAttrs(ctx, centralName, iface, address, channelNo, attrs))
-	// state := count of active entries. Currently 0 until the
-	// non-climate schedule-data hydrator lands; climate counters are
-	// available via CountClimateEntries.
+	// state := count of ACTIVE entries. Both arms read their counter from
+	// internal/model/weekprofile, which is also what the hub tool reports as
+	// EntryCount — one schedule must not have two entry counts depending on
+	// which plane an operator looks at.
 	count := 0
 	if cp := wp.Climate(); cp != nil {
 		if sched, err := cp.Current(); err == nil && sched != nil {
@@ -3520,7 +3520,7 @@ func (b *EventBridge) publishScheduleEntityPayload(
 	}
 	if sp := wp.Simple(); sp != nil {
 		if sched, err := sp.Current(); err == nil && sched != nil {
-			count = len(sched.Entries)
+			count = weekprofile.CountSimpleEntries(sched)
 		}
 	}
 	notePublish(ctx, bridge.PublishScheduleEntityState(ctx, centralName, iface, address, channelNo, count))

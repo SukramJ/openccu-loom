@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Tests for Sysvar.Extended, SysvarDpSensor list-label transform,
-// the IsExcludedSysvar filter, MetricHubSensor as
+// Tests for Sysvar.Extended, the IsExcludedSysvar filter, MetricHubSensor as
 // HubDataPointer, and the MetricHubSensors factory.
 package hub
 
@@ -33,8 +32,6 @@ func TestSysvarExtendedTrueWhenSet(t *testing.T) {
 		t.Fatal("Extended() must return true after IsExtended = true")
 	}
 }
-
-// ─── Item 2: SysvarDpSensor ──────────────────────────────────────────────────
 
 // ─── IsExcludedSysvar ───────────────────────────────────────────────────────
 

@@ -36,6 +36,24 @@ func TestPin_CcuBackend_SetHTTPTransport_CalledInWiring(t *testing.T) {
 	)
 }
 
+// TestPin_CcuBackend_SetCCUTimezone_CalledInWiring pins that ccu_wiring.go
+// hands the CCU's own IANA zone to the backend after construction.
+//
+// Without this call the backend falls back to time.Local, and the
+// communication-test timestamps the ReGa scripts return are offset-free
+// CCU-local wall clock — so a daemon in a different zone than its CCU
+// reports the completion instant wrong by the offset between them, with
+// nothing failing. The effect of a wired zone is covered in
+// internal/client/backends/ccu_comtest_timezone_test.go; what only a pin
+// can catch is the wiring going away.
+func TestPin_CcuBackend_SetCCUTimezone_CalledInWiring(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"ccuBackend", "SetCCUTimezone",
+	)
+}
+
 // TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring pins that
 // ccu_wiring.go wires the per-central rename hook via SetRenameDeviceFn.
 // Without this call, device and channel renames only mutate the in-memory

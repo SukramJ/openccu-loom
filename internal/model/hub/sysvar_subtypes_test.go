@@ -32,8 +32,6 @@ func TestProgramDpButtonPress(t *testing.T) {
 	}
 }
 
-// --- WrapSysvar factory ---
-
 // TestSysvarInternalIsRaceFreeAgainstAHubScan pins that the internal flag
 // is read and written through the sysvar's own lock.
 //

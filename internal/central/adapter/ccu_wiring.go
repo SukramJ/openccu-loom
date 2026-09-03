@@ -862,6 +862,11 @@ func wireInterface(
 		if runner != nil {
 			ccuBackend.SetScriptRunner(runner)
 		}
+		// The ReGa com-test timestamps are offset-free CCU-local wall clock,
+		// so the backend needs the CCU's own zone to turn one into an
+		// instant. WireHub has already stamped it from the CCU's time
+		// configuration by the time any interface is wired.
+		ccuBackend.SetCCUTimezone(unit.SystemInformation().Timezone)
 		hc := jsonrpcHTTPClient(cc)
 		if hc == nil {
 			// No timeout here by design; the transport is ours either way.

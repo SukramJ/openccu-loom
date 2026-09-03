@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -763,6 +764,25 @@ func (c *InterfaceClient) WireBoundaryID() string {
 	return string(c.cfg.Interface)
 }
 
+// pingCallerIDSeparator separates a ping caller_id's wire-boundary prefix
+// from its correlation token. The CCU echoes the caller_id verbatim in the
+// PONG, so [FormatPingCallerID] and [ParsePingCallerID] are one grammar's two
+// halves and must not be spelled separately.
+const pingCallerIDSeparator = "#"
+
+// FormatPingCallerID renders the caller_id a correlated ping carries: the
+// client's wire-boundary id, the separator, and the sequence token.
+func FormatPingCallerID(boundaryID, token string) string {
+	return boundaryID + pingCallerIDSeparator + token
+}
+
+// ParsePingCallerID splits an echoed caller_id back into its wire-boundary
+// prefix and its correlation token. ok is false for a bare liveness probe
+// that carries no token — those are not correlated.
+func ParsePingCallerID(callerID string) (prefix, token string, ok bool) {
+	return strings.Cut(callerID, pingCallerIDSeparator)
+}
+
 // callbackFreshness is the window during which a recent inbound callback
 // counts as "alive". 15s scheduler tick × 12 = 180s of headroom before a
 // silent interface is treated as broken.
@@ -988,7 +1008,7 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 	if handlePingPong && c.cfg.Capabilities.PingPong {
 		seq := c.pingSeq.Add(1)
 		token = strconv.FormatUint(seq, 10)
-		callerID = c.WireBoundaryID() + "#" + token
+		callerID = FormatPingCallerID(c.WireBoundaryID(), token)
 	}
 	// Use the circuit breaker's PROBE path — operation name
 	// "check_connection" is deliberately NOT on the bypass list so

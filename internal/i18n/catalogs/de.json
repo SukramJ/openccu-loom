@@ -63,6 +63,7 @@
   "discovery.week_profile": "Wochenprofil",
   "health.component": "Komponente",
   "health.note": "Hinweis",
+  "health.note.event_received": "Ereignis empfangen",
   "health.note.breaker_closed": "Sicherung geschlossen",
   "health.note.breaker_half_open": "Sicherung halb offen",
   "health.note.breaker_open": "Sicherung offen",

@@ -232,6 +232,34 @@ type Channel struct {
 // Device returns the parent device.
 func (c *Channel) Device() *Device { return c.device }
 
+// Sibling returns the channel numbered no on the same device.
+//
+// The receiver wins when its own Number matches, which is what makes
+// this usable from a profile pass that resolves a field's absolute
+// channel number without first knowing whether that number is the
+// channel it is already standing on. A nil receiver, or one that was
+// never attached to a device, yields nil rather than panicking: profile
+// materialisation runs over channels the schema names, not only over
+// channels the device turned out to carry.
+func (c *Channel) Sibling(no int) *Channel {
+	if c == nil {
+		return nil
+	}
+	if c.Number == no {
+		return c
+	}
+	d := c.device
+	if d == nil {
+		return nil
+	}
+	for _, s := range d.Channels() {
+		if s.Number == no {
+			return s
+		}
+	}
+	return nil
+}
+
 // Remove tears down the channel's live resources in the same order as the
 // Python Channel.remove() method (model/device.py):
 //

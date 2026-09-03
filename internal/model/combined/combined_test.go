@@ -45,7 +45,7 @@ func (w *stubWriter) find(p hmenum.Parameter) (any, bool) {
 
 func TestLevelCombinedIsCombined(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombined("x:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("x:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if !lc.IsCombined() {
 		t.Fatal("LevelCombined.IsCombined() must return true")
 	}
@@ -71,7 +71,7 @@ func TestTimerIsCombined(t *testing.T) {
 
 func TestLevelCombinedDataPointKey(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombinedWithCentral("ccu1", "DEV:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombinedWithCentral("ccu1", "DEV:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	key := lc.DataPointKey()
 	if key.ChannelAddress != "DEV:1" {
 		t.Errorf("ChannelAddress = %q, want DEV:1", key.ChannelAddress)
@@ -101,7 +101,7 @@ func TestHSColorDataPointKey(t *testing.T) {
 // comparison.
 func TestLevelCombinedOnAnyUpdateJSON(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombined("x:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("x:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	var got string
 	unsub := lc.OnAnyUpdate(func(_, next any) {
 		got, _ = next.(string)
@@ -245,7 +245,7 @@ func TestTimerOnComponentsAggregates(t *testing.T) {
 // --- LevelCombined ---
 
 func TestLevelCombinedValueRequiresBothInputs(t *testing.T) {
-	l := NewLevelCombined("x", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	l := NewLevelCombined("x", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	l.OnLevel(0.5)
 	if _, ok := l.Value(); ok {
 		t.Fatal("should not be observed yet")
@@ -263,7 +263,7 @@ func TestLevelCombinedValueRequiresBothInputs(t *testing.T) {
 // IsRefreshed / StateUncertain on combined DPs
 
 func TestLevelCombinedIsRefreshedRequiresBothInputs(t *testing.T) {
-	l := NewLevelCombined("x", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	l := NewLevelCombined("x", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if l.IsRefreshed() {
 		t.Fatal("IsRefreshed must be false before any input")
 	}
@@ -278,7 +278,7 @@ func TestLevelCombinedIsRefreshedRequiresBothInputs(t *testing.T) {
 }
 
 func TestLevelCombinedStateUncertainAlwaysFalse(t *testing.T) {
-	l := NewLevelCombined("x", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	l := NewLevelCombined("x", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if l.StateUncertain() {
 		t.Fatal("StateUncertain must always be false for LevelCombined")
 	}
@@ -477,7 +477,7 @@ func TestRecalcUnitHours(t *testing.T) {
 
 // TestLevelCombinedOnUpdate verifies OnUpdate fires and unsubscribes.
 func TestLevelCombinedOnUpdate(t *testing.T) {
-	lc := NewLevelCombined("addr:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("addr:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	var count int
 	unsub := lc.OnUpdate(func(_, _ LevelComposite) { count++ })
 
@@ -570,7 +570,7 @@ func TestTimerSignature(t *testing.T) {
 
 func TestLevelCombinedSignature(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombined("VCU:1", nil, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("VCU:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	got := lc.Signature()
 	const want = "cover//LEVEL_COMBINED"
 	if got != want {

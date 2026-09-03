@@ -331,7 +331,7 @@ func ClimateToRawWire(c *schedule.Climate) (rawClimateSchedule, error) { //nolin
 func RawToClimate(raw rawClimateSchedule) (*schedule.Climate, error) {
 	c := schedule.NewClimate()
 	for profileKey, ps := range raw {
-		if !isValidProfileKey(profileKey) {
+		if !schedule.IsValidProfileKey(profileKey) {
 			return nil, fmt.Errorf("weekprofile: invalid profile key %q", profileKey)
 		}
 		prof := schedule.NewClimateProfile()
@@ -348,19 +348,6 @@ func RawToClimate(raw rawClimateSchedule) (*schedule.Climate, error) {
 		c.Profiles[profileKey] = prof
 	}
 	return c, nil
-}
-
-// isValidProfileKey mirrors the schedule package helper but is package-local
-// to avoid importing it.
-func isValidProfileKey(k string) bool {
-	if len(k) < 2 || k[0] != 'P' {
-		return false
-	}
-	var n int
-	if _, err := fmt.Sscanf(k, "P%d", &n); err != nil {
-		return false
-	}
-	return n >= 1 && n <= 6
 }
 
 // isValidWeekday checks whether a string is a known CCU weekday.
@@ -486,6 +473,16 @@ func slotsToClimateWeekday(ws weekdaySlots) schedule.ClimateWeekday {
 	for _, n := range ordered {
 		endStr := n.slot.EndTime
 		temp := n.slot.Temperature
+
+		// A cell whose end time does not parse, or does not advance past the
+		// previous cell's end, spans no minutes: it can only produce a
+		// zero-length period. The base-temperature derivation drops the same
+		// cells, and so does the flat-paramset reader in
+		// internal/central/adapter.
+		endMins := toMinutes(endStr)
+		if endMins < 0 || endMins <= toMinutes(prevEnd) {
+			continue
+		}
 
 		if temp != baseTemp {
 			if current == nil {
@@ -728,7 +725,7 @@ func ParseSimpleRawParamset(raw map[string]any, bits TargetChannelBits) (*schedu
 		if groupNo < 1 || groupNo > SimpleMaxGroup {
 			continue
 		}
-		if g.weekday == 0 {
+		if !IsSimpleGroupActive(g.weekday) {
 			continue // inactive group
 		}
 		days := WeekdayBitmaskToList(g.weekday)

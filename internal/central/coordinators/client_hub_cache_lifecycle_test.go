@@ -445,13 +445,13 @@ func TestHubCoordinatorAddRemoveSysvarDP(t *testing.T) {
 	}
 }
 
-func TestHubCoordinatorSetProgramStateNilWriterIsNoop(t *testing.T) {
+func TestHubCoordinatorSetProgramStateNilWriterReportsTheMissingWire(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	h := NewHubCoordinator("c-psw", bus)
 	// No writer wired.
-	if err := h.SetProgramState(context.Background(), "prog-1", true); err != nil {
-		t.Fatalf("SetProgramState with nil writer must return nil: %v", err)
+	if err := h.SetProgramState(context.Background(), "prog-1", true); !errors.Is(err, ErrNoProgramStateWriter) {
+		t.Fatalf("SetProgramState with nil writer must report ErrNoProgramStateWriter, got %v", err)
 	}
 }
 

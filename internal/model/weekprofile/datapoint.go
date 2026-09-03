@@ -81,6 +81,12 @@ type TargetChannelInfo struct {
 	ChannelNo      int
 	ChannelAddress string
 	Name           string
+	// NameSynthetic reports that Name is a generated placeholder, not a
+	// name the operator gave the channel. Consumers that choose a label
+	// read this instead of comparing Name against the placeholder's
+	// spelling — a channel an operator actually named "Channel 5" is
+	// indistinguishable from a generated one by string comparison alone.
+	NameSynthetic bool
 	// ChannelType is "primary" or "secondary".
 	ChannelType string
 }

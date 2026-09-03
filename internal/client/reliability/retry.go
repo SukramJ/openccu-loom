@@ -189,14 +189,13 @@ func NewRetrier(cfg RetryConfig) *Retrier {
 	if cfg.Multiplier <= 1 {
 		cfg.Multiplier = 2
 	}
-	// Default jitter is `_JITTER_FACTOR = 0.2` (±20 %). A zero value
-	// triggers the default; pass a negative value to disable jitter
-	// explicitly.
+	// A zero value triggers the shared default; pass a negative value to
+	// disable jitter explicitly.
 	switch {
 	case cfg.Jitter < 0:
 		cfg.Jitter = 0
 	case cfg.Jitter == 0:
-		cfg.Jitter = 0.2
+		cfg.Jitter = hmreliability.RetryJitterFraction
 	}
 	if cfg.Rand == nil {
 		seed := time.Now().UnixNano()

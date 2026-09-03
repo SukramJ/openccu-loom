@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 )
 
 // SessionProvider returns the currently-cached CCU session ID. The
@@ -152,8 +154,8 @@ func buildMultipart(id string, payload io.Reader) (io.Reader, string, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 	filename := id
-	if !strings.HasSuffix(filename, ".sbk") {
-		filename += ".sbk"
+	if !strings.HasSuffix(filename, sbk.Extension) {
+		filename += sbk.Extension
 	}
 	field, err := w.CreateFormFile("backup_file", filename)
 	if err != nil {

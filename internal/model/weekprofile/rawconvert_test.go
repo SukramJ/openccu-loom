@@ -761,21 +761,21 @@ func TestMapToProfileKeyAllBranches(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// isValidProfileKey — invalid formats
+// profile-key grammar — invalid formats
 // ---------------------------------------------------------------------------
 
-func TestIsValidProfileKeyInvalid(t *testing.T) {
+func TestProfileKeyGrammarInvalid(t *testing.T) {
 	t.Parallel()
 	invalid := []string{"", "P", "P0", "P7", "X1", "1"}
 	for _, k := range invalid {
-		if isValidProfileKey(k) {
-			t.Errorf("isValidProfileKey(%q) = true, want false", k)
+		if schedule.IsValidProfileKey(k) {
+			t.Errorf("schedule.IsValidProfileKey(%q) = true, want false", k)
 		}
 	}
 	valid := []string{"P1", "P2", "P6"}
 	for _, k := range valid {
-		if !isValidProfileKey(k) {
-			t.Errorf("isValidProfileKey(%q) = false, want true", k)
+		if !schedule.IsValidProfileKey(k) {
+			t.Errorf("schedule.IsValidProfileKey(%q) = false, want true", k)
 		}
 	}
 }

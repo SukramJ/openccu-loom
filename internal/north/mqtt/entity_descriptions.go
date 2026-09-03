@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
 // EntityDescription captures the per-parameter metadata MQTT consumers
@@ -53,10 +54,13 @@ type EntityDescription struct {
 	SuggestedDisplayPrecision int
 }
 
-// EntityCategory values mirror Home Assistant's literal constants.
+// EntityCategory values are Home Assistant's literal constants. They
+// are the payload-layer declarations, not a second spelling of them:
+// the two planes publish into the same discovery bodies, so a copy that
+// drifts places an entity in a category the other plane does not use.
 const (
-	EntityCategoryConfig     = "config"
-	EntityCategoryDiagnostic = "diagnostic"
+	EntityCategoryConfig     = payload.CombinedEntityCategoryConfig
+	EntityCategoryDiagnostic = payload.CombinedEntityCategoryDiagnostic
 )
 
 // Unit spellings that carry a prefix Unicode encodes twice. Every one of

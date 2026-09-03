@@ -275,6 +275,13 @@ func resolveUniqueDevice(reg *central.Registry, deviceAddress string) (*device.D
 	return found, foundOn, nil
 }
 
+// The domain rule is [hmtypes.DeviceAddress], which cuts at the FIRST colon.
+// This copy cuts at the last one. The two agree on every address a CCU
+// produces — a scan of the 5818 ADDRESS values in the reference device
+// descriptors finds none with more than one colon — and nothing in the
+// firmware or the descriptors says which half a two-colon address would name,
+// so the copies are left as they are rather than folded onto a convention
+// no source carries.
 func deviceAddressOf(channel string) string {
 	for i := len(channel) - 1; i >= 0; i-- {
 		if channel[i] == ':' {

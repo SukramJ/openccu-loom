@@ -822,7 +822,7 @@ func (t *Tracker) RecordEventReceived(name string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	now := t.clk.Now()
-	sample := Sample{Healthy: true, Note: "event-received", Timestamp: now}
+	sample := Sample{Healthy: true, Note: "event-received", NoteKey: NoteKeyFor("event-received"), Timestamp: now}
 	// We only update the last-event note without flipping the status — the
 	// component may be degraded or unhealthy for other reasons and we do
 	// not want a received-event to reset that. Store as a separate sample so

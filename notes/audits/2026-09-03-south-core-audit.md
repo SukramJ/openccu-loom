@@ -334,6 +334,45 @@ On the firmware side the ratio runs the other way: only 36 of 234 rules came
 back confirmed exactly, but 109 were narrowed rather than refuted — right where
 they are applied, wrong if generalised. Recording the boundary is the result.
 
+## Remediation outcome
+
+Everything below was written before any of it was fixed. What follows is
+what the fixing turned up, added after the fact so the report and the tree
+do not drift apart.
+
+All 13 high and 97 medium findings were worked through first, then the 170
+low ones and the nine low firmware contradictions. The low set was
+re-triaged against the tree before anything was touched: five had already
+been fixed as a side effect of the high/medium work and were left alone.
+
+Three results are worth recording because they change what the report
+above claims:
+
+**A recipe is a claim, not a fact.** Several fixes were refused by the
+person or agent applying them, with a source: one because the CCU firmware
+contradicted the premise the recipe rested on, one because a proposed
+guard was measured — through `go test -overlay`, so the shared file was
+never touched — and found to stay green in both directions, one because
+the fix needed a value no source in the tree carries. Those are recorded
+as unfixed rather than carried, and the report's finding stands as
+*narrowed*, not resolved.
+
+**The golden naming corpus measured nothing.** `tests/golden/naming_test.go`
+drove a naming family on `*Channel` that no production code called, and the
+two had diverged in 18 of 20 cases — the dead one emitted raw wire
+parameter names where the daemon emits title-cased ones. The corpus that
+exists to freeze entity naming had frozen names no operator ever saw. It
+runs against `device.BuildDataPointName` now, and repointing it exposed a
+real defect the audit had not found: stripping the device-name prefix left
+the separator behind, so a channel named "Wohnzimmer Licht-Kanal" was
+published as "-Kanal Level".
+
+**Two families were deleted rather than repaired.** `internal/model/device/naming.go`
+and the `SysvarDp*` set in `internal/model/hub` each carried duplicated
+rules that had drifted from the live ones, and neither had a production
+caller, an accessor, or a constructor call since the initial release. The
+duplication findings against them are resolved by removal.
+
 ## Method
 
 29 readers, one per partition, each reading its files end to end and returning

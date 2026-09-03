@@ -722,31 +722,28 @@ func detectLockAction(level float64, durBase, durFactor int) string {
 //
 //	level_2 / ramp_time / duration
 //
-// Keep this table in sync with internal/model/schedule/simple.go::ValidateFor.
-var simpleScheduleUnsupportedFields = map[string]map[string]struct{}{
-	"switch": {"level_2": {}, "ramp_time": {}},
-	"light":  {"level_2": {}},
-	"cover":  {"ramp_time": {}, "duration": {}},
-	"valve":  {"level_2": {}, "ramp_time": {}},
-	"lock":   {"level_2": {}, "ramp_time": {}, "duration": {}},
-}
-
-// stripUnsupportedFields nulls fields the domain validator rejects so
-// the parsed entry survives a Parse → Validate → Build round-trip.
+// The catalogue itself lives in [schedule.UnsupportedFieldsFor], which the
+// domain validator enforces — restating it here is what let a read emit a
+// field the write then rejected.
+//
+// stripUnsupportedFields nulls fields the domain validator rejects so the
+// parsed entry survives a Parse → Validate → Build round-trip. The domain
+// strings the adapter carries are the [hmenum.DataPointCategory] values, so
+// a category the catalogue does not constrain drops nothing.
 func stripUnsupportedFields(entries []hmapi.SimpleScheduleEntry, domain string) {
-	unsupported, ok := simpleScheduleUnsupportedFields[domain]
-	if !ok {
+	dropLevel2, dropRampTime, dropDuration := schedule.UnsupportedFieldsFor(hmenum.DataPointCategory(domain))
+	if !dropLevel2 && !dropRampTime && !dropDuration {
 		return
 	}
 	for i := range entries {
 		e := &entries[i]
-		if _, drop := unsupported["level_2"]; drop {
+		if dropLevel2 {
 			e.Level2 = nil
 		}
-		if _, drop := unsupported["ramp_time"]; drop {
+		if dropRampTime {
 			e.RampTime = ""
 		}
-		if _, drop := unsupported["duration"]; drop {
+		if dropDuration {
 			e.Duration = ""
 		}
 	}
@@ -1111,7 +1108,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 func (s *SchedulesDomain) SetActiveProfile(
 	ctx context.Context, deviceAddress string, channelNo int, profile string,
 ) error {
-	if !isValidProfileID(profile) {
+	if !schedule.IsValidProfileKey(profile) {
 		return fmt.Errorf("%w: %q is not a valid profile key (P1..P6)", ErrInvalidProfileID, profile)
 	}
 	// Per-device cap check: P4 on a 3-profile device is rejected.
@@ -1160,7 +1157,7 @@ func (s *SchedulesDomain) readActiveProfile(
 		return "", 0, false
 	}
 	idx, ok := coerceInt(raw)
-	if !ok || idx < 1 || idx > 6 {
+	if !ok || !weekprofile.ValidProfileIndex(idx) {
 		return "", 0, false
 	}
 	return fmt.Sprintf("P%d", idx), idx - 1, true
@@ -1326,10 +1323,11 @@ func parseClimateSchedule(ctx context.Context, raw map[string]any) (*hmapi.Clima
 // base-temperature + explicit-periods form (the "simple" schedule
 // shape). The base temperature is the temperature holding the most
 // minutes of the day, decided by
-// [schedule.IdentifyBaseTemperatureFromSegments] so that this read path
-// and the week-profile read path cannot report different bases for the
-// same paramset; every stretch that is not the base becomes an explicit
-// period.
+// [schedule.IdentifyBaseTemperatureFromSegments]. The winner rule is
+// shared; the flattening that produces the segments is not, and each path
+// normalises its own wire shape — the two agree only as far as they drop
+// the same cells, which TestClimateBaseTemperatureAgreesAcrossReadPaths
+// measures. Every stretch that is not the base becomes an explicit period.
 func simplifyWeekday(slots map[int]*slotVals) hmapi.ClimateWeekday {
 	// Slot numbers in ascending order.
 	nums := make([]int, 0, len(slots))
@@ -1405,7 +1403,7 @@ func serializeClimateSchedule(sched *hmapi.ClimateSchedule) (map[string]any, err
 	// allocation size. The map grows on demand.
 	out := make(map[string]any)
 	for profileID, profile := range sched.Profiles {
-		if !isValidProfileID(profileID) {
+		if !schedule.IsValidProfileKey(profileID) {
 			return nil, fmt.Errorf("schedules: invalid profile id %q", profileID)
 		}
 		for weekday, wd := range profile.Weekdays {
@@ -1590,14 +1588,6 @@ func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 }
 
 // --- helpers ------------------------------------------------------
-
-func isValidProfileID(s string) bool {
-	if len(s) != 2 || s[0] != 'P' {
-		return false
-	}
-	n := int(s[1] - '0')
-	return n >= 1 && n <= 6
-}
 
 func isValidWeekdayName(s string) bool {
 	return slices.Contains(scheduleWeekdays, s)

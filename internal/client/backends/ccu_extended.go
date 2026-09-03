@@ -132,8 +132,12 @@ func (b *CcuBackend) SetInstallModeLocal(ctx context.Context, duration int, sgti
 	return err
 }
 
-// comTestTimeLayout is the ReGa `system.Date("%Y-%m-%d %H:%M:%S")` format
-// the com-test scripts emit for the start / completed timestamps.
+// comTestTimeLayout is the layout the CCU renders LastTestCompletedTime() in.
+// It is settled by the firmware's own formatter, not by system.Date: ReGa
+// TimeStamp.fn::TimeStampToString3 slices the value at fixed character offsets
+// 0/4, 5/2, 8/2, 11/2, 14/2, 17/2, which can only be "YYYY-MM-DD HH:MM:SS",
+// and no step in that chain applies an offset. The value is therefore CCU-local
+// wall clock with no zone — see [CcuBackend.SetCCUTimezone].
 const comTestTimeLayout = "2006-01-02 15:04:05"
 
 type comTestStart struct {
@@ -191,7 +195,7 @@ func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs
 		}
 		if poll.Passed {
 			completedAt := startedAt
-			if t, perr := time.ParseInLocation(comTestTimeLayout, poll.Completed, time.Local); perr == nil {
+			if t, perr := time.ParseInLocation(comTestTimeLayout, poll.Completed, b.ccuLocation()); perr == nil {
 				completedAt = t
 			}
 			return hmapi.CommunicationTestResult{

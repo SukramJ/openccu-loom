@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // fakeClient is a test-double for jsonClientLike.
@@ -601,5 +602,46 @@ func TestLoaderLoad_BadChannelsSkipped(t *testing.T) {
 	// The bad entry was skipped; the good one was processed.
 	if got := cache.GetName("VCU_GOOD"); got != "good device" {
 		t.Errorf("VCU_GOOD name = %q, want %q", got, "good device")
+	}
+}
+
+// TestLoaderSkipsAReloadInsideTheCacheWindow pins the load gate to a
+// third of [hmtypes.MaxCacheAge] by measuring the gate, not by
+// restating the expression that computes it.
+//
+// The window used to be a private ten-second copy divided locally, so
+// the shared ceiling could move without moving the gate; the two ages
+// below straddle the boundary, which is the only observation that tells
+// a three-second window from any other.
+func TestLoaderSkipsAReloadInsideTheCacheWindow(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeClient{
+		deviceDetails: []map[string]any{{"address": "VCU1234567", "name": "Flur", "id": "1"}},
+		rooms:         []rawEntry{},
+		functions:     []rawEntry{},
+	}
+	cache, loader := newTestLoader(client)
+
+	// A third of the shared ceiling, which is what the gate is: whole
+	// seconds, so 3s for a 10s ceiling.
+	window := hmtypes.MaxCacheAge / time.Second / 3 * time.Second
+
+	cache.MarkRefreshed(time.Now().Add(-(window - 500*time.Millisecond)))
+	if err := loader.Load(context.Background(), false); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if client.callCounts.details != 0 {
+		t.Errorf("a cache %v old triggered %d CCU round-trip(s); the gate is %v",
+			window-500*time.Millisecond, client.callCounts.details, window)
+	}
+
+	cache.MarkRefreshed(time.Now().Add(-(window + 500*time.Millisecond)))
+	if err := loader.Load(context.Background(), false); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if client.callCounts.details != 1 {
+		t.Errorf("a cache %v old made %d CCU round-trip(s), want exactly 1; the gate is %v",
+			window+500*time.Millisecond, client.callCounts.details, window)
 	}
 }
