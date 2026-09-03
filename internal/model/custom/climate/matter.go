@@ -7,8 +7,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
+
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -171,40 +172,11 @@ func (climateSystemModeUnsupportedError) MatterStatusCode() im.StatusCode {
 
 var _ im.StatusCodeError = climateSystemModeUnsupportedError{}
 
-// celsiusToMatter encodes an HM temperature (°C) into Matter's int16
-// 0.01°C convention. Clamps to [−27315, 32766] rather than the raw int16
-// bounds: 32767 is the TLV-null sentinel (Matter §2.3.5.1 / chip
-// `kMaxMeasuredValueRange = 32766`) and −32768 falls below the
-// TemperatureMeasurement cluster's MinMeasuredValue constraint floor
-// (chip `kMinMeasuredValueRange = -27315 = -273.15 °C`); a value outside
-// that range is out-of-constraint for the mandatory MeasuredValue
-// attribute on both the standalone and the climate-derived servers.
-//
-// The product is rounded, not truncated: a tenth-of-a-degree reading
-// such as 20.4 is 2039.9999999999998 in binary64, and truncating it
-// reports 20.39 °C — one hundredth below what every other surface shows
-// for the same reading. 54 of the 801 tenth-degree steps between −30 and
-// 50 °C land on that side of an exact hundredth.
-//
-// This body is duplicated: internal/north/matter/cluster/measurement
-// carries the same nine lines as celsiusToInt16, the encoder behind the
-// standalone TemperatureMeasurement endpoints — and the same reading is
-// encoded by both, once for this endpoint's LocalTemperature and once for
-// the channel's own temperature-sensor endpoint. Nothing enforces the
-// agreement: both are unexported in different packages, so a rounding or
-// clamp correction applied here alone makes the two endpoints report
-// different hundredths for one reading. Folding them onto one exported
-// encoder is the fix and belongs in the measurement package.
-func celsiusToMatter(c float64) int16 {
-	v := math.Round(c * 100)
-	if v > 32766 { // 32767 is the Matter NULL sentinel — must not be emitted as a real value
-		return 32766
-	}
-	if v < -27315 { // −273.15 °C absolute-zero floor per chip kMinMeasuredValueRange
-		return -27315
-	}
-	return int16(v)
-}
+// celsiusToMatter encodes a Celsius reading as Matter's centi-degree int16
+// through the one encoder, in [measurement.CelsiusToInt16]. It used to be a
+// byte-identical copy of it, clamps and comments included — two encoders for
+// one wire format, either of which could have been corrected alone.
+func celsiusToMatter(c float64) int16 { return measurement.CelsiusToInt16(c) }
 
 // matterToCelsius is the inverse of [celsiusToMatter].
 func matterToCelsius(m int16) float64 { return float64(m) / 100 }

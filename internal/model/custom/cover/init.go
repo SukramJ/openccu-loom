@@ -179,34 +179,21 @@ func applyGroupLevel(cov *Cover, ch *device.Channel, rebased custom.RebasedChann
 	if cov == nil || ch == nil || ch.Device() == nil {
 		return
 	}
-	for chNo, fields := range rebased.ChannelFields {
-		fv, ok := fields[hmenum.FieldGroupLevel]
-		if !ok {
-			continue
-		}
-		param, _ := custom.ResolveFieldValue(fv)
-		if param == "" {
-			continue
-		}
-		var groupCh *device.Channel
-		for _, sibling := range ch.Device().Channels() {
-			if sibling.Number == chNo {
-				groupCh = sibling
-				break
-			}
-		}
-		if groupCh == nil {
-			continue
-		}
-		// The group channel's LEVEL is read-only on the HmIP families
-		// (HmIP-BROLL reports it as OPERATIONS 5 on channel 3 while the
-		// action channels are read+write), so it resolves to a sensor
-		// rather than a writable float. Asking for the writable shape
-		// found nothing on any device.
-		if dp := custom.GroupLevelField(groupCh, param); dp != nil {
-			cov.SetGroupLevel(dp, useGroupChannelForState(ch))
-			return
-		}
+	// One resolver for the group field: it reads the group-wide block
+	// before the per-channel ones, which this profile did not do (see
+	// custom.ResolveGroupFieldSlot).
+	param, groupCh, ok := custom.ResolveGroupFieldSlot(ch, rebased, hmenum.FieldGroupLevel)
+	if !ok {
+		return
+	}
+	// The group channel's LEVEL is read-only on the HmIP families
+	// (HmIP-BROLL reports it as OPERATIONS 5 on channel 3 while the
+	// action channels are read+write), so it resolves to a sensor
+	// rather than a writable float. Asking for the writable shape
+	// found nothing on any device.
+	if dp := custom.GroupLevelField(groupCh, param); dp != nil {
+		cov.SetGroupLevel(dp, useGroupChannelForState(ch))
+		return
 	}
 }
 
@@ -220,29 +207,16 @@ func applyGroupLevel2(b *Blind, ch *device.Channel, rebased custom.RebasedChanne
 	if b == nil || ch == nil || ch.Device() == nil {
 		return
 	}
-	for chNo, fields := range rebased.ChannelFields {
-		fv, ok := fields[hmenum.FieldGroupLevel2]
-		if !ok {
-			continue
-		}
-		param, _ := custom.ResolveFieldValue(fv)
-		if param == "" {
-			continue
-		}
-		var groupCh *device.Channel
-		for _, sibling := range ch.Device().Channels() {
-			if sibling.Number == chNo {
-				groupCh = sibling
-				break
-			}
-		}
-		if groupCh == nil {
-			continue
-		}
-		if dp := custom.GroupLevelField(groupCh, param); dp != nil {
-			b.SetGroupLevel2(dp)
-			return
-		}
+	// One resolver for the group field: it reads the group-wide block
+	// before the per-channel ones, which this profile did not do (see
+	// custom.ResolveGroupFieldSlot).
+	param, groupCh, ok := custom.ResolveGroupFieldSlot(ch, rebased, hmenum.FieldGroupLevel2)
+	if !ok {
+		return
+	}
+	if dp := custom.GroupLevelField(groupCh, param); dp != nil {
+		b.SetGroupLevel2(dp)
+		return
 	}
 }
 

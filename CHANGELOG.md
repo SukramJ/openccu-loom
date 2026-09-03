@@ -29,6 +29,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Two more single-sourcings.** The climate profile carried a byte-identical
+  copy of the Matter centi-degree encoder — same rounding, same two clamps
+  (32767 is the NULL sentinel and must never be sent as a reading, -27315 is
+  absolute zero), same comments. It reads
+  `measurement.CelsiusToInt16` now, so a boundary corrected in one place cannot
+  leave the other emitting the old value.
+
+  And four device profiles resolved a group-scoped profile field by hand, of
+  which only the light profile read the group-wide declaration block; cover,
+  valve and switch looked at the per-channel blocks alone. No shipped profile
+  declares such a field group-wide, so the four agreed by accident — the first
+  one to do so would have bound on one device family and silently bound nothing
+  on the other three. `custom.ResolveGroupFieldSlot` resolves it once, reading
+  the group-wide block first.
+
 - **A raised rollup lag would have deleted unfolded history, silently.** The
   retention purge drops raw samples once they age out; the hourly fold only
   folds samples older than `rollupHourlyLag`. `config.HistoryRetentionFloor`

@@ -106,33 +106,18 @@ func applyGroupState(sw *Switch, ch *device.Channel, rebased custom.RebasedChann
 	if sw == nil || ch == nil || ch.Device() == nil {
 		return
 	}
-	for chNo, fields := range rebased.ChannelFields {
-		fv, ok := fields[hmenum.FieldGroupState]
-		if !ok {
-			continue
-		}
-		param, _ := custom.ResolveFieldValue(fv)
-		if param == "" {
-			continue
-		}
-		var groupCh *device.Channel
-		for _, sibling := range ch.Device().Channels() {
-			if sibling.Number == chNo {
-				groupCh = sibling
-				break
-			}
-		}
-		if groupCh == nil {
-			continue
-		}
-		switch dp := groupCh.Parameter(param).(type) {
-		case *generic.Switch:
-			sw.SetGroupState(dp)
-			return
-		case *generic.BinarySensor:
-			sw.SetGroupState(dp)
-			return
-		}
+	// One resolver for the group field: it reads the group-wide block before
+	// the per-channel ones, which this profile did not do (see
+	// custom.ResolveGroupFieldSlot).
+	param, groupCh, ok := custom.ResolveGroupFieldSlot(ch, rebased, hmenum.FieldGroupState)
+	if !ok {
+		return
+	}
+	switch dp := groupCh.Parameter(param).(type) {
+	case *generic.Switch:
+		sw.SetGroupState(dp)
+	case *generic.BinarySensor:
+		sw.SetGroupState(dp)
 	}
 }
 

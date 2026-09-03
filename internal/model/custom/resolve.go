@@ -190,3 +190,46 @@ func GroupLevelField(ch *device.Channel, p hmenum.Parameter) GroupLevelDataPoint
 		return nil
 	}
 }
+
+// ResolveGroupFieldSlot resolves a group-scoped profile field to the wire
+// parameter it names and the channel that carries it.
+//
+// It reads the group-wide block first and the per-channel blocks second,
+// because the two device families declare the same field differently: the RF
+// ones map it group-wide onto a parameter of the calling channel, the HmIP
+// ones per channel onto the group's own state channel. Four device profiles
+// resolved this by hand and only one of them read the group-wide block, so a
+// profile that declared such a field group-wide would have been found by the
+// light profile and missed by cover, valve and switch — behaviour-equivalent
+// today only because no profile does.
+//
+// Returns ok=false when the field is not declared, when it names no parameter,
+// or when the named channel is absent from the device.
+func ResolveGroupFieldSlot(
+	ch *device.Channel, rebased RebasedChannelGroupConfig, field hmenum.Field,
+) (param hmenum.Parameter, groupCh *device.Channel, ok bool) {
+	if ch == nil || ch.Device() == nil {
+		return "", nil, false
+	}
+	if fv, declared := rebased.Fields[field]; declared {
+		if p, _ := ResolveFieldValue(fv); p != "" {
+			return p, ch, true
+		}
+	}
+	for chNo, fields := range rebased.ChannelFields {
+		fv, declared := fields[field]
+		if !declared {
+			continue
+		}
+		p, _ := ResolveFieldValue(fv)
+		if p == "" {
+			continue
+		}
+		for _, sibling := range ch.Device().Channels() {
+			if sibling.Number == chNo {
+				return p, sibling, true
+			}
+		}
+	}
+	return "", nil, false
+}
