@@ -29,6 +29,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **An installable access-point firmware update stayed hidden.**
+  `IsFirmwareUpdateReady` held `{READY_FOR_UPDATE, DO_UPDATE_PENDING,
+  PERFORMING_UPDATE}`. The CCU's own install precondition is
+  `READY_FOR_UPDATE || liveServerUpdateState == NEW_FIRMWARE_AVAILABLE ||
+  liveServerUpdateState == DELIVER_FIRMWARE_IMAGE`, and the live-server states
+  reach the legacy XML-RPC wire prefixed `LIVE_`. Both were missing, so
+  `GatedLatestFirmware` reported the device's current version as the latest one
+  and the update never surfaced. The two in-flight states were in the set and
+  are not installable — they answer `IsFirmwareUpdateInProgress`, which
+  `GatedLatestFirmware` now asks separately so a running install still shows
+  the version it is heading for.
+
+- **Four dead exported pairs removed.** `ConvertCPVToHMLevel` /
+  `ConvertCPVToHMIPLevel`, `Notification.SourceNames` and the JSON-RPC
+  transport's `DownloadFirmware` had no production caller — the live download
+  path builds its own request against `cp_maintenance.cgi` and never reached
+  the transport copy. Each had tests, so each looked maintained; a change to
+  any of them would have gone green while the live path kept its own answer.
+
 - **50 further audited rules corrected.** 16 changed behaviour, 34 corrected a
   stated reason. The ones that reached a device:
 

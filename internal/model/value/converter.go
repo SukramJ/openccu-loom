@@ -16,7 +16,6 @@
 // turn accepts an int64 for a bool target, which the other does not. Neither
 // copy has a production caller — the outgoing value of a write is serialised
 // by the transport.
-// 2. [ConvertCPVToHMLevel] / [ConvertCPVToHMIPLevel] — the BidCos
 // "hex level" → float64 decode for COMBINED_PARAMETER channels. The decode a
 // running daemon performs is backends.ParseCombinedParameter, which does not
 // agree with this pair on every input; the encode direction lives in
@@ -30,7 +29,6 @@
 package value
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -120,28 +118,6 @@ func FromHomematicValue(v any, targetType string) any {
 		}
 	}
 	return v
-}
-
-// ConvertCPVToHMLevel converts a BidCos CPV hex string back to a
-// floating-point level (0..1).
-func ConvertCPVToHMLevel(cpv string) (float64, bool) {
-	var raw int
-	if _, err := fmt.Sscanf(cpv, "%v", &raw); err != nil {
-		return 0, false
-	}
-	return float64(raw) / 100 / 2, true
-}
-
-// ConvertCPVToHMIPLevel converts a BidCos CPV integer string to a
-// floating-point level for HmIP.
-//
-// int(value) / 100
-func ConvertCPVToHMIPLevel(cpv string) (float64, bool) {
-	var raw int
-	if _, err := fmt.Sscanf(cpv, "%d", &raw); err != nil {
-		return 0, false
-	}
-	return float64(raw) / 100, true
 }
 
 // roundFloat rounds f to decimals decimal places.

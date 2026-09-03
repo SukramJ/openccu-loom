@@ -24,10 +24,6 @@ import (
 // up to five minutes on a loaded unit.
 const backupDownloadTimeout = 5 * time.Minute
 
-// firmwareDownloadTimeout is the per-request HTTP timeout for the CCU
-// firmware download initiated via the maintenance CGI.
-const firmwareTransportDownloadTimeout = 10 * time.Minute
-
 // The methods in this file are typed wrappers around [Client.Call] for the
 // most frequently used CCU JSON-RPC operations. Wire-method names and
 // Parameter keys mirror py (lines cited per method).
@@ -818,91 +814,6 @@ func (c *Client) DownloadBackup(ctx context.Context) ([]byte, error) {
 		return nil, c.wrap("download_backup", fmt.Errorf("read response body: %w", err))
 	}
 	return data, nil
-}
-
-// DownloadFirmware posts a firmware URL to the CCU's maintenance CGI. Only
-// "http://" and "https://" scheme URLs are accepted; others return
-// [hmerr.ErrUnsupported].
-//
-// Wire: POST {baseURL}/config/cp_maintenance.cgi (form params: sid, action,
-// url) (10-minute timeout).
-//
-// THIS REQUEST IS NOT KNOWN TO WORK AGAINST A CCU, and two independent
-// readings of the firmware say it cannot, so a nil return here is NOT
-// evidence that a download started:
-//
-//   - There is no `download_firmware` action. cp_maintenance.cgi dispatches
-//     by calling `action_$action`, and the only download action it defines is
-//     action_download_logfile; an unknown name is an undefined Tcl command.
-//     Its remote firmware source is a fixed script constant
-//     (REMOTE_FIRMWARE_SCRIPT) and its local source is a multipart
-//     `firmware_file` upload (action_firmware_upload) — neither takes a `url`
-//     parameter.
-//   - The bare `sid` FORM field is never read. session.tcl is sourced before
-//     the CGI parses its POST body, and its session_urlsid reads
-//     QUERY_STRING only, returning "" immediately when that is empty — so the
-//     validity check rejects the request before any action would run. The
-//     session id has to travel in the query string, in the @…@ form
-//     [Client.DownloadBackup] uses.
-//
-// Both failures render an HTML page under HTTP 200, which the status check
-// below accepts. Correcting that — and the identical form built on the live
-// path in internal/client/backends — needs a verified replacement request
-// (the fixed remote script, or the multipart upload), which no source in this
-// repo carries; until then the operation is unverified and reports success it
-// cannot substantiate.
-func (c *Client) DownloadFirmware(ctx context.Context, firmwareURL string) error {
-	if !strings.HasPrefix(firmwareURL, "http://") && !strings.HasPrefix(firmwareURL, "https://") {
-		return c.wrap("download_firmware", fmt.Errorf("only http/https scheme allowed, got %q: %w", firmwareURL, hmerr.ErrUnsupported))
-	}
-
-	c.mu.Lock()
-	sid := c.sessionID
-	c.mu.Unlock()
-	if sid == "" {
-		return c.wrap("download_firmware", fmt.Errorf("no active JSON-RPC session: %w", hmerr.ErrAuthFailure))
-	}
-
-	base := c.backupBaseURL()
-	if base == "" {
-		return c.wrap("download_firmware", fmt.Errorf("cannot derive base URL from endpoint %q: %w", c.cfg.Endpoint, hmerr.ErrUnsupported))
-	}
-
-	uploadURL := base + "/config/cp_maintenance.cgi"
-
-	form := url.Values{
-		"sid":    {sid},
-		"action": {"download_firmware"},
-		"url":    {firmwareURL},
-	}
-
-	hc := c.httpClient
-	if hc == nil {
-		hc = httpx.NewClient(firmwareTransportDownloadTimeout)
-	} else {
-		hc = &http.Client{
-			Transport: hc.Transport,
-			Timeout:   firmwareTransportDownloadTimeout,
-		}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return c.wrap("download_firmware", fmt.Errorf("build request: %w", err))
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := hc.Do(req)
-	if err != nil {
-		return c.wrap("download_firmware", fmt.Errorf("%w: %w", hmerr.ErrNoConnection, err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return c.wrap("download_firmware", fmt.Errorf("CCU returned HTTP %d: %w", resp.StatusCode, hmerr.ErrInternalBackendException))
-	}
-	return nil
 }
 
 // GetHTTPSRedirectEnabled queries the CCU for its current HTTPS-redirect flag.

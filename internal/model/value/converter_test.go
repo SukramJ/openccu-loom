@@ -109,30 +109,6 @@ func TestFromHomematicValue_PassThrough(t *testing.T) {
 	}
 }
 
-// TestConvertCPVToHMLevel verifies the CPV hex → level round-trip.
-func TestConvertCPVToHMLevel(t *testing.T) {
-	tests := []struct {
-		cpv  string
-		want float64
-		ok   bool
-	}{
-		{"0x00", 0.0, true},
-		{"0xc8", 1.0, true},
-		{"0x64", 0.5, true},
-		{"not-a-hex", 0, false},
-	}
-	for _, tt := range tests {
-		got, ok := value.ConvertCPVToHMLevel(tt.cpv)
-		if tt.ok && !ok {
-			t.Errorf("ConvertCPVToHMLevel(%q): expected ok=true, got false", tt.cpv)
-			continue
-		}
-		if tt.ok && math.Abs(got-tt.want) > 1e-6 {
-			t.Errorf("ConvertCPVToHMLevel(%q) = %v, want %v", tt.cpv, got, tt.want)
-		}
-	}
-}
-
 // TestConvertableParameters verifies the set covers the known
 // convertable parameter names.
 func TestConvertableParameters(t *testing.T) {

@@ -31,12 +31,28 @@ func (s DeviceFirmwareState) IsFirmwareUpdateInProgress() bool {
 	return s == DeviceFirmwareStateDoUpdatePending || s == DeviceFirmwareStatePerformingUpdate
 }
 
-// IsFirmwareUpdateReady reports whether the state represents a
-// pending-or-ready update that can be kicked off.
+// IsFirmwareUpdateReady reports whether an update can be started now.
+//
+// This is the CCU's own install precondition:
+//
+//	installable = updateState == READY_FOR_UPDATE
+//	           || liveServerUpdateState == NEW_FIRMWARE_AVAILABLE
+//	           || liveServerUpdateState == DELIVER_FIRMWARE_IMAGE
+//
+// The live-server states reach the legacy XML-RPC wire carrying a "LIVE_"
+// prefix, and the CCU's device-firmware overview renders its Update button for
+// LIVE_NEW_FIRMWARE_AVAILABLE. Both were missing here, so an access point with
+// an installable update reported its current version as the latest one and the
+// update stayed hidden.
+//
+// DO_UPDATE_PENDING and PERFORMING_UPDATE were in this set and are not
+// installable — an install is already running. They answer
+// [DeviceFirmwareState.IsFirmwareUpdateInProgress] instead, which every
+// consumer that needs to know about an in-flight install already asks.
 func (s DeviceFirmwareState) IsFirmwareUpdateReady() bool {
 	return s == DeviceFirmwareStateReadyForUpdate ||
-		s == DeviceFirmwareStateDoUpdatePending ||
-		s == DeviceFirmwareStatePerformingUpdate
+		s == DeviceFirmwareStateLiveNewFirmwareAvailable ||
+		s == DeviceFirmwareStateLiveDeliverFirmwareImage
 }
 
 // DeviceUpdateStatus is the daemon-derived, client-facing firmware-update

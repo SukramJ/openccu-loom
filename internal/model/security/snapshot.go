@@ -158,24 +158,6 @@ type Notification struct {
 	Retainable bool
 }
 
-// SourceNames returns the display names of the notification's sources,
-// falling back to the channel address for an unnamed one.
-func (n Notification) SourceNames() []string {
-	if len(n.Sources) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(n.Sources))
-	for i := range n.Sources {
-		switch {
-		case n.Sources[i].Name != "":
-			out = append(out, n.Sources[i].Name)
-		case n.Sources[i].ChannelAddress != "":
-			out = append(out, n.Sources[i].ChannelAddress)
-		}
-	}
-	return out
-}
-
 // SourceView is one classified data point as an operator sees it in the
 // inventory: what the classifier decided, whether an override changed
 // that, and whether an alarm zone holds it.

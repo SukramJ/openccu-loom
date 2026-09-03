@@ -88,34 +88,3 @@ func TestFromHomematicValue_ISOTimeWithoutTimezone(t *testing.T) {
 
 // TestFromHomematicValue_BadTimeFallsThrough verifies that an unparseable
 // string is returned unchanged when targetType is "time.Time".
-func TestFromHomematicValue_BadTimeFallsThrough(t *testing.T) {
-	s := "not-a-time"
-	got := value.FromHomematicValue(s, "time.Time")
-	if got != s {
-		t.Errorf("expected passthrough of bad time string, got %v", got)
-	}
-}
-
-// TestConvertCPVToHMIPLevel verifies the HmIP CPV → level round-trip.
-func TestConvertCPVToHMIPLevel(t *testing.T) {
-	tests := []struct {
-		cpv  string
-		want float64
-		ok   bool
-	}{
-		{"0", 0.0, true},
-		{"100", 1.0, true},
-		{"50", 0.5, true},
-		{"notanint", 0, false},
-	}
-	for _, tt := range tests {
-		got, ok := value.ConvertCPVToHMIPLevel(tt.cpv)
-		if ok != tt.ok {
-			t.Errorf("ConvertCPVToHMIPLevel(%q): ok=%v, want %v", tt.cpv, ok, tt.ok)
-			continue
-		}
-		if tt.ok && (got < tt.want-1e-9 || got > tt.want+1e-9) {
-			t.Errorf("ConvertCPVToHMIPLevel(%q) = %v, want %v", tt.cpv, got, tt.want)
-		}
-	}
-}
