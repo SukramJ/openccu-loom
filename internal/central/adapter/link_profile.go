@@ -223,20 +223,17 @@ func decodeFloatSlice(raws []json.RawMessage) []float64 {
 	return out
 }
 
-// profileSpecificity scores a profile: every fixed constraint gains
-// one point, every non-fixed (list / range) subtracts 100. All-fixed
-// profiles therefore always beat profiles with loose constraints,
-// regardless of total parameter count.
+// profileSpecificity scores a profile through the one implementation, in
+// [linkprofile.ProfileSpecificity]. It used to be a second copy of the same
+// arithmetic over this plane's own constraint shape; both planes resolve the
+// active profile, so two scorers could name different profiles for one
+// channel.
 func profileSpecificity(params map[string]profileParamConstraint) float64 {
-	fixed, loose := 0, 0
+	types := make([]string, 0, len(params))
 	for name := range params {
-		if params[name].ConstraintType == "fixed" {
-			fixed++
-		} else {
-			loose++
-		}
+		types = append(types, params[name].ConstraintType)
 	}
-	return float64(fixed) - float64(loose)*100
+	return linkprofile.ProfileSpecificity(types)
 }
 
 // toFloat narrows whatever the CCU returned (int / float / string)

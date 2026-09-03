@@ -480,13 +480,37 @@ func ProfileMatches(params map[string]ParamConstraint, current map[string]any) b
 	return true
 }
 
-// profileSpecificity scores a profile: fixed constraints gain one point,
-// non-fixed (list / range) subtract 100. All-fixed profiles always beat
-// profiles with loose constraints regardless of total parameter count.
+// ProfileSpecificityOfConstraints scores this plane's own constraint shape.
+// Exported so a parity test can compare the two planes through the entry point
+// each of them actually uses.
+func ProfileSpecificityOfConstraints(params map[string]ParamConstraint) float64 {
+	return profileSpecificity(params)
+}
+
+// profileSpecificity is the internal form: it projects this package's
+// constraints onto the shared scorer.
 func profileSpecificity(params map[string]ParamConstraint) float64 {
-	fixed, loose := 0, 0
+	types := make([]string, 0, len(params))
 	for _, c := range params {
-		if c.ConstraintType == "fixed" {
+		types = append(types, c.ConstraintType)
+	}
+	return ProfileSpecificity(types)
+}
+
+// ProfileSpecificity scores a profile from its constraint types alone: every
+// "fixed" constraint gains a point, every other kind subtracts 100, so an
+// all-fixed profile always beats one with a loose constraint regardless of how
+// many parameters each carries.
+//
+// It takes the types rather than the constraints because that is all the score
+// reads, and because the other plane holds its constraints in a different
+// shape — the SPA's link schema keeps them as raw JSON. Both planes resolve
+// the active profile, and a second implementation of the score would let them
+// name different profiles for one channel.
+func ProfileSpecificity(constraintTypes []string) float64 {
+	fixed, loose := 0, 0
+	for _, t := range constraintTypes {
+		if t == "fixed" {
 			fixed++
 		} else {
 			loose++

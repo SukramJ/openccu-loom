@@ -29,6 +29,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The active-profile score was computed twice.** Both planes resolve which
+  link profile is active — the SPA's schema over raw JSON constraints, the
+  store over decoded ones — and each carried its own copy of the specificity
+  arithmetic. Two scorers can rank two profiles differently, and then the
+  operator sees one active profile while everything reading the store sees
+  another. `linkprofile.ProfileSpecificity` is the one scorer now; it takes the
+  constraint types, which is all the score ever read, so neither plane has to
+  convert its whole constraint shape to ask.
+
 - **The OnOff cluster's Matter identity was hand-transcribed in four
   packages.** `internal/model/generic` and the switch, light and siren profiles
   each declared the cluster id, the revision, the LT-gated attribute block and
