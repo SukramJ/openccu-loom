@@ -123,7 +123,10 @@ func TestParityMatterJS_SmokeExpressedStateUsesItsOwnEnum(t *testing.T) {
 		{SmokeStatusIdleOff, matterExpressedStateNormal},
 		{SmokeStatusSecondaryAlarm, matterExpressedStateSmokeAlarm},
 		{SmokeStatusPrimaryAlarm, matterExpressedStateSmokeAlarm},
-		{SmokeStatusIntrusion, matterExpressedStateSmokeAlarm},
+		// INTRUSION_ALARM is Normal, not SmokeAlarm: the detector is being
+		// used as a sounder for a burglar alarm and its smoke sensor has
+		// detected nothing. See TestIntrusionIsNotReportedAsSmoke.
+		{SmokeStatusIntrusion, matterExpressedStateNormal},
 	}
 	for _, c := range cases {
 		if got := smokeStatusToExpressedState(c.status); got != c.want {

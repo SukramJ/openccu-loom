@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
@@ -406,28 +407,48 @@ func (s *SmokeSiren) MatterClusterServers() []interfaces.MatterClusterServer {
 // smokeCOServer projects SmokeSiren onto the SmokeCOAlarm cluster.
 // Maps the HM SmokeAlarmStatus enum onto AlarmStateEnum:
 //
-//	IDLE_OFF / IDLE_ON       → Normal (0)
-//	SECONDARY_ALARM          → Warning (1) — peer is alarming
-//	PRIMARY_ALARM / INTRUSION → Critical (2) — local alarm fires
+//	IDLE_OFF / INTRUSION_ALARM → Normal (0)
+//	SECONDARY_ALARM            → Warning (1) — a peer detector sensed smoke
+//	PRIMARY_ALARM              → Critical (2) — this detector sensed smoke
 type smokeCOServer struct{ s *SmokeSiren }
 
 func (s smokeCOServer) MatterClusterID() uint32 { return matterClusterSmokeCOAlarm }
 
+// smokeStatusToAlarmState maps the HM status onto AlarmStateEnum.
+//
+// Which labels mean smoke is not decided here: it is read from
+// [hmenum.SmokeDetectorAlarmStatusSmokeLabels], the one place the domain
+// answers that question, so this plane cannot drift from the safety
+// classifier and the derived SMOKE_ALARM sensor. It did: INTRUSION_ALARM was
+// reported as Critical, i.e. as a fire, although it means the installation
+// drove this smoke detector as a *siren* for a burglar alarm — a command the
+// domain sent, not a detection the device made. Matter's SmokeState is
+// "whether the device's smoke sensor is currently triggering a smoke alarm"
+// (matter.js packages/types/src/clusters/smoke-co-alarm.d.ts:150), so an
+// intrusion belongs at Normal however loud the sounder is.
+//
+// Only the severity of a genuine smoke label is decided locally.
 func smokeStatusToAlarmState(st SmokeAlarmStatus) uint8 {
-	switch st {
-	case SmokeStatusPrimaryAlarm, SmokeStatusIntrusion:
-		return matterSmokeAlarmCritical
-	case SmokeStatusSecondaryAlarm:
-		return matterSmokeAlarmWarning
-	default:
+	if !slices.Contains(hmenum.SmokeDetectorAlarmStatusSmokeLabels(), string(st)) {
 		return matterSmokeAlarmNormal
 	}
+	if st == SmokeStatusSecondaryAlarm {
+		return matterSmokeAlarmWarning
+	}
+	return matterSmokeAlarmCritical
 }
 
 // smokeStatusToExpressedState maps the HM status onto ExpressedStateEnum.
-// The device has one sensor, so every non-normal state is expressed as
-// SmokeAlarm; the finer Warning/Critical distinction stays on SmokeState,
-// which is the attribute typed AlarmStateEnum.
+// The device has one sensor, so every smoke state is expressed as SmokeAlarm;
+// the finer Warning/Critical distinction stays on SmokeState, which is the
+// attribute typed AlarmStateEnum.
+//
+// An intrusion alarm reaches Normal here through the same gate: ExpressedState
+// SmokeAlarm means the device is expressing visual and audible indication of a
+// *smoke* alarm (smoke-co-alarm.d.ts:566-574), and the enum carries no member
+// for "sounding on someone else's behalf". Normal understates what the device
+// is doing; SmokeAlarm would misstate why, and only one of those sends a
+// controller a fire notification.
 func smokeStatusToExpressedState(st SmokeAlarmStatus) uint8 {
 	if smokeStatusToAlarmState(st) == matterSmokeAlarmNormal {
 		return matterExpressedStateNormal

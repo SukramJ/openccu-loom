@@ -29,6 +29,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **A burglar alarm was reported to Matter controllers as a fire.**
+  `SMOKE_DETECTOR_ALARM_STATUS` carries `INTRUSION_ALARM` when the installation
+  drives a smoke detector as a *siren* for an intrusion alarm — a command the
+  domain sent, not a detection the device made. The safety classifier and the
+  derived `SMOKE_ALARM` sensor both exclude it, and `pkg/hmenum` spells out why
+  in the comment above the list. The Matter projection reversed that: it mapped
+  the label to `SmokeState = Critical` and `ExpressedState = SmokeAlarm`, which
+  Matter defines as the device's *smoke sensor* triggering
+  (`smoke-co-alarm.d.ts:150`, `:566-574`). Anyone whose alarm sounded a smoke
+  detector got a fire notification from Apple Home or Google Home.
+
+  Which labels mean smoke is no longer decided on the Matter plane at all: it
+  is read from `hmenum.SmokeDetectorAlarmStatusSmokeLabels`, the one place the
+  domain answers that question, so the two planes cannot drift apart again.
+  Only the severity of a genuine smoke label stays local.
+  `TestSmokeMatterPlaneAgreesWithTheDomainsSmokeLabels` asserts the agreement
+  rather than a value, which is what neither side's tests did before — each was
+  internally consistent, and that is why the reversal survived.
+
 - **Eleven more rules grounded against the CCU firmware.** Each was carried by
   a comment, a bare literal or the Python port; each is now either corrected or
   explicitly labelled unverified at the site where a reader will look for it.
