@@ -38,23 +38,13 @@ var InitTime = time.Unix(0, 0).UTC()
 // Hostname and IP validation patterns — mirror the Python reference
 // implementation's HOSTNAME_PATTERN, IPV4_PATTERN, IPV6_PATTERN constants.
 //
-// Note: Go's RE2 does not support PCRE lookaheads / lookbehinds, so the
-// hostname pattern is implemented as a programmatic validator instead of
-// a single compiled regexp. The ipv4 and ipv6 patterns use basic RE2.
-var (
-	ipv4Pattern = regexp.MustCompile(
-		`^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`,
-	)
-	ipv6Pattern = regexp.MustCompile(`^\[?[0-9a-fA-F:]+\]?$`)
-
-	// htmlTagPattern strips HTML tags and entities, mirroring the Python
-	// reference implementation's HTMLTAG_PATTERN.
-	htmlTagPattern = regexp.MustCompile(`<.*?>|&([a-z0-9]+|#\d{1,6}|#x[0-9a-f]{1,6});`)
-
-	// hostnameLabel validates a single DNS label (1-63 chars, alnum + hyphen,
-	// no leading or trailing hyphen). Used by isValidHostname.
-	hostnameLabel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9]$|^[A-Za-z0-9]$`)
-)
+// htmlTagPattern strips HTML tags and entities, mirroring the Python
+// reference implementation's HTMLTAG_PATTERN.
+//
+// The host-validation patterns that stood beside it went with ValidateHost /
+// IsHost: nothing outside their own tests used them, and config's host
+// grammar — the one place that validates a host — is deliberately its own.
+var htmlTagPattern = regexp.MustCompile(`<.*?>|&([a-z0-9]+|#\d{1,6}|#x[0-9a-f]{1,6});`)
 
 // ToBool converts a bool or string to a bool.
 // Strings "y", "yes", "t", "true", "on", "1" (case-insensitive) are
