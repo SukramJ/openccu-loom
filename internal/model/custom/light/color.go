@@ -573,12 +573,18 @@ func (l *FixedColorLight) Subscribe(ch *device.Channel) func() {
 }
 
 // Color returns the last observed colour slot.
+//
+// The slot is resolved through the device's own VALUE_LIST, never by casting
+// the raw index: a CCU orders COLOR by the RGB bit pattern (bit 0 blue, bit 1
+// green, bit 2 red), which agrees with [FixedColor] on only four of its eight
+// slots. A label outside the eight known colours — the writable list also
+// carries RANDOM, OLD_VALUE and DO_NOT_CARE — reports as unobserved.
 func (l *FixedColorLight) Color() (FixedColor, bool) {
-	if l.color == nil {
+	name, ok := l.ColorName()
+	if !ok {
 		return 0, false
 	}
-	v, ok := l.color.Value()
-	return FixedColor(v), ok
+	return fixedColorByName(name)
 }
 
 // SetColor commands a new colour slot. The wire value is the string label
@@ -602,9 +608,38 @@ func (l *FixedColorLight) SetColor(ctx context.Context, c FixedColor, priority h
 		return fmt.Errorf("fixedcolor: SET: %w", err)
 	}
 	// Optimistic local update so Color() / ColorName() reflect the new slot
-	// immediately, before the CCU confirms the write.
-	l.color.OnEvent(int32(c))
+	// immediately, before the CCU confirms the write. The stored index is the
+	// label's position in the device's own VALUE_LIST — the value the CCU will
+	// echo — and not the [FixedColor] ordinal, which denotes a different slot
+	// on four of eight colours.
+	if idx, found := l.deviceSlotIndex(name); found {
+		l.color.OnEvent(idx)
+	}
 	return nil
+}
+
+// deviceSlotIndex returns the position of a COLOR label in the device's
+// VALUE_LIST, which is the raw index the CCU reports for that colour.
+func (l *FixedColorLight) deviceSlotIndex(name string) (int32, bool) {
+	if l.color == nil {
+		return 0, false
+	}
+	for i, label := range l.color.Descriptor.ValueList {
+		if label == name {
+			return int32(i), true
+		}
+	}
+	return 0, false
+}
+
+// fixedColorByName maps a CCU colour label onto its [FixedColor] slot.
+func fixedColorByName(name string) (FixedColor, bool) {
+	for c, n := range fixedColorNames {
+		if n == name {
+			return c, true
+		}
+	}
+	return 0, false
 }
 
 // SetColorByName commands a colour slot by its CCU enum name (e.g. "BLUE").
@@ -613,10 +648,8 @@ func (l *FixedColorLight) SetColor(ctx context.Context, c FixedColor, priority h
 // only has the descriptor must address the slot by name rather than by index.
 // Returns an error when the name is not one of the eight known colours.
 func (l *FixedColorLight) SetColorByName(ctx context.Context, name string, priority hmenum.CommandPriority) error {
-	for c, n := range fixedColorNames {
-		if n == name {
-			return l.SetColor(ctx, c, priority)
-		}
+	if c, known := fixedColorByName(name); known {
+		return l.SetColor(ctx, c, priority)
 	}
 	return fmt.Errorf("fixedcolor: unknown color name %q", name)
 }
@@ -638,14 +671,19 @@ var fixedColorNames = map[FixedColor]string{
 // (e.g. "WHITE", "RED"). Returns ("", false) when the value has never been
 // observed.
 func (l *FixedColorLight) ColorName() (string, bool) {
-	c, ok := l.Color()
+	if l.color == nil {
+		return "", false
+	}
+	name, ok := l.color.Label()
 	if !ok {
 		return "", false
 	}
-	if name, found := fixedColorNames[c]; found {
-		return name, true
+	// Only the eight known colours are reported; RANDOM / OLD_VALUE /
+	// DO_NOT_CARE are write-side selectors, not observed colours.
+	if _, known := fixedColorByName(name); !known {
+		return "", false
 	}
-	return "", false
+	return name, true
 }
 
 // CurrentColorBehaviour returns the last observed COLOR_BEHAVIOUR label
@@ -679,11 +717,9 @@ func (l *FixedColorLight) ChannelHsColor() (hue int32, saturation float64, ok bo
 		return 0, 0, false
 	}
 	// Map the CCU string name to a FixedColor index then to HS.
-	for fc, n := range fixedColorNames {
-		if n == name {
-			h, s := FixedColorToHS(fc)
-			return h, s, true
-		}
+	if fc, known := fixedColorByName(name); known {
+		h, s := FixedColorToHS(fc)
+		return h, s, true
 	}
 	// Unknown name: return minimum hue/saturation (mirrors Python's fallback
 	// of (_MIN_HUE, _MIN_SATURATION) in FIXED_COLOR_TO_HS_CONVERTER.get).

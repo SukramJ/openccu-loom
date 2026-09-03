@@ -58,7 +58,7 @@ func buildSoundPlayerLEDDP(t *testing.T, addr string, w *dispatchWriter) *light.
 	ch := dev.AddChannel(addr+":1", 1, "MP3P_LED", hmenum.ParamsetKeyValues)
 	ch.Put(floatDP(addr+":1", hmenum.ParameterLevel, w))
 	ch.Put(selectDP(addr+":1", hmenum.ParameterColor, w,
-		[]string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"}))
+		[]string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"}))
 	// The HmIP-MP3P LED profile is dimmable / colour-capable (see
 	// newSoundPlayerLEDConstructor); mirror it so set_brightness routes.
 	return light.NewSoundPlayerLED(light.Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColor: true}})

@@ -367,7 +367,7 @@ func newFixedColorLightFixture(t *testing.T, w *fakeWriter) *light.FixedColorLig
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-			ValueList:  []string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"},
+			ValueList:  []string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"},
 		},
 		Writer: w,
 	})
@@ -519,7 +519,7 @@ func newSoundPlayerLEDFixture(t *testing.T, w *fakeWriter) (*light.SoundPlayerLE
 		Key: hmtypes.DataPointKey{ChannelAddress: addr, ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterColor)},
 		Descriptor: hmproto.ParameterData{
 			Type:      hmenum.ParameterTypeEnum,
-			ValueList: []string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"},
+			ValueList: []string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"},
 		},
 		Writer: w,
 	})

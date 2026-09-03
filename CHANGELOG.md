@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Four of the eight fixed colours were reported as the wrong colour.**
+  `FixedColorLight.Color()` cast the raw COLOR index straight to a
+  `FixedColor` ordinal. The CCU orders its COLOR value list by the RGB bit
+  pattern — bit 0 blue, bit 1 green, bit 2 red — giving
+  `BLACK, BLUE, GREEN, TURQUOISE, RED, PURPLE, YELLOW, WHITE`, which agrees
+  with our enumeration on four slots and swaps the other four: what the device
+  called blue we reported as red, its turquoise as yellow, its red as blue, its
+  yellow as turquoise. The ordinal is what arrives on the wire, because the
+  CCU substitutes an ENUM's index for its label
+  (`etc/config_templates/crRFD.conf:47`,
+  `Legacy.Parameter.ReplaceEnumValueWithOrdinal=true`). Affected HmIP-BSL,
+  HmIP-MP3P channels 2-5 and HmIPW-WGC, in `ColorName()`, the MQTT
+  `fixed_color` field, and the optimistic update after a write, which seeded
+  the store with an index the CCU would never echo.
+
+  The slot is resolved through the device's own VALUE_LIST now, so the rule no
+  longer depends on any ordering assumption, and a label outside the eight
+  known colours — the writable list also carries `RANDOM`, `OLD_VALUE` and
+  `DO_NOT_CARE` — reports as unobserved instead of becoming a nonsense
+  ordinal. The write path was already correct: it writes the label, and its
+  own comment stated the CCU's order while `Color()` contradicted it.
+
+  Every test fixture in the repository declared the value list in our order
+  rather than the CCU's, which is why nothing caught this: the tests fed in the
+  convention they confirmed. The fixtures now carry the device's order, and
+  `TestFixedColorLightReadsSlotByLabelNotByIndex` pins each of the eight slots.
+
 ## [0.72.2] - 2026-09-02
 
 ### Fixed
