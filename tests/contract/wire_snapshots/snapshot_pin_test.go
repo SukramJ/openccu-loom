@@ -387,7 +387,7 @@ func newFixedColorLightFixture(t *testing.T, w *fakeWriter) *light.FixedColorLig
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-			ValueList:  []string{"DO_NOT_CARE", "OFF", "OLD_VALUE", "ON"},
+			ValueList:  []string{"OFF", "ON", "BLINKING_SLOW", "BLINKING_MIDDLE", "BLINKING_FAST", "FLASH_SLOW", "FLASH_MIDDLE", "FLASH_FAST", "BILLOW_SLOW", "BILLOW_MIDDLE", "BILLOW_FAST", "OLD_VALUE", "DO_NOT_CARE"},
 		},
 		Writer: w,
 	})

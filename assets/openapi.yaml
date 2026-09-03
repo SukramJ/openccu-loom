@@ -7653,8 +7653,12 @@ components:
         anonymise:
           type: boolean
           description: >-
-            Whether device-address-shaped values in the recorded archive are
-            hashed. Responses always carry the effective value.
+            Whether the archive's operator-identifying attributes are hashed
+            — the `subject`, `user`, `username`, `remote` and `remote_addr`
+            keys. Device addresses, channel addresses, parameter names and
+            interface ids stay in clear text, so an operator reading their own
+            archive can follow the trace. Responses always carry the effective
+            value.
     StartupCaptureConfigWrite:
       type: object
       required: [enabled, duration_seconds]

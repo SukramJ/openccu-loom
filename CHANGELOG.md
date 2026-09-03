@@ -29,6 +29,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The capture archive's redaction was documented as the opposite of what it
+  does.** Two config comments and the REST contract said `anonymise` hashes
+  "device-address-shaped values". It hashes the operator-identifying attributes
+  — the `subject`, `user`, `username`, `remote` and `remote_addr` keys — while
+  device addresses, channel addresses, parameter names and interface ids stay
+  in clear text, which is deliberate: an operator reading their own archive
+  needs them to follow the trace. The `hmlog` side said so correctly all along.
+  An operator who read the contract had it backwards in both directions.
+
+- **A wire-parity reference asserted values no device and neither stack
+  produces.** `FixedColorLight__SetColorBehaviour.json` claimed aiohomematic
+  sends `COLOR_BEHAVIOUR` as the integers 0 / 2 / 3 and that openccu-loom is
+  equivalent. `COLOR_BEHAVIOUR` is an ENUM whose MIN is a string on every
+  device carrying it (HmIP-BSL: `MIN 'OFF'`, thirteen entries with `OLD_VALUE`
+  at 11 and `DO_NOT_CARE` at 12), so both stacks send the label — aiohomematic
+  through `DpSelect`'s string branch, openccu-loom through
+  `Select.EnumWireValue`. The asserted indices belong to no device's list; the
+  Go fixture beside the comparison declared a six-entry value list invented so
+  that exactly those indices would fall out. Reference, fixture and generator
+  now carry what both stacks actually send.
+
 - **Two more single-sourcings.** The climate profile carried a byte-identical
   copy of the Matter centi-degree encoder — same rounding, same two clamps
   (32767 is the NULL sentinel and must never be sent as a reading, -27315 is
