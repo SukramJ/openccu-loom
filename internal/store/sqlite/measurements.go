@@ -1832,9 +1832,13 @@ func (s *MeasurementStore) DeleteDailyOlderThan(ctx context.Context, cutoff time
 }
 
 // DeleteDevice removes every measurement for every channel of the given
-// device. Used on device-remove / unpair so history cannot keep growing
-// for an address that no longer exists. Prefix-safe ("DEVICE" never
-// matches "DEVICE2:0").
+// device, so history cannot keep growing for an address that no longer
+// exists. Prefix-safe ("DEVICE" never matches "DEVICE2:0").
+//
+// Reached on device-remove / unpair through [adapter.WireMeasurementEviction],
+// which is pinned by TestRemovedDevicePurgesItsMeasurementHistory. It had no
+// caller at all until that seam existed, and the comment claiming one is what
+// hid it.
 func (s *MeasurementStore) DeleteDevice(
 	ctx context.Context, centralName, interfaceID, deviceAddress string,
 ) error {

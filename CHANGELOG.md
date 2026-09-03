@@ -29,6 +29,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **An unpaired device kept its measurement history and its recording
+  overrides forever.** `MeasurementStore.DeleteDevice` and
+  `RecordingOverrideStore.DeleteDevice` each carried a doc comment saying they
+  run on device-remove / unpair, and neither had a production caller: the
+  removal path wires evictors for the values cache, the MASTER cache, the
+  paramsets and the channel flags, and none for these two. History across all
+  three tiers and the operator's per-channel recording decisions survived
+  unpairing indefinitely — and because the CCU reuses addresses when hardware
+  is swapped, a replacement paired into the same address inherited the previous
+  device's series and its recording settings. That is exactly the resurfacing
+  the multi-tier delete was written to prevent.
+
+  `WireMeasurementEviction` supplies the missing seam, registered per central
+  through the same observer the other evictors use so a CCU adopted at runtime
+  is covered too. A whole-model teardown is excluded, as elsewhere.
+  `TestRemovedDevicePurgesItsMeasurementHistory` asserts the effect in the
+  database through the real constructor, and both comments now name the seam
+  instead of claiming a caller.
+
 - **A device lookup answered from the wrong CCU.** Device addresses are unique
   within one CCU and repeat verbatim across them — the virtual-remote roots
   (`BidCoS-RF`, `BidCos-Wir`, `HmIP-RCV-1`) and the `INT000*` group devices
