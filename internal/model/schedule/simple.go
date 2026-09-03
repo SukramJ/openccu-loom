@@ -194,6 +194,11 @@ func (e *SimpleEntry) Validate() error {
 	if !timePattern.MatchString(e.Time) {
 		return fmt.Errorf("schedule: invalid time %q", e.Time)
 	}
+	// A device-independent sanity bound only. The range that decides is the
+	// one the channel declares for ASTRO_OFFSET, enforced on the way to the
+	// wire in weekprofile.BuildSimpleRawParamset — the CCU's own editor reads
+	// ASTRO_OFFSET_MIN / MAX out of the paramset description rather than
+	// holding a number, and every model in the corpus declares ±128.
 	if e.AstroOffsetMinutes < -720 || e.AstroOffsetMinutes > 720 {
 		return fmt.Errorf("schedule: astro offset out of range: %d", e.AstroOffsetMinutes)
 	}

@@ -526,6 +526,22 @@ func hasColorScheduleParams(raw map[string]any) bool {
 // one — what the CCU's weekly-program editor reads rather than computes. A
 // device that yields none returns nil, and the encoder then withholds the
 // field instead of guessing a position; see [weekprofile.TargetChannelBits].
+// astroOffsetLimitsFor resolves the channel's declared ASTRO_OFFSET range,
+// the way the CCU's editor reads it out of the paramset description.
+func (s *SchedulesDomain) astroOffsetLimitsFor(deviceAddress string, scheduleChannelNo int) weekprofile.AstroOffsetLimits {
+	if s.registry == nil {
+		return weekprofile.AstroOffsetLimits{}
+	}
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
+		if !ok {
+			continue
+		}
+		return astroOffsetLimits(dev.Channel(fmt.Sprintf("%s:%d", deviceAddress, scheduleChannelNo)))
+	}
+	return weekprofile.AstroOffsetLimits{}
+}
+
 func (s *SchedulesDomain) targetChannelBitsFor(deviceAddress string, scheduleChannelNo int) weekprofile.TargetChannelBits {
 	if s.registry == nil {
 		return nil
@@ -889,7 +905,8 @@ func simpleScheduleToDomain(entries []hmapi.SimpleScheduleEntry) (*schedule.Simp
 // SPA users edit the friendly fields, the wire ends up consistent
 // With.
 func serializeSimpleScheduleWithDomain(
-	entries []hmapi.SimpleScheduleEntry, domain string, deactivateUpTo int, bits weekprofile.TargetChannelBits,
+	entries []hmapi.SimpleScheduleEntry, domain string, deactivateUpTo int,
+	bits weekprofile.TargetChannelBits, astro weekprofile.AstroOffsetLimits,
 ) (map[string]any, error) {
 	if domain == "lock" {
 		// Apply the lock encoding *before* serialising so the
@@ -900,7 +917,7 @@ func serializeSimpleScheduleWithDomain(
 		}
 		entries = mapped
 	}
-	return serializeSimpleSchedule(entries, deactivateUpTo, bits)
+	return serializeSimpleSchedule(entries, deactivateUpTo, bits, astro)
 }
 
 // applyLockEncoding rewrites a lock slot's level / duration / target_channels
@@ -943,12 +960,15 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 // mapped onto [schedule.Simple] and encoded by
 // [weekprofile.BuildSimpleRawParamset], which is the daemon's only
 // encoder for this format.
-func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo int, bits weekprofile.TargetChannelBits) (map[string]any, error) {
+func serializeSimpleSchedule(
+	entries []hmapi.SimpleScheduleEntry, deactivateUpTo int,
+	bits weekprofile.TargetChannelBits, astro weekprofile.AstroOffsetLimits,
+) (map[string]any, error) {
 	s, err := simpleScheduleToDomain(entries)
 	if err != nil {
 		return nil, fmt.Errorf("schedules: %w", err)
 	}
-	raw, err := weekprofile.BuildSimpleRawParamset(s, deactivateUpTo, bits)
+	raw, err := weekprofile.BuildSimpleRawParamset(s, deactivateUpTo, bits, astro)
 	if err != nil {
 		return nil, fmt.Errorf("schedules: %w", err)
 	}
@@ -1015,7 +1035,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	switch sched.Kind {
 	case "simple":
 		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain, highestScheduleGroup(descKeys),
-			s.targetChannelBitsFor(deviceAddress, channelNo))
+			s.targetChannelBitsFor(deviceAddress, channelNo), s.astroOffsetLimitsFor(deviceAddress, channelNo))
 		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
 			// Filter out schedule fields the device does not advertise in its
 			// MASTER paramset description. Devices like HmIP-DLD expose only a

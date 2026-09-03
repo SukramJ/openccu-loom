@@ -395,7 +395,11 @@ type SimpleScheduleEntry struct {
 	// AstroType is "sunrise" or "sunset". Required for any astro-
 	// involving condition; ignored for "fixed_time".
 	AstroType string `json:"astro_type,omitempty"`
-	// AstroOffsetMinutes shifts the astro event (-720..+720).
+	// AstroOffsetMinutes shifts the astro event. The accepted range is the
+	// one the channel declares for ASTRO_OFFSET (INTEGER; every model in the
+	// descriptor corpus declares MIN -128 / MAX 127), read from the paramset
+	// description the way the CCU's own weekly-program editor reads it. A
+	// channel whose descriptor has not been loaded falls back to ±720.
 	AstroOffsetMinutes int `json:"astro_offset_minutes,omitempty"`
 
 	// --- Target ------------------------------------------------

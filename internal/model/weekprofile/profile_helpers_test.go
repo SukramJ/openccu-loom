@@ -566,7 +566,7 @@ func TestSimpleParamsetBuildDictToRaw(t *testing.T) {
 	if err := ss.Put(1, entry); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	got, err := BuildSimpleRawParamset(ss, schedule.SimpleMaxSlot, nil)
+	got, err := BuildSimpleRawParamset(ss, schedule.SimpleMaxSlot, nil, AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestSimpleRawParamsetRoundTripsGroupsAboveTwentyFour(t *testing.T) {
 
 			// And back out again: a schedule that survives the read must
 			// survive the write, or an operator opening it loses it.
-			out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
+			out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil, AstroOffsetLimits{})
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}
@@ -660,7 +660,7 @@ func TestBuildSimpleRawParamsetHonoursTheDeactivationBound(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 
-	out, err := BuildSimpleRawParamset(s, 69, nil)
+	out, err := BuildSimpleRawParamset(s, 69, nil, AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -673,7 +673,7 @@ func TestBuildSimpleRawParamsetHonoursTheDeactivationBound(t *testing.T) {
 
 	// Bound 0 means "device unknown": write the active groups, touch
 	// nothing else.
-	none, err := BuildSimpleRawParamset(s, 0, nil)
+	none, err := BuildSimpleRawParamset(s, 0, nil, AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}

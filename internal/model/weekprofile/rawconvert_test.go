@@ -486,7 +486,7 @@ func TestSimpleParamsetRoundTrip(t *testing.T) {
 		Level:    0.5,
 	})
 
-	raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
+	raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil, AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -539,7 +539,7 @@ func TestSimpleParamsetColorRoundTrip(t *testing.T) {
 		t.Fatalf("colour not parsed: %+v", entry)
 	}
 
-	out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
+	out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil, AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestParseSimpleRawParamsetSkipsInactiveGroups(t *testing.T) {
 
 func TestBuildSimpleRawParamsetNilIsAllZeros(t *testing.T) {
 	t.Parallel()
-	raw, err := BuildSimpleRawParamset(nil, schedule.SimpleMaxSlot, nil)
+	raw, err := BuildSimpleRawParamset(nil, schedule.SimpleMaxSlot, nil, AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("BuildSimpleRawParamset: %v", err)
 	}
@@ -871,7 +871,7 @@ func TestBuildSimpleRawParamsetWritesEveryLockActionDuration(t *testing.T) {
 				TargetChannels: []string{"1_1"},
 			}
 
-			raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil)
+			raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot, nil, AstroOffsetLimits{})
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}

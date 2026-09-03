@@ -782,7 +782,7 @@ func decodeWireDuration(base, factor int) string {
 // the REST/WS schedules domain maps its DTOs onto [schedule.Simple] and
 // calls this rather than encoding the paramset a second time. Errors
 // name the offending group so a REST caller gets a usable 4xx.
-func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int, bits TargetChannelBits) (map[string]any, error) { //nolint:gocyclo,gocognit,funlen // flat per-field emit; length/complexity is field count, not control-flow depth
+func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int, bits TargetChannelBits, astro AstroOffsetLimits) (map[string]any, error) { //nolint:gocyclo,gocognit,funlen // flat per-field emit; length/complexity is field count, not control-flow depth
 	out := make(map[string]any, (deactivateUpTo+1)*4)
 	if s != nil {
 		for _, groupNo := range s.Slots() {
@@ -829,8 +829,12 @@ func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int, bits TargetC
 				return nil, fmt.Errorf("slot %d: unknown astro_type %q", groupNo, entry.AstroType)
 			}
 			out[prefix+"ASTRO_TYPE"] = astroID
-			if entry.AstroOffsetMinutes < -720 || entry.AstroOffsetMinutes > 720 {
-				return nil, fmt.Errorf("slot %d: astro_offset_minutes out of range", groupNo)
+			// The channel's own declared range decides, the way the CCU's
+			// editor does it. A wider value is not clipped: it is a different
+			// switching time from the one the operator asked for.
+			if lo, hi := astro.bounds(); entry.AstroOffsetMinutes < lo || entry.AstroOffsetMinutes > hi {
+				return nil, fmt.Errorf("slot %d: astro_offset_minutes %d outside the declared range %d..%d",
+					groupNo, entry.AstroOffsetMinutes, lo, hi)
 			}
 			out[prefix+"ASTRO_OFFSET"] = entry.AstroOffsetMinutes
 
@@ -1308,4 +1312,36 @@ func splitHHMM(hhmm string) (hour, minute int, err error) {
 		return 0, 0, fmt.Errorf("invalid minute in %q", hhmm)
 	}
 	return h, m, nil
+}
+
+// AstroOffsetLimits carries the ASTRO_OFFSET bounds a channel declares.
+//
+// The CCU holds no constant for this: its weekly-program editor reads
+// ASTRO_OFFSET_MIN / ASTRO_OFFSET_MAX out of the paramset description and
+// clamps its input field to them, so the accepted range is whatever the
+// channel declares. Every model in the descriptor corpus declares INTEGER
+// MIN -128 MAX 127.
+//
+// Declared is false when the channel carries no ASTRO_OFFSET descriptor. The
+// write is then bounded by [astroOffsetFallbackLimit], which is this project's
+// long-standing conservative bound and not a claim about any device.
+type AstroOffsetLimits struct {
+	Min      int
+	Max      int
+	Declared bool
+}
+
+// astroOffsetFallbackLimit bounds an astro offset when the channel declares no
+// range. It is ±12 hours, the bound this project applied before the declared
+// range was read, kept so a channel whose descriptor has not been loaded is no
+// less protected than it used to be. It describes nothing about a device: every
+// model in the descriptor corpus declares ±128.
+const astroOffsetFallbackLimit = 720
+
+// bounds returns the range to enforce and how to name it in an error.
+func (l AstroOffsetLimits) bounds() (lo, hi int) {
+	if l.Declared {
+		return l.Min, l.Max
+	}
+	return -astroOffsetFallbackLimit, astroOffsetFallbackLimit
 }

@@ -29,6 +29,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **A schedule could ask for an astro offset five times wider than any device
+  accepts.** `astro_offset_minutes` was validated against a constant ±720, and
+  anything inside that reached the wire. Every model in the descriptor corpus
+  declares `ASTRO_OFFSET` as `INTEGER MIN -128 MAX 127`, and the CCU's own
+  weekly-program editor carries no constant at all — it reads
+  `ASTRO_OFFSET_MIN` / `ASTRO_OFFSET_MAX` out of the paramset description and
+  clamps its input to them. An offset between 128 and 720 was written, and the
+  device either rejected the `putParamset` or stored a clipped switching time.
+
+  The bound is now the channel's declared range, resolved from the live model
+  the same way the target-channel bits already are. An out-of-range offset is
+  refused rather than clipped: a clipped offset is a different switching time
+  from the one the operator asked for. A channel whose descriptor has not been
+  loaded keeps the previous ±720 bound, which describes nothing about a device
+  and is documented as such. `TestSaveRejectsAnAstroOffsetTheChannelDoesNotDeclare`
+  pins the seam through the production save path rather than the helper.
+
 - **The LED flash duration sent four labels the device does not have, and
   turned a ten-second flash into a permanent one.** `ON_TIME_LIST` was mapped
   through a fixed table of our own that assumed a regular 100 ms ladder up to

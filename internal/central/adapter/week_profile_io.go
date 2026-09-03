@@ -134,6 +134,23 @@ func targetChannelBits(ch *device.Channel) weekprofile.TargetChannelBits {
 	return weekprofile.TargetChannelBitsFrom(wp.AvailableTargetChannels())
 }
 
+// astroOffsetLimits reads the ASTRO_OFFSET bounds the channel declares.
+//
+// The CCU's own weekly-program editor holds no constant for this: it reads
+// ASTRO_OFFSET_MIN / ASTRO_OFFSET_MAX out of the paramset description and
+// clamps its input to them. Slot 1 is representative — a device declares the
+// same range on every slot.
+func astroOffsetLimits(ch *device.Channel) weekprofile.AstroOffsetLimits {
+	if ch == nil {
+		return weekprofile.AstroOffsetLimits{}
+	}
+	lo, hi, ok := ch.MasterParameterIntRange("01_WP_ASTRO_OFFSET")
+	if !ok {
+		return weekprofile.AstroOffsetLimits{}
+	}
+	return weekprofile.AstroOffsetLimits{Min: lo, Max: hi, Declared: true}
+}
+
 type defaultChannelLoader struct {
 	ch     *device.Channel
 	domain string
@@ -205,7 +222,7 @@ func (sv *defaultChannelSaver) Save(ctx context.Context, s *schedule.Simple) err
 	if w == nil {
 		return ErrChannelNotWired
 	}
-	values, err := weekprofile.BuildSimpleRawParamset(s, sv.declaredGroups(ctx), targetChannelBits(sv.ch))
+	values, err := weekprofile.BuildSimpleRawParamset(s, sv.declaredGroups(ctx), targetChannelBits(sv.ch), astroOffsetLimits(sv.ch))
 	if err != nil {
 		return fmt.Errorf("schedule.save.simple: %w", err)
 	}

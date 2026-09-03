@@ -541,6 +541,29 @@ func (c *Channel) ParameterFloatRange(name string) (lo, hi float64, ok bool) {
 	return loV, hiV, true
 }
 
+// MasterParameterIntRange returns the descriptor's MIN / MAX bounds for the
+// named MASTER-paramset parameter, parsed as int. The third return value is
+// true when both bounds were present and parseable.
+//
+// Used for the schedule fields whose accepted range the CCU looks up per
+// channel rather than holding as a constant — ASTRO_OFFSET above all.
+func (c *Channel) MasterParameterIntRange(name string) (lo, hi int, ok bool) {
+	if c == nil {
+		return 0, 0, false
+	}
+	dp := c.MasterParameter(hmenum.Parameter(name))
+	if dp == nil {
+		return 0, 0, false
+	}
+	desc := dp.ParameterData()
+	loV, loOK := parseRawFloat(desc.Min)
+	hiV, hiOK := parseRawFloat(desc.Max)
+	if !loOK || !hiOK {
+		return 0, 0, false
+	}
+	return int(loV), int(hiV), true
+}
+
 // dataPointMultiplierReader is an internal adapter the Multiplier
 // helper uses to fish a per-DP scaling factor out of a DataPoint
 // without forcing every consumer to re-import generic. Every

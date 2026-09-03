@@ -8,6 +8,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
@@ -72,7 +73,7 @@ func TestSerializeSimpleSchedule_ColorGluedToSlot(t *testing.T) {
 			Level:    0.5,
 		},
 	}
-	raw, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot, nil)
+	raw, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot, nil, weekprofile.AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -97,7 +98,7 @@ func TestSerializeSimpleSchedule_ColorZeroEmitted(t *testing.T) {
 		Level:      1.0,
 		ColorType:  ptrInt(0),
 		ColorValue: ptrInt(0),
-	}}, schedule.SimpleMaxSlot, nil)
+	}}, schedule.SimpleMaxSlot, nil, weekprofile.AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -126,7 +127,7 @@ func TestSimpleSchedule_ColorRoundTripAcrossReorder(t *testing.T) {
 	}
 	// Relocate the switch point to slot 7.
 	entries[0].SlotNo = 7
-	out, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot, nil)
+	out, err := serializeSimpleSchedule(entries, schedule.SimpleMaxSlot, nil, weekprofile.AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
