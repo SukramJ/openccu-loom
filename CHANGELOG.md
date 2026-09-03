@@ -8,6 +8,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`reportValueUsage` was classified as a read, and it reconfigures the
+  device.** The CCU documents the method as telling the interface process how
+  often a value is used *so that it can establish or delete the connection to
+  the component* (`src/rfd/XmlRpcMethods.cpp:700-723`): it persists the
+  per-channel usage record and adds or removes the direct link peer between
+  the channel and the central. Its BidCos return value is a transmission
+  verdict rather than a query result — `false` means the device was
+  unreachable, the change is queued, and `CONFIG_PENDING` is now set on its
+  MAINTENANCE channel. The daemon uses it for exactly that, calling it per
+  channel with `refCounter` 1 to create a central link and 0 to tear one down.
+
+  It sat in `readMethods`, whose own header said the table holds methods that
+  return CCU state without mutating it, so it was paced on the read throttle
+  and reported as a read. It is a write now. `TestNoMethodIsBothReadAndWrite`
+  keeps the tables disjoint, and `TestReportValueUsageIsAWrite` pins this one
+  against what the CCU does rather than against the table.
+
+  This matters beyond the throttle: the read/write split is what the project's
+  own procedure for the developer's live CCU treats as free of consequence, so
+  a run that believed it was only reading could reconfigure device links.
+
 - **Four of the eight fixed colours were reported as the wrong colour.**
   `FixedColorLight.Color()` cast the raw COLOR index straight to a
   `FixedColor` ordinal. The CCU orders its COLOR value list by the RGB bit

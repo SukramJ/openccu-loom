@@ -76,3 +76,26 @@ func TestRPCClassString(t *testing.T) {
 		})
 	}
 }
+
+// TestReportValueUsageIsAWrite pins the classification of a method whose name
+// reads like a query and whose effect is a device reconfiguration.
+//
+// The CCU documents it as telling the interface process how often a value is
+// used so that it can establish or delete the connection to the component
+// (src/rfd/XmlRpcMethods.cpp:700-723). It persists the per-channel usage
+// record and it adds or removes the direct link peer between the channel and
+// the central; its BidCos return value is a transmission verdict, not a query
+// result — false means the device was unreachable, the change is queued, and
+// CONFIG_PENDING is now set on its MAINTENANCE channel.
+//
+// The daemon uses it for exactly that: central_links.go calls it per channel
+// with refCounter 1 to create a central link and 0 to tear one down. A read
+// classification paces it on the read throttle and misreports what the daemon
+// is doing to the CCU.
+func TestReportValueUsageIsAWrite(t *testing.T) {
+	t.Parallel()
+
+	if got := reliability.ClassifyMethod("reportValueUsage"); got != reliability.RPCClassWrite {
+		t.Errorf("ClassifyMethod(reportValueUsage) = %v, want %v", got, reliability.RPCClassWrite)
+	}
+}
