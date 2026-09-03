@@ -128,19 +128,18 @@ func (b *CcuBackend) Capabilities() Capabilities {
 	if probed := b.probedCaps.Load(); probed != nil {
 		caps = *probed
 	}
-	// Backup and HasSystemUpdate both route through the ReGa script runner,
-	// which production wires AFTER Initialize() runs (see ccu_wiring.go). If
-	// these were frozen at probe time they would be stuck false, so derive
-	// them from the current runner at call time instead.
+	// Backup routes through the ReGa script runner, which production wires
+	// AFTER Initialize() runs (see ccu_wiring.go). If it were frozen at
+	// probe time it would be stuck false, so derive it from the current
+	// runner at call time instead.
 	caps.Backup = b.rega != nil
-	caps.HasSystemUpdate = b.rega != nil
 	return caps
 }
 
-// Initialize implements [Initializer]. Backup and system-update capability
-// are NOT set here: they depend on the ReGa script runner, which is wired
-// after Initialize, so [CcuBackend.Capabilities] derives them live from the
-// current runner instead.
+// Initialize implements [Initializer]. The Backup capability is NOT set
+// here: it depends on the ReGa script runner, which is wired after
+// Initialize, so [CcuBackend.Capabilities] derives it live from the current
+// runner instead.
 func (b *CcuBackend) Initialize(_ context.Context) error {
 	caps := CapabilityFor(KindCCU)
 	b.probedCaps.Store(&caps)
@@ -299,62 +298,14 @@ func (b *CcuBackend) ReplaceDevice(ctx context.Context, oldDeviceAddress, newDev
 // sender->receiver, so the partner's links are collected by the partner's
 // own query.
 func (b *CcuBackend) GetLinks(ctx context.Context, channelAddress string) ([]hmproto.LinkDescription, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getLinks", channelAddress, 0)
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinks: unexpected type %T", raw)
-	}
-	out := make([]hmproto.LinkDescription, 0, len(list))
-	for _, entry := range list {
-		m, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		ld := hmproto.LinkDescription{
-			Sender:      asString(m["SENDER"]),
-			Receiver:    asString(m["RECEIVER"]),
-			Name:        asString(m["NAME"]),
-			Description: asString(m["DESCRIPTION"]),
-		}
-		if f, ok := m["FLAGS"].(int); ok {
-			ld.Flags = f
-		}
-		if ld.Sender == "" || ld.Receiver == "" {
-			continue
-		}
-		out = append(out, ld)
-	}
-	return out, nil
+	return getLinksViaCaller(ctx, b.xml, "ccu", channelAddress)
 }
 
 // GetLinkPeers implements Operations. Returns the bare peer-address
 // list; cheaper than GetLinks when only the peer enumeration is
 // needed (e.g. to iterate LINK paramsets for a channel).
 func (b *CcuBackend) GetLinkPeers(ctx context.Context, channelAddress string) ([]string, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getLinkPeers", channelAddress)
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinkPeers: unexpected type %T", raw)
-	}
-	out := make([]string, 0, len(list))
-	for _, entry := range list {
-		if s, ok := entry.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	return out, nil
+	return getLinkPeersViaCaller(ctx, b.xml, "ccu", channelAddress)
 }
 
 // AddLink implements Operations.
@@ -380,55 +331,17 @@ func (b *CcuBackend) RemoveLink(ctx context.Context, senderAddress, receiverAddr
 // identical across peers. Only per-peer *values* (handled by GetLinkParamset
 // / PutLinkParamset) key on the peer address.
 func (b *CcuBackend) GetLinkParamsetDescription(ctx context.Context, channelAddress, _ string) (map[string]hmproto.ParameterData, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamsetDescription", channelAddress, "LINK")
-	if err != nil {
-		return nil, err
-	}
-	outer, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinkParamsetDescription: unexpected type %T", raw)
-	}
-	out := make(map[string]hmproto.ParameterData, len(outer))
-	for param, inner := range outer {
-		m, ok := inner.(map[string]any)
-		if !ok {
-			continue
-		}
-		pd, err := toParameterData(m)
-		if err != nil {
-			return nil, fmt.Errorf("ccu.GetLinkParamsetDescription[%s]: %w", param, err)
-		}
-		out[param] = pd
-	}
-	return out, nil
+	return getLinkParamsetDescriptionViaCaller(ctx, b.xml, "ccu", channelAddress)
 }
 
 // GetLinkParamset implements Operations.
 func (b *CcuBackend) GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamset", channelAddress, peerAddress)
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinkParamset: unexpected type %T", raw)
-	}
-	return m, nil
+	return getLinkParamsetViaCaller(ctx, b.xml, "ccu", channelAddress, peerAddress)
 }
 
 // PutLinkParamset implements Operations.
 func (b *CcuBackend) PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error {
-	if b.xml == nil {
-		return ErrNotWired
-	}
-	_, err := b.xml.Call(ctx, "putParamset", channelAddress, peerAddress, values)
-	return err
+	return putLinkParamsetViaCaller(ctx, b.xml, channelAddress, peerAddress, values)
 }
 
 // ActivateLinkParamset implements Operations. Maps to the CCU XML-RPC
@@ -668,8 +581,7 @@ func (b *CcuBackend) CreateSystemVariableBool(ctx context.Context, name string, 
 }
 
 // CreateSystemVariableEnum implements Operations via JSON-RPC. This is the
-// shipping path for the call; the transport package carries a second, unused
-// implementation of the same request.
+// only implementation of the call.
 //
 // Wire: SysVar.createEnum takes {name, valList, internal, chnID} — the key is
 // `valList`, declared as `ARGUMENTS {_session_id_ name valList internal chnID}`

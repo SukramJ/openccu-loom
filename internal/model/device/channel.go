@@ -829,6 +829,16 @@ func (c *Channel) IgnoreMultipleChannelsForName() bool {
 //
 // Returns false when the channel has no parent device, no
 // custom-DP, or its custom-DP does not expose HAComponent().
+//
+// Two planes read it, not one: the MQTT discovery name builder, and
+// [BuildCustomDataPointName] (namedata.go), whose production caller is
+// the REST custom-data-points handler. A change here moves entity names
+// on both.
+//
+// The `target == ""` branch below is unreachable today — every profile
+// registered in internal/model/custom returns a non-empty component —
+// and a contract guard keeps it that way. A profile that returned ""
+// would silently collect a ch<N> suffix rather than be reported.
 func (c *Channel) HasSinglePrimaryCustomDP() bool {
 	if c == nil || c.device == nil {
 		return false
@@ -986,11 +996,13 @@ func (c *Channel) GroupMaster() *Channel {
 	if c.device == nil {
 		return nil
 	}
-	deviceAddr := c.Address
-	if i := indexOfColon(deviceAddr); i >= 0 {
-		deviceAddr = deviceAddr[:i]
-	}
-	masterAddr := deviceAddr + ":" + itoa(groupNo)
+	// The device/channel split lives in hmtypes, which owns the address
+	// grammar. The ":" + number half stays spelled out here rather than
+	// going through hmtypes.ChannelAddress: that helper returns the bare
+	// device address for a negative channel number, and AssignGroupNumber
+	// rejects only 0, so a negative group number would resolve to the
+	// device-root pseudo-channel instead of failing the lookup.
+	masterAddr := hmtypes.DeviceAddress(c.Address) + ":" + itoa(groupNo)
 	return c.device.Channel(masterAddr)
 }
 
@@ -1052,17 +1064,6 @@ func (c *Channel) NotifyLinkPeerChanged() {
 			h()
 		}
 	}
-}
-
-// indexOfColon is a tiny inlined `strings.Index(s, ":")` so we don't
-// pull strings into this file.
-func indexOfColon(s string) int {
-	for i := range len(s) {
-		if s[i] == ':' {
-			return i
-		}
-	}
-	return -1
 }
 
 // itoa is a tiny inlined `strconv.Itoa` for non-negative ints; the
@@ -1356,25 +1357,6 @@ func (c *Channel) GetGenericDataPointByStatePath(path string) ParameterDataPoint
 		}
 	}
 	return nil
-}
-
-// UniqueID returns a stable identifier for this channel in the form
-// "<device_address>_<channel_number>".
-//
-// return generate_channel_unique_id(self.address, self.no)
-//
-// Used by north-bound adapters (MQTT Discovery, REST) that need a per-channel
-// identity token separate from the raw address string.
-func (c *Channel) UniqueID() string {
-	if c == nil {
-		return ""
-	}
-	// Extract device address (everything before the last ":N" suffix).
-	addr := c.Address
-	if i := indexOfColon(addr); i >= 0 {
-		addr = addr[:i]
-	}
-	return addr + "_" + itoa(c.Number)
 }
 
 // ParamsetParameter looks up a data point in the given paramset.

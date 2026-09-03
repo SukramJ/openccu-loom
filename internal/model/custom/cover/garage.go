@@ -223,7 +223,7 @@ func (g *Garage) Position() (custom.Position, bool) {
 	case DoorStateOpen:
 		return custom.NewPosition(1.0), true
 	case DoorStateVentilation:
-		return custom.NewPosition(0.5), true
+		return custom.NewPosition(custom.VentLevel), true
 	case DoorStateClosed:
 		return custom.NewPosition(0.0), true
 	}

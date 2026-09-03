@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 455.
+Guards without a doc comment: 7 of 460.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -52,6 +52,7 @@ Guards without a doc comment: 7 of 455.
 | TestCCUAddonUpdateScriptExitCodeContract | ccu_addon_update_script_test.go | TestCCUAddonUpdateScriptExitCodeContract locks the exit-code contract OpenCCU's /bin/install_addon relies on: 0 means "installed without reboot", 10 means "reboot required" and anything else means the platform identifier ($1) was rejected outright. |
 | TestCentralLinksEligibilityMatchesDeviceRule | central_links_eligibility_test.go | TestCentralLinksEligibilityMatchesDeviceRule pins the dispatching adapter to the domain rule it claims to follow. |
 | TestCentralLinksVirtualRemoteReasonNamesTheModel | central_links_eligibility_test.go | TestCentralLinksVirtualRemoteReasonNamesTheModel pins the operator-visible reason token. |
+| TestChannelAddressBuildersAreRecorded | channel_address_builder_test.go | TestChannelAddressBuildersAreRecorded fails when a file grows a new hand-rolled "<device>:<ordinal>" concatenation. |
 | TestChannelOrdinalParsersDelegateToHmtypes | channel_ordinal_parser_test.go | TestChannelOrdinalParsersDelegateToHmtypes fails when a file grows its own "<something>:<number>" scanner. |
 | TestEveryTeardownCloserIsInvokedByATest | closer_return_path_test.go | TestEveryTeardownCloserIsInvokedByATest asserts, for each reviewed seam, that at least one of its test files invokes the closer the seam hands back. |
 | TestCompositionRootHandsOverEveryDeclaredField | composition_root_handover_test.go | TestCompositionRootHandsOverEveryDeclaredField pins that for each covered seam, the set the struct declares and the set the composition root fills are the same set. |
@@ -141,6 +142,8 @@ Guards without a doc comment: 7 of 455.
 | TestDeclaredSilentEventDocsClaimNoConsumers | event_subscriber_coverage_test.go | TestDeclaredSilentEventDocsClaimNoConsumers cross-checks the two truths this package keeps about an event: eventsWithoutSubscriber declares that nothing consumes it, while the catalogue's doc comment tells a reader what it is for. |
 | TestEveryEventTypeHasASubscriber | event_subscriber_coverage_test.go | TestEveryEventTypeHasASubscriber asserts that every event type the daemon defines is consumed by production code, or is declared in [eventsWithoutSubscriber] as deliberately unconsumed. |
 | TestFilenamePurity | filename_purity_test.go | TestFilenamePurity walks every .go file under internal/, pkg/, cmd/, and tests/ and fails when a filename carries an internal audit / migration-phase marker that has no place in the long-term filename vocabulary. |
+| TestEveryCustomDataPointDeclaresAnHAComponent | ha_component_non_empty_test.go | TestEveryCustomDataPointDeclaresAnHAComponent asserts no shipped profile returns the empty component that would make the ch<N> branch in Channel.HasSinglePrimaryCustomDP reachable. |
+| TestHAComponentTableCoversEverySourceImplementer | ha_component_non_empty_test.go | TestHAComponentTableCoversEverySourceImplementer re-derives the implementer set by reading internal/model/custom and compares it with the table above. |
 | TestHARegistryDescriptionRulesHaveKeys | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesHaveKeys fails when any entry has an empty Description.Key. |
 | TestHARegistryDescriptionRulesMatchTheGolden | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesMatchTheGolden compares every field of every rule against the committed golden file. |
 | TestHARegistryDescriptionRulesNoDuplicates | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesNoDuplicates fails when the rule slice contains two or more entries that have identical (category, parameters, devices, unit, postfix, varNameContains) matching criteria. |
@@ -254,6 +257,7 @@ Guards without a doc comment: 7 of 455.
 | TestConfigSchemaCommandRetryInitialDelayDefaultMatchesReliabilityStack | reliability_constants_test.go | TestConfigSchemaCommandRetryInitialDelayDefaultMatchesReliabilityStack pins the SPA-facing placeholder for `reliability.command_retry_initial_delay` against the constant it actually falls back to. |
 | TestXMLRPCFaultCodeRetryability | reliability_constants_test.go | TestXMLRPCFaultCodeRetryability pins the retry classifier in both directions: the four codes describing a condition that can pass are retryable, and every other catalogue code is not. |
 | TestXMLRPCFaultCodeValues | reliability_constants_test.go | TestXMLRPCFaultCodeValues pins the wire-level CCU fault codes the retry layer treats as retryable. |
+| TestReliabilityPrimitivesCarryNoTransportDependency | reliability_layering_test.go | TestReliabilityPrimitivesCarryNoTransportDependency walks the transitive import graph of internal/client/reliability and fails when it reaches any transport, backend or wire-DTO package. |
 | TestReliabilityInstrumentCoverage | reliability_observability_test.go | TestReliabilityInstrumentCoverage verifies that every core reliability component (Coalescer, Throttle, Retrier, CircuitBreaker, PingPong tracker) exposes an observability interface. |
 | TestReloadDepsFieldsAreOnlyTouchedByItsAccessors | reload_deps_nil_safety_test.go | TestReloadDepsFieldsAreOnlyTouchedByItsAccessors asserts that no code outside reload_deps.go reads or writes a field of the daemon's late-bound dependency bag directly. |
 | TestRepetitionsLabelIsOneRuleAcrossCustomProfiles | repetitions_label_parity_test.go | TestRepetitionsLabelIsOneRuleAcrossCustomProfiles pins the two custom profiles that turn a numeric repetition count into a REPETITIONS wire label against each other. |
@@ -332,6 +336,7 @@ Guards without a doc comment: 7 of 455.
 | TestTimerSentinelHasOneDeclaration | timer_sentinel_single_source_test.go | TestTimerSentinelHasOneDeclaration fails when a package spells the disabled-timer sentinel out for itself instead of reading custom.TimerNotUsed. |
 | TestTimerUnitOrdinalsAreDeclaredOnlyInHmenum | timer_unit_single_source_test.go | TestTimerUnitOrdinalsAreDeclaredOnlyInHmenum fails when a package under internal/ or pkg/ declares timer unit names of its own instead of reading them from pkg/hmenum. |
 | TestTimerUnitOrdinalsComeFromTheDeviceValueList | timer_unit_single_source_test.go | TestTimerUnitOrdinalsComeFromTheDeviceValueList pins both timer encoders against the device's own DURATION_UNIT VALUE_LIST. |
+| TestUIHintTokensExistInSPA | ui_hint_tokens_exist_in_spa_test.go | TestUIHintTokensExistInSPA pins the cross-language half of the data-point UI hint: the daemon emits `ui_hint.icon` and `ui_hint.state_color_rule` as opaque strings on every DataPointSummary, and the SPA resolves both by table lookup with a silent fallback — an unknown icon renders as a generic Gauge, an unknown rule renders in the default text colour. |
 | TestDeclaredOpensRelationsAreLive | ui_surface_registry_test.go | TestDeclaredOpensRelationsAreLive pins the `opens` relation at both ends: the editor a read-only overview hands off to must exist, and the overview must actually ask whether it does. |
 | TestE2ESurfaceFixtureMatchesRegistry | ui_surface_registry_test.go | TestE2ESurfaceFixtureMatchesRegistry keeps the Playwright fixture from drifting away from the registry it stands in for. |
 | TestEverySurfaceIsRegistered | ui_surface_registry_test.go | TestEverySurfaceIsRegistered fails when the SPA and the Go registry disagree in either direction. |

@@ -57,6 +57,42 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Low-severity audit findings, second batch: 62 more fixed across the model,
+  client, alarm, config, pkg and north-bound packages.** The same classes as
+  the first batch, plus three worth naming:
+
+  - *A guard that could not tell the two sides apart.* The forced-sensor
+    identity is spelled in three places; nothing compared them, so the model
+    and the MQTT discovery payload could name different entities. A new test
+    drives all three from one device and fails when they diverge.
+  - *A hint vocabulary with no cross-language check.* Every icon and
+    state-colour token `pkg/hmui` emits is now asserted to exist in the SPA's
+    own registries, so a token added on one side and not the other stops
+    silently rendering nothing.
+  - *A comment that taught a rule the body does not implement.* The event
+    group's usage doc described a membership condition; the body never reads
+    the member set. The doc now says what the code does, and the rule stays
+    unimplemented because no consumer defines which answer is right.
+
+  Eleven findings were not fixed. Three had their recipe's own text say no
+  change was sound, two needed a value no source carries, three were
+  duplicates or optional halves of another finding, and the rest reached
+  outside the package that owned them. Two more were reported as fixed
+  without a bite proof because measurement showed the proposed guard cannot
+  bite — in both cases the fix makes the two sides read one constant, so they
+  move together and no test can separate them.
+
+  Along the way `internal/model/device/naming.go`'s successor in
+  `internal/model/hub` went the same way as the naming family before it: the
+  `SysvarDp*` wrapper set had no production caller, no accessor on `Sysvar`
+  and no constructor call since the initial release, while carrying three
+  coercion rules that had drifted from the live ones. It is deleted. The
+  service route for `set_value` stopped parsing strings itself — its boolean
+  table was case-sensitive and knew neither "yes" nor "t", while its numeric
+  tables used `fmt.Sscanf`, which reads "12abc" as 12 and bounds nothing, so
+  a caller could be refused a value the daemon would write, or have a
+  malformed one accepted.
+
 - **Low-severity audit findings, first batch: 48 fixed across six packages.**
   Each was re-verified against the current tree before anything was changed —
   five of the original set had already been fixed by the high/medium work and

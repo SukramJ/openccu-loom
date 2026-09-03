@@ -146,9 +146,9 @@ func TestCcuGetSystemUpdateInfoReturnsMap(t *testing.T) {
 
 // TestCcuCapabilitiesReflectRunnerAfterInitialize locks the wiring-order fix:
 // production calls Initialize() before SetScriptRunner(), so the rega-dependent
-// capabilities must be derived at call time, not frozen at probe time.
-// Otherwise CreateBackupAndDownload / system-update short-circuit on a stale
-// Backup=false and silently produce an empty result.
+// Backup capability must be derived at call time, not frozen at probe time.
+// Otherwise CreateBackupAndDownload short-circuits on a stale Backup=false and
+// silently produces an empty result.
 func TestCcuCapabilitiesReflectRunnerAfterInitialize(t *testing.T) {
 	t.Parallel()
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
@@ -157,16 +157,14 @@ func TestCcuCapabilitiesReflectRunnerAfterInitialize(t *testing.T) {
 	if err := b.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
-	if caps := b.Capabilities(); caps.Backup || caps.HasSystemUpdate {
-		t.Fatalf("without a runner: Backup=%v HasSystemUpdate=%v, want both false",
-			caps.Backup, caps.HasSystemUpdate)
+	if caps := b.Capabilities(); caps.Backup {
+		t.Fatal("without a runner: Backup=true, want false")
 	}
 
-	// Wiring the runner afterwards must flip both capabilities on.
+	// Wiring the runner afterwards must flip the capability on.
 	b.SetScriptRunner(&fakeScriptRunner{})
-	if caps := b.Capabilities(); !caps.Backup || !caps.HasSystemUpdate {
-		t.Fatalf("after SetScriptRunner: Backup=%v HasSystemUpdate=%v, want both true",
-			caps.Backup, caps.HasSystemUpdate)
+	if caps := b.Capabilities(); !caps.Backup {
+		t.Fatal("after SetScriptRunner: Backup=false, want true")
 	}
 }
 

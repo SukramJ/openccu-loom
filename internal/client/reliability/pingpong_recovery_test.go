@@ -48,7 +48,8 @@ import (
 //
 // The live pending table causes severity elevation even before Sweep — a
 // pending PING that has not been matched and whose TTL has not yet elapsed
-// already counts as a live anomaly if the table size equals the threshold.
+// already counts as a live anomaly once the table size is over the
+// threshold.
 // After Sweep the entries move into the mismatch counter; the pending table
 // shrinks and severity falls back to "ok" (the cumulative mismatch counter
 // does not affect Severity directly — only the live table sizes do).
@@ -64,16 +65,17 @@ func TestPingPongSweepFailureSetsLiveSeverity(t *testing.T) {
 		Clock:             fake,
 	})
 
-	// Send threshold pings — live pending table is exactly at threshold.
-	for i := range threshold {
+	// One ping more than the threshold — the live pending table is over it.
+	const sent = threshold + 1
+	for i := range sent {
 		tr.RecordPing(fmt.Sprintf("ping-%d", i))
 	}
 
 	s := tr.Stats()
-	if s.Pending != threshold {
-		t.Fatalf("Pending=%d, want %d", s.Pending, threshold)
+	if s.Pending != sent {
+		t.Fatalf("Pending=%d, want %d", s.Pending, sent)
 	}
-	// Severity must be "degraded" (one table at threshold, not both).
+	// Severity must be "degraded" (one table over the threshold, not both).
 	if s.Severity != "degraded" {
 		t.Errorf("severity before Sweep=%q, want degraded (pending=%d, threshold=%d)", s.Severity, s.Pending, threshold)
 	}
@@ -82,8 +84,8 @@ func TestPingPongSweepFailureSetsLiveSeverity(t *testing.T) {
 	fake.Advance(ttl + time.Millisecond)
 	mismatches := tr.Sweep()
 
-	if len(mismatches) != threshold {
-		t.Errorf("Sweep mismatches=%d, want %d", len(mismatches), threshold)
+	if len(mismatches) != sent {
+		t.Errorf("Sweep mismatches=%d, want %d", len(mismatches), sent)
 	}
 	for _, m := range mismatches {
 		if m.Kind != hmenum.PingPongMismatchPending {
@@ -100,15 +102,15 @@ func TestPingPongSweepFailureSetsLiveSeverity(t *testing.T) {
 		t.Errorf("severity after Sweep=%q, want ok", sAfter.Severity)
 	}
 	// Cumulative mismatch counter grew.
-	if sAfter.MismatchTotal != threshold {
-		t.Errorf("MismatchTotal=%d, want %d", sAfter.MismatchTotal, threshold)
+	if sAfter.MismatchTotal != sent {
+		t.Errorf("MismatchTotal=%d, want %d", sAfter.MismatchTotal, sent)
 	}
 }
 
 // ─── B2. RecordPong (heartbeat) after "degraded" → returns to "ok" ───────────
 
 // TestPingPongRecordPongDrainsDegradedState verifies that once the pending
-// table reaches the threshold (severity "degraded"), matching pongs against
+// table is over the threshold (severity "degraded"), matching pongs against
 // those pings drains the table and restores severity to "ok".
 //
 // This mirrors the recovery path where heartbeat pings are eventually answered
@@ -125,9 +127,9 @@ func TestPingPongRecordPongDrainsDegradedState(t *testing.T) {
 		Clock:             fake,
 	})
 
-	// Build up to the threshold so severity becomes "degraded".
-	ids := make([]string, threshold)
-	for i := range threshold {
+	// Build past the threshold so severity becomes "degraded".
+	ids := make([]string, threshold+1)
+	for i := range threshold + 1 {
 		ids[i] = fmt.Sprintf("hb-%d", i)
 		tr.RecordPing(ids[i])
 	}
@@ -152,9 +154,9 @@ func TestPingPongRecordPongDrainsDegradedState(t *testing.T) {
 	if s.Severity != "ok" {
 		t.Errorf("severity after recovery=%q, want ok", s.Severity)
 	}
-	// MatchedTotal equals threshold.
-	if s.MatchedTotal != threshold {
-		t.Errorf("MatchedTotal=%d, want %d", s.MatchedTotal, threshold)
+	// MatchedTotal equals the number of pings sent.
+	if s.MatchedTotal != len(ids) {
+		t.Errorf("MatchedTotal=%d, want %d", s.MatchedTotal, len(ids))
 	}
 }
 

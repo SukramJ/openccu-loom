@@ -4,7 +4,6 @@
 package combined
 
 import (
-	"encoding/json"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -167,13 +166,13 @@ func (l *LevelCombined) Subscribe(ch *device.Channel) func() {
 // OnAnyUpdate satisfies the adapter.CombinedDataPoint interface. The typed
 // LevelComposite value is JSON-encoded to a string so BridgeCombinedDataPoint
 // can wrap it in a ParamValue and publish it on the event bus.
+//
+// Encoding goes through [EncodeLevelCompositeJSON], the same renderer the
+// combined state topic uses, so one value never reaches two planes spelled
+// two ways.
 func (l *LevelCombined) OnAnyUpdate(fn func(old, next any)) func() {
 	return l.OnUpdate(func(_, next LevelComposite) {
-		data, _ := json.Marshal(map[string]float64{
-			"level": next.Level.Level(),
-			"slats": next.SlatsLevel.Level(),
-		})
-		fn(nil, string(data))
+		fn(nil, EncodeLevelCompositeJSON(next))
 	})
 }
 

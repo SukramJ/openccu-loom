@@ -18,6 +18,9 @@ const (
 	// MaxAcousticSeconds is the hard per-activation ceiling for any
 	// acoustic output. Not configurable upward.
 	MaxAcousticSeconds = 600
+	// DefaultSirenSeconds bounds one acoustic activation when neither
+	// the output nor the engine configures a duration.
+	DefaultSirenSeconds = 180
 	// DefaultOpticalSeconds bounds one optical-only activation when
 	// the output does not configure one.
 	DefaultOpticalSeconds = 600
@@ -68,6 +71,12 @@ type OutputConfig struct {
 	// SysvarName is the CCU system variable a sysvar-mirror output
 	// maintains.
 	SysvarName string `json:"sysvar_name,omitempty"`
+	// SysvarAllowDisarm lets an operator disarm the zone by writing the
+	// mirrored variable; SysvarExisting marks a pre-existing
+	// operator-owned ALARM (bool) variable the mirror must never create
+	// or retype. Both are read by the sysvar mirror in package alarm.
+	SysvarAllowDisarm bool `json:"sysvar_allow_disarm,omitempty"`
+	SysvarExisting    bool `json:"sysvar_existing,omitempty"`
 	// NotifyMQTT / NotifyWebhook select the delivery planes of a
 	// notification output; nil means enabled (both default on).
 	NotifyMQTT    *bool `json:"notify_mqtt,omitempty"`
@@ -118,7 +127,7 @@ func (c OutputConfig) acousticDuration(engineDefault time.Duration) time.Duratio
 		d = engineDefault
 	}
 	if d <= 0 {
-		d = 180 * time.Second
+		d = DefaultSirenSeconds * time.Second
 	}
 	if ceil := MaxAcousticSeconds * time.Second; d > ceil {
 		d = ceil

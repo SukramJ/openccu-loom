@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Capability profile tests: CapabilityFor, UpdateCapabilitiesForVersion,
-// Kind.String(), and the capability matrix for each backend kind.
+// Capability profile tests: CapabilityFor, Kind.String(), and the
+// capability matrix for each backend kind.
 
 package backends
 
@@ -166,7 +166,6 @@ func TestHomegearCapabilityFlags(t *testing.T) {
 		{"IseIDLookup", caps.IseIDLookup},
 		{"ExecuteProgram", caps.ExecuteProgram},
 		{"FirmwareUpdate", caps.FirmwareUpdate},
-		{"HasSystemUpdate", caps.HasSystemUpdate},
 		{"PingPong", caps.PingPong},
 		{"Metadata", caps.Metadata},
 	}
@@ -299,37 +298,6 @@ func TestKindStringCoversAllKnownKinds(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UpdateCapabilitiesForVersion adjusts HasSystemUpdate
-// ---------------------------------------------------------------------------
-
-func TestVersionBoundaryTable(t *testing.T) {
-	t.Parallel()
-	ccu := CapabilityFor(KindCCU)
-
-	tests := []struct {
-		version string
-		wantSU  bool
-	}{
-		{"3.49.10.20210601", true},
-		{"3.50.0.0", true},
-		{"3.48.99.0", false},
-		{"3.0.0.0", false},
-		{"2.99.0.0", false},
-		{"", true}, // empty string: no adjustment
-	}
-	for _, tc := range tests {
-		t.Run(tc.version, func(t *testing.T) {
-			t.Parallel()
-			got := UpdateCapabilitiesForVersion(ccu, tc.version)
-			if got.HasSystemUpdate != tc.wantSU {
-				t.Errorf("version %q: HasSystemUpdate = %v; want %v",
-					tc.version, got.HasSystemUpdate, tc.wantSU)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // CCU capability matrix — GetAllPrograms, GetAllSysvars, RequiresPeriodicRefresh
 // ---------------------------------------------------------------------------
 
@@ -411,57 +379,6 @@ func TestCapabilityFirmwareUpdateConsistency(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Version-based capability adjustment (UpdateCapabilitiesForVersion)
-// ---------------------------------------------------------------------------
-
-// TestVersionOldFirmwareDisablesSystemUpdate verifies that firmware versions
-// before 3.49 have HasSystemUpdate == false.
-func TestVersionOldFirmwareDisablesSystemUpdate(t *testing.T) {
-	t.Parallel()
-	caps := CapabilityFor(KindCCU)
-	if !caps.HasSystemUpdate {
-		t.Fatal("pre-condition: KindCCU base caps must have HasSystemUpdate=true")
-	}
-	oldCaps := UpdateCapabilitiesForVersion(caps, "3.47.10.20190101")
-	if oldCaps.HasSystemUpdate {
-		t.Error("firmware 3.47: HasSystemUpdate must be false (requires >= 3.49)")
-	}
-}
-
-// TestVersionNewFirmwareKeepsSystemUpdate verifies that firmware >= 3.49
-// retains HasSystemUpdate == true.
-func TestVersionNewFirmwareKeepsSystemUpdate(t *testing.T) {
-	t.Parallel()
-	caps := CapabilityFor(KindCCU)
-	updatedCaps := UpdateCapabilitiesForVersion(caps, "3.55.10.20210601")
-	if !updatedCaps.HasSystemUpdate {
-		t.Error("firmware 3.55: HasSystemUpdate must remain true (>= 3.49)")
-	}
-}
-
-// TestVersionExactBoundaryInclusive verifies that firmware exactly 3.49
-// retains HasSystemUpdate == true (boundary is inclusive: >= 3.49).
-func TestVersionExactBoundaryInclusive(t *testing.T) {
-	t.Parallel()
-	caps := CapabilityFor(KindCCU)
-	updatedCaps := UpdateCapabilitiesForVersion(caps, "3.49.0.20200101")
-	if !updatedCaps.HasSystemUpdate {
-		t.Error("firmware 3.49.0: HasSystemUpdate must be true (boundary inclusive)")
-	}
-}
-
-// TestVersionEmptyStringNoAdjustment verifies that an empty version string
-// leaves capabilities unchanged.
-func TestVersionEmptyStringNoAdjustment(t *testing.T) {
-	t.Parallel()
-	caps := CapabilityFor(KindCCU)
-	adjusted := UpdateCapabilitiesForVersion(caps, "")
-	if adjusted != caps {
-		t.Error("empty version string must not adjust any capability")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Full capability matrix verification per backend kind
 // ---------------------------------------------------------------------------
 
@@ -485,7 +402,6 @@ func TestCCUCapabilityMatrix(t *testing.T) {
 		"DeleteDevice":           caps.DeleteDevice,
 		"DeleteSystemVariable":   caps.DeleteSystemVariable,
 		"ExecuteProgram":         caps.ExecuteProgram,
-		"HasSystemUpdate":        caps.HasSystemUpdate,
 		"InboxDevices":           caps.InboxDevices,
 		"InstallMode":            caps.InstallMode,
 		"LinkOperations":         caps.LinkOperations,
@@ -525,15 +441,14 @@ func TestHomegearCapabilityMatrix(t *testing.T) {
 		"DeleteDevice":   caps.DeleteDevice,
 	}
 	mustNot := map[string]bool{
-		"GetAllPrograms":  caps.GetAllPrograms,
-		"GetAllSysvars":   caps.GetAllSysvars,
-		"FirmwareUpdate":  caps.FirmwareUpdate,
-		"ConfigRestore":   caps.ConfigRestore,
-		"Backup":          caps.Backup,
-		"InstallMode":     caps.InstallMode,
-		"HasSystemUpdate": caps.HasSystemUpdate,
-		"PingPong":        caps.PingPong,
-		"Metadata":        caps.Metadata,
+		"GetAllPrograms": caps.GetAllPrograms,
+		"GetAllSysvars":  caps.GetAllSysvars,
+		"FirmwareUpdate": caps.FirmwareUpdate,
+		"ConfigRestore":  caps.ConfigRestore,
+		"Backup":         caps.Backup,
+		"InstallMode":    caps.InstallMode,
+		"PingPong":       caps.PingPong,
+		"Metadata":       caps.Metadata,
 	}
 	for name, v := range must {
 		if !v {
@@ -566,14 +481,13 @@ func TestCUxDCapabilityMatrix(t *testing.T) {
 	}
 
 	absent := map[string]bool{
-		"GetAllPrograms":  caps.GetAllPrograms,
-		"GetAllSysvars":   caps.GetAllSysvars,
-		"FirmwareUpdate":  caps.FirmwareUpdate,
-		"ConfigRestore":   caps.ConfigRestore,
-		"Backup":          caps.Backup,
-		"AlarmMessages":   caps.AlarmMessages,
-		"InstallMode":     caps.InstallMode,
-		"HasSystemUpdate": caps.HasSystemUpdate,
+		"GetAllPrograms": caps.GetAllPrograms,
+		"GetAllSysvars":  caps.GetAllSysvars,
+		"FirmwareUpdate": caps.FirmwareUpdate,
+		"ConfigRestore":  caps.ConfigRestore,
+		"Backup":         caps.Backup,
+		"AlarmMessages":  caps.AlarmMessages,
+		"InstallMode":    caps.InstallMode,
 	}
 	for name, v := range absent {
 		if v {

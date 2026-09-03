@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -160,26 +159,6 @@ func (t *CommandTracker) AddSetValue(
 	t.entries[dpk] = cachedCommand{value: value, sentAt: time.Now()}
 	t.mu.Unlock()
 	return dpk, true
-}
-
-// AddCombinedParameter parses a combined-parameter wire string (COMBINED_PARAMETER
-// or LEVEL_COMBINED) into its component key/value pairs and records each pair as
-// a tracked command under ParamsetKeyValues. Returns the list of DataPointKeys
-// registered, or nil when the wire string cannot be parsed.
-//
-// This mirrors the Python add_combined_parameter path: parse the combined string
-// into a paramset map, then delegate to AddPutParamset so both sends land in the
-// tracker as a single atomic unit.
-func (t *CommandTracker) AddCombinedParameter(
-	channelAddress string,
-	parameter string,
-	value string,
-) []hmtypes.DataPointKey {
-	values, ok := backends.ParseCombinedParameter(parameter, value)
-	if !ok || len(values) == 0 {
-		return nil
-	}
-	return t.AddPutParamset(channelAddress, hmenum.ParamsetKeyValues, values)
 }
 
 // AddPutParamset records a putParamset send for all values and returns

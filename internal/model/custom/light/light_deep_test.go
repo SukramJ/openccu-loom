@@ -146,26 +146,26 @@ func TestLightNilLevelDPGracefullyDegrades(t *testing.T) {
 	}
 }
 
-// TestLightBrightnessPctTruncates pins the level→percent rule the model owns:
-// the fraction is dropped, it is not rounded. 0.505 × 100 is 50.499999… in
-// binary64, so the percentage is 50 and not 51.
+// TestLightBrightnessPctRounds pins the level→percent rule the model owns:
+// the fraction is rounded half up, not dropped. 0.505 × 100 is exactly 50.5
+// in binary64, so the percentage is 51.
 //
 // The expectation is written out rather than computed, so it bites if the
 // shared rule in the value object changes.
-func TestLightBrightnessPctTruncates(t *testing.T) {
+func TestLightBrightnessPctRounds(t *testing.T) {
 	t.Parallel()
 
 	w := &stubWriter{}
 	l, level := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 
-	// Drive the CCU-side DP to 0.505 → 50 %, the fraction dropped.
+	// Drive the CCU-side DP to 0.505 → 51 %, rounded half up.
 	level.OnEvent(0.505)
 	pct, ok := l.BrightnessPct()
 	if !ok {
 		t.Fatal("BrightnessPct: not observed")
 	}
-	if pct != 50 {
-		t.Errorf("BrightnessPct(0.505) = %d, want 50", pct)
+	if pct != 51 {
+		t.Errorf("BrightnessPct(0.505) = %d, want 51", pct)
 	}
 
 	// 0.0 → 0 %, fully off.

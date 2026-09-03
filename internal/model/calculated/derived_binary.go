@@ -105,16 +105,6 @@ func (s *DerivedBinarySensor) StateUncertain() bool {
 	return s.sourceSink.StateUncertain()
 }
 
-// NewWindowOpenSensor is a convenience constructor pre-configured with
-// the CCU's WINDOW_STATE enum labels.
-func NewWindowOpenSensor() *DerivedBinarySensor {
-	return NewDerivedBinarySensor(
-		hmenum.CalculatedParameterWindowOpen,
-		[]string{"OPEN", "TILTED"},
-		[]string{"CLOSED"},
-	)
-}
-
 // DerivedBinaryMapping records a per-model derived-binary registration.
 type DerivedBinaryMapping struct {
 	// Models is the prefix-match list of device models this mapping

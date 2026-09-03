@@ -845,15 +845,23 @@ func (e *Engine) disarmIdle(ctx context.Context, zoneID, by, source, identity st
 		}
 		e.fireDuress(ctx, a, CodeVerbDisarm, by, source)
 	}
-	if a.autoRearmCancel != nil {
-		a.cancelAutoRearm()
-		e.persist(ctx, a)
-		e.journalEntry(ctx, a, JournalEntry{
-			Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_cancelled",
-			Actor: by, Source: source,
-		})
-	}
+	e.cancelPendingAutoRearmLocked(ctx, a, by, source)
 	return true, nil
+}
+
+// cancelPendingAutoRearmLocked cancels a pending auto-rearm on a,
+// persists the zone and journals the cancellation. No-op when none is
+// pending. The caller holds e.mu.
+func (e *Engine) cancelPendingAutoRearmLocked(ctx context.Context, a *zone, by, source string) {
+	if a.autoRearmCancel == nil {
+		return
+	}
+	a.cancelAutoRearm()
+	e.persist(ctx, a)
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_cancelled",
+		Actor: by, Source: source,
+	})
 }
 
 // disarmResolved applies a disarm whose code has already been resolved.
@@ -874,14 +882,7 @@ func (e *Engine) disarmResolved(ctx context.Context, zoneID, by, source, identit
 		e.fireDuress(ctx, a, CodeVerbDisarm, by, source)
 	}
 	if a.state == hmenum.AlarmZoneStateDisarmed {
-		if a.autoRearmCancel != nil {
-			a.cancelAutoRearm()
-			e.persist(ctx, a)
-			e.journalEntry(ctx, a, JournalEntry{
-				Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_cancelled",
-				Actor: by, Source: source,
-			})
-		}
+		e.cancelPendingAutoRearmLocked(ctx, a, by, source)
 		return nil
 	}
 	prevPolicy := a.cfg.Modes[a.mode].Outputs

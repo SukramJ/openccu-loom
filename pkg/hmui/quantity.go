@@ -8,8 +8,9 @@
 //
 // Resolution order in [HintFor]:
 //
-//  1. ENUM-shape rules (alarm-state value lists, on/off shapes).
-//  2. Parameter-name substring (MOTION, STATE, RAINING, …).
+//  1. Parameter-name rules — the exact-match table first, then the
+//     substring table (MOTION, STATE, RAINING, …).
+//  2. ENUM-shape rules (alarm-state value lists, on/off shapes).
 //  3. Unit-string (°C → temperature, lx → illuminance, …).
 //  4. Type fallback (BOOL / INTEGER / FLOAT / STRING / ACTION).
 //
@@ -145,9 +146,11 @@ var parameterSubstrings = []struct {
 	{"MASS_CONCENTRATION", Hint{Icon: "mdi:smog", Semantic: "particulate"}},
 	{"NUMBER_CONCENTRATION", Hint{Icon: "mdi:counter", Semantic: "particulate_count"}},
 	{"TYPICAL_PARTICLE_SIZE", Hint{Icon: "mdi:dots-grid", Semantic: "particle_size"}},
+	// GAS_ENERGY_COUNTER contains ENERGY_COUNTER, so the gas row has to
+	// come first or a gas meter is classified as an electricity counter.
+	{"GAS_ENERGY", Hint{Icon: "mdi:fire-circle", Semantic: "gas_energy"}},
 	{"ENERGY_COUNTER", Hint{Icon: "mdi:counter", Semantic: "energy"}},
 	{"GAS_VOLUME", Hint{Icon: "mdi:fire-circle", Semantic: "gas_volume"}},
-	{"GAS_ENERGY", Hint{Icon: "mdi:fire-circle", Semantic: "gas_energy"}},
 	{"ACTUAL_TEMPERATURE", Hint{Icon: "mdi:thermometer", Semantic: "temperature", StateColorRule: "temp_heat"}},
 	{"SET_POINT_TEMPERATURE", Hint{Icon: "mdi:thermometer-check", Semantic: "temperature_setpoint", StateColorRule: "temp_heat"}},
 	{"SETPOINT", Hint{Icon: "mdi:thermometer-check", Semantic: "temperature_setpoint", StateColorRule: "temp_heat"}},

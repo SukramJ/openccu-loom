@@ -201,11 +201,13 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 		}
 		// A code is required here but none was supplied: the verb is
 		// still refused, but an absent code is not a wrong guess and must
-		// not charge the rate limiter. An HA aggregate ("master") panel
-		// disarms code-free and the engine loops it across every zone;
-		// each code-required zone would otherwise record a failure, and a
+		// not charge the rate limiter. The daemon itself produces the
+		// code-free fan-out: the MQTT master-disarm sink loops
+		// Engine.Disarm — which passes no code — over every zone
+		// (cmd/openccu-loom/daemon_north.go, MasterDisarm). Each
+		// code-required zone would otherwise record a failure, so a
 		// handful of zones on one code-free press would lock the source
-		// out — refusing the operator's immediately following correct
+		// out, refusing the operator's immediately following correct
 		// per-zone PIN. Journal the fault for audit, charge nothing.
 		f.recordInvalid(ctx, zoneID, source, "code_missing", opSource, false)
 		return "", false, engine.ErrInvalidCode
@@ -323,10 +325,14 @@ func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source str
 
 // HasPINCodes reports whether any enabled, in-validity pin code applies
 // to zoneID — the "codes exist" half of the effective code requirement
-// (notes/concepts/alarm-concept.md §11). MQTT discovery uses it to advertise
-// code_arm_required / code_disarm_required exactly as the engine will
-// enforce them: a policy default resolves to required only while such a
-// code exists, so HA prompts for a code precisely when one is needed.
+// (notes/concepts/alarm-concept.md §11). Its one production caller is
+// Service.EffectiveCodePolicy (internal/alarm/service.go), which is what
+// three surfaces read the code_arm_required / code_disarm_required flags
+// from: the MQTT discovery payload, the WS alarm-panel event and the
+// REST panel model. Resolving them here keeps them identical to what the
+// engine enforces — a policy default resolves to required only while
+// such a code exists, so a client prompts for a code precisely when one
+// is needed.
 func (f *Facade) HasPINCodes(ctx context.Context, zoneID string) bool {
 	cands, err := f.pinCandidates(ctx, zoneID, f.clk.Now().UnixMilli())
 	return err == nil && len(cands) > 0
@@ -407,12 +413,10 @@ func (f *Facade) pinCandidates(ctx context.Context, zoneID string, nowMS int64) 
 		if r.ValidUntilMS != 0 && nowMS > r.ValidUntilMS {
 			continue
 		}
-		var perms Perms
-		if r.PermsJSON != "" {
-			if err := json.Unmarshal([]byte(r.PermsJSON), &perms); err != nil {
-				f.log.Error("alarm code perms_json malformed, skipping", "id", r.ID, "error", err)
-				continue
-			}
+		perms, err := parsePerms(r.PermsJSON)
+		if err != nil {
+			f.log.Error("alarm code perms_json malformed, skipping", "id", r.ID, "error", err)
+			continue
 		}
 		zones, err := parseZones(r.ZonesJSON)
 		if err != nil {
@@ -495,11 +499,9 @@ func permits(p Perms, verb string) bool {
 // parseRow decodes one raw store row into its Row projection, minus
 // the hash.
 func parseRow(r *sqlitestore.AlarmCodeRow) (Row, error) {
-	var perms Perms
-	if r.PermsJSON != "" {
-		if err := json.Unmarshal([]byte(r.PermsJSON), &perms); err != nil {
-			return Row{}, fmt.Errorf("perms_json: %w", err)
-		}
+	perms, err := parsePerms(r.PermsJSON)
+	if err != nil {
+		return Row{}, fmt.Errorf("perms_json: %w", err)
 	}
 	zones, err := parseZones(r.ZonesJSON)
 	if err != nil {
@@ -516,6 +518,21 @@ func parseRow(r *sqlitestore.AlarmCodeRow) (Row, error) {
 		Perms: perms, Zones: zones, Binding: binding,
 		ValidFromMS: r.ValidFromMS, ValidUntilMS: r.ValidUntilMS, Enabled: r.Enabled,
 	}, nil
+}
+
+// parsePerms decodes perms_json, treating an empty string as the
+// all-false permission set. Both projections of the column — the
+// authentication candidates and the Row listing — go through here, so a
+// document one accepts can never be one the other rejects.
+func parsePerms(permsJSON string) (Perms, error) {
+	var perms Perms
+	if permsJSON == "" {
+		return perms, nil
+	}
+	if err := json.Unmarshal([]byte(permsJSON), &perms); err != nil {
+		return Perms{}, err
+	}
+	return perms, nil
 }
 
 // parseZones decodes zones_json, treating an empty string the same as

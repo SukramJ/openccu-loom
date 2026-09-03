@@ -40,9 +40,10 @@ func (b *Bootstrap) Build(_ context.Context, cfg *config.Config) (*Registry, fun
 		logger = slog.Default()
 	}
 
-	// Daemon-global instance identity — the leading component of every
-	// central's wire interface_id (`<instance_name>-<ccu_name>-<iface>`,
-	// ADR-0024). Same for every central in this daemon.
+	// Daemon-global instance identity — a component of every central's
+	// wire interface_id (`loom-<instance_name>-<ccu_name>-<iface>`, built
+	// by adapter.InitInterfaceID; ADR-0024). Same for every central in
+	// this daemon.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 
 	reg := NewRegistryWithManifest(b.Manifest)

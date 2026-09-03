@@ -57,21 +57,51 @@ var climateParamPattern = regexp.MustCompile(
 // device-specific caveat.
 const SimpleMaxGroup = schedule.SimpleMaxSlot
 
+// HighestSimpleGroup returns the largest group number any key in m names,
+// or 0 when none does. The map's value type is irrelevant to the answer,
+// which is why it is generic: the two callers hold a paramset-description
+// key set and a MASTER paramset, and both were walking the keys with
+// their own copy of this loop.
+func HighestSimpleGroup[V any](m map[string]V) int {
+	highest := 0
+	for key := range m {
+		if no, ok := SimpleGroupNo(key); ok && no > highest {
+			highest = no
+		}
+	}
+	return highest
+}
+
 // SimpleGroupNo extracts the group number from a simple week-profile
 // key ("01_WP_LEVEL" → 1). ok is false when the key is not of that
 // form. The number is returned unclamped, so callers can tell an
 // out-of-range group ("25_WP_LEVEL") apart from a key that is not a
 // week-profile cell at all.
 func SimpleGroupNo(key string) (groupNo int, ok bool) {
+	n, _, ok := SimpleGroupField(key)
+	return n, ok
+}
+
+// SimpleGroupField is [SimpleGroupNo] plus the field name after the
+// "_WP_" marker ("01_WP_LEVEL" → 1, "LEVEL"). One parse serves both, so
+// a reader that wants a specific cell asks for it rather than rebuilding
+// the key.
+//
+// Rebuilding is what a caller must not do: the CCU pads the slot number
+// to two digits only below ten (WebUI HmIPWeeklyProgram.js,
+// _addLeadingZero: `return (parseInt(val) < 10) ? "0"+val : val;`), so
+// the width is a minimum rather than a fixed shape, and a formatted
+// prefix encodes an assumption this parse does not need.
+func SimpleGroupField(key string) (groupNo int, field string, ok bool) {
 	parts := strings.SplitN(key, "_", 3)
 	if len(parts) != 3 || parts[1] != "WP" || parts[2] == "" {
-		return 0, false
+		return 0, "", false
 	}
 	n, err := strconv.Atoi(parts[0])
 	if err != nil || n < 1 {
-		return 0, false
+		return 0, "", false
 	}
-	return n, true
+	return n, parts[2], true
 }
 
 // IsParameterName reports whether a MASTER paramset key is one cell of a

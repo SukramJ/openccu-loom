@@ -66,8 +66,8 @@ func (h *HSColor) IsStatusValid() bool {
 // Multiplier returns 1.0.
 func (h *HSColor) Multiplier() float64 { return 1.0 }
 
-// ParamsetKey returns "COMBINED".
-func (h *HSColor) ParamsetKey() string { return "COMBINED" }
+// ParamsetKey returns the synthetic COMBINED compartment key.
+func (h *HSColor) ParamsetKey() string { return string(hmenum.ParamsetKeyCombined) }
 
 // TranslationKey returns "hs_color".
 func (h *HSColor) TranslationKey() string { return "hs_color" }
@@ -182,8 +182,8 @@ func (t *Timer) IsStatusValid() bool {
 // Multiplier returns 1.0.
 func (t *Timer) Multiplier() float64 { return 1.0 }
 
-// ParamsetKey returns "COMBINED".
-func (t *Timer) ParamsetKey() string { return "COMBINED" }
+// ParamsetKey returns the synthetic COMBINED compartment key.
+func (t *Timer) ParamsetKey() string { return string(hmenum.ParamsetKeyCombined) }
 
 // TranslationKey returns "timer".
 func (t *Timer) TranslationKey() string { return "timer" }
@@ -220,8 +220,8 @@ func (t *Timer) IsWritable() bool { return true }
 
 // --- LevelCombined P2 surface ---
 
-// ParamsetKey returns "COMBINED".
-func (l *LevelCombined) ParamsetKey() string { return "COMBINED" }
+// ParamsetKey returns the synthetic COMBINED compartment key.
+func (l *LevelCombined) ParamsetKey() string { return string(hmenum.ParamsetKeyCombined) }
 
 // TranslationKey returns "level_combined".
 func (l *LevelCombined) TranslationKey() string { return "level_combined" }

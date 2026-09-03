@@ -512,6 +512,11 @@ func deviceRenameChannelHandler(d DeviceWriter) CommandHandler {
 		if p.Name == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "name is required")
 		}
+		// The channel address is built as address + ":" + channel, so a
+		// negative ordinal would reach the CCU as an impossible channel.
+		if p.Channel < 0 {
+			return nil, NewCommandError(CommandErrorBadRequest, "channel must not be negative")
+		}
 		if err := d.RenameChannel(ctx, p.Address, p.Channel, p.Name); err != nil {
 			return nil, fmt.Errorf("device.rename_channel: %w", err)
 		}

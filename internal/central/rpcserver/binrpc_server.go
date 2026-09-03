@@ -541,12 +541,7 @@ func (s *BINRPCServer) dispatchCall(ctx context.Context, req *binrpc.Request) (x
 		if len(rest) != 2 {
 			return nil, fmt.Errorf("error: want 2 args after iface, got %d", len(rest))
 		}
-		var code int
-		if i, err := xmlrpc.AsInt(rest[0]); err == nil {
-			code = i
-		} else if s, err := xmlrpc.AsString(rest[0]); err == nil {
-			_, _ = fmt.Sscanf(s, "%d", &code)
-		}
+		code := decodeErrorCode(rest[0])
 		msg, _ := xmlrpc.AsString(rest[1])
 		_ = handlers.Error(ctx, ifaceID, code, msg)
 		return xmlrpc.NilValue{}, nil

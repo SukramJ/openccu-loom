@@ -9,9 +9,8 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// RequiredParameters aggregates every Parameter referenced anywhere in
-// the generated catalogs (DefaultDataPoints, all ProfileConfigs) and in
-// Extended configs of all registered profiles.
+// RequiredParameters aggregates every Parameter referenced by
+// DefaultDataPoints and by the profiles registered in this registry.
 //
 // The resulting slice acts as a whitelist in the Visibility-Decider:
 // a parameter that appears in IGNORED_PARAMETERS but also here must NOT
@@ -19,13 +18,15 @@ import (
 //
 // Sources (in order):
 //  1. DefaultDataPoints — all channel-offset entries.
-//  2. ProfileConfigs — for every *ProfileConfig in ProfileConfigs:
-//     - ChannelGroup.Fields (all FieldValues → Parameter)
-//     - ChannelGroup.ChannelFields (all sub-maps)
-//     - ChannelGroup.FixedChannelFields
-//     - AdditionalDataPoints
-//  3. AllExtendedConfigs — all registered profiles whose Extended != nil
-//     → Extended.RequiredParameters().
+//  2. Every registered profile's [Profile.RequiredParameters] — its Config
+//     (ChannelGroup.Fields, ChannelFields, FixedChannelFields,
+//     AdditionalDataPoints) unioned with its Extended config.
+//
+// The receiver's own profiles are the scope on purpose. Reading the global
+// ProfileConfigs catalogue instead would make every registry answer for
+// entries it does not hold, and it would bypass [Profile.RequiredParameters]
+// — the same union, stated once. For [DefaultRegistry] the two agree, which
+// is what TestDefaultRegistryRequiredParametersMatchItsOwnProfiles pins.
 //
 // Output: deduplicated + alphabetically sorted.
 func (r *Registry) RequiredParameters() []hmenum.Parameter {
@@ -38,21 +39,10 @@ func (r *Registry) RequiredParameters() []hmenum.Parameter {
 		}
 	}
 
-	// 2. ProfileConfigs (the global generated catalog).
-	for _, pc := range ProfileConfigs {
-		if pc == nil {
-			continue
-		}
-		collectFromProfileConfig(pc, seen)
-	}
-
-	// 3. Extended configs from registered profiles.
+	// 2. The profiles this registry holds.
 	r.mu.RLock()
 	for _, profile := range r.items {
-		if profile.Extended == nil {
-			continue
-		}
-		for _, p := range profile.Extended.RequiredParameters() {
+		for _, p := range profile.RequiredParameters() {
 			seen[p] = struct{}{}
 		}
 	}
@@ -64,7 +54,7 @@ func (r *Registry) RequiredParameters() []hmenum.Parameter {
 // RequiredParameters returns the parameters required by this Profile
 // (its ProfileConfig + its Extended config). The Materializer uses
 // this per-device to compute the per-device required-parameter set, which
-// is a subset of the global Registry.RequiredParameters().
+// is a subset of the registry-wide [Registry.RequiredParameters].
 //
 // A Profile with no Config and no Extended returns an empty (non-nil) slice.
 func (p Profile) RequiredParameters() []hmenum.Parameter {

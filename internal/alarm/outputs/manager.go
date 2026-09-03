@@ -158,7 +158,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		failed:           map[string]string{},
 	}
 	if m.defaultSiren <= 0 {
-		m.defaultSiren = 180 * time.Second
+		m.defaultSiren = DefaultSirenSeconds * time.Second
 	}
 	if m.maxPerIncident <= 0 {
 		m.maxPerIncident = 900 * time.Second

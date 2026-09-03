@@ -245,34 +245,3 @@ func TestDetectHomegearVersionExtractedFromSoftwareVersion(t *testing.T) {
 		t.Errorf("SoftwareVersion = %q, want 6.0.0.20260101", res.SoftwareVersion)
 	}
 }
-
-// TestParseMajorMinorEdgeCases verifies the internal version parser handles
-// various inputs correctly.
-func TestParseMajorMinorEdgeCases(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		version   string
-		wantMajor int
-		wantMinor int
-	}{
-		{"3.55.10.20210601", 3, 55},
-		{"3.49.0.0", 3, 49},
-		{"3.47.10.20190101", 3, 47},
-		{"4.0.0.0", 4, 0},
-		{"", 0, 0},
-		{"bad-version", 0, 0},
-		{"3", 0, 0},  // no dot → (0,0)
-		{"3.", 3, 0}, // trailing dot, minor defaults to 0
-		{"3.0", 3, 0},
-	}
-	for _, tc := range cases {
-		t.Run(tc.version, func(t *testing.T) {
-			t.Parallel()
-			gotMaj, gotMin := parseMajorMinor(tc.version)
-			if gotMaj != tc.wantMajor || gotMin != tc.wantMinor {
-				t.Errorf("parseMajorMinor(%q) = (%d, %d), want (%d, %d)",
-					tc.version, gotMaj, gotMin, tc.wantMajor, tc.wantMinor)
-			}
-		})
-	}
-}

@@ -147,6 +147,12 @@ type Lock struct {
 	// fallback. The DataPointKey deliberately stays "BUTTON_LOCK" so the
 	// CDP name (REST/MQTT identity, HA postfix matching) is stable.
 	buttonParam hmenum.Parameter
+
+	// targetLevelAddr / targetLevelParam are the HmIP write target resolved
+	// once at construction through the profile's channel-group schema, which
+	// states both the parameter and the channel the field binds to.
+	targetLevelAddr  string
+	targetLevelParam hmenum.Parameter
 }
 
 // Config is the constructor record. Channel must already carry the
@@ -207,6 +213,12 @@ func New(cfg Config) *Lock {
 		l.rfErrorDp = custom.EnumSensorField(
 			custom.ResolveSlotOnCarryingChannel(cfg.Channel, cfg.Group, hmenum.FieldError, hmenum.ParameterError),
 		)
+	}
+	targetCh, targetParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLockTargetLevel, hmenum.ParameterLockTargetLevel)
+	l.targetLevelParam = targetParam
+	l.targetLevelAddr = address
+	if targetCh != nil {
+		l.targetLevelAddr = targetCh.Address
 	}
 	// Which way the motor last turned is a read-only ENUM that the two
 	// families report under different names: the HM key-matic devices call
@@ -569,7 +581,7 @@ func (l *Lock) sendIP(ctx context.Context, cmd command, priority hmenum.CommandP
 	case commandOpen:
 		label = ipTargetOpen
 	}
-	if err := l.writer.SetValue(ctx, l.Address, hmenum.ParameterLockTargetLevel, label, priority); err != nil {
+	if err := l.writer.SetValue(ctx, l.targetLevelAddr, l.targetLevelParam, label, priority); err != nil {
 		return fmt.Errorf("lock: IP command %d: %w", cmd, err)
 	}
 	l.observeCommand(cmd)

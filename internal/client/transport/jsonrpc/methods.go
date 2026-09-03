@@ -432,25 +432,6 @@ func (c *Client) CreateSystemVariableBool(ctx context.Context, name string, init
 	return result, nil
 }
 
-// CreateSystemVariableEnum creates a new enum system variable on the CCU.
-// valueList is joined as a semicolon-separated string (CCU wire format).
-//
-// Wire: SysVar.createEnum, params: {name, valList, internal, chnID} — the
-// key is valList, which is what www/api/methods.conf declares and what
-// sysvar/createenum.tcl's ReGa script reads (`sv.ValueList( valList )`).
-func (c *Client) CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error) {
-	var result map[string]any
-	if err := c.Call(ctx, "SysVar.createEnum", map[string]any{
-		"name":     name,
-		"valList":  joinSemicolon(valueList),
-		"internal": 0,
-		"chnID":    -1,
-	}, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 // CreateSystemVariableFloat creates a new float system variable on the CCU.
 // minValue and maxValue define the allowed range (CCU defaults: 0–65000).
 //
@@ -489,29 +470,6 @@ func (c *Client) GetAllSystemVariables(ctx context.Context) ([]map[string]any, e
 func (c *Client) GetAllPrograms(ctx context.Context) ([]map[string]any, error) {
 	var result []map[string]any
 	if err := c.Call(ctx, "Program.getAll", nil, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// GetValue reads a single parameter value from the CCU. When paramsetKey is
-// "MASTER" the Interface.getMasterValue method is used; for all other keys
-// (e.g. "VALUES") Interface.getValue is used.
-//
-// Wire: Interface.getValue or Interface.getMasterValue,
-//
-// params: {interface, address, valueKey}.
-func (c *Client) GetValue(ctx context.Context, iface, address, paramsetKey, parameter string) (any, error) {
-	method := "Interface.getValue"
-	if paramsetKey == "MASTER" {
-		method = "Interface.getMasterValue"
-	}
-	var result any
-	if err := c.Call(ctx, method, map[string]any{
-		"interface": iface,
-		"address":   address,
-		"valueKey":  parameter,
-	}, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -927,17 +885,4 @@ func (c *Client) backupBaseURL() string {
 		return ""
 	}
 	return u.Scheme + "://" + u.Host
-}
-
-// joinSemicolon joins a string slice with semicolons. Used to format the
-// valueList parameter for SysVar.createEnum (CCU wire format).
-func joinSemicolon(s []string) string {
-	var result strings.Builder
-	for i, v := range s {
-		if i > 0 {
-			result.WriteString(";")
-		}
-		result.WriteString(v)
-	}
-	return result.String()
 }

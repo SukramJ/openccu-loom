@@ -57,11 +57,15 @@ type InboxDevice struct {
 }
 
 // Inbox aggregates the "pending device" view an operator has to act on.
-// It has two sources: the CCU's own inbox (devices paired but not yet
-// configured, delivered by the hub coordinator through [Inbox.Replace])
-// and the daemon's deferred-creation queue (devices announced over
+// It has three sources: the CCU's own inbox (devices paired but not yet
+// configured, delivered by the hub coordinator through [Inbox.Replace]),
+// the daemon's deferred-creation queue (devices announced over
 // newDevices while `delay_new_device_creation` is enabled, delivered
-// through [Inbox.SetPendingCreation]). Both mean the same thing to an
+// through [Inbox.SetPendingCreation]), and the awaiting-release set (the
+// wizard's middle state, delivered through [Inbox.SetAwaitingRelease]).
+// The third is derived rather than owned: it is rebuilt from the model
+// registry on every publish, which is why [Inbox.Remove] does not touch
+// it — a delete there would be reverted by the next sweep. Both mean the same thing to an
 // operator — "this device is waiting for you" — so they share one
 // aggregate and therefore one REST/WS/MQTT surface. The UI reads
 // `Count()` / `List()` to surface pairing candidates.
@@ -111,7 +115,7 @@ func NewInboxWithCentral(centralName string) *Inbox {
 	}
 }
 
-// Count is the number of pending devices across both sources.
+// Count is the number of pending devices across all three sources.
 func (i *Inbox) Count() int {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
@@ -284,8 +288,10 @@ func (i *Inbox) swap(mutate func() bool) {
 	}
 }
 
-// Remove drops a single pending device by address from both sources,
-// firing subscribers only
+// Remove drops a single pending device by address from the two OWNED
+// sources; the derived awaiting-release set is left alone, because it is
+// rebuilt on every publish and an awaiting-release device genuinely is
+// still awaiting release. Subscribers fire only
 // when the entry was actually present. It reconciles a stale entry the CCU no
 // longer knows (e.g. an accept that reported the device gone) immediately,
 // without waiting for the next full inbox sweep.

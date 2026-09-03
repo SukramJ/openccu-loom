@@ -216,6 +216,14 @@ func (t *PingPongTracker) Clear() {
 	t.rttMax = 0
 }
 
+// overThreshold is the single boundary test for "the mismatch table is
+// over the configured threshold". Every emit decision and the severity
+// reported by [PingPongTracker.Stats] read it, so the boundary cannot
+// differ between them. A non-positive threshold disables the test.
+func (t *PingPongTracker) overThreshold(n int) bool {
+	return t.cfg.MismatchThreshold > 0 && n > t.cfg.MismatchThreshold
+}
+
 // RecordPing notes that id was sent at the current clock reading.
 //
 // - The connection-issue gate (when configured) returns the PING unrecorded
@@ -246,7 +254,7 @@ func (t *PingPongTracker) RecordPing(id string) {
 	// Threshold crossing — emit on every even count above the
 	// Threshold (mirrors
 	// handle_send_ping, plus the unconditional emit when crossing).
-	if publishHook != nil && threshold > 0 && count > threshold && (count%2 == 0 || count == threshold+1) {
+	if publishHook != nil && t.overThreshold(count) && (count%2 == 0 || count == threshold+1) {
 		publishHook(hmenum.PingPongMismatchPending, count)
 	}
 }
@@ -260,7 +268,6 @@ func (t *PingPongTracker) RecordPong(id string) (matched bool, rtt time.Duration
 	now := t.clk.Now()
 	t.totalRecv++
 	var (
-		threshold       = t.cfg.MismatchThreshold
 		publishHook     = t.onPublish
 		emitKind        hmenum.PingPongMismatchType
 		emitCount       int
@@ -283,7 +290,7 @@ func (t *PingPongTracker) RecordPong(id string) (matched bool, rtt time.Duration
 		t.appendJournalLocked(JournalEntry{When: now, Kind: JournalEventMatched, ID: id, RTT: measuredRTT})
 		matchedThisCall = true
 		// Pending shrinks on match; emit if still above threshold.
-		if publishHook != nil && threshold > 0 && len(t.pending) > threshold {
+		if publishHook != nil && t.overThreshold(len(t.pending)) {
 			emitKind = hmenum.PingPongMismatchPending
 			emitCount = len(t.pending)
 			shouldEmit = true
@@ -293,7 +300,7 @@ func (t *PingPongTracker) RecordPong(id string) (matched bool, rtt time.Duration
 		t.appendJournalLocked(JournalEntry{When: now, Kind: JournalEventUnknown, ID: id})
 		t.enforceCap(t.unknown, JournalEventEvicted)
 		// Unknown grows; emit when above threshold.
-		if publishHook != nil && threshold > 0 && len(t.unknown) > threshold {
+		if publishHook != nil && t.overThreshold(len(t.unknown)) {
 			emitKind = hmenum.PingPongMismatchUnknown
 			emitCount = len(t.unknown)
 			shouldEmit = true
@@ -374,10 +381,10 @@ func (t *PingPongTracker) Stats() Stats {
 	severity := "ok"
 	if t.cfg.MismatchThreshold > 0 {
 		thOver := 0
-		if pending >= t.cfg.MismatchThreshold {
+		if t.overThreshold(pending) {
 			thOver++
 		}
-		if unknown >= t.cfg.MismatchThreshold {
+		if t.overThreshold(unknown) {
 			thOver++
 		}
 		switch thOver {

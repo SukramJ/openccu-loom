@@ -701,3 +701,55 @@ func TestTextDisplayWriteRowsZeroIDReturnsError(t *testing.T) {
 		t.Error("WriteRows with ID=0 must return ErrInvalidRow")
 	}
 }
+
+// TestWriteAndWriteWithSoundEmitTheSameRowFields pins the two atomic entry
+// points to one row bundle. They differ only in the acoustic options
+// WriteWithSound adds; every display field — ID, COMMIT, STRING, ICON and the
+// three optional styling fields — must be identical, because a row written
+// with a sound is the same row.
+func TestWriteAndWriteWithSoundEmitTheSameRowFields(t *testing.T) {
+	align := AlignCenter
+	fg := "RED"
+	bg := "BLUE"
+	row := func() Row {
+		return Row{
+			ID:              1,
+			Text:            "Alarm",
+			Icon:            "LAMP_ON",
+			Alignment:       &align,
+			TextColor:       &fg,
+			BackgroundColor: &bg,
+		}
+	}
+
+	plain := &putWriter{}
+	if err := New("VCU3756007:3", plain).Write(
+		context.Background(), row(), hmenum.CommandPriorityHigh,
+	); err != nil {
+		t.Fatal(err)
+	}
+	withSound := &putWriter{}
+	if err := New("VCU3756007:3", withSound).WriteWithSound(
+		context.Background(),
+		row(),
+		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_5", Interval: "1S"},
+		hmenum.CommandPriorityHigh,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if len(plain.puts) != 1 || len(withSound.puts) != 1 {
+		t.Fatalf("put_paramset counts: Write=%d WriteWithSound=%d, want 1 each",
+			len(plain.puts), len(withSound.puts))
+	}
+	got := maps.Clone(withSound.puts[0])
+	for _, p := range []hmenum.Parameter{
+		hmenum.ParameterAcousticNotificationSelection,
+		hmenum.ParameterRepetitions,
+		hmenum.ParameterInterval,
+	} {
+		delete(got, string(p))
+	}
+	if !maps.Equal(got, plain.puts[0]) {
+		t.Errorf("WriteWithSound row fields = %v, Write row fields = %v", got, plain.puts[0])
+	}
+}

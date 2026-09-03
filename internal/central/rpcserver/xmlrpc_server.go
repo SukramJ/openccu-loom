@@ -448,15 +448,7 @@ func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen /
 			return nil, fmt.Errorf("error: want 3 params, got %d", len(params))
 		}
 		iface, _ := xmlrpc.AsString(params[0])
-		// error_code arrives as either an integer or a stringified
-		// integer depending on the CCU firmware. Try int first; fall
-		// back to string-parse.
-		var code int
-		if i, err := xmlrpc.AsInt(params[1]); err == nil {
-			code = i
-		} else if s, err := xmlrpc.AsString(params[1]); err == nil {
-			_, _ = fmt.Sscanf(s, "%d", &code)
-		}
+		code := decodeErrorCode(params[1])
 		msg, _ := xmlrpc.AsString(params[2])
 		_ = h.Error(ctx, iface, code, msg)
 		return xmlrpc.NilValue{}, nil

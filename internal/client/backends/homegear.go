@@ -200,60 +200,12 @@ func (b *HomegearBackend) ReplaceDevice(_ context.Context, _, _ string) error {
 // default", which is the only claim both sides support, and do not assume
 // the CCU bit meanings apply.
 func (b *HomegearBackend) GetLinks(ctx context.Context, channelAddress string) ([]hmproto.LinkDescription, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getLinks", channelAddress, 0)
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("homegear.GetLinks: unexpected type %T", raw)
-	}
-	out := make([]hmproto.LinkDescription, 0, len(list))
-	for _, entry := range list {
-		m, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		ld := hmproto.LinkDescription{
-			Sender:      asString(m["SENDER"]),
-			Receiver:    asString(m["RECEIVER"]),
-			Name:        asString(m["NAME"]),
-			Description: asString(m["DESCRIPTION"]),
-		}
-		if f, ok := m["FLAGS"].(int); ok {
-			ld.Flags = f
-		}
-		if ld.Sender == "" || ld.Receiver == "" {
-			continue
-		}
-		out = append(out, ld)
-	}
-	return out, nil
+	return getLinksViaCaller(ctx, b.xml, "homegear", channelAddress)
 }
 
 // GetLinkPeers implements Operations.
 func (b *HomegearBackend) GetLinkPeers(ctx context.Context, channelAddress string) ([]string, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getLinkPeers", channelAddress)
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("homegear.GetLinkPeers: unexpected type %T", raw)
-	}
-	out := make([]string, 0, len(list))
-	for _, entry := range list {
-		if s, ok := entry.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	return out, nil
+	return getLinkPeersViaCaller(ctx, b.xml, "homegear", channelAddress)
 }
 
 // AddLink implements Operations.
@@ -276,55 +228,17 @@ func (b *HomegearBackend) RemoveLink(ctx context.Context, senderAddress, receive
 
 // GetLinkParamsetDescription implements Operations.
 func (b *HomegearBackend) GetLinkParamsetDescription(ctx context.Context, channelAddress, _ string) (map[string]hmproto.ParameterData, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamsetDescription", channelAddress, "LINK")
-	if err != nil {
-		return nil, err
-	}
-	outer, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("homegear.GetLinkParamsetDescription: unexpected type %T", raw)
-	}
-	out := make(map[string]hmproto.ParameterData, len(outer))
-	for param, inner := range outer {
-		m, ok := inner.(map[string]any)
-		if !ok {
-			continue
-		}
-		pd, err := toParameterData(m)
-		if err != nil {
-			return nil, fmt.Errorf("homegear.GetLinkParamsetDescription[%s]: %w", param, err)
-		}
-		out[param] = pd
-	}
-	return out, nil
+	return getLinkParamsetDescriptionViaCaller(ctx, b.xml, "homegear", channelAddress)
 }
 
 // GetLinkParamset implements Operations.
 func (b *HomegearBackend) GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamset", channelAddress, peerAddress)
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("homegear.GetLinkParamset: unexpected type %T", raw)
-	}
-	return m, nil
+	return getLinkParamsetViaCaller(ctx, b.xml, "homegear", channelAddress, peerAddress)
 }
 
 // PutLinkParamset implements Operations.
 func (b *HomegearBackend) PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error {
-	if b.xml == nil {
-		return ErrNotWired
-	}
-	_, err := b.xml.Call(ctx, "putParamset", channelAddress, peerAddress, values)
-	return err
+	return putLinkParamsetViaCaller(ctx, b.xml, channelAddress, peerAddress, values)
 }
 
 // ActivateLinkParamset implements Operations. Homegear's XML-RPC does not
@@ -617,18 +531,7 @@ func (b *HomegearBackend) GetDeviceDetails(ctx context.Context, addresses []stri
 // GetDeviceDescription implements Operations. Returns the raw device
 // description for a single address via XML-RPC.
 func (b *HomegearBackend) GetDeviceDescription(ctx context.Context, address string) (map[string]any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getDeviceDescription", address)
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("homegear.GetDeviceDescription: unexpected type %T", raw)
-	}
-	return m, nil
+	return getDeviceDescriptionViaCaller(ctx, b.xml, "homegear", address)
 }
 
 // CreateBackupAndDownload implements Operations. Not available on Homegear.

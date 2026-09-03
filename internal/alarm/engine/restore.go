@@ -14,6 +14,21 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// resumedTimerFloor is the shortest delay a countdown resumed at boot
+// is rescheduled with: an already-elapsed deadline still fires, but one
+// tick later, so the restore path never schedules a zero-length timer.
+const resumedTimerFloor = time.Second
+
+// flooredRemaining applies resumedTimerFloor. The restore paths that
+// resume a countdown share it; the paths that escalate on an elapsed
+// deadline (restorePending, restoreTriggered) deliberately do not floor.
+func flooredRemaining(d time.Duration) time.Duration {
+	if d <= 0 {
+		return resumedTimerFloor
+	}
+	return d
+}
+
 // Start loads the configured zones and sensors, bumps the boot
 // counter, and restores every persisted zone state per the restart
 // table of notes/concepts/alarm-concept.md §10.2. It is not idempotent — call
@@ -329,9 +344,7 @@ func (e *Engine) restoreArming(ctx context.Context, a *zone, timers []persistedT
 		e.publishState(a, from, "engine:restore", "engine")
 		return
 	}
-	if remaining <= 0 {
-		remaining = time.Second
-	}
+	remaining = flooredRemaining(remaining)
 	e.scheduleStateTimer(a, TimerKindExit, remaining)
 	// The tick chain is a separate timer from the state timer, and it
 	// is the only producer of AlarmCountdownEvent and of the countdown
@@ -569,9 +582,7 @@ func (e *Engine) restoreAutoRearm(ctx context.Context, a *zone, timers []persist
 	default:
 		remaining = time.Duration(t.RemainingMS) * time.Millisecond
 	}
-	if remaining <= 0 {
-		remaining = time.Second
-	}
+	remaining = flooredRemaining(remaining)
 	e.scheduleAutoRearm(a, a.autoRearmMode, remaining)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_resumed",

@@ -643,18 +643,7 @@ func (b *CcuBackend) GetDeviceDetails(ctx context.Context, _ []string) ([]map[st
 // GetDeviceDescription implements Operations. Returns the raw device
 // description for a single address via XML-RPC.
 func (b *CcuBackend) GetDeviceDescription(ctx context.Context, address string) (map[string]any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getDeviceDescription", address)
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetDeviceDescription: unexpected type %T", raw)
-	}
-	return m, nil
+	return getDeviceDescriptionViaCaller(ctx, b.xml, "ccu", address)
 }
 
 // --- backup -------------------------------------------------------------

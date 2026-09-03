@@ -251,13 +251,7 @@ func (sv *defaultChannelSaver) declaredGroups(ctx context.Context) int {
 	if err != nil {
 		return 0
 	}
-	highest := 0
-	for key := range values {
-		if no, ok := weekprofile.SimpleGroupNo(key); ok && no > highest {
-			highest = no
-		}
-	}
-	return highest
+	return weekprofile.HighestSimpleGroup(values)
 }
 
 // bindDefaultScheduleIO attaches a fully-wired

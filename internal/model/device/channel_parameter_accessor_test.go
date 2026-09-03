@@ -944,20 +944,6 @@ func TestSortKeysNilSlice(t *testing.T) {
 	}
 }
 
-// TestChannelUniqueIDNoColon verifies UniqueID for a device address without colon.
-func TestChannelUniqueIDNoColon(t *testing.T) {
-	// Channel whose address has no colon (device root channel).
-	ch := &Channel{
-		Address: "ABC0001",
-		Number:  ChannelNumberDevice,
-	}
-	uid := ch.UniqueID()
-	// Should use the full address as device prefix.
-	if uid == "" {
-		t.Error("UniqueID must be non-empty")
-	}
-}
-
 // TestChannel0FloatInt32 exercises channel0Float with int32 raw value.
 func TestChannel0FloatInt32(t *testing.T) {
 	d := New(Config{InterfaceID: "HmIP-RF", Address: "INT320001", Model: "HmIP-X"})

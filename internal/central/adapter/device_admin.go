@@ -394,9 +394,18 @@ func (a *DeviceAdminDomain) InterfaceDutyCycle(address string) (int, bool) {
 }
 
 // SetInstallMode opens a per-device pairing window via the backend's
-// XML-RPC `setInstallMode(true, durationSecs, mode, address)` call, with
-// the flavour taken from [installModeNormal] so this path and the
-// broadcast path in install_mode.go cannot drift apart.
+// XML-RPC `setInstallMode` call, with the flavour taken from
+// [installModeNormal] so this path and the broadcast path in
+// install_mode.go cannot drift apart as written.
+//
+// The flavour does not reach the wire here. With an address the backend
+// sends three arguments and the third is a string, which rfd reads as a
+// whitelist serial and answers with INSTALL_DEVICE_WHITELIST; an integer
+// third argument is accepted only in 0..2 and cannot name that mode at
+// all (rfd XmlRpcMethods.cpp, the setInstallMode method's execute). So
+// the constant keeps the two call sites aligned in the source, and
+// TestBothInstallModePathsSendTheSameFlavour pins that alignment at the
+// argument — not at the wire, where only the broadcast path carries it.
 //
 // Interfaces outside [hmenum.InterfacesSupportingInstallMode] answer
 // [backends.ErrUnsupported] before a wire call is made — the same gate

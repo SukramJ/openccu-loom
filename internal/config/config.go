@@ -1646,7 +1646,10 @@ type HAIngressConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 	// TrustedProxyCIDR is the network the Ingress request must originate from
 	// (the request's real RemoteAddr). Empty uses the HA Supervisor default
-	// (172.30.32.0/23). Only the loopback / this CIDR are ever trusted.
+	// (172.30.32.0/23), which is applied — and spelled out a second time — as
+	// defaultSupervisorCIDR in the composition root's ingress auth wiring,
+	// the only consumer; a reader changing one has to change that one too.
+	// Only the loopback / this CIDR are ever trusted.
 	TrustedProxyCIDR string `yaml:"trusted_proxy_cidr" json:"trusted_proxy_cidr" cfg:"expert"`
 	// Role is the Loom role granted to a trusted Ingress request: "admin"
 	// (default), "operator" or "viewer".
@@ -1979,10 +1982,10 @@ func (c *Config) applyDefaults() {
 		c.Callback.Host = "0.0.0.0"
 	}
 	if c.Callback.Port == 0 {
-		c.Callback.Port = 8120
+		c.Callback.Port = hmenum.DefaultXMLRPCCallbackPort
 	}
 	if c.Callback.BinPort == 0 {
-		c.Callback.BinPort = 8129
+		c.Callback.BinPort = hmenum.DefaultBINRPCCallbackPort
 	}
 	if c.Callback.MaxConnections == 0 {
 		c.Callback.MaxConnections = 64
@@ -1992,13 +1995,16 @@ func (c *Config) applyDefaults() {
 	}
 	// Canonicalise the MQTT topic base. The topic builder trims leading and
 	// trailing slashes for every topic it declares, while the consumers that
-	// concatenate the raw base do not — the last will and the retained-cleanup
-	// subscribe filters among them. A base the operator wrote as "loom/" then
-	// declares availability on `loom/bridge/status` while the broker holds the
-	// will on `loom//bridge/status`, so the offline signal lands where nothing
-	// listens and every bridged entity keeps its last retained value. Trim
-	// before the empty-check so a base of nothing but slashes falls back to the
-	// default instead of failing validation.
+	// concatenate the raw base do not — the retained-cleanup matchers among
+	// them, which test `strings.HasPrefix(topic, topicBase+"/")`. A base the
+	// operator wrote as "loom/" then publishes state on `loom/<central>/…`
+	// while the matcher looks for `loom//<central>/…`, so the orphan sweep
+	// collects nothing and retained topics from a previous build keep feeding
+	// stale values forever. Trim before the empty-check so a base of nothing
+	// but slashes falls back to the default instead of failing validation.
+	// (The last will is no longer such a consumer — it goes through the
+	// trimming builder — so this normalisation is what keeps the remaining
+	// raw concatenations honest, not what the will depends on.)
 	c.North.MQTT.TopicBase = strings.Trim(c.North.MQTT.TopicBase, "/")
 	if c.North.MQTT.TopicBase == "" {
 		c.North.MQTT.TopicBase = "openccu-loom"
@@ -2067,6 +2073,19 @@ func (c *Config) applyDefaults() {
 	if c.AddonUpdate.CheckInterval == 0 {
 		c.AddonUpdate.CheckInterval = 24 * time.Hour
 	}
+	// Clamp an explicit history.retention below the hourly-rollup lag up
+	// to the floor: keeping it lower would let the purge delete raw rows
+	// before the hourly fold folds them (permanent loss). Zero is left
+	// untouched — it selects the daemon default, well above the floor.
+	//
+	// The clamp lives here as well as in Validate because the config store
+	// applies defaults without validating (configstore.Store.Effective),
+	// so a stored `persistence.history` row below the floor was reported
+	// by GET /api/v1/config as written while the running daemon held the
+	// clamped value.
+	if h := &c.Persistence.History; h.Retention > 0 && h.Retention < HistoryRetentionFloor {
+		h.Retention = HistoryRetentionFloor
+	}
 }
 
 // ApplyDefaults fills any still-unset field with its compiled-in default.
@@ -2110,6 +2129,12 @@ func validateCentralBehavior(idx int, b *CentralBehavior) error {
 }
 
 // Validate returns an error when required invariants are violated.
+//
+// It also normalises: an explicit history.retention below
+// [HistoryRetentionFloor] is clamped up to the floor, so the receiver is
+// written to and callers must not treat it as read-only. The same clamp runs
+// in applyDefaults; keeping it here too means every path is clamped whatever
+// its defaults/validate order.
 func (c *Config) Validate() error {
 	if err := c.Logging.validate(); err != nil {
 		return err

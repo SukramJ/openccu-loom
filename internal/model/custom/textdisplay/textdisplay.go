@@ -577,34 +577,7 @@ func (t *TextDisplay) Write(ctx context.Context, r Row, priority hmenum.CommandP
 		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	if pw, ok := t.Writer.(generic.ParamsetWriter); ok {
-		values := map[string]any{
-			string(hmenum.ParameterDisplayDataID):     r.ID,
-			string(hmenum.ParameterDisplayDataCommit): true,
-			// STRING is always sent, even when empty — an empty string clears the
-			// display row. Skipping it leaves the previous text visible.
-			string(hmenum.ParameterDisplayDataString): r.Text,
-		}
-		// Icon is always sent. When the caller supplies an empty string the
-		// first available icon (conventionally "NO_ICON") is used, so a
-		// previously set icon is cleared rather than left visible.
-		iconValue := r.Icon
-		if iconValue == "" {
-			if len(t.availableIcons) > 0 {
-				iconValue = t.availableIcons[0]
-			} else {
-				iconValue = noIcon
-			}
-		}
-		values[string(hmenum.ParameterDisplayDataIcon)] = iconValue
-		if r.Alignment != nil && *r.Alignment != "" {
-			values[string(hmenum.ParameterDisplayDataAlignment)] = *r.Alignment
-		}
-		if r.TextColor != nil && *r.TextColor != "" {
-			values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor
-		}
-		if r.BackgroundColor != nil && *r.BackgroundColor != "" {
-			values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
-		}
+		values := t.rowParamset(r)
 		return pw.PutParamset(ctx, t.Address, hmenum.ParamsetKeyValues, values, priority)
 	}
 	if err := t.writeRowFields(ctx, r, priority); err != nil {
@@ -713,34 +686,7 @@ func (t *TextDisplay) WriteWithSound(
 		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	if pw, ok := t.Writer.(generic.ParamsetWriter); ok {
-		values := map[string]any{
-			string(hmenum.ParameterDisplayDataID):     r.ID,
-			string(hmenum.ParameterDisplayDataCommit): true,
-			// STRING is always sent, even when empty — an empty string clears the
-			// display row. Skipping it leaves the previous text visible.
-			string(hmenum.ParameterDisplayDataString): r.Text,
-		}
-		// Icon is always sent. When the caller supplies an empty string the
-		// first available icon (conventionally "NO_ICON") is used, so a
-		// previously set icon is cleared rather than left visible.
-		iconValueWS := r.Icon
-		if iconValueWS == "" {
-			if len(t.availableIcons) > 0 {
-				iconValueWS = t.availableIcons[0]
-			} else {
-				iconValueWS = noIcon
-			}
-		}
-		values[string(hmenum.ParameterDisplayDataIcon)] = iconValueWS
-		if r.Alignment != nil && *r.Alignment != "" {
-			values[string(hmenum.ParameterDisplayDataAlignment)] = *r.Alignment
-		}
-		if r.TextColor != nil && *r.TextColor != "" {
-			values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor
-		}
-		if r.BackgroundColor != nil && *r.BackgroundColor != "" {
-			values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
-		}
+		values := t.rowParamset(r)
 		if opts.Sound != "" {
 			values[string(hmenum.ParameterAcousticNotificationSelection)] = opts.Sound
 		}
@@ -796,6 +742,45 @@ func (t *TextDisplay) SubDataPointKeys() []hmtypes.DataPointKey {
 	return t.aggregate().SubDataPointKeys()
 }
 
+// iconOrFallback resolves the icon label a row write sends. An icon is always
+// sent, even when the caller supplies none: falling back to the first
+// available label (conventionally "NO_ICON") clears a previously set icon
+// rather than leaving it on the display.
+func (t *TextDisplay) iconOrFallback(icon string) string {
+	if icon != "" {
+		return icon
+	}
+	if len(t.availableIcons) > 0 {
+		return t.availableIcons[0]
+	}
+	return noIcon
+}
+
+// rowParamset builds the VALUES paramset for one display row: the fields
+// [Write] and [WriteWithSound] both send, including COMMIT. The two entry
+// points must put the same row on the wire, so the bundle is built here once
+// and each adds only what is its own.
+func (t *TextDisplay) rowParamset(r Row) map[string]any {
+	values := map[string]any{
+		string(hmenum.ParameterDisplayDataID):     r.ID,
+		string(hmenum.ParameterDisplayDataCommit): true,
+		// STRING is always sent, even when empty — an empty string clears the
+		// display row. Skipping it leaves the previous text visible.
+		string(hmenum.ParameterDisplayDataString): r.Text,
+		string(hmenum.ParameterDisplayDataIcon):   t.iconOrFallback(r.Icon),
+	}
+	if r.Alignment != nil && *r.Alignment != "" {
+		values[string(hmenum.ParameterDisplayDataAlignment)] = *r.Alignment
+	}
+	if r.TextColor != nil && *r.TextColor != "" {
+		values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor
+	}
+	if r.BackgroundColor != nil && *r.BackgroundColor != "" {
+		values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
+	}
+	return values
+}
+
 // writeRowFields writes every populated wire field of `r` without
 // committing. Shared by [Write], [WriteRows] and [WriteWithSound].
 func (t *TextDisplay) writeRowFields(ctx context.Context, r Row, priority hmenum.CommandPriority) error {
@@ -808,15 +793,7 @@ func (t *TextDisplay) writeRowFields(ctx context.Context, r Row, priority hmenum
 		return fmt.Errorf("textdisplay: STRING: %w", err)
 	}
 	// Icon is always sent, even when empty — clears any previously set icon.
-	iconValueFB := r.Icon
-	if iconValueFB == "" {
-		if len(t.availableIcons) > 0 {
-			iconValueFB = t.availableIcons[0]
-		} else {
-			iconValueFB = noIcon
-		}
-	}
-	if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataIcon, iconValueFB, priority); err != nil {
+	if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataIcon, t.iconOrFallback(r.Icon), priority); err != nil {
 		return fmt.Errorf("textdisplay: ICON: %w", err)
 	}
 	if r.Alignment != nil && *r.Alignment != "" {

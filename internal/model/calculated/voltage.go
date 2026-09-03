@@ -186,8 +186,14 @@ func (s *OperatingVoltageLevelSensor) CalculatedParameter() hmenum.CalculatedPar
 // computed level.
 func (s *OperatingVoltageLevelSensor) IsRefreshed() bool { return s.emit.refreshed() }
 
-// AdditionalInformation key constants mirror
-// `operating_voltage_level.py:22-26` string constants.
+// AdditionalInformation key constants are OpenCCU-Loom's own
+// `additional_information` object keys, not a schema any consumer
+// defines for us.
+//
+// They are published verbatim on two planes — MQTT via
+// payload.Wrapper.AdditionalInformation and REST via the
+// AdditionalInformation() capability assertion in the devices handler —
+// so renaming one is a breaking change on both.
 const (
 	addinfoKeyBatteryQty         = "Battery Qty"
 	addinfoKeyBatteryType        = "Battery Type"

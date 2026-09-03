@@ -783,13 +783,25 @@ func parseSimpleScheduleWithDomain(raw map[string]any, domain string, bits weekp
 // lookupSlotDuration reads DURATION_BASE/FACTOR for the named slot
 // directly from the raw paramset. Called by the lock branch after
 // stripUnsupportedFields cleared the Duration string on the entry.
-// Slot keys follow the `<NN>_WP_<FIELD>` grammar; the slot
-// number is zero-padded to two digits in the wire shape.
+//
+// The keys are parsed through [weekprofile.SimpleGroupField] rather than
+// rebuilt from a format string, so this reader and the parser cannot
+// disagree about the grammar. The CCU pads the slot number to two digits
+// only below ten, which a formatted prefix would silently assume away.
 func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationFactor int) {
-	prefix := fmt.Sprintf("%02d_WP_", slotNo)
-	dBase, _ := coerceInt(raw[prefix+"DURATION_BASE"])
-	dFactor, _ := coerceInt(raw[prefix+"DURATION_FACTOR"])
-	return dBase, dFactor
+	for key, value := range raw {
+		no, field, ok := weekprofile.SimpleGroupField(key)
+		if !ok || no != slotNo {
+			continue
+		}
+		switch field {
+		case "DURATION_BASE":
+			durationBase, _ = coerceInt(value)
+		case "DURATION_FACTOR":
+			durationFactor, _ = coerceInt(value)
+		}
+	}
+	return durationBase, durationFactor
 }
 
 // parseSimpleSchedule decodes the `<NN>_WP_<FIELD>` MASTER paramset into
@@ -974,13 +986,7 @@ func serializeSimpleSchedule(
 // MASTER paramset description, or 0 when the description is unavailable
 // or names none.
 func highestScheduleGroup(descKeys map[string]struct{}) int {
-	highest := 0
-	for key := range descKeys {
-		if no, ok := weekprofile.SimpleGroupNo(key); ok && no > highest {
-			highest = no
-		}
-	}
-	return highest
+	return weekprofile.HighestSimpleGroup(descKeys)
 }
 
 // isCCUScheduleFalsePositive reports whether err is the documented

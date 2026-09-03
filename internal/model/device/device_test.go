@@ -787,30 +787,6 @@ func TestIsScheduleChannelTrueAfterAttach(t *testing.T) {
 	}
 }
 
-// ─── Channel.UniqueID ────────────────────────────────────────────────
-
-// TestChannelUniqueIDFormat verifies the stable "<device>_<channel>" format.
-func TestChannelUniqueIDFormat(t *testing.T) {
-	d := newTestDevice(t)
-	ch := d.Channel("0001ABCD:1")
-	got := ch.UniqueID()
-	want := "0001ABCD_1"
-	if got != want {
-		t.Fatalf("Channel.UniqueID() = %q, want %q", got, want)
-	}
-}
-
-// TestChannelUniqueIDChannel0 verifies channel 0 unique ID.
-func TestChannelUniqueIDChannel0(t *testing.T) {
-	d := newTestDevice(t)
-	ch := d.Channel("0001ABCD:0")
-	got := ch.UniqueID()
-	want := "0001ABCD_0"
-	if got != want {
-		t.Fatalf("Channel.UniqueID() = %q, want %q", got, want)
-	}
-}
-
 // ─── Update.TranslationKey ───────────────────────────────────────────
 
 // TestUpdateTranslationKeyReturnsDeviceUpdate verifies the translation key.

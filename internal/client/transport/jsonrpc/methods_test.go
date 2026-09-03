@@ -679,31 +679,6 @@ func TestCreateSystemVariableBool(t *testing.T) {
 	}
 }
 
-// TestCreateSystemVariableEnum verifies the value list is semicolon-joined.
-func TestCreateSystemVariableEnum(t *testing.T) {
-	t.Parallel()
-	var gotParams map[string]any
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"SysVar.createEnum": func(env envelope) any {
-			gotParams = env.Params
-			return okResult(map[string]any{"id": "5678"})
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	_, err := c.CreateSystemVariableEnum(context.Background(), "scene", []string{"off", "relax", "bright"})
-	if err != nil {
-		t.Fatalf("CreateSystemVariableEnum: %v", err)
-	}
-	if n, _ := gotParams["name"].(string); n != "scene" {
-		t.Errorf("name=%q, want scene", n)
-	}
-	if vl, _ := gotParams["valList"].(string); vl != "off;relax;bright" {
-		t.Errorf("valList=%q, want off;relax;bright", vl)
-	}
-}
-
 // TestCreateSystemVariableFloat verifies name, min and max are forwarded.
 func TestCreateSystemVariableFloat(t *testing.T) {
 	t.Parallel()
@@ -783,72 +758,6 @@ func TestGetAllPrograms(t *testing.T) {
 	}
 	if active, _ := progs[0]["isActive"].(bool); !active {
 		t.Error("progs[0].isActive=false, want true")
-	}
-}
-
-// TestGetValueValues verifies Interface.getValue is used for non-MASTER keys.
-func TestGetValueValues(t *testing.T) {
-	t.Parallel()
-	var gotMethod string
-	var gotParams map[string]any
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.getValue": func(env envelope) any {
-			gotMethod = "Interface.getValue"
-			gotParams = env.Params
-			return okResult(21.5)
-		},
-		"Interface.getMasterValue": func(env envelope) any {
-			gotMethod = "Interface.getMasterValue"
-			gotParams = env.Params
-			return okResult(42.0)
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	val, err := c.GetValue(context.Background(), "BidCos-RF", "HEQ0123456:1", "VALUES", "SET_POINT_TEMPERATURE")
-	if err != nil {
-		t.Fatalf("GetValue: %v", err)
-	}
-	if gotMethod != "Interface.getValue" {
-		t.Errorf("method=%q, want Interface.getValue", gotMethod)
-	}
-	if iface, _ := gotParams["interface"].(string); iface != "BidCos-RF" {
-		t.Errorf("interface=%q, want BidCos-RF", iface)
-	}
-	if addr, _ := gotParams["address"].(string); addr != "HEQ0123456:1" {
-		t.Errorf("address=%q, want HEQ0123456:1", addr)
-	}
-	if vk, _ := gotParams["valueKey"].(string); vk != "SET_POINT_TEMPERATURE" {
-		t.Errorf("valueKey=%q, want SET_POINT_TEMPERATURE", vk)
-	}
-	if v, _ := val.(float64); v != 21.5 {
-		t.Errorf("result=%v, want 21.5", val)
-	}
-}
-
-// TestGetValueMaster verifies Interface.getMasterValue is used for MASTER key.
-func TestGetValueMaster(t *testing.T) {
-	t.Parallel()
-	var gotMethod string
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.getValue": func(env envelope) any {
-			gotMethod = "Interface.getValue"
-			return okResult(0.0)
-		},
-		"Interface.getMasterValue": func(env envelope) any {
-			gotMethod = "Interface.getMasterValue"
-			return okResult(5.0)
-		},
-	})
-	defer srv.Close()
-
-	c, _ := New(Config{Endpoint: srv.URL})
-	if _, err := c.GetValue(context.Background(), "BidCos-RF", "HEQ0123456:1", "MASTER", "BURST_LIMIT"); err != nil {
-		t.Fatalf("GetValue MASTER: %v", err)
-	}
-	if gotMethod != "Interface.getMasterValue" {
-		t.Errorf("method=%q, want Interface.getMasterValue", gotMethod)
 	}
 }
 
@@ -1841,20 +1750,6 @@ func TestCreateSystemVariableBoolError(t *testing.T) {
 	}
 }
 
-func TestCreateSystemVariableEnumError(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"SysVar.createEnum": func(_ envelope) any {
-			return response{Error: &wireError{Code: -32603, Message: "fail"}}
-		},
-	})
-	defer srv.Close()
-	c, _ := New(Config{Endpoint: srv.URL})
-	if _, err := c.CreateSystemVariableEnum(context.Background(), "x", []string{"a", "b"}); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
 func TestCreateSystemVariableFloatError(t *testing.T) {
 	t.Parallel()
 	srv := newTestServer(t, map[string]func(envelope) any{
@@ -1893,20 +1788,6 @@ func TestGetAllProgramsError(t *testing.T) {
 	defer srv.Close()
 	c, _ := New(Config{Endpoint: srv.URL})
 	if _, err := c.GetAllPrograms(context.Background()); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-func TestGetValueError(t *testing.T) {
-	t.Parallel()
-	srv := newTestServer(t, map[string]func(envelope) any{
-		"Interface.getValue": func(_ envelope) any {
-			return response{Error: &wireError{Code: -32603, Message: "fail"}}
-		},
-	})
-	defer srv.Close()
-	c, _ := New(Config{Endpoint: srv.URL})
-	if _, err := c.GetValue(context.Background(), "BidCos-RF", "addr:1", "VALUES", "LEVEL"); err == nil {
 		t.Fatal("expected error")
 	}
 }

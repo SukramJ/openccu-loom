@@ -456,6 +456,10 @@ func (g *GroupState) GroupValue() bool {
 // helper. Common to covers and valves.
 type Position struct{ level float64 }
 
+// VentLevel is the intermediate ventilation position a garage door
+// reports between fully closed and fully open.
+const VentLevel = 0.5
+
 // NewPosition clamps level into [0, 1] and returns a Position.
 func NewPosition(level float64) Position {
 	if level < 0 {
@@ -470,8 +474,15 @@ func NewPosition(level float64) Position {
 // Level returns the underlying 0–1 value.
 func (p Position) Level() float64 { return p.level }
 
+// levelToPercent converts a 0–1 level to a 0–100 integer percentage,
+// rounding half up. Half-up is load-bearing rather than cosmetic: the CCU
+// reports LEVEL on a 0.01 grid, and 0.29, 0.57 and 0.58 land just under
+// their exact hundredth in binary64 (0.29*100 is 28.999999999999996), so
+// truncation reports those three one percent low.
+func levelToPercent(level float64) int { return int(level*100 + 0.5) }
+
 // OpenFraction returns the position as a 0–100 percentage.
-func (p Position) OpenFraction() int { return int(p.level*100 + 0.5) }
+func (p Position) OpenFraction() int { return levelToPercent(p.level) }
 
 // Closed reports whether the position is exactly 0.
 func (p Position) Closed() bool { return p.level == 0 }
@@ -480,10 +491,10 @@ func (p Position) Closed() bool { return p.level == 0 }
 func (p Position) Open() bool { return p.level == 1 }
 
 // Vent reports whether the position matches the garage door's
-// intermediate ventilation step (level == 0.5). Used by Garage's
+// intermediate ventilation step ([VentLevel]). Used by Garage's
 // IsStateChangeArgs / Vent service path; covers without an
 // intermediate position never see this true.
-func (p Position) Vent() bool { return p.level == 0.5 }
+func (p Position) Vent() bool { return p.level == VentLevel }
 
 // ---------- Brightness ----------
 
@@ -491,15 +502,10 @@ func (p Position) Vent() bool { return p.level == 0.5 }
 // projection useful for MQTT and REST consumers.
 type Brightness struct{ level float64 }
 
-// NewBrightness clamps level into [0, 1].
+// NewBrightness clamps level into [0, 1]. The bound is the one
+// [NewPosition] defines — the same rule, stated once.
 func NewBrightness(level float64) Brightness {
-	if level < 0 {
-		level = 0
-	}
-	if level > 1 {
-		level = 1
-	}
-	return Brightness{level: level}
+	return Brightness{level: NewPosition(level).Level()}
 }
 
 // Level returns the 0–1 value.
@@ -508,14 +514,13 @@ func (b Brightness) Level() float64 { return b.level }
 // Byte returns the value as 0–255.
 func (b Brightness) Byte() uint8 { return uint8(b.level * 255) }
 
-// Pct returns the brightness as a 0–100 integer percentage.
-//
-// return int(level * 100)
+// Pct returns the brightness as a 0–100 integer percentage, by the same
+// rule [Position.OpenFraction] applies.
 //
 // Note: unlike [Byte] (which uses 255 as the ceiling), Pct uses 100 so that
 // the HA brightness_pct entity field receives an integer in the [0, 100]
 // range without any float-to-byte rounding.
-func (b Brightness) Pct() int { return int(b.level * 100) }
+func (b Brightness) Pct() int { return levelToPercent(b.level) }
 
 // IsOn reports whether brightness is above zero.
 func (b Brightness) IsOn() bool { return b.level > 0 }
@@ -605,9 +610,10 @@ type (
 	CoverCapabilities struct {
 		SupportsTilt bool
 		SupportsStop bool
-		// SupportsPosition advertises that the device accepts a position write
-		// (LEVEL parameter). HA discovery uses this to decide whether to emit a
-		// `position_topic`/`set_position_topic` pair.
+		// SupportsPosition reports that the channel carries a writable LEVEL,
+		// i.e. the drive accepts an absolute position rather than only
+		// open/stop/close. The discovery builder in cover/payload.go turns
+		// this into the position topic pair.
 		SupportsPosition bool
 		// SupportsVent advertises the garage "vent" intermediate position the
 		// IP-Garage drive supports.
@@ -621,8 +627,10 @@ type (
 		SupportsColor     bool
 		SupportsColorTemp bool
 		SupportsEffects   bool
-		// Transition indicates the device accepts RAMP_TIME, enabling HA's
-		// transition field in JSON-Schema MQTT light mode.
+		// Transition reports that the channel carries a writable RAMP_TIME,
+		// i.e. the light can be commanded to fade over a given time. The
+		// discovery builder in light/payload.go turns this into the
+		// transition field.
 		Transition bool
 	}
 
@@ -637,14 +645,14 @@ type (
 		SupportsAcoustic bool
 		SupportsOptical  bool
 		SupportsDuration bool
-		// SupportsSoundfiles advertises a SOUND_PLAYER preset that allows selecting
-		// one of the device's recorded sound files rather than just an alarm tone.
-		// HA discovery uses this to decide whether to emit a `available_tones`
-		// array in the siren entity payload.
+		// SupportsSoundfiles reports that the device carries a SOUND_PLAYER
+		// preset list, so a recorded sound file can be selected rather than
+		// only an alarm tone. The discovery builder in siren/payload.go turns
+		// this into the available-tones list.
 		SupportsSoundfiles bool
-		// SupportsVolumeSet reports whether the siren can adjust its volume. HA
-		// discovery uses this for the `support_volume_set` field in the siren
-		// entity payload.
+		// SupportsVolumeSet reports that the siren has a settable volume. The
+		// discovery builder in siren/payload.go turns this into the
+		// volume-set support flag.
 		SupportsVolumeSet bool
 	}
 )

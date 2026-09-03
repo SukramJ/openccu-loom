@@ -9,7 +9,6 @@ package hmtypes
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -62,11 +61,10 @@ func NewDataPointKey(interfaceID, channelAddress string, paramsetKey hmenum.Para
 // DeviceAddress returns the channel's device address. "ABC:1" → "ABC".
 // Returns the channel address unchanged if it has no colon (shouldn't
 // happen in practice; devices always come back as addr:channel).
+// Delegates to the package-level [DeviceAddress] helper so both entry
+// points share one parsing rule.
 func (k DataPointKey) DeviceAddress() string {
-	if i := strings.IndexByte(k.ChannelAddress, ':'); i >= 0 {
-		return k.ChannelAddress[:i]
-	}
-	return k.ChannelAddress
+	return DeviceAddress(k.ChannelAddress)
 }
 
 // ChannelNo returns the numeric channel number or ok=false if the

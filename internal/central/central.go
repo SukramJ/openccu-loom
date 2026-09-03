@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Config configures a [*Unit]. Required fields: Name.
@@ -42,13 +42,15 @@ type Config struct {
 	// Appears in every log and metric label.
 	Name string
 
-	// InstanceName is the daemon's own identity, advertised to the CCU
-	// as the leading component of the wire interface_id
-	// (`<instance_name>-<central_name>-<interface>`) so two daemons against
-	// the same CCU do not overwrite each other's callback registration.
-	// Daemon-global (same for every central); defaults to the OS
-	// hostname. Empty falls back to the legacy `<central_name>-<interface>`
-	// form. See ADR-0024.
+	// InstanceName is the daemon's own identity, carried in the wire
+	// interface_id (`loom-<instance_name>-<central_name>-<interface>`) so
+	// two daemons against the same CCU do not overwrite each other's
+	// callback registration. Daemon-global (same for every central);
+	// defaults to the OS hostname. An empty instance name, or one equal to
+	// the central name, is omitted from the join, yielding
+	// `loom-<central_name>-<interface>`; the pre-prefix form is produced
+	// only by adapter.LegacyInitInterfaceID, which de-registers ids left
+	// behind by older releases. See adapter.InitInterfaceID and ADR-0024.
 	InstanceName string
 
 	// DB is the shared SQLite handle. May be nil for tests that run
@@ -225,17 +227,19 @@ func (u *Unit) SetObservabilityRecorder(rec observability.Recorder) {
 // SystemInfo carries the CCU-side metadata northbound consumers need
 // for status pages (model, version, hostname, openCCU/HA-app flag).
 //
-// The struct tags drive the per-kind partitioning in [internal/payload]
-// the same way [device.Device] does — Kind.INFO surfaces fields HA
-// MQTT-Discovery wants in its synthetic hub-device block, Kind.STATE
-// is reserved for future state surfaces.
+// No reflection reads this struct: [internal/payload]'s only entry points
+// are For and ForWith, and both are called on a device, never here. The
+// northbound projections are hand-written — [Unit.Info] builds
+// payload.CentralInfo field by field, and the MQTT-Discovery hub block is
+// assembled from the five named fields of mqtt.HubInfo. A field reaches a
+// consumer only by being added to that consumer.
 type SystemInfo struct {
-	Model    string `payload:"info"`
-	Version  string `payload:"info,alt=sw_version"`
-	Hostname string `payload:"info"`
-	Serial   string `payload:"info,alt=serial_number"`
-	URL      string `payload:"info,alt=configuration_url"`
-	IsHaApp  bool   `payload:"info,alt=is_ha_app"`
+	Model    string
+	Version  string
+	Hostname string
+	Serial   string
+	URL      string
+	IsHaApp  bool
 
 	// AuthEnabled reports whether the CCU requires authentication on its
 	// own interfaces, and HTTPSRedirectEnabled whether it redirects plain
@@ -243,10 +247,10 @@ type SystemInfo struct {
 	// itself, not about the daemon, and both default to false when the
 	// firmware does not implement the query.
 	//
-	// Deliberately untagged: [internal/payload] skips fields without a
-	// `payload:` tag, which keeps these out of the MQTT-Discovery hub
-	// block. They are a status-page concern, and adding them to the
-	// discovery payload would change a published wire contract.
+	// Neither reaches the MQTT-Discovery hub block: that block is built
+	// from mqtt.HubInfo's five fields, filled by hubInfoFromUnit. They are
+	// a status-page concern, and adding them to the discovery payload
+	// would change a published wire contract.
 	AuthEnabled          bool
 	HTTPSRedirectEnabled bool
 
@@ -256,9 +260,9 @@ type SystemInfo struct {
 	// surfacing it makes a wrong location visible instead of letting it
 	// skew every astro schedule silently.
 	//
-	// Untagged for the same reason as the two flags above: they are a
-	// status-page concern and must not change the published MQTT
-	// discovery hub block.
+	// Out of the discovery payload for the same reason as the two flags
+	// above: they are a status-page concern and must not change the
+	// published MQTT discovery hub block.
 	Longitude float64
 	Latitude  float64
 	Timezone  string
@@ -454,10 +458,10 @@ func (u *Unit) ReloadRecorderFromPersistence(ctx context.Context) {
 // Name returns the central's identifier.
 func (u *Unit) Name() string { return u.cfg.Name }
 
-// InstanceName returns the daemon-global instance identity used as the
-// leading component of the wire interface_id. Empty when unset (the
-// interface_id then falls back to the legacy `<central_name>-<interface>`
-// form). See [Config.InstanceName] and ADR-0024.
+// InstanceName returns the daemon-global instance identity carried in the
+// wire interface_id. Empty when unset, in which case the producer omits it
+// from the join. adapter.InitInterfaceID builds the id; see
+// [Config.InstanceName] and ADR-0024.
 func (u *Unit) InstanceName() string { return u.cfg.InstanceName }
 
 // WireDevicesCreatedGate subscribes to the event bus and sets the
@@ -1104,7 +1108,7 @@ func (u *Unit) RenameChannel(ctx context.Context, channelAddress, name string) e
 	// In-memory rename — always applied so the UI reflects the change
 	// even when no persistent backend is wired (e.g. tests).
 	if u.ModelRegistry != nil {
-		base, _, _ := strings.Cut(channelAddress, ":")
+		base := hmtypes.DeviceAddress(channelAddress)
 		if dev, ok := u.ModelRegistry.Get(base); ok && dev != nil {
 			if ch := dev.Channel(channelAddress); ch != nil {
 				ch.SetName(name)

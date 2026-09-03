@@ -95,6 +95,10 @@ func TestHSColorDataPointKey(t *testing.T) {
 
 // --- OnAnyUpdate (JSON encoding) ---
 
+// TestLevelCombinedOnAnyUpdateJSON pins that the body the event bus
+// carries is the body the combined state topic carries: both go through
+// EncodeLevelCompositeJSON, so no literal appears on either side of the
+// comparison.
 func TestLevelCombinedOnAnyUpdateJSON(t *testing.T) {
 	t.Parallel()
 	lc := NewLevelCombined("x:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
@@ -108,11 +112,21 @@ func TestLevelCombinedOnAnyUpdateJSON(t *testing.T) {
 	if got == "" {
 		t.Fatal("OnAnyUpdate did not fire")
 	}
-	if !strings.Contains(got, `"level"`) || !strings.Contains(got, `"slats"`) {
-		t.Errorf("unexpected JSON payload: %s", got)
+	composite, ok := lc.Value()
+	if !ok {
+		t.Fatal("Value() not observed after both inputs")
+	}
+	if want := EncodeLevelCompositeJSON(composite); got != want {
+		t.Errorf("OnAnyUpdate body = %s, projection renders %s", got, want)
 	}
 }
 
+// TestHSColorOnAnyUpdateJSON pins the same equality for HS. The
+// saturation is deliberately small enough to land in the window where
+// fmt's %g and encoding/json disagree on exponent notation (below 1e-4
+// on the 0..100 scale this data point exposes) — a second encoder would
+// otherwise agree with the projection on every ordinary value and the
+// comparison would prove nothing.
 func TestHSColorOnAnyUpdateJSON(t *testing.T) {
 	t.Parallel()
 	hs := NewHSColor("x:1", &stubWriter{}, hmenum.ParameterHue, hmenum.ParameterSaturation)
@@ -122,12 +136,16 @@ func TestHSColorOnAnyUpdateJSON(t *testing.T) {
 	})
 	defer unsub()
 	hs.OnHue(120)
-	hs.OnSaturation(0.5)
+	hs.OnSaturation(1e-7)
 	if got == "" {
 		t.Fatal("OnAnyUpdate did not fire")
 	}
-	if !strings.Contains(got, `"hue"`) || !strings.Contains(got, `"saturation"`) {
-		t.Errorf("unexpected JSON payload: %s", got)
+	pair, ok := hs.Value()
+	if !ok {
+		t.Fatal("Value() not observed after both inputs")
+	}
+	if want := EncodeHSJSON(pair); got != want {
+		t.Errorf("OnAnyUpdate body = %s, projection renders %s", got, want)
 	}
 }
 

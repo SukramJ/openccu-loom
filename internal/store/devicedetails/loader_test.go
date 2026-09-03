@@ -95,8 +95,8 @@ func TestLoaderLoad_FillsNamesAndISEIDs(t *testing.T) {
 		t.Errorf("device ISE-ID = %d, want 42", got)
 	}
 	// Device interface
-	if got := cache.GetInterface("VCU1234567"); got != hmenum.InterfaceHmIPRF {
-		t.Errorf("device interface = %v, want HmIP-RF", got)
+	if got, ok := cache.GetInterface("VCU1234567"); !ok || got != hmenum.InterfaceHmIPRF {
+		t.Errorf("device interface = (%v, %t), want (HmIP-RF, true)", got, ok)
 	}
 	// Channel names and ISE-IDs
 	if got := cache.GetName("VCU1234567:0"); got != "Wohnzimmer Heizung Kanal 0" {
@@ -131,8 +131,10 @@ func TestLoaderLoad_FallbackInterfaceBidCosRF(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if got := cache.GetInterface("VCU0000001"); got != hmenum.InterfaceBidCosRF {
-		t.Errorf("unknown interface should fall back to BidCos-RF, got %v", got)
+	// The loader writes the fallback tag explicitly, so it is cached — ok is
+	// true, which is what separates it from an address the loader never saw.
+	if got, ok := cache.GetInterface("VCU0000001"); !ok || got != hmenum.InterfaceBidCosRF {
+		t.Errorf("unknown interface should be cached as BidCos-RF, got (%v, %t)", got, ok)
 	}
 }
 

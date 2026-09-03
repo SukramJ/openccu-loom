@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ─── Item 1: Sysvar.Extended() ───────────────────────────────────────────────
@@ -36,120 +35,6 @@ func TestSysvarExtendedTrueWhenSet(t *testing.T) {
 }
 
 // ─── Item 2: SysvarDpSensor ──────────────────────────────────────────────────
-
-// TestSysvarDpSensorListLabelResolution verifies that SensorValue maps
-// a numeric index to the corresponding string label in ValueList.
-// Mirrors Python's SysvarDpSensor.value → SensorValueMixin._transform_sensor_value
-// with value_list (hub/sensor.py:24-31, mixins/sensor_value.py:60-61).
-func TestSysvarDpSensorListLabelResolution(t *testing.T) {
-	sv := &Sysvar{
-		HubDataPoint: HubDataPoint{Name: "mode"},
-		ValueType:    hmenum.HubValueTypeList,
-		ValueList:    []string{"off", "heating", "cooling"},
-	}
-	sensor := &SysvarDpSensor{Sysvar: sv}
-
-	// Before any observation SensorValue should return ("", false).
-	label, ok := sensor.SensorValue()
-	if ok {
-		t.Fatal("SensorValue() must return ok=false before first observation")
-	}
-	if label != "" {
-		t.Fatalf("SensorValue() label=%q want empty before observation", label)
-	}
-
-	// Index 1 → "heating"
-	sv.OnValue(hmtypes.IntValue(1))
-	label, ok = sensor.SensorValue()
-	if !ok {
-		t.Fatal("SensorValue() must return ok=true after observation")
-	}
-	if label != "heating" {
-		t.Errorf("SensorValue()=%q want %q", label, "heating")
-	}
-
-	// Index 0 → "off"
-	sv.OnValue(hmtypes.IntValue(0))
-	label, ok = sensor.SensorValue()
-	if !ok {
-		t.Fatal("SensorValue() must return ok=true")
-	}
-	if label != "off" {
-		t.Errorf("SensorValue()=%q want %q", label, "off")
-	}
-
-	// Index 2 → "cooling"
-	sv.OnValue(hmtypes.IntValue(2))
-	label, ok = sensor.SensorValue()
-	if !ok {
-		t.Fatal("SensorValue() must return ok=true")
-	}
-	if label != "cooling" {
-		t.Errorf("SensorValue()=%q want %q", label, "cooling")
-	}
-}
-
-// TestSysvarDpSensorOutOfRangeIndex verifies that an index beyond the
-// value list length renders as an integer string rather than panicking
-// or returning ok=false.
-func TestSysvarDpSensorOutOfRangeIndex(t *testing.T) {
-	sv := &Sysvar{
-		HubDataPoint: HubDataPoint{Name: "mode"},
-		ValueType:    hmenum.HubValueTypeList,
-		ValueList:    []string{"a", "b"},
-	}
-	sensor := &SysvarDpSensor{Sysvar: sv}
-	sv.OnValue(hmtypes.IntValue(99)) // out of range
-	label, ok := sensor.SensorValue()
-	if !ok {
-		t.Fatal("SensorValue() must return ok=true even for out-of-range index (fallback render)")
-	}
-	if label == "" {
-		t.Error("SensorValue() label must not be empty for an out-of-range int")
-	}
-}
-
-// TestSysvarDpSensorStringPassthrough verifies that a non-list sysvar
-// returns the string value directly.
-func TestSysvarDpSensorStringPassthrough(t *testing.T) {
-	sv := &Sysvar{
-		HubDataPoint: HubDataPoint{Name: "note"},
-		ValueType:    hmenum.HubValueTypeString,
-	}
-	sensor := &SysvarDpSensor{Sysvar: sv}
-	sv.OnValue(hmtypes.StringValue("hello"))
-	label, ok := sensor.SensorValue()
-	if !ok {
-		t.Fatal("SensorValue() must return ok=true for string value")
-	}
-	if label != "hello" {
-		t.Errorf("SensorValue()=%q want %q", label, "hello")
-	}
-}
-
-// TestWrapSysvarReturnsSensorForReadOnlyList verifies that WrapSysvar
-// returns *SysvarDpSensor for a read-only (Writer==nil, !IsExtended)
-// list sysvar.
-func TestWrapSysvarReturnsSensorForReadOnlyList(t *testing.T) {
-	sv := NewSysvar("c1", "mode", "", hmenum.HubValueTypeList, nil)
-	sv.ValueList = []string{"off", "on"}
-	got := WrapSysvar(sv)
-	if _, ok := got.(*SysvarDpSensor); !ok {
-		t.Fatalf("WrapSysvar() returned %T, want *SysvarDpSensor for read-only LIST sysvar", got)
-	}
-}
-
-// TestWrapSysvarReturnsBaseForExtendedList verifies that WrapSysvar
-// returns the base *Sysvar when IsExtended is true (extended list sysvars
-// are not wrapped as SysvarDpSensor).
-func TestWrapSysvarReturnsBaseForExtendedList(t *testing.T) {
-	sv := NewSysvar("c1", "mode", "", hmenum.HubValueTypeList, nil)
-	sv.IsExtended = true
-	got := WrapSysvar(sv)
-	if _, ok := got.(*Sysvar); !ok {
-		t.Fatalf("WrapSysvar() returned %T, want *Sysvar for extended LIST sysvar", got)
-	}
-}
 
 // ─── IsExcludedSysvar ───────────────────────────────────────────────────────
 

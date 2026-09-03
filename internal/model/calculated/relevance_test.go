@@ -170,7 +170,7 @@ func TestIsOperatingVoltageLevelRelevantNilChannel(t *testing.T) {
 }
 
 func TestIsOperatingVoltageLevelRelevantUnknownModel(t *testing.T) {
-	ch := channelWith("OPERATING_VOLTAGE")
+	ch := channelWith(string(hmenum.ParameterOperatingVoltage))
 	if IsOperatingVoltageLevelRelevant(ch, "UNKNOWN") {
 		t.Fatal("unknown model must return false")
 	}
@@ -185,7 +185,7 @@ func TestIsOperatingVoltageLevelRelevantMissingParameter(t *testing.T) {
 
 func TestIsOperatingVoltageLevelRelevantOperatingVoltage(t *testing.T) {
 	// Minimal stub (no voltageChannelInspector): falls back to VALUES-only check.
-	ch := channelWith("OPERATING_VOLTAGE")
+	ch := channelWith(string(hmenum.ParameterOperatingVoltage))
 	if !IsOperatingVoltageLevelRelevant(ch, "HM-CC-RT-DN") {
 		t.Fatal("model with OPERATING_VOLTAGE must be relevant (fallback path)")
 	}
@@ -193,7 +193,7 @@ func TestIsOperatingVoltageLevelRelevantOperatingVoltage(t *testing.T) {
 
 func TestIsOperatingVoltageLevelRelevantBatteryState(t *testing.T) {
 	// Minimal stub (no voltageChannelInspector): falls back to VALUES-only check.
-	ch := channelWith("BATTERY_STATE")
+	ch := channelWith(string(hmenum.ParameterBatteryState))
 	if !IsOperatingVoltageLevelRelevant(ch, "HM-CC-RT-DN") {
 		t.Fatal("model with BATTERY_STATE must be relevant (fallback path)")
 	}
@@ -203,8 +203,8 @@ func TestIsOperatingVoltageLevelRelevantRequiresLowBatLimit(t *testing.T) {
 	// V2-05: when voltageChannelInspector is implemented, LOW_BAT_LIMIT in
 	// MASTER is required alongside OPERATING_VOLTAGE.
 	withLowBat := channelWithMaster(
-		[]string{"OPERATING_VOLTAGE"},
-		[]string{"LOW_BAT_LIMIT"},
+		[]string{string(hmenum.ParameterOperatingVoltage)},
+		[]string{string(hmenum.ParameterLowBatLimit)},
 		nil,
 	)
 	if !IsOperatingVoltageLevelRelevant(withLowBat, "HM-CC-RT-DN") {
@@ -212,7 +212,7 @@ func TestIsOperatingVoltageLevelRelevantRequiresLowBatLimit(t *testing.T) {
 	}
 
 	withoutLowBat := channelWithMaster(
-		[]string{"OPERATING_VOLTAGE"},
+		[]string{string(hmenum.ParameterOperatingVoltage)},
 		nil,
 		nil,
 	)
@@ -225,16 +225,16 @@ func TestIsOperatingVoltageLevelRelevantBatteryStateRequiresDeviceLowBatLimit(t 
 	// V2-05: BATTERY_STATE path requires LOW_BAT_LIMIT on the device-root
 	// channel (HasDeviceMasterParameter), not the channel itself.
 	withDeviceLowBat := channelWithMaster(
-		[]string{"BATTERY_STATE"},
-		nil,                       // no channel-level MASTER LOW_BAT_LIMIT
-		[]string{"LOW_BAT_LIMIT"}, // device-root MASTER LOW_BAT_LIMIT present
+		[]string{string(hmenum.ParameterBatteryState)},
+		nil, // no channel-level MASTER LOW_BAT_LIMIT
+		[]string{string(hmenum.ParameterLowBatLimit)}, // device-root MASTER LOW_BAT_LIMIT present
 	)
 	if !IsOperatingVoltageLevelRelevant(withDeviceLowBat, "HM-CC-RT-DN") {
 		t.Fatal("BATTERY_STATE + device-root LOW_BAT_LIMIT-MASTER must be relevant")
 	}
 
 	withoutDeviceLowBat := channelWithMaster(
-		[]string{"BATTERY_STATE"},
+		[]string{string(hmenum.ParameterBatteryState)},
 		nil,
 		nil, // no device-root LOW_BAT_LIMIT
 	)

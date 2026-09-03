@@ -6,6 +6,8 @@ package hmproto
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // LinkRoles holds the role-name tokens carried in CCU's LINK_SOURCE_ROLES /
@@ -149,24 +151,15 @@ func (d *DeviceDescription) IsChannel() bool { return d.Parent != "" }
 // ChannelNo returns the channel number derived from the ADDRESS field (e.g.
 // "VCU1234567:3" → 3). Returns -1 when the address has no colon suffix or
 // parsing fails.
+//
+// Delegates to [hmtypes.ChannelNo] so the address grammar — which colon
+// separates the device part, and what counts as a numeric suffix — is
+// decided in one place. That helper takes the first separator and accepts
+// what strconv.Atoi accepts, so an address carrying two colons has no
+// channel number here rather than the last segment's.
 func (d *DeviceDescription) ChannelNo() int {
-	addr := d.Address
-	idx := -1
-	for i := len(addr) - 1; i >= 0; i-- {
-		if addr[i] == ':' {
-			idx = i
-			break
-		}
+	if n, ok := hmtypes.ChannelNo(d.Address); ok {
+		return n
 	}
-	if idx < 0 || idx == len(addr)-1 {
-		return -1
-	}
-	n := 0
-	for _, ch := range addr[idx+1:] {
-		if ch < '0' || ch > '9' {
-			return -1
-		}
-		n = n*10 + int(ch-'0')
-	}
-	return n
+	return -1
 }

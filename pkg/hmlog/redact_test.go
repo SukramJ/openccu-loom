@@ -346,3 +346,31 @@ func TestRedactingHandler_EnabledDelegatesToInner(t *testing.T) {
 		t.Error("Error should be enabled")
 	}
 }
+
+// TestIsSensitiveKeyAndHandlerAgreeOnDefaults drives both entry points —
+// the package-level predicate and a handler built the way the daemon
+// builds it — and requires one answer. Substring matching is the half
+// that drifts silently: a prefix-only or exact-only copy still answers
+// correctly for "password" and only diverges on a key that merely
+// contains a pattern.
+func TestIsSensitiveKeyAndHandlerAgreeOnDefaults(t *testing.T) {
+	t.Parallel()
+	h := hmlog.NewRedactingHandler(newTextHandler(&bytes.Buffer{}))
+	keys := []string{
+		"", "password", "PASSWORD", "PassWord",
+		"user_password_hash", "db_password", "authorization_header",
+		"x-api-key", "APIKEY", "session_id_cache", "refresh_token_expiry",
+		"bearer_token", "cookie_jar",
+		"user", "device_address", "level", "pass", "tokenizer_name",
+	}
+	for _, k := range keys {
+		t.Run(k, func(t *testing.T) {
+			t.Parallel()
+			pkgAnswer := hmlog.IsSensitiveKey(k)
+			handlerAnswer := h.IsSensitive(k)
+			if pkgAnswer != handlerAnswer {
+				t.Errorf("IsSensitiveKey(%q)=%v but handler.IsSensitive=%v", k, pkgAnswer, handlerAnswer)
+			}
+		})
+	}
+}

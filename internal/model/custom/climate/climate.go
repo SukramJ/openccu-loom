@@ -83,29 +83,6 @@ const (
 // (e.g. "week_program_1").
 const ProfilePrefix = "week_program_"
 
-// HMWeekProfilePointersToNames maps the RF WEEK_PROGRAM_POINTER integer index
-// (0-based) to the CCU internal week-program name string. Used when writing
-// ACTIVE_PROFILE / WEEK_PROGRAM_POINTER to the CCU.
-var HMWeekProfilePointersToNames = map[int]string{
-	0: "WEEK PROGRAM 1",
-	1: "WEEK PROGRAM 2",
-	2: "WEEK PROGRAM 3",
-	3: "WEEK PROGRAM 4",
-	4: "WEEK PROGRAM 5",
-	5: "WEEK PROGRAM 6",
-}
-
-// HMWeekProfilePointersToIdx is the reverse of
-// [HMWeekProfilePointersToNames]: it maps a CCU week-program name back to its
-// 0-based pointer index.
-var HMWeekProfilePointersToIdx = func() map[string]int {
-	m := make(map[string]int, len(HMWeekProfilePointersToNames))
-	for k, v := range HMWeekProfilePointersToNames {
-		m[v] = k
-	}
-	return m
-}()
-
 // ErrModeNotSupported is returned when Set* is called for a mode not
 // listed in the capability profile.
 var ErrModeNotSupported = errors.New("climate: mode not supported by device")
@@ -2373,19 +2350,8 @@ func resolveWeekProgramPointer(ch *device.Channel, k Kind) device.ParameterDataP
 func (c *Climate) numWeekPrograms() int {
 	dp := resolveWeekProgramPointer(c.channelRef, c.Kind)
 	if dp == nil {
-		// In production this means the device has no week-program-
-		// pointer DP at all (e.g. HM-CC-RT-DN) and the preset list
-		// collapses to the static base. Test rigs that wire no channel
-		// at all fall back to a kind default so unit tests need not
-		// build a synthetic descriptor.
-		if c.channelRef == nil {
-			switch c.Kind { //nolint:exhaustive // KindSimpleRF has no week programs; only IP and RF have kind-defaults
-			case KindIP:
-				return 6
-			case KindRF:
-				return 3
-			}
-		}
+		// The device has no week-program-pointer DP at all (e.g.
+		// HM-CC-RT-DN) and the preset list collapses to the static base.
 		return 0
 	}
 	desc := dp.ParameterData()

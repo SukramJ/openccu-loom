@@ -34,11 +34,6 @@ const (
 	// long-term archival is the exporter's job.
 	DefaultRetention = 720 * time.Hour
 
-	// DefaultRetentionHourly is how long the hourly rollup tier is kept
-	// by default (13 months) — long enough that a year of hourly
-	// resolution survives even a slightly late read of the tier.
-	DefaultRetentionHourly = 13 * 30 * 24 * time.Hour
-
 	// DefaultMaxBuffer bounds the in-memory sample buffer between
 	// flushes. On overflow the oldest sample is dropped so the event
 	// handler never blocks and the daemon never OOMs.
@@ -115,8 +110,8 @@ type Options struct {
 	MaxBuffer     int
 	Logger        *slog.Logger
 	// RetentionHourly overrides how long the hourly rollup tier is kept.
-	// <= 0 falls back to [DefaultRetentionHourly] (13 months). Callers
-	// typically thread this from the config layer's
+	// <= 0 falls back to [config.RetentionHourlyDefault] (13 months).
+	// Callers typically thread this from the config layer's
 	// HistoryConfig.RetentionHourlyOrDefault().
 	RetentionHourly time.Duration
 	// RetentionDaily overrides how long the daily rollup tier is kept.
@@ -160,7 +155,7 @@ func New(store *sqlite.MeasurementStore, opts Options) *Recorder {
 		r.retention = DefaultRetention
 	}
 	if r.retentionHourly <= 0 {
-		r.retentionHourly = DefaultRetentionHourly
+		r.retentionHourly = config.RetentionHourlyDefault
 	}
 	// retentionDaily <= 0 is a genuine "keep forever" value, never
 	// defaulted.

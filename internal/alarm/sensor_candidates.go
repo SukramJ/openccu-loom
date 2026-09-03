@@ -189,7 +189,7 @@ func sensorCandidateFor(model, channelType string, parameter hmenum.Parameter) (
 	// (safety.ActiveFromRaw).
 	if role, ok := sensorTypeByChannelType[channelType]; ok && role != hmenum.AlarmSensorTypeHazard {
 		if parameter != hmenum.ParameterState && parameter != hmenum.ParameterMotion &&
-			parameter != "PRESENCE_DETECTION_STATE" {
+			parameter != hmenum.ParameterPresenceDetectionState {
 			return SensorCandidate{}, false
 		}
 		cand.SensorType = role

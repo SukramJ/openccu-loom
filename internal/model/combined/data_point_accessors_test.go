@@ -35,7 +35,7 @@ func TestHSColorP2Methods(t *testing.T) {
 	if h.Multiplier() != 1.0 {
 		t.Errorf("Multiplier()=%v, want 1.0", h.Multiplier())
 	}
-	if got := h.ParamsetKey(); got != "COMBINED" {
+	if got := h.ParamsetKey(); got != string(hmenum.ParamsetKeyCombined) {
 		t.Errorf("ParamsetKey()=%q, want COMBINED", got)
 	}
 	if got := h.TranslationKey(); got != "hs_color" {
@@ -118,7 +118,7 @@ func TestTimerP2Methods(t *testing.T) {
 	if timer.Multiplier() != 1.0 {
 		t.Errorf("Multiplier()=%v, want 1.0", timer.Multiplier())
 	}
-	if got := timer.ParamsetKey(); got != "COMBINED" {
+	if got := timer.ParamsetKey(); got != string(hmenum.ParamsetKeyCombined) {
 		t.Errorf("ParamsetKey()=%q, want COMBINED", got)
 	}
 	if got := timer.TranslationKey(); got != "timer" {
@@ -166,7 +166,7 @@ func TestLevelCombinedP2Methods(t *testing.T) {
 		hmenum.ParameterLevel, hmenum.ParameterLevel2,
 		hmenum.ParameterLevelCombined)
 
-	if got := lc.ParamsetKey(); got != "COMBINED" {
+	if got := lc.ParamsetKey(); got != string(hmenum.ParamsetKeyCombined) {
 		t.Errorf("ParamsetKey()=%q, want COMBINED", got)
 	}
 	if got := lc.TranslationKey(); got != "level_combined" {

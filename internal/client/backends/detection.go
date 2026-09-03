@@ -107,9 +107,6 @@ func DetectBackend(ctx context.Context, cfg DetectionConfig) (BackendDetectionRe
 		isHomegear, version := sniffHomegear(reply)
 		if isHomegear {
 			caps := CapabilityFor(KindHomegear)
-			if version != "" {
-				caps = UpdateCapabilitiesForVersion(caps, version)
-			}
 			return BackendDetectionResult{
 				Kind:            KindHomegear,
 				Capabilities:    caps,

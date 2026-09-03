@@ -323,7 +323,12 @@ func (c *InterfaceClient) WriteUnconfirmedValue(
 ) {
 	if paramconvert.IsConvertable(parameter) {
 		if s, ok := value.(string); ok {
-			c.CommandTracker().AddCombinedParameter(channelAddress, string(parameter), s)
+			// Parse here rather than inside the tracker: the combined-string
+			// grammar is a wire concern owned by the backends package, and
+			// the reliability primitives carry no transport dependency.
+			if values, ok := backends.ParseCombinedParameter(string(parameter), s); ok && len(values) > 0 {
+				c.CommandTracker().AddPutParamset(channelAddress, paramsetKey, values)
+			}
 			return
 		}
 	}

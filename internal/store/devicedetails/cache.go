@@ -165,15 +165,24 @@ func (c *Cache) GetAddressID(address string) int {
 	return c.iseIDs[address]
 }
 
-// GetInterface returns the cached interface or [hmenum.InterfaceBidCosRF]
-// as a fallback.
-func (c *Cache) GetInterface(address string) hmenum.Interface {
+// GetInterface returns the cached interface for address. ok reports whether
+// an interface tag was actually cached; when it is false the returned value
+// is the [hmenum.InterfaceBidCosRF] placeholder and carries no information
+// about the device.
+//
+// The distinction matters because the cache is populated only by the
+// periodic [Loader] run, which is the sole writer of the interface tags: a
+// caller reading before the first refresh would otherwise receive
+// "BidCos-RF" for every address, indistinguishable from a device the loader
+// genuinely tagged BidCos-RF, which [Loader.Load] writes for an omitted or
+// unrecognised interface token.
+func (c *Cache) GetInterface(address string) (iface hmenum.Interface, ok bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if iface, ok := c.interfaces[address]; ok {
-		return iface
+		return iface, true
 	}
-	return hmenum.InterfaceBidCosRF
+	return hmenum.InterfaceBidCosRF, false
 }
 
 // GetChannelRooms returns a copy of the room set for a channel

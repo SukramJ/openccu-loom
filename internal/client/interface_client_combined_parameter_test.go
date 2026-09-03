@@ -76,8 +76,8 @@ func TestWriteUnconfirmedValueRoutesCombinedParameter(t *testing.T) {
 }
 
 // TestWriteUnconfirmedValueRoutesLevelCombined verifies that a LEVEL_COMBINED
-// wire string is also routed through AddCombinedParameter, decomposing into
-// LEVEL and LEVEL_SLATS sub-parameters recorded under ParamsetKeyValues.
+// wire string is also decomposed before tracking, into LEVEL and LEVEL_SLATS
+// sub-parameters recorded under the paramset key the write carried.
 func TestWriteUnconfirmedValueRoutesLevelCombined(t *testing.T) {
 	t.Parallel()
 

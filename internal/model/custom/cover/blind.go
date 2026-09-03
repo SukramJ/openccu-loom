@@ -87,6 +87,13 @@ type Blind struct {
 	muOp          sync.RWMutex
 	operationMode string
 	hasOpMode     bool
+
+	// combinedAddr / combinedParam are the joint-axis write target resolved
+	// once at construction through the profile's channel-group schema. Which
+	// field applies depends on [BlindKind]: the classic RF actuators drive
+	// LEVEL_COMBINED, the HmIP ones COMBINED_PARAMETER.
+	combinedAddr  string
+	combinedParam hmenum.Parameter
 }
 
 // BlindConfig is the constructor record. Channel must already carry
@@ -129,6 +136,17 @@ func NewBlind(cfg BlindConfig) *Blind {
 	}
 	if cov != nil && cov.Float != nil {
 		b.registerBlindServices()
+	}
+	combinedField, combinedFallback := hmenum.FieldLevelCombined, hmenum.ParameterLevelCombined
+	if cfg.Kind == BlindKindIP {
+		combinedField, combinedFallback = hmenum.FieldCombinedParameter, hmenum.ParameterCombinedParameter
+	}
+	combinedChannel, combinedParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, combinedField, combinedFallback)
+	b.combinedParam = combinedParam
+	if combinedChannel != nil {
+		b.combinedAddr = combinedChannel.Address
+	} else if cov != nil {
+		b.combinedAddr = cov.Address()
 	}
 	if b.level2 != nil {
 		_ = b.level2.OnConfirmedUpdate(func(_, _ float64) { b.dataVersion.Bump() })
@@ -256,12 +274,7 @@ func (b *Blind) SetTilt(ctx context.Context, target float64, priority hmenum.Com
 	if !b.IsStateChangeArgs(StateChangeArgs{TiltPosition: &target}) {
 		return nil
 	}
-	if target < 0 {
-		target = 0
-	}
-	if target > 1 {
-		target = 1
-	}
+	target = custom.NewPosition(target).Level()
 	if b.level2 == nil {
 		return errors.New("blind: SET tilt: channel has no LEVEL_2 data point")
 	}
@@ -314,18 +327,10 @@ func (b *Blind) acquireCommandLock(ctx context.Context) (release func(), acquire
 // `_target_level` / `_target_tilt_level` rather than to the observed
 // group level. A command that names both axes never stops.
 func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving bool, priority hmenum.CommandPriority) error {
-	if level < 0 {
-		level = 0
-	}
-	if level > 1 {
-		level = 1
-	}
-	if tilt < 0 {
-		tilt = 0
-	}
-	if tilt > 1 {
-		tilt = 1
-	}
+	// The [0, 1] bound is the one custom.Position defines; restating it
+	// here would be a second copy of the same rule.
+	level = custom.NewPosition(level).Level()
+	tilt = custom.NewPosition(tilt).Level()
 
 	ctx = custom.EnsureContext(ctx)
 	release, _ := b.acquireCommandLock(ctx)
@@ -344,7 +349,7 @@ func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving
 	switch b.Kind {
 	case BlindKindHM:
 		s := parameter.ConvertHMLevelToCPV(wireL) + "," + parameter.ConvertHMLevelToCPV(wireT)
-		if err := b.writer.SetValue(ctx, b.Address(), hmenum.ParameterLevelCombined, s, priority); err != nil {
+		if err := b.writer.SetValue(ctx, b.combinedAddr, b.combinedParam, s, priority); err != nil {
 			return fmt.Errorf("blind: LEVEL_COMBINED: %w", err)
 		}
 	case BlindKindIP:
@@ -357,7 +362,7 @@ func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving
 		s := fmt.Sprintf("L2=%d,L=%d",
 			custom.NewPosition(wireT).OpenFraction(),
 			custom.NewPosition(wireL).OpenFraction())
-		if err := b.writer.SetValue(ctx, b.Address(), hmenum.ParameterCombinedParameter, s, priority); err != nil {
+		if err := b.writer.SetValue(ctx, b.combinedAddr, b.combinedParam, s, priority); err != nil {
 			return fmt.Errorf("blind: COMBINED_PARAMETER: %w", err)
 		}
 	}
@@ -403,18 +408,10 @@ func (b *Blind) Stop(ctx context.Context, priority hmenum.CommandPriority) error
 // - BlindKindIP: writes COMBINED_PARAMETER as the string "L2=<tilt_pct>,L=<level_pct>"
 // — tilt first, both values are integer 0..100 (position-percent).
 func (b *Blind) SetCombined(ctx context.Context, level, tilt float64, priority hmenum.CommandPriority) error {
-	if level < 0 {
-		level = 0
-	}
-	if level > 1 {
-		level = 1
-	}
-	if tilt < 0 {
-		tilt = 0
-	}
-	if tilt > 1 {
-		tilt = 1
-	}
+	// The [0, 1] bound is the one custom.Position defines; restating it
+	// here would be a second copy of the same rule.
+	level = custom.NewPosition(level).Level()
+	tilt = custom.NewPosition(tilt).Level()
 	// Both axes are named, so neither falls back to a pending target and
 	// the STOP guard never fires (cover.py:513-535).
 	return b.sendCombined(ctx, level, tilt, false, priority)
