@@ -388,30 +388,44 @@ type SubDeviceInspector interface {
 }
 
 // CustomDPNamingInspector is an optional extension on ChannelInspector
-// that exposes the custom-DP primary/secondary classification used by
-// the HA-Discovery name builder. Channels that satisfy it drive the
-// Naming convention
+// that exposes the custom-DP primary/secondary classification. It is
+// what tells [displayChannelName] that a channel carries a custom data
+// point at all, and therefore that the model owns its entity name; a
+// channel that satisfies the interface but is neither primary nor
+// secondary falls through to the legacy channel-number path, as does an
+// inspector that omits the interface entirely (test fakes, narrow
+// shims).
 //
-//   - HasSinglePrimaryCustomDP=true  → entity name is empty
-//     (HA falls back to `device.name`); used when the device has
-//     exactly one primary custom-DP (HmIP-BWTH climate, HmIP-eTRV
-//     climate, HmIP-FSI16 switch, …).
-//   - IsCustomDPPrimaryChannel=true (and not the only-primary case) →
-//     entity name `ch<N>`; used when several independent custom-DPs
-//     share the device (HmIP-PSM ch3/ch4/ch5, HmIP-DRSI4 …).
-//   - IsCustomDPSecondaryChannel=true → entity name `vch<N>` and
-//     `enabled_by_default: false`; used for the secondary mirror
-//     channels declared via `secondary_channels` in the profile
-//     config (HmIP-BSL bicolor light, IP_DIMMER virtual channels).
-//
-// `*device.Channel` implements this interface natively. Other
-// inspectors (test fakes, narrow shims) may omit it; the name
-// builder falls back to the legacy "channel-number-as-string" path
-// in that case.
+// `*device.Channel` implements it natively, alongside
+// [CustomDPDisplayNamer], which is where the name itself comes from.
 type CustomDPNamingInspector interface {
 	IsCustomDPPrimaryChannel() bool
 	IsCustomDPSecondaryChannel() bool
 	HasSinglePrimaryCustomDP() bool
+}
+
+// CustomDPDisplayNamer is the channel's own entity name for its custom
+// data point, as the model composes it
+// (device.Channel.CustomDPDisplayName). HA prepends `device.name` when
+// it computes `friendly_name`, so the value never repeats it.
+//
+// The discovery builder asks instead of deriving because the model is
+// the naming authority, and the copy that used to live here had already
+// drifted: it emitted the `ch<N>` marker for every channel of a
+// multi-primary device, including one the operator had named on the CCU
+// — where REST, the SPA and the model itself show that name. The two
+// other name builders in the discovery package (press events, impulse
+// and device-error entities) already preferred the operator's label,
+// which is what made this one the outlier rather than the convention.
+//
+// What the model produces, so the shapes stay findable from here:
+// nothing for the device's only primary custom-DP, `ch<N>` for one of
+// several primaries on an unnamed channel, `vch<N>` for a secondary
+// mirror channel, and the operator's own channel name when there is
+// one. The rules and their reference citations live on
+// device.BuildCustomDataPointName.
+type CustomDPDisplayNamer interface {
+	CustomDPDisplayName() string
 }
 
 // IgnoreMultipleChannelsForNameInspector is an optional extension on

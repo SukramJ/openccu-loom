@@ -6,7 +6,6 @@ package mqtt
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -2438,41 +2437,35 @@ func (m *mockChannelInspector) IsCustomDPSecondaryChannel() bool { return m.isSe
 func (m *mockChannelInspector) IsCustomDPPrimaryChannel() bool   { return m.isPrimary }
 func (m *mockChannelInspector) HasSinglePrimaryCustomDP() bool   { return m.singlePrimary }
 
-func TestDisplayChannelNameSecondary(t *testing.T) {
+// TestDisplayChannelNameFallsBackForAClassificationOnlyChannel pins the
+// shim path. A channel inspector that answers the primary/secondary
+// classification but cannot name itself — a test fake, or a narrow shim
+// over something that is not a model channel — gets the legacy
+// channel-number name rather than a marker the adapter would have to
+// derive itself.
+//
+// The three tests this replaces asserted `vch4` / `ch2` / "" against
+// exactly such a fake. They read as proof of the marker rule and were
+// nothing of the kind: the rule lives in the model, and a fake that
+// cannot be named never reaches it. The real shapes are measured against
+// real channels in channel_display_name_test.go.
+func TestDisplayChannelNameFallsBackForAClassificationOnlyChannel(t *testing.T) {
 	t.Parallel()
-	ev := Event{
-		ChannelNo: 4,
-		Channel:   &mockChannelInspector{isSecondary: true},
-	}
-	got := displayChannelName(ev)
-	want := fmt.Sprintf("vch%d", ev.ChannelNo)
-	if got != want {
-		t.Fatalf("secondary: got %q, want %q", got, want)
-	}
-}
-
-func TestDisplayChannelNamePrimaryMultiple(t *testing.T) {
-	t.Parallel()
-	ev := Event{
-		ChannelNo: 2,
-		Channel:   &mockChannelInspector{isPrimary: true, singlePrimary: false},
-	}
-	got := displayChannelName(ev)
-	want := fmt.Sprintf("ch%d", ev.ChannelNo)
-	if got != want {
-		t.Fatalf("primary-multi: got %q, want %q", got, want)
-	}
-}
-
-func TestDisplayChannelNamePrimarySingle(t *testing.T) {
-	t.Parallel()
-	ev := Event{
-		ChannelNo: 1,
-		Channel:   &mockChannelInspector{isPrimary: true, singlePrimary: true},
-	}
-	got := displayChannelName(ev)
-	if got != "" {
-		t.Fatalf("single-primary: got %q, want %q", got, "")
+	for _, c := range []struct {
+		what      string
+		inspector *mockChannelInspector
+	}{
+		{"secondary", &mockChannelInspector{isSecondary: true}},
+		{"one of several primaries", &mockChannelInspector{isPrimary: true}},
+		{"the only primary", &mockChannelInspector{isPrimary: true, singlePrimary: true}},
+	} {
+		t.Run(c.what, func(t *testing.T) {
+			t.Parallel()
+			got := displayChannelName(Event{ChannelNo: 4, Channel: c.inspector})
+			if got != "4" {
+				t.Fatalf("%s: got %q, want the channel number %q", c.what, got, "4")
+			}
+		})
 	}
 }
 

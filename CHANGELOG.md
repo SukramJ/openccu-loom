@@ -57,6 +57,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **MQTT published `ch3` where the operator had named the channel.** The
+  discovery name builder derived its entity name from the custom-DP
+  classification alone and never looked at the channel's name, so every
+  channel of a multi-primary device was published under the `ch<N>` marker —
+  including one the operator had labelled on the CCU. REST, the SPA and the
+  model itself showed the operator's label; MQTT alone showed the marker.
+
+  The marker exists to keep two channels apart when neither carries a label:
+  the CCU reports the bare `<device>:<no>` form for a channel nobody renamed,
+  and those slugify onto one entity id in Home Assistant. A named channel
+  already distinguishes itself. The unnamed shapes are unchanged — `ch<N>`
+  for one of several primaries, `vch<N>` for a secondary mirror, and no name
+  at all for a device's only primary.
+
+  The builder now asks the model (`device.Channel.CustomDPDisplayName`)
+  instead of re-deriving, which is where the divergence came from and where
+  the other two name builders in the same package were already looking. Two
+  further name builders in that file — press events, and the impulse /
+  device-error entities — had preferred the operator's label all along, which
+  is what made this one the outlier rather than the convention.
+
+  What an existing installation sees: affected entities change their
+  displayed name. Their `entity_id` does not move — Home Assistant assigns it
+  once and only changes it on an explicit rename
+  (`homeassistant/helpers/entity_registry.py`: `async_get_or_create` reuses
+  the registered entry without passing `new_entity_id`, the one branch that
+  moves an id). Automations keep working; a channel discovered for the first
+  time after the upgrade gets its id from the new name.
+
 - **Two of the three silence-code switches were stored and ignored.** The
   alarm policies view offered a per-source "require code to silence" gate for
   `mqtt`, `keypad` and `remote`. The engine drops that requirement for every
