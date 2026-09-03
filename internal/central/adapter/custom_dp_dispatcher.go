@@ -672,18 +672,17 @@ func (d *CustomDPDispatcher) dispatchSiren(
 	switch op {
 	case "turn_on":
 		cfg := siren.OnConfig{}
-		if durRaw, ok := p["duration"]; ok {
-			dur, err := anyToDuration(durRaw)
-			if err != nil {
-				return fmt.Errorf("%w: duration: %w", hmapi.ErrBadParam, err)
-			}
+		// The siren's own reader, shared with its service handler so the two
+		// planes cannot disagree about the same key again — this branch used
+		// to read a bare number as milliseconds while the handler read
+		// seconds, and it accepted neither the canonical "seconds" key nor
+		// the shared helper every other timed operation here uses.
+		dur, ok, err := siren.ParseOnDuration(p)
+		if err != nil {
+			return fmt.Errorf("%w: %w", hmapi.ErrBadParam, err)
+		}
+		if ok {
 			cfg.Duration = dur
-		} else if secRaw, ok := p["duration_seconds"]; ok {
-			sec, err := toFloat64(secRaw)
-			if err != nil {
-				return fmt.Errorf("%w: duration_seconds: %w", hmapi.ErrBadParam, err)
-			}
-			cfg.Duration = time.Duration(sec * float64(time.Second))
 		}
 		if acoustic, ok := p["acoustic"]; ok {
 			v, err := toString(acoustic)

@@ -29,6 +29,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **A siren's `duration` meant two different things depending on which surface
+  carried it.** The invoke plane — REST, WebSocket and the MQTT cdp-invoke
+  topic — read a bare number as milliseconds; the siren's own service handler,
+  which the per-service MQTT topic reaches, read the same key as seconds. So
+  `{"duration": 30}` wrote `DURATION_VALUE=0` through one path and `30` through
+  the other, on the same device, with no error on either to say so. The invoke
+  branch also accepted neither the canonical `seconds` key that every other
+  timed operation takes, nor the shared helper — it had invented a third
+  vocabulary — and the service handler silently dropped a value it could not
+  parse, so `{"duration": "5s"}` worked on one plane and vanished on the other.
+
+  Both planes read through one function now (`siren.ParseOnDuration`). A bare
+  number is seconds, which is what Home Assistant's MQTT siren sends and what
+  the service handler always did; `seconds` and `duration_seconds` are accepted
+  alongside it, and an unreadable value fails the command instead of falling
+  through to the device default. `TestSirenDurationMeansTheSameOnBothPlanes`
+  asserts the two planes agree rather than pinning a number.
+
 - **A burglar alarm was reported to Matter controllers as a fire.**
   `SMOKE_DETECTOR_ALARM_STATUS` carries `INTRUSION_ALARM` when the installation
   drives a smoke detector as a *siren* for an intrusion alarm — a command the
