@@ -226,9 +226,9 @@ func TestMarkerMatch(t *testing.T) {
 		want    bool
 	}{
 		{"anything", nil, true}, // empty markers → match all
-		{"HAHM kitchen", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, true},                         // prefix match
+		{"HAHM kitchen", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, true},                         // marker at the start
 		{"  HAHM kitchen", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, true},                       // leading space trimmed
-		{"kitchen HAHM", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, false},                        // not a prefix
+		{"kitchen HAHM", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, true},                         // marker anywhere: substring, matching parseSysvarDescription
 		{"plain", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM, hmenum.DescriptionMarkerMQTT}, false}, // no marker
 		{"MQTT light", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM, hmenum.DescriptionMarkerMQTT}, true},
 	} {

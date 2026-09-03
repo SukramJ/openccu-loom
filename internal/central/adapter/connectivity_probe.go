@@ -16,18 +16,27 @@ import (
 // JSONRPCConnectivityProbe implements [coordinators.ConnectivityProbe]
 // by calling the CCU's `Interface.listInterfaces` JSON-RPC method.
 //
-// The CCU returns one entry per *currently active* interface, so every
-// entry is reported as Reachable=true unless the firmware adds an
-// explicit `connected: false`. Interfaces the CCU is no longer serving
-// simply do not appear — the absence itself is the down signal, which
-// [coordinators.Reconciler] turns into Reachable=false by diffing the
-// answer against the previous one. Membership therefore carries the
-// unreachable transition on firmwares that never emit the `connected`
-// field.
+// It measures MEMBERSHIP, not liveness, and the distinction is load-bearing:
+// `Interface.listInterfaces` is a configuration listing. The firmware script
+// walks the interface list built from /etc/config/InterfacesList.xml through a
+// /var/tmp cache and appends exactly three members per entry — name, port,
+// info (www/api/methods/interface/listinterfaces.tcl, sourced via
+// www/api/homematic.cgi and www/api/eq3/ipc.tcl). So an interface process that
+// has died still appears, and no member reports whether it is serving.
 //
-// Some CCU firmwares add extra fields like `info` or `connected` to
-// each entry. If a `connected` boolean is present it is honored;
-// otherwise the entry counts as reachable.
+// Consequence, stated plainly: on stock firmware every entry reads
+// Reachable=true and this probe can never carry an unreachable transition on
+// its own. A total interface outage looks fully reachable here. The `connected`
+// decode below is defensive only — no firmware in the OpenCCU source or its
+// distribution patch set emits that member, so it has never been observed to
+// fire.
+//
+// What would actually settle reachability, none of which this probe issues:
+// `Interface.listBidcosInterfaces` (which does report isConnected, per BidCoS
+// radio gateway rather than per interface process),
+// `Interface.getLGWConnectionStatus`, or a per-interface XML-RPC round trip.
+// Wiring one of those is the fix for reachability; correcting this comment is
+// not.
 type JSONRPCConnectivityProbe struct {
 	client *jsonrpc.Client
 }
@@ -40,9 +49,9 @@ func NewJSONRPCConnectivityProbe(client *jsonrpc.Client) *JSONRPCConnectivityPro
 }
 
 // Probe issues `Interface.listInterfaces` and decodes the response into
-// a list of interface-reachability tuples. The CCU's response shape
-// is `[{"name": "BidCos-RF", ...}, ...]` — only the `name` and the
-// optional `connected` field are inspected. The round-trip duration is
+// a list of interface-reachability tuples. The firmware's response shape is
+// `[{"name":…,"port":…,"info":…}, …]` — only `name` is inspected, plus a
+// `connected` boolean no shipped firmware sends. The round-trip duration is
 // measured and reported in [coordinators.InterfaceReachability.LatencyMs]
 // so the Reconciler can forward it via [hmevent.ConnectivityChangedEvent].
 //

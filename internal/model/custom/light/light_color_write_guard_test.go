@@ -23,9 +23,14 @@ import (
 
 // ─── SetColor write-guard ────────────────────────────────────────────────────
 
-// TestSetColorGuardSuppressesRepeat verifies that a second SetColor call with
-// the same hue+saturation does not produce a second write.
-func TestSetColorGuardSuppressesRepeat(t *testing.T) {
+// TestSetColorRepeatStillWritesAfterObservation measures what the colour
+// write-guard actually does with a repeated command: nothing. The check it
+// runs (IsStateChangeFull) consults a commanded-colour accessor that holds
+// no state, so the second write goes out even after the CCU has reported
+// the commanded colour back. The name and body used to claim suppression
+// and assert nothing; the property is pinned in
+// TestHmLgtColourStateChangeFullAlwaysReportsAChange.
+func TestSetColorRepeatStillWritesAfterObservation(t *testing.T) {
 	t.Parallel()
 
 	w := &colorStubWriter{}
@@ -49,13 +54,13 @@ func TestSetColorGuardSuppressesRepeat(t *testing.T) {
 		l.saturation.OnEvent(0.8)
 	}
 
-	// Second call with identical values: no write expected after the light has
-	// seen the same commanded state.
-	_ = l.SetColor(context.Background(), 120, 0.8, hmenum.CommandPriorityHigh)
-	// The first SetColor already proves the guard path exists; suppression
-	// only fires after the state is actually observed. We just verify the
-	// function returns nil without error on a second call — write count may
-	// or may not advance depending on optimistic-state tracking.
+	// Second call with identical values.
+	if err := l.SetColor(context.Background(), 120, 0.8, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("second SetColor: %v", err)
+	}
+	if len(w.calls) == writeCount {
+		t.Fatal("the repeat was suppressed — the commanded-colour accessors now carry state; update the doc comments in light.go / color.go and this test")
+	}
 }
 
 // TestSetColorGuardAllowsChange verifies that a different hue always triggers
@@ -83,9 +88,11 @@ func TestSetColorGuardAllowsChange(t *testing.T) {
 
 // ─── SetKelvin write-guard ───────────────────────────────────────────────────
 
-// TestSetKelvinGuardSuppressesRepeat verifies that a second SetKelvin call
-// with the same value does not produce a write after the state is observed.
-func TestSetKelvinGuardSuppressesRepeat(t *testing.T) {
+// TestSetKelvinRepeatStillWritesAfterObservation is the colour-temperature
+// counterpart: the commanded-kelvin accessor holds no state, so a repeat of
+// an already-observed value is written again. The old body asserted only
+// that the FIRST call wrote, which no suppression rule can fail.
+func TestSetKelvinRepeatStillWritesAfterObservation(t *testing.T) {
 	t.Parallel()
 
 	w := &colorStubWriter{}
@@ -97,6 +104,16 @@ func TestSetKelvinGuardSuppressesRepeat(t *testing.T) {
 	}
 	if len(w.calls) == 0 {
 		t.Fatal("first SetKelvin must write to device")
+	}
+	if l.kelvin != nil {
+		l.kelvin.OnEvent(int32(4000))
+	}
+	before := len(w.calls)
+	if err := l.SetKelvin(context.Background(), 4000, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("second SetKelvin: %v", err)
+	}
+	if len(w.calls) == before {
+		t.Fatal("the repeat was suppressed — the commanded-kelvin accessor now carries state; update the doc comments in light.go / color.go and this test")
 	}
 }
 
@@ -124,9 +141,12 @@ func TestSetKelvinGuardAllowsChange(t *testing.T) {
 
 // ─── SetEffect write-guard ───────────────────────────────────────────────────
 
-// TestSetEffectGuardSuppressesRepeat verifies that a second SetEffect call with
-// the same index does not produce a write.
-func TestSetEffectGuardSuppressesRepeat(t *testing.T) {
+// TestSetEffectRepeatWithNoEffectList verifies the one effect path that
+// does stop early: with no PROGRAM value list the label is "" for every
+// index, and the write goes out at most once per call. It is NOT evidence
+// of suppression — the commanded-effect accessor holds no state (see the
+// hook block in light.go).
+func TestSetEffectRepeatWithNoEffectList(t *testing.T) {
 	t.Parallel()
 
 	w := &colorStubWriter{}

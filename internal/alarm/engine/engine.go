@@ -39,10 +39,18 @@ var (
 
 // Code verbs passed to the CodeValidator. The strings are part of the
 // port contract — keep them stable.
+//
+// Exported because the vocabulary is closed on the other side of the
+// port too: the validator answers each verb from a switch whose default
+// is deny, so a rename landing on one side only compiles cleanly and
+// then refuses every coded arm, disarm or silence as a wrong code. A
+// validator that spells them out itself is pinned by
+// TestWiredCodeValidatorSpeaksTheEngineCodeVerbs (package alarm), which
+// drives the real facade with these constants.
 const (
-	codeVerbArm     = "arm"
-	codeVerbDisarm  = "disarm"
-	codeVerbSilence = "silence"
+	CodeVerbArm     = "arm"
+	CodeVerbDisarm  = "disarm"
+	CodeVerbSilence = "silence"
 )
 
 // Strongly-authenticated sources that bypass a code requirement
@@ -50,10 +58,18 @@ const (
 // when a code is supplied. These tokens are the operator-session /
 // break-glass surfaces; anonymous MQTT / sysvar paths are not listed
 // and stay code-gated.
+//
+// Exported because the engine closes an authorization decision on string
+// equality against them ([IsOperatorSource], [isPreAuthenticatedSource],
+// the code-bypass at resolveCode and the facade's rate-limit exemption),
+// while the value is produced one layer out by whichever north-bound
+// adapter attributes the request. An adapter that spells its own token
+// instead of using these silently loses the bypass: the operator surface
+// is then code-gated and rate-limited, with nothing failing.
 const (
-	codeSourceRESTOperator = "rest-operator"
-	codeSourceWSOperator   = "ws-operator"
-	codeSourceHmcli        = "hmcli"
+	CodeSourceRESTOperator = "rest-operator"
+	CodeSourceWSOperator   = "ws-operator"
+	CodeSourceHmcli        = "hmcli"
 )
 
 // Hardware-intent sources. A keypad or remote press is already
@@ -64,8 +80,8 @@ const (
 // They never carry a code, so no duress detection applies here (WKP
 // on-device slots are independent of engine codes by design).
 const (
-	codeSourceKeypad = "keypad"
-	codeSourceRemote = "remote"
+	CodeSourceKeypad = "keypad"
+	CodeSourceRemote = "remote"
 )
 
 // IsOperatorSource reports whether source is an operator-session /
@@ -75,7 +91,7 @@ const (
 // would suppress duress detection (notes/concepts/alarm-concept.md §11).
 func IsOperatorSource(source string) bool {
 	switch source {
-	case codeSourceRESTOperator, codeSourceWSOperator, codeSourceHmcli:
+	case CodeSourceRESTOperator, CodeSourceWSOperator, CodeSourceHmcli:
 		return true
 	default:
 		return false
@@ -89,7 +105,7 @@ func isOperatorSource(source string) bool { return IsOperatorSource(source) }
 // authenticated (operator session or hardware binding) and therefore
 // bypasses the code requirement in authorize.
 func isPreAuthenticatedSource(source string) bool {
-	return isOperatorSource(source) || source == codeSourceKeypad || source == codeSourceRemote
+	return isOperatorSource(source) || source == CodeSourceKeypad || source == CodeSourceRemote
 }
 
 // NotReadyError reports a refused arm together with the blocking
@@ -426,7 +442,7 @@ func (e *Engine) Arm(ctx context.Context, zoneID string, req ArmRequest) (ArmRes
 	if err != nil {
 		return ArmResult{}, err
 	}
-	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, codeVerbArm, req.Code, req.Source)
+	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, CodeVerbArm, req.Code, req.Source)
 	if cerr != nil {
 		return ArmResult{}, cerr
 	}
@@ -440,7 +456,7 @@ func (e *Engine) Arm(ctx context.Context, zoneID string, req ArmRequest) (ArmRes
 		req.By = identity
 	}
 	if duress {
-		e.fireDuress(ctx, a, codeVerbArm, req.By, req.Source)
+		e.fireDuress(ctx, a, CodeVerbArm, req.By, req.Source)
 	}
 	return e.beginArm(ctx, a, req, mcfg)
 }
@@ -574,8 +590,8 @@ func (e *Engine) beginArm(ctx context.Context, a *zone, req ArmRequest, mcfg Mod
 
 	if exit > 0 {
 		a.state = hmenum.AlarmZoneStateArming
-		e.scheduleStateTimer(a, timerKindExit, exit)
-		e.startTicks(a, timerKindExit)
+		e.scheduleStateTimer(a, TimerKindExit, exit)
+		e.startTicks(a, TimerKindExit)
 		e.persist(ctx, a)
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassArm, Event: "arming_started",
@@ -725,9 +741,9 @@ func (e *Engine) fireDuress(ctx context.Context, a *zone, verb, by, source strin
 // accompanied.
 func duressJournalClass(verb string) hmenum.AlarmJournalClass {
 	switch verb {
-	case codeVerbArm:
+	case CodeVerbArm:
 		return hmenum.AlarmJournalClassArm
-	case codeVerbSilence:
+	case CodeVerbSilence:
 		return hmenum.AlarmJournalClassSilence
 	default:
 		return hmenum.AlarmJournalClassDisarm
@@ -765,7 +781,7 @@ func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code st
 		return ErrUnknownZone
 	}
 	if state == hmenum.AlarmZoneStateDisarmed {
-		identity, duress := e.probeDuress(ctx, zoneID, codeVerbDisarm, code, source)
+		identity, duress := e.probeDuress(ctx, zoneID, CodeVerbDisarm, code, source)
 		if applied, err := e.disarmIdle(ctx, zoneID, by, source, identity, duress); applied {
 			return err
 		}
@@ -777,7 +793,7 @@ func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code st
 	if !ok {
 		return ErrUnknownZone
 	}
-	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, codeVerbDisarm, code, source)
+	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, CodeVerbDisarm, code, source)
 	if cerr != nil {
 		return cerr
 	}
@@ -806,7 +822,7 @@ func (e *Engine) disarmIdle(ctx context.Context, zoneID, by, source, identity st
 		if identity != "" && by == "" {
 			by = identity
 		}
-		e.fireDuress(ctx, a, codeVerbDisarm, by, source)
+		e.fireDuress(ctx, a, CodeVerbDisarm, by, source)
 	}
 	if a.autoRearmCancel != nil {
 		a.cancelAutoRearm()
@@ -834,7 +850,7 @@ func (e *Engine) disarmResolved(ctx context.Context, zoneID, by, source, identit
 		by = identity
 	}
 	if duress {
-		e.fireDuress(ctx, a, codeVerbDisarm, by, source)
+		e.fireDuress(ctx, a, CodeVerbDisarm, by, source)
 	}
 	if a.state == hmenum.AlarmZoneStateDisarmed {
 		if a.autoRearmCancel != nil {
@@ -874,7 +890,7 @@ func (e *Engine) SilenceWithCode(ctx context.Context, zoneID, by, source, code s
 	if !ok {
 		return ErrUnknownZone
 	}
-	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, codeVerbSilence, code, source)
+	identity, duress, cerr := e.resolveCode(ctx, zoneID, policy, CodeVerbSilence, code, source)
 	if cerr != nil {
 		return cerr
 	}
@@ -888,7 +904,7 @@ func (e *Engine) SilenceWithCode(ctx context.Context, zoneID, by, source, code s
 		by = identity
 	}
 	if duress {
-		e.fireDuress(ctx, a, codeVerbSilence, by, source)
+		e.fireDuress(ctx, a, CodeVerbSilence, by, source)
 	}
 	e.silenceLocked(ctx, a, by, source)
 	return nil
@@ -1110,8 +1126,8 @@ func (e *Engine) routeActivation(ctx context.Context, a *zone, s *sensorState, c
 			from := a.state
 			a.state = hmenum.AlarmZoneStatePending
 			a.pendingCause = cause.SensorID
-			e.scheduleStateTimer(a, timerKindEntry, d)
-			e.startTicks(a, timerKindEntry)
+			e.scheduleStateTimer(a, TimerKindEntry, d)
+			e.startTicks(a, TimerKindEntry)
 			e.persist(ctx, a)
 			e.journalEntry(ctx, a, JournalEntry{
 				Class: hmenum.AlarmJournalClassTrigger, Event: "pending_started",
@@ -1244,24 +1260,7 @@ func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts
 
 	newIncident := a.incident == nil
 	if newIncident {
-		causeJSON, err := json.Marshal(cause)
-		if err != nil {
-			causeJSON = []byte("{}")
-		}
-		inc := sqlitestore.AlarmIncident{
-			ZoneID:            a.id,
-			Mode:              a.mode,
-			CauseJSON:         string(causeJSON),
-			StartedAtMS:       unixMS(now),
-			TriggerDeadlineMS: unixMS(now.Add(dur)),
-		}
-		id, err := e.incidents.Create(ctx, inc)
-		if err != nil {
-			e.journalFault(ctx, a, "incident_persist_failed", err, 0)
-		} else {
-			inc.ID = id
-		}
-		a.incident = &inc
+		e.openIncident(ctx, a, cause, now, dur)
 	}
 
 	// Two-phase pre-alarm (notes/concepts/alarm-concept.md §15 row 21): a fresh,
@@ -1278,9 +1277,9 @@ func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts
 
 	if preAlarm {
 		opts.PreAlarm = true
-		e.scheduleStateTimer(a, timerKindPreAlarm, time.Duration(mcfg.PreAlarmSeconds)*time.Second)
+		e.scheduleStateTimer(a, TimerKindPreAlarm, time.Duration(mcfg.PreAlarmSeconds)*time.Second)
 	} else {
-		e.scheduleStateTimer(a, timerKindTrigger, dur)
+		e.scheduleStateTimer(a, TimerKindTrigger, dur)
 	}
 	e.persist(ctx, a)
 	e.recordSource(ctx, a, a.incident.ID, cause)
@@ -1331,7 +1330,7 @@ func (e *Engine) onPreAlarmElapsed(ctx context.Context, a *zone) {
 			}
 		}
 	}
-	e.scheduleStateTimer(a, timerKindTrigger, dur)
+	e.scheduleStateTimer(a, TimerKindTrigger, dur)
 	e.persist(ctx, a)
 	if inc != nil {
 		e.fireCycle(ctx, a, *inc, FireOptions{Policy: mcfg.Outputs})
@@ -1376,7 +1375,7 @@ func (e *Engine) onTriggerElapsed(ctx context.Context, a *zone) {
 					e.journalFault(ctx, a, "incident_persist_failed", err, inc.ID)
 				}
 			}
-			e.scheduleStateTimer(a, timerKindTrigger, dur)
+			e.scheduleStateTimer(a, TimerKindTrigger, dur)
 			e.persist(ctx, a)
 			e.fireCycle(ctx, a, *inc, FireOptions{Cycle: inc.RetriggerCycles, Policy: mcfg.Outputs})
 			e.journalEntry(ctx, a, JournalEntry{
@@ -1406,27 +1405,68 @@ func (e *Engine) finishTriggered(ctx context.Context, a *zone, journalEvent stri
 		Class: hmenum.AlarmJournalClassTrigger, Event: journalEvent, IncidentID: incID,
 	})
 	if a.cfg.PostTrigger == hmenum.AlarmPostTriggerDisarm {
-		rearmMode := a.mode
-		a.cancelTimers()
-		a.state = hmenum.AlarmZoneStateDisarmed
-		a.mode = hmenum.AlarmModeDisarmed
-		a.bypassed = map[string]bool{}
-		a.openAtArm = map[string]bool{}
-		// Auto-rearm (notes/concepts/alarm-concept.md §15 row 22): schedule a
-		// return to the pre-incident mode after a quiet period. Set
-		// before persist so the timer lands in timers_json.
-		e.scheduleAutoRearmIfConfigured(ctx, a, rearmMode, "engine")
-		e.persist(ctx, a)
-		e.journalEntry(ctx, a, JournalEntry{
-			Class: hmenum.AlarmJournalClassDisarm, Event: "disarmed_post_trigger", Actor: "engine",
-		})
-		e.publishState(a, from, "engine", "engine")
+		e.disarmAfterTrigger(ctx, a, from, "engine")
 		return
 	}
 	// Return to armed: re-capture the open baseline so a door still
 	// standing open does not instantly re-trigger; a fresh transition
 	// is required for a new incident.
 	e.completeArm(ctx, a, from, "engine", "engine")
+}
+
+// disarmAfterTrigger applies the PostTrigger=disarm policy: the zone
+// returns to disarmed and — when the zone configures one — an auto-rearm
+// quiet period is scheduled back to the pre-incident mode
+// (notes/concepts/alarm-concept.md §15 row 22). It is shared by the live
+// path (finishTriggered) and the restore path (finishTriggeredOnRestore)
+// so a crash-restart that lands past the trigger window leaves exactly
+// the same zone state, journal and timer set as the live elapse would;
+// by is the actor recorded on the published transition. The caller holds
+// the lock.
+func (e *Engine) disarmAfterTrigger(ctx context.Context, a *zone, from hmenum.AlarmZoneState, by string) {
+	rearmMode := a.mode
+	a.cancelTimers()
+	a.resetToDisarmed()
+	// The auto-rearm is set before persist so the timer lands in
+	// timers_json and survives a further restart.
+	e.scheduleAutoRearmIfConfigured(ctx, a, rearmMode, by)
+	e.persist(ctx, a)
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassDisarm, Event: "disarmed_post_trigger", Actor: by,
+	})
+	e.publishState(a, from, by, "engine")
+}
+
+// openIncident opens the zone's incident and attaches it: the cause is
+// marshalled into the persisted document and the trigger deadline is
+// derived as now + the bounded trigger duration the caller resolved from
+// the mode. Every entry path (intrusion trigger, adopted sounding siren,
+// always-on activation) goes through here, because the restore path
+// reads TriggerDeadlineMS back as authoritative — a deadline derived
+// differently at one entry changes how long a restored alarm sounds.
+//
+// A failed Create is journalled and the incident is still attached with
+// ID 0: the episode runs, but nothing persists it. The caller holds the
+// lock.
+func (e *Engine) openIncident(ctx context.Context, a *zone, cause incidentCause, now time.Time, dur time.Duration) {
+	causeJSON, err := json.Marshal(cause)
+	if err != nil {
+		causeJSON = []byte("{}")
+	}
+	inc := sqlitestore.AlarmIncident{
+		ZoneID:            a.id,
+		Mode:              a.mode,
+		CauseJSON:         string(causeJSON),
+		StartedAtMS:       unixMS(now),
+		TriggerDeadlineMS: unixMS(now.Add(dur)),
+	}
+	id, err := e.incidents.Create(ctx, inc)
+	if err != nil {
+		e.journalFault(ctx, a, "incident_persist_failed", err, 0)
+	} else {
+		inc.ID = id
+	}
+	a.incident = &inc
 }
 
 // closeIncident closes the open incident (idempotent) and detaches it
@@ -1482,19 +1522,19 @@ func (e *Engine) onStateTimerFired(zoneID string, seq uint64) {
 	a.timerKind = ""
 	ctx := e.lifeCtx
 	switch kind {
-	case timerKindExit:
+	case TimerKindExit:
 		if a.state == hmenum.AlarmZoneStateArming {
 			e.completeArm(ctx, a, a.state, "engine", "engine")
 		}
-	case timerKindEntry:
+	case TimerKindEntry:
 		if a.state == hmenum.AlarmZoneStatePending {
 			e.trigger(ctx, a, pendingElapsedCause(a), FireOptions{})
 		}
-	case timerKindPreAlarm:
+	case TimerKindPreAlarm:
 		if a.state == hmenum.AlarmZoneStateTriggered && a.preAlarm {
 			e.onPreAlarmElapsed(ctx, a)
 		}
-	case timerKindTrigger:
+	case TimerKindTrigger:
 		if a.state == hmenum.AlarmZoneStateTriggered {
 			e.onTriggerElapsed(ctx, a)
 		}
@@ -1576,7 +1616,7 @@ func (e *Engine) startTicks(a *zone, timerKind string) {
 			})
 			if aa.cfg.Modes[aa.mode].Outputs.CountdownTicks {
 				kind := ChirpCountdownTick
-				if timerKind == timerKindEntry {
+				if timerKind == TimerKindEntry {
 					kind = ChirpEntryWarning
 				}
 				e.chirp(e.lifeCtx, aa, ChirpRequest{Kind: kind, Remaining: remaining, Total: total})
@@ -1610,28 +1650,10 @@ func (e *Engine) AdoptSounding(ctx context.Context, zoneID string, outputIDs []s
 	now := e.clk.Now()
 	dur := mcfg.triggerDuration()
 	if a.incident == nil {
-		cause := incidentCause{Kind: causeKindAdopted}
-		causeJSON, err := json.Marshal(cause)
-		if err != nil {
-			causeJSON = []byte("{}")
-		}
-		inc := sqlitestore.AlarmIncident{
-			ZoneID:            a.id,
-			Mode:              a.mode,
-			CauseJSON:         string(causeJSON),
-			StartedAtMS:       unixMS(now),
-			TriggerDeadlineMS: unixMS(now.Add(dur)),
-		}
-		id, err := e.incidents.Create(ctx, inc)
-		if err != nil {
-			e.journalFault(ctx, a, "incident_persist_failed", err, 0)
-		} else {
-			inc.ID = id
-		}
-		a.incident = &inc
+		e.openIncident(ctx, a, incidentCause{Kind: causeKindAdopted}, now, dur)
 	}
 	a.state = hmenum.AlarmZoneStateTriggered
-	e.scheduleStateTimer(a, timerKindTrigger, dur)
+	e.scheduleStateTimer(a, TimerKindTrigger, dur)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassTrigger, Event: "sounding_siren_adopted",
@@ -1748,28 +1770,11 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, po
 	dur := a.cfg.Modes[a.mode].triggerDuration()
 
 	if a.incident == nil {
-		causeJSON, err := json.Marshal(cause)
-		if err != nil {
-			causeJSON = []byte("{}")
-		}
-		inc := sqlitestore.AlarmIncident{
-			ZoneID:            a.id,
-			Mode:              a.mode,
-			CauseJSON:         string(causeJSON),
-			StartedAtMS:       unixMS(now),
-			TriggerDeadlineMS: unixMS(now.Add(dur)),
-		}
-		id, err := e.incidents.Create(ctx, inc)
-		if err != nil {
-			e.journalFault(ctx, a, "incident_persist_failed", err, 0)
-		} else {
-			inc.ID = id
-		}
-		a.incident = &inc
+		e.openIncident(ctx, a, cause, now, dur)
 	}
 
 	a.state = hmenum.AlarmZoneStateTriggered
-	e.scheduleStateTimer(a, timerKindTrigger, dur)
+	e.scheduleStateTimer(a, TimerKindTrigger, dur)
 	e.persist(ctx, a)
 	e.recordSource(ctx, a, a.incident.ID, cause)
 	e.fireCycle(ctx, a, *a.incident, FireOptions{Policy: policy})
@@ -1815,10 +1820,7 @@ func (e *Engine) finishAlwaysOn(ctx context.Context, a *zone, journalEvent, acto
 		a.mode = target
 		e.recaptureOpenBaseline(a)
 	} else {
-		a.state = hmenum.AlarmZoneStateDisarmed
-		a.mode = hmenum.AlarmModeDisarmed
-		a.bypassed = map[string]bool{}
-		a.openAtArm = map[string]bool{}
+		a.resetToDisarmed()
 	}
 	e.persist(ctx, a)
 	e.publishState(a, from, actor, "engine")
@@ -1973,7 +1975,7 @@ func (e *Engine) persist(ctx context.Context, a *zone) {
 			remaining = 0
 		}
 		timers = append(timers, persistedTimer{
-			Kind:          timerKindAutoRearm,
+			Kind:          TimerKindAutoRearm,
 			DeadlineMS:    unixMS(a.autoRearmDeadline),
 			RemainingMS:   remaining.Milliseconds(),
 			PersistedAtMS: unixMS(now),

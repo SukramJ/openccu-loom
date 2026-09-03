@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ---------------------------------------------------------------------------
@@ -721,31 +722,40 @@ func TestToFloatStringBranch(t *testing.T) {
 // mapToProfileKey — all type branches
 // ---------------------------------------------------------------------------
 
+// TestMapToProfileKeyAllBranches walks every wire type the pointer can arrive
+// as. The base comes from the parameter, not from the type: ACTIVE_PROFILE is
+// declared 1-based and WEEK_PROGRAM_POINTER 0-based, so the same int32(0)
+// means "no such profile" on one and "the first week program" on the other.
 func TestMapToProfileKeyAllBranches(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		in   any
-		want string
+		param hmenum.Parameter
+		in    any
+		want  string
 	}{
-		{nil, ""},
-		{int(1), "P1"},
-		{int(0), ""}, // below range
-		{int(7), ""}, // above range
-		{int32(3), "P3"},
-		{int32(0), ""},
-		{int64(6), "P6"},
-		{int64(7), ""},
-		{float64(2), "P2"},
-		{float64(0), ""},
-		{"0", "P1"}, // 0-based string → P1
-		{"5", "P6"}, // 0-based string → P6
-		{"6", ""},   // 0-based out of range
-		{"bad", ""},
+		{hmenum.ParameterActiveProfile, nil, ""},
+		{hmenum.ParameterActiveProfile, int(1), "P1"},
+		{hmenum.ParameterActiveProfile, int(0), ""}, // below range
+		{hmenum.ParameterActiveProfile, int(7), ""}, // above range
+		{hmenum.ParameterActiveProfile, int32(3), "P3"},
+		{hmenum.ParameterActiveProfile, int32(0), ""},
+		{hmenum.ParameterActiveProfile, int64(6), "P6"},
+		{hmenum.ParameterActiveProfile, int64(7), ""},
+		{hmenum.ParameterActiveProfile, float64(2), "P2"},
+		{hmenum.ParameterActiveProfile, float64(0), ""},
+		{hmenum.ParameterActiveProfile, "bad", ""},
+		{hmenum.ParameterWeekProgramPointer, int32(0), "P1"}, // 0-based → P1
+		{hmenum.ParameterWeekProgramPointer, int32(2), "P3"},
+		{hmenum.ParameterWeekProgramPointer, "0", "P1"}, // 0-based string → P1
+		{hmenum.ParameterWeekProgramPointer, "5", "P6"}, // 0-based string → P6
+		{hmenum.ParameterWeekProgramPointer, "6", ""},   // 0-based out of range
+		{hmenum.ParameterWeekProgramPointer, "bad", ""},
+		{hmenum.ParameterLevel, int32(1), ""}, // not a profile pointer
 	}
 	for _, c := range cases {
-		got := mapToProfileKey(c.in)
+		got := mapToProfileKey(c.param, c.in)
 		if got != c.want {
-			t.Errorf("mapToProfileKey(%#v) = %q, want %q", c.in, got, c.want)
+			t.Errorf("mapToProfileKey(%s, %#v) = %q, want %q", c.param, c.in, got, c.want)
 		}
 	}
 }

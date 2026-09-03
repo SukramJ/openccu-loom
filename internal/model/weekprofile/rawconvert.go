@@ -402,9 +402,20 @@ func climateWeekdayToSlotsExpand(cwd schedule.ClimateWeekday) (weekdaySlots, err
 		prevEnd = p.endMins
 	}
 
-	if prevEnd < 24*60 {
-		// Trailing gap — fill to 24:00 with base temperature.
+	if prevEnd < schedule.ClimateEndOfDayMinutes {
+		// Trailing gap — fill to the end of day with base temperature.
 		ws[slotNo] = ScheduleSlot{EndTime: maxScheduleTime, Temperature: cwd.BaseTemperature}
+	}
+
+	// Refuse an over-capacity day rather than let [fillUpWeekdaySlots] trim it.
+	// A period preceded by a gap costs two slots, so a weekday that passes
+	// [schedule.ClimateWeekday.ValidateWire] — which does not require gapless
+	// coverage — can expand past what the CCU stores. The trim would drop the
+	// tail, and the entry that ends the day at 24:00 is in it, so the device
+	// would be written a day that stops in the afternoon with nothing reported.
+	if len(ws) > slotCount {
+		return nil, fmt.Errorf("weekprofile: weekday expands to %d slots, the CCU stores %d",
+			len(ws), slotCount)
 	}
 
 	return fillUpWeekdaySlots(cwd.BaseTemperature, ws), nil
@@ -1097,9 +1108,13 @@ const MaxTimeBaseFactor = 30
 //
 // The encoder passes this one pair through verbatim so a lock schedule read
 // from the CCU can be saved again.
+//
+// The numbers themselves are declared once, in the domain
+// ([schedule.PermanentDurationBase]), because the lock action table states the
+// same pair and a correction has to reach both.
 const (
-	permanentBase   = 7 // HOUR_1
-	permanentFactor = 31
+	permanentBase   = schedule.PermanentDurationBase
+	permanentFactor = schedule.PermanentDurationFactor
 )
 
 // timeBaseTable maps a CCU TimeBase integer to (unit string, multiplier in that
@@ -1151,7 +1166,7 @@ var durationUnitIn100ms = map[string]float64{
 // a string for it the write kept whatever the slot held — the firmware
 // default (7, 31), which reads back as `lock_autorelock_end`, the
 // opposite intent.
-const ZeroDuration = "0ms"
+const ZeroDuration = schedule.ZeroDuration
 
 // PermanentDuration is the string form of the (base 7, factor 31) pair — the
 // CCU's own encoding for a switch point that does not expire.
@@ -1172,7 +1187,7 @@ const ZeroDuration = "0ms"
 // The same pair and the same word cover RAMP_TIME: the CCU builds both
 // editors from one helper (`_getDurationRamptimeHTML`), so the encoding is
 // shared.
-const PermanentDuration = "permanent"
+const PermanentDuration = schedule.PermanentDuration
 
 // FormatTimeBaseFactor converts a (base, factor) pair from the CCU
 // paramset into a human-readable duration string used by [schedule.SimpleEntry].
@@ -1332,11 +1347,10 @@ type AstroOffsetLimits struct {
 }
 
 // astroOffsetFallbackLimit bounds an astro offset when the channel declares no
-// range. It is ±12 hours, the bound this project applied before the declared
-// range was read, kept so a channel whose descriptor has not been loaded is no
-// less protected than it used to be. It describes nothing about a device: every
-// model in the descriptor corpus declares ±128.
-const astroOffsetFallbackLimit = 720
+// range. The domain validator applies the same bound to the same field, so it
+// is stated once, in the domain — see [schedule.AstroOffsetFallbackLimit] for
+// what it rests on.
+const astroOffsetFallbackLimit = schedule.AstroOffsetFallbackLimit
 
 // bounds returns the range to enforce and how to name it in an error.
 func (l AstroOffsetLimits) bounds() (lo, hi int) {

@@ -222,6 +222,16 @@ func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs
 // a direct JSON-RPC call, which may not be supported on all CCU firmware
 // versions. The messageType filter is applied client-side on the ReGa path
 // because the script returns all messages unconditionally.
+//
+// Human-readable fields (name, device_name, and each rooms / functions entry)
+// arrive percent-encoded Latin-1 and are passed through UNDECODED. Decoding
+// them here would need the canonical ReGa decoder, which is not reachable
+// from this package; a plain url.QueryUnescape is not a substitute, because
+// it turns an umlaut into an invalid UTF-8 byte that every north-bound
+// encoder then replaces with U+FFFD. Callers must decode before display.
+// The live hub path reads the same script through the schema in
+// internal/client/rega and does apply that decode; the two field sets are
+// pinned to each other by a test in this package.
 func (b *CcuBackend) GetServiceMessages(ctx context.Context, messageType string) ([]map[string]any, error) {
 	if b.rega != nil {
 		type svcMsg struct {
@@ -303,6 +313,10 @@ func (b *CcuBackend) SuppressServiceMessage(ctx context.Context, channelAddress,
 // from the CCU via the get_alarm_messages ReGa script — the reference stack
 // reads alarms the same way; there is no JSON-RPC alarm method on the CCU.
 // Without a ScriptRunner alarm messages are unavailable.
+//
+// The name and description fields arrive percent-encoded Latin-1 and are
+// passed through UNDECODED — see [CcuBackend.GetServiceMessages] for why the
+// decode does not happen here and what callers owe.
 func (b *CcuBackend) GetAlarmMessages(ctx context.Context) ([]map[string]any, error) {
 	if b.rega == nil {
 		return nil, ErrUnsupported
@@ -535,27 +549,58 @@ func (b *CcuBackend) GetHeatingGroupList(ctx context.Context) (string, error) {
 // --- bulk device data ---------------------------------------------------
 
 // GetAllDeviceData implements Operations. Fetches all current data-point
-// values for all devices on the interface. Returns a map of
-// dpName → value.
+// values for all devices on the interface, keyed channelAddress → parameter
+// → value. Both branches below produce that one grammar; it is the shape the
+// wrapping call documents, and a caller that has to ask which branch answered
+// has no contract at all.
 //
 // When a ScriptRunner is wired in (via [CcuBackend.SetScriptRunner]), the
 // operation runs the fetch_all_device_data ReGa script, which requires the
 // interface name as a parameter. Without a ScriptRunner the backend falls
 // back to a direct JSON-RPC call.
+//
+// Values are returned as the script emits them. String-valued data points
+// arrive percent-encoded (fetch_all_device_data.fn writes
+// `oDP.Value().UriEncode()` for value type 20) and are NOT decoded here: the
+// decode is Latin-1-aware, a plain unescape corrupts every umlaut
+// irreversibly, and the one implementation of it is not reachable from this
+// package. Callers must decode string values through the canonical ReGa
+// decoder before seeding them anywhere. Exporting that decoder into a package
+// both readers can import is what would let this method finish the job.
 func (b *CcuBackend) GetAllDeviceData(ctx context.Context) (map[string]map[string]any, error) {
 	if b.rega != nil {
-		// The ReGa script returns a flat {"DPName": value, ...} map where
-		// the keys are dot-separated DP names (e.g. "HmIP-RF.ADDR:1.LEVEL").
-		// We re-wrap each entry as map[string]any so callers get a uniform
-		// two-level structure keyed by the full DP name.
+		// The script returns one flat object whose keys are the data point's
+		// full ReGa name, UriEncoded (`oDP.Name().UriEncode()` in
+		// internal/client/rega/scripts/fetch_all_device_data.fn) — three
+		// dot-separated components, "<interface>.<channelAddress>.<PARAM>".
+		// Unescaping before the split is what makes it irrelevant whether
+		// UriEncode escapes the channel separator ':', which no source here
+		// states.
 		var flat map[string]any
 		if err := b.rega.RunJSON(ctx, hmenum.RegaScriptFetchAllDeviceData,
 			map[string]string{"interface": string(b.ifaceType)}, &flat); err != nil {
 			return nil, err
 		}
 		out := make(map[string]map[string]any, len(flat))
-		for k, v := range flat {
-			out[k] = map[string]any{"value": v}
+		for rawKey, v := range flat {
+			key, err := url.QueryUnescape(rawKey)
+			if err != nil {
+				continue
+			}
+			parts := strings.SplitN(key, ".", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			channelAddress, parameter := parts[1], parts[2]
+			if channelAddress == "" || parameter == "" {
+				continue
+			}
+			params, ok := out[channelAddress]
+			if !ok {
+				params = make(map[string]any, 4)
+				out[channelAddress] = params
+			}
+			params[parameter] = v
 		}
 		return out, nil
 	}
@@ -1078,6 +1123,13 @@ func (b *CcuBackend) HasProgramIDs(ctx context.Context, iseID string) (bool, err
 // stage the image for installation. Requires that
 // [SetDownloadFirmwareTransport] has been called with a valid base URL and
 // session-ID provider; returns [ErrUnsupported] otherwise.
+//
+// This is the implementation a running daemon executes; the REST maintenance
+// handler reaches it through the primary backend. internal/client/transport/jsonrpc
+// holds a second, unreached implementation of the same POST, including its own
+// copy of the scheme allowlist below. The allowlist that governs what the
+// daemon will hand the CCU is THIS one — tighten or widen it here, and check
+// whether the other copy still needs to exist at all.
 //
 // Only "http://" and "https://" scheme firmware URLs are accepted.
 func (b *CcuBackend) DownloadFirmware(ctx context.Context, firmwareURL string) error {

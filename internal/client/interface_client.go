@@ -1073,21 +1073,15 @@ func (c *InterfaceClient) RecordConnectivityProbe(alive bool) {
 	)
 }
 
-// VirtualRemote reports the address of the CCU's virtual-remote device for
-// the wrapped interface, if any.
-//
-// The second return reports whether the wrapped interface has a
-// virtual-remote concept at all. CUxD / VirtualDevices / wired interfaces
-// have none → returns ("", false).
-func (c *InterfaceClient) VirtualRemote() (string, bool) {
-	switch c.cfg.Interface { //nolint:exhaustive // Wired / CUxD / VirtualDevices have no virtual-remote concept; all non-RF interfaces return ("", false)
-	case hmenum.InterfaceHmIPRF:
-		return "HmIP-RF", true
-	case hmenum.InterfaceBidCosRF:
-		return "BidCoS-RF", true
-	}
-	return "", false
-}
+// The virtual-remote ADDRESS datum (BidCoS-RF / BidCoS-Wir / HmIP-RCV-1) is
+// deliberately NOT restated here. It has one home — internal/routingkey's
+// virtualRemoteRoots, which feeds published unique ids and retained MQTT
+// topics — and the MODEL axis (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50) has
+// another, in pkg/hmenum. A per-interface accessor used to live at this spot
+// and disagreed with both: it returned the interface tag "HmIP-RF" where the
+// firmware's HmIP virtual remote is addressed "HmIP-RCV-1", and it declared
+// the wired interfaces to have no virtual remote although hs485d builds one.
+// [TestHmCliClientHoldsNoVirtualRemoteAddressCopy] keeps it from returning.
 
 // ---------------------------------------------------------------------------
 // StateMachine — expose the validated state machine
@@ -1163,24 +1157,27 @@ func (c *InterfaceClient) RPCServerType() hmenum.RPCServerType {
 	return RPCServerTypeForInterface(c.cfg.Interface)
 }
 
-// RPCServerTypeForInterface maps an interface tag to its callback server
-// type. Extracted as a standalone function so coordinators and backend
-// detection code can call it without constructing a full client.
+// RPCServerTypeForInterface reports which callback server serves an
+// interface's callbacks. It DERIVES the answer from pkg/hmenum rather than
+// restating it: the datum lives there in two halves, and hmenum's own doc
+// comment on [hmenum.InterfaceRPCServerType] instructs callers to combine
+// them. The map answers [hmenum.RPCServerTypeNone] for CUxD because CUxD's
+// callbacks are not served by the XML-RPC listener the map models; the flag
+// that does model them is [hmenum.Interface.IsBINRPC], so it is consulted
+// first. CUxD speaking BIN-RPC natively — with our own BIN-RPC callback
+// server — is a deliberate divergence; see SPECIFICATION §8.5 and ADR 0002.
+//
+// Keeping this derived rather than switching over interface tags is what
+// stops a second, silently drifting copy of the mapping from forming here;
+// [TestHmCliRPCServerTypeForInterfaceDerivesFromHmenum] measures it.
 func RPCServerTypeForInterface(iface hmenum.Interface) hmenum.RPCServerType {
-	switch iface {
-	case hmenum.InterfaceCUxD:
-		// CUxD speaks BIN-RPC natively — openccu-loom runs its own
-		// BIN-RPC callback server. This is a deliberate divergence.
-		// See SPECIFICATION §8.5 and ADR 0002.
+	if iface.IsBINRPC() {
 		return hmenum.RPCServerTypeBINRPC
-	case hmenum.InterfaceHmIPRF,
-		hmenum.InterfaceBidCosRF,
-		hmenum.InterfaceBidCosWired,
-		hmenum.InterfaceVirtualDevices:
-		return hmenum.RPCServerTypeXMLRPC
-	default:
-		return hmenum.RPCServerTypeNone
 	}
+	if t, ok := hmenum.InterfaceRPCServerType[iface]; ok {
+		return t
+	}
+	return hmenum.RPCServerTypeNone
 }
 
 // ---------------------------------------------------------------------------

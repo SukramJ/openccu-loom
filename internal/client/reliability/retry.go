@@ -298,10 +298,7 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 		r.mu.Lock()
 		r.metrics.TotalRetries++
 		r.mu.Unlock()
-		wait := r.specialDelayFor(err)
-		if wait <= 0 {
-			wait = r.jitter(delay)
-		}
+		wait := r.waitAfter(err, delay)
 
 		// Recovery-aware sleep: when the failure was a circuit-breaker rejection
 		// (or a transient network error), let the configured RecoveryWaiter
@@ -327,15 +324,40 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 			case <-timer.C():
 			}
 		}
-		// Advance the exponential schedule only when the regular
-		// path was actually used. A DUTY_CYCLE retry keeps the
-		// regular delay fresh for the next non-special failure
-		// participate in the backoff sequence.
-		if r.specialDelayFor(err) <= 0 {
-			delay = nextDelay(delay, r.cfg.Multiplier, r.cfg.Max)
-		}
+		delay = r.advanceSchedule(err, delay)
 	}
 	return err
+}
+
+// waitAfter returns how long to wait before the attempt that follows a
+// failure with err, given the current position `delay` in the exponential
+// schedule. A CCU fault with a fixed recovery window (DUTY_CYCLE,
+// TRANSMISSION_PENDING) takes precedence and bypasses the jitter; everything
+// else waits the jittered schedule delay.
+//
+// It exists once so both retry entry points ([Retrier.Do] and
+// [Retrier.DoForKey]) are on one policy —
+// [TestHmCliRetryScheduleIsTheSameForDoAndDoForKey] measures that they are.
+func (r *Retrier) waitAfter(err error, delay time.Duration) time.Duration {
+	if wait := r.specialDelayFor(err); wait > 0 {
+		return wait
+	}
+	return r.jitter(delay)
+}
+
+// advanceSchedule returns the next position in the exponential schedule after
+// a failure with err. The schedule advances only when the regular path was
+// actually used: a fault served by a fixed special delay keeps the regular
+// delay fresh for the next non-special failure instead of consuming a step of
+// the backoff sequence.
+//
+// Like [Retrier.waitAfter] this is deliberately the single copy of the rule —
+// it used to be written out three times across the two loops.
+func (r *Retrier) advanceSchedule(err error, delay time.Duration) time.Duration {
+	if r.specialDelayFor(err) > 0 {
+		return delay
+	}
+	return nextDelay(delay, r.cfg.Multiplier, r.cfg.Max)
 }
 
 // shouldWaitForRecovery reports whether err is a class of failure
@@ -568,10 +590,7 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 		r.mu.Lock()
 		r.metrics.TotalRetries++
 		r.mu.Unlock()
-		wait := r.specialDelayFor(err)
-		if wait <= 0 {
-			wait = r.jitter(delay)
-		}
+		wait := r.waitAfter(err, delay)
 		if r.cfg.RecoveryWaiter != nil && shouldWaitForRecovery(err) {
 			r.mu.Lock()
 			r.metrics.RecoveryWaits++
@@ -581,9 +600,7 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 			if ctx.Err() != nil {
 				return err
 			}
-			if r.specialDelayFor(err) <= 0 {
-				delay = nextDelay(delay, r.cfg.Multiplier, r.cfg.Max)
-			}
+			delay = r.advanceSchedule(err, delay)
 			continue
 		}
 		timer := r.cfg.Clock.NewTimer(wait)
@@ -598,9 +615,7 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 			return ErrRetrySuperseded
 		case <-timer.C():
 		}
-		if r.specialDelayFor(err) <= 0 {
-			delay = nextDelay(delay, r.cfg.Multiplier, r.cfg.Max)
-		}
+		delay = r.advanceSchedule(err, delay)
 	}
 	return err
 }

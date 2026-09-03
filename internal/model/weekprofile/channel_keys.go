@@ -18,14 +18,46 @@ import (
 // (schedule disabled); a CLEAR bit means the channel is ENABLED.
 // [ParseChannelLocks] handles the inversion.
 //
-// What is measured and what is not, because the difference decides how much
-// this table can be trusted. Measured on live hardware: the CCU masks
-// WEEK_PROGRAM_CHANNEL_LOCKS to 24 bits (0x00FFFFFF), which fits the 8×3 grid
-// and rules out a narrower scheme. NOT established: which key addresses which
-// channel. Deciding that needs a week program configured on a device with one
-// bit set and an observation of which channel stops following it — an
-// intervention in a working installation, not a read, and it has not been
-// done. So a wrong entry here would be invisible to every test we have.
+// The firmware does establish the mapping, and this grid is not it. The CCU's
+// own weekly-program editor derives the bit POSITIONALLY from the channel's
+// place in the device's schedule-relevant channel list — every
+// `*_VIRTUAL_RECEIVER` plus the access-control channel types, in channel order
+// (`getRelevantChannels`,
+// ../OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:517-555)
+// — and takes the bit as `Math.pow(2, index)` over that list (:357).
+//
+// Two firmware facts do back the shape below. The semantics are inverted (a
+// set bit selects Manu, i.e. schedule off — :239-241), and the stride is 3:
+// the non-expert view seeds `tmpVal = 1` and shifts `tmpVal << 3` per actor
+// (:361-364) and reads back every third bit (:614). So "actor N, sub S → bit
+// 3(N-1)+(S-1)" is the firmware's own scheme for an ordinary multi-actor
+// virtual-receiver device, and it is right for HmIP-BSM / PS / FSM and for
+// HmIP-BSL, whose own firmware override `[4, 5, 6, 8, 9, 10, 12, 13, 14]`
+// (:48-54) lands on positions 0..8 exactly as keys 1_1..3_3 do here.
+//
+// Where it is wrong, because the firmware overrides the list per family and
+// this table cannot express an override:
+//
+//   - HmIP-DLP: the editor puts DOOR_LOCK_TRANSCEIVER :12 at bit 8 (value
+//     256) and AUTO_RELOCK_TRANSCEIVER :13 at bit 9 (512), with bits 0..7
+//     taken by the eight PERMISSION_TRANSCEIVER channels
+//     (iseHmIPWeeklyProgram_AccessReceiver.js:300-313). A registry that
+//     schedules only the door-lock group mints key 1_1 and writes bit 0 —
+//     a permission channel.
+//   - HmIP-FWI (Wiegand): ACCESS_TRANSCEIVER channels take bits 3..10 and the
+//     virtual switch receivers keep bits 0..2 (:330-345, :465-479).
+//   - HmIP-DRG-DALI: the bit is the channel number minus one over 48 channels
+//     (:351), which is neither this stride nor 24 bits wide.
+//   - HmIP-RGBW: the universal-light group carries a fourth member, which
+//     mints key `1_4` — no entry here, so [ChannelKeyToBitmask] rejects it and
+//     the write fails rather than addressing the firmware's bit 3.
+//
+// Deriving the bit from the device's own channel list is the fix, and it
+// cannot be made here: the keys are minted from the custom-DP channel groups
+// upstream of this package, and for the families above that list is not the
+// firmware's relevant-channel list. The 24-bit mask measured on live hardware
+// is a property of the devices it was measured on, not of the scheme —
+// HmIP-DRG-DALI carries a 48-bit value.
 var channelKeyBitmask = map[string]uint32{
 	"1_1": 1 << 0,  // 1
 	"1_2": 1 << 1,  // 2

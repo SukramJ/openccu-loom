@@ -269,8 +269,28 @@ func (b *CcuBackend) ReplaceDevice(ctx context.Context, oldDeviceAddress, newDev
 
 // GetLinks implements Operations. CCU returns the link descriptors
 // for the given channel regardless of direction (sender + receiver).
-// Flags bit 0 toggles whether link metadata (names + descriptions)
-// is included — we always request the full detail (flags = 0).
+//
+// The second argument is the firmware's GetLinks flag word. The bits are
+// GL_FLAG_GROUP=0x01, GL_FLAG_SENDER_PARAMSET=0x02,
+// GL_FLAG_RECEIVER_PARAMSET=0x04, GL_FLAG_SENDER_DESCRIPTION=0x08,
+// GL_FLAG_RECEIVER_DESCRIPTION=0x10, GL_FLAG_CHECK_PEER=0x4000
+// (OpenCCU-Base src/libhsscomm/LogicalInstance.h:33-38), so 0 — the
+// documented default (src/rfd/XmlRpcMethods.cpp:377) — is the LEAST detail,
+// not the fullest: it asks for neither link paramset nor channel
+// description. It is still the right request here, because the five fields
+// decoded below (SENDER, RECEIVER, NAME, DESCRIPTION, FLAGS) arrive whatever
+// the flag word is: RFChannel fills NAME and DESCRIPTION outside every flags
+// test (src/rfd/RFChannel.cpp:640-641), and RFManager ORs GL_FLAG_CHECK_PEER
+// into the caller's word for any non-empty address (src/rfd/RFManager.cpp:627),
+// which is what makes the returned FLAGS validity bits meaningful.
+//
+// Bit 0 is therefore not a metadata switch. GL_FLAG_GROUP folds the links of
+// a key pair's partner channel into the same result. Raising it here would
+// not add rows: the device-scoped entry point clears it again
+// (src/rfd/RFDevice.cpp:1240), and the per-channel caller in the adapter
+// already queries every channel of the device and dedupes on
+// sender->receiver, so the partner's links are collected by the partner's
+// own query.
 func (b *CcuBackend) GetLinks(ctx context.Context, channelAddress string) ([]hmproto.LinkDescription, error) {
 	if b.xml == nil {
 		return nil, ErrNotWired
@@ -631,12 +651,21 @@ func (b *CcuBackend) CreateSystemVariableBool(ctx context.Context, name string, 
 	return m, nil
 }
 
-// CreateSystemVariableEnum implements Operations via JSON-RPC.
+// CreateSystemVariableEnum implements Operations via JSON-RPC. This is the
+// shipping path for the call; the transport package carries a second, unused
+// implementation of the same request.
+//
+// Wire: SysVar.createEnum takes {name, valList, internal, chnID} — the key is
+// `valList`, declared as `ARGUMENTS {_session_id_ name valList internal chnID}`
+// in OpenCCU-Base www/api/methods.conf:890-894 and read by the ReGa script at
+// www/api/methods/sysvar/createenum.tcl:26 (`sv.ValueList( valList )`). The
+// separator is a semicolon, documented as the value format at
+// createenum.tcl:7, and it is a wire contract in both directions: the read
+// side splits the returned list on the same character.
 func (b *CcuBackend) CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error) {
 	if b.json == nil {
 		return nil, ErrUnsupported
 	}
-	// Join as semicolon-separated CCU wire format.
 	var joined strings.Builder
 	for i, v := range valueList {
 		if i > 0 {

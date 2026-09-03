@@ -248,6 +248,7 @@ func gatedCentralBringUp(
 	deps WireDeps,
 	callbackURL, binRPCCallbackAddr string,
 	cbHandlers *CallbackHandlers,
+	adoptBINRPCHandlers func(*CallbackHandlers),
 	addCloser func(func()),
 	logger *slog.Logger,
 ) {
@@ -257,7 +258,7 @@ func gatedCentralBringUp(
 		if !WaitForCCUReady(ctx, *cc, CCUReadinessConfig{Timeout: -1}, logger) {
 			return // teardown
 		}
-		if loaded, err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, addCloser, logger); err == nil {
+		if loaded, err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, adoptBINRPCHandlers, addCloser, logger); err == nil {
 			// Bring-up done: clear the transient "waiting for CCU" component so it
 			// does not linger and decay to UNKNOWN (which would drag the overall
 			// health verdict down forever even though the central is now healthy).
@@ -425,6 +426,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	deps WireDeps,
 	callbackURL, binRPCCallbackAddr string,
 	cbHandlers *CallbackHandlers,
+	adoptBINRPCHandlers func(*CallbackHandlers),
 	addCloser func(func()),
 	logger *slog.Logger,
 ) (loaded int, err error) {
@@ -504,7 +506,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	for _, ifaceSpec := range cc.Interfaces {
 		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
-		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
+		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, adoptBINRPCHandlers, logger)
 		if ifErr != nil {
 			logger.Warn("wire.interface.failed",
 				slog.String("central", cc.Name),
@@ -706,6 +708,7 @@ func wireInterface(
 	jsonCaller backends.Caller,
 	binrpcCallbackServer *rpcserver.BINRPCServer,
 	binrpcCallbackAddr string,
+	adoptBINRPCHandlers func(*CallbackHandlers),
 	logger *slog.Logger,
 ) (closer func(), ingested bool, err error) {
 	// CUxD speaks BIN-RPC natively. It gets its own dedicated wiring
@@ -717,7 +720,7 @@ func wireInterface(
 		// merely whether the client/backend wiring succeeded — a CUxD
 		// interface that exhausts every retry is wired but empty, and must
 		// not count toward the "interfaces loaded" tally.
-		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, logger)
+		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, adoptBINRPCHandlers, logger)
 	}
 
 	url, err := interfaceURL(cc, iface)

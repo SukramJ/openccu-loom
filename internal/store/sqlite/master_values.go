@@ -183,7 +183,7 @@ func (s *MasterValuesStore) DeleteDevice(
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := strings.TrimRight(deviceAddress, ":") + ":"
+	prefix := escapeLikePrefix(strings.TrimRight(deviceAddress, ":")) + ":"
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM master_values
          WHERE central_name = ? AND interface_id = ?

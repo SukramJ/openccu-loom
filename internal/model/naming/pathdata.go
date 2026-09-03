@@ -463,37 +463,6 @@ func (p PathData) DiscoveryObjectID(suffix string) string {
 	return fmt.Sprintf("%d_%s", p.ChannelNo, strings.ToLower(TopicSafe(suffix)))
 }
 
-// DiscoveryUniqueID returns the cross-broker-stable `unique_id`
-// payload field. Format:
-// `<daemonPrefix>_<central-lower>_<address-lower>_<channel>_<suffix-lower>`.
-// HA persists the value in its registry; changing the format
-// orphans every entity HA already knows about, so the format is
-// pinned via this method.
-//
-// `daemonPrefix` is the daemon identity (typically `"openccu-loom"`)
-// — kept as a parameter so multi-daemon test setups can produce
-// per-daemon unique-ids without collision.
-//
-// Empty when Address is missing or the suffix is empty.
-func (p PathData) DiscoveryUniqueID(daemonPrefix, centralName, suffix string) string {
-	if p.Address == "" || suffix == "" {
-		return ""
-	}
-	addr := strings.ToLower(p.Address)
-	suf := strings.ToLower(TopicSafe(suffix))
-	prefix := strings.ToLower(TopicSafe(daemonPrefix))
-	if prefix == "" {
-		prefix = "openccu-loom"
-	}
-	if centralName == "" {
-		return fmt.Sprintf("%s_%s_%d_%s", prefix, addr, p.ChannelNo, suf)
-	}
-	return fmt.Sprintf(
-		"%s_%s_%s_%d_%s",
-		prefix, strings.ToLower(TopicSafe(centralName)), addr, p.ChannelNo, suf,
-	)
-}
-
 // DiscoveryConfigTopic returns the canonical HA-Discovery retained
 // config topic `homeassistant/<component>/<node_id>/<object_id>/config`.
 //

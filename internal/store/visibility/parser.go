@@ -61,10 +61,21 @@ type UnIgnoreEntry struct {
 	// Central scopes the entry to one CCU (central.Unit.Name). Empty means
 	// the entry is global and matches every central — the default for
 	// entries built by [ParseUnIgnore], which has no central context of its
-	// own. A caller that persists un-ignore rules per central (multi-CCU is
-	// first class, ADR 0002) stamps this field before calling
-	// [ParameterDecider.LoadUnIgnore] so the entry cannot decide visibility
-	// for a central it was never registered against.
+	// own.
+	//
+	// No production caller sets this field today. The daemon persists
+	// un-ignore patterns per central (one SQLite row set per central, one
+	// REST PUT per central) but the composition root then newline-joins
+	// every central's patterns into one stream and parses it here, so every
+	// live entry carries Central=="" and the scoping below never fires: an
+	// un-ignore requested for one CCU applies to the whole fleet. That
+	// behaviour is deliberate on the composition-root side
+	// (cmd/openccu-loom/visibility_adapter.go documents the decider as
+	// fleet-wide) and it contradicts the per-central shape of the operator
+	// surface; which of the two is right is an open decision, not something
+	// this field settles. Until it is settled, treat the scoping as an
+	// unused seam rather than as a live guarantee — the only writers of this
+	// field are tests.
 	Central string
 }
 

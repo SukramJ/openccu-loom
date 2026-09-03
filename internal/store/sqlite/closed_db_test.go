@@ -222,15 +222,6 @@ func TestIncidentStore_ClosedDB_GetAllIncidents(t *testing.T) {
 	}
 }
 
-func TestIncidentStore_ClosedDB_GetDiagnostics(t *testing.T) {
-	t.Parallel()
-	s := closedDB(t)
-	_, err := s.incidents.GetDiagnostics(context.Background(), "c", DefaultMaxPerType, DefaultMaxAgeDays)
-	if err == nil {
-		t.Error("GetDiagnostics on closed DB: want error, got nil")
-	}
-}
-
 func TestIncidentStore_ClosedDB_GetIncidentsByType(t *testing.T) {
 	t.Parallel()
 	s := closedDB(t)

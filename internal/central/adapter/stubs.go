@@ -36,9 +36,20 @@ var errStorageNotConfigured = fmt.Errorf("backup: no storage configured: %w", hm
 
 // --- Backup adapter ---
 
-// backupRunTimeout bounds the detached create-and-download goroutine. It
-// sits above the backend's own 300 s poll budget so the backend reports a
-// clean timeout before this hard ceiling cancels the context.
+// backupRunTimeout bounds the detached create-and-download goroutine.
+//
+// It is the only bound on the run, not a ceiling above a backend budget. The
+// production caller passes maxWaitTime 0 (WireBackupAndDownload), and
+// [backends.CcuBackend.CreateBackupAndDownload] applies a timeout only for a
+// positive maxWaitTime — its own doc states that leaving the bound to the
+// caller is what every production caller wants. In the default configuration
+// the HTTP client is untimed as well, so a backup that outruns this constant
+// surfaces as a context cancellation, not as a clean backend timeout.
+//
+// 6 minutes is a client-side choice sized to cover an archive build on a
+// loaded CCU. No firmware source states how long that takes, so the number is
+// unverified; what would settle it is a measurement against a real CCU under
+// load, not another constant.
 const backupRunTimeout = 6 * time.Minute
 
 // BackupAdapter creates CCU backups via the reference create-and-download

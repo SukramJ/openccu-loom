@@ -98,7 +98,9 @@ func TestLightStatePayload_OnAndBrightness(t *testing.T) {
 	w := &stubWriter{}
 	l, level := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 
-	// 50 % level → state ON, brightness 128 (int(0.5*255+0.5) = 128)
+	// 50 % level → state ON, brightness 127 — the shared value-object
+	// rule, custom.Brightness.Byte() = uint8(0.5*255) = 127. The payload
+	// must not round differently from the byte every comparison uses.
 	level.OnEvent(0.5)
 	p, _ := l.State().(*payload.LightState)
 
@@ -109,12 +111,12 @@ func TestLightStatePayload_OnAndBrightness(t *testing.T) {
 		}
 		t.Errorf("level=0.5 → state %q, want ON", state)
 	}
-	if p == nil || p.Brightness == nil || *p.Brightness != 128 {
+	if p == nil || p.Brightness == nil || *p.Brightness != 127 {
 		var brightness any
-		if p != nil {
-			brightness = p.Brightness
+		if p != nil && p.Brightness != nil {
+			brightness = *p.Brightness
 		}
-		t.Errorf("level=0.5 → brightness %v, want 128", brightness)
+		t.Errorf("level=0.5 → brightness %v, want 127", brightness)
 	}
 
 	// 0 % level → state OFF

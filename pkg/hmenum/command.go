@@ -17,12 +17,32 @@ const (
 )
 
 // RollbackReason explains why an optimistic value update was reversed.
+//
+// These strings are the published vocabulary: they ride the rollback
+// event out to REST, the WebSocket plane, MQTT and the audit log
+// verbatim. The wire schema declares the field as a free string, so a
+// value this type never declared would not fail validation anywhere —
+// it would simply reach clients as a reason the daemon's own vocabulary
+// does not contain.
+//
+// The producing side spells the same three strings a second time
+// (internal/model/generic RollbackReason) and the value crosses into
+// this type through a bare named-string conversion, which accepts
+// anything. Until that copy is folded onto this one, a contract test
+// pins the two sets equal — that pin is the only thing standing between
+// a renamed reason on the producing side and a silently drifted wire
+// value.
 type RollbackReason string
 
 // RollbackReason values.
 const (
-	RollbackReasonTimeout       RollbackReason = "timeout"
-	RollbackReasonSendError     RollbackReason = "send_error"
+	RollbackReasonTimeout   RollbackReason = "timeout"
+	RollbackReasonSendError RollbackReason = "send_error"
+	// RollbackReasonValueMismatch is declared but never emitted: no
+	// production path rolls back on a value mismatch, because the CCU's
+	// value is authoritative and the confirmation simply replaces the
+	// optimistic one. It stays declared so the vocabulary a client may
+	// receive is complete if that path is ever added.
 	RollbackReasonValueMismatch RollbackReason = "mismatch"
 )
 

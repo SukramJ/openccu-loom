@@ -93,9 +93,12 @@ func TestTimerP2Methods(t *testing.T) {
 	if timer.Default() != nil {
 		t.Error("Default() must be nil")
 	}
+	// The seconds ceiling, not the per-unit INTEGER maximum — see
+	// TestHmSchTimerMaxIsAReachableSecondsCeiling, which derives it from the
+	// encoder instead of restating it here.
 	maxVal, ok := timer.Max()
-	if !ok || maxVal != float64(timerUpperBoundSeconds) {
-		t.Errorf("Max()=(%v,%v), want (%v,true)", maxVal, ok, timerUpperBoundSeconds)
+	if !ok || maxVal != float64(timerValueMaxPerUnit)*60 {
+		t.Errorf("Max()=(%v,%v), want (%v,true)", maxVal, ok, float64(timerValueMaxPerUnit)*60)
 	}
 	if _, ok := timer.Min(); ok {
 		t.Error("Min() must return (0, false)")

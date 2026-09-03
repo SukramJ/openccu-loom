@@ -9,9 +9,14 @@ import "slices"
 // SMOKE_DETECTOR_ALARM_STATUS parameter on the SMOKE_DETECTOR channel.
 //
 // The four constants below are the VALUE_LIST the HmIP-SWSD paramset
-// description declares, in its order. The device's own value list is
-// the only authority on this vocabulary; a label no paramset carries
-// does not get a constant here, however plausible it looks.
+// description declares, in its order — read off a captured descriptor
+// (channel VCU2822385:1, VALUES / SMOKE_DETECTOR_ALARM_STATUS: TYPE
+// ENUM, DEFAULT "IDLE_OFF", VALUE_LIST ["IDLE_OFF", "PRIMARY_ALARM",
+// "INTRUSION_ALARM", "SECONDARY_ALARM"]), not inferred. The device's
+// own value list is the only authority on this vocabulary; a label no
+// paramset carries does not get a constant here, however plausible it
+// looks. IDLE_ON is exactly such a label: it appears in no captured
+// descriptor, only in hand-written fixtures.
 // loom:reachable:reason="the type of the four SMOKE_DETECTOR_ALARM_STATUS constants whose string values build SmokeDetectorAlarmStatusSmokeLabels, read in production by the smoke active-value set in internal/model/safety and by the derived SMOKE_ALARM mapping in internal/model/calculated; a string type whose methods production never calls, which the analyzer's type heuristic cannot see used"
 type SmokeDetectorAlarmStatus string
 

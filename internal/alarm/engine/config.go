@@ -100,6 +100,16 @@ type CodePolicy struct {
 	RequireDisarm *bool `json:"require_disarm,omitempty"`
 	// RequireSilence gates silence per source surface (default off per
 	// S3; keyed by the source string, e.g. "mqtt").
+	//
+	// It reaches the anonymous planes only. resolveCode drops the
+	// requirement for every pre-authenticated source — the operator
+	// surfaces (CodeSourceRESTOperator, CodeSourceWSOperator,
+	// CodeSourceHmcli) carry a session, and CodeSourceKeypad /
+	// CodeSourceRemote are authenticated by the slot or binding match
+	// and carry no PIN that could be typed — so an entry keyed on one of
+	// those is accepted, persisted and inert. What remains gateable is
+	// what arrives anonymously: "mqtt", "sysvar". Pinned by
+	// TestRequireSilenceGatesOnlyAnonymousSources.
 	RequireSilence map[string]bool `json:"require_silence,omitempty"`
 }
 
@@ -107,14 +117,14 @@ type CodePolicy struct {
 // policy, before the CodeValidator resolves whether any code exists.
 func (p CodePolicy) requires(verb, source string) bool {
 	switch verb {
-	case codeVerbArm:
+	case CodeVerbArm:
 		return p.RequireArm
-	case codeVerbDisarm:
+	case CodeVerbDisarm:
 		if p.RequireDisarm == nil {
 			return true
 		}
 		return *p.RequireDisarm
-	case codeVerbSilence:
+	case CodeVerbSilence:
 		return p.RequireSilence[source]
 	default:
 		return false

@@ -261,7 +261,7 @@ WHERE central_name = ? AND interface_id = ?
   AND (channel_address = ? OR channel_address LIKE ? ESCAPE '\')
   AND schema_version = ?
 ORDER BY paramset_key, channel_address`
-	like := deviceAddress + ":%"
+	like := escapeLikePrefix(deviceAddress) + ":%"
 	rows, err := s.db.QueryContext(ctx, q, centralName, ifaceID, deviceAddress, like, ParamsetCacheSchemaVersion)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get channel addresses by paramset key: %w", err)
@@ -313,7 +313,7 @@ func (s *ParamsetStore) DeleteChannel(ctx context.Context, centralName, ifaceID,
 // DeleteDevice removes every paramset row for every channel of the device
 // (channel_address = deviceAddress or deviceAddress:<n>).
 func (s *ParamsetStore) DeleteDevice(ctx context.Context, centralName, ifaceID, deviceAddress string) (int64, error) {
-	prefix := strings.TrimRight(deviceAddress, ":") + ":"
+	prefix := escapeLikePrefix(strings.TrimRight(deviceAddress, ":")) + ":"
 	res, err := s.db.ExecContext(ctx, `
         DELETE FROM paramsets
          WHERE central_name = ? AND interface_id = ?

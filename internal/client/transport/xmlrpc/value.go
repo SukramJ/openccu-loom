@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -164,6 +165,17 @@ func (DoubleValue) Kind() Kind { return KindDouble }
 // encoding self-describing. Whether a non-CCU peer (Homegear) needs it is
 // unverified.
 func (v DoubleValue) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
+	// A non-finite double has no XML-RPC representation at all:
+	// FormatFloat renders it as the bare word "NaN" / "+Inf" / "-Inf",
+	// none of which contains a '.', so the fractional-digit branch below
+	// would turn it into the literal <double>NaN.0</double> and put it on
+	// the wire. The same [DoubleValue] is refused locally on the BIN-RPC
+	// write path (binrpc encodeDouble) and on both read paths, so without
+	// this check one value gets two answers depending on the transport.
+	// Reject it here, at the wire boundary, before the request is built.
+	if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+		return fmt.Errorf("xmlrpc: non-finite double %v is not representable", float64(v))
+	}
 	s := strconv.FormatFloat(float64(v), 'f', -1, 64)
 	if !strings.ContainsRune(s, '.') {
 		s += ".0"

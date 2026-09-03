@@ -25,6 +25,34 @@ type CommandTrackerConfig struct {
 	WarningThreshold int
 
 	// TTL is the max age of a tracked entry. Default: 60s.
+	//
+	// 60 s is a POLICY bound of this daemon, not a CCU-stated latency, and
+	// no firmware value would settle it: for a device whose rx mode is
+	// wake-up only, rfd stores the written value in its own volatile store
+	// and QUEUES the frame (OpenCCU-Base src/rfd/RFPhysicalDataInterfaceCommand.cpp,
+	// PutData), so setValue/putParamset answer success without transmitting.
+	// The queue is drained only when the device itself next transmits
+	// (src/rfd/RFDevice.cpp SendAfterWakeupFrames, reached from the
+	// incoming-frame path); it carries no expiry at all — the only bound is
+	// a depth of 10, and an overflow silently drops the OLDEST frame. So the
+	// confirming VALUES callback can arrive minutes later or never, and no
+	// finite TTL can cover that path. Of the shipped RF device types a
+	// substantial minority declare a wake-up-only rx mode, including wall
+	// thermostats users write setpoints to.
+	//
+	// What the firmware does bound is the synchronous case, and 60 s covers
+	// it with room: per-frame BidCos wait times are 1500 / 4500 / 12500 ms
+	// (src/rfd/BidcosFrameWaitTime.h) and the HmIP legacy call budget is
+	// Legacy.ResponseTimeout, default 25 s
+	// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.LegacyServiceHandler).
+	// [TestHmCliCommandTrackerTTLCoversSynchronousBudgets] pins that margin.
+	//
+	// Consequence of the uncovered path, stated so it is not mistaken for a
+	// guarantee: on a wake-up device the optimistic entry expires before the
+	// device answers, GetLastSentValue reports (nil, false), and the value
+	// reverts to whatever the model last knew. That is a deliberate
+	// bounded-memory choice; extending the TTL only widens the window, it
+	// does not close it.
 	TTL time.Duration
 
 	// CleanupThreshold triggers lazy cleanup when the tracker exceeds

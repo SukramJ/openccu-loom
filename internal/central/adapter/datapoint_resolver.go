@@ -4,9 +4,8 @@
 package adapter
 
 import (
-	"strings"
-
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -78,11 +77,20 @@ func isImpulseEvent(parameter string) bool {
 	return ok
 }
 
-// IsDeviceErrorEvent mirrors
-// prefix tuple (`("ERROR", "SENSOR_ERROR")`). The Python side uses
-// `str.startswith(tuple)`; we replicate it as two prefix checks.
+// isDeviceErrorEvent reports whether the parameter is a device-error
+// parameter, which is suppressed as a stateful data point and surfaces as a
+// device-trigger event instead.
+//
+// The verdict is asked of [modevent.Classify] rather than restated here.
+// Suppressing the data point is only safe because the classifier keeps the
+// parameter: a name this side suppressed but the classifier did not know
+// reached no plane at all — no data point, no device-trigger event, no
+// broadcast. A bare HasPrefix here answered true for /^ERROR[^_]/ names
+// (ERRORCODE, ERRORS) that the classifier's exact-or-underscore rule rejects,
+// so the two rules were the same rule in name only.
 func isDeviceErrorEvent(parameter string) bool {
-	return strings.HasPrefix(parameter, "ERROR") || strings.HasPrefix(parameter, "SENSOR_ERROR")
+	k, ok := modevent.Classify(hmenum.Parameter(parameter))
+	return ok && k == modevent.KindDeviceError
 }
 
 // buttonActionParameters are write-only ACTION parameters that are rendered

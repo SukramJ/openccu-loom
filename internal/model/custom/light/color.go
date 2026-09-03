@@ -189,8 +189,10 @@ func (l *ColorLight) colorFromIndex() (hue int32, saturation float64, observed b
 // _SATURATION_MULTIPLIER=100 (model/custom/light.py). [Color] performs the
 // inverse on read, so a north-bound round-trip is unit-consistent.
 //
-// Returns nil without writing when IsStateChangeFull reports no change for the
-// given HS color — matches the turn_on guard pattern.
+// Asks IsStateChangeFull first, matching the turn_on guard pattern. That
+// check cannot suppress a repeat today — the commanded-colour accessor
+// it consults holds no state (see the hook block in light.go) — so a
+// repeated colour command does reach the CCU.
 //
 // HUE and SATURATION are grouped into one atomic put_paramset: a
 // CallParameterCollector is attached to ctx, both dp.Set calls route through
@@ -291,10 +293,10 @@ func NewColorTempLight(cfg Config, minK, maxK int32) *ColorTempLight {
 // keeps the COLOR_TEMPERATURE-only behaviour.
 func newColorTempLightOn(cfg Config, minK, maxK int32, whitePoint *device.Channel) *ColorTempLight {
 	if minK <= 0 {
-		minK = 2000
+		minK = defaultMinKelvin
 	}
 	if maxK <= 0 {
-		maxK = 6500
+		maxK = defaultMaxKelvin
 	}
 	ct := &ColorTempLight{
 		Light:     New(cfg),
@@ -355,8 +357,10 @@ func (l *ColorTempLight) Subscribe(ch *device.Channel) func() {
 // SetKelvin commands a new colour temperature. Values are clamped to
 // the [MinKelvin, MaxKelvin] range.
 //
-// Returns nil without writing when IsStateChangeFull reports no change for the
-// given colour temperature — matches the turn_on guard pattern.
+// Asks IsStateChangeFull first, matching the turn_on guard pattern. That
+// check cannot suppress a repeat today — the commanded-kelvin accessor
+// it consults holds no state (see the hook block in light.go) — so a
+// repeated colour-temperature command does reach the CCU.
 func (l *ColorTempLight) SetKelvin(ctx context.Context, v int32, priority hmenum.CommandPriority) error {
 	if v < l.MinKelvin {
 		v = l.MinKelvin
@@ -401,6 +405,24 @@ const (
 	maxKelvinScale = 1_000_000
 	maxMireds      = 500
 	minMireds      = 153
+)
+
+// defaultMinKelvin / defaultMaxKelvin are the fallback colour-temperature
+// bounds for a channel whose COLOR_TEMPERATURE descriptor declares no
+// MIN/MAX. They apply only then: every light that carries the descriptor
+// takes its bounds from the device (see [kelvinBoundsFromChannel]).
+//
+// The pair itself is loom-local and its origin is **unverified**: no
+// source in the reference family carries it (the Python reference exposes
+// no Kelvin bounds at all, only the 1000000 mireds constant), and no
+// device descriptor in the simulated fleet declares 2000/6500. What would
+// settle it is a CCU-declared range for a tunable-white RF dimmer — the
+// two devices on this path (HM-LC-DW-WM, HM-DW-WM) carry no
+// COLOR_TEMPERATURE parameter at all, which is why the fallback is
+// reached for them in the first place.
+const (
+	defaultMinKelvin int32 = 2000
+	defaultMaxKelvin int32 = 6500
 )
 
 // kelvinFromColorLevel converts a 0..1 white-point level to kelvin.

@@ -893,7 +893,20 @@ func markerMatch(desc string, markers []hmenum.DescriptionMarker) bool {
 	}
 	d := strings.TrimSpace(desc)
 	for _, m := range markers {
-		if m != "" && strings.HasPrefix(d, string(m)) {
+		// Substring, not prefix. [parseSysvarDescription] answers the same
+		// question — does this description carry marker M — with
+		// strings.Contains, on the same rawDesc in the same function body
+		// (upsertSysvar). A prefix test here made one sysvar arrive in its
+		// extended, writable shape and simultaneously disabled by default.
+		//
+		// Substring is also the predicate the reference stack this comment
+		// invokes uses: element_matches_key is called with
+		// do_left_wildcard_search=True while do_right_wildcard_search
+		// defaults to True, which reduces to `element in compare_with`, and
+		// its own fixture is "#HAHM# External" — a description in which the
+		// marker is deliberately not a prefix. No firmware source defines
+		// the marker convention at all, so that stack is the authority here.
+		if m != "" && strings.Contains(d, string(m)) {
 			return true
 		}
 	}
@@ -1892,24 +1905,26 @@ func stringField(m map[string]any, key string) string {
 	return s
 }
 
-// inferSysvarType resolves the effective HubValueType for a sysvar. When the
-// CCU declares type NUMBER it does not distinguish float from integer; the raw
-// value string carries that information via the presence of a decimal point.
-// All other declared types are used as-is.
+// inferSysvarType resolves the effective HubValueType for a sysvar. A declared
+// NUMBER is always FLOAT; every other declared type is used as-is.
 //
-// Mirrors the NUMBER→FLOAT/INTEGER split in json_rpc.py:_build_sysvar_record.
-func inferSysvarType(declaredType string, rawValue json.RawMessage) hmenum.HubValueType {
+// The CCU has no integer NUMBER variable. www/api/methods/sysvar/getall.tcl:43-48
+// derives the emitted TYPE from ValueSubType() alone — istGeneric → "NUMBER" —
+// and never emits ValueType(), so the payload we parse carries no int/float
+// distinction to recover. Every creation path pairs istGeneric with ivtFloat
+// (www/rega/esp/system.fn:830-836, www/api/methods/sysvar/createfloat.tcl:21);
+// the one ivtInteger pairing is with istEnum, which is LIST, not NUMBER
+// (system.fn:838-842). The WebUI's own classifier agrees: a variable is NUMBER
+// only for `(iVT==ivtFloat) && (iST==istGeneric)` (system.fn:464).
+//
+// The raw value string is therefore not consulted. Deriving the kind from a
+// decimal point in the current value both mislabelled every integral-looking
+// float and made the declared kind flip between refreshes as the live value
+// crossed an integral boundary.
+func inferSysvarType(declaredType string, _ json.RawMessage) hmenum.HubValueType {
 	vt := hmenum.HubValueType(strings.ToUpper(declaredType))
-	if vt != hmenum.HubValueTypeNumber {
-		return vt
-	}
-	// For NUMBER: inspect the raw string value for a decimal point.
-	var s string
-	if err := json.Unmarshal(rawValue, &s); err == nil {
-		if strings.Contains(s, ".") {
-			return hmenum.HubValueTypeFloat
-		}
-		return hmenum.HubValueTypeInteger
+	if vt == hmenum.HubValueTypeNumber {
+		return hmenum.HubValueTypeFloat
 	}
 	return vt
 }
@@ -2722,8 +2737,14 @@ func WireSysvarCreator(unit *central.Unit, writer *clientpkg.ValueWriter) {
 // unlike the trigger-only path, which left the archive stranded on the CCU.
 //
 // Call this after [WireCentrals] has registered all interface clients, for
-// the same late-binding reason as [WireSysvarCreator]. Passing 0 for both
-// poll parameters selects the backend defaults (300 s wait, 5 s interval).
+// the same late-binding reason as [WireSysvarCreator].
+//
+// Both poll parameters are passed as 0 deliberately, and 0 selects no backend
+// default: the backend applies a deadline only for a positive maxWaitTime and
+// otherwise leaves the bound to the caller's context, which is what its own
+// doc asks for. The effective bound is therefore the caller's — for the REST
+// path, backupRunTimeout. The second parameter (poll interval) is unused by
+// the backend entirely.
 func WireBackupAndDownload(unit *central.Unit, writer *clientpkg.ValueWriter) {
 	if unit == nil {
 		return

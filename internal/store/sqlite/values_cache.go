@@ -430,7 +430,7 @@ func (s *ValuesCacheStore) DeleteDevice(
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := strings.TrimRight(deviceAddress, ":") + ":"
+	prefix := escapeLikePrefix(strings.TrimRight(deviceAddress, ":")) + ":"
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM values_cache
          WHERE central_name = ?

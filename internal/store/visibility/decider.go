@@ -124,11 +124,14 @@ func (d *ParameterDecider) LoadUnIgnore(entries []UnIgnoreEntry) {
 //
 // IsParameterIgnored answers for the central-agnostic ("global") scope: only
 // un-ignore entries with an empty [UnIgnoreEntry.Central] can re-enable a
-// parameter here. Callers that know which central they are answering for —
-// every production call site does, since multi-CCU is first class (ADR
-// 0002) — must use [ParameterDecider.IsParameterIgnoredForCentral] instead,
-// so a per-central un-ignore entry cannot decide visibility for a different
-// central sharing this decider instance.
+// parameter here.
+//
+// This is the variant every production call site uses, and every entry the
+// daemon loads carries an empty Central (see [UnIgnoreEntry.Central]), so the
+// per-central variant below is currently an unused seam rather than the
+// path callers are expected to take. Do not read the existence of
+// [ParameterDecider.IsParameterIgnoredForCentral] as a statement that
+// un-ignore rules are scoped per CCU today — they are not.
 //
 // Decision order
 // 1. For VALUES: static IGNORED_PARAMETERS / wildcard patterns → ignored,
@@ -146,6 +149,12 @@ func (d *ParameterDecider) IsParameterIgnored(model, channelType string, channel
 // IsParameterIgnoredForCentral is [ParameterDecider.IsParameterIgnored]
 // scoped to one central: an [UnIgnoreEntry] only re-enables the parameter
 // here when its Central field is empty (global) or equals `central`.
+//
+// No production caller passes a non-empty central, and nothing in production
+// stamps [UnIgnoreEntry.Central], so the scoping this method offers is not in
+// effect anywhere in the running daemon — it is reachable only from tests.
+// Making it live means stamping the field where the patterns are read back
+// per central (the composition root) as well as calling this variant.
 func (d *ParameterDecider) IsParameterIgnoredForCentral(central, model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	key := ignoreCacheKey{
 		central:     central,

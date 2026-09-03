@@ -482,62 +482,108 @@ func (dp *ProfileDataPoint) SetCurrentProfile(key string) error {
 	return nil
 }
 
-// SyncProfilePointer maps a raw device parameter value to a profile key and
-// calls SetCurrentProfile if it differs from the current value.
+// SyncProfilePointerFor maps a raw device value of `param` to a profile key
+// and calls SetCurrentProfile if it differs from the current value.
 //
-// IP devices: ACTIVE_PROFILE is a 1-based int (1..6) → "P1".."P6".
-// RF devices: WEEK_PROGRAM_POINTER is a 0-based string ("0".."5") → "P1".."P6".
+// The parameter decides the base, because that is what the device declares:
 //
-// Mirrors `set_profile_pointer_data_point` / `_on_profile_pointer_updated`
-// In.
-func (dp *ProfileDataPoint) SyncProfilePointer(rawValue any) error {
-	key := mapToProfileKey(rawValue)
+//   - ACTIVE_PROFILE (HmIP) is INTEGER with min 1, default 1 — 1-based, so 1
+//     is P1 (HMIPServer
+//     de.eq3.cbcs.devicedescription.channelspecification.stateparameter.ClimateStateParameterFactory#createActiveProfileParameter).
+//   - WEEK_PROGRAM_POINTER (RF) is an option type whose description carries
+//     MIN=0, MAX=len(options)-1 and VALUE_LIST[i]=options[i]
+//     (../OpenCCU-Base/src/libhsscomm/HSSLogicalTypeOption.cpp:96-112, with
+//     the three "WEEK PROGRAM n" options declared under `<ol start="0">` in
+//     ../OpenCCU-Base/src/devicetypes/rftypes/rf_tc_it_wm-w-eu.xml:381-401) —
+//     0-based, so 0 is P1.
+//
+// It is deliberately not the Go type of the value: the CCU hands out an
+// option-typed parameter as an INTEGER on the read path
+// (HSSParameter::GetValue runs PhysicalToLogical then EnforceConstraints,
+// whose option branch replaces any label with `(int)i` —
+// HSSLogicalTypeOption.cpp:72-94), so an RF pointer arriving as an int is the
+// normal case rather than the IP case.
+//
+// A value the parameter cannot mean — out of range, unparseable, or a
+// parameter that is not a profile pointer at all — leaves the current profile
+// untouched and returns nil, so a surprising wire value cannot silently move
+// the operator's schedule onto a neighbouring program.
+func (dp *ProfileDataPoint) SyncProfilePointerFor(param hmenum.Parameter, rawValue any) error {
+	key := mapToProfileKey(param, rawValue)
 	if key == "" {
 		return nil
 	}
 	return dp.SetCurrentProfile(key)
 }
 
+// SyncProfilePointer is the parameter-less form kept for the callers that
+// have not been given the parameter to pass. It reads every value as
+// ACTIVE_PROFILE's 1-based integer except a string, which it reads 0-based.
+//
+// That discriminator is unsound and it is why [SyncProfilePointerFor] exists:
+// the type a value arrives as says nothing about which parameter produced it,
+// and an RF WEEK_PROGRAM_POINTER read through this form lands one program too
+// low. Prefer the parameter-aware form; this one is only correct for
+// ACTIVE_PROFILE.
+func (dp *ProfileDataPoint) SyncProfilePointer(rawValue any) error {
+	if s, isString := rawValue.(string); isString {
+		return dp.SyncProfilePointerFor(hmenum.ParameterWeekProgramPointer, s)
+	}
+	return dp.SyncProfilePointerFor(hmenum.ParameterActiveProfile, rawValue)
+}
+
 // mapToProfileKey converts a raw CCU profile pointer value to a "P1".."P6"
-// key.  Returns "" if the value cannot be mapped.
-func mapToProfileKey(v any) string {
+// key. Returns "" if the value cannot be mapped.
+func mapToProfileKey(param hmenum.Parameter, v any) string {
 	if v == nil {
 		return ""
 	}
+	var offset int
+	switch param {
+	case hmenum.ParameterActiveProfile:
+		offset = 0 // declared 1-based
+	case hmenum.ParameterWeekProgramPointer:
+		offset = 1 // declared 0-based
+	default:
+		return ""
+	}
+	idx, ok := profilePointerIndex(v)
+	if !ok {
+		return ""
+	}
+	p := idx + offset
+	// A device declares how many programs it has; [validateProfileKey]
+	// enforces that against profileCount. Six is the upper bound of the
+	// parameter family (ACTIVE_PROFILE's max is 3 or 6 depending on channel
+	// subtype), not of any one device.
+	if p < 1 || p > 6 {
+		return ""
+	}
+	return fmt.Sprintf("P%d", p)
+}
+
+// profilePointerIndex reads the wire value as the whole number the parameter
+// carries. A numeric string is accepted because the description path for
+// virtual heating groups declares this parameter's bounds as strings, and
+// whether their VALUE arrives as one is unverified.
+func profilePointerIndex(v any) (int, bool) {
 	switch val := v.(type) {
 	case int:
-		// IP: 1-based
-		if val >= 1 && val <= 6 {
-			return fmt.Sprintf("P%d", val)
-		}
+		return val, true
 	case int32:
-		// Wire form for IP devices — generic.Integer DPs surface
-		// values as int32. Same 1-based semantics as `int`.
-		n := int(val)
-		if n >= 1 && n <= 6 {
-			return fmt.Sprintf("P%d", n)
-		}
+		// Wire form for integer DPs, which surface values as int32.
+		return int(val), true
 	case int64:
-		n := int(val)
-		if n >= 1 && n <= 6 {
-			return fmt.Sprintf("P%d", n)
-		}
+		return int(val), true
 	case float64:
-		n := int(val)
-		if n >= 1 && n <= 6 {
-			return fmt.Sprintf("P%d", n)
-		}
+		return int(val), true
 	case string:
-		// RF: 0-based numeric string
 		var idx int
 		if _, err := fmt.Sscanf(val, "%d", &idx); err == nil {
-			p := idx + 1
-			if p >= 1 && p <= 6 {
-				return fmt.Sprintf("P%d", p)
-			}
+			return idx, true
 		}
 	}
-	return ""
+	return 0, false
 }
 
 // validateProfileKey returns an error if key is not one of the available

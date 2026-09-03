@@ -270,9 +270,19 @@ func (s *Store) GetProfileByID(receiverChannelType, senderChannelType string, id
 // MatchActiveProfile returns the ID of the currently active profile (0 =
 // Expert / no match) given the live LINK-paramset values.
 //
-// Specificity is fixed_count − loose_count×100, porting
-// 's match_active_profile exactly. When multiple
-// profiles match, the most specific one wins.
+// Specificity is fixed_count − loose_count×100. When multiple profiles match,
+// the most specific one wins.
+//
+// This package is where "which link profile is active" is decided, because
+// two planes ask it of the same embedded archive: the WS link-profile list
+// calls this method, and the SPA's link UI schema resolves the same question
+// from the raw JSON constraints it forwards. The matching half of the rule is
+// shared — that plane converts its constraints and calls [ProfileMatches]
+// rather than comparing them itself, after the two had drifted (see that
+// function). The scoring half is still restated there: it scores the same
+// fixed − loose×100 over its own constraint type. The two agree today and
+// nothing measures that they still do, so a change to the score here is a
+// change to be made on both planes.
 func (s *Store) MatchActiveProfile(receiverChannelType, senderChannelType string, currentValues map[string]any) int {
 	if s == nil {
 		return 0

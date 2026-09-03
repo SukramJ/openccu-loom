@@ -183,7 +183,9 @@ func TestTimerRecalcUnitThresholds(t *testing.T) {
 	}{
 		{30, 30, hmenum.TimerUnitSeconds},
 		{16343, 16343, hmenum.TimerUnitSeconds},
-		{16344, 16344.0 / 60, hmenum.TimerUnitMinutes},
+		// DURATION_VALUE is an INTEGER count: the promoted value truncates
+		// toward zero rather than carrying 272.4 onto the wire.
+		{16344, 272, hmenum.TimerUnitMinutes},
 		{3600 * 1000, 1000, hmenum.TimerUnitHours}, // huge → hours
 	}
 	for _, c := range cases {
@@ -203,7 +205,7 @@ func TestTimerSetDurationSendsUnitAndValue(t *testing.T) {
 	if v, _ := w.find(hmenum.ParameterOnTimeUnit); v.(int32) != int32(hmenum.TimerUnitSeconds) {
 		t.Errorf("unit=%v", v)
 	}
-	if v, _ := w.find(hmenum.ParameterOnTimeValue); v.(float64) != 30 {
+	if v, _ := w.find(hmenum.ParameterOnTimeValue); v.(int32) != 30 {
 		t.Errorf("value=%v", v)
 	}
 	// Round-trip via ingestion.

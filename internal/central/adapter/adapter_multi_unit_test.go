@@ -2389,7 +2389,7 @@ func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
 func TestResolveCustomDP_NilRegistry_ReturnsError(t *testing.T) {
 	t.Parallel()
 	d := &CustomDPDispatcher{registry: nil}
-	_, _, err := d.resolveCustomDP("DEV001", "LEVEL")
+	_, _, err := d.resolveCustomDP("", "DEV001", "LEVEL")
 	if err == nil {
 		t.Error("expected error for nil registry")
 	}

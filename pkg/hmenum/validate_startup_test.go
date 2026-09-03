@@ -13,7 +13,7 @@ func TestValidateStartupPasses(t *testing.T) {
 
 func TestAllDataPointCategoriesCoversKnownCount(t *testing.T) {
 	// AllDataPointCategories must not include Undefined (that's in
-	// BlockedDataPointCategories and intentionally excluded from the
+	// ValidationExemptDataPointCategories and intentionally excluded from the
 	// exhaustive slice because it is a sentinel, not a real category).
 	for _, c := range AllDataPointCategories {
 		if c == DataPointCategoryUndefined {
@@ -33,7 +33,7 @@ func TestHubDataPointCategoriesAreSubset(t *testing.T) {
 }
 
 func TestBlockedCategoryUndefinedPresent(t *testing.T) {
-	if _, ok := BlockedDataPointCategories[DataPointCategoryUndefined]; !ok {
-		t.Error("BlockedDataPointCategories must contain DataPointCategoryUndefined")
+	if _, ok := ValidationExemptDataPointCategories[DataPointCategoryUndefined]; !ok {
+		t.Error("ValidationExemptDataPointCategories must contain DataPointCategoryUndefined")
 	}
 }

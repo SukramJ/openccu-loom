@@ -9,8 +9,6 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"strconv"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -122,7 +120,7 @@ type SimpleEntry struct {
 
 	Condition          Condition
 	AstroType          Astro
-	AstroOffsetMinutes int // -720 .. +720
+	AstroOffsetMinutes int // bounded by the channel's declared ASTRO_OFFSET range
 
 	TargetChannels []string
 
@@ -148,29 +146,52 @@ type SimpleEntry struct {
 
 // --- validation ---
 
-// maxDurationFactor is the maximum allowed numeric factor in a duration string
-// (e.g. "30s", "30min", "30h"). Values above 30 are rejected to match CCU
-// firmware limits; larger values are silently clipped by the CCU.
-const maxDurationFactor = 30
+// AstroOffsetFallbackLimit bounds an astro offset, in minutes, when nothing
+// better is known about the channel.
+//
+// The CCU holds no constant for this: its weekly-program editor reads
+// ASTRO_OFFSET_MIN / ASTRO_OFFSET_MAX out of the paramset description and
+// clamps its input to them, so the accepted range is whatever the channel
+// declares — every model in the descriptor corpus declares INTEGER MIN -128
+// MAX 127. This ±12 h bound describes nothing about a device; it is this
+// project's long-standing conservative limit, kept so a channel whose
+// descriptor has not been loaded is no less protected than it used to be.
+//
+// It is declared here rather than beside the encoder because both the domain
+// validator and the raw converter's undeclared-range fallback state it, and
+// the two must move together.
+const AstroOffsetFallbackLimit = 720
 
 var (
 	timePattern     = regexp.MustCompile(`^(?:[01]?\d|2[0-3]):[0-5]\d$`)
 	channelPattern  = regexp.MustCompile(`^[1-8]_[123]$`)
 	durationPattern = regexp.MustCompile(`^\d+(?:ms|s|min|h)$`)
-	durationUnitRE  = regexp.MustCompile(`(?:ms|s|min|h)$`)
 )
 
-// validateDuration checks the format and that the numeric factor is within
-// the CCU-accepted range [1, maxDurationFactor].
+// validateDuration checks that d is spelled like a duration this schedule
+// domain can carry: a whole number with one of the four units, or one of the
+// two reserved words ([PermanentDuration], [ZeroDuration]).
+//
+// It deliberately does NOT bound the numeral. The digits are the duration in
+// the unit shown, not the CCU's DURATION_FACTOR: the wire pair is (base,
+// factor), the reader multiplies the factor out in the base's own unit, and a
+// coarse base therefore emits "50min" (base MIN_10, factor 5) or "500ms"
+// (base MS_100, factor 5). Reading the digits as the factor and capping them
+// at 30 rejected values the daemon's own read path produces — every slot on a
+// coarse base, "0ms" for a lock's auto-relock start, and the "permanent"
+// sentinel the CCU holds for a standing user permission.
+//
+// What decides whether a duration is representable is the encoder that has to
+// produce the pair: weekprofile.ParseTimeBaseFactor picks the coarsest base
+// that divides the value into a factor of 1..30 and fails the write when none
+// does. This function is the domain's spelling check, not that search.
 func validateDuration(d string) error {
+	switch d {
+	case PermanentDuration, ZeroDuration:
+		return nil
+	}
 	if !durationPattern.MatchString(d) {
 		return fmt.Errorf("schedule: invalid duration %q", d)
-	}
-	unit := durationUnitRE.FindString(d)
-	factorStr := strings.TrimSuffix(d, unit)
-	factor, err := strconv.Atoi(factorStr)
-	if err != nil || factor < 1 || factor > maxDurationFactor {
-		return fmt.Errorf("schedule: duration factor %d out of range (1..%d)", factor, maxDurationFactor)
 	}
 	return nil
 }
@@ -199,7 +220,7 @@ func (e *SimpleEntry) Validate() error {
 	// wire in weekprofile.BuildSimpleRawParamset — the CCU's own editor reads
 	// ASTRO_OFFSET_MIN / MAX out of the paramset description rather than
 	// holding a number, and every model in the corpus declares ±128.
-	if e.AstroOffsetMinutes < -720 || e.AstroOffsetMinutes > 720 {
+	if e.AstroOffsetMinutes < -AstroOffsetFallbackLimit || e.AstroOffsetMinutes > AstroOffsetFallbackLimit {
 		return fmt.Errorf("schedule: astro offset out of range: %d", e.AstroOffsetMinutes)
 	}
 	if e.Level < 0 || e.Level > 1.01 {
@@ -219,7 +240,10 @@ func (e *SimpleEntry) Validate() error {
 		}
 	}
 	if e.RampTime != "" {
-		if !durationPattern.MatchString(e.RampTime) {
+		// The same grammar and the same reserved words: the CCU builds the
+		// duration and ramp-time editors from one helper, so the encoding is
+		// shared.
+		if err := validateDuration(e.RampTime); err != nil {
 			return fmt.Errorf("schedule: invalid ramp_time %q", e.RampTime)
 		}
 	}

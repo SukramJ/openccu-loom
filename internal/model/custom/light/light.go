@@ -987,10 +987,13 @@ type HSColor struct {
 // Returns true when any non-nil field of args differs from the
 // currently-commanded state — or when no state has been observed yet.
 //
-// This is the canonical state-change suppression surface for Light
-// chains that drive HSColor / ColorTemp / Effect / OnTime / RampTime
-// from a single HA service call. Callers that only care about
-// on/off/brightness can keep using the narrower [IsStateChange].
+// It is the surface for Light chains that drive HSColor / ColorTemp /
+// Effect / OnTime / RampTime from a single HA service call, but only
+// its on/off + brightness half can currently answer "no change": the
+// five commanded-* accessors below hold no state, so every non-nil
+// colour, kelvin, effect, on-time or ramp-time field makes this return
+// true. Callers that only care about on/off/brightness can use the
+// narrower [IsStateChange] and lose nothing.
 func (l *Light) IsStateChangeFull(args StateChangeArgsFull) bool {
 	if l.IsStateChange(args.TurnOn, args.TurnOff, args.Brightness) {
 		return true
@@ -1024,17 +1027,27 @@ func (l *Light) IsStateChangeFull(args StateChangeArgsFull) bool {
 }
 
 // commandedHSColor / commandedColorTempKelvin / commandedEffect /
-// commandedOnTime / commandedRampTime are stubs in the base Light
-// type. ColorLight / ColorTempLight / EffectLight override the
-// relevant accessor; Light itself returns `(_, false)` so a generic
-// Light without these capabilities reports "not commanded".
+// commandedOnTime / commandedRampTime report "not commanded" — always,
+// on every light. No subtype supplies these values today, and none can
+// by declaring its own method: [Light.IsStateChangeFull] calls them on
+// *Light, and Go binds that statically, so a method on ColorLight would
+// shadow rather than override.
 //
-// The override pattern is class-level: each subclass overrides only
-// the commanded-* keys it owns and the base class returns the
-// "no observation yet" tuple for the rest. Since Go has no virtual
-// dispatch we expose hook methods; the concrete Light subtypes
-// (color.go, effect.go, …) can shadow these when they hold the
-// corresponding cached state.
+// The consequence is stated where a reader looks for it rather than
+// left implicit: the HSColor / ColorTempKelvin / Effect / OnTime /
+// RampTime branches of IsStateChangeFull always report a change, so a
+// repeated colour, colour-temperature or effect command is not
+// suppressed and reaches the CCU once the optimistic in-flight window
+// has closed (the in-flight repeat is dropped a layer down, by the
+// burst-skip in generic.sendAndObserve). Only the on/off + brightness
+// half of the rule, which reads real state through commandedIsOn /
+// commandedBrightness, suppresses anything.
+//
+// Wiring the missing half needs state plus a seam Go can dispatch
+// through — a hook field on Light that the subtype constructor sets, or
+// an interface the caller holds — not a method with the same name on
+// the subtype. Guard:
+// TestHmLgtColourStateChangeFullAlwaysReportsAChange.
 func (l *Light) commandedHSColor() (HSColor, bool)        { _ = l; return HSColor{}, false }
 func (l *Light) commandedColorTempKelvin() (uint16, bool) { _ = l; return 0, false }
 func (l *Light) commandedEffect() (string, bool)          { _ = l; return "", false }

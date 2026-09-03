@@ -6,6 +6,7 @@ package combined
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -22,9 +23,20 @@ import (
 // generic DPs.
 const ParameterDuration hmenum.Parameter = "DURATION"
 
-// timerUpperBoundSeconds is the threshold above which seconds are
-// re-expressed as minutes, and analogously for minutes→hours.
-const timerUpperBoundSeconds = 16343
+// timerValueMaxPerUnit is DURATION_VALUE's maximum as an INTEGER count in
+// whichever unit DURATION_UNIT names — not a number of seconds. The CCU
+// declares it once, in the single factory every DURATION_VALUE-bearing channel
+// goes through: LogicalType.INTEGER, default 0, min 0, max 16343, paired with
+// a DURATION_UNIT ENUM over {S, M, H} (HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createDurationValueParameter).
+//
+// It is therefore also the threshold at which the encoder promotes to the next
+// coarser unit — a count above it has no representation in the current one.
+// The promotion itself lives in [custom.EncodeTimerDuration]; this constant is
+// kept only to express the seconds ceiling in [Timer.Max], and
+// TestHmSchTimerMaxIsAReachableSecondsCeiling re-derives it from that encoder
+// rather than trusting the two copies to stay equal.
+const timerValueMaxPerUnit = 16343
 
 // Timer combines a value + unit pair into one "seconds" value. On
 // read it exposes the last observed seconds payload; on write it
@@ -245,11 +257,16 @@ func (t *Timer) OnComponents(rawValue float64, unit hmenum.TimerUnit) {
 // SetDuration writes the duration back to the device, auto-selecting
 // the unit. Durations longer than the value-parameter's representable
 // range switch from seconds → minutes → hours.
+//
+// The count goes on the wire as an int32: DURATION_VALUE is declared INTEGER,
+// and nothing between here and the transport coerces it — a float64 staged
+// here would be encoded as a <double> on a parameter the device declares as an
+// integer.
 func (t *Timer) SetDuration(ctx context.Context, d time.Duration, priority hmenum.CommandPriority) error {
 	seconds := d.Seconds()
-	value, unit := RecalcUnit(seconds)
+	value, unit := custom.EncodeTimerDuration(d)
 
-	if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, int32(unit), priority); err != nil { //nolint:gosec // unit in 0..2; see #20
+	if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, unit, priority); err != nil {
 		return fmt.Errorf("timer: UNIT: %w", err)
 	}
 	if err := t.Writer.SetValue(ctx, t.Address, t.ValueParameter, value, priority); err != nil {
@@ -358,33 +375,40 @@ func (t *Timer) SendDefault(
 	return nil
 }
 
-// RecalcUnit picks the smallest unit that keeps the value
-// within the representable range. The promotion thresholds mirror
-// the reference timer logic:
+// RecalcUnit expresses a duration in seconds as the CCU's (DURATION_VALUE,
+// DURATION_UNIT) pair: the smallest unit whose count stays within
+// [timerValueMaxPerUnit], with the count truncated toward zero because
+// DURATION_VALUE is an INTEGER parameter.
 //
-//	> 16343 s  → minutes
-//	> 16343 min → hours
+// It is the same rule [custom.EncodeTimerDuration] applies on the service
+// path, and it delegates to it rather than restating it. The two used to be
+// separate implementations that agreed on the unit and disagreed on the value
+// — this one promoted in floating point and staged the fraction on the wire,
+// so 16373 s reached the device as 272.88 minutes here and as 272 minutes
+// there, for one requested duration. The sentinel [custom.TimerNotUsed] and
+// the negative case come from that encoder too.
 //
-// The sentinel value [custom.TimerNotUsed] is returned unchanged with
-// hmenum.TimerUnitHours so the CCU re-interprets the "disabled" marker
-// correctly without unit-conversion artefacts.
+// The returned value is a float64 only because the combined DP's seconds
+// domain is one; it always holds a whole count.
 //
 // loom:reachable:reason="called by Timer.SetDuration to pick the correct unit before writing to the CCU"
 func RecalcUnit(seconds float64) (float64, hmenum.TimerUnit) {
-	if seconds == custom.TimerNotUsed {
-		return seconds, hmenum.TimerUnitHours
+	value, unit := custom.EncodeTimerDuration(secondsToDuration(seconds))
+	return float64(value), hmenum.TimerUnit(unit)
+}
+
+// secondsToDuration converts a seconds total to a [time.Duration], saturating
+// rather than wrapping: a nanosecond count past the int64 range would come
+// back as a negative duration and read as "no duration at all".
+func secondsToDuration(seconds float64) time.Duration {
+	const maxSeconds = float64(math.MaxInt64) / float64(time.Second)
+	if seconds >= maxSeconds {
+		return time.Duration(math.MaxInt64)
 	}
-	if seconds < 0 {
-		seconds = 0
+	if seconds <= -maxSeconds {
+		return time.Duration(math.MinInt64)
 	}
-	if seconds <= timerUpperBoundSeconds {
-		return seconds, hmenum.TimerUnitSeconds
-	}
-	minutes := seconds / 60
-	if minutes <= timerUpperBoundSeconds {
-		return minutes, hmenum.TimerUnitMinutes
-	}
-	return seconds / 3600, hmenum.TimerUnitHours
+	return time.Duration(seconds * float64(time.Second))
 }
 
 func toSeconds(rawValue float64, unit hmenum.TimerUnit) float64 {

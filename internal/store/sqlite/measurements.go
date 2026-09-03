@@ -820,6 +820,26 @@ func scanTierBuckets(rows *sql.Rows) ([]tierBucket, error) {
 	return out, nil
 }
 
+// mergeWeightedSpan merges the time-weighted pair (weightedSum, weightMs) of
+// two buckets being folded into one, and is the single statement of the
+// degrade rule every Go fold applies: a merge that includes even one source
+// row without a known covered span (weightMs == 0 — see [tierBucket]) makes
+// the merged span unknown too. A partly-weighted average is not a weaker
+// average, it is a wrong one, so the whole merged bucket degrades to the
+// legacy pair rather than time-weighting only the half it knows the span of.
+//
+// The daily rollup restates the same rule in SQL, because it folds inside the
+// database: `CASE WHEN MIN(weight_ms) OVER w = 0 THEN 0 ELSE SUM(...) END` in
+// [rollupDailySelectSQL]. That is partition-wide where this is pairwise, and
+// the two agree because a Go accumulator that has degraded stays degraded for
+// the rest of the fold. Changing the rule here means changing it there.
+func mergeWeightedSpan(aWeightedSum float64, aWeightMs int64, bWeightedSum float64, bWeightMs int64) (weightedSum float64, weightMs int64) {
+	if aWeightMs == 0 || bWeightMs == 0 {
+		return 0, 0
+	}
+	return aWeightedSum + bWeightedSum, aWeightMs + bWeightMs
+}
+
 // foldTierBucketsBy re-folds source buckets into the coarser buckets named
 // by bucketStart, which maps a source bucket's start to the start of the
 // bucket that contains it. sum/count are additive and min/max fold, so the
@@ -855,18 +875,7 @@ func foldTierBucketsBy(src []tierBucket, bucketStart func(ms int64) int64) []tie
 		a := &out[idx]
 		a.sum += b.sum
 		a.count += b.count
-		// A merge that includes even one source row without a known
-		// covered span (weightMs == 0 — see [tierBucket]) makes the
-		// merged span unknown too. A partly-weighted average is not a
-		// weaker average, it is a wrong one, so the whole merged bucket
-		// degrades to the legacy pair rather than time-weighting only the
-		// half it knows the span of.
-		if a.weightMs == 0 || b.weightMs == 0 {
-			a.weightedSum, a.weightMs = 0, 0
-		} else {
-			a.weightedSum += b.weightedSum
-			a.weightMs += b.weightMs
-		}
+		a.weightedSum, a.weightMs = mergeWeightedSpan(a.weightedSum, a.weightMs, b.weightedSum, b.weightMs)
 		a.minV = math.Min(a.minV, b.minV)
 		a.maxV = math.Max(a.maxV, b.maxV)
 	}
@@ -914,14 +923,7 @@ func foldTierBuckets(src []tierBucket, fromMs, width int64, buckets int) []Measu
 		}
 		a.sum += b.sum
 		a.count += b.count
-		// See [foldTierBucketsBy]: a mix of a spanned and an unspanned
-		// source row degrades the merged bucket to the legacy pair.
-		if a.weightMs == 0 || b.weightMs == 0 {
-			a.weightedSum, a.weightMs = 0, 0
-		} else {
-			a.weightedSum += b.weightedSum
-			a.weightMs += b.weightMs
-		}
+		a.weightedSum, a.weightMs = mergeWeightedSpan(a.weightedSum, a.weightMs, b.weightedSum, b.weightMs)
 		a.minV = math.Min(a.minV, b.minV)
 		a.maxV = math.Max(a.maxV, b.maxV)
 	}
@@ -1092,7 +1094,7 @@ const energyTierHourlySelectSQL = `
        AND parameter IN (?, ?, ?)
        AND bucket_ts >= ?
        AND bucket_ts < ?
-       AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+       AND (? = '' OR channel_address = ? OR channel_address LIKE ? ESCAPE '\')
 `
 
 const energyTierDailySelectSQL = `
@@ -1102,7 +1104,7 @@ const energyTierDailySelectSQL = `
        AND parameter IN (?, ?, ?)
        AND bucket_ts >= ?
        AND bucket_ts < ?
-       AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+       AND (? = '' OR channel_address = ? OR channel_address LIKE ? ESCAPE '\')
 `
 
 // energyRawFoldSQL folds raw measurement rows into fixed-width buckets over
@@ -1167,7 +1169,7 @@ const energyRawFoldSQL = `
                        AND parameter IN (?, ?, ?)
                        AND ts >= ?
                        AND ts < ?
-                       AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+                       AND (? = '' OR channel_address = ? OR channel_address LIKE ? ESCAPE '\')
                   )
                 WINDOW sk AS (PARTITION BY channel_address, parameter ORDER BY ts)
               )
@@ -1214,7 +1216,7 @@ func (s *MeasurementStore) readEnergyTier(
 	if toMs <= fromMs {
 		return nil, nil
 	}
-	prefix := deviceAddr + ":%"
+	prefix := escapeLikePrefix(deviceAddr) + ":%"
 	rows, err := s.db.QueryContext(ctx, query,
 		central, energyParameters[0], energyParameters[1], energyParameters[2],
 		fromMs, toMs, deviceAddr, deviceAddr, prefix)
@@ -1231,7 +1233,7 @@ func (s *MeasurementStore) foldRawEnergy(
 	if toMs <= fromMs {
 		return nil, nil
 	}
-	prefix := deviceAddr + ":%"
+	prefix := escapeLikePrefix(deviceAddr) + ":%"
 	rows, err := s.db.QueryContext(ctx, energyRawFoldSQL,
 		widthMs, toMs, widthMs, central, energyParameters[0], energyParameters[1], energyParameters[2],
 		fromMs, toMs, deviceAddr, deviceAddr, prefix)
@@ -1402,12 +1404,7 @@ func foldEnergyRowsBy(rows []EnergyRow, bucketStart func(ms int64) int64) []Ener
 		}
 		a.row.Sum += r.Sum
 		a.row.Count += r.Count
-		if a.row.weightMs == 0 || r.weightMs == 0 {
-			a.row.weightedSum, a.row.weightMs = 0, 0
-		} else {
-			a.row.weightedSum += r.weightedSum
-			a.row.weightMs += r.weightMs
-		}
+		a.row.weightedSum, a.row.weightMs = mergeWeightedSpan(a.row.weightedSum, a.row.weightMs, r.weightedSum, r.weightMs)
 		if r.Min < a.row.Min {
 			a.row.Min = r.Min
 		}
@@ -1845,7 +1842,7 @@ func (s *MeasurementStore) DeleteDevice(
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := deviceAddress + ":"
+	prefix := escapeLikePrefix(deviceAddress) + ":"
 	// One statement per tier, inside one transaction: the rollups outlive
 	// the raw rows, so an unpaired device would keep its aggregates for the
 	// tiers' whole retention if only `measurements` were cleared. Without

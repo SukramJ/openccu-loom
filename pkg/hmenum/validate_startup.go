@@ -8,7 +8,7 @@ import "fmt"
 // AllDataPointCategories enumerates every known DataPointCategory value except
 // [DataPointCategoryUndefined]. The slice is used by [ValidateStartup] to verify
 // that the three classification sets — [CategoryToType],
-// [HubDataPointCategories], and [BlockedDataPointCategories] — collectively
+// [HubDataPointCategories], and [ValidationExemptDataPointCategories] — collectively
 // cover every member.
 //
 // The list is hand-maintained and therefore able to drift from the enum; the
@@ -62,21 +62,33 @@ var HubDataPointCategories = map[DataPointCategory]struct{}{
 	DataPointCategoryHubUpdate:       {},
 }
 
-// BlockedDataPointCategories is the set of categories that must never
-// be exposed to north-bound adapters. They are internal model nodes
-// only (e.g. composite "parent" entries for event groups or the
-// undefined sentinel).
-var BlockedDataPointCategories = map[DataPointCategory]struct{}{
+// ValidationExemptDataPointCategories is the set of categories that
+// [ValidateStartup] accepts without a device- or hub-classification
+// entry: the undefined sentinel, and the composite event-group parent
+// that shares its type with [DataPointCategoryEvent].
+//
+// It is a coverage bucket, not an export ban. An earlier name and doc
+// declared these "must never be exposed to north-bound adapters", which
+// was false in both halves: no production code reads this map at all —
+// [ValidateStartup] is its only reader, and it only counts coverage —
+// and event_group is deliberately exported, carrying a DataPointType
+// here and published by MQTT discovery as a Home Assistant event
+// component. A reader who trusted the old declaration and dropped that
+// discovery case would silently remove live entities.
+var ValidationExemptDataPointCategories = map[DataPointCategory]struct{}{
 	DataPointCategoryUndefined:  {},
 	DataPointCategoryEventGroup: {},
 }
 
 // ValidateStartup performs an exhaustive boot-time check that every
 // [DataPointCategory] value (except [DataPointCategoryUndefined]) is
-// covered by exactly one of the three classification sets:
+// covered by at least one of the three classification sets:
 // - [CategoryToType] (device data points)
 // - [HubDataPointCategories] (hub data points)
-// - [BlockedDataPointCategories] (blocked from north-bound export)
+// - [ValidationExemptDataPointCategories] (needs neither)
+//
+// "At least one", not "exactly one": event_group is a member of both
+// CategoryToType and the exempt set, and that overlap is intended.
 //
 // Returns an error listing all uncovered categories. The daemon does
 // not call it: an uncovered category is a programming error rather than
@@ -87,8 +99,8 @@ func ValidateStartup() error {
 	for _, c := range AllDataPointCategories {
 		_, inType := CategoryToType[c]
 		_, inHub := HubDataPointCategories[c]
-		_, inBlocked := BlockedDataPointCategories[c]
-		if !inType && !inHub && !inBlocked {
+		_, inExempt := ValidationExemptDataPointCategories[c]
+		if !inType && !inHub && !inExempt {
 			missing = append(missing, c)
 		}
 	}

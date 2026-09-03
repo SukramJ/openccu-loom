@@ -163,8 +163,10 @@ func (l *EffectLight) TurnOn(ctx context.Context, priority hmenum.CommandPriorit
 
 // SetEffect selects an effect by its index in [Effects].
 //
-// Returns nil without writing when IsStateChangeFull reports no change for the
-// given effect — matches the turn_on guard pattern.
+// Asks IsStateChangeFull first, matching the turn_on guard pattern. That
+// check cannot suppress a repeat today — the commanded-effect accessor
+// it consults holds no state (see the hook block in light.go) — so a
+// repeated effect command does reach the CCU.
 func (l *EffectLight) SetEffect(ctx context.Context, idx int32, priority hmenum.CommandPriority) error {
 	if l.program == nil {
 		return errors.New("effectlight: channel missing PROGRAM")

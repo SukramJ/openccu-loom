@@ -29,6 +29,40 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **75 further audited rules corrected across nine packages.** 40 changed
+  behaviour, 35 corrected a stated reason that the CCU sources refute while the
+  behaviour stood. Each carries a test written before the fix and a bite proof;
+  each was then read by an independent reviewer against the original finding.
+  The ones a user can notice:
+
+  - A `NUMBER` system variable was typed float or integer depending on whether
+    its current value happened to contain a decimal point. The CCU has no
+    integer `NUMBER` sysvar at all — `getall.tcl` derives the type from
+    `ValueSubType()` alone and every creation path pairs `istGeneric` with
+    `ivtFloat`, so the payload carries no int/float distinction to recover.
+  - A custom data point invoked over MQTT was resolved against an arbitrary
+    central instead of the one the topic named — the same class as the device
+    lookup fixed above, on the command path.
+  - `deriveTargetChannels` minted schedule target keys that no
+    `WEEK_PROGRAM_CHANNEL_LOCKS` bit can address; they are withheld now rather
+    than written.
+  - The runtime `delay_new_device_creation` toggle never reached the CUxD
+    callback handler, so switching it off left CUxD devices held until restart
+    — the exact failure the function's own doc claims to fix.
+  - `setInstallMode` and firmware updates were accepted on interfaces that
+    cannot serve them; they consult the interface capability now.
+  - The backup-restore upload used an `action` verb and a form field the
+    firmware's CGI does not define.
+  - MQTT schedule entries dropped the colour fields the REST DTO carries from
+    the same domain struct.
+  - Device-error suppression and the model's event classification disagreed
+    about which parameters are error events, so a suppressed parameter the
+    classifier drops reached no plane at all.
+
+  Where the CCU sources cannot decide a rule, the comment now says so in those
+  words rather than asserting one — 27 rules are recorded as Tier-1-silent and
+  5 as not decidable from any available source.
+
 - **The siren's OnOff cluster omitted a mandatory command.** matter.js gives
   `Toggle` conformance `!OFFONLY` (`on-off.element.ts:39`) — mandatory on any
   OnOff cluster that does not advertise the OffOnly feature, and this

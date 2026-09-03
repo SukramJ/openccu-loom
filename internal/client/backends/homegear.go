@@ -191,6 +191,14 @@ func (b *HomegearBackend) ReplaceDevice(_ context.Context, _, _ string) error {
 // --- direct links --------------------------------------------------
 
 // GetLinks implements Operations.
+//
+// The flag word 0 is carried over from [CcuBackend.GetLinks], where it is
+// grounded in the CCU firmware. Homegear is a re-implementation, not that
+// firmware, so what its getLinks does with the flag word is unverified here:
+// no source in the reference set states it. What would settle it is
+// Homegear's own getLinks implementation. Until then, treat 0 as "the
+// default", which is the only claim both sides support, and do not assume
+// the CCU bit meanings apply.
 func (b *HomegearBackend) GetLinks(ctx context.Context, channelAddress string) ([]hmproto.LinkDescription, error) {
 	if b.xml == nil {
 		return nil, ErrNotWired

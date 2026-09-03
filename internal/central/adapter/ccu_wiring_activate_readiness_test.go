@@ -225,6 +225,7 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 			nil, // jsonCaller: CcuBackend only needs XML-RPC for the methods
 			// this scenario exercises (listDevices, Init, Deinit).
 			nil, "", // BIN-RPC callback server/addr: unused outside the CUxD branch.
+			nil, // adoptBINRPCHandlers: only the CUxD branch registers one.
 			logger,
 		)
 		resultCh <- wireResult{closer, err}

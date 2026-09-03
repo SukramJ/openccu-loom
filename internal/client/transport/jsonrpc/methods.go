@@ -757,8 +757,16 @@ func (c *Client) GetSystemVariable(ctx context.Context, name string) (any, error
 // it back. Returns the raw archive bytes (typically a few MB).
 //
 // The call requires an active JSON-RPC session because the CCU's CGI uses the
-// session ID for authentication — the session ID is embedded in the URL in
-// the @sid@ form required by the CCU.
+// session ID for authentication, and the @…@ delimiters around it are not a
+// convention: the CGI's own extractor captures them inclusively
+// (`regexp "$sidname=(@[A-Za-z0-9]*@)"` in OpenCCU-Base
+// www/tcl/eq3_old/session.tcl, session_urlsid) and a companion proc strips
+// them again for the ReGa lookup. The WebUI builds byte-for-byte this URL
+// (www/config/cp_security.cgi), and `action=create_backup` is a real proc
+// there that streams the .sbk archive (www/config/backup.tcl). The JSON-RPC
+// login hands back the INNER value, so re-wrapping it here is right; the
+// url.QueryEscape is a provable no-op over the [A-Za-z0-9] session alphabet
+// and is kept only as a defensive measure.
 //
 // Wire: GET
 // {baseURL}/config/cp_security.cgi?sid=@{session_id}@&action=create_backup
@@ -812,12 +820,37 @@ func (c *Client) DownloadBackup(ctx context.Context) ([]byte, error) {
 	return data, nil
 }
 
-// DownloadFirmware instructs the CCU to fetch firmware from the given URL via
-// an HTTP POST to the maintenance CGI. Only "http://" and "https://" scheme
-// URLs are accepted; others return [hmerr.ErrUnsupported].
+// DownloadFirmware posts a firmware URL to the CCU's maintenance CGI. Only
+// "http://" and "https://" scheme URLs are accepted; others return
+// [hmerr.ErrUnsupported].
 //
 // Wire: POST {baseURL}/config/cp_maintenance.cgi (form params: sid, action,
 // url) (10-minute timeout).
+//
+// THIS REQUEST IS NOT KNOWN TO WORK AGAINST A CCU, and two independent
+// readings of the firmware say it cannot, so a nil return here is NOT
+// evidence that a download started:
+//
+//   - There is no `download_firmware` action. cp_maintenance.cgi dispatches
+//     by calling `action_$action`, and the only download action it defines is
+//     action_download_logfile; an unknown name is an undefined Tcl command.
+//     Its remote firmware source is a fixed script constant
+//     (REMOTE_FIRMWARE_SCRIPT) and its local source is a multipart
+//     `firmware_file` upload (action_firmware_upload) — neither takes a `url`
+//     parameter.
+//   - The bare `sid` FORM field is never read. session.tcl is sourced before
+//     the CGI parses its POST body, and its session_urlsid reads
+//     QUERY_STRING only, returning "" immediately when that is empty — so the
+//     validity check rejects the request before any action would run. The
+//     session id has to travel in the query string, in the @…@ form
+//     [Client.DownloadBackup] uses.
+//
+// Both failures render an HTML page under HTTP 200, which the status check
+// below accepts. Correcting that — and the identical form built on the live
+// path in internal/client/backends — needs a verified replacement request
+// (the fixed remote script, or the multipart upload), which no source in this
+// repo carries; until then the operation is unverified and reports success it
+// cannot substantiate.
 func (c *Client) DownloadFirmware(ctx context.Context, firmwareURL string) error {
 	if !strings.HasPrefix(firmwareURL, "http://") && !strings.HasPrefix(firmwareURL, "https://") {
 		return c.wrap("download_firmware", fmt.Errorf("only http/https scheme allowed, got %q: %w", firmwareURL, hmerr.ErrUnsupported))
@@ -964,9 +997,13 @@ func (c *Client) ListInterfaces(ctx context.Context) ([]InterfaceEntry, error) {
 }
 
 // backupBaseURL derives the CCU base URL from the configured JSON-RPC endpoint
-// By stripping the "/api/homematic.cgi" suffix (
-// constant, const.py:315). Returns an empty string when the endpoint does not
-// contain the expected suffix and cannot be safely trimmed.
+// by stripping the "/api/homematic.cgi" suffix. The suffix is not a borrowed
+// constant: the firmware's document root makes the JSON-RPC entry point and
+// the config CGIs siblings under /www/ (OpenCCU-Base www/api/homematic.cgi
+// sets DOCUMENT_ROOT to /www/, with www/config/cp_*.cgi alongside it), so the
+// trimmed prefix plus "/config/…" addresses the same server. Returns an empty
+// string when the endpoint does not contain the expected suffix and cannot be
+// safely trimmed.
 func (c *Client) backupBaseURL() string {
 	const jsonRPCPath = "/api/homematic.cgi"
 	ep := strings.TrimRight(c.cfg.Endpoint, "/")

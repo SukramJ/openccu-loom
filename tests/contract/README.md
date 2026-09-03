@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 442.
+Guards without a doc comment: 7 of 445.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -143,6 +143,9 @@ Guards without a doc comment: 7 of 442.
 | TestHARegistryDescriptionRulesHaveKeys | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesHaveKeys fails when any entry has an empty Description.Key. |
 | TestHARegistryDescriptionRulesMatchTheGolden | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesMatchTheGolden compares every field of every rule against the committed golden file. |
 | TestHARegistryDescriptionRulesNoDuplicates | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesNoDuplicates fails when the rule slice contains two or more entries that have identical (category, parameters, devices, unit, postfix, varNameContains) matching criteria. |
+| TestHmEnumClickEventsAndKeypressSourcesAgree | hmEnum_shared_vocabulary_test.go | TestHmEnumClickEventsAndKeypressSourcesAgree ties the two independent spellings of one domain fact — which wire parameters are button presses — that live on opposite sides of a package boundary. |
+| TestHmEnumRollbackReasonVocabularyIsShared | hmEnum_shared_vocabulary_test.go | TestHmEnumRollbackReasonVocabularyIsShared pins the producing side's rollback vocabulary to the one that is published. |
+| TestHmEnumStatusPairGrammarIsOneGrammar | hmEnum_shared_vocabulary_test.go | TestHmEnumStatusPairGrammarIsOneGrammar ties the two halves of one pairing rule together. |
 | TestEveryPublishedDTOFieldHasAWriter | hmapi_field_writer_coverage_test.go | TestEveryPublishedDTOFieldHasAWriter pins that a field pkg/hmapi declares — and assets/openapi.yaml therefore publishes — is populated somewhere in the daemon. |
 | TestAllInterfacesPush | hmenum_constants_test.go | TestAllInterfacesPush pins down SPECIFICATION §8.1: every interface supports push callbacks. |
 | TestBitmaskZeroIsEmpty | hmenum_constants_test.go | TestBitmaskZeroIsEmpty locks in the Operations / Flag zero-value semantics: no bits set. |

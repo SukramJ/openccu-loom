@@ -172,6 +172,26 @@ type zoneContext struct {
 	AutoRearmMode hmenum.AlarmMode `json:"auto_rearm_mode,omitempty"`
 }
 
+// resetToDisarmed puts the zone into the disarmed shape: disarmed
+// state and mode plus the full residue set an armed or triggered
+// episode can leave behind. It is the single definition of what
+// "returned to disarmed" means, because the residue fields are
+// persisted (encodeContext writes pendingCause, preTriggerState,
+// preTriggerMode and preAlarm into context_json), and a leftover
+// preTriggerState re-routes the next ordinary trigger through the
+// always-on exit. Timers are the caller's business — a post-trigger
+// disarm cancels the state timers and then schedules the auto-rearm.
+func (a *zone) resetToDisarmed() {
+	a.state = hmenum.AlarmZoneStateDisarmed
+	a.mode = hmenum.AlarmModeDisarmed
+	a.bypassed = map[string]bool{}
+	a.openAtArm = map[string]bool{}
+	a.pendingCause = ""
+	a.preTriggerState = ""
+	a.preTriggerMode = ""
+	a.preAlarm = false
+}
+
 // cancelTimers stops the state timer, the debounce timer, and the
 // countdown tick chain.
 func (a *zone) cancelTimers() {

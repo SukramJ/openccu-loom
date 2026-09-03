@@ -164,7 +164,7 @@ func TestCcuBackendGetLinksDecodesArray(t *testing.T) {
 		t.Fatalf("Flags=%d, want 3", ld.Flags)
 	}
 
-	// Verify getLinks is called with flags=0 (full detail).
+	// Verify getLinks is called with the firmware's default flag word (0).
 	method, args, ok := loadArgs(x)
 	if !ok || method != "getLinks" {
 		t.Fatalf("method=%s", method)

@@ -26,11 +26,16 @@ func (r LockActionRaw) DurFactor() int { return r.durFactor }
 // LockActionTable maps door-lock action names to their wire encoding.
 // The adapter layer reads this table directly so both sides share the same
 // canonical label ↔ wire mapping without duplication.
+//
+// The three actions that mean "until further notice" carry the CCU's own
+// permanent pair rather than a private copy of it — see
+// [PermanentDurationBase]. The auto-relock start is a real zero duration
+// (0, 0), which is a different fact and stays a literal.
 var LockActionTable = map[LockAction]LockActionRaw{
 	LockActionAutoRelockStart: {level: 0.0, durBase: 0, durFactor: 0},
-	LockActionAutoRelockEnd:   {level: 0.0, durBase: 7, durFactor: 31},
-	LockActionUnlock:          {level: 1.0, durBase: 7, durFactor: 31},
-	LockActionOpen:            {level: 1.01, durBase: 7, durFactor: 31},
+	LockActionAutoRelockEnd:   {level: 0.0, durBase: PermanentDurationBase, durFactor: PermanentDurationFactor},
+	LockActionUnlock:          {level: 1.0, durBase: PermanentDurationBase, durFactor: PermanentDurationFactor},
+	LockActionOpen:            {level: 1.01, durBase: PermanentDurationBase, durFactor: PermanentDurationFactor},
 }
 
 // lockActionTable is the unexported alias kept so that DetectLockAction (which

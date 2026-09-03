@@ -306,6 +306,7 @@ func TestWireInterfaceReportsStaleHmIPParamsetDescriptors(t *testing.T) {
 		newBackendRegistry(),
 		nil,     // jsonCaller: every call this scenario makes is XML-RPC
 		nil, "", // BIN-RPC callback server/addr: CUxD only
+		nil, // adoptBINRPCHandlers: CUxD only
 		logger,
 	)
 	if closer != nil {

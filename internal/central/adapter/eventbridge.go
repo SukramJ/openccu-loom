@@ -3247,16 +3247,33 @@ func simpleEntryJSON(e schedule.SimpleEntry) map[string]any {
 		weekdays = append(weekdays, string(w))
 	}
 	var (
-		level2     any
-		duration   any
-		rampTime   any
-		astroType  any
-		lockMode   any
-		lockAction any
-		permission any
+		level2          any
+		duration        any
+		rampTime        any
+		astroType       any
+		lockMode        any
+		lockAction      any
+		permission      any
+		colorType       any
+		colorValue      any
+		outputBehaviour any
 	)
 	if e.Level2 != nil {
 		level2 = *e.Level2
+	}
+	// The universal-light colour fields (HmIP-BSL / HmIP-RGBW `<NN>_WP_*`)
+	// come off the same parsed paramset the REST DTO is built from and are
+	// carried opaquely for a lossless round-trip. Dropping them here made a
+	// coloured switch point unrenderable from the retained MQTT attribute
+	// while REST returned it in full.
+	if e.ColorType != nil {
+		colorType = *e.ColorType
+	}
+	if e.ColorValue != nil {
+		colorValue = *e.ColorValue
+	}
+	if e.OutputBehaviour != nil {
+		outputBehaviour = *e.OutputBehaviour
 	}
 	// An empty Duration/RampTime means "no duration — leave the device's
 	// value alone", which is a different wire pair from the genuine (base
@@ -3305,6 +3322,9 @@ func simpleEntryJSON(e schedule.SimpleEntry) map[string]any {
 		"lock_mode":            lockMode,
 		"lock_action":          lockAction,
 		"permission":           permission,
+		"color_type":           colorType,
+		"color_value":          colorValue,
+		"output_behaviour":     outputBehaviour,
 	}
 }
 

@@ -106,7 +106,10 @@ func normalizeWeekdaySlots(ws weekdaySlots) weekdaySlots {
 }
 
 // fillUpWeekdaySlots pads ws to exactly 13 slots by appending "24:00"
-// entries with the given fill temperature. Any slots beyond 13 are trimmed.
+// entries with the given fill temperature. Any slots beyond 13 are trimmed —
+// a last-resort bound, not a policy: the expansion path checks capacity first
+// and returns an error, because a silent trim drops the end-of-day entry along
+// with the excess.
 //
 // The padding is about filling the paramset, not about marking the end: the
 // CCU terminates a weekday by VALUE at whatever ordinal it occurs — its

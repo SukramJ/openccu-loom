@@ -312,7 +312,9 @@ type AlarmMessage struct {
 
 // GetAlarmMessages returns all active alarm messages from the CCU by running
 // the get_alarm_messages.fn ReGa script. Name and Description are
-// URL-encoded; callers should apply url.QueryUnescape before display.
+// percent-encoded Latin-1: callers apply url.QueryUnescape AND the Latin-1
+// transcode before display — see the package doc comment; the unescape on its
+// own corrupts every non-ASCII value irreversibly.
 func (r *Runner) GetAlarmMessages(ctx context.Context) ([]AlarmMessage, error) {
 	var messages []AlarmMessage
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetAlarmMessages, nil, &messages); err != nil {
@@ -341,8 +343,10 @@ type ServiceMessage struct {
 
 // GetServiceMessages returns all active service messages from the CCU by
 // running the get_service_messages.fn ReGa script. Name, DeviceName, and
-// each entry of Rooms and Functions are URL-encoded; callers should apply
-// url.QueryUnescape before display.
+// each entry of Rooms and Functions are percent-encoded Latin-1: callers apply
+// url.QueryUnescape AND the Latin-1 transcode before display — see the package
+// doc comment; the unescape on its own corrupts every non-ASCII value
+// irreversibly.
 func (r *Runner) GetServiceMessages(ctx context.Context) ([]ServiceMessage, error) {
 	var messages []ServiceMessage
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetServiceMessages, nil, &messages); err != nil {
@@ -470,8 +474,10 @@ type ProgramDescription struct {
 // GetProgramDescriptions returns the URI-encoded description string and the
 // compact rule summaries for every CCU automation program by running the
 // get_program_descriptions.fn ReGa script. The Description, ConditionSummary,
-// and ActivitySummary field values are URL-encoded; callers should apply
-// url.QueryUnescape before display.
+// and ActivitySummary field values are percent-encoded Latin-1: callers apply
+// url.QueryUnescape AND the Latin-1 transcode before display — see the package
+// doc comment; the unescape on its own corrupts every non-ASCII value
+// irreversibly.
 func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescription, error) {
 	var descs []ProgramDescription
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetProgramDescriptions, nil, &descs); err != nil {
@@ -481,7 +487,9 @@ func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescripti
 }
 
 // SysvarUsageProgram is one program returned by [Runner.SysvarUsagePrograms].
-// Name is URL-encoded; callers apply url.QueryUnescape before display.
+// Name is percent-encoded Latin-1: callers apply url.QueryUnescape AND the
+// Latin-1 transcode before display — see the package doc comment; the unescape
+// on its own corrupts every non-ASCII value irreversibly.
 type SysvarUsageProgram struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -526,8 +534,10 @@ type SystemVariableDescription struct {
 // GetSystemVariableDescriptions returns the URI-encoded description string
 // and the explicitly assigned channel address for every CCU system variable
 // by running the get_system_variable_descriptions.fn ReGa script. The
-// Description and ChannelAddress field values are URL-encoded; callers
-// should apply url.QueryUnescape before use.
+// Description and ChannelAddress field values are percent-encoded Latin-1:
+// callers apply url.QueryUnescape AND the Latin-1 transcode before use — see
+// the package doc comment; the unescape on its own corrupts every non-ASCII
+// value irreversibly.
 func (r *Runner) GetSystemVariableDescriptions(ctx context.Context) ([]SystemVariableDescription, error) {
 	var descs []SystemVariableDescription
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetSystemVariableDescriptions, nil, &descs); err != nil {

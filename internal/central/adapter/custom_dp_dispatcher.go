@@ -102,7 +102,25 @@ func (d *CustomDPDispatcher) InvokeCustomDP(
 	// The REST handler (parsePriority) maps "" → CommandPriorityHigh before
 	// calling here. We pass priority through unchanged to model methods.
 
-	dp, chNo, err := d.resolveCustomDP(deviceAddress, name)
+	return d.InvokeCustomDPOn(ctx, "", deviceAddress, name, operation, params, priority, source)
+}
+
+// InvokeCustomDPOn is [CustomDPDispatcher.InvokeCustomDP] scoped to one
+// central. A caller that already knows which CCU the command was addressed to
+// — the MQTT topic carries the central name — must pass it: a device address
+// repeats across CCUs, and the unscoped walk stops at the first central
+// holding the address, which is the alphabetically first one.
+//
+// An empty centralName keeps the registry-wide walk, which is what the REST
+// and WebSocket paths have (their URLs carry no central).
+func (d *CustomDPDispatcher) InvokeCustomDPOn(
+	ctx context.Context,
+	centralName, deviceAddress, name, operation string,
+	params map[string]any,
+	priority hmenum.CommandPriority,
+	source string,
+) error {
+	dp, chNo, err := d.resolveCustomDP(centralName, deviceAddress, name)
 	if err != nil {
 		return err
 	}
@@ -115,13 +133,23 @@ func (d *CustomDPDispatcher) InvokeCustomDP(
 	return nil
 }
 
-// resolveCustomDP walks the central registry to find the named custom
-// data point on the device at deviceAddress.
-func (d *CustomDPDispatcher) resolveCustomDP(deviceAddress, name string) (device.AttachableDataPoint, int, error) {
+// resolveCustomDP finds the named custom data point on the device at
+// deviceAddress. A non-empty centralName scopes the lookup to that central;
+// an empty one walks the whole registry and stops at the first central
+// holding the address.
+func (d *CustomDPDispatcher) resolveCustomDP(centralName, deviceAddress, name string) (device.AttachableDataPoint, int, error) {
 	if d.registry == nil {
 		return nil, 0, errors.New("custom_dp: registry not configured")
 	}
-	for _, u := range d.registry.List() {
+	units := d.registry.List()
+	if centralName != "" {
+		u, ok := d.registry.Get(centralName)
+		if !ok || u == nil {
+			return nil, 0, fmt.Errorf("custom_dp: unknown central %q", centralName)
+		}
+		units = []*central.Unit{u}
+	}
+	for _, u := range units {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue

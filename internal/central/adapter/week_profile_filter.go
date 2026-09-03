@@ -246,6 +246,27 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 	for actorIdx, group := range groups {
 		for subIdx, member := range group.Channels {
 			key := fmt.Sprintf("%d_%d", actorIdx+1, subIdx+1)
+			// Publish only keys the WEEK_PROGRAM_CHANNEL_LOCKS table can
+			// address. The table covers an 8x3 grid; a channel group with
+			// more than three members (IPRGBW: one primary plus three
+			// secondaries, so HmIP-RGBW / HmIP-LSC mint a fourth member)
+			// runs past it. Registering such a key anyway published a
+			// schedule switch the operator can never write — the REST lock
+			// handler's 404 gate passes because the key IS registered, and
+			// SetScheduleEnabled then fails with "unknown channel key" —
+			// while the broadcast path silently reported it as changed
+			// without ever setting a bit for it.
+			//
+			// The missing bit is not invented here: which key addresses
+			// which channel is not established by any source we have (see
+			// the note on channelKeyBitmask). Settling it needs a week
+			// program configured on such a device with one bit set and an
+			// observation of which channel stops following it. Until that
+			// measurement exists, the fourth member carries no schedule
+			// switch, which is a visible gap rather than a broken control.
+			if _, ok := weekprofile.ChannelKeyToBitmask(key); !ok {
+				continue
+			}
 			chType := "secondary"
 			if member.Primary {
 				chType = "primary"

@@ -26,11 +26,16 @@ var (
 )
 
 // Matter Device Type IDs and OnOff cluster IDs follow the Matter 1.5.1
-// Application Cluster Specification. They live here next to the
-// projection; the cluster-protocol package
-// internal/north/matter/cluster/onoff/ may later import them.
-// Cluster revision verified against the Matter cluster sweep
-// (matter.js HEAD packages/model/src/standard/elements/).
+// Application Cluster Specification. The command ids come from
+// internal/north/matter/cluster/wire, which owns the wire contract; the
+// device type, the cluster id, the LT attribute ids, the LT feature bit
+// and the cluster revision are declared here next to the projection that
+// advertises them, and every one of them is pinned against the matter.js
+// snapshot by TestHmLgtSwitchOnOffMatchesMatterJS — the ids are not
+// reviewed by eye against a second hand-written list.
+//
+// (There is no internal/north/matter/cluster/onoff package; an earlier
+// note here pointed at one.)
 const (
 	matterDeviceTypeOnOffPlugInUnit uint16 = 0x010A
 
@@ -58,15 +63,19 @@ const (
 	// matter.js on-off.element.ts:24 (Field LT).
 	matterFeatureOnOffLT uint32 = 0x01
 
-	matterCmdOff    uint32 = 0x00
-	matterCmdOn     uint32 = 0x01
-	matterCmdToggle uint32 = 0x02
-	// LT (Lighting) feature-gated OnOff commands — mandatory once LT is
-	// advertised. matter.js on-off.element.ts:41,46,51 mark all three
-	// conformance "LT".
-	matterCmdOffWithEffect           uint32 = 0x40
-	matterCmdOnWithRecallGlobalScene uint32 = 0x41
-	matterCmdOnWithTimedOff          uint32 = 0x42
+	// The six OnOff command IDs are the wire contract, so they are read
+	// from the package that owns it —
+	// internal/north/matter/cluster/wire/onoff.go — instead of being
+	// transcribed a second time here. matter.js
+	// packages/model/src/standard/elements/on-off.element.ts marks Off "M",
+	// On and Toggle "!OFFONLY", and the three 0x4x commands "LT": all six
+	// are mandatory for the FeatureMap this projection advertises.
+	matterCmdOff                     = wire.OnOffCmdOff
+	matterCmdOn                      = wire.OnOffCmdOn
+	matterCmdToggle                  = wire.OnOffCmdToggle
+	matterCmdOffWithEffect           = wire.OnOffCmdOffWithEffect
+	matterCmdOnWithRecallGlobalScene = wire.OnOffCmdOnWithRecallGlobalScene
+	matterCmdOnWithTimedOff          = wire.OnOffCmdOnWithTimedOff
 
 	matterOnOffClusterRevision uint16 = 6
 )
@@ -139,9 +148,16 @@ func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 		// 97-104 (on), :158-169 (offWithEffect).
 		return s.globalSceneControl.Load(), true
 	case matterAttrOnTime:
-		// OnTime (uint16, conformance LT): timed-off countdown.
-		// Returns the last written value (default 0 = no timed-off active).
-		// matter.js OnOffServer.ts:102.
+		// OnTime (uint16, conformance LT): matter.js OnOffServer.ts:102
+		// runs it down as a countdown. This projection does not — it
+		// stores what a controller writes and reads it back unchanged,
+		// because there is no timer here (see matterCmdOnWithTimedOff
+		// below, which collapses to a plain On). The light projection
+		// does run the countdown
+		// (internal/model/custom/light/matter_timed_onoff.go), so the
+		// two endpoint types answer the same LT contract differently;
+		// Switch.TurnOnFor shows the device-side capability exists, so
+		// this is an unwired gap rather than a limit of the hardware.
 		return uint16(s.onTime.Load() & 0xFFFF), true
 	case matterAttrOffWaitTime:
 		// OffWaitTime (uint16, conformance LT): delayed-off wait.

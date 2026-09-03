@@ -128,9 +128,20 @@ func (t *Timer) Default() any {
 	return t.defaultSeconds
 }
 
-// Max returns the upper-bound seconds threshold.
+// Max returns the largest duration, in seconds, this timer can put on the
+// wire as a finite value: [timerValueMaxPerUnit] counts at the minutes unit.
+//
+// It is not 16343 s. 16343 is DURATION_VALUE's per-unit INTEGER maximum, and
+// publishing it as a seconds bound capped the data point at 4 h 32 min. Nor is
+// it the integer maximum reinterpreted at the hours unit: the CCU coerces
+// DURATION_UNIT=H with a value of 31 or more to its infinite marker
+// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#correctInfiniteDuration,
+// which runs on every VALUES write), so the hours unit carries nothing longer
+// than 30 h and every duration this encoder would promote to hours is past
+// that coercion. The minutes unit is therefore where the largest finite
+// duration lives.
 func (t *Timer) Max() (float64, bool) {
-	return float64(timerUpperBoundSeconds), true
+	return float64(timerValueMaxPerUnit) * 60, true
 }
 
 // Min returns (0, false) — no meaningful minimum for a timer.
