@@ -180,7 +180,10 @@ func TestW2CliRegaEncodedFieldsAreDocumented(t *testing.T) {
 		doc := fn.Doc.Text() + typeDoc[resultType]
 		for _, field := range structs[resultType].Fields.List {
 			if field.Doc != nil {
-				doc += field.Doc.Text()
+				var b strings.Builder
+				b.WriteString(doc)
+				b.WriteString(field.Doc.Text())
+				doc = b.String()
 			}
 		}
 

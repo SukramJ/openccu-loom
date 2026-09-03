@@ -345,6 +345,9 @@ func (l *Lock) LockState() (State, bool) {
 			}
 			return StateUnlocked, true
 		}
+		//nolint:staticcheck // S1002: comparing against the named constant is the
+		// point — it states the CCU's STATE polarity at the site instead of
+		// leaving a bare boolean whose meaning the reader has to reconstruct.
 		if v == rfStateUnlocked {
 			return StateUnlocked, true
 		}

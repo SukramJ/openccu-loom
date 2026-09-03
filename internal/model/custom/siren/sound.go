@@ -317,6 +317,8 @@ func ConvertPlayRepetitionsIndex(index int, availableRep []string) (string, erro
 	if slot >= len(availableRep)-1 {
 		return "", fmt.Errorf("siren: ConvertPlayRepetitionsIndex: index %d has no repeat slot in the device's %d-entry REPETITIONS list", index, len(availableRep))
 	}
+	//nolint:gosec // G602: slot is bounded above by the len(availableRep)-1 check
+	// directly above and below by the switch, which only assigns slot >= 1.
 	return availableRep[slot], nil
 }
 

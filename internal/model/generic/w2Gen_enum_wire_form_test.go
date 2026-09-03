@@ -43,7 +43,7 @@ const (
 )
 
 // w2GenSpecFromDescriptor builds a Spec around a verbatim device descriptor.
-func w2GenSpecFromDescriptor(t *testing.T, parameter string, raw string) Spec {
+func w2GenSpecFromDescriptor(t *testing.T, parameter, raw string) Spec {
 	t.Helper()
 	var desc hmproto.ParameterData
 	if err := json.Unmarshal([]byte(raw), &desc); err != nil {

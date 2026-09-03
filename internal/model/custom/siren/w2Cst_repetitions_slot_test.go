@@ -37,7 +37,7 @@ func TestW2CstFiniteRepetitionsIndexNeverBecomesInfinite(t *testing.T) {
 
 	infinite := w2CstRepetitionsValuesList[len(w2CstRepetitionsValuesList)-1]
 
-	for index := 0; index <= 18; index++ {
+	for index := range 19 {
 		label, err := ConvertPlayRepetitionsIndex(index, w2CstRepetitionsValuesList)
 		if err != nil {
 			continue // rejected outright, which is the safe outcome

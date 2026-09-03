@@ -117,7 +117,7 @@ func (e *hmAdpCUxDEndpoint) sawAddress(addr string) bool {
 	return false
 }
 
-func hmAdpStartCUxDEndpoint(t *testing.T) (*hmAdpCUxDEndpoint, int) {
+func hmAdpStartCUxDEndpoint(t *testing.T) (endpoint *hmAdpCUxDEndpoint, port int) {
 	t.Helper()
 	ep := &hmAdpCUxDEndpoint{}
 	srv, err := binrpc.NewServer(binrpc.ServerConfig{Addr: "127.0.0.1:0", Logger: slog.New(slog.DiscardHandler)})

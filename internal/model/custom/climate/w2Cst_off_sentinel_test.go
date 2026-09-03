@@ -19,7 +19,7 @@ import (
 // w2CstIPClimateWithSetpointMin builds a KindIP Climate whose
 // SET_POINT_TEMPERATURE descriptor declares the given MIN — the value
 // [Climate.MinTemp]'s second resolution step reads.
-func w2CstIPClimateWithSetpointMin(t *testing.T, w custom.Writer, min float64, declared bool) *Climate {
+func w2CstIPClimateWithSetpointMin(t *testing.T, w custom.Writer, declaredMin float64, declared bool) *Climate {
 	t.Helper()
 
 	const addr = "0001D8A9B12345:1"
@@ -31,9 +31,9 @@ func w2CstIPClimateWithSetpointMin(t *testing.T, w custom.Writer, min float64, d
 		Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
 	}
 	if declared {
-		b, err := json.Marshal(min)
+		b, err := json.Marshal(declaredMin)
 		if err != nil {
-			t.Fatalf("marshal %v: %v", min, err)
+			t.Fatalf("marshal %v: %v", declaredMin, err)
 		}
 		desc.Min = b
 	}
