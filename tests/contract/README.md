@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 452.
+Guards without a doc comment: 7 of 453.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -336,6 +336,7 @@ Guards without a doc comment: 7 of 452.
 | TestFloorSurfacesAreTheDocumentedSet | ui_surface_registry_test.go | TestFloorSurfacesAreTheDocumentedSet pins the floor itself. |
 | TestSurfaceCopyIsComplete | ui_surface_registry_test.go | TestSurfaceCopyIsComplete requires a description for every surface, in both locales, AND that the surface's label resolves to the key the navigation itself uses. |
 | TestUISchemaDeclarationMatchesThePayload | uischema_declaration_test.go | TestUISchemaDeclarationMatchesThePayload validates a fully populated [hmapi.UISchema] — the exact value the handler marshals — against the `UISchema` component in the specification. |
+| TestDocumentedUnIgnorePatternsParse | unignore_documented_patterns_test.go | TestDocumentedUnIgnorePatternsParse feeds every example pattern the documentation shows through the parser that has to accept it. |
 | TestVirtualRemoteModelClassificationIsSingleSourced | virtual_remote_model_test.go | TestVirtualRemoteModelClassificationIsSingleSourced pins every consumer of the virtual-remote model rule to one set. |
 | TestVisibilityReadOnlyDPSkipDocumented | visibility_read_only_audit_test.go | TestVisibilityReadOnlyDPSkipDocumented documents the read-only DP skip Logic:.py:180-189) skips DP creation when Operations has neither EVENT nor WRITE. |
 | TestVisibilityFlagOperationsTriple | visibility_triple_test.go | TestVisibilityFlagOperationsTriple pins the FLAGS × OPERATIONS filter table against the Python reference (_should_skip_data_point, model/__init__.py:180-189). |

@@ -1175,6 +1175,8 @@ const EN: Catalog = {
     "Hidden parameters promoted to first-class data points. Use at your own risk.",
   "unignore.warning":
     "Excessive writes to MASTER paramset values can damage devices.",
+  "unignore.fleet_scope":
+    "Patterns are saved per central but apply to the whole fleet: a pattern names a model, channel and parameter, so it also unhides matching parameters on your other CCUs.",
   "unignore.central_label": "Central:",
   "unignore.search_placeholder": "Filter by name…",
   "unignore.add_pattern": "Add pattern",
@@ -5084,6 +5086,8 @@ const DE: Catalog = {
     "Versteckte Parameter als reguläre Datenpunkte verfügbar machen. Verwendung auf eigene Gefahr.",
   "unignore.warning":
     "Häufige Schreibvorgänge auf MASTER-Paramset-Werte können Geräte beschädigen.",
+  "unignore.fleet_scope":
+    "Muster werden pro Zentrale gespeichert, wirken aber auf die gesamte Anlage: Ein Muster benennt Modell, Kanal und Parameter und macht passende Parameter deshalb auch auf den anderen CCUs sichtbar.",
   "unignore.central_label": "Zentrale:",
   "unignore.search_placeholder": "Nach Name filtern…",
   "unignore.add_pattern": "Hinzufügen",

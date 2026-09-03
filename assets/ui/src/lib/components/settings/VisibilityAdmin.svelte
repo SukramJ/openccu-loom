@@ -281,6 +281,16 @@
   <p class="text-sm text-amber-600 dark:text-amber-400">
     ⚠ {t("unignore.warning")}
   </p>
+  <!--
+    The central selector below picks whose list is edited, not where the
+    patterns take effect: a pattern names a model, a channel and a
+    parameter, and the daemon unions every central's list into one shared
+    decider. Saying so here is what keeps the selector from reading as a
+    scope. See notes/concepts/ui/unignore-concept.md.
+  -->
+  <p class="text-sm text-[var(--ha-secondary-text-color)]">
+    {t("unignore.fleet_scope")}
+  </p>
 
   {#if visibilityStore.centralsLoading || visibilityStore.candidatesLoading}
     <LoadingState />

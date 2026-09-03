@@ -11,9 +11,20 @@ import (
 	"time"
 )
 
-// VisibilityUnIgnoreStore persists the per-central un_ignore patterns
-// — `MODEL:CHANNEL:PARAMETER` strings (with `*` wildcards) that promote
-// otherwise-hidden parameters into the visible data-point surface.
+// VisibilityUnIgnoreStore persists un_ignore patterns — the
+// `PARAMETER` / `PARAMETER:PARAMSET@MODEL:CHANNEL` strings that promote
+// otherwise-hidden parameters into the visible data-point surface (see
+// [visibility.ParseUnIgnoreLine] for the grammar).
+//
+// Rows are keyed by central, and that is a storage and ownership
+// property, not a scope: the daemon unions every central's patterns
+// into one shared visibility decider, and a pattern names a model, a
+// channel and a parameter — nothing that identifies a CCU. A pattern
+// stored for one central therefore unhides the matching parameter
+// across the fleet. What the key does buy is per-central ownership:
+// the SPA edits one central's list at a time, and removing a central
+// takes its patterns with it (see [VisibilityUnIgnoreStore.DeleteForCentral]).
+// Pinned by TestUnIgnorePatternsApplyAcrossTheFleet.
 //
 // Reads happen at daemon start (one query per central) and after every
 // REST PUT (read-back to confirm what was applied). Writes replace the

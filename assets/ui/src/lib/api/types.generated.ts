@@ -1981,12 +1981,21 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Download a firmware image onto a CCU (admin-only)
-         * @description Instructs one CCU to fetch a firmware image from the supplied
-         *     http/https URL onto the central (posting to the CCU's maintenance
-         *     CGI) so it can be staged for a later install. The CCU performs the
-         *     transfer asynchronously; the endpoint returns 202 once the request
-         *     was accepted.
+         * Download the newest firmware onto a CCU (admin-only)
+         * @description Asks one CCU to fetch the newest firmware **for itself** and stage
+         *     it for a later install (`POST /system/firmware/update` performs the
+         *     install).
+         *
+         *     The image cannot be chosen by the caller: the CCU resolves the
+         *     download from its own version and board serial. The request body's
+         *     `url` field is therefore accepted and ignored — it is kept in the
+         *     schema so clients written against an earlier version of this
+         *     contract keep working instead of failing validation.
+         *
+         *     Returns 202 once the CCU reported the download succeeded, and 502
+         *     when it reported a failure — there is no image for that version and
+         *     serial, or the transfer failed. The whole body is optional for
+         *     single-CCU deployments.
          */
         post: operations["downloadSystemFirmware"];
         delete?: never;
@@ -5087,7 +5096,7 @@ export interface components {
             enabled: boolean;
             /** @description Duration of the boot-time capture. Zero falls back to the default (300 s). */
             duration_seconds: number;
-            /** @description Whether device-address-shaped values in the recorded archive are hashed. Responses always carry the effective value. */
+            /** @description Whether the archive's operator-identifying attributes are hashed — the `subject`, `user`, `username`, `remote` and `remote_addr` keys. Device addresses, channel addresses, parameter names and interface ids stay in clear text, so an operator reading their own archive can follow the trace. Responses always carry the effective value. */
             anonymise: boolean;
         };
         /** @description Write shape of the startup-capture toggle. `anonymise` may be omitted and then means true — the boot capture has no later chance to ask, so an unstated preference must not end up archiving raw device addresses. */
@@ -8788,10 +8797,17 @@ export interface components {
         /** @description Per-central visibility overrides. */
         VisibilityConfig: {
             /**
-             * @description MODEL:CHANNEL:PARAMETER patterns (with `*` wildcards) that
-             *     promote parameters from the default-hidden set into the
-             *     visible data-point surface. Bare parameter names are
-             *     treated as *:*:PARAMETER.
+             * @description Patterns that promote parameters from the default-hidden set
+             *     into the visible data-point surface. Two forms are accepted:
+             *     a bare `PARAMETER`, which matches every VALUES paramset on
+             *     any model and channel, or the fully-qualified
+             *     `PARAMETER:PARAMSET@MODEL:CHANNEL`, where MODEL may be `all`
+             *     and CHANNEL may be `all` or empty for any channel. A colon
+             *     without an `@` is rejected.
+             *
+             *     Stored per central, effective across the whole fleet: a
+             *     pattern names a model, a channel and a parameter, none of
+             *     which identify a CCU.
              */
             un_ignore?: string[];
         };
@@ -10006,9 +10022,10 @@ export interface components {
         DownloadSystemFirmwareRequest: {
             /**
              * Format: uri
-             * @description http/https firmware image the CCU should fetch.
+             * @deprecated
+             * @description Accepted and ignored. The CCU has no call that fetches a caller-supplied image; it downloads the firmware matching its own version and board serial.
              */
-            url: string;
+            url?: string;
             /** @description Target central (optional for single-CCU deployments). */
             central?: string;
         };
@@ -13218,7 +13235,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["DownloadSystemFirmwareRequest"];
             };

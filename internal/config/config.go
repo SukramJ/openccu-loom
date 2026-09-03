@@ -1878,11 +1878,21 @@ func (b CentralBehavior) DelayNewDeviceCreationEnabled() bool {
 // fields mean "no bootstrap override — use whatever is persisted in
 // SQLite, or the built-in defaults when SQLite is empty".
 type VisibilityConfig struct {
-	// UnIgnore lists `MODEL:CHANNEL:PARAMETER` patterns (with `*`
-	// wildcards for MODEL / CHANNEL) that promote parameters out of
-	// the default-hidden set into the visible data-point surface.
-	// Bare parameter names (no colons) are treated as
-	// `*:*:PARAMETER`.
+	// UnIgnore lists patterns that promote parameters out of the
+	// default-hidden set into the visible data-point surface, in the
+	// two forms the parser accepts (see
+	// [visibility.ParseUnIgnoreLine]): a bare `PARAMETER`, matching
+	// every VALUES paramset on any model and channel, or the fully
+	// qualified `PARAMETER:PARAMSET@MODEL:CHANNEL`, where MODEL may be
+	// `all` and CHANNEL may be `all` or empty for any channel. A colon
+	// without an `@` is rejected.
+	//
+	// The list is written per central and takes effect across the
+	// whole fleet: the daemon unions every central's patterns into
+	// one shared visibility decider, and a pattern matches on model,
+	// channel and parameter — none of which identify a CCU. So a
+	// pattern added here for one central also unhides the matching
+	// parameter on every other central that has such a device.
 	UnIgnore []string `yaml:"un_ignore" json:"un_ignore" cfg:"expert"`
 }
 

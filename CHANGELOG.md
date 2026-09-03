@@ -57,6 +57,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Every documented un-ignore pattern was one the parser rejects.** The
+  annotated reference config, the concept document, the config field's own
+  comment, the store and the REST contract all taught
+  `MODEL:CHANNEL:PARAMETER` — `"*:*:RSSI_DEVICE"`,
+  `"HM-CC-RT-DN:4:VALVE_STATE"`. The parser refuses a colon without an `@`
+  outright. The accepted forms are a bare `PARAMETER`, matching every VALUES
+  paramset on any model and channel, or the fully-qualified
+  `PARAMETER:PARAMSET@MODEL:CHANNEL` — which the SPA's own input placeholder
+  had right all along.
+
+  An operator who followed the documentation got a silently empty list: a
+  parse failure is counted and logged, never surfaced as a config error, so
+  the parameter simply stayed hidden with nothing to say why. Every document
+  now carries the grammar the parser implements, and
+  `TestDocumentedUnIgnorePatternsParse` feeds each documented example through
+  that parser. Its extractor accepts any quoted list item under an
+  `un_ignore:` key rather than only well-formed ones — an extractor that
+  matched only valid patterns could never have caught this.
+
+- **Un-ignore patterns are documented as fleet-wide, which is what they are.**
+  They are stored per central and the visibility editor edits one central's
+  list at a time, so the storage shape and the editor both read as if the
+  effect were scoped to that CCU. It is not: the daemon unions every
+  central's patterns into one shared visibility decider and re-applies the
+  marks across every device of every central. Nor could it be otherwise as
+  written — a pattern names a model, a channel and a parameter, none of which
+  identify a CCU.
+
+  No behaviour changed. The config field, the store, the concept document and
+  the REST contract now say so, the visibility editor carries a line above
+  the central selector explaining that it picks whose list is edited rather
+  than where it applies, and `TestUnIgnorePatternsApplyAcrossTheFleet` pins
+  the scope so the documentation cannot drift from it again. Making the
+  effect per-central would mean a per-central decider, and it would silently
+  narrow every rule an operator has already saved — an architectural change,
+  not a fix.
+
 - **MQTT published `ch3` where the operator had named the channel.** The
   discovery name builder derived its entity name from the custom-DP
   classification alone and never looked at the channel's name, so every
