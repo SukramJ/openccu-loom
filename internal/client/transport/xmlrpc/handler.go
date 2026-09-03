@@ -5,7 +5,6 @@ package xmlrpc
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -113,11 +112,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// asFault collapses any error into an XMLRPCFault. Errors that are
-// already faults pass through untouched; anything else maps to code -1.
+// asFault collapses any error into an XMLRPCFault. The rule lives with
+// the type, in [hmerr.FaultFromError]; this package had its own copy of
+// it, byte for byte, as did the callback server.
 func asFault(err error) *hmerr.XMLRPCFault {
-	if fault, ok := errors.AsType[*hmerr.XMLRPCFault](err); ok {
-		return fault
-	}
-	return &hmerr.XMLRPCFault{Code: -1, Message: err.Error()}
+	return hmerr.FaultFromError(err)
 }

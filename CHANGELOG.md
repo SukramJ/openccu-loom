@@ -57,6 +57,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The last seven low findings, all cross-package.** The `.sbk` suffix, the
+  ping caller-id and the XML-RPC fault collapse each had two spellings in
+  different packages; the Latin-1 byte loop had two, one over `[]byte` and
+  one over `string`, easy to confuse with its inverse
+  (`FixXMLRPCEncoding`) and now living beside it. `pkg/hmenum/ports.go`
+  cited SPECIFICATION §7.2 for its values; that section is the risk
+  register and the specification states no CCU-side port at all.
+
+  Two comments were corrected against the firmware rather than tidied. The
+  `get_serial` script claimed it compresses the serial to ten characters —
+  the script does nothing of the kind, the Go caller does, and the CCU
+  publishes the value untruncated where it publishes it (`get_serial_number`
+  in the UPnP device description feeds `SERIAL_NUMBER` straight from the
+  file). The reduction stays, because clients embed the result as the
+  central-id slot of their unique_ids, but it is this daemon's convention
+  and now says so.
+
+  The aggregate alarm panel's name is resolved the same way on every plane:
+  MQTT already treated a catalogue key echoed back as "no translation", the
+  REST/WS wiring did not, so a dropped row would have shown the raw key on
+  one plane and "Alarm system" on the other.
+
 - **Low-severity audit findings, final batch: 24 more, and the last of the
   open ones.** The remaining set was the cross-package half — findings whose
   fix reached into two or three packages at once, which is why they came last.

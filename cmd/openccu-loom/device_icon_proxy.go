@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/httpx"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ccuImagePath is the CCU web-server directory that serves the 250px
@@ -213,11 +214,11 @@ func (p *deviceIconProxy) fetch(ctx context.Context, filename, centralName strin
 
 // ccuImageBaseURL builds the CCU web-server base URL (scheme://host:port).
 // Mirrors the JSON-RPC endpoint scheme (internal/central/adapter
-// hub_wiring.go): 80/443 by default, overridable via JSONRPCPort.
+// hub_wiring.go): the hmenum defaults, overridable via JSONRPCPort.
 func ccuImageBaseURL(cc config.CentralConfig) string {
-	scheme, port := "http", 80
+	scheme, port := "http", hmenum.DefaultJSONRPCPort
 	if cc.TLS {
-		scheme, port = "https", 443
+		scheme, port = "https", hmenum.DefaultJSONRPCTLSPort
 	}
 	if cc.JSONRPCPort > 0 {
 		port = cc.JSONRPCPort

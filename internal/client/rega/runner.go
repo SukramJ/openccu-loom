@@ -437,10 +437,16 @@ func (r *Runner) GetBackendInfo(ctx context.Context) (BackendInfo, error) {
 // get_serial.fn ReGa script. Returns an empty string when the CCU cannot
 // determine the serial.
 //
-// The CCU may report the full radio-module serial; only the last 10
-// characters are the canonical hardware serial shown in the WebUI. Clients
-// embed this value as the central-id slot of their unique_ids, so it must
-// match that canonical form byte for byte.
+// The script emits whichever of three files it finds, verbatim — the
+// first is /var/board_sgtin, which is longer than the ten characters the
+// daemon uses. The reduction to the last ten happens here, and it is this
+// daemon's own canonical form rather than a firmware property: the CCU
+// publishes the value untruncated where it publishes it at all (the UPnP
+// device description's get_serial_number, www/upnp/basic_dev.cgi, feeds
+// SERIAL_NUMBER straight from the file).
+//
+// It matters because clients embed the result as the central-id slot of
+// their unique_ids, so changing the reduction renames every entity.
 func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 	var result struct {
 		Serial string `json:"serial"`

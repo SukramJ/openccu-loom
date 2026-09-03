@@ -810,10 +810,10 @@ func jsonrpcEndpoint(cc config.CentralConfig) string {
 // simulator and non-standard reverse-proxy deployments rely on that override.
 func ccuBaseURLFor(cc config.CentralConfig) string {
 	scheme := "http"
-	port := 80
+	port := hmenum.DefaultJSONRPCPort
 	if cc.TLS {
 		scheme = "https"
-		port = 443
+		port = hmenum.DefaultJSONRPCTLSPort
 	}
 	if cc.JSONRPCPort > 0 {
 		port = cc.JSONRPCPort
@@ -1641,7 +1641,7 @@ func decodeRegaField(s string) string {
 	// ("Sp�le" for "Spüle" in a program's condition/activity summary).
 	// Transcode when the decoded value is not already valid UTF-8.
 	if !utf8.ValidString(s) {
-		s = latin1ToUTF8String(s)
+		s = hmtypes.Latin1ToUTF8String(s)
 	}
 	return s
 }
@@ -1661,17 +1661,6 @@ func decodeRegaFields(ss []string) []string {
 		out[i] = decodeRegaField(s)
 	}
 	return out
-}
-
-// latin1ToUTF8String reinterprets an ISO-8859-1 string's bytes as Unicode
-// code points, producing valid UTF-8. ASCII bytes map 1:1, so a mixed string
-// keeps its structure while high bytes become correct multi-byte runes.
-func latin1ToUTF8String(s string) string {
-	runes := make([]rune, len(s))
-	for i := range len(s) {
-		runes[i] = rune(s[i])
-	}
-	return string(runes)
 }
 
 // systemUpdateRefresher is the narrow slice of the HubCoordinator the

@@ -60,11 +60,9 @@ func TestClientKeepsValidUTF8Body(t *testing.T) {
 	}
 }
 
-func TestLatin1ToUTF8(t *testing.T) {
-	if got := string(latin1ToUTF8([]byte("Sp\xfcle"))); got != "Spüle" {
-		t.Fatalf("latin1ToUTF8 = %q, want Spüle", got)
-	}
-	if got := string(latin1ToUTF8([]byte("plain-ascii"))); got != "plain-ascii" {
-		t.Fatalf("ASCII must map 1:1, got %q", got)
-	}
-}
+// TestLatin1ToUTF8 exercised the package-local copy of the byte loop.
+// The loop lives in pkg/hmtypes now, and a test calling it there would
+// prove nothing about this transport — the case above
+// (TestClientDecodesLatin1Body) drives it through Call, which is where the
+// re-encode actually has to happen. Kept as a pointer so the removal
+// reads as deliberate rather than as lost coverage.

@@ -403,6 +403,21 @@ func (f *XMLRPCFault) Error() string {
 	return fmt.Sprintf("xml-rpc fault %d: %s", f.Code, f.Message)
 }
 
+// FaultFromError collapses an arbitrary error into the XML-RPC fault a
+// CCU-facing surface answers with. An error that already carries a typed
+// fault passes through untouched; anything else becomes code -1, the
+// CCU's catch-all.
+//
+// It lives here because [XMLRPCFault] does: the callback server and the
+// client-side handler each had a byte-identical copy, and a fault code is
+// the kind of value two copies drift on without anything failing.
+func FaultFromError(err error) *XMLRPCFault {
+	if fault, ok := errors.AsType[*XMLRPCFault](err); ok {
+		return fault
+	}
+	return &XMLRPCFault{Code: -1, Message: err.Error()}
+}
+
 // Is reports that every fault is-a ClientException.
 func (f *XMLRPCFault) Is(target error) bool {
 	return errors.Is(target, ErrClientException)
