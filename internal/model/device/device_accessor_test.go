@@ -274,11 +274,8 @@ func TestSubscribeToFirmwareUpdatedUnsubscribe(t *testing.T) {
 	}
 }
 
-// ─── Channel.FullName ─────────────────────────────────────────────────
-
-// TestChannelFullNameWithDeviceName verifies that FullName prepends the device
-// name.
-func TestChannelFullNameWithDeviceName(t *testing.T) {
+// ─── Channel.NameData full name ───────────────────────────────────────
+func TestChannelNameDataCarriesTheFullName(t *testing.T) {
 	t.Parallel()
 
 	d := New(Config{
@@ -289,19 +286,10 @@ func TestChannelFullNameWithDeviceName(t *testing.T) {
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH_TRANSMITTER", "VALUES")
 	ch.SetName("Wohnzimmer Licht")
 
-	full := ch.FullName()
-	if full == "" {
-		t.Fatal("FullName() must not be empty when device has a name")
-	}
-}
-
-// TestChannelFullNameNilSafe verifies FullName on nil channel returns "".
-func TestChannelFullNameNilSafe(t *testing.T) {
-	t.Parallel()
-
-	var c *Channel
-	if got := c.FullName(); got != "" {
-		t.Fatalf("FullName() on nil Channel = %q, want empty", got)
+	// Channel.FullName was a one-line forwarder into a naming family no
+	// production code called; NameData is the path the daemon uses.
+	if full := ch.NameData().FullName(); full == "" {
+		t.Fatal("FullName() must not be empty when the device has a name")
 	}
 }
 

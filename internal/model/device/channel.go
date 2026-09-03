@@ -1388,16 +1388,6 @@ func (c *Channel) ParamsetParameter(key hmenum.ParamsetKey, p hmenum.Parameter) 
 	return nil
 }
 
-// ─── FullName ─────────────────────────────────────────────────────────
-
-// FullName returns the device-prefixed full name for this channel. Equivalent
-// to the DataPointFullName with an empty parameter.
-//
-// full_name: Final = DelegatedProperty[str](path="_name_data.full_name")
-func (c *Channel) FullName() string {
-	return c.DataPointFullName("")
-}
-
 // ─── NameData ─────────────────────────────────────────────────────────
 
 // NameData returns the [naming.NameData] for this channel with an empty

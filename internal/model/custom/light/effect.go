@@ -15,9 +15,9 @@ import (
 )
 
 // EffectLight is a [ColorLight] that additionally exposes a PROGRAM
-// parameter selecting one of a predefined set of effects (e.g. "Off",
-// "Slow color change", "Medium color change", "Fast color change",
-// "Campfire", "Waterfall", "TV simulation").
+// parameter selecting one of a predefined set of effects (see
+// [colorDimmerEffects] for the vocabulary the CCU uses when the device
+// declares none of its own).
 //
 // The effect list is sourced from the PROGRAM data point's VALUE_LIST
 // at construction; callers select by index.
@@ -32,16 +32,20 @@ type EffectLight struct {
 // It is hard-coded because the device is: PROGRAM is a bare INTEGER
 // 0..255 with no VALUE_LIST, so the wire carries no names at all and the
 // CCU's own configuration surface labels the parameter "program number".
-// The seven entries and their order are the reference's
-// (`CustomDpColorDimmerEffect._effects`, light.py:478-486) — the index
-// written to PROGRAM is the position in this list, so the order is the
-// contract, not a presentation choice.
+// The labels and their order are the CCU's own, and the index is stated
+// in the firmware rather than inferred from list position: the RGBW
+// easymode control emits `<option value='N'>${optionRGBWControllerPrgN}</option>`
+// for N = 0..6 (www/rega/esp/controls/rgbw.fn), and those seven keys
+// resolve in www/webui/js/lang/en/translate.lang.option.js. The
+// RGBW_AUTOMATIC easymode carries the same seven under optionPrg0..6.
+// The index written to PROGRAM is the position in this list, so the
+// order is the contract, not a presentation choice.
 var colorDimmerEffects = []string{
 	"Off",
-	"Slow color change",
-	"Medium color change",
-	"Fast color change",
-	"Campemit",
+	"Slow cycle",
+	"Normal cycle",
+	"Fast cycle",
+	"Bonfire",
 	"Waterfall",
 	"TV simulation",
 }

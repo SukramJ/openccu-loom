@@ -41,7 +41,17 @@ type ColorLight struct {
 // colorIndexWhite is the COLOR value that means "white": the wire
 // encodes the hue circle as 0..199 and reserves 200 for the white
 // point. Larger values are undefined and are read back as white for
-// robustness. Mirrors `CustomDpColorDimmer.hs_color` (light.py:447-460).
+// robustness.
+//
+// colorIndexSpan is the span BOTH directions divide by. The CCU's own
+// surfaces are unanimous and all three read `parseInt(colorVal / 199 *
+// 360)`: the RGBW easymode control
+// (www/rega/esp/controls/rgbw.fn, the emitted colorVal block), its
+// picker (www/config/easymodes/js/RGBW_Controller.js), and the WebUI's
+// ACT_HSV_COLOR_VALUE_STORE reader (www/webui/webui.js,
+// __activateColorPicker). 200 is the white point, not the span, so
+// dividing by it reads every hue about half a percent low and can never
+// report the top of the circle.
 const (
 	colorIndexWhite = 200
 	colorIndexSpan  = 199
@@ -178,7 +188,11 @@ func (l *ColorLight) colorFromIndex() (hue int32, saturation float64, observed b
 	if c < 0 {
 		c = 0
 	}
-	return int32(float64(c) / colorIndexWhite * 360), 100, true //nolint:gosec // c < 200 keeps the product below 360
+	// c is at most 199 here (200 and above returned white above), so the
+	// product is at most exactly 360 — the top of the circle, which is
+	// the same colour as 0 and which every consumer normalises
+	// ([hueToMatter] wraps it; Home Assistant's hue range includes it).
+	return int32(float64(c) / colorIndexSpan * 360), 100, true //nolint:gosec // c <= 199 caps the product at 360
 }
 
 // SetColor commands a new (hue, saturation) pair. Hue wraps around 360°;

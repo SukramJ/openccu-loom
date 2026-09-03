@@ -348,54 +348,6 @@ func TestSaveAllWithDescriptionNoOp(t *testing.T) {
 	}
 }
 
-// ---- L-A5-35: GetLinksForLocale / GetLinkableChannelsForLocale ----
-
-func TestGetLinksForLocaleRoleFilter(t *testing.T) {
-	lc := NewLinkCoordinator(func(_ string) (LinkClient, bool) {
-		return &fakeLinkClient{
-			links: []DeviceLink{
-				{SenderAddress: "A:1", ReceiverAddress: "B:1", Direction: "outgoing"},
-				{SenderAddress: "B:1", ReceiverAddress: "A:1", Direction: "incoming"},
-			},
-		}, true
-	})
-
-	outgoing, err := lc.GetLinksForLocale(context.Background(), "A", "de", "outgoing")
-	if err != nil {
-		t.Fatalf("GetLinksForLocale: %v", err)
-	}
-	if len(outgoing) != 1 || outgoing[0].Direction != "outgoing" {
-		t.Fatalf("GetLinksForLocale = %v, want 1 outgoing entry", outgoing)
-	}
-
-	all, err := lc.GetLinksForLocale(context.Background(), "A", "", "")
-	if err != nil {
-		t.Fatalf("GetLinksForLocale (all): %v", err)
-	}
-	if len(all) != 2 {
-		t.Fatalf("GetLinksForLocale (all) = %d, want 2", len(all))
-	}
-}
-
-func TestGetLinkableChannelsForLocaleRoleFilter(t *testing.T) {
-	lc := NewLinkCoordinator(func(_ string) (LinkClient, bool) {
-		return &fakeLinkClient{
-			linkable: []LinkableChannel{
-				{Address: "A:1", ChannelType: "SWITCH_VIRTUAL_RECEIVER"},
-				{Address: "A:2", ChannelType: "DIMMER_VIRTUAL_RECEIVER"},
-			},
-		}, true
-	})
-
-	filtered, err := lc.GetLinkableChannelsForLocale(context.Background(), "A", "de", "SWITCH_VIRTUAL_RECEIVER")
-	if err != nil {
-		t.Fatalf("GetLinkableChannelsForLocale: %v", err)
-	}
-	if len(filtered) != 1 || filtered[0].ChannelType != "SWITCH_VIRTUAL_RECEIVER" {
-		t.Fatalf("expected 1 SWITCH_VIRTUAL_RECEIVER entry, got %v", filtered)
-	}
-}
-
 // ---- L-A5-36: DeviceLink extended fields ----
 
 func TestDeviceLinkExtendedFieldsPresent(t *testing.T) {

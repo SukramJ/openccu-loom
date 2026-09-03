@@ -144,12 +144,7 @@ func repeatPlaceholders(n int) string {
 	return string(buf)
 }
 
-// rowScanner is satisfied by both *sql.Row and *sql.Rows.
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanAlarmIncidentSource(sc rowScanner) (AlarmIncidentSource, error) {
+func scanAlarmIncidentSource(sc scannable) (AlarmIncidentSource, error) {
 	var r AlarmIncidentSource
 	err := sc.Scan(&r.ID, &r.IncidentID, &r.ZoneID, &r.Ref, &r.CentralName, &r.InterfaceID,
 		&r.ChannelAddress, &r.DeviceAddress, &r.Parameter, &r.SensorID, &r.Name,

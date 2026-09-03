@@ -20,11 +20,19 @@ import (
 
 // DoorState enumerates the values the DOOR_STATE parameter reports on
 // HmIP-MOD-HO / HmIP-MOD-TM-class garage drives.
+//
+// The labels are the parameter's VALUE_LIST verbatim — that list is what
+// reaches us on the wire, and a resolved label is what
+// custom.EnumLabelValue hands the comparisons below. A drive without the
+// ventilation option reports a three-entry list without
+// VENTILATION_POSITION, which is why the vent control stays gated on
+// Capabilities.SupportsVent. Pinned by
+// TestDoorEnumLabelsMatchReportedValueList.
 type DoorState string
 
 // DoorState values.
 const (
-	DoorStateUnknown     DoorState = "UNKNOWN"
+	DoorStateUnknown     DoorState = "POSITION_UNKNOWN"
 	DoorStateOpen        DoorState = "OPEN"
 	DoorStateClosed      DoorState = "CLOSED"
 	DoorStateVentilation DoorState = "VENTILATION_POSITION"
@@ -371,17 +379,22 @@ func (g *Garage) Subscribe(ch *device.Channel) func() {
 			g.OnSection(v)
 		}
 	}
-	if dp := ch.Parameter(hmenum.ParameterDoorState); dp != nil {
-		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) {
+	// Both slots are the ones the profile schema named, resolved once in
+	// [NewGarage] — not looked up again on the own channel here. A second
+	// own-channel lookup binds a different data point than the one the
+	// constructor's DataVersion hook and applyState's label read already
+	// observe whenever the schema puts the field on a sibling channel.
+	if g.doorStateDp != nil {
+		unsubs = append(unsubs, g.doorStateDp.OnAnyUpdate(func(_, next any) {
 			applyState(next)
 		}))
-		custom.ReplayCurrentValue(dp, applyState)
+		custom.ReplayCurrentValue(g.doorStateDp, applyState)
 	}
-	if dp := ch.Parameter(hmenum.ParameterSection); dp != nil {
-		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) {
+	if g.sectionDp != nil {
+		unsubs = append(unsubs, g.sectionDp.OnAnyUpdate(func(_, next any) {
 			applySection(next)
 		}))
-		custom.ReplayCurrentValue(dp, applySection)
+		custom.ReplayCurrentValue(g.sectionDp, applySection)
 	}
 	return func() {
 		for _, u := range unsubs {

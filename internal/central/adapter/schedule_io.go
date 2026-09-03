@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // schedule_io.go — coordinator-layer calls for climate week profiles,
@@ -196,7 +197,7 @@ func (s *SchedulesDomain) GetSchedule(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	channelAddr := fmt.Sprintf("%s:%d", deviceAddress, channelNo)
+	channelAddr := hmtypes.ChannelAddress(deviceAddress, channelNo)
 	if !force {
 		if cached, ok := s.climateCache().get(channelAddr); ok {
 			return cached, nil

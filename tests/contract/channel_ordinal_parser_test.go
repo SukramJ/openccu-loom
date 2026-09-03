@@ -19,16 +19,19 @@ import (
 // pkg/hmtypes that still turns a ':'-separated suffix into a number with its
 // own byte loop instead of calling [hmtypes.ChannelNo].
 //
-// The three CCU-address entries do not agree with each other: two return 0
-// for "no channel", the third returns -1, and all three scan backwards where
+// The two remaining CCU-address entries do not agree with each other: one
+// returns 0 for "no channel", the other -1, and both scan backwards where
 // hmtypes takes the first separator. Which sentinel and which direction is
 // correct is a question about what those call sites actually receive, and
 // answering it is a change of its own — so they are recorded, not blessed.
+//
+// schedule_query_adapter.go's splitChannelAddress used to be a third. It
+// delegates to hmtypes.SplitChannelAddress now and keeps only its own
+// no-separator fallback, which is why its row is gone rather than reworded.
 var materializeChannelNoHandRolledParsers = map[string]string{
-	"internal/central/adapter/paramsets.go":              "channelNumberOf: backwards scan, sentinel 0 for a non-numeric suffix",
-	"internal/central/adapter/schedule_query_adapter.go": "splitChannelAddress: backwards scan, sentinel 0; same open question as paramsets.go",
-	"pkg/hmproto/device.go":                              "DeviceDescription.ChannelNo: backwards scan, sentinel -1; disagrees with the two above",
-	"internal/north/matter/bridge/bridge.go":             "udpPort parses a network listen string, not a CCU address — a different grammar",
+	"internal/central/adapter/paramsets.go":  "channelNumberOf: backwards scan, sentinel 0 for a non-numeric suffix",
+	"pkg/hmproto/device.go":                  "DeviceDescription.ChannelNo: backwards scan, sentinel -1; disagrees with the one above",
+	"internal/north/matter/bridge/bridge.go": "udpPort parses a network listen string, not a CCU address — a different grammar",
 }
 
 // TestChannelOrdinalParsersDelegateToHmtypes fails when a file grows its own

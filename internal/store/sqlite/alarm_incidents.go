@@ -202,8 +202,8 @@ func (s *AlarmIncidentStore) PurgeClosedBefore(ctx context.Context, cutoffMS int
 	return res.RowsAffected()
 }
 
-// boolToInt maps a Go bool onto the 0/1 INTEGER convention used by
-// the alarm tables.
+// boolToInt maps a Go bool onto the 0/1 INTEGER convention this
+// package's tables use.
 func boolToInt(b bool) int {
 	if b {
 		return 1

@@ -348,7 +348,15 @@ func (b *Blind) sendCombined(ctx context.Context, level, tilt float64, wasMoving
 			return fmt.Errorf("blind: LEVEL_COMBINED: %w", err)
 		}
 	case BlindKindIP:
-		s := fmt.Sprintf("L2=%d,L=%d", int(wireT*100+0.5), int(wireL*100+0.5))
+		// The level→percent rounding is the one custom.Position defines,
+		// not a second copy of it: half-up, so a level whose binary64
+		// product lands just under the integer (0.57*100 is
+		// 56.99999999999999) still writes the percent the caller asked
+		// for. The clamp NewPosition applies is a no-op here — both axes
+		// were already bounded above.
+		s := fmt.Sprintf("L2=%d,L=%d",
+			custom.NewPosition(wireT).OpenFraction(),
+			custom.NewPosition(wireL).OpenFraction())
 		if err := b.writer.SetValue(ctx, b.Address(), hmenum.ParameterCombinedParameter, s, priority); err != nil {
 			return fmt.Errorf("blind: COMBINED_PARAMETER: %w", err)
 		}

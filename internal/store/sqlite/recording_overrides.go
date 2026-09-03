@@ -124,7 +124,7 @@ func (s *RecordingOverrideStore) DeleteDevice(
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := escapeLikePrefix(deviceAddress) + ":"
+	prefix := channelLikePrefix(deviceAddress)
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM measurement_recording_overrides
          WHERE central_name = ?

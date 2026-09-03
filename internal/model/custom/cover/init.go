@@ -291,11 +291,11 @@ func isHmSecWin(ch *device.Channel) bool {
 // Awning, curtain, and damper are valid HA device classes but no
 // Homematic device currently maps to them. The variant can still be
 // set explicitly via [Config.Variant] for custom integrations.
+// The model comparison itself lives in [isHmSecWin] only — the two
+// answers derived from it (the window-drive level mapping and the
+// variant) must move together when the model set changes.
 func coverVariantFromModel(ch *device.Channel) CoverVariant {
-	if ch == nil || ch.Device() == nil {
-		return VariantShutter
-	}
-	if ch.Device().Model == "HM-Sec-Win" {
+	if isHmSecWin(ch) {
 		return VariantWindow
 	}
 	return VariantShutter

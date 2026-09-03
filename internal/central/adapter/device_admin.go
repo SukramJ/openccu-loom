@@ -242,8 +242,10 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 	}
 	if notInInbox {
 		// At least one central reported the device gone and none accepted it:
-		// the inbox entry is stale. Surface the 404-mapped sentinel rather than
-		// the generic no-backend error (502).
+		// the inbox entry is stale. That is a different answer from "no
+		// backend could be reached", so it gets its own sentinel — the two
+		// are told apart by the REST layer, which owns the status mapping
+		// (internal/north/rest/handlers/device_admin.go).
 		return fmt.Errorf("%w: device %s", interfaces.ErrInboxDeviceNotFound, address)
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -392,9 +394,9 @@ func (a *DeviceAdminDomain) InterfaceDutyCycle(address string) (int, bool) {
 }
 
 // SetInstallMode opens a per-device pairing window via the backend's
-// XML-RPC `setInstallMode(true, durationSecs, mode=1, address)` call.
-// `mode=1` is the CCU's "normal" install mode (mode=2 means "ready
-// for re-pairing"); 0.1.0 only exposes the normal mode.
+// XML-RPC `setInstallMode(true, durationSecs, mode, address)` call, with
+// the flavour taken from [installModeNormal] so this path and the
+// broadcast path in install_mode.go cannot drift apart.
 //
 // Interfaces outside [hmenum.InterfacesSupportingInstallMode] answer
 // [backends.ErrUnsupported] before a wire call is made — the same gate
@@ -411,7 +413,7 @@ func (a *DeviceAdminDomain) SetInstallMode(ctx context.Context, address string, 
 	if !dev.Interface.SupportsInstallMode() {
 		return fmt.Errorf("set install mode: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 	}
-	return backend.SetInstallMode(ctx, true, durationSecs, 1, address)
+	return backend.SetInstallMode(ctx, true, durationSecs, installModeNormal, address)
 }
 
 // SetRooms replaces the device's room assignments via the central's

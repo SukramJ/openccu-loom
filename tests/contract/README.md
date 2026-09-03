@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 453.
+Guards without a doc comment: 7 of 455.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -162,6 +162,7 @@ Guards without a doc comment: 7 of 453.
 | TestReplaceClassification | hmenum_constants_test.go | TestReplaceClassification pins the exact set of interfaces whose daemon exposes `listReplaceableDevices` / `replaceDevice`: BidCos-RF and BidCos-Wired, because rfd and hs485d implement the guided device-replace swap while HMIPServer (HmIP-RF) throws NotImplementedException. |
 | TestTeamsClassification | hmenum_constants_test.go | TestTeamsClassification pins the team-assignment interface set: rfd (BidCos-RF) and HMIPServer (HmIP-RF) implement setTeam/listTeams; BidCos-Wired, CUxD and VirtualDevices do not. |
 | TestEveryHTTPClientOwnsItsTransport | http_transport_ownership_test.go | TestEveryHTTPClientOwnsItsTransport fails on any composite literal of type http.Client that omits the Transport field, on any reference to http.DefaultClient, and on the http package's request helpers that dispatch through it. |
+| TestEveryHubRefreshCategoryHasABootLoad | hub_refresh_boot_load_test.go | TestEveryHubRefreshCategoryHasABootLoad pins InitHub's slot coverage against the hubRefreshSet declaration. |
 | TestHubUniqueIDMatchesAcrossPlanes | hub_unique_id_cross_plane_test.go | TestHubUniqueIDMatchesAcrossPlanes pins the two implementations of a hub entity's `unique_id` against each other: hub.Program / hub.Sysvar serve it on the REST/WS plane, and the MQTT discovery builder serves it on the broker. |
 | TestContractHubDataPointUniqueIDIsCentralScoped | hub_visibility_test.go | TestContractHubDataPointUniqueIDIsCentralScoped pins ADR 0002: every hub DP must produce a UniqueID with a non-empty central segment. |
 | TestContractHubDataPointVisibilityMatrix | hub_visibility_test.go | TestContractHubDataPointVisibilityMatrix pins every (forced-usage, EnabledDefault) combination on hub data points, mirroring the foundation matrix in `internal/model/datapoint/base_test.go`. |
@@ -227,6 +228,7 @@ Guards without a doc comment: 7 of 453.
 | TestOpenAPIDeclaresMVPEndpoints | openapi_test.go | — (no doc comment) |
 | TestOpenAPIManagementPathsPresent | openapi_test.go | TestOpenAPIManagementPathsPresent pins the management and live-edit paths in the spec so a future router rename or refactor cannot silently drift away from the production OpenAPI validator middleware. |
 | TestOpenAPIVersion | openapi_test.go | — (no doc comment) |
+| TestPendingDevicePhaseVocabularyIsOneVocabulary | pending_device_phase_vocabulary_test.go | TestPendingDevicePhaseVocabularyIsOneVocabulary pins the three copies of the onboarding phase vocabulary against each other. |
 | TestPingPongCallerIDDistinguishesDaemons | ping_pong_caller_id_contract_test.go | TestPingPongCallerIDDistinguishesDaemons asserts that two daemons with the same CentralName and Interface but different InitInterfaceID values produce distinct WireBoundaryID values, and that neither degenerates to the bare interface name. |
 | TestProfileArchivesHaveOneSource | profile_archive_single_source_test.go | TestProfileArchivesHaveOneSource asserts that no package carries its own copy of the eQ-3 profile archives. |
 | TestProfilesArchiveConstraintGrammarIsFullyDecoded | profiles_archive_constraint_grammar_test.go | TestProfilesArchiveConstraintGrammarIsFullyDecoded pins the typed constraint struct against the archive it decodes. |

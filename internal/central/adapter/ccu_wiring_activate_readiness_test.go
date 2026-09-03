@@ -152,7 +152,7 @@ func gateTestFaultXML(code int, message string) string {
 // them.
 //
 // Timeline (all durations are wireInterface's own hardcoded constants, not
-// test-configurable — see ccu_wiring.go's ingestBackoff and
+// test-configurable — see cuxd_wiring.go's ingestBackoff and
 // activateReadinessProbeTimeout in ccu_readiness.go):
 //
 //  1. Attempt 0: listDevices fails (forced) -> ingestLoop backs off 1s.

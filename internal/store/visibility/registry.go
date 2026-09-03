@@ -223,14 +223,21 @@ func AcceptParameterOnlyOnChannelMap() map[string]int {
 // does `search_key.startswith(element)` in the reference stack): the sole
 // entry "HmIP-PS" must also cover HmIP-PSM and the all-caps HMIP-PS
 // spelling some firmware reports.
+//
+// Every matching key is consulted, not just the first one the map iteration
+// yields: with two keys that are both prefixes of the model, returning the
+// first key's verdict would make the answer depend on Go's randomised map
+// order. The map holds one key today, so this is a boundary, not a repair of
+// an observed failure.
 func IsParameterIgnoredForDataPointEvent(model string, p hmenum.Parameter) bool {
 	modelL := strings.ToLower(model)
 	for key, params := range ignoreDevicesForDataPointEvents {
 		if !strings.HasPrefix(modelL, strings.ToLower(key)) {
 			continue
 		}
-		_, suppressed := params[p]
-		return suppressed
+		if _, suppressed := params[p]; suppressed {
+			return true
+		}
 	}
 	return false
 }

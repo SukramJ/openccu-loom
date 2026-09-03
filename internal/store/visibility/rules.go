@@ -446,6 +446,13 @@ var ignoreParametersByDevice = map[string]map[string]struct{}{
 		"HM-LC-Sw4-DR",
 		"HM-SwI-3-FM",
 	),
+	// The HmIP-PCBS key is inert for the models HmIP-PCBS and HmIP-PCBS-BAT
+	// themselves: step 0 of computeIgnoredValues returns not-ignored first,
+	// because deviceUnIgnoresByPrefix matches the un-ignore key
+	// HmIP-PCBS-BAT, which starts with either model name. The entry reaches
+	// only longer variants that are not a prefix of an un-ignore key —
+	// measured: HmIP-PCBS2. Do not delete it: HmIP-PCBS2 is suppressed
+	// through it today.
 	"LOW_BAT": modelNameSet("HmIP-BWTH", "HmIP-PCBS"),
 	"OPERATING_VOLTAGE": modelNameSet(
 		"ELV-SH-BS2",
@@ -460,6 +467,8 @@ var ignoreParametersByDevice = map[string]map[string]struct{}{
 		"HmIP-FROLL",
 		"HmIP-FSM",
 		"HmIP-MOD-OC8",
+		// Inert for HmIP-PCBS and HmIP-PCBS-BAT for the reason spelled out
+		// above the LOW_BAT entry; reaches HmIP-PCBS2.
 		"HmIP-PCBS",
 		"HmIP-PDT",
 		"HmIP-PMFS",

@@ -279,10 +279,16 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 	}
 	changes := auditChanges(before, after)
 	rc, _ := reqctx.FromContext(ctx)
+	// SplitChannelAddress, not channelNumberOf: a device-level write
+	// carries a bare device address, for which channelNumberOf answers 0
+	// — the audit row then reads as a write to channel 0, an existing and
+	// unrelated channel. The canonical parser answers -1, the model's own
+	// device.ChannelNumberDevice.
+	_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
 	p.audit.Record(audit.Entry{
 		Action:        audit.ActionParamsetWrite,
 		DeviceAddress: deviceAddressOf(channelAddress),
-		ChannelNo:     channelNumberOf(channelAddress),
+		ChannelNo:     auditChannelNo,
 		Paramset:      paramset,
 		Changes:       changes,
 		Note:          rc.Operation,
@@ -484,10 +490,13 @@ func (p *ParamsetsDomain) PutLinkParamset(
 	_, _ = b.GetLinkParamset(ctx, channelAddress, peerAddress)
 	if p.audit != nil {
 		changes := auditChanges(before, values)
+		// See recordParamsetWrite: the canonical parser reports the
+		// device level as -1 rather than as channel 0.
+		_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
 		p.audit.Record(audit.Entry{
 			Action:        audit.ActionLinkParamsetWrite,
 			DeviceAddress: deviceAddressOf(channelAddress),
-			ChannelNo:     channelNumberOf(channelAddress),
+			ChannelNo:     auditChannelNo,
 			Peer:          peerAddress,
 			Changes:       changes,
 		})

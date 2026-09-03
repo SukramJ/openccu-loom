@@ -919,7 +919,7 @@ func serializeSimpleScheduleWithDomain(
 // from the high-level lock_mode + (lock_action | permission) fields.
 func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 	switch e.LockMode {
-	case "door_lock":
+	case string(schedule.LockModeDoorLock):
 		level, durBase, durFactor, ok := lockActionRawFor(e.LockAction)
 		if !ok {
 			return e
@@ -931,11 +931,11 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 		if len(e.TargetChannels) == 0 {
 			e.TargetChannels = []string{"1_1"}
 		}
-	case "user_permission":
+	case string(schedule.LockModeUserPermission):
 		switch e.Permission {
-		case "granted":
+		case string(schedule.LockPermissionAllowed):
 			e.Level = 1.0
-		case "not_granted":
+		case string(schedule.LockPermissionDenied):
 			e.Level = 0.0
 		}
 		e.Duration = weekprofile.FormatTimeBaseFactor(schedule.PermanentDurationBase, schedule.PermanentDurationFactor)
@@ -1191,10 +1191,7 @@ func (s *SchedulesDomain) resolve(
 // BidCos thermostats (HM-CC-RT-DN); every other channel gets the usual
 // "<device>:<channel>" form.
 func scheduleChannelAddress(deviceAddress string, channelNo int) string {
-	if channelNo == device.ChannelNumberDevice {
-		return deviceAddress
-	}
-	return fmt.Sprintf("%s:%d", deviceAddress, channelNo)
+	return hmtypes.ChannelAddress(deviceAddress, channelNo)
 }
 
 // --- Parsing ------------------------------------------------------

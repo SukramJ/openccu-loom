@@ -15480,9 +15480,9 @@ func TestResolveDataPointSequenceOKReturnsNil(t *testing.T) {
 			Operations: hmenum.OperationsEvent,
 		},
 	}
-	dp := resolveDataPoint(cfg)
+	dp := resolveDataPointWithUnIgnore(cfg, false)
 	if dp != nil {
-		t.Errorf("resolveDataPoint(SEQUENCE_OK) must return nil, got %T", dp)
+		t.Errorf("resolveDataPointWithUnIgnore(SEQUENCE_OK) must return nil, got %T", dp)
 	}
 }
 
@@ -15512,7 +15512,7 @@ func TestMasterOperationsZeroFixedBeforeResolve(t *testing.T) {
 		Operations: hmenum.OperationsNone, // 0
 	}
 	cfgBefore := generic.Spec{Key: key, Descriptor: pdBefore}
-	dpBefore := resolveDataPoint(cfgBefore)
+	dpBefore := resolveDataPointWithUnIgnore(cfgBefore, false)
 	// With OPERATIONS=0, resolveDataPoint should return nil (no READ, no
 	// WRITE → falls to resolveReadonly → no binary/sensor match for writable).
 	// Note: this is the pre-fix behavior — the fix is in hydrateParamset,
@@ -15525,7 +15525,7 @@ func TestMasterOperationsZeroFixedBeforeResolve(t *testing.T) {
 		Operations: hmenum.OperationsRead | hmenum.OperationsWrite, // 3
 	}
 	cfgAfter := generic.Spec{Key: key, Descriptor: pdAfter}
-	dpAfter := resolveDataPoint(cfgAfter)
+	dpAfter := resolveDataPointWithUnIgnore(cfgAfter, false)
 	if dpAfter == nil {
 		t.Error("resolveDataPoint with OPERATIONS=3 (Read+Write) must return non-nil DP for FLOAT")
 	}

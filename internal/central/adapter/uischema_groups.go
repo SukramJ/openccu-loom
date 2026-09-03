@@ -20,11 +20,13 @@ type groupPattern struct {
 	expression *regexp.Regexp
 }
 
-// FallbackGroupPatterns mirrors 's
-// `_GROUP_DEFINITIONS` in grouping.py, plus an explicit DST section
-// That leaves for the HA frontend to split
-// client-side. We split at the backend so every API consumer (and
-// our own SPA) sees the same top-level structure.
+// fallbackGroupPatterns is the Tier-3 section heuristic: regex buckets
+// plus an explicit Daylight-Saving-Time section, applied to a channel that
+// carries no easymode metadata. Order matters — the first match wins, so
+// the more specific expressions come first.
+//
+// The split happens in the backend rather than in each client, so every
+// API consumer and the SPA see the same top-level structure.
 var fallbackGroupPatterns = []groupPattern{
 	{
 		id: "dst", labelEn: "Daylight Saving Time", labelDe: "Sommerzeit",
@@ -150,13 +152,11 @@ func (a *UISchemaAdapter) orderedSingleGroup(
 	if len(all) == 0 {
 		return nil
 	}
-	label := otherGroupLabel(locale)
-	switch locale {
-	case "en":
-		label = "Settings"
-	case "de":
-		label = "Einstellungen"
-	}
+	// Every parameter is in this one bucket, so it is the whole settings
+	// list, not a leftovers bucket. An unsupported locale therefore falls
+	// back to the English title of THIS group, not to the catch-all's
+	// "Other Settings" — that seed was reaching every locale but en and de.
+	label := groupLabelForLocale(locale, "Settings", "Einstellungen")
 	return []hmapi.UISchemaGroup{{ID: "all", Label: label, Parameters: all}}
 }
 

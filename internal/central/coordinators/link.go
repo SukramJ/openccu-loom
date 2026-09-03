@@ -173,50 +173,6 @@ func (c *LinkCoordinator) GetLinkableChannels(ctx context.Context, deviceAddress
 		})
 }
 
-// GetLinksForLocale lists every direct link a device participates in,
-// filtered by role and sorted by (sender, receiver). locale is currently
-// reserved for future i18n label translation; role is matched verbatim
-// against [DeviceLink.Direction], so the accepted set is the direction
-// vocabulary the north-bound contract serialises: "" = all,
-// "outgoing" = links the device sends on, "incoming" = links it receives.
-func (c *LinkCoordinator) GetLinksForLocale(ctx context.Context, deviceAddress, locale, role string) ([]DeviceLink, error) {
-	links, err := c.GetLinks(ctx, deviceAddress)
-	if err != nil {
-		return nil, err
-	}
-	if role == "" {
-		return links, nil
-	}
-	out := links[:0]
-	for i := range links {
-		if links[i].Direction == role {
-			out = append(out, links[i])
-		}
-	}
-	return out, nil
-}
-
-// GetLinkableChannelsForLocale enumerates linkable channels, filtered by
-// role. locale is reserved for future i18n label translation; role is
-// a free-form filter string applied against ChannelType (exact match, "" =
-// all). This is the extended-signature variant of [GetLinkableChannels].
-func (c *LinkCoordinator) GetLinkableChannelsForLocale(ctx context.Context, deviceAddress, locale, role string) ([]LinkableChannel, error) {
-	channels, err := c.GetLinkableChannels(ctx, deviceAddress)
-	if err != nil {
-		return nil, err
-	}
-	if role == "" {
-		return channels, nil
-	}
-	out := channels[:0]
-	for i := range channels {
-		if channels[i].ChannelType == role {
-			out = append(out, channels[i])
-		}
-	}
-	return out, nil
-}
-
 // SetLinkInfo updates the human-readable name / description of an
 // existing link.
 func (c *LinkCoordinator) SetLinkInfo(ctx context.Context, sender, receiver, name, description string) error {

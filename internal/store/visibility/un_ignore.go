@@ -8,6 +8,12 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // UnIgnoreWildcard is the placeholder token used in full-format
 // un-ignore candidate strings when the channel or model is left
 // unspecified (e.g. "ALARM_COUNT:VALUES@HmIP-SWSD:all").
+//
+// It is the sentinel for both "all models" and "all channels" in the
+// complex un-ignore grammar: it may appear as the model field value and
+// as the channel_no field value, and an entry using it for both is a
+// fully-open wildcard. The concrete value ("all") matches
+// UN_IGNORE_WILDCARD in the reference implementation.
 const UnIgnoreWildcard = "all"
 
 // ignoreForUnIgnoreParameters lists parameters that must never be

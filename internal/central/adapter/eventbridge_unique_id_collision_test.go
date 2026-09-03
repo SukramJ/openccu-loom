@@ -142,7 +142,7 @@ func publishVirtualRemoteDiscovery(t *testing.T, centralName, address, serial st
 	// production fleet publishes ~900 of. The resolver decides the shape;
 	// hand-building one would let the fixture pick the outcome.
 	for _, param := range []hmenum.Parameter{hmenum.ParameterPressShort, hmenum.ParameterPressLong} {
-		dp := resolveDataPoint(generic.Spec{
+		dp := resolveDataPointWithUnIgnore(generic.Spec{
 			Key: hmtypes.DataPointKey{
 				InterfaceID:    "BidCos-RF",
 				ChannelAddress: ch.Address,
@@ -153,7 +153,7 @@ func publishVirtualRemoteDiscovery(t *testing.T, centralName, address, serial st
 				Type:       hmenum.ParameterTypeAction,
 				Operations: hmenum.OperationsEvent,
 			},
-		})
+		}, false)
 		if dp == nil {
 			t.Fatalf("the resolver produced no data point for %s", param)
 		}

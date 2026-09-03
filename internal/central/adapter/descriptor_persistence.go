@@ -244,6 +244,15 @@ func WireDescriptorPersistence(ctx context.Context, unit *central.Unit, stores D
 			iface := hmtypes.ParseWireInterfaceID(rec.InterfaceID)
 			// Put, not Add: rows were persisted post-normalisation and
 			// post-patching, so re-applying patches here would double-patch.
+			// The consequence is that a row freezes the patch table's
+			// output as of the release that wrote it — a later patch-table
+			// edit does not reach an already-persisted row, because
+			// hydration re-applies nothing. It is corrected on the next
+			// live pull: [DevicePipeline.hydrateParamset] always reads
+			// GetParamsetDescription from the wire and re-patches, so a
+			// normal boot rewrites every channel the CCU still answers
+			// for. A channel it no longer answers for keeps the previous
+			// release's values indefinitely.
 			unit.ParamsetReg.Put(iface, rec.ChannelAddress, rec.ParamsetKey, rec.Paramset)
 			sink.psHashes[psHashKey(iface, rec.ChannelAddress, rec.ParamsetKey)] = rec.Hash
 			paramsets++

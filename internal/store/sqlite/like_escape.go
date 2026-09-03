@@ -21,3 +21,17 @@ import "strings"
 func escapeLikePrefix(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
+
+// channelLikePrefix is the LIKE prefix that matches every channel row of
+// deviceAddress. Each statement in this package binds deviceAddress verbatim
+// into its own `channel_address = ?` arm and this prefix into the LIKE arm,
+// so the two together mean "the device row and all its channels".
+//
+// The trailing colon is trimmed first because a caller-supplied address is
+// unvalidated (internal/central/cachereset Scope.Validate checks only that
+// the field is non-empty): without the trim, "ABC123:" would build the
+// prefix "ABC123::", which matches nothing at all. Three of the call sites
+// trimmed and six did not before this was single-sourced.
+func channelLikePrefix(deviceAddress string) string {
+	return escapeLikePrefix(strings.TrimRight(deviceAddress, ":")) + ":"
+}

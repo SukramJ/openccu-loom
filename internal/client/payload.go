@@ -45,6 +45,20 @@ func (c *InterfaceClient) Config() payload.ConfigPayload {
 	}
 }
 
+// stateTimestampLayout is the RFC3339 spelling the client state payload emits
+// for its two timestamps: UTC with the fractional second padded to a fixed
+// nine digits.
+//
+// It is deliberately not [time.RFC3339Nano], which trims trailing zeros and
+// therefore varies its width with the value — an instant at .5 s renders as
+// ".500000000Z" through this layout and ".5Z" through that one. Both re-parse
+// to the same instant; only a consumer that string-compares or assumes a
+// fixed width can tell them apart.
+//
+// TestStateTimestampLayoutIsFixedWidth pins the padding against a silent
+// swap to time.RFC3339Nano.
+const stateTimestampLayout = "2006-01-02T15:04:05.000000000Z07:00"
+
 // State returns the live client state: state-machine bucket, request
 // counters and last-failure / last-callback timestamps. The
 // aggregated shape lets the MQTT bridge publish one connectivity
@@ -67,12 +81,12 @@ func (c *InterfaceClient) State() payload.StatePayload {
 	}
 	c.failureMu.Lock()
 	if !c.lastFailureAt.IsZero() {
-		out.LastFailureAt = c.lastFailureAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
+		out.LastFailureAt = c.lastFailureAt.UTC().Format(stateTimestampLayout)
 	}
 	c.failureMu.Unlock()
 	c.callbackMu.Lock()
 	if !c.lastCallbackAt.IsZero() {
-		out.LastCallbackAt = c.lastCallbackAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
+		out.LastCallbackAt = c.lastCallbackAt.UTC().Format(stateTimestampLayout)
 	}
 	c.callbackMu.Unlock()
 	return out

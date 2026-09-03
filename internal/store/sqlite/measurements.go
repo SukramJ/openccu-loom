@@ -1222,7 +1222,7 @@ func (s *MeasurementStore) readEnergyTier(
 	if toMs <= fromMs {
 		return nil, nil
 	}
-	prefix := escapeLikePrefix(deviceAddr) + ":%"
+	prefix := channelLikePrefix(deviceAddr) + "%"
 	rows, err := s.db.QueryContext(ctx, query,
 		central, energyParameters[0], energyParameters[1], energyParameters[2],
 		fromMs, toMs, deviceAddr, deviceAddr, prefix)
@@ -1239,7 +1239,7 @@ func (s *MeasurementStore) foldRawEnergy(
 	if toMs <= fromMs {
 		return nil, nil
 	}
-	prefix := escapeLikePrefix(deviceAddr) + ":%"
+	prefix := channelLikePrefix(deviceAddr) + "%"
 	rows, err := s.db.QueryContext(ctx, energyRawFoldSQL,
 		widthMs, toMs, widthMs, central, energyParameters[0], energyParameters[1], energyParameters[2],
 		fromMs, toMs, deviceAddr, deviceAddr, prefix)
@@ -1848,7 +1848,7 @@ func (s *MeasurementStore) DeleteDevice(
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := escapeLikePrefix(deviceAddress) + ":"
+	prefix := channelLikePrefix(deviceAddress)
 	// One statement per tier, inside one transaction: the rollups outlive
 	// the raw rows, so an unpaired device would keep its aggregates for the
 	// tiers' whole retention if only `measurements` were cleared. Without

@@ -176,8 +176,8 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		   visibility_json=excluded.visibility_json, behavior_json=excluded.behavior_json,
 		   enabled=excluded.enabled, updated_at=excluded.updated_at`,
 		r.Name, r.Host, r.Serial, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, sealedPlain,
-		boolInt(r.TLS), boolInt(r.TLSInsecureSkipVerify), r.PrimaryInterface,
-		string(ifJSON), string(portsJSON), string(visJSON), string(behJSON), boolInt(r.Enabled),
+		boolToInt(r.TLS), boolToInt(r.TLSInsecureSkipVerify), r.PrimaryInterface,
+		string(ifJSON), string(portsJSON), string(visJSON), string(behJSON), boolToInt(r.Enabled),
 		now, now)
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals upsert: %w", err)
@@ -302,11 +302,4 @@ func (s *CentralsStore) Count(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("sqlite: centrals count: %w", err)
 	}
 	return n, nil
-}
-
-func boolInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }

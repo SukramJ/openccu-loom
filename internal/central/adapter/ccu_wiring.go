@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -980,7 +981,7 @@ func wireInterface(
 
 		// Resolve the CCU's TCP address from the XML-RPC URL so the
 		// TCP-probe stage can dial without knowing the per-interface port.
-		ccuTCPAddr := cc.Host + ":2010" // fallback: CCU homematic2 port
+		ccuTCPAddr := interfaceTCPAddr(cc, iface)
 		if parsed, parseErr := neturl.Parse(url); parseErr == nil && parsed.Host != "" {
 			ccuTCPAddr = parsed.Host // already "host:port"
 		}
@@ -1340,9 +1341,6 @@ func wireInterface(
 	// wireInterface runs on the central's background bring-up goroutine, so a
 	// brief block is fine; ctx-cancel (teardown) aborts the wait. The interface
 	// is reported as wired regardless (the closer tracks it for shutdown).
-	ingestBackoff := []time.Duration{
-		1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
-	}
 	ingested = runXMLRPCActivation(ctx, ingestBackoff, activate, ic, cc.Name, wireID, logger)
 
 	// The bring-up has reported its result for this interface, so hand it to
@@ -1545,27 +1543,13 @@ func interfaceRemotePathOverride(cc config.CentralConfig, iface hmenum.Interface
 // and therefore rejected here — callers that want CUxD must wire the
 // BIN-RPC caller separately.
 func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, error) {
-	if iface == hmenum.InterfaceCUxD {
-		return "", errors.New("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
+	port, err := interfacePort(cc, iface)
+	if err != nil {
+		return "", err
 	}
-	ports, ok := hmenum.DetectionPorts[iface]
-	if !ok {
-		return "", fmt.Errorf("no known port for interface %q", iface)
-	}
-	port := ports.Plain
 	scheme := "http"
 	if cc.TLS {
-		if ports.TLS == 0 {
-			return "", fmt.Errorf("interface %q has no TLS port", iface)
-		}
-		port = ports.TLS
 		scheme = "https"
-	}
-	// Per-interface override takes precedence over the central-wide
-	// fallback so operators can pin, e.g., HmIP-RF to a non-standard
-	// port without disturbing other interfaces.
-	if ov := interfacePortOverride(cc, iface); ov > 0 {
-		port = ov
 	}
 	// Path mirrors the CCU's XML-RPC routing: /RPC2 is the default
 	// endpoint, /groups is the VirtualDevices variant. POSTing to the
@@ -1583,4 +1567,45 @@ func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, erro
 		path = ov
 	}
 	return fmt.Sprintf("%s://%s:%d%s", scheme, cc.Host, port, path), nil
+}
+
+// interfacePort resolves the TCP port for (central, interface): the
+// SPECIFICATION §7.2 detection port, its TLS variant when the central
+// speaks TLS, and finally the per-interface operator override. CUxD is
+// BIN-RPC only and is rejected here, like [interfaceURL].
+func interfacePort(cc config.CentralConfig, iface hmenum.Interface) (int, error) {
+	if iface == hmenum.InterfaceCUxD {
+		return 0, errors.New("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
+	}
+	ports, ok := hmenum.DetectionPorts[iface]
+	if !ok {
+		return 0, fmt.Errorf("no known port for interface %q", iface)
+	}
+	port := ports.Plain
+	if cc.TLS {
+		if ports.TLS == 0 {
+			return 0, fmt.Errorf("interface %q has no TLS port", iface)
+		}
+		port = ports.TLS
+	}
+	// Per-interface override takes precedence over the central-wide
+	// fallback so operators can pin, e.g., HmIP-RF to a non-standard
+	// port without disturbing other interfaces.
+	if ov := interfacePortOverride(cc, iface); ov > 0 {
+		port = ov
+	}
+	return port, nil
+}
+
+// interfaceTCPAddr is the "host:port" the recovery coordinator's TCP probe
+// dials for (central, interface). It answers the same port [interfaceURL]
+// puts in the endpoint, so the probe cannot end up watching a different
+// interface's port than the one the RPC calls use. Empty when the interface
+// has no XML-RPC port.
+func interfaceTCPAddr(cc config.CentralConfig, iface hmenum.Interface) string {
+	port, err := interfacePort(cc, iface)
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort(cc.Host, strconv.Itoa(port))
 }

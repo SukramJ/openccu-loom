@@ -361,8 +361,12 @@ func backupNameSegment(s string) string {
 }
 
 // backupTimestampLayout is the fixed-width UTC timestamp appended to every
-// backup id. Its rendered length (incl. the leading separator, see
-// backupID) is backupIDSuffixLen.
+// backup id this adapter MINTS (see backupID). Its rendered length (incl.
+// the leading separator) is backupIDSuffixLen.
+//
+// Operator-uploaded ids are minted elsewhere, by
+// FilesystemBackupStorage.SaveUploaded, with a wider millisecond layout;
+// they are deliberately NOT decomposable by backupIDSuffixLen.
 const backupTimestampLayout = "20060102-150405"
 
 // backupIDSuffixLen is the length of the "-<timestamp>" suffix backupID

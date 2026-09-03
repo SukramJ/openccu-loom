@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -73,9 +74,14 @@ func TestCheckParamsetConsistencyNilCheckerReturnsError(t *testing.T) {
 	}
 }
 
-// ─── Test 2: non-HmIP interfaces are skipped (no inconsistencies) ────────────
+// ─── Test 2: non-HmIP interfaces are rejected, not silently skipped ──────────
 
-func TestCheckParamsetConsistencySkipsNonHmIPInterfaces(t *testing.T) {
+// TestCheckParamsetConsistencyRejectsNonHmIPInterfaces pins the refusal as an
+// error rather than an empty clean result. An empty result is what a caller
+// widened past HmIP-RF would read as "these devices are fine", although no
+// device was looked at; hmerr.ErrUnsupported makes that case loud in the
+// background runner's log instead.
+func TestCheckParamsetConsistencyRejectsNonHmIPInterfaces(t *testing.T) {
 	t.Parallel()
 	descs := []hmproto.DeviceDescription{
 		{Address: "BID0001", Parent: "", Type: "HM-LC-Sw1-Pl"},
@@ -89,8 +95,8 @@ func TestCheckParamsetConsistencySkipsNonHmIPInterfaces(t *testing.T) {
 	})
 	checker := &fakeChecker{perChannel: map[string]map[string]any{}}
 	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceBidCosRF, wireKey(hmenum.InterfaceBidCosRF), []string{"BID0001"}, checker)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if !errors.Is(err, hmerr.ErrUnsupported) {
+		t.Fatalf("BidCos-RF must be refused with hmerr.ErrUnsupported, got results=%d err=%v", len(results), err)
 	}
 	if len(results) != 0 {
 		t.Fatalf("expected no inconsistencies for BidCos-RF, got %d", len(results))

@@ -11,23 +11,23 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
-// resolveDataPoint maps a paramset entry onto a concrete
+// resolveDataPointWithUnIgnore maps a paramset entry onto a concrete
 // [device.ParameterDataPoint]. The decision tree:
 //
 //	writable ACTION → Button / ActionSelect / Action / Switch
 //	writable non-ACTION, write-only → ActionSelect / ActionFloat / …
 //	writable read+write → Switch / Select / Float / Integer / Text
-//	readonly → BinarySensor / (typed) Sensor / nil for click events
+//	readonly → BinarySensor / Button (click events) / (typed) Sensor
 //
-// Returns nil when the parameter is a click event (handled as a
-// separate event stream), or when the (type, operations) tuple has
-// no meaningful data-point analogue (e.g. ENUM readonly without a
-// value list).
-func resolveDataPoint(cfg generic.Spec) device.ParameterDataPoint {
-	return resolveDataPointWithUnIgnore(cfg, false)
-}
-
-// resolveDataPointWithUnIgnore is the un-ignore-aware variant. When the
+// It returns nil in exactly three cases: an impulse event (SEQUENCE_OK —
+// see [ImpulseEvents]), a DEVICE_ERROR-prefixed parameter the visibility
+// decider has not un-ignored, and a descriptor whose TYPE is DUMMY or
+// empty. Click events are NOT dropped — they resolve to a Button in
+// [resolveReadonly], because dropping them left HmIP-BSM / HmIP-WRC buttons
+// with no data point at all. A read-only ENUM resolves to an integer sensor
+// whether or not it carries a VALUE_LIST.
+//
+// It is the un-ignore-aware entry point. When the
 // caller already knows from the visibility decider that an ERROR-prefixed
 // parameter is un-ignored for this device model (e.g. HM-Sec-Key HM-Sec-Win
 // ERROR or HmIP-DLD / HmIP-DLP ERROR_JAMMED — see

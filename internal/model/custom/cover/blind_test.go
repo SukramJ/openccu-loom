@@ -371,3 +371,33 @@ func TestBlindHMAttachesLevelCombinedDP(t *testing.T) {
 		t.Errorf("expected LevelCombined in CombinedDataPoints(), got %d DPs", len(cdps))
 	}
 }
+
+// TestBlindCombinedParameterRoundsHalfUp pins the rounding mode of the
+// HmIP COMBINED_PARAMETER percentages.
+//
+// The two levels are chosen because binary64 puts their products just
+// below the integer: 0.57*100 is 56.99999999999999 and 0.29*100 is
+// 28.999999999999996. Truncation writes 56/28 — the position the user
+// asked for, off by one percent on both axes. Half-up writes 57/29.
+// Both levels are computed at run time so the compiler cannot fold the
+// multiplication exactly.
+func TestBlindCombinedParameterRoundsHalfUp(t *testing.T) {
+	w := &putWriter{}
+	b := newBlindRig(t, "VCU9000003:1", w, custom.CoverCapabilities{}, BlindKindIP)
+
+	level, tilt := 0.57, 0.29
+	if err := b.SetCombined(context.Background(), level, tilt, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatal(err)
+	}
+
+	var combinedVal string
+	for _, c := range w.calls {
+		if c.param == hmenum.ParameterCombinedParameter {
+			combinedVal = c.value.(string)
+		}
+	}
+	const want = "L2=29,L=57"
+	if combinedVal != want {
+		t.Errorf("COMBINED_PARAMETER=%q, want %q", combinedVal, want)
+	}
+}

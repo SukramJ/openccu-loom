@@ -491,3 +491,38 @@ func TestGarageOnMatterValueChangedNilSafe(t *testing.T) {
 	}
 	fireDoorState(t, doorStateDP, string(DoorStateOpen)) // must not panic with no subscriber
 }
+
+// TestGoToLiftPercentageClampsToPercent100thsMax drives an out-of-range
+// Percent100ths through the production invoke path and pins that what
+// reaches the stored Matter target is the saturated value, not the raw
+// one.
+//
+// The wire shape is the tag-keyed map the bridge's generic field decoder
+// produces, with the unsigned integer widened to uint64 — the shape a
+// real GoToLiftPercentage lands in, since the command has no typed
+// decoder. Reading TargetPositionLiftPercent100ths back is the only
+// externally visible consequence of the clamp: the HM conversion
+// saturates independently, so a missing clamp shows up here and nowhere
+// else.
+func TestGoToLiftPercentageClampsToPercent100thsMax(t *testing.T) {
+	t.Parallel()
+	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
+	srv := c.MatterClusterServers()[0]
+
+	if _, err := srv.MatterInvoke(
+		context.Background(),
+		matterCmdGoToLiftPercentage,
+		map[uint8]any{0: uint64(20000)},
+		hmenum.CommandPriorityHigh,
+	); err != nil {
+		t.Fatalf("GoToLiftPercentage(20000): %v", err)
+	}
+
+	target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+	if !ok {
+		t.Fatal("TargetPositionLift not readable after GoToLiftPercentage")
+	}
+	if got := target.(uint16); got != matterCoverPctMax {
+		t.Fatalf("TargetPositionLift after GoToLiftPercentage(20000) = %d, want %d", got, matterCoverPctMax)
+	}
+}

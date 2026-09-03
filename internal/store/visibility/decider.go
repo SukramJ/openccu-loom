@@ -349,8 +349,8 @@ func modelMatchesByPrefix(model string, models map[string]struct{}) bool {
 //
 // Without a whitelist match, MASTER DPs default to NoCreate so unlisted
 // devices like HmIP-STE2-PCB / HmIP-SFD don't surface ~25 configuration
-// entities (ARR_TIMEOUT, CYCLIC_INFO_MSG, COND_TX_*, …) HA users never tune
-// from the climate / sensor card.
+// entities (ARR_TIMEOUT, CYCLIC_INFO_MSG, COND_TX_*, …) — configuration
+// parameters no operator tunes from a device view.
 //
 // Decision order: 1. If the parameter is in relevantMasterParamsetsByChannel
 // for channelNo (or the nil-channel wildcard) → NOT ignored. 2. If the model
@@ -607,9 +607,9 @@ func (d *ParameterDecider) matchesUnIgnore(central, model string, channelNo int,
 // _check_parameter_is_un_ignored in parameter_decider.py):
 //
 //	(model_l, channelNo)           — exact model + exact channel
-//	(model_l, unIgnoreWildcard)    — exact model + any channel
-//	(unIgnoreWildcard, channelNo)  — any model + exact channel
-//	(unIgnoreWildcard, wildcard)   — any model + any channel
+//	(model_l, UnIgnoreWildcard)    — exact model + any channel
+//	(UnIgnoreWildcard, channelNo)  — any model + exact channel
+//	(UnIgnoreWildcard, wildcard)   — any model + any channel
 //
 // For non-VALUES (MASTER, LINK, …) only the exact (model_l, channelNo) point
 // is checked.
@@ -670,16 +670,16 @@ func entryMatchesSearchMatrix(e UnIgnoreEntry, modelL string, channelNo int, par
 		if entryModelChannelMatch(eModelL, modelL, e, channelNo) {
 			return true
 		}
-		// Point 2: (model_l, unIgnoreWildcard) — exact model + any channel.
+		// Point 2: (model_l, UnIgnoreWildcard) — exact model + any channel.
 		if eModelL == modelL && e.ChannelNoIsWildcard {
 			return true
 		}
-		// Point 3: (unIgnoreWildcard, channelNo) — any model + exact channel.
-		if eModelL == unIgnoreWildcard && entryChannelMatch(e, channelNo) {
+		// Point 3: (UnIgnoreWildcard, channelNo) — any model + exact channel.
+		if eModelL == UnIgnoreWildcard && entryChannelMatch(e, channelNo) {
 			return true
 		}
-		// Point 4: (unIgnoreWildcard, wildcard) — any model + any channel.
-		if eModelL == unIgnoreWildcard && e.ChannelNoIsWildcard {
+		// Point 4: (UnIgnoreWildcard, wildcard) — any model + any channel.
+		if eModelL == UnIgnoreWildcard && e.ChannelNoIsWildcard {
 			return true
 		}
 		return false

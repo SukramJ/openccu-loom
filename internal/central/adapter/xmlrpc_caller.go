@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math"
 
@@ -122,6 +123,10 @@ func xmlRPCValueToGo(v xmlrpc.Value) any {
 		return bool(x)
 	case xmlrpc.DoubleValue:
 		return float64(x)
+	case xmlrpc.DateTimeValue:
+		return x.Time().Format(xmlrpc.ISO8601CompactLayout)
+	case xmlrpc.Base64Value:
+		return base64.StdEncoding.EncodeToString([]byte(x))
 	case xmlrpc.ArrayValue:
 		out := make([]any, 0, len(x))
 		for _, e := range x {

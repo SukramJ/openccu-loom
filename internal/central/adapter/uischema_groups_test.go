@@ -162,6 +162,34 @@ func TestBuildGroupsOrderedSingleGroupDe(t *testing.T) {
 	}
 }
 
+// TestBuildGroupsOrderedSingleGroupUnsupportedLocale pins the Tier-2
+// bucket's fallback title.
+//
+// The locale reaching this code is the raw ?locale= query parameter, so any
+// value a client sends arrives here. The bucket holds every parameter of
+// the channel, so titling it "Other Settings" for an unsupported locale
+// tells the operator that the settings they are looking at are the
+// leftovers.
+func TestBuildGroupsOrderedSingleGroupUnsupportedLocale(t *testing.T) {
+	t.Parallel()
+	a := nilAdapter()
+	meta := &ccudata.SenderTypeMetadata{
+		ParameterOrder: []string{"STATE"},
+	}
+	params := buildTestParams("STATE")
+	groups := a.buildGroups("fr", meta, params)
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	if groups[0].ID != "all" {
+		t.Errorf("group ID = %q, want all", groups[0].ID)
+	}
+	if groups[0].Label != "Settings" {
+		t.Errorf("fr label = %q, want Settings", groups[0].Label)
+	}
+}
+
 func TestBuildGroupsOrderedEmptyParams(t *testing.T) {
 	t.Parallel()
 	a := nilAdapter()

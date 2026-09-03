@@ -57,6 +57,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Low-severity audit findings, first batch: 48 fixed across six packages.**
+  Each was re-verified against the current tree before anything was changed —
+  five of the original set had already been fixed by the high/medium work and
+  were left alone. The classes that recurred:
+
+  - *A constant that named no wire value.* The garage door's
+    `DoorStateUnknown` was `"UNKNOWN"`; every device declaring `DOOR_STATE`
+    declares `CLOSED, OPEN, VENTILATION_POSITION, POSITION_UNKNOWN`, so the
+    comparison matched nothing and an unknown door position was never
+    recognised as one.
+  - *One rule spelled several times.* Channel-address parsing and composition
+    across the adapter now go through `pkg/hmtypes`; the boot-time ingest
+    backoff, the CCU port table, the channel LIKE prefix and the lock
+    permission vocabulary each had two independent copies with a comment
+    asserting their equality and nothing enforcing it.
+  - *Code that could not run.* A duplicate error sanitiser in
+    `internal/client` with no production caller, two unreachable un-ignore
+    branches, a `PhaseUnreleased` no producer emits, an `ErrSchemaDrift` no
+    path returns, and two `LinkCoordinator` methods nothing called.
+  - *Wire kinds that decoded to nil.* The XML-RPC reply converter on the
+    callback path handled neither `DateTimeValue` nor `Base64Value`; both
+    arrived as an untyped nil indistinguishable from a genuine `NilValue`.
+  - *Comments describing something the code does not do.* The initial-snapshot
+    header said MASTER values are skipped while the pass publishes them; the
+    audit trail recorded channel 0 for a device-level paramset write.
+
+  Nine findings were deliberately not fixed and are recorded rather than
+  carried: two had their premise refuted by the firmware on re-reading, three
+  needed a decision about behaviour rather than a repair, and the rest reached
+  outside the package that owned them.
+
 - **Every documented un-ignore pattern was one the parser rejects.** The
   annotated reference config, the concept document, the config field's own
   comment, the store and the REST contract all taught

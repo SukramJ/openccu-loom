@@ -23,20 +23,13 @@ type channelParamsetKey struct {
 	paramsetKey hmenum.ParamsetKey
 }
 
-// anyChannelNo is the sentinel value for "any / unknown channel", mirroring
-// Python's None channel. Consumed once ChannelParamsetRules gets exposed
-// through Registry — F11 P1-10 follow-up.
-//
-//nolint:unused // see comment above
-const anyChannelNo = -1
-
 // NewChannelParamsetRules returns an empty container.
 func NewChannelParamsetRules() *ChannelParamsetRules {
 	return &ChannelParamsetRules{data: make(map[channelParamsetKey]map[string]struct{})}
 }
 
 // Add inserts parameter into the set for (channelNo, paramsetKey).
-// Use anyChannelNo as channelNo to match any channel.
+// Use [channelNoUnknown] as channelNo to match any channel.
 func (c *ChannelParamsetRules) Add(channelNo int, paramsetKey hmenum.ParamsetKey, parameter string) {
 	k := channelParamsetKey{channelNo: channelNo, paramsetKey: paramsetKey}
 	if _, ok := c.data[k]; !ok {

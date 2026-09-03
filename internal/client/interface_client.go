@@ -178,8 +178,11 @@ type Config struct {
 	// typed as a plain function (not a full interface) to keep the client
 	// package free of a dependency on the coordinators or store packages.
 	//
-	// rpcType is "xml-rpc" or "json-rpc" (matching session.RPCTypeXML
-	// session.RPCTypeJSON constants). method is the RPC method name
+	// rpcType is a transport label derived from [Config.BackendKind]:
+	// "bin-rpc" for CUxD, "xml-rpc" otherwise. It is NOT a
+	// session.RPCType value — those spell the same transports "bin" /
+	// "xml" / "json" — because this package cannot import the store; the
+	// wiring layer maps the label. method is the RPC method name
 	// ("setValue" or "putParamset"). params and response are the wire
 	// arguments / result values.
 	//
@@ -552,10 +555,14 @@ func (c *InterfaceClient) CallOrdered(
 
 	throttle := c.throttleForMethod(method)
 
+	// Counted once per logical call, outside the retrier, so the counter
+	// keeps the meaning [Call] gives it and the executed/total ratio stays
+	// a coalescing ratio rather than a wire-attempt count.
+	c.executedRequests.Add(1)
+
 	var result any
 	err := c.cfg.Circuit.DoWithPriority(ctx, method, priority, func(ctx context.Context) error {
 		return c.cfg.Retrier.Do(ctx, func(ctx context.Context, _ int) error {
-			c.executedRequests.Add(1)
 			if err := throttle.Acquire(ctx, priority); err != nil {
 				return err
 			}

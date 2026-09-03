@@ -327,7 +327,7 @@ func (s *MQTTCommandSink) InvokeChannelService(
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
 	}
-	chAddr := fmt.Sprintf("%s:%d", deviceAddress, channel)
+	chAddr := hmtypes.ChannelAddress(deviceAddress, channel)
 	ch := dev.Channel(chAddr)
 	if ch == nil {
 		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", chAddr, centralName)
@@ -416,7 +416,7 @@ func (s *MQTTCommandSink) SetScheduleSwitch(
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
 	}
-	chAddr := fmt.Sprintf("%s:%d", deviceAddress, channel)
+	chAddr := hmtypes.ChannelAddress(deviceAddress, channel)
 	ch := dev.Channel(chAddr)
 	if ch == nil {
 		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", chAddr, centralName)
@@ -458,7 +458,7 @@ func (s *MQTTCommandSink) SetCombinedValue(
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
 	}
-	chAddr := fmt.Sprintf("%s:%d", deviceAddress, channel)
+	chAddr := hmtypes.ChannelAddress(deviceAddress, channel)
 	ch := dev.Channel(chAddr)
 	if ch == nil {
 		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", chAddr, centralName)

@@ -20,13 +20,6 @@ var unIgnoreLinePattern = regexp.MustCompile(
 	`^(?P<parameter>[^:@]+):(?P<paramset_key>[^@]+)@(?P<model>[^:]+):(?P<channel_no>.*)$`,
 )
 
-// unIgnoreWildcard is the sentinel string that represents "all models" or
-// "all channels" in the complex un-ignore grammar. It is used both as the
-// model field value and as the channel_no field value to express a
-// fully-open wildcard entry. The concrete value ("all") matches
-// UN_IGNORE_WILDCARD defined by the upstream Python reference implementation.
-const unIgnoreWildcard = "all"
-
 // UnIgnoreEntry is one parsed line of an `un_ignore` file.
 // The grammar has two forms:
 //   - Simple: a bare parameter name; matches any model/channel for the VALUES paramset.
@@ -42,7 +35,7 @@ type UnIgnoreEntry struct {
 	// in matchesUnIgnoreLocked.
 	IsSimple bool
 	// Model restricts the entry to a device model (lower-cased, as parsed).
-	// The special value unIgnoreWildcard ("all") means any model.
+	// The special value UnIgnoreWildcard ("all") means any model.
 	// Empty only for simple entries.
 	Model string
 	// ChannelNo restricts the entry to a specific channel number when non-nil.
@@ -169,7 +162,7 @@ func ParseUnIgnoreLine(line string) ParsedUnIgnoreLine {
 
 	// Simple-wildcard collapse: model=="all" && channel_no=="all" && paramset==VALUES
 	// → simple entry (matches any model/channel for VALUES).
-	if model == unIgnoreWildcard && channelNoIsWildcard && channelNoStr == unIgnoreWildcard &&
+	if model == UnIgnoreWildcard && channelNoIsWildcard && channelNoStr == UnIgnoreWildcard &&
 		paramsetKey == hmenum.ParamsetKeyValues {
 		result.Entry = &UnIgnoreEntry{
 			Parameter: hmenum.Parameter(parameter),
@@ -186,7 +179,7 @@ func ParseUnIgnoreLine(line string) ParsedUnIgnoreLine {
 			result.Err = "channel must be numeric or empty for MASTER paramset in '" + trimmed + "'"
 			return result
 		}
-		if model == unIgnoreWildcard {
+		if model == UnIgnoreWildcard {
 			result.Err = "model must be specified for MASTER paramset in '" + trimmed + "'"
 			return result
 		}

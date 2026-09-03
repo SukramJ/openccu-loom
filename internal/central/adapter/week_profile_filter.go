@@ -30,13 +30,13 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // parseFloat decodes a JSON-RawMessage as a float64. Returns ok=false
@@ -280,7 +280,7 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 			if member.Primary {
 				chType = "primary"
 			}
-			address := fmt.Sprintf("%s:%d", dev.Address, member.ChannelNo)
+			address := hmtypes.ChannelAddress(dev.Address, member.ChannelNo)
 			name := fmt.Sprintf("Channel %d", member.ChannelNo)
 			if ch := dev.Channel(address); ch != nil && ch.Name() != "" {
 				name = ch.Name()
@@ -411,7 +411,7 @@ func existingClimateWeekProfileChannel(dev *device.Device) *device.Channel {
 // custom-DP channel. Returns nil when neither exists.
 func canonicalScheduleChannel(dev *device.Device) *device.Channel {
 	for _, ch := range dev.Channels() {
-		if strings.HasSuffix(ch.Type, "WEEK_PROFILE") {
+		if isWeekProfileChannel(ch.Type) {
 			return ch
 		}
 	}
@@ -441,7 +441,7 @@ func deviceHasRegisteredScheduleChannel(dev *device.Device, reg *custom.Registry
 		}
 	}
 	for _, ch := range dev.Channels() {
-		if strings.HasSuffix(ch.Type, "WEEK_PROFILE") {
+		if isWeekProfileChannel(ch.Type) {
 			return true
 		}
 	}

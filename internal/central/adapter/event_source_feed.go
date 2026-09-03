@@ -4,13 +4,11 @@
 package adapter
 
 import (
-	"strconv"
-
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // EventSourceFeed fires a channel's model-side event sources from the
@@ -35,6 +33,13 @@ import (
 type EventSourceFeed struct {
 	reg    *central.Registry
 	unsubs []func()
+}
+
+// eventFirer is the narrow contract an attached event must satisfy to
+// record a fire. The model's event source (internal/model/event.Source)
+// satisfies it, and so does anything that wraps one.
+type eventFirer interface {
+	Fire(value any) bool
 }
 
 // NewEventSourceFeed returns a feed bound to reg.
@@ -69,14 +74,16 @@ func (f *EventSourceFeed) StartCentral(u *central.Unit) func() {
 		if q == nil {
 			return
 		}
-		channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
+		channelAddr := hmtypes.ChannelAddress(e.DeviceAddress, e.ChannelNo)
 		attached := q.GetEventGroup(channelAddr, hmenum.Parameter(e.Parameter))
 		if attached == nil {
 			return
 		}
-		// Only concrete sources carry the fire lifecycle; any other
-		// implementation of the interface has no timestamp to record.
-		src, ok := attached.(*modevent.Source)
+		// Assert the capability, not the concrete type: a decorated or
+		// wrapped source still carries the fire lifecycle, and narrowing
+		// to one struct drops it silently — the group then reports that
+		// nothing was ever pressed.
+		src, ok := attached.(eventFirer)
 		if !ok {
 			return
 		}

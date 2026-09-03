@@ -281,7 +281,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		return nil
 	}
 
-	ingested = runCUxDActivation(ctx, cuxdIngestBackoff, activate, ic, cc.Name, wireID, logger)
+	ingested = runCUxDActivation(ctx, ingestBackoff, activate, ic, cc.Name, wireID, logger)
 
 	// The bring-up has reported its result for this interface, so hand it to
 	// the recovery coordinator. Before this point every trigger for it is
@@ -368,11 +368,12 @@ func announceCUxDCallback(
 	ensureConnectedClientState(ic, logger)
 }
 
-// cuxdIngestBackoff is the boot-time retry schedule for the CUxD ingest.
-// Same shape as the XML-RPC path: a handful of short waits that cover the
-// window in which the CUxD addon is still starting up behind a CCU that
-// already reports ready.
-var cuxdIngestBackoff = []time.Duration{
+// ingestBackoff is the boot-time ingest retry schedule shared by the
+// XML-RPC path (ccu_wiring.go) and the CUxD path: a handful of short waits
+// that cover the window in which the interface is still starting up behind
+// a CCU that already reports ready. Read-only — the activation runners take
+// their schedule as a parameter, so tests inject their own.
+var ingestBackoff = []time.Duration{
 	1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
 }
 

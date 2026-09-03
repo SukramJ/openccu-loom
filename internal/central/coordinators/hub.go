@@ -86,7 +86,7 @@ type HubCoordinator struct {
 	// index to surface duty-cycle / carrier-sense per radio interface.
 	bidcos map[string]BidcosInterfaceInfo
 
-	// refresh holds the nine per-type periodic-refresh slots. Each slot
+	// refresh holds the ten per-type periodic-refresh slots. Each slot
 	// owns its hook and its per-type serialisation semaphore; see
 	// hub_refresh.go for the slot type and hubRefreshSet.
 	refresh hubRefreshSet
@@ -921,8 +921,22 @@ func (h *HubCoordinator) CreateSysvarFloat(ctx context.Context, name string, min
 
 // InitHub performs the hub-coordinator initialization sequence. It clears
 // any stale state from a previous run (sysvars, programs) and triggers an
-// initial load for every hub data category so the hub model is populated
-// as soon as the CCU connection comes up.
+// initial load for the eight categories listed in the body.
+//
+// Two of the ten slots [hubRefreshSet] declares are deliberately absent here:
+// systemUpdate is boot-loaded by the adapter instead
+// (runInitialSystemUpdateLoad in internal/central/adapter/hub_wiring.go, a
+// detached goroutine that outlives WireHub), and bidcosInterfaces has no boot
+// load at all — its only production driver is the periodic
+// "hub.bidcos_interfaces_refresh" scheduler job registered in
+// internal/central/jobs.go, which carries no RunOnStart, so the category
+// stays empty until the first tick.
+//
+// Ordering, measured against the single production call site: WireHub calls
+// InitHub before it calls [HubCoordinator.SetRefreshHooks], so on a first
+// bring-up every slot's hook is still nil and each run below returns without
+// doing anything — only the Clear() half has an effect there. The loads
+// matter on a repeat pass, where the previous pass's hooks are still set.
 //
 // The initial loads run best-effort: individual hook errors are ignored so a
 // partial CCU response does not block the rest of the init sequence.

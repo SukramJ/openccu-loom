@@ -670,10 +670,14 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 // MQTT side (retained topic with the same payload is a no-op for
 // most brokers).
 //
-// MASTER-paramset values are deliberately skipped: they are
-// configuration parameters, not runtime state, and are surfaced
-// through the Config UI / REST paramset endpoints instead of the
-// MQTT broker.
+// MASTER-paramset values ARE published on this pass (ADR 0011 phase 1c):
+// they are seeded once via OnWireValue and generate no value-change bus
+// events, so the snapshot synthesises them onto
+// `channels/<ch>/master/<param>/state`. The volume is bounded by which
+// MASTER parameters became data points at all during hydration (the
+// week-profile slot filter is the largest such cut) and by the
+// southbound-ready gate in [EventBridge.publishCentralSnapshot] —
+// widening either widens the broker surface.
 func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 	if b.registry == nil {
 		return
@@ -2620,27 +2624,24 @@ func (b *EventBridge) onCentralReadiness(centralName string, e hmevent.CentralRe
 
 // --- helpers ---
 
+// parseChannel returns the address unchanged plus its channel number, or 0
+// when it carries none. Delegating to [hmtypes.ChannelNo] keeps one grammar
+// for what a channel suffix is; a hand-rolled copy drifts silently, because
+// nothing compares the two.
 func parseChannel(channelAddress string) (addr string, number int) {
-	idx := strings.LastIndexByte(channelAddress, ':')
-	if idx < 0 {
-		return channelAddress, 0
-	}
-	if n, err := strconv.Atoi(channelAddress[idx+1:]); err == nil {
-		number = n
-	}
-	return channelAddress, number
+	n, _ := hmtypes.ChannelNo(channelAddress)
+	return channelAddress, n
 }
 
+// deviceAddrAndChannel splits a channel address into its device part and
+// channel number, reporting channel 0 when the address carries no parsable
+// suffix. Same grammar as [parseChannel].
 func deviceAddrAndChannel(channelAddress string) (deviceAddr string, channel int) {
-	idx := strings.LastIndexByte(channelAddress, ':')
-	if idx < 0 {
-		return channelAddress, 0
+	dev, n, ok := hmtypes.SplitChannelAddress(channelAddress)
+	if !ok {
+		return dev, 0
 	}
-	deviceAddr = channelAddress[:idx]
-	if n, err := strconv.Atoi(channelAddress[idx+1:]); err == nil {
-		channel = n
-	}
-	return deviceAddr, channel
+	return dev, n
 }
 
 // inferInterface returns the interface id carried in the data-point
@@ -3458,7 +3459,7 @@ func (b *EventBridge) publishScheduleEntityPayload(
 	if bridge == nil {
 		return
 	}
-	chAddr := fmt.Sprintf("%s:%d", address, channelNo)
+	chAddr := hmtypes.ChannelAddress(address, channelNo)
 	scheduleType := "default"
 	if wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
 		scheduleType = "climate"
