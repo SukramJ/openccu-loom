@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Package reqctx provides cross-cutting request context propagation.
+// Package hmreqctx provides cross-cutting request context propagation.
+//
+// It lives under pkg/ rather than internal/ because pkg/hmlog depends on
+// it: the log factory installs this package's context handler, and the
+// operation logger reads the request span from it. While it sat in
+// internal/, an external program that imported pkg/hmlog could not
+// compile — the internal rule is enforced against importers outside the
+// module, and every importer in this repository is inside it, so nothing
+// here could notice. TestPkgDoesNotImportInternal is what notices now.
 //
 // A [RequestContext] captures the identity and metadata of a single logical
 // request as it flows from north-bound adapters (REST, WS) through the domain
@@ -13,7 +21,7 @@
 //
 // The Go equivalent does not use Python's ContextVar mechanism; it stores the
 // [RequestContext] inside a standard context.Context value instead.
-package reqctx
+package hmreqctx
 
 import (
 	"context"
@@ -45,7 +53,7 @@ type RequestContext struct {
 	// characters). It survives across every hop of a single logical
 	// operation — REST adapter → coordinator → client → transport →
 	// CCU and back. Empty when the request has not been traced yet
-	// (e.g. legacy code paths that have not adopted reqctx.NewTraceID).
+	// (e.g. legacy code paths that have not adopted hmreqctx.NewTraceID).
 	TraceID string
 	// SpanID is the W3C-format span identifier (16 lowercase hex
 	// characters) for the current unit of work. A child span carries a

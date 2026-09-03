@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // newJSONLogger returns a Debug-level JSON slog.Logger writing into buf.
@@ -74,16 +74,16 @@ func TestStartOp_ChildSpan_WithParent(t *testing.T) {
 	var buf bytes.Buffer
 	logger := newJSONLogger(&buf)
 
-	parentRC := reqctx.RequestContext{
-		TraceID: reqctx.NewTraceID(),
+	parentRC := hmreqctx.RequestContext{
+		TraceID: hmreqctx.NewTraceID(),
 		SpanID:  "aabbccdd11223344",
 	}
-	parentCtx := reqctx.WithRequestContext(context.Background(), parentRC)
+	parentCtx := hmreqctx.WithRequestContext(context.Background(), parentRC)
 
 	childCtx, closer := hmlog.StartOp(parentCtx, "child.op", hmlog.OpOptions{Logger: logger})
 	defer closer(nil)
 
-	childRC, ok := reqctx.FromContext(childCtx)
+	childRC, ok := hmreqctx.FromContext(childCtx)
 	if !ok {
 		t.Fatal("returned ctx has no RequestContext")
 	}
@@ -105,7 +105,7 @@ func TestStartOp_ChildSpan_NoParent(t *testing.T) {
 	childCtx, closer := hmlog.StartOp(context.Background(), "root.op", hmlog.OpOptions{Logger: logger})
 	defer closer(nil)
 
-	rc, ok := reqctx.FromContext(childCtx)
+	rc, ok := hmreqctx.FromContext(childCtx)
 	if !ok {
 		t.Fatal("returned ctx has no RequestContext")
 	}
@@ -389,7 +389,7 @@ func TestStartOp_OperationSetInRequestContext(t *testing.T) {
 	childCtx, closer := hmlog.StartOp(context.Background(), "my.operation", hmlog.OpOptions{Logger: logger})
 	defer closer(nil)
 
-	rc, ok := reqctx.FromContext(childCtx)
+	rc, ok := hmreqctx.FromContext(childCtx)
 	if !ok {
 		t.Fatal("returned ctx has no RequestContext")
 	}
@@ -403,17 +403,17 @@ func TestStartOp_OperationOverwritesPrevious(t *testing.T) {
 	var buf bytes.Buffer
 	logger := newJSONLogger(&buf)
 
-	parentRC := reqctx.RequestContext{
-		TraceID:   reqctx.NewTraceID(),
-		SpanID:    reqctx.NewSpanID(),
+	parentRC := hmreqctx.RequestContext{
+		TraceID:   hmreqctx.NewTraceID(),
+		SpanID:    hmreqctx.NewSpanID(),
 		Operation: "old.operation",
 	}
-	parentCtx := reqctx.WithRequestContext(context.Background(), parentRC)
+	parentCtx := hmreqctx.WithRequestContext(context.Background(), parentRC)
 
 	childCtx, closer := hmlog.StartOp(parentCtx, "new.operation", hmlog.OpOptions{Logger: logger})
 	defer closer(nil)
 
-	rc, ok := reqctx.FromContext(childCtx)
+	rc, ok := hmreqctx.FromContext(childCtx)
 	if !ok {
 		t.Fatal("returned ctx has no RequestContext")
 	}

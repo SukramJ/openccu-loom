@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package reqctx_test
+package hmreqctx_test
 
 import (
 	"context"
@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // TestWithCentralName verifies the RequestContext.WithCentralName copy method.
 func TestWithCentralName(t *testing.T) {
 	t.Parallel()
 
-	base := reqctx.RequestContext{
+	base := hmreqctx.RequestContext{
 		RequestID: "r1",
 		Operation: "op",
 		StartedAt: time.Now(),
@@ -38,7 +38,7 @@ func TestContextHandlerWithAttrsAndWithGroup(t *testing.T) {
 	t.Parallel()
 
 	inner := slog.NewTextHandler(&discardWriter{}, nil)
-	h := reqctx.NewContextHandler(inner)
+	h := hmreqctx.NewContextHandler(inner)
 
 	// WithAttrs must return a non-nil slog.Handler that is still a *ContextHandler
 	// (or at minimum satisfies the interface).

@@ -14,10 +14,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -278,7 +278,7 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 		return
 	}
 	changes := auditChanges(before, after)
-	rc, _ := reqctx.FromContext(ctx)
+	rc, _ := hmreqctx.FromContext(ctx)
 	// SplitChannelAddress, not channelNumberOf: a device-level write
 	// carries a bare device address, for which channelNumberOf answers 0
 	// — the audit row then reads as a write to channel 0, an existing and

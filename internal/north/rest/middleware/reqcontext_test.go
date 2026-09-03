@@ -10,18 +10,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // TestReqContextPopulatesContext verifies that the middleware
-// installs a [reqctx.RequestContext] with the request id, the raw
+// installs a [hmreqctx.RequestContext] with the request id, the raw
 // path as Operation, and a non-zero StartedAt.
 func TestReqContextPopulatesContext(t *testing.T) {
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 	var ok bool
 
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen, ok = reqctx.FromContext(r.Context())
+		seen, ok = hmreqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -59,12 +59,12 @@ func TestReqContextPopulatesContext(t *testing.T) {
 // [CentralScope]: it enriches the request with the chi-resolved
 // central_name URL parameter without losing the rest of the context.
 func TestCentralFromURLPopulatesScope(t *testing.T) {
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CentralScope calls this once chi has matched the route.
 		r = CentralFromURL(r)
-		seen, _ = reqctx.FromContext(r.Context())
+		seen, _ = hmreqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -91,10 +91,10 @@ func TestCentralFromURLPopulatesScope(t *testing.T) {
 // without the middleware is logged unscoped — which is what makes the
 // per-route attachment the thing worth asserting.
 func TestCentralScopeFillsTheScopePerRoute(t *testing.T) {
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen, _ = reqctx.FromContext(r.Context())
+		seen, _ = hmreqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -111,7 +111,7 @@ func TestCentralScopeFillsTheScopePerRoute(t *testing.T) {
 		{path: "/api/v1/centrals/ccu-01/devices", want: "ccu-01"},
 		{path: "/api/v1/centrals/ccu-01/programs", want: ""},
 	} {
-		seen = reqctx.RequestContext{}
+		seen = hmreqctx.RequestContext{}
 		req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -128,10 +128,10 @@ func TestCentralScopeFillsTheScopePerRoute(t *testing.T) {
 // covers the `{central}` routes as well as the spelled-out
 // `{central_name}` ones — the router uses both.
 func TestCentralScopeAcceptsBothURLParamSpellings(t *testing.T) {
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen, _ = reqctx.FromContext(r.Context())
+		seen, _ = hmreqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -154,7 +154,7 @@ func TestCentralScopeAcceptsBothURLParamSpellings(t *testing.T) {
 func TestSetCentralNameWithoutPriorContext(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/centrals/ccu-99/devices/X", http.NoBody)
 	enriched := SetCentralName(req, "ccu-99")
-	rc, ok := reqctx.FromContext(enriched.Context())
+	rc, ok := hmreqctx.FromContext(enriched.Context())
 	if !ok {
 		t.Fatal("RequestContext missing after SetCentralName")
 	}
@@ -171,9 +171,9 @@ func TestSetCentralNameWithoutPriorContext(t *testing.T) {
 // W3C trace + span pair and echoes it in the response header so a
 // client can correlate logs against its own request.
 func TestReqContextGeneratesTraceIDs(t *testing.T) {
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen, _ = reqctx.FromContext(r.Context())
+		seen, _ = hmreqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -195,8 +195,8 @@ func TestReqContextGeneratesTraceIDs(t *testing.T) {
 	if seen.ParentSpanID != "" {
 		t.Errorf("ParentSpanID=%q want empty for self-originated trace", seen.ParentSpanID)
 	}
-	tp := rr.Header().Get(reqctx.TraceparentHeader)
-	tid, sid, _, ok := reqctx.ParseTraceparent(tp)
+	tp := rr.Header().Get(hmreqctx.TraceparentHeader)
+	tid, sid, _, ok := hmreqctx.ParseTraceparent(tp)
 	if !ok {
 		t.Fatalf("response traceparent malformed: %q", tp)
 	}
@@ -213,9 +213,9 @@ func TestReqContextAdoptsIncomingTraceparent(t *testing.T) {
 	const upstreamTrace = "abcdef0123456789abcdef0123456789"
 	const upstreamSpan = "1122334455667788"
 
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen, _ = reqctx.FromContext(r.Context())
+		seen, _ = hmreqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -225,7 +225,7 @@ func TestReqContextAdoptsIncomingTraceparent(t *testing.T) {
 	r.Get("/api/v1/info", leaf)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
-	req.Header.Set(reqctx.TraceparentHeader, "00-"+upstreamTrace+"-"+upstreamSpan+"-01")
+	req.Header.Set(hmreqctx.TraceparentHeader, "00-"+upstreamTrace+"-"+upstreamSpan+"-01")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
@@ -245,9 +245,9 @@ func TestReqContextAdoptsIncomingTraceparent(t *testing.T) {
 // is generated, rather than the request inheriting a malformed
 // identifier.
 func TestReqContextMalformedTraceparentFallsBack(t *testing.T) {
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen, _ = reqctx.FromContext(r.Context())
+		seen, _ = hmreqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -257,7 +257,7 @@ func TestReqContextMalformedTraceparentFallsBack(t *testing.T) {
 	r.Get("/api/v1/info", leaf)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
-	req.Header.Set(reqctx.TraceparentHeader, "garbage-not-a-traceparent")
+	req.Header.Set(hmreqctx.TraceparentHeader, "garbage-not-a-traceparent")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 

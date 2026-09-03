@@ -11,8 +11,8 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // Program is a CCU program entity. Callers execute it through the
@@ -103,8 +103,8 @@ func (p *Program) registerProgramServices() {
 		// service-invoke route so the execute audit never reads blank.
 		// A nil ctx (tolerated by the registry contract) skips the stamp.
 		if ctx != nil {
-			if rc, ok := reqctx.FromContext(ctx); !ok || rc.Operation == "" {
-				ctx = reqctx.WithOperation(ctx, "service:program-trigger")
+			if rc, ok := hmreqctx.FromContext(ctx); !ok || rc.Operation == "" {
+				ctx = hmreqctx.WithOperation(ctx, "service:program-trigger")
 			}
 		}
 		return p.Execute(ctx)

@@ -11,9 +11,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/observability"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -229,7 +229,7 @@ func (h *HubCoordinator) Sysvars() []SysvarSnapshot {
 // daemon log can name the surface that asked instead of a generic "api".
 func (h *HubCoordinator) NotifyProgramExecuted(ctx context.Context, programID string, trigger hmenum.ProgramTrigger, success bool) {
 	source := ""
-	if rc, ok := reqctx.FromContext(ctx); ok {
+	if rc, ok := hmreqctx.FromContext(ctx); ok {
 		source = rc.Operation
 	}
 	events.Publish(h.bus, hmevent.ProgramExecutedEvent{

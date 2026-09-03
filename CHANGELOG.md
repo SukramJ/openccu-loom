@@ -57,6 +57,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **`pkg/hmlog` was not importable from outside this module.** It imported
+  `internal/reqctx` — in the log factory, to install the request-context
+  handler, and in the operation logger, to read the span. Go refuses an
+  `internal/` path to an importer outside the module, so an external program
+  that embedded openccu-loom as a library and imported `pkg/hmlog` failed to
+  compile. Nothing in this repository could notice: the rule never applies to
+  importers inside the module, and every importer here is inside it, so
+  `go build ./...` stayed green.
+
+  That contradicted the promise `pkg/` carries, written on `pkg/hmapi`: the
+  package sits there so an external program can import it without pulling in
+  the whole `internal/` tree.
+
+  `internal/reqctx` is now `pkg/hmreqctx` (package `hmreqctx`, matching the
+  `pkg/hm*` convention every sibling follows). No behaviour changed and no
+  call site changed meaning — 31 files follow the rename.
+  `TestPkgDoesNotImportInternal` walks `pkg/` and fails on any `internal/`
+  import, with no exception list: one entry for `hmlog` would have made it
+  blind to the case it exists for. ADR 0017 carries an amendment recording
+  the move and why it was forced.
+
 - **The last seven low findings, all cross-package.** The `.sbk` suffix, the
   ping caller-id and the XML-RPC fault collapse each had two spellings in
   different packages; the Latin-1 byte loop had two, one over `[]byte` and

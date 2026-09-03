@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // writeCommandRoles is the single source of truth for the minimum role a
@@ -301,7 +301,7 @@ func wrapDomainError(op string, err error) *CommandError {
 //
 // The router applies the same cross-cutting boundary as the REST
 // router (audit O13): every Dispatch enriches its context with a
-// [reqctx.RequestContext], times the call, and (when a logger is
+// [hmreqctx.RequestContext], times the call, and (when a logger is
 // wired via [SetBoundary]) emits one `ws.command` slog record per
 // outcome with the same `request_id`/`operation`/`elapsed`/
 // `central_name` shape as REST. That keeps log aggregation and
@@ -389,7 +389,7 @@ func (r *Router) Commands() []string {
 // with code [CommandErrorUnknownCommand].
 //
 // Cross-cutting work (audit O13): the dispatch enriches ctx with a
-// [reqctx.RequestContext] tagged `op="ws.command"`, captures the
+// [hmreqctx.RequestContext] tagged `op="ws.command"`, captures the
 // elapsed time, and emits one structured slog record per outcome
 // when [SetBoundary] has wired a logger. The shape mirrors the REST
 // Logger middleware: `command`, `status`, `elapsed`, `request_id`,
@@ -457,20 +457,20 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 	return res
 }
 
-// enrichContext returns ctx with a [reqctx.RequestContext] installed
+// enrichContext returns ctx with a [hmreqctx.RequestContext] installed
 // under the WS-boundary tag. The request id is preserved from a
 // caller-supplied RequestContext (when present, e.g. when the same
 // connection was already tagged), otherwise a fresh one is minted.
 // Empty boundary fields fall through unchanged.
 func (r *Router) enrichContext(ctx context.Context, command string, start time.Time) context.Context {
-	rid := reqctx.RequestIDFromContext(ctx)
-	rc := reqctx.RequestContext{
+	rid := hmreqctx.RequestIDFromContext(ctx)
+	rc := hmreqctx.RequestContext{
 		RequestID:   rid,
 		Operation:   "ws.command:" + command,
 		StartedAt:   start,
 		CentralName: r.centralName,
 	}
-	return reqctx.WithRequestContext(ctx, rc)
+	return hmreqctx.WithRequestContext(ctx, rc)
 }
 
 // logOutcome emits one structured slog record describing the
@@ -484,7 +484,7 @@ func (r *Router) logOutcome(ctx context.Context, command string, res Result, ela
 		slog.String("command", command),
 		slog.Duration("elapsed", elapsed),
 	}
-	if rid := reqctx.RequestIDFromContext(ctx); rid != "" {
+	if rid := hmreqctx.RequestIDFromContext(ctx); rid != "" {
 		attrs = append(attrs, slog.String("request_id", rid))
 	}
 	if r.centralName != "" {

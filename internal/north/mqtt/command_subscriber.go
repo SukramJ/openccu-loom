@@ -17,8 +17,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // CommandSink is the domain-facing write contract. The composition
@@ -962,7 +962,7 @@ func (c *CommandSubscriber) handleProgram(topic string, body []byte, retained bo
 		defer cancel()
 		// Stamp the surface so the program-execute audit/log subscriber
 		// can attribute the run to the MQTT command plane.
-		ctx = reqctx.WithOperation(ctx, "mqtt:program-trigger")
+		ctx = hmreqctx.WithOperation(ctx, "mqtt:program-trigger")
 		if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
 			c.logger.Warn("mqtt.command.program",
 				slog.String("topic", topic), slog.String("err", err.Error()))

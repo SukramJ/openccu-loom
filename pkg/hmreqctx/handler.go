@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package reqctx
+package hmreqctx
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type ContextHandler struct {
 // inner must not be nil.
 func NewContextHandler(inner slog.Handler) *ContextHandler {
 	if inner == nil {
-		panic("reqctx.NewContextHandler: inner handler must not be nil")
+		panic("hmreqctx.NewContextHandler: inner handler must not be nil")
 	}
 	return &ContextHandler{inner: inner}
 }

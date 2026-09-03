@@ -270,8 +270,8 @@ openccu-loom/
 ├── cmd/openccu-loom/        — main daemon (composition root)
 ├── cmd/hmcli/               — admin CLI
 ├── pkg/                     — public surface: hmtypes, hmenum, hmerr,
-│                              hmevent, hmlog, hmapi, hmreliability, hmui,
-│                              interfaces, hmproto
+│                              hmevent, hmlog, hmreqctx, hmapi,
+│                              hmreliability, hmui, interfaces, hmproto
 ├── internal/
 │   ├── central/             — CentralUnit, coordinators, registries,
 │   │                          rpcserver (XML-RPC + BIN-RPC callbacks)

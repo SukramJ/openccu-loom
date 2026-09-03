@@ -12,16 +12,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // TestLogger_AccessLogHasNoDuplicateRequestIDKey builds the same middleware
 // chain the router mounts in production — [RequestID], [ReqContextWithCentral],
-// then [Logger], with the logger backed by [reqctx.ContextHandler] the way
+// then [Logger], with the logger backed by [hmreqctx.ContextHandler] the way
 // [pkg/hmlog] wires it — and serves one request through it.
 //
-// [reqctx.ContextHandler] injects "request_id" into every record that
-// carries a [reqctx.RequestContext], which [ReqContextWithCentral] installs
+// [hmreqctx.ContextHandler] injects "request_id" into every record that
+// carries a [hmreqctx.RequestContext], which [ReqContextWithCentral] installs
 // before [Logger] runs. [Logger] must not also add its own "request_id"
 // attribute: doing so emits a JSON object with the same key twice, which
 // some decoders reject outright and others resolve inconsistently — a
@@ -35,7 +35,7 @@ func TestLogger_AccessLogHasNoDuplicateRequestIDKey(t *testing.T) {
 
 	var buf bytes.Buffer
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	logger := slog.New(reqctx.NewContextHandler(jsonHandler))
+	logger := slog.New(hmreqctx.NewContextHandler(jsonHandler))
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

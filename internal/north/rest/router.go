@@ -389,7 +389,7 @@ type Deps struct {
 	// so the TCP-level timeouts are fixed constants in server.go.
 	WriteTimeout time.Duration
 	// CentralName is the scope this REST router is bound to. When set,
-	// every request enriches its [reqctx.RequestContext] with the name
+	// every request enriches its [hmreqctx.RequestContext] with the name
 	// so log records and domain calls carry the central tag. Leave
 	// empty in multi-central setups where handlers resolve the central
 	// per-request.

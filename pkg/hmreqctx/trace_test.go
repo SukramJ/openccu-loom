@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package reqctx_test
+package hmreqctx_test
 
 import (
 	"context"
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // --------------------------------------------------------------------------
@@ -16,14 +16,14 @@ import (
 // --------------------------------------------------------------------------
 
 func TestNewTraceID_Length(t *testing.T) {
-	id := reqctx.NewTraceID()
+	id := hmreqctx.NewTraceID()
 	if len(id) != 32 {
 		t.Errorf("len = %d, want 32", len(id))
 	}
 }
 
 func TestNewTraceID_LowercaseHex(t *testing.T) {
-	id := reqctx.NewTraceID()
+	id := hmreqctx.NewTraceID()
 	for i, c := range id {
 		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Errorf("char[%d] = %q is not lowercase hex", i, c)
@@ -33,14 +33,14 @@ func TestNewTraceID_LowercaseHex(t *testing.T) {
 
 func TestNewTraceID_NotAllZero(t *testing.T) {
 	for range 10 {
-		if id := reqctx.NewTraceID(); id == "00000000000000000000000000000000" {
+		if id := hmreqctx.NewTraceID(); id == "00000000000000000000000000000000" {
 			t.Fatal("NewTraceID returned all-zero value")
 		}
 	}
 }
 
 func TestNewTraceID_UniquePerCall(t *testing.T) {
-	a, b := reqctx.NewTraceID(), reqctx.NewTraceID()
+	a, b := hmreqctx.NewTraceID(), hmreqctx.NewTraceID()
 	if a == b {
 		t.Errorf("two consecutive calls returned the same ID: %q", a)
 	}
@@ -51,14 +51,14 @@ func TestNewTraceID_UniquePerCall(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestNewSpanID_Length(t *testing.T) {
-	id := reqctx.NewSpanID()
+	id := hmreqctx.NewSpanID()
 	if len(id) != 16 {
 		t.Errorf("len = %d, want 16", len(id))
 	}
 }
 
 func TestNewSpanID_LowercaseHex(t *testing.T) {
-	id := reqctx.NewSpanID()
+	id := hmreqctx.NewSpanID()
 	for i, c := range id {
 		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Errorf("char[%d] = %q is not lowercase hex", i, c)
@@ -68,14 +68,14 @@ func TestNewSpanID_LowercaseHex(t *testing.T) {
 
 func TestNewSpanID_NotAllZero(t *testing.T) {
 	for range 10 {
-		if id := reqctx.NewSpanID(); id == "0000000000000000" {
+		if id := hmreqctx.NewSpanID(); id == "0000000000000000" {
 			t.Fatal("NewSpanID returned all-zero value")
 		}
 	}
 }
 
 func TestNewSpanID_UniquePerCall(t *testing.T) {
-	a, b := reqctx.NewSpanID(), reqctx.NewSpanID()
+	a, b := hmreqctx.NewSpanID(), hmreqctx.NewSpanID()
 	if a == b {
 		t.Errorf("two consecutive calls returned the same ID: %q", a)
 	}
@@ -86,7 +86,7 @@ func TestNewSpanID_UniquePerCall(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestParseTraceparent_Valid(t *testing.T) {
-	traceID, spanID, flags, ok := reqctx.ParseTraceparent(
+	traceID, spanID, flags, ok := hmreqctx.ParseTraceparent(
 		"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 	)
 	if !ok {
@@ -104,7 +104,7 @@ func TestParseTraceparent_Valid(t *testing.T) {
 }
 
 func TestParseTraceparent_MixedCase_OutputLowercase(t *testing.T) {
-	_, spanID, _, ok := reqctx.ParseTraceparent(
+	_, spanID, _, ok := hmreqctx.ParseTraceparent(
 		"00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01",
 	)
 	if !ok {
@@ -137,7 +137,7 @@ var parseTraceparentInvalidCases = []struct {
 func TestParseTraceparent_Invalid(t *testing.T) {
 	for _, tc := range parseTraceparentInvalidCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, _, ok := reqctx.ParseTraceparent(tc.header)
+			_, _, _, ok := hmreqctx.ParseTraceparent(tc.header)
 			if ok {
 				t.Errorf("ParseTraceparent(%q) = ok, want false", tc.header)
 			}
@@ -146,7 +146,7 @@ func TestParseTraceparent_Invalid(t *testing.T) {
 }
 
 func TestParseTraceparent_WhitespaceTrimmed(t *testing.T) {
-	_, _, _, ok := reqctx.ParseTraceparent(
+	_, _, _, ok := hmreqctx.ParseTraceparent(
 		"  00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01  ",
 	)
 	if !ok {
@@ -159,7 +159,7 @@ func TestParseTraceparent_WhitespaceTrimmed(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestFormatTraceparent_Sampled(t *testing.T) {
-	out := reqctx.FormatTraceparent(
+	out := hmreqctx.FormatTraceparent(
 		"4bf92f3577b34da6a3ce929d0e0e4736",
 		"00f067aa0ba902b7",
 		true,
@@ -170,7 +170,7 @@ func TestFormatTraceparent_Sampled(t *testing.T) {
 }
 
 func TestFormatTraceparent_NotSampled(t *testing.T) {
-	out := reqctx.FormatTraceparent(
+	out := hmreqctx.FormatTraceparent(
 		"4bf92f3577b34da6a3ce929d0e0e4736",
 		"00f067aa0ba902b7",
 		false,
@@ -183,9 +183,9 @@ func TestFormatTraceparent_NotSampled(t *testing.T) {
 func TestFormatTraceparent_Roundtrip(t *testing.T) {
 	traceID := "4bf92f3577b34da6a3ce929d0e0e4736"
 	spanID := "00f067aa0ba902b7"
-	header := reqctx.FormatTraceparent(traceID, spanID, true)
+	header := hmreqctx.FormatTraceparent(traceID, spanID, true)
 
-	gotTrace, gotSpan, _, ok := reqctx.ParseTraceparent(header)
+	gotTrace, gotSpan, _, ok := hmreqctx.ParseTraceparent(header)
 	if !ok {
 		t.Fatalf("ParseTraceparent on formatted header returned ok=false: %q", header)
 	}
@@ -202,8 +202,8 @@ func TestFormatTraceparent_Roundtrip(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestStartChildSpan_EmptyCtx_CreatesFreshTrace(t *testing.T) {
-	ctx := reqctx.StartChildSpan(context.Background())
-	rc, ok := reqctx.FromContext(ctx)
+	ctx := hmreqctx.StartChildSpan(context.Background())
+	rc, ok := hmreqctx.FromContext(ctx)
 	if !ok {
 		t.Fatal("FromContext returned false after StartChildSpan on empty ctx")
 	}
@@ -219,18 +219,18 @@ func TestStartChildSpan_EmptyCtx_CreatesFreshTrace(t *testing.T) {
 }
 
 func TestStartChildSpan_WithExistingTrace_PreservesTraceID(t *testing.T) {
-	parentTraceID := reqctx.NewTraceID()
-	parentSpanID := reqctx.NewSpanID()
+	parentTraceID := hmreqctx.NewTraceID()
+	parentSpanID := hmreqctx.NewSpanID()
 
-	rc0 := reqctx.RequestContext{
+	rc0 := hmreqctx.RequestContext{
 		RequestID: "r1",
 		TraceID:   parentTraceID,
 		SpanID:    parentSpanID,
 	}
-	ctx0 := reqctx.WithRequestContext(context.Background(), rc0)
-	ctx1 := reqctx.StartChildSpan(ctx0)
+	ctx0 := hmreqctx.WithRequestContext(context.Background(), rc0)
+	ctx1 := hmreqctx.StartChildSpan(ctx0)
 
-	rc1, ok := reqctx.FromContext(ctx1)
+	rc1, ok := hmreqctx.FromContext(ctx1)
 	if !ok {
 		t.Fatal("FromContext returned false after StartChildSpan")
 	}
@@ -249,15 +249,15 @@ func TestStartChildSpan_WithExistingTrace_PreservesTraceID(t *testing.T) {
 }
 
 func TestStartChildSpan_EmptyTraceID_GetsNewTraceID(t *testing.T) {
-	rc0 := reqctx.RequestContext{
+	rc0 := hmreqctx.RequestContext{
 		RequestID: "r2",
 		TraceID:   "",
 		SpanID:    "",
 	}
-	ctx0 := reqctx.WithRequestContext(context.Background(), rc0)
-	ctx1 := reqctx.StartChildSpan(ctx0)
+	ctx0 := hmreqctx.WithRequestContext(context.Background(), rc0)
+	ctx1 := hmreqctx.StartChildSpan(ctx0)
 
-	rc1, ok := reqctx.FromContext(ctx1)
+	rc1, ok := hmreqctx.FromContext(ctx1)
 	if !ok {
 		t.Fatal("FromContext returned false")
 	}
@@ -271,18 +271,18 @@ func TestStartChildSpan_EmptyTraceID_GetsNewTraceID(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestTraceparentFromContext_EmptyCtx(t *testing.T) {
-	if got := reqctx.TraceparentFromContext(context.Background()); got != "" {
+	if got := hmreqctx.TraceparentFromContext(context.Background()); got != "" {
 		t.Errorf("TraceparentFromContext on empty ctx = %q, want empty", got)
 	}
 }
 
 func TestTraceparentFromContext_WithTrace(t *testing.T) {
-	traceID := reqctx.NewTraceID()
-	spanID := reqctx.NewSpanID()
-	rc := reqctx.RequestContext{TraceID: traceID, SpanID: spanID}
-	ctx := reqctx.WithRequestContext(context.Background(), rc)
+	traceID := hmreqctx.NewTraceID()
+	spanID := hmreqctx.NewSpanID()
+	rc := hmreqctx.RequestContext{TraceID: traceID, SpanID: spanID}
+	ctx := hmreqctx.WithRequestContext(context.Background(), rc)
 
-	got := reqctx.TraceparentFromContext(ctx)
+	got := hmreqctx.TraceparentFromContext(ctx)
 	if got == "" {
 		t.Fatal("TraceparentFromContext returned empty string for context with trace")
 	}
@@ -293,19 +293,19 @@ func TestTraceparentFromContext_WithTrace(t *testing.T) {
 }
 
 func TestTraceparentFromContext_EmptySpanID(t *testing.T) {
-	rc := reqctx.RequestContext{TraceID: reqctx.NewTraceID(), SpanID: ""}
-	ctx := reqctx.WithRequestContext(context.Background(), rc)
+	rc := hmreqctx.RequestContext{TraceID: hmreqctx.NewTraceID(), SpanID: ""}
+	ctx := hmreqctx.WithRequestContext(context.Background(), rc)
 
-	if got := reqctx.TraceparentFromContext(ctx); got != "" {
+	if got := hmreqctx.TraceparentFromContext(ctx); got != "" {
 		t.Errorf("TraceparentFromContext with empty SpanID = %q, want empty", got)
 	}
 }
 
 func TestTraceparentFromContext_EmptyTraceID(t *testing.T) {
-	rc := reqctx.RequestContext{TraceID: "", SpanID: reqctx.NewSpanID()}
-	ctx := reqctx.WithRequestContext(context.Background(), rc)
+	rc := hmreqctx.RequestContext{TraceID: "", SpanID: hmreqctx.NewSpanID()}
+	ctx := hmreqctx.WithRequestContext(context.Background(), rc)
 
-	if got := reqctx.TraceparentFromContext(ctx); got != "" {
+	if got := hmreqctx.TraceparentFromContext(ctx); got != "" {
 		t.Errorf("TraceparentFromContext with empty TraceID = %q, want empty", got)
 	}
 }

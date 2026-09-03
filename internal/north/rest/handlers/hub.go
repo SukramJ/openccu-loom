@@ -15,9 +15,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/internal/restapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -777,7 +777,7 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 		}
 		// Stamp the surface so the program-execute audit/log subscriber
 		// can attribute the run to the REST API.
-		ctx := reqctx.WithOperation(r.Context(), "rest:program-execute")
+		ctx := hmreqctx.WithOperation(r.Context(), "rest:program-execute")
 		if req.CheckConditions {
 			executed, err := p.ExecuteWithConditionCheck(ctx)
 			if err != nil {

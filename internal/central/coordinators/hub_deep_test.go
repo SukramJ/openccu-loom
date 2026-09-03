@@ -12,9 +12,9 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -198,7 +198,7 @@ func TestHubNotifyProgramExecutedLiftsRequestOperation(t *testing.T) {
 	})
 	h := NewHubCoordinator("c4", bus)
 
-	ctx := reqctx.WithOperation(context.Background(), "mqtt:program-trigger")
+	ctx := hmreqctx.WithOperation(context.Background(), "mqtt:program-trigger")
 	h.NotifyProgramExecuted(ctx, "prog-007", hmenum.ProgramTriggerAPI, true)
 
 	mu.Lock()

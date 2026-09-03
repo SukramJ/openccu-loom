@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package reqctx_test
+package hmreqctx_test
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // TestContextHandlerInjectsRequestID verifies that ContextHandler enriches
@@ -21,15 +21,15 @@ import (
 func TestContextHandlerInjectsRequestID(t *testing.T) {
 	var buf bytes.Buffer
 	inner := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	h := reqctx.NewContextHandler(inner)
+	h := hmreqctx.NewContextHandler(inner)
 	logger := slog.New(h)
 
-	rc := reqctx.RequestContext{
+	rc := hmreqctx.RequestContext{
 		RequestID: "req-abc",
 		Operation: "put_paramset",
 		StartedAt: time.Now().Add(-50 * time.Millisecond),
 	}
-	ctx := reqctx.WithRequestContext(context.Background(), rc)
+	ctx := hmreqctx.WithRequestContext(context.Background(), rc)
 
 	logger.InfoContext(ctx, "test message")
 
@@ -59,7 +59,7 @@ func TestContextHandlerInjectsRequestID(t *testing.T) {
 func TestContextHandlerNoContextPassthrough(t *testing.T) {
 	var buf bytes.Buffer
 	inner := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	h := reqctx.NewContextHandler(inner)
+	h := hmreqctx.NewContextHandler(inner)
 	logger := slog.New(h)
 
 	logger.InfoContext(context.Background(), "no context here")
@@ -81,27 +81,27 @@ func TestContextHandlerPanicsOnNilInner(t *testing.T) {
 			t.Error("expected panic when inner handler is nil")
 		}
 	}()
-	_ = reqctx.NewContextHandler(nil)
+	_ = hmreqctx.NewContextHandler(nil)
 }
 
 // TestContextHandlerInjectsTraceFields verifies that trace_id, span_id, and
 // parent_span_id are emitted when the RequestContext carries them, and are
 // absent when the fields are empty.
 func TestContextHandlerInjectsTraceFields(t *testing.T) {
-	traceID := reqctx.NewTraceID()
-	spanID := reqctx.NewSpanID()
-	parentSpanID := reqctx.NewSpanID()
+	traceID := hmreqctx.NewTraceID()
+	spanID := hmreqctx.NewSpanID()
+	parentSpanID := hmreqctx.NewSpanID()
 
 	tests := []struct {
 		name       string
-		rc         reqctx.RequestContext
+		rc         hmreqctx.RequestContext
 		wantTrace  bool
 		wantSpan   bool
 		wantParent bool
 	}{
 		{
 			name: "all_trace_fields_present",
-			rc: reqctx.RequestContext{
+			rc: hmreqctx.RequestContext{
 				RequestID:    "r1",
 				TraceID:      traceID,
 				SpanID:       spanID,
@@ -114,7 +114,7 @@ func TestContextHandlerInjectsTraceFields(t *testing.T) {
 		},
 		{
 			name: "no_trace_fields",
-			rc: reqctx.RequestContext{
+			rc: hmreqctx.RequestContext{
 				RequestID: "r2",
 				StartedAt: time.Now(),
 			},
@@ -124,7 +124,7 @@ func TestContextHandlerInjectsTraceFields(t *testing.T) {
 		},
 		{
 			name: "trace_and_span_no_parent",
-			rc: reqctx.RequestContext{
+			rc: hmreqctx.RequestContext{
 				RequestID: "r3",
 				TraceID:   traceID,
 				SpanID:    spanID,
@@ -140,10 +140,10 @@ func TestContextHandlerInjectsTraceFields(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			inner := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-			h := reqctx.NewContextHandler(inner)
+			h := hmreqctx.NewContextHandler(inner)
 			logger := slog.New(h)
 
-			ctx := reqctx.WithRequestContext(context.Background(), tc.rc)
+			ctx := hmreqctx.WithRequestContext(context.Background(), tc.rc)
 			logger.InfoContext(ctx, "trace test")
 
 			var record map[string]any
@@ -181,13 +181,13 @@ func TestContextHandlerInjectsTraceFields(t *testing.T) {
 func TestContextHandlerInjectsScopeFields(t *testing.T) {
 	t.Parallel()
 
-	emit := func(t *testing.T, rc reqctx.RequestContext) map[string]any {
+	emit := func(t *testing.T, rc hmreqctx.RequestContext) map[string]any {
 		t.Helper()
 		var buf bytes.Buffer
-		logger := slog.New(reqctx.NewContextHandler(
+		logger := slog.New(hmreqctx.NewContextHandler(
 			slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}),
 		))
-		logger.InfoContext(reqctx.WithRequestContext(context.Background(), rc), "test message")
+		logger.InfoContext(hmreqctx.WithRequestContext(context.Background(), rc), "test message")
 		var record map[string]any
 		if err := json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &record); err != nil {
 			t.Fatalf("log line is not valid JSON: %v\n%s", err, buf.String())
@@ -197,7 +197,7 @@ func TestContextHandlerInjectsScopeFields(t *testing.T) {
 
 	t.Run("scoped_request_carries_every_field", func(t *testing.T) {
 		t.Parallel()
-		record := emit(t, reqctx.RequestContext{
+		record := emit(t, hmreqctx.RequestContext{
 			RequestID:     "r1",
 			Operation:     "put_paramset",
 			CentralName:   "ccu-nord",
@@ -218,7 +218,7 @@ func TestContextHandlerInjectsScopeFields(t *testing.T) {
 
 	t.Run("unscoped_request_omits_them", func(t *testing.T) {
 		t.Parallel()
-		record := emit(t, reqctx.RequestContext{RequestID: "r2", StartedAt: time.Now()})
+		record := emit(t, hmreqctx.RequestContext{RequestID: "r2", StartedAt: time.Now()})
 		for _, field := range []string{"central_name", "interface_id", "device_address"} {
 			if _, ok := record[field]; ok {
 				t.Errorf("%s present on an unscoped request: %v", field, record[field])

@@ -9,13 +9,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
-// ReqContext installs a [reqctx.RequestContext] for every HTTP request after
+// ReqContext installs a [hmreqctx.RequestContext] for every HTTP request after
 // [RequestID] has run. Downstream code (REST handler, domain core, CCU
 // transport) inherits the request id, the operation tag (`METHOD path`), and
-// the start timestamp. The [reqctx.ContextHandler] in the logging chain picks
+// the start timestamp. The [hmreqctx.ContextHandler] in the logging chain picks
 // these fields up automatically and emits them as structured slog attributes.
 //
 // CentralName and InterfaceID are intentionally NOT filled here — at the
@@ -33,7 +33,7 @@ func ReqContext(next http.Handler) http.Handler {
 }
 
 // ReqContextWithCentral builds a middleware that installs a
-// [reqctx.RequestContext] with [centralName] pre-filled. Used by the
+// [hmreqctx.RequestContext] with [centralName] pre-filled. Used by the
 // daemon when the REST router is wired to a single central — the
 // closure captures the central scope at boot time, so every downstream
 // slog record carries `central_name` automatically.
@@ -43,8 +43,8 @@ func ReqContext(next http.Handler) http.Handler {
 func ReqContextWithCentral(centralName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			traceID, spanID, parentSpanID := traceFromHeader(r.Header.Get(reqctx.TraceparentHeader))
-			rc := reqctx.RequestContext{
+			traceID, spanID, parentSpanID := traceFromHeader(r.Header.Get(hmreqctx.TraceparentHeader))
+			rc := hmreqctx.RequestContext{
 				RequestID:    RequestIDFrom(r.Context()),
 				Operation:    r.Method + " " + r.URL.Path,
 				StartedAt:    time.Now(),
@@ -53,8 +53,8 @@ func ReqContextWithCentral(centralName string) func(http.Handler) http.Handler {
 				SpanID:       spanID,
 				ParentSpanID: parentSpanID,
 			}
-			ctx := reqctx.WithRequestContext(r.Context(), rc)
-			w.Header().Set(reqctx.TraceparentHeader, reqctx.FormatTraceparent(traceID, spanID, true))
+			ctx := hmreqctx.WithRequestContext(r.Context(), rc)
+			w.Header().Set(hmreqctx.TraceparentHeader, hmreqctx.FormatTraceparent(traceID, spanID, true))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -68,14 +68,14 @@ func ReqContextWithCentral(centralName string) func(http.Handler) http.Handler {
 // originated the trace.
 func traceFromHeader(header string) (traceID, spanID, parentSpanID string) {
 	if header != "" {
-		if tid, sid, _, ok := reqctx.ParseTraceparent(header); ok {
-			return tid, reqctx.NewSpanID(), sid
+		if tid, sid, _, ok := hmreqctx.ParseTraceparent(header); ok {
+			return tid, hmreqctx.NewSpanID(), sid
 		}
 	}
-	return reqctx.NewTraceID(), reqctx.NewSpanID(), ""
+	return hmreqctx.NewTraceID(), hmreqctx.NewSpanID(), ""
 }
 
-// SetCentralName replaces (or installs) the [reqctx.RequestContext] in
+// SetCentralName replaces (or installs) the [hmreqctx.RequestContext] in
 // r.Context() with CentralName set, so downstream slog records carry the
 // central scope. [CentralFromURL] is its caller once the URL parameter is
 // resolved; it stays exported because it is the only way to install the
@@ -83,10 +83,10 @@ func traceFromHeader(header string) (traceID, spanID, parentSpanID string) {
 // rebuilds the whole request context when [ReqContext] never ran rather
 // than dropping the scope silently.
 func SetCentralName(r *http.Request, name string) *http.Request {
-	rc, ok := reqctx.FromContext(r.Context())
+	rc, ok := hmreqctx.FromContext(r.Context())
 	if !ok {
-		traceID, spanID, parentSpanID := traceFromHeader(r.Header.Get(reqctx.TraceparentHeader))
-		rc = reqctx.RequestContext{
+		traceID, spanID, parentSpanID := traceFromHeader(r.Header.Get(hmreqctx.TraceparentHeader))
+		rc = hmreqctx.RequestContext{
 			RequestID:    RequestIDFrom(r.Context()),
 			Operation:    r.Method + " " + r.URL.Path,
 			StartedAt:    time.Now(),
@@ -96,7 +96,7 @@ func SetCentralName(r *http.Request, name string) *http.Request {
 		}
 	}
 	rc.CentralName = name
-	return r.WithContext(reqctx.WithRequestContext(r.Context(), rc))
+	return r.WithContext(hmreqctx.WithRequestContext(r.Context(), rc))
 }
 
 // CentralFromURL reads the central-scoping URL parameter, calls

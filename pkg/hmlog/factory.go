@@ -11,7 +11,7 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // Format selects the encoding of the underlying slog handler.
@@ -50,7 +50,7 @@ func ParseFormat(raw string) Format {
 // The default chain, in order from outer to inner, is:
 //
 //	levelFilterHandler (drops records below their subsystem's level)
-//	  → reqctx.ContextHandler (adds request_id / operation / trace fields)
+//	  → hmreqctx.ContextHandler (adds request_id / operation / trace fields)
 //	    → RedactingHandler (masks sensitive attribute values)
 //	      → TeeHandler (mirrors into the capture sink + live-log ring)
 //	        → core handler (JSON or text, gated by a Leveler)
@@ -187,7 +187,7 @@ func loggerForLevelerWithTee(opts StackOptions, leveler slog.Leveler) (*slog.Log
 	// Reqctx filter sits outermost so the injected attributes (which
 	// include the W3C trace IDs) are visible to downstream handlers
 	// and themselves never trip the redaction patterns.
-	enriched := reqctx.NewContextHandler(redacted)
+	enriched := hmreqctx.NewContextHandler(redacted)
 	return slog.New(enriched), tee
 }
 
