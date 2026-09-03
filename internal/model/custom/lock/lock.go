@@ -338,15 +338,14 @@ func (l *Lock) LockState() (State, bool) {
 			return StateUnknown, false
 		}
 		// Button locks invert the RF STATE semantics:
-		// GLOBAL_BUTTON_LOCK=true means the keys are locked,
-		// while RF STATE reads true as "unlocked".
+		// GLOBAL_BUTTON_LOCK=true means the keys are locked.
 		if l.Kind == KindButton {
 			if v {
 				return StateLocked, true
 			}
 			return StateUnlocked, true
 		}
-		if v {
+		if v == rfStateUnlocked {
 			return StateUnlocked, true
 		}
 		return StateLocked, true
@@ -534,6 +533,29 @@ const (
 	ipTargetOpen     = "OPEN"
 )
 
+// rfStateLocked / rfStateUnlocked are the two values of the RF lock's bool
+// STATE parameter. Declared once because four live sites express the same
+// fact and none of them can see the others: [Lock.sendRF] writes it,
+// [Lock.LockState] reads it back, [Lock.observeCommand] stamps the optimistic
+// echo, and [Lock.HADiscoveryPayload] republishes it as the payload_lock /
+// payload_unlock strings Home Assistant publishes onto the STATE command
+// topic. Any one of the four drifting alone unlocks a door the other three
+// believe is locked; tests/contract/w2Cst_lock_rf_state_parity_test.go crosses
+// them.
+//
+// Authority: the KEYMATIC channel declares STATE as a logical boolean whose
+// physical value is the motor's LEVEL byte
+// (../OpenCCU-Base/firmware/rftypes/rf_keymatic.xml:1, paramset_def
+// "keymatic_valueset"), so false is the zero-LEVEL end — locked — and true
+// the driven end. The description carries no explicit boolean-to-LEVEL
+// conversion element, so the direction itself is inherited from the port and
+// unverified against the firmware description; what these constants remove is
+// the drift between the four sites, not that uncertainty.
+const (
+	rfStateLocked   = false
+	rfStateUnlocked = true
+)
+
 func (l *Lock) sendIP(ctx context.Context, cmd command, priority hmenum.CommandPriority) error {
 	var label string
 	switch cmd {
@@ -555,14 +577,13 @@ func (l *Lock) sendIP(ctx context.Context, cmd command, priority hmenum.CommandP
 }
 
 func (l *Lock) sendRF(ctx context.Context, cmd command, priority hmenum.CommandPriority) error {
-	// KindRF uses the bool STATE parameter: false locks, true unlocks.
 	switch cmd {
 	case commandLock:
-		if err := l.writer.SetValue(ctx, l.Address, hmenum.ParameterState, false, priority); err != nil {
+		if err := l.writer.SetValue(ctx, l.Address, hmenum.ParameterState, rfStateLocked, priority); err != nil {
 			return fmt.Errorf("lock: send lock: %w", err)
 		}
 	case commandUnlock:
-		if err := l.writer.SetValue(ctx, l.Address, hmenum.ParameterState, true, priority); err != nil {
+		if err := l.writer.SetValue(ctx, l.Address, hmenum.ParameterState, rfStateUnlocked, priority); err != nil {
 			return fmt.Errorf("lock: send unlock: %w", err)
 		}
 	case commandOpen:
@@ -649,9 +670,9 @@ func (l *Lock) observeCommand(cmd command) {
 	if l.boolStateDp != nil {
 		// Button locks invert the RF STATE wire semantics: true means
 		// "locked" (GLOBAL_BUTTON_LOCK active).
-		locked, unlocked := false, true
+		locked, unlocked := rfStateLocked, rfStateUnlocked
 		if l.Kind == KindButton {
-			locked, unlocked = true, false
+			locked, unlocked = !rfStateLocked, !rfStateUnlocked
 		}
 		switch cmd {
 		case commandLock:

@@ -184,9 +184,17 @@ var _ im.StatusCodeError = climateSystemModeUnsupportedError{}
 // such as 20.4 is 2039.9999999999998 in binary64, and truncating it
 // reports 20.39 °C — one hundredth below what every other surface shows
 // for the same reading. 54 of the 801 tenth-degree steps between −30 and
-// 50 °C land on that side of an exact hundredth. Matches
-// internal/north/matter/cluster/measurement celsiusToInt16, the encoder
-// behind the standalone TemperatureMeasurement endpoints.
+// 50 °C land on that side of an exact hundredth.
+//
+// This body is duplicated: internal/north/matter/cluster/measurement
+// carries the same nine lines as celsiusToInt16, the encoder behind the
+// standalone TemperatureMeasurement endpoints — and the same reading is
+// encoded by both, once for this endpoint's LocalTemperature and once for
+// the channel's own temperature-sensor endpoint. Nothing enforces the
+// agreement: both are unexported in different packages, so a rounding or
+// clamp correction applied here alone makes the two endpoints report
+// different hundredths for one reading. Folding them onto one exported
+// encoder is the fix and belongs in the measurement package.
 func celsiusToMatter(c float64) int16 {
 	v := math.Round(c * 100)
 	if v > 32766 { // 32767 is the Matter NULL sentinel — must not be emitted as a real value
@@ -200,22 +208,6 @@ func celsiusToMatter(c float64) int16 {
 
 // matterToCelsius is the inverse of [celsiusToMatter].
 func matterToCelsius(m int16) float64 { return float64(m) / 100 }
-
-// humidityToMatter encodes an HM humidity (% RH, 0..100) into Matter's
-// uint16 0.01% convention. The product is rounded for the same reason
-// [celsiusToMatter] rounds: 20.4*100 is 2039.9999999999998 in binary64,
-// and truncating it reports 20.39 % where every other surface shows
-// 20.4 %.
-func humidityToMatter(h float64) uint16 {
-	v := math.Round(h * 100)
-	if v < 0 {
-		return 0
-	}
-	if v > 10000 {
-		return 10000
-	}
-	return uint16(v)
-}
 
 // matterToHmMode maps a written SystemModeEnum value back onto the
 // Climate domain Mode.

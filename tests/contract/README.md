@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 445.
+Guards without a doc comment: 8 of 452.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -88,7 +88,7 @@ Guards without a doc comment: 7 of 445.
 | TestConsumedOperationsAreServed | consumed_operations_test.go | TestConsumedOperationsAreServed is the manifest's own soundness check, and it runs before anything is classified against it. |
 | TestExcusedRemovalsAreStillBreaking | consumed_operations_test.go | TestExcusedRemovalsAreStillBreaking keeps the escape list from outliving its entries. |
 | TestRemovedOperationsAreReportedAgainstWhatClientsCall | consumed_operations_test.go | TestRemovedOperationsAreReportedAgainstWhatClientsCall answers the question the version number could not: is a removal one a client would notice? It does not decide the bump — TestAPISurfaceChangesCarryTheRightBump owns that, and still demands a major for any removal. |
-| TestConvertableParameterSetsAgree | convertable_parameter_parity_test.go | TestConvertableParameterSetsAgree pins the two parallel definitions of the convertable-parameter set to the same membership. |
+| TestConvertableParameterSetsAgree | convertable_parameter_parity_test.go | TestConvertableParameterSetsAgree pins every declaration of one rule — which parameter names carry a combined wire encoding — to the same membership. |
 | TestCoordinatorMinimumLOC | coordinator_size_test.go | TestCoordinatorMinimumLOC is a gutting tripwire for the coordinator package: it fails when a coordinator loses most of its body, which is what "we deleted behaviour and nothing noticed" looks like from the outside. |
 | TestCoordinatorSetIsStable | coordinator_size_test.go | TestCoordinatorSetIsStable lists every coordinator file we expect to exist. |
 | TestCoverMotionBindsTheSchemaResolvedChannel | cover_motion_channel_test.go | TestCoverMotionBindsTheSchemaResolvedChannel asserts that the state path (Direction / IsOpening) and the Matter DataVersion path observe the SAME motion data point — the one the profile schema names. |
@@ -338,6 +338,12 @@ Guards without a doc comment: 7 of 445.
 | TestVirtualRemoteModelClassificationIsSingleSourced | virtual_remote_model_test.go | TestVirtualRemoteModelClassificationIsSingleSourced pins every consumer of the virtual-remote model rule to one set. |
 | TestVisibilityReadOnlyDPSkipDocumented | visibility_read_only_audit_test.go | TestVisibilityReadOnlyDPSkipDocumented documents the read-only DP skip Logic:.py:180-189) skips DP creation when Operations has neither EVENT nor WRITE. |
 | TestVisibilityFlagOperationsTriple | visibility_triple_test.go | TestVisibilityFlagOperationsTriple pins the FLAGS × OPERATIONS filter table against the Python reference (_should_skip_data_point, model/__init__.py:180-189). |
+| TestW2CstRFLockStatePolarityIsOneRule | w2Cst_lock_rf_state_parity_test.go | TestW2CstRFLockStatePolarityIsOneRule crosses the three live readers of the RF lock's STATE polarity — the daemon's own write, the state accessor, and the payloads Home Assistant is handed — against each other. |
+| TestW2StoDiagramBlobCapHasOneValue | w2Sto_diagram_blob_cap_single_source_test.go | TestW2StoDiagramBlobCapHasOneValue pins the two literals that cap a diagram config blob to one value. |
+| TestW2ParBoolTruthSetsAgree | w2par_bool_truth_set_test.go | TestW2ParBoolTruthSetsAgree pins the two declarations of one rule — which CCU-reported strings count as boolean true — against each other. |
+| TestW2PkgHmtypesPathDataHasNoDaemonConsumer | w2pkg_hmtypes_pathdata_consumers_test.go | hmtypes.PathData used to document itself as the type that "drives MQTT topic generation, REST URL routing, and UI breadcrumbs". |
+| TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType | w2pkg_matter_device_type_name_coverage_test.go | TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType holds the table's own claim: every device type the model can put into an eligibility verdict has an operator-facing name. |
+| TestW2PkgScheduleRangeMessageMatchesTheDomainBound | w2pkg_schedule_profile_range_message_test.go | The climate-profile index bound has one owner, [weekprofile.MaxProfileIndex], and one enforcer, [weekprofile.ValidProfileIndex]. |
 | TestWeekprofileLocksBackendFallbackUsesTheModelBitTable | weekprofile_locks_combined_parameter_test.go | TestWeekprofileLocksBackendFallbackUsesTheModelBitTable pins the adapter's unmodelled-device write path to the week-profile model's own encoding. |
 | TestWeekprofileLocksWireFormatLivesOnlyInTheModel | weekprofile_locks_combined_parameter_test.go | TestWeekprofileLocksWireFormatLivesOnlyInTheModel is the cheap recurrence guard for the same defect: the WPTCLS/WPTCL payload grammar must be spelled in exactly one package. |
 | TestWeekprofileLocksWireDecodeGoesThroughTheModel | weekprofile_locks_wire_decode_test.go | TestWeekprofileLocksWireDecodeGoesThroughTheModel pins the event bridge's WEEK_PROGRAM_CHANNEL_LOCKS handling to the week-profile data point's own decode. |

@@ -6,10 +6,14 @@ package adapter
 import (
 	"context"
 	"log/slog"
+	"net"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
+	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestHmAdpToggleReachesTheBINRPCCallbackHandler pins that the runtime
@@ -43,7 +47,10 @@ func TestHmAdpToggleReachesTheBINRPCCallbackHandler(t *testing.T) {
 		cbHandlers: xmlrpcHandlers,
 		logger:     slog.New(slog.DiscardHandler),
 	}
-	// The CUxD wiring hands its instance to the handle exactly this way.
+	// Stands in for the wiring's own hand-over, which
+	// TestHmAdpCUxDWiringAdoptsItsCallbackHandler pins separately — this
+	// test is about what ApplyDeferredCreationBehavior does with an adopted
+	// handler, not about who adopted it.
 	h.adoptBINRPCHandlers(binrpcHandlers)
 
 	for _, want := range []bool{true, false, true} {
@@ -82,23 +89,102 @@ func TestHmAdpBringUpGenerationDropsStaleBINRPCHandlers(t *testing.T) {
 	stale := NewCallbackHandlers(c, nil)
 	t.Cleanup(stale.Stop)
 
+	dead, cancel := context.WithCancel(context.Background())
+	cancel()
 	h := &centralBringUp{
-		cc:     config.CentralConfig{Name: "ccu-binrpc-reset"},
-		unit:   c,
-		logger: slog.New(slog.DiscardHandler),
+		cc:        config.CentralConfig{Name: "ccu-binrpc-reset", Host: "127.0.0.1"},
+		unit:      c,
+		parentCtx: dead,
+		logger:    slog.New(slog.DiscardHandler),
 	}
 	h.adoptBINRPCHandlers(stale)
 	if got := len(h.callbackHandlers()); got != 1 {
 		t.Fatalf("adopted handlers = %d, want 1", got)
 	}
 
-	// start() resets the per-generation set before the bring-up goroutine
-	// runs; assert the reset directly so the test needs no live bring-up.
-	h.mu.Lock()
-	h.binCbHandlers = nil
-	h.mu.Unlock()
+	// Drive the production reset: start() clears the per-generation set
+	// before launching the bring-up goroutine. The parent context is already
+	// cancelled, so gatedCentralBringUp falls out of its readiness gate on
+	// the first probe and the generation drains without any CCU.
+	h.start()
+	h.wg.Wait()
 
 	if got := len(h.callbackHandlers()); got != 0 {
-		t.Fatalf("handlers after a new generation = %d, want 0", got)
+		t.Fatalf("handlers after a new generation = %d, want 0 — start() left a torn-down generation's BIN-RPC handler adopted", got)
+	}
+}
+
+// hmAdpClosedPort binds a loopback port, records it and releases it again, so
+// a dial against it is refused immediately instead of hanging on a route.
+func hmAdpClosedPort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve port: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	if err := ln.Close(); err != nil {
+		t.Fatalf("release port: %v", err)
+	}
+	return port
+}
+
+// TestHmAdpCUxDWiringAdoptsItsCallbackHandler guards the seam rather than the
+// helper: [centralBringUp.adoptBINRPCHandlers] works when called, but nothing
+// asserted that [wireCUxDInterface] — the only place a BIN-RPC handler is ever
+// created — actually calls it. Dropping that one call re-opens the whole
+// finding, with every unit test still green.
+//
+// The CUxD host is a loopback port nothing listens on, so the outbound client
+// builds, the callback registration happens, and the ingest fails fast. The
+// adoption is on the registration path, ahead of the ingest, so the failure
+// does not mask it.
+func TestHmAdpCUxDWiringAdoptsItsCallbackHandler(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-cuxd-adopt"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	logger := slog.New(slog.DiscardHandler)
+	cbServer, err := rpcserver.NewBINRPCServer(rpcserver.BINRPCConfig{Addr: "127.0.0.1:0", Logger: logger})
+	if err != nil {
+		t.Fatalf("NewBINRPCServer: %v", err)
+	}
+	t.Cleanup(func() { _ = cbServer.Close() })
+
+	cc := config.CentralConfig{
+		Name:  "ccu-cuxd-adopt",
+		Host:  "127.0.0.1",
+		Ports: map[string]int{string(hmenum.InterfaceCUxD): hmAdpClosedPort(t)},
+	}
+	h := &centralBringUp{cc: cc, unit: c, logger: logger}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the ingest must not sit through the boot-time backoff schedule
+
+	closer, _, err := wireCUxDInterface(
+		ctx, cc, c,
+		NewDevicePipeline(c),
+		client.NewValueWriter(),
+		nil, // runner: the ReGa surface is not on the adoption path
+		config.ReliabilityConfig{},
+		nil, // masterValues: the CUxD poller tolerates a nil store
+		newBackendRegistry(),
+		cbServer, "127.0.0.1:8129",
+		h.adoptBINRPCHandlers,
+		logger,
+	)
+	if err != nil {
+		t.Fatalf("wireCUxDInterface: %v", err)
+	}
+	if closer != nil {
+		t.Cleanup(closer)
+	}
+
+	if got := len(h.callbackHandlers()); got != 1 {
+		t.Fatalf("bring-up handle holds %d callback handler(s) after wireCUxDInterface, want 1 — "+
+			"the CUxD wiring never handed its BIN-RPC handler over, so the runtime "+
+			"delay-new-device-creation toggle cannot reach it", got)
 	}
 }

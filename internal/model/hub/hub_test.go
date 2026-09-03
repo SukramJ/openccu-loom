@@ -296,10 +296,10 @@ func TestServiceMessagesQuittableCountAndLatestTimestamp(t *testing.T) {
 	}
 }
 
-func TestAlarmMessagesCounterAndLatestTimestamp(t *testing.T) {
+func TestAlarmMessagesCountAndLatestTimestamp(t *testing.T) {
 	a := NewAlarmMessages(&stubAck{})
-	if a.Counter() != 0 || !a.LatestTimestamp().IsZero() {
-		t.Fatal("empty alarm set must report zero counter/timestamp")
+	if a.Count() != 0 || !a.LatestTimestamp().IsZero() {
+		t.Fatal("empty alarm set must report zero count/timestamp")
 	}
 	t1 := time.Date(2026, 4, 26, 9, 0, 0, 0, time.UTC)
 	t2 := time.Date(2026, 4, 26, 11, 30, 0, 0, time.UTC)
@@ -307,41 +307,14 @@ func TestAlarmMessagesCounterAndLatestTimestamp(t *testing.T) {
 		{ID: "smoke-1", Timestamp: t1, Counter: 3},
 		{ID: "smoke-2", Timestamp: t2, Counter: 7},
 	})
-	// Counter mirrors len(messages), not the cumulative per-entry
-	// trigger sum — the HA MQTT statistics-template expects the
-	// active-alarm count.
-	if got := a.Counter(); got != 2 {
-		t.Fatalf("counter=%d want 2", got)
+	// Count is the size of the active set, not the cumulative per-entry
+	// trigger sum the AlarmMessage.Counter fields carry: two active alarms
+	// that have fired 3 and 7 times count as 2.
+	if got := a.Count(); got != 2 {
+		t.Fatalf("count=%d want 2", got)
 	}
 	if got := a.LatestTimestamp(); !got.Equal(t2) {
 		t.Fatalf("latest=%v want %v", got, t2)
-	}
-}
-
-// TestAlarmMessagesAdditionalInformationIndexed verifies the indexed-dict
-// form maps each key to the alarm's Name — an alarm entry has no device
-// to prefix it with (see [AlarmMessage]).
-func TestAlarmMessagesAdditionalInformationIndexed(t *testing.T) {
-	a := NewAlarmMessages(&stubAck{})
-	if got := a.AdditionalInformationIndexed(); len(got) != 0 {
-		t.Fatalf("empty alarm set must produce empty indexed map, got %v", got)
-	}
-	a.Replace([]AlarmMessage{
-		{ID: "smoke-1", Name: "Smoke"},
-		{ID: "low-bat", Name: "Low Battery"},
-	})
-	got := a.AdditionalInformationIndexed()
-	if len(got) != 2 {
-		t.Fatalf("indexed map size = %d, want 2", len(got))
-	}
-	want := map[string]bool{
-		"Smoke":       true,
-		"Low Battery": true,
-	}
-	for _, v := range got {
-		if !want[v] {
-			t.Errorf("unexpected indexed value %q", v)
-		}
 	}
 }
 

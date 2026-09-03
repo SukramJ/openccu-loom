@@ -43,8 +43,10 @@ var (
 // Exported because the vocabulary is closed on the other side of the
 // port too: the validator answers each verb from a switch whose default
 // is deny, so a rename landing on one side only compiles cleanly and
-// then refuses every coded arm, disarm or silence as a wrong code. A
-// validator that spells them out itself is pinned by
+// then refuses every coded arm, disarm or silence as a wrong code. The
+// wired validator (internal/alarm/codes, permits) therefore switches on
+// these constants rather than on its own literals, and a validator that
+// does spell them out itself is caught by
 // TestWiredCodeValidatorSpeaksTheEngineCodeVerbs (package alarm), which
 // drives the real facade with these constants.
 const (
@@ -79,6 +81,14 @@ const (
 // bypass the engine-side code requirement like operator sources do.
 // They never carry a code, so no duress detection applies here (WKP
 // on-device slots are independent of engine codes by design).
+//
+// The producer is the intent router in package alarm, which passes the
+// token as an opaque source string; a token spelled out there instead
+// of taken from here loses the bypass without any compile error, and
+// the engine then demands a code the hardware cannot supply. Pinned by
+// TestW2AlmHardwareIntentSourcesKeepTheEngineCodeBypass (package
+// alarm), which drives the router over the real engine and the real
+// codes facade on a code-gated zone.
 const (
 	CodeSourceKeypad = "keypad"
 	CodeSourceRemote = "remote"

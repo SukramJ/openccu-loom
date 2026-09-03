@@ -629,16 +629,12 @@ func (c *Climate) Profiles() []Profile {
 // 2. SET_POINT_TEMPERATURE descriptor MIN (when set by CCU).
 // 3. [custom.ClimateCapabilities].MinTemperature fallback.
 //
-// When the resolved value equals `_OFF_TEMPERATURE` (4.5 °C — the
-// "off" sentinel used by HmIP/HM thermostats)
-// `_DEFAULT_TEMPERATURE_STEP` (0.5) to keep HA's slider from
-// presenting the off-state as a normal setpoint. Mirror that
-// behaviour 1:1; otherwise openccu-loom emitted 4.5 where
-// Shows 5.0 for ~13 thermostat models.
+// When the resolved value equals [offTemperature], one
+// [offTemperatureStep] is added so HA's slider never presents the off
+// state as a normal setpoint. Without the bump the off sentinel is
+// published as the selectable minimum on the thermostat models whose
+// descriptor MIN is the sentinel itself.
 func (c *Climate) MinTemp() float64 {
-	const offTemperature = 4.5
-	const defaultTemperatureStep = 0.5
-
 	resolve := func() float64 {
 		// Step 1: operator-configured TEMPERATURE_MINIMUM.
 		if dp := c.crossChannelTemperatureBound(hmenum.ParameterTemperatureMinimum); dp != nil {
@@ -657,7 +653,7 @@ func (c *Climate) MinTemp() float64 {
 
 	v := resolve()
 	if v == offTemperature {
-		return v + defaultTemperatureStep
+		return v + offTemperatureStep
 	}
 	return v
 }
@@ -701,18 +697,48 @@ func (c *Climate) TemperatureStep() float64 {
 	return 0.5
 }
 
-// offTemperatureConst is the setpoint sentinel that means "thermostat is off"
-// on HmIP/HM thermostats.
-const offTemperatureConst = 4.5
+// offTemperature is the setpoint sentinel that means "the thermostat is off"
+// rather than "set it to 4.5 °C", and offTemperatureStep is the single step
+// added to it wherever the off state has to be lifted to the nearest
+// selectable setpoint.
+//
+// Declared once because three live readers act on the same decision and none
+// of them can see the others: [Climate.setIPMode] puts the sentinel on
+// SET_POINT_TEMPERATURE for ModeOff, [Climate.MinTemp] bumps a resolved
+// minimum equal to it by one step so the slider never presents the off state
+// as a normal setpoint, and [Climate.temperatureForHeatMode] treats any
+// setpoint at or below it as "no usable value". Moving one alone makes the
+// daemon write an OFF value it simultaneously advertises as a selectable
+// minimum; w2Cst_off_sentinel_test.go crosses the three.
+//
+// Deliberately NOT folded in: [custom.ClimateCapabilities].MinTemperature and
+// the HM-CC-VG-1 descriptor patch in internal/store/patches, which carry 4.5
+// as one end of a 4.5..30.5 range. A range floor that happens to coincide
+// with the sentinel is a shared value, not a shared rule, and renaming across
+// the two would let a change here move a descriptor bound.
+//
+// One divergence stays as it is, on purpose. The RF mode-OFF path writes
+// c.Capabilities.MinTemperature while the IP path writes this sentinel; for
+// IP profiles the capability floor is 5.0, so an IP thermostat with neither a
+// TEMPERATURE_MINIMUM data point nor a setpoint descriptor MIN is sent 4.5
+// while its profile advertises 5.0. Which of the two the device intends is
+// not decidable from the sources at hand — it needs the device-side semantics
+// of SET_POINT_TEMPERATURE — so it is recorded here as unverified rather than
+// resolved by picking the tidier number.
+const (
+	offTemperature     = 4.5
+	offTemperatureStep = 0.5
+)
 
 // temperatureForHeatMode returns a safe setpoint to use when transitioning to
 // HEAT (or COOL) mode.
 //
-// 1. Read the last observed setpoint. 2. If none observed, or the value is ≤
-// _OFF_TEMPERATURE (4.5), or the value is below min_temp: return min_temp
-// when min_temp > 4.5, otherwise return 4.5 + 0.5 = 5.0. 3. If the value
-// exceeds max_temp: clamp to max_temp. 4. Otherwise return the observed value
-// as-is.
+//  1. Read the last observed setpoint.
+//  2. If none was observed, or the value is at or below [offTemperature], or
+//     it is below min_temp: return min_temp when min_temp is above the
+//     sentinel, otherwise the sentinel lifted by one [offTemperatureStep].
+//  3. If the value exceeds max_temp: clamp to max_temp.
+//  4. Otherwise return the observed value as-is.
 func (c *Climate) temperatureForHeatMode() float64 {
 	minTemp := c.MinTemp()
 	maxTemp := c.MaxTemp()
@@ -734,11 +760,11 @@ func (c *Climate) temperatureForHeatMode() float64 {
 	}()
 
 	// Step 2: None / OFF sentinel / below min.
-	if !hasTemp || temp <= offTemperatureConst || temp < minTemp {
-		if minTemp > offTemperatureConst {
+	if !hasTemp || temp <= offTemperature || temp < minTemp {
+		if minTemp > offTemperature {
 			return minTemp
 		}
-		return offTemperatureConst + 0.5
+		return offTemperature + offTemperatureStep
 	}
 	// Step 3: clamp to max.
 	if temp > maxTemp {
@@ -1490,17 +1516,31 @@ func (c *Climate) SetBoost(ctx context.Context, on bool, priority hmenum.Command
 // --- helpers ---
 
 func (c *Climate) setIPMode(ctx context.Context, m Mode, priority hmenum.CommandPriority) error {
-	// HmIP thermostats (HmIP-BWTH / -eTRV / -STH / -WTH / …) use the
-	// **write-only** `CONTROL_MODE` ACTION parameter to change mode, not the
-	// read-only `SET_POINT_MODE` (which the firmware *reports* the active mode
-	// through). Writing SET_POINT_MODE has no effect on most CCU firmwares — the
-	// value is read-only on the wire and the device snaps right back to the mode
-	// it derived from the control flow (CONTROL_MODE / BOOST_MODE /
-	// WEEK_PROGRAM_POINTER).
+	// HmIP thermostats (HmIP-BWTH / -eTRV / -STH / -WTH / …) change mode
+	// through the write-only `CONTROL_MODE` parameter (declared WRITE, range
+	// 0..3, default 0 — HMIPServer de.eq3.cbcs.devicedescription.
+	// channelspecification.stateparameter.ClimateStateParameterFactory#
+	// createControlModeParameter), not through `SET_POINT_MODE`, which the
+	// firmware *reports* the active mode through.
 	//
-	// Every wire path is a put_paramset envelope, never a bare setValue —
-	// some CCU firmware stages reject a raw setValue for CONTROL_MODE
-	// while accepting the same write inside put_paramset.
+	// Writing SET_POINT_MODE does not get the mode changed, but the reason
+	// depends on the channel's binding and only one half is sourced here.
+	// ClimateStateParameterFactory registers two SET_POINT_MODE variants: a
+	// READ|EVENT one, for which the parameter really is read-only, and a
+	// writable one (the HmIP-eTRV-B-2 R4M declares OPERATIONS 7). On a channel
+	// bound to the writable variant the block is elsewhere — the legacy
+	// setValue guard requires SET_POINT_MODE together with
+	// SET_POINT_TEMPERATURE, so a bare write is dropped without a fault (see
+	// [custom.PutParamsetForce]). Which variant a given channel type binds is
+	// unverified, so neither reason is stated as the general one; what holds
+	// for both is that the device stays on the mode it derived from the
+	// control flow (CONTROL_MODE / BOOST_MODE / WEEK_PROGRAM_POINTER).
+	//
+	// Every wire path is a put_paramset envelope, never a bare setValue. For
+	// CONTROL_MODE alone that is uniformity rather than necessity — the
+	// legacy setValue guard does not list it (see [custom.PutParamsetForce])
+	// — but the HEAT / OFF branches carry two keys that must arrive together
+	// anyway, so one envelope shape covers all four branches.
 	//
 	// When BOOST is currently active, the AUTO / HEAT / OFF write bundles
 	// BOOST_MODE=False so the mode switch implies "boost off". Without
@@ -1523,7 +1563,7 @@ func (c *Climate) setIPMode(ctx context.Context, m Mode, priority hmenum.Command
 		params[hmenum.ParameterSetPointTemperature] = c.temperatureForHeatMode()
 	case ModeOff:
 		params[hmenum.ParameterControlMode] = int32(1)
-		params[hmenum.ParameterSetPointTemperature] = 4.5
+		params[hmenum.ParameterSetPointTemperature] = offTemperature
 	default:
 		return ErrModeNotSupported
 	}
@@ -2051,28 +2091,21 @@ func (c *Climate) IsHeating() bool {
 }
 
 // ScheduleProfileNos returns the number of schedule (week-program) slots the
-// device supports. Both derive the count from the number of entries in their
-// `_profiles` mapping, which in turn is driven by the WEEK_PROGRAM_POINTER
-// (RF) or ACTIVE_PROFILE (IP) descriptor min/max range.
+// device supports — the same count [Climate.Profiles] emits as week-program
+// presets, and it is derived the same way, from [Climate.numWeekPrograms].
 //
-// The Go implementation is a static capability-flag count: every profile with
-// a week-program slot contributes one.
+// It does not count the ProfileWeekProgram1..6 constants. Those are the
+// widest shape the model can express, not what a given thermostat has: the
+// RF family ranges from three slots down to none, and the count a device
+// actually offers is the WEEK_PROGRAM_POINTER (RF) / ACTIVE_PROFILE (IP)
+// descriptor's MIN/MAX span. Counting the constants answered 6 for every
+// profile with SupportsProfile set, which is a different question with the
+// same shape.
 func (c *Climate) ScheduleProfileNos() int {
 	if !c.Capabilities.SupportsProfile {
 		return 0
 	}
-	// Count the week-program slots that would appear in Profiles().
-	// The canonical slots are week_program_1 … week_program_6.
-	count := 0
-	for _, p := range []Profile{
-		ProfileWeekProgram1, ProfileWeekProgram2, ProfileWeekProgram3,
-		ProfileWeekProgram4, ProfileWeekProgram5, ProfileWeekProgram6,
-	} {
-		if _, ok := profileWeekIndex(p); ok {
-			count++
-		}
-	}
-	return count
+	return c.numWeekPrograms()
 }
 
 // OptimumStartStop returns the current state of the OPTIMUM_START_STOP
@@ -2334,17 +2367,17 @@ func resolveWeekProgramPointer(ch *device.Channel, k Kind) device.ParameterDataP
 // description), the count is 0 and `Profiles()` emits no week
 // program slots. The IP family ships six pointer slots on every
 // channel; the RF family ranges from three (HM-CC-VG-1) to zero
-// (HM-CC-RT-DN). Static "family default" guesses produce drift
-// Against, so the exact wire MIN/MAX is the
+// (HM-CC-RT-DN). A static per-family default would be wrong on some
+// member of every family, so the wire descriptor's MIN/MAX is the
 // only authoritative source.
 func (c *Climate) numWeekPrograms() int {
 	dp := resolveWeekProgramPointer(c.channelRef, c.Kind)
 	if dp == nil {
 		// In production this means the device has no week-program-
-		// pointer DP at all (e.g. HM-CC-RT-DN) — preset list collapses
-		// To the static base. Test rigs that
-		// don't wire a pointer DP fall back to a kind-default so unit
-		// tests don't have to construct a synthetic descriptor.
+		// pointer DP at all (e.g. HM-CC-RT-DN) and the preset list
+		// collapses to the static base. Test rigs that wire no channel
+		// at all fall back to a kind default so unit tests need not
+		// build a synthetic descriptor.
 		if c.channelRef == nil {
 			switch c.Kind { //nolint:exhaustive // KindSimpleRF has no week programs; only IP and RF have kind-defaults
 			case KindIP:

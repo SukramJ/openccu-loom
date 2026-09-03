@@ -68,6 +68,13 @@ func NewDiagramConfigStore(db *sql.DB) *DiagramConfigStore {
 // below rendered verbatim in a toast. Raising or lowering the cap here does
 // not change what the editor lets an operator build.
 //
+// The blob cap is additionally restated in the REST handler, over the whole
+// request body rather than over the blob alone, so on the REST path the
+// handler's is the binding one and this cap is defence-in-depth for a
+// non-REST caller. The two literals are pinned to one value by
+// TestW2StoDiagramBlobCapHasOneValue in tests/contract — the series cap has
+// no such counterpart anywhere, which is the asymmetry above.
+//
 // And the check keys on the document's shape by name: json.Unmarshal ignores
 // unknown keys, so a blob whose series list is not called `series`, or whose
 // entries do not carry `central`, unmarshals into an empty slice, skips both

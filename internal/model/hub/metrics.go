@@ -143,8 +143,15 @@ func TranslationKeyForMetric(kind MetricKind) string {
 	return string(kind)
 }
 
-// MetricSensorName returns the canonical human-readable name for a metric
-// kind, mirroring the _sensor_name constants.
+// MetricSensorName returns the stable, locale-independent identifier for a
+// metric kind. It is read by [MetricHubSensor.Signature] and nothing else.
+//
+// It is not the operator-visible name of these entities: MQTT discovery
+// resolves that through the i18n catalogues (keys discovery.system_health,
+// discovery.connection_latency, discovery.last_event_age), so the same three
+// metrics surface to a German operator as "Systemzustand",
+// "Verbindungslatenz" and "Alter letztes Ereignis". Changing the strings
+// below renames a debug signature, not an entity.
 func MetricSensorName(kind MetricKind) string {
 	switch kind {
 	case MetricSystemHealth:
@@ -157,8 +164,9 @@ func MetricSensorName(kind MetricKind) string {
 	return string(kind)
 }
 
-// MetricSensorUnit returns the unit string for a metric kind, mirroring
-// the _unit constants.
+// MetricSensorUnit returns the unit string for a metric kind. It is the one
+// live member of this group: the REST hub-data-points handler and the
+// WebSocket hub-events stream both stamp it onto the sample they emit.
 func MetricSensorUnit(kind MetricKind) string {
 	switch kind {
 	case MetricSystemHealth:
@@ -171,8 +179,11 @@ func MetricSensorUnit(kind MetricKind) string {
 	return ""
 }
 
-// MetricSensorDescription returns the human-readable description for a metric
-// kind. Used by north-bound adapters to populate sensor entity descriptions.
+// MetricSensorDescription returns the English description for a metric kind,
+// stamped onto [MetricHubSensor.Description] at construction. No north-bound
+// adapter reads it: entity descriptions on the published surfaces come from
+// the i18n catalogues, and a string returned here would reach an operator
+// untranslated. Give it a catalogue key before wiring it to any plane.
 func MetricSensorDescription(kind MetricKind) string {
 	switch kind {
 	case MetricSystemHealth:
@@ -186,23 +197,30 @@ func MetricSensorDescription(kind MetricKind) string {
 }
 
 // MetricHubSensor exposes one [MetricKind] from a [*Metrics] aggregate
-// as a [HubDataPointer]-compatible entity. This gives north-bound
-// adapters (MQTT discovery, REST) a uniform view over hub metrics
-// alongside other [HubDataPointer] entities.
+// as a [HubDataPointer]-compatible entity. Each [MetricKind]
+// (system_health, connection_latency_ms, last_event_age_seconds) is a thin
+// view over the shared [Metrics] aggregate rather than a separate data-point
+// instance, so the three views cost no extra state.
 //
-// Each [MetricKind] (system_health, connection_latency_ms,
-// last_event_age_seconds) is wrapped as a thin view over the shared
-// [Metrics] aggregate rather than as a separate data-point instance,
-// reducing allocation and locking overhead.
+// No production code constructs one. The planes that surface hub metrics
+// today read the [Metrics] aggregate directly — MQTT discovery builds its own
+// entity per metric with a catalogue-resolved name, and REST/WS read
+// [Metrics.Value] — so this type is a [HubDataPointer]-shaped adapter that is
+// available but unused. Anything asserted here about a north-bound consumer
+// would be an assertion about no caller; wiring it is what would make its
+// Name and Description operator-visible, and both are English-only.
 type MetricHubSensor struct {
 	datapoint.BaseDataPointFields
 	// Kind identifies which metric this view exposes.
 	Kind MetricKind
 	// Unit is the unit string (%, ms, s).
 	Unit string
-	// Name is the human-readable sensor name.
+	// Name is [MetricSensorName] for Kind — the locale-independent debug
+	// identifier [MetricHubSensor.Signature] is built from, not a label
+	// fit for an operator.
 	Name string
-	// Description is the human-readable sensor description.
+	// Description is [MetricSensorDescription] for Kind: English only,
+	// with no catalogue key behind it.
 	Description string
 
 	metrics *Metrics

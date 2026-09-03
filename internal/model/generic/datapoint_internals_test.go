@@ -58,31 +58,6 @@ func TestSpecialContains_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// datapoint.go — lastColon
-// ---------------------------------------------------------------------------
-
-func TestLastColon_Present(t *testing.T) {
-	t.Parallel()
-	if idx := lastColon("A:1"); idx != 1 {
-		t.Errorf("expected 1, got %d", idx)
-	}
-}
-
-func TestLastColon_Absent(t *testing.T) {
-	t.Parallel()
-	if idx := lastColon("NoColon"); idx != -1 {
-		t.Errorf("expected -1, got %d", idx)
-	}
-}
-
-func TestLastColon_MultipleColons(t *testing.T) {
-	t.Parallel()
-	if idx := lastColon("a:b:c"); idx != 3 {
-		t.Errorf("expected 3, got %d", idx)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // datapoint.go — DataPointKey nil receiver
 // ---------------------------------------------------------------------------
 

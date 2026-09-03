@@ -65,13 +65,33 @@ func resolveDataPointWithUnIgnore(cfg generic.Spec, parameterIsUnIgnored bool) d
 }
 
 // ImpulseEvents is the set of parameter names treated as impulse events.
-// Parameters in this set are not created as standalone data points they
+// Parameters in this set are not created as standalone data points; they
 // surface as device-level events instead.
-var ImpulseEvents = map[string]struct{}{
-	"SEQUENCE_OK": {},
+//
+// Derived from [modevent.Sources], not restated: the membership belongs to
+// the classifier that also has to emit the event. Restating it here meant
+// SEQUENCE_OK was declared twice, and the two copies were free to drift —
+// a name added on this side alone suppresses a data point for an event
+// nothing emits, and one added on the classifier's side alone emits an event
+// beside a data point that should not exist.
+var ImpulseEvents = impulseEventNames()
+
+// impulseEventNames projects the classifier's impulse parameters onto the
+// plain-string keys this package resolves parameters by.
+func impulseEventNames() map[string]struct{} {
+	params := modevent.Sources(modevent.KindImpulse)
+	out := make(map[string]struct{}, len(params))
+	for _, p := range params {
+		out[string(p)] = struct{}{}
+	}
+	return out
 }
 
-// isImpulseEvent reports whether the parameter name is in [ImpulseEvents].
+// isImpulseEvent reports whether the parameter name is in [ImpulseEvents],
+// which is the classifier's own impulse set projected onto strings — so this
+// answers the same question [modevent.Classify] does, for the same reason
+// [isDeviceErrorEvent] delegates: suppressing the data point is only safe
+// while the classifier keeps the parameter.
 func isImpulseEvent(parameter string) bool {
 	_, ok := ImpulseEvents[parameter]
 	return ok

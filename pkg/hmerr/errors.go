@@ -135,8 +135,16 @@ var (
 	ErrScheduleCopyNoOp = errors.New("schedules: copy source and destination are identical")
 
 	// ErrScheduleCopyProfileRange signals that a profile index falls outside
-	// the supported 1..6 range. Like [ErrScheduleCopyNoOp] this is rejected
+	// the supported range. Like [ErrScheduleCopyNoOp] this is rejected
 	// before any wire call and maps to 422 / Unprocessable Entity.
+	//
+	// The bound itself is owned by internal/model/weekprofile
+	// (MinProfileIndex / MaxProfileIndex, enforced by ValidProfileIndex);
+	// the "1..6" in the message below is that bound quoted for the caller,
+	// not a second declaration of it. hmerr cannot import the domain
+	// package, so the two are tied by
+	// TestW2PkgScheduleRangeMessageMatchesTheDomainBound in tests/contract
+	// instead — move the bound and that guard reports this string.
 	ErrScheduleCopyProfileRange = errors.New("schedules: profile index out of range (1..6)")
 )
 

@@ -31,10 +31,11 @@ func hmAdpAssertTargetKeysAreWritable(t *testing.T, targets map[string]weekprofi
 
 // TestHmAdpDerivedTargetKeysAllResolveToALockBit couples the two halves of the
 // channel-lock surface: every key the adapter mints must be writable through
-// [weekprofile.ChannelKeyToBitmask]. The lock table covers an 8x3 grid, and
-// its own comment records that which key addresses which channel is NOT
-// established — so a key outside the grid may not be invented here, it must
-// not be published.
+// [weekprofile.ChannelKeyToBitmask]. The lock table covers an 8x3 actor×sub
+// grid keyed by the custom-DP channel groups; the firmware keys its bits
+// positionally off its own relevant-channel list instead, so a key outside
+// the grid has a firmware bit that this table has no way to name. It must
+// therefore not be published rather than be published unwritable.
 //
 // HmIP-RGBW is the shipped case: profile IPRGBW carries PrimaryChannel 0 with
 // SecondaryChannels {1,2,3} (internal/model/custom/profile_configs.go), so a
@@ -69,9 +70,11 @@ func TestHmAdpDerivedTargetKeysAllResolveToALockBit(t *testing.T) {
 }
 
 // TestHmAdpRGBWKeepsTheThreeWritableTargets records what the RGBW device is
-// left with once the unwritable key is withheld: the three members the lock
-// table can address. The fourth member has no bit that any source establishes;
-// naming it here keeps the loss visible rather than silent.
+// left with once the unaddressable key is withheld: the three members the
+// lock table can address. The fourth member does have a firmware bit — the
+// CCU editor gives the fourth UNIVERSAL_LIGHT_RECEIVER `Math.pow(2, 3)` — but
+// no entry in an actor×sub grid corresponds to it. Naming the loss here keeps
+// it visible rather than silent.
 func TestHmAdpRGBWKeepsTheThreeWritableTargets(t *testing.T) {
 	t.Parallel()
 

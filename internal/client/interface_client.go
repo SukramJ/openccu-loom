@@ -1168,8 +1168,22 @@ func (c *InterfaceClient) RPCServerType() hmenum.RPCServerType {
 // server — is a deliberate divergence; see SPECIFICATION §8.5 and ADR 0002.
 //
 // Keeping this derived rather than switching over interface tags is what
-// stops a second, silently drifting copy of the mapping from forming here;
-// [TestHmCliRPCServerTypeForInterfaceDerivesFromHmenum] measures it.
+// stops a second, silently drifting copy of the mapping from forming here.
+// The guard for that is structural, not numeric:
+// [TestW2CliRPCServerTypeKeepsNoLocalCopy] reads this function's AST and
+// fails when it enumerates the interfaces itself.
+// [TestHmCliRPCServerTypeForInterfaceDerivesFromHmenum] cannot see that — a
+// local switch answers identically for every interface hmenum declares
+// today, so it stays green with either implementation; what it pins is the
+// value agreement with the two hmenum halves once they change.
+//
+// Nothing in the daemon calls this function or [InterfaceClient.RPCServerType]
+// today (measured: the only non-test references are this file's own wrapper).
+// The BIN-RPC/XML-RPC split the daemon actually executes runs through
+// [hmenum.Interface.IsBINRPC] in internal/config/config.go, and the callback
+// servers route by URL path and by interface_id in the envelope rather than
+// by this type. Treat the function as the answer a future callback-server
+// caller should reach for, not as evidence that one already does.
 func RPCServerTypeForInterface(iface hmenum.Interface) hmenum.RPCServerType {
 	if iface.IsBINRPC() {
 		return hmenum.RPCServerTypeBINRPC

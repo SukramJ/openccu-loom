@@ -268,6 +268,30 @@ func (r *Registry) SerialSuffix(name string) string {
 // adopted by an ecosystem. Unknown addresses and devices that never
 // entered the wizard report true, so absence of a hold reads as
 // released — the same rule the persisted queue uses.
+//
+// A bare device address is not a key across centrals, so every holder is
+// consulted and a single hold wins: a device withheld on one CCU is not
+// released, whatever a same-named device on another CCU says. Three of the
+// firmware's address spaces are minted per CCU rather than globally, so the
+// collision is structural and not a corner case — the BidCoS central device's
+// serial is the compile-time literal at
+// ../OpenCCU-Base/src/rfd/RFCentral.cpp:37 (`serial="BidCoS-RF";`, with
+// `type="HM-RCV-50";` at :36) and is identical in every rfd build; an HmIP
+// group's legacy device address is built from a per-CCU group-id counter
+// (HMIPServer de.eq3.ccu.groupdevice.service.internal.GroupDeviceAddressHelper#getVirtualDeviceAddressFromGroup);
+// and the legacy virtual remote's id counter starts at 1 per instance
+// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.VirtualRemoteControl), so
+// HmIP-RCV-1 exists on every CCU. See interface_id.go for the same rule stated
+// at the point where wire IDs are scoped, and internal/routingkey/uniqueid.go
+// for the virtual-remote roots it already special-cases.
+//
+// Returning the first match instead made the answer depend on
+// [Registry.List]'s name ordering, so renaming a central silently flipped the
+// verdict for a device still in the onboarding wizard.
+//
+// VCU-prefixed HmIP device addresses are the one space that is device-borne
+// and does not collide, but the caller has only an address and cannot tell the
+// spaces apart, so the combining rule applies to all of them.
 func (r *Registry) Released(address string) bool {
 	for _, u := range r.List() {
 		if u == nil || u.ModelRegistry == nil || u.Devices == nil {
@@ -277,7 +301,9 @@ func (r *Registry) Released(address string) bool {
 		if !ok || d == nil {
 			continue
 		}
-		return u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(d.InterfaceID), d.Address)
+		if !u.Devices.IsReleased(hmtypes.ParseWireInterfaceID(d.InterfaceID), d.Address) {
+			return false
+		}
 	}
 	return true
 }

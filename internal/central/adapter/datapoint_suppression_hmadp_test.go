@@ -23,31 +23,16 @@ import (
 func TestHmAdpSuppressionAgreesWithEventClassification(t *testing.T) {
 	t.Parallel()
 
-	// Names that separate a bare-prefix rule from an exact-or-underscore one,
-	// alongside the shapes the descriptor corpus actually carries.
-	params := []string{
-		"ERROR",
-		"ERROR_CODE",
-		"ERROR_JAMMED",
-		"ERROR_OVERHEAT",
-		"ERROR_OVERLOAD",
-		"ERROR_SMOKE_CHAMBER",
-		"ERROR_NON_FLAT_POSITIONING",
-		"ERROR_ALARM_TEST",
-		"SENSOR_ERROR",
-		"ERRORCODE",
-		"ERRORS",
-		"SENSOR_ERRORLIST",
-		"STATE",
-		"LEVEL",
-		"SEQUENCE_OK",
-	}
-	for _, p := range params {
+	for _, p := range hmAdpSuppressionCorpus() {
 		suppressed := isDeviceErrorEvent(p) || isImpulseEvent(p)
-		_, classified := modevent.Classify(hmenum.Parameter(p))
-		if suppressed != classified {
-			t.Fatalf("parameter %q: adapter suppresses the data point=%v, model/event classifies it=%v — a suppressed parameter the classifier drops reaches no plane at all",
-				p, suppressed, classified)
+		// Keypress parameters are classified too, but keep their data point:
+		// the click surface is a separate path (Parameter.IsClickEvent), so
+		// only the error and impulse kinds are the ones this resolver drops.
+		kind, classified := modevent.Classify(hmenum.Parameter(p))
+		want := classified && (kind == modevent.KindDeviceError || kind == modevent.KindImpulse)
+		if suppressed != want {
+			t.Fatalf("parameter %q: adapter suppresses the data point=%v, model/event classifies it as %q (suppressible=%v) — a suppressed parameter the classifier drops reaches no plane at all",
+				p, suppressed, kind, want)
 		}
 	}
 }
@@ -71,6 +56,74 @@ func TestHmAdpDeviceErrorRuleMatchesTheClassifier(t *testing.T) {
 	} {
 		if got := isDeviceErrorEvent(tc.param); got != tc.want {
 			t.Fatalf("isDeviceErrorEvent(%q) = %v, want %v", tc.param, got, tc.want)
+		}
+	}
+}
+
+// hmAdpSuppressionCorpus builds the parameter names the coupling is checked
+// over from the two sides themselves rather than from a remembered list, so a
+// name added to either side extends the corpus instead of leaving a hole:
+// every parameter [modevent.Sources] reports for each kind, every key of
+// [ImpulseEvents], and per device-error root the four shapes that separate an
+// exact-or-underscore rule from a bare prefix.
+//
+// The trailing literals are ordinary parameters, needed because neither side
+// enumerates what it rejects. They are not invented: every one of them is a
+// real CCU parameter name, measured over the reference paramset-description
+// corpus checked out beside this repository by parsing all 399 files as
+// latin-1 JSON and collecting every map key containing "ERROR" — CLEAR_ERROR
+// appears in 2 files, LOAD_ERROR_CALIB in 9, VALVE_ERROR_POSITION in 2,
+// STATUS_FLAG_ERROR in 1. The same measurement found no ERRORCODE, ERRORS or
+// SENSOR_ERRORLIST anywhere, so those enter below as derived shapes, which is
+// what they are — probes for the rule, not device parameters.
+func hmAdpSuppressionCorpus() []string {
+	out := []string{"STATE", "LEVEL", "CLEAR_ERROR", "LOAD_ERROR_CALIB", "VALVE_ERROR_POSITION", "STATUS_FLAG_ERROR"}
+	for _, k := range []modevent.Kind{modevent.KindKeypress, modevent.KindImpulse, modevent.KindDeviceError} {
+		for _, p := range modevent.Sources(k) {
+			root := string(p)
+			out = append(out, root)
+			if k != modevent.KindDeviceError {
+				continue
+			}
+			// root+"_X" must be a device error; the three glued shapes must
+			// not — that is the whole difference between the classifier's
+			// rule and the bare HasPrefix this side used to run.
+			out = append(out, root+"_OVERHEAT", root+"CODE", root+"S", root+"LIST")
+		}
+	}
+	for k := range ImpulseEvents {
+		out = append(out, k)
+	}
+	return out
+}
+
+// TestHmAdpImpulseEventsMirrorsTheClassifier pins the de-duplication itself:
+// [ImpulseEvents] is a projection of the classifier's impulse sources, not a
+// second declaration of them. SEQUENCE_OK used to be written out in both
+// places, and nothing compared the two — a name added to one side alone
+// either suppressed a data point for an event nothing emits, or emitted an
+// event beside a data point that should not exist.
+func TestHmAdpImpulseEventsMirrorsTheClassifier(t *testing.T) {
+	t.Parallel()
+
+	want := make(map[string]struct{})
+	for _, p := range modevent.Sources(modevent.KindImpulse) {
+		want[string(p)] = struct{}{}
+	}
+	if len(want) == 0 {
+		t.Fatal("the classifier reports no impulse parameters — this test would pass vacuously")
+	}
+	for name := range want {
+		if _, ok := ImpulseEvents[name]; !ok {
+			t.Fatalf("the classifier treats %q as an impulse event, ImpulseEvents does not — the two sets have drifted", name)
+		}
+		if !isImpulseEvent(name) {
+			t.Fatalf("isImpulseEvent(%q) = false while the classifier reports an impulse event", name)
+		}
+	}
+	for name := range ImpulseEvents {
+		if _, ok := want[name]; !ok {
+			t.Fatalf("ImpulseEvents carries %q, the classifier does not — a data point suppressed for an event nothing emits", name)
 		}
 	}
 }

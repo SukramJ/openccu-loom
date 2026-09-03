@@ -691,19 +691,52 @@ type UISchemaValueListEntry struct {
 	Label string `json:"label,omitempty"`
 }
 
-// UISchemaParameterOps mirrors the OCCU OPERATIONS bitmask.
+// UISchemaParameterOps carries the four OPERATIONS bits the CCU publishes
+// in a parameter description. The bits themselves are declared once, in
+// pkg/hmenum; this struct is their JSON projection and adds no rule of its
+// own.
+//
+// Firmware definition: OP_READ=1, OP_WRITE=2, OP_EVENT=4, OP_DETERMINE=8 in
+// ../OpenCCU-Base/src/libhsscomm/HSSParameter.h:53-59, introduced there as
+// the values for "das Feld OPERATIONS in der Parameterbeschreibung an der
+// XmlRpc-Schnittstelle" — so all four are wire fields, not a local
+// convention.
 type UISchemaParameterOps struct {
 	Read  bool `json:"read"`
 	Write bool `json:"write"`
 	Event bool `json:"event"`
-	// Determine is the DETERMINE bit (0x08): the parameter's live value
-	// can be read from the device on demand. The MASTER editor renders a
-	// "Determine" button for such fields. Omitted when unset so the
-	// addition is backward-compatible.
+	// Determine is the DETERMINE bit (0x08): the device can be asked to
+	// establish the parameter's value on demand. The firmware gates the
+	// operation on exactly this bit —
+	// ../OpenCCU-Base/src/libhsscomm/HSSParameter.h:91
+	// (IsDeterminable = operations & OP_DETERMINE) guards
+	// ../OpenCCU-Base/src/rfd/RFParamset.cpp:261-265, which refuses the
+	// request and otherwise calls DetermineValue on the device; it is
+	// reachable over XML-RPC as determineParameter
+	// (../OpenCCU-Base/src/rfd/XmlRpcMethods.cpp:249-262).
+	//
+	// This flag is what the SPA's MASTER editor gates its "Determine" button
+	// on (assets/ui/src/lib/components/parameter/ParameterField.svelte:111,
+	// wired MASTER-only from ChannelPanel.svelte), and it is the same test the
+	// CCU's own editor applies: devconfig.cgi:902-903 renders its Determine
+	// link on precisely `$operations & 8` and points it at determine_parameter.
+	// Two surfaces, one rule — which is why the bit belongs in the DTO rather
+	// than being re-derived per client. Omitted when unset so the addition is
+	// backward-compatible.
 	Determine bool `json:"determine,omitempty"`
 }
 
-// UISchemaParameterFlags mirrors the OCCU FLAGS bitmask.
+// UISchemaParameterFlags is a partial projection of the OCCU FLAGS bitmask,
+// not a mirror of it. The firmware bitmask
+// (../OpenCCU-Base/src/libhsscomm/HSSParameter.h:63-70) also carries
+// FLG_TRANSFORM (1<<2) — a write to the parameter may change the containing
+// channel's description — and FLG_STICKY (1<<4) — a service message that
+// does not clear itself when its cause goes away. Neither is projected, so a
+// client reading this struct cannot tell "the flag is absent" from "the flag
+// is not published"; whether to expose them is a contract decision, not
+// something to infer from the field list.
+//
+// The bits are declared once, in pkg/hmenum. Nothing here re-derives them.
 type UISchemaParameterFlags struct {
 	Visible  bool `json:"visible"`
 	Internal bool `json:"internal"`

@@ -313,11 +313,12 @@ func TestTextDisplaySubDataPointKeysEmptyWithoutBurstLimitWarning(t *testing.T) 
 	}
 }
 
-// ─── L12: HADiscoveryPayload max=24 ──────────────────────────────────────────
+// ─── HADiscoveryPayload max ─────────────────────────────────────────────────
 
-// TestTextDisplayHADiscoveryPayloadMaxIs24 verifies that the HA Discovery payload
-// advertises max=24 (matching MaxRowLength), not the old value of 64.
-func TestTextDisplayHADiscoveryPayloadMaxIs24(t *testing.T) {
+// TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength verifies that the HA
+// Discovery payload advertises the profile's own row-length limit rather than
+// a second literal.
+func TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength(t *testing.T) {
 	t.Parallel()
 	d := New("VCU0001:3", nil)
 	_, body := d.HADiscoveryPayload(discoveryCtx{})

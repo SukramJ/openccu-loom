@@ -9,8 +9,16 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestHmCliRPCServerTypeForInterfaceDerivesFromHmenum pins that this package
-// does not keep its own copy of the interface→callback-server-type datum.
+// TestHmCliRPCServerTypeForInterfaceDerivesFromHmenum pins that this
+// package's answer AGREES with the two pkg/hmenum halves for every interface
+// hmenum declares, and for one it does not.
+//
+// It does not, and cannot, pin the absence of a local copy: the switch this
+// function replaced returns the same value for all five interfaces and for an
+// unknown one, so it passes with either implementation. That property is
+// structural and belongs to [TestW2CliRPCServerTypeKeepsNoLocalCopy]; what
+// this test adds is the value leg — a copy that has already diverged, or a
+// derivation that stops matching hmenum after a row moves.
 //
 // The two halves of that datum both live in pkg/hmenum, and hmenum's own doc
 // comment on InterfaceRPCServerType says so: the map answers

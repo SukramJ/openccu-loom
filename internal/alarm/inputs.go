@@ -261,7 +261,7 @@ func (s *Service) journalDeviceBlocked(ctx context.Context, centralName string, 
 	if _, err := s.journal.Append(ctx, engine.JournalEntry{
 		Class:  hmenum.AlarmJournalClassFault,
 		Event:  "keypad_blocked",
-		Source: "keypad",
+		Source: engine.CodeSourceKeypad,
 		Details: map[string]any{
 			"central":   centralName,
 			"device":    hmtypes.DeviceAddress(key.ChannelAddress),

@@ -268,7 +268,13 @@ func (r *Runner) GetSystemUpdateInfo(ctx context.Context) (SystemUpdateInfo, err
 }
 
 // InboxDevice holds a single entry returned by [Runner.GetInboxDevices].
-// Fields mirror py:2102).
+//
+// Name is percent-encoded Latin-1 — get_inbox_devices.fn is the one script
+// of this group that encodes a single field: callers apply url.QueryUnescape
+// AND the Latin-1 transcode before display — see the package doc comment; the
+// unescape on its own corrupts every non-ASCII value irreversibly. DeviceID,
+// Address, DeviceType and Interface are written raw by the script and must
+// not be unescaped at all.
 type InboxDevice struct {
 	DeviceID   string `json:"id"`
 	Address    string `json:"address"`

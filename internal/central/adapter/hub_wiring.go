@@ -878,8 +878,8 @@ func hubScanOptionsFromConfig(cc config.CentralConfig) hubScanOptions {
 }
 
 // markerMatch reports whether desc carries one of the marker tokens
-// (prefix match on the trimmed description). An empty marker list
-// matches everything.
+// anywhere in the trimmed description (substring, not prefix — see the
+// note at the comparison). An empty marker list matches everything.
 //
 // It feeds [hubEnabledDefault] only. Markers decide whether a sysvar or
 // program arrives ENABLED, never whether it is imported - the reference

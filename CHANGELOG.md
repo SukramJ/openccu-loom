@@ -29,6 +29,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **50 further audited rules corrected.** 16 changed behaviour, 34 corrected a
+  stated reason. The ones that reached a device:
+
+  - **A siren asked to repeat 15 times sounded until someone stopped it.**
+    `MaxRepetitions` was 18; the VALUES-paramset `REPETITIONS` list ends at
+    `REPETITIONS_014` on every device that carries it, and the silent clamp slid
+    15..18 onto the last slot — which is `INFINITE_REPETITIONS`. A finite
+    repetition count became an unbounded alarm. The ceiling is 14 now, one
+    literal instead of two, and an index the device does not offer is an error
+    rather than a clamp.
+  - A sound file the device does not offer was written anyway; the player
+    repeated its previous file and reported success. The index is checked
+    against the device's own list now.
+  - The text display's row length was 24 characters where HmIP-WRCD declares
+    16, and 24 was republished to Home Assistant as the input field's maximum.
+  - `ScheduleProfileNos` answered a static 6 while the published slots come from
+    the device; the two now answer through one path.
+  - The RF lock's `STATE` polarity was spelled independently on the read path,
+    the write path and the discovery payload — `payload_lock` advertised `true`
+    while the service path wrote `false`.
+
+  Every number that went into a comment was measured by reading the files, and
+  the method is stated beside it. That rule exists because a wave-1 comment
+  carried counts produced by `grep` without `-a`, which skips half the device
+  XMLs as binary.
+
 - **75 further audited rules corrected across nine packages.** 40 changed
   behaviour, 35 corrected a stated reason that the CCU sources refute while the
   behaviour stood. Each carries a test written before the fix and a bite proof;

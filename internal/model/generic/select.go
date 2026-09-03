@@ -48,6 +48,10 @@ func (s *Select) Label() (string, bool) {
 }
 
 // SetIndex sends the given 0-based index.
+//
+// An index-typed caller always puts the index on the wire, whichever domain
+// the descriptor declares — the reference implementation makes the same
+// allowance for a numeric argument (select.py:39-41).
 func (s *Select) SetIndex(ctx context.Context, idx int32, priority hmenum.CommandPriority) error {
 	if !s.IsWritable() {
 		return ErrNotWritable
@@ -58,7 +62,10 @@ func (s *Select) SetIndex(ctx context.Context, idx int32, priority hmenum.Comman
 	return s.sendAndObserve(ctx, idx, idx, priority)
 }
 
-// SetLabel resolves label in VALUE_LIST and forwards to [SetIndex].
+// SetLabel resolves label in VALUE_LIST and sends it in the form the
+// descriptor declares — see [DataPoint.EnumWireValue] for who decides and on
+// what authority. The observed value stays the index either way, because that
+// is what this data point's type is.
 func (s *Select) SetLabel(ctx context.Context, label string, priority hmenum.CommandPriority) error {
 	if !s.IsWritable() {
 		return ErrNotWritable
@@ -70,5 +77,6 @@ func (s *Select) SetLabel(ctx context.Context, label string, priority hmenum.Com
 	if !ok {
 		return fmt.Errorf("%q: %w", label, ErrUnknownLabel)
 	}
-	return s.SetIndex(ctx, int32(idx), priority) //nolint:gosec // bounds-checked above; see #20
+	typed := int32(idx) //nolint:gosec // a VALUE_LIST index is bounded by the list length
+	return s.sendAndObserve(ctx, s.EnumWireValue(label, typed), typed, priority)
 }

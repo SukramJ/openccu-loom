@@ -833,6 +833,12 @@ func scanTierBuckets(rows *sql.Rows) ([]tierBucket, error) {
 // [rollupDailySelectSQL]. That is partition-wide where this is pairwise, and
 // the two agree because a Go accumulator that has degraded stays degraded for
 // the rest of the fold. Changing the rule here means changing it there.
+//
+// That agreement is measured, not assumed: each statement has its own mixed
+// merge — one spanned and one unspanned source in the same output bucket, the
+// only input whose answer differs with and without the rule. The three Go
+// folds in hmsto_weight_degrade_test.go, the SQL one in
+// w2Sto_daily_rollup_weight_degrade_test.go.
 func mergeWeightedSpan(aWeightedSum float64, aWeightMs int64, bWeightedSum float64, bWeightMs int64) (weightedSum float64, weightMs int64) {
 	if aWeightMs == 0 || bWeightMs == 0 {
 		return 0, 0

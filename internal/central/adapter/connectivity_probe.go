@@ -24,12 +24,25 @@ import (
 // www/api/homematic.cgi and www/api/eq3/ipc.tcl). So an interface process that
 // has died still appears, and no member reports whether it is serving.
 //
-// Consequence, stated plainly: on stock firmware every entry reads
-// Reachable=true and this probe can never carry an unreachable transition on
-// its own. A total interface outage looks fully reachable here. The `connected`
-// decode below is defensive only — no firmware in the OpenCCU source or its
+// Consequence, stated plainly: on stock firmware every entry this probe
+// returns reads Reachable=true, so a dead interface process — still listed,
+// because the listing is configuration — looks healthy. The `connected` decode
+// below is defensive only: no firmware in the OpenCCU source or its
 // distribution patch set emits that member, so it has never been observed to
 // fire.
+//
+// The one down signal this probe does feed is ABSENCE, and it is not produced
+// here. [coordinators.Reconciler] diffs each probe result against the previous
+// one and publishes ConnectivityChangedEvent{Reachable: false} plus a
+// DriftCorrectedEvent for every interface id that vanished
+// (coordinators/reconciler.go:278-305, which also holds the tracker entry at
+// Reachable=false rather than dropping it, so the interface shows as down and
+// not as never-seen). Because the list is a configuration listing, an id
+// vanishes when the interface is de-configured, not when its process dies —
+// and the diff is skipped entirely for an empty result
+// (coordinators/reconciler.go:274), so a listing that goes wholly dark
+// produces no transition either. That is the gap: process-level liveness has
+// no path to an unreachable transition through this probe.
 //
 // What would actually settle reachability, none of which this probe issues:
 // `Interface.listBidcosInterfaces` (which does report isConnected, per BidCoS

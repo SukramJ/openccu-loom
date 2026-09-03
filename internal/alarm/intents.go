@@ -272,16 +272,16 @@ func (r *intentRouter) handleKeypadPress(ctx context.Context, centralName string
 
 	if lock {
 		if !row.Perms.Arm {
-			r.journalPermissionDenied(ctx, row, "keypad", "arm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceKeypad, "arm")
 			return
 		}
-		r.dispatchArm(ctx, row, row.Binding.ArmMode, "keypad")
+		r.dispatchArm(ctx, row, row.Binding.ArmMode, engine.CodeSourceKeypad)
 	} else {
 		if !row.Perms.Disarm {
-			r.journalPermissionDenied(ctx, row, "keypad", "disarm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceKeypad, "disarm")
 			return
 		}
-		r.dispatchDisarm(ctx, row, "keypad")
+		r.dispatchDisarm(ctx, row, engine.CodeSourceKeypad)
 	}
 }
 
@@ -331,28 +331,28 @@ func (r *intentRouter) dispatchRemoteAction(ctx context.Context, row *CodeRow) {
 	switch {
 	case strings.HasPrefix(action, remoteActionArmPrefix):
 		if !row.Perms.Arm {
-			r.journalPermissionDenied(ctx, row, "remote", "arm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceRemote, "arm")
 			return
 		}
-		r.dispatchArm(ctx, row, strings.TrimPrefix(action, "arm:"), "remote")
+		r.dispatchArm(ctx, row, strings.TrimPrefix(action, remoteActionArmPrefix), engine.CodeSourceRemote)
 	case action == remoteActionDisarm:
 		if !row.Perms.Disarm {
-			r.journalPermissionDenied(ctx, row, "remote", "disarm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceRemote, "disarm")
 			return
 		}
-		r.dispatchDisarm(ctx, row, "remote")
+		r.dispatchDisarm(ctx, row, engine.CodeSourceRemote)
 	case action == remoteActionSilence:
 		if !row.Perms.Silence {
-			r.journalPermissionDenied(ctx, row, "remote", "silence")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceRemote, "silence")
 			return
 		}
-		if err := r.svc.engine.Silence(ctx, row.Binding.ZoneID, row.Name, "remote"); err != nil {
-			r.journalActionFault(ctx, row, "remote", "silence", err)
+		if err := r.svc.engine.Silence(ctx, row.Binding.ZoneID, row.Name, engine.CodeSourceRemote); err != nil {
+			r.journalActionFault(ctx, row, engine.CodeSourceRemote, "silence", err)
 		}
 	case action == remoteActionPanic:
 		r.dispatchPanic(ctx, row)
 	default:
-		r.journalActionFault(ctx, row, "remote", action, errUnknownAction)
+		r.journalActionFault(ctx, row, engine.CodeSourceRemote, action, errUnknownAction)
 	}
 }
 
@@ -395,11 +395,11 @@ func (r *intentRouter) dispatchDisarm(ctx context.Context, row *CodeRow, source 
 func (r *intentRouter) dispatchPanic(ctx context.Context, row *CodeRow) {
 	zoneID := row.Binding.ZoneID
 	if zoneID == "" {
-		r.journalActionFault(ctx, row, "remote", "panic", errBindingIncomplete)
+		r.journalActionFault(ctx, row, engine.CodeSourceRemote, "panic", errBindingIncomplete)
 		return
 	}
-	if err := r.svc.engine.PanicTrigger(ctx, zoneID, false, row.Name, "remote"); err != nil {
-		r.journalActionFault(ctx, row, "remote", "panic", err)
+	if err := r.svc.engine.PanicTrigger(ctx, zoneID, false, row.Name, engine.CodeSourceRemote); err != nil {
+		r.journalActionFault(ctx, row, engine.CodeSourceRemote, "panic", err)
 	}
 }
 
@@ -429,7 +429,7 @@ func (r *intentRouter) journalKeypadUnmatched(ctx context.Context, centralName, 
 	r.append(ctx, engine.JournalEntry{
 		Class:  hmenum.AlarmJournalClassFault,
 		Event:  "keypad_press_unmatched",
-		Source: "keypad",
+		Source: engine.CodeSourceKeypad,
 		Details: map[string]any{
 			"central":    centralName,
 			"device":     dev,

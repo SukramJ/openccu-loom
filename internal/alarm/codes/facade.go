@@ -469,15 +469,23 @@ func (f *Facade) journalFault(ctx context.Context, zoneID, source, event string,
 	}
 }
 
-// permits reports whether p grants verb ("arm" | "disarm" | "silence").
-// An unrecognized verb is denied by default.
+// permits reports whether p grants verb. An unrecognized verb is
+// denied by default.
+//
+// The verbs are the engine's own ([engine.CodeVerbArm] and friends),
+// taken from there rather than respelled here: this switch is the far
+// side of the CodeValidator port, and a token that drifts from the
+// engine's fails closed and silently — every coded verb of that kind
+// comes back as engine.ErrInvalidCode, which reaches the operator as
+// "wrong code" on a code that is correct. Pinned by
+// TestWiredCodeValidatorSpeaksTheEngineCodeVerbs (package alarm).
 func permits(p Perms, verb string) bool {
 	switch verb {
-	case "arm":
+	case engine.CodeVerbArm:
 		return p.Arm
-	case "disarm":
+	case engine.CodeVerbDisarm:
 		return p.Disarm
-	case "silence":
+	case engine.CodeVerbSilence:
 		return p.Silence
 	default:
 		return false

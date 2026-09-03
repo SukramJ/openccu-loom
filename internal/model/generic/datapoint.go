@@ -1912,6 +1912,34 @@ func (d *DataPoint[T]) EnumValueIsIndex() bool {
 	return d.enumValueIsIndex
 }
 
+// EnumWireValue returns the value to put on the wire for the VALUE_LIST entry
+// `label`, which sits at `idx`.
+//
+// This is the single place the ENUM wire form is decided. Callers that already
+// hold an index send it as an index; a caller that holds a label has to ask
+// here, because the two device families disagree and only the descriptor knows
+// which one is in front of us.
+//
+// Authority: the parameter's own declared bounds. An ENUM descriptor spells
+// MIN, MAX and DEFAULT in the domain its values live in — either all three as
+// integers (indices into VALUE_LIST) or all three as the VALUE_LIST labels.
+// Measured over the paramset descriptions of the simulator this module pins
+// (github.com/SukramJ/godevccu v0.2.2, 399 device files, decoded as JSON and
+// classified by the Go type of each decoded bound): 38144 ENUM parameters
+// declare a VALUE_LIST, 9186 declare all three bounds as integers, 28958
+// declare all three as strings, none mix the two. [enumValueIsIndex] carries
+// that classification, taken from MIN.
+//
+// The reference implementation resolves a label-typed write the same way
+// (select.py:42-47, action_select.py:48-53, action.py:35-38, over the flag
+// derived in data_point.py:1404-1410).
+func (d *DataPoint[T]) EnumWireValue(label string, idx int32) any {
+	if d.enumValueIsIndex {
+		return idx
+	}
+	return label
+}
+
 // IgnoreOnInitialLoad reports whether fetching this parameter during the
 // initial device load should be skipped. See
 // [hmenum.Parameter.IgnoreOnInitialLoad] for the full semantics.
@@ -2135,29 +2163,17 @@ func (d *DataPoint[T]) GetEventData() EventData {
 // pre-coerced value into the event payload without mutating the DP.
 func (d *DataPoint[T]) GetEventDataFor(value any) EventData {
 	key := d.Key
-	// Derive device address from channel address by stripping the ":N" suffix.
-	deviceAddr := key.ChannelAddress
-	if i := lastColon(deviceAddr); i >= 0 {
-		deviceAddr = deviceAddr[:i]
-	}
 	return EventData{
 		InterfaceID:    key.InterfaceID,
 		ChannelAddress: key.ChannelAddress,
-		DeviceAddress:  deviceAddr,
-		Parameter:      key.Parameter,
-		Value:          value,
+		// The channel → device address grammar has one owner. Restating it
+		// here is how the two answers drift apart on an address with more than
+		// one separator, with nothing downstream able to tell which rule
+		// produced the value it got.
+		DeviceAddress: hmtypes.DeviceAddress(key.ChannelAddress),
+		Parameter:     key.Parameter,
+		Value:         value,
 	}
-}
-
-// lastColon returns the index of the last ':' in s, or -1 when absent.
-// Inlined to avoid importing strings for a single call.
-func lastColon(s string) int {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == ':' {
-			return i
-		}
-	}
-	return -1
 }
 
 // ─── AllowedInternalParameters ──────────────────────────────────────

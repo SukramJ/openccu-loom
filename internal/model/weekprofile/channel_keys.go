@@ -44,10 +44,17 @@ import (
 //     (iseHmIPWeeklyProgram_AccessReceiver.js:300-313). A registry that
 //     schedules only the door-lock group mints key 1_1 and writes bit 0 —
 //     a permission channel.
-//   - HmIP-FWI (Wiegand): ACCESS_TRANSCEIVER channels take bits 3..10 and the
-//     virtual switch receivers keep bits 0..2 (:330-345, :465-479).
+//   - HmIP-FWI (Wiegand): the editor drops the derived list for the hard-coded
+//     `[1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12]` (iseHmIPWeeklyProgram.js:230) and
+//     remaps the index — 0..7 to bits 3..10, 8..10 to bits 0..2 (:327-345 and
+//     :462-479). The firmware names what those two runs are where it folds the
+//     mask back for the non-expert view: "3 virtual switch actor channels" and
+//     "8 access control channels" (:619-621, counting bits from 1). So the
+//     eight ACCESS_TRANSCEIVER channels take bits 3..10 and the three switch
+//     receivers keep bits 0..2.
 //   - HmIP-DRG-DALI: the bit is the channel number minus one over 48 channels
-//     (:351), which is neither this stride nor 24 bits wide.
+//     (iseHmIPWeeklyProgram.js:351), which is neither this stride nor 24 bits
+//     wide.
 //   - HmIP-RGBW: the universal-light group carries a fourth member, which
 //     mints key `1_4` — no entry here, so [ChannelKeyToBitmask] rejects it and
 //     the write fails rather than addressing the firmware's bit 3.

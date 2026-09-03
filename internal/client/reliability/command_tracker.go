@@ -47,6 +47,29 @@ type CommandTrackerConfig struct {
 	// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.LegacyServiceHandler).
 	// [TestHmCliCommandTrackerTTLCoversSynchronousBudgets] pins that margin.
 	//
+	// The daemon's OWN retry waits do not compete with this TTL either,
+	// which is the relation a reader is most likely to assume backwards:
+	// RetryConfig.DutyCycleDelay is 40 s and a three-attempt chain waits it
+	// twice, so a TTL of 60 s would look far too short. It is not, because
+	// the entry is stamped only after the reliability stack has returned
+	// success — InterfaceClient.SetValue calls WriteUnconfirmedValue below
+	// the Circuit/Retrier call and after its error check, and
+	// ValueWriter.SetValueWithOptions calls its command-tracker hook after
+	// the wire write. Every backoff is therefore spent BEFORE sentAt
+	// exists, not against it, and a write that exhausts its attempts
+	// records nothing at all.
+	// [TestW2CliCommandTrackerRecordsAfterTheRetryWindow] and
+	// [TestW2CliCommandTrackerRecordsNothingForAFailedWrite] pin both
+	// halves; stamping the entry before the chain would subtract the whole
+	// retry window from the TTL.
+	//
+	// On a real CCU that chain does not arise on this path in the first
+	// place: fault -8 is thrown at exactly one place in the CCU sources,
+	// inside RFDevice::UpdateFirmware (OpenCCU-Base
+	// src/rfd/RFDevice.cpp:1492 `throw XmlRpcException("not enough
+	// DutyCycle free",-8)`, the only XmlRpcException carrying -8 in the
+	// tree), so no value write produces it.
+	//
 	// Consequence of the uncovered path, stated so it is not mistaken for a
 	// guarantee: on a wake-up device the optimistic entry expires before the
 	// device answers, GetLastSentValue reports (nil, false), and the value

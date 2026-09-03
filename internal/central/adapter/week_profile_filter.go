@@ -257,13 +257,22 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 			// while the broadcast path silently reported it as changed
 			// without ever setting a bit for it.
 			//
-			// The missing bit is not invented here: which key addresses
-			// which channel is not established by any source we have (see
-			// the note on channelKeyBitmask). Settling it needs a week
-			// program configured on such a device with one bit set and an
-			// observation of which channel stops following it. Until that
-			// measurement exists, the fourth member carries no schedule
-			// switch, which is a visible gap rather than a broken control.
+			// The bit is not missing from the firmware, it is missing from
+			// our table. The CCU's own weekly-program editor derives the
+			// bit positionally from the device's schedule-relevant channel
+			// list — `Math.pow(2, index)` over getRelevantChannels, whose
+			// accepted channel types include UNIVERSAL_LIGHT_RECEIVER
+			// (../OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:357
+			// and :517-555) — so an HmIP-RGBW's fourth universal-light
+			// receiver is that firmware's bit 3. What cannot be expressed
+			// is the mapping: channelKeyBitmask is a fixed actor×sub grid
+			// keyed by the custom-DP channel groups, not by the firmware's
+			// relevant-channel list, and the two lists diverge per device
+			// family (see the note on channelKeyBitmask, which carries the
+			// families and the reason the fix does not belong there). Until
+			// the key is minted from the device's own channel list, the
+			// fourth member carries no schedule switch — a target this
+			// table cannot address, not a bit nobody knows.
 			if _, ok := weekprofile.ChannelKeyToBitmask(key); !ok {
 				continue
 			}

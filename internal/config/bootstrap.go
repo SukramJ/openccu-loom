@@ -136,16 +136,11 @@ func ParseBootstrap(buf []byte) (*BootstrapConfig, error) {
 
 func (b *BootstrapConfig) applyDefaults() {
 	if b.DataDir == "" {
-		b.DataDir = "./var"
+		b.DataDir = defaultDataDir
 	}
-	if b.Logging.Level == "" {
-		b.Logging.Level = "info"
-	}
-	if b.Logging.Format == "" {
-		b.Logging.Format = "json"
-	}
+	b.Logging.applyDefaults()
 	if b.Listen.REST == "" {
-		b.Listen.REST = ":8119"
+		b.Listen.REST = defaultRESTListen
 	}
 	if b.EnvFile == "" {
 		b.EnvFile = DefaultEnvFile
@@ -185,14 +180,7 @@ func (b *BootstrapConfig) EnvFileEnabled() bool {
 
 // Validate enforces invariants on the bootstrap tier.
 func (b *BootstrapConfig) Validate() error {
-	if b.Logging.Level != "debug" && b.Logging.Level != "info" &&
-		b.Logging.Level != "warn" && b.Logging.Level != "error" {
-		return fmt.Errorf("config: invalid logging.level %q", b.Logging.Level)
-	}
-	if b.Logging.Format != "json" && b.Logging.Format != "text" && b.Logging.Format != "text-color" {
-		return fmt.Errorf("config: invalid logging.format %q", b.Logging.Format)
-	}
-	return nil
+	return b.Logging.validate()
 }
 
 // FirstRunSetupAllowed returns the effective allow_first_run_setup

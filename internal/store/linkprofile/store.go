@@ -280,9 +280,13 @@ func (s *Store) GetProfileByID(receiverChannelType, senderChannelType string, id
 // shared — that plane converts its constraints and calls [ProfileMatches]
 // rather than comparing them itself, after the two had drifted (see that
 // function). The scoring half is still restated there: it scores the same
-// fixed − loose×100 over its own constraint type. The two agree today and
-// nothing measures that they still do, so a change to the score here is a
-// change to be made on both planes.
+// fixed − loose×100 over its own constraint type. Only this side's half is
+// measured: TestW2StoMatchActiveProfile_SpecificityOrdersMatchingProfiles pins
+// the weight, the per-constraint penalty and the match-before-score order
+// through this method, so the score cannot change here unnoticed. Nothing
+// measures that the other plane still agrees, so a change here is still a
+// change to be made on both planes; closing that needs the second plane to
+// score through this package rather than through its own copy.
 func (s *Store) MatchActiveProfile(receiverChannelType, senderChannelType string, currentValues map[string]any) int {
 	if s == nil {
 		return 0

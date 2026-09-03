@@ -1422,15 +1422,6 @@ func TestCelsiusToMatterRoundsTenthDegreeReadings(t *testing.T) {
 	}
 }
 
-func TestHumidityToMatterClamping(t *testing.T) {
-	if got := humidityToMatter(-1.0); got != 0 {
-		t.Errorf("humidityToMatter(-1) = %d, want 0", got)
-	}
-	if got := humidityToMatter(200.0); got != 10000 {
-		t.Errorf("humidityToMatter(200) = %d, want 10000", got)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // matter server – MatterInvoke SetpointRaiseLower
 // ---------------------------------------------------------------------------

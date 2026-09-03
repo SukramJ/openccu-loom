@@ -8,7 +8,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
-	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // TestHmAdpMQTTScheduleEntryCarriesTheColourFields couples the two projections
@@ -69,42 +68,59 @@ func TestHmAdpMQTTScheduleEntryNullsAbsentColourFields(t *testing.T) {
 }
 
 // TestHmAdpRESTAndMQTTProjectionsAgreeOnTheColourFields is the coupling half:
-// whatever the REST DTO reports for the colour fields, the MQTT map reports the
-// same. It runs both projections over one parsed paramset so neither side can
-// drift without the other.
+// whatever the REST DTO reports for the colour fields, the MQTT map reports
+// the same. It starts from one raw `<NN>_WP_*` MASTER paramset — the shape the
+// CCU actually returns — and runs each plane's own production projection over
+// it: [parseSimpleSchedule] for REST/WS (schedules.go), and
+// [weekprofile.ParseSimpleRawParamset] + [simpleEntryJSON] for the MQTT
+// json_attributes payload (eventbridge.go), which is the pair
+// [simpleScheduleEntriesJSON] runs. Neither side is hand-built here, so
+// dropping a field on either one turns this red.
 func TestHmAdpRESTAndMQTTProjectionsAgreeOnTheColourFields(t *testing.T) {
 	t.Parallel()
 
-	colorType, colorValue, outputBehaviour := 0, 300, 1
-	entry := schedule.SimpleEntry{
-		Weekdays:        []schedule.Weekday{schedule.WeekdayTuesday},
-		Time:            "18:00",
-		Level:           0.5,
-		ColorType:       &colorType,
-		ColorValue:      &colorValue,
-		OutputBehaviour: &outputBehaviour,
+	// Weekday bit 2 = Tuesday; FIXED_HOUR/MINUTE 18:00; LEVEL 0.5.
+	// The colour triple is what an HmIP-RGBW switch point carries.
+	raw := map[string]any{
+		"01_WP_WEEKDAY":      2,
+		"01_WP_FIXED_HOUR":   18,
+		"01_WP_FIXED_MINUTE": 0,
+		"01_WP_LEVEL":        0.5,
+		"01_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":  1,
+		"01_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE": 4200,
+		"01_WP_OUTPUT_BEHAVIOUR":                              3,
 	}
-	rest := hmapi.SimpleScheduleEntry{
-		SlotNo:          1,
-		ColorType:       entry.ColorType,
-		ColorValue:      entry.ColorValue,
-		OutputBehaviour: entry.OutputBehaviour,
+	bits := weekprofile.TargetChannelBits{"1_1": 0}
+
+	restEntries := parseSimpleSchedule(raw, bits)
+	if len(restEntries) != 1 {
+		t.Fatalf("REST projection produced %d entries, want 1 — the fixture no longer parses", len(restEntries))
+	}
+	rest := restEntries[0]
+
+	domain, err := weekprofile.ParseSimpleRawParamset(raw, bits)
+	if err != nil {
+		t.Fatalf("ParseSimpleRawParamset: %v", err)
+	}
+	entry, ok := domain.Entries[rest.SlotNo]
+	if !ok {
+		t.Fatalf("MQTT side has no slot %d", rest.SlotNo)
 	}
 	mqtt := simpleEntryJSON(entry)
 
-	for key, want := range map[string]*int{
+	// Both planes must carry the value; a plane that drops the field
+	// publishes nil here, which is the divergence this test exists for.
+	for key, restVal := range map[string]*int{
 		"color_type":       rest.ColorType,
 		"color_value":      rest.ColorValue,
 		"output_behaviour": rest.OutputBehaviour,
 	} {
-		if want == nil {
-			continue
+		if restVal == nil {
+			t.Fatalf("REST projection dropped %s — the paramset carries it", key)
 		}
-		if mqtt[key] != *want {
-			t.Fatalf("REST reports %s=%d, MQTT reports %v", key, *want, mqtt[key])
+		if mqtt[key] != *restVal {
+			t.Fatalf("REST reports %s=%d, MQTT reports %v — the two projections of one paramset disagree",
+				key, *restVal, mqtt[key])
 		}
 	}
-	// Keep the weekprofile import meaningful: the two projections share this
-	// package's parser, which is where a future divergence would originate.
-	_ = weekprofile.TargetChannelBits{}
 }
