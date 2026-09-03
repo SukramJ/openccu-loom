@@ -77,9 +77,7 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 			}
 			p := inst.cfg.OpticalPattern
 			if p == "" {
-				if lights := dev.AvailableLights(); len(lights) > 1 {
-					p = lights[len(lights)-1]
-				}
+				p = alarmOpticalSelection(dev)
 			}
 			if p != "" {
 				on.OpticalSelection = &p

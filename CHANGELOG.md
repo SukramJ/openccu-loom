@@ -29,6 +29,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **An optical alarm flashed an acknowledgement blink instead of an alarm.**
+  With no pattern configured, the driver took the last entry of the device's
+  `OPTICAL_ALARM_SELECTION` list. On every HmIP-ASIR variant that entry is
+  `CONFIRMATION_SIGNAL_2` — "long short short", the third of three one-shot
+  acknowledgement blinks. The device's four sustained alarm patterns are the
+  `*_REPEATING` entries; the list order is fixed and identical across ASIR,
+  ASIR-2 and ASIR-O, so the positional rule resolved deterministically to the
+  entry furthest from what an alarm needs. Nothing failed: the device accepted
+  it, `OPTICAL_ALARM_ACTIVE` went true and the watchdog was satisfied, so an
+  optical-only activation or test fire showed a brief blink and nothing else.
+
+  The pattern now comes from a property the device states rather than from a
+  position: `Siren.AlarmOpticalLabel` picks the first selection the device
+  itself names as repeating, mirroring `DisableAcousticLabel` on the acoustic
+  half — whose own comment already warned against re-deriving the label
+  positionally. A device offering no repeating pattern gets no optical
+  selection written at all and keeps the one it holds, which beats sending a
+  blink that would satisfy the watchdog.
+
 - **A schedule could ask for an astro offset five times wider than any device
   accepts.** `astro_offset_minutes` was validated against a constant ±720, and
   anything inside that reached the wire. Every model in the descriptor corpus

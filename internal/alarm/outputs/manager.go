@@ -472,9 +472,7 @@ func (m *Manager) sirenOnConfig(
 		}
 		p := o.cfg.OpticalPattern
 		if p == "" && on.OpticalSelection == nil {
-			if lights := dev.AvailableLights(); len(lights) > 1 {
-				p = lights[len(lights)-1]
-			}
+			p = alarmOpticalSelection(dev)
 		}
 		if p != "" {
 			on.OpticalSelection = &p
