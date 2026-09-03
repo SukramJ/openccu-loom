@@ -29,6 +29,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Two schedule constants left in the adapter after their home was created.**
+  The lock-permission duration pair (`base 7, factor 31` — the CCU's own
+  "Dauerhaft") was declared a third time in the adapter beside the two the
+  domain now single-sources, and the climate day terminator was spelled as a
+  bare `1440` at four places in the adapter's weekday expander while
+  `schedule.ClimateEndOfDayMinutes` owns it. Both read from the domain now, so
+  the adapter's expander cannot drift from `weekprofile`'s about where a day
+  ends.
+
 - **The escalation threshold was rebuilt at five call sites.** `health.Tracker`
   flap-damps deliberately: a probe's first failing sample yields DEGRADED, and
   only a second consecutive one escalates. Five callers needed the opposite —

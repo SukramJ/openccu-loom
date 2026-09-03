@@ -697,11 +697,6 @@ func lockActionRawFor(action string) (level float64, durBase, durFactor int, ok 
 	return schedule.EncodeLockAction(schedule.LockAction(action))
 }
 
-const (
-	lockPermissionDurationBase   = 7  // HOUR_1
-	lockPermissionDurationFactor = 31 // -> sentinel "always"
-)
-
 // detectLockAction reverses the wire encoding to its canonical label.
 // Falls back to "lock_autorelock_start" (the zero-value encoding) when nothing matches.
 func detectLockAction(level float64, durBase, durFactor int) string {
@@ -943,7 +938,7 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 		case "not_granted":
 			e.Level = 0.0
 		}
-		e.Duration = weekprofile.FormatTimeBaseFactor(lockPermissionDurationBase, lockPermissionDurationFactor)
+		e.Duration = weekprofile.FormatTimeBaseFactor(schedule.PermanentDurationBase, schedule.PermanentDurationFactor)
 		// Permission slots target channels >= 2_x.
 		if len(e.TargetChannels) == 0 {
 			e.TargetChannels = []string{"2_1"}
@@ -1569,11 +1564,11 @@ func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 		stretches = append(stretches, stretch{end: pEnd, temp: p.Temperature})
 		cursor = pEnd
 	}
-	if cursor < 1440 {
-		stretches = append(stretches, stretch{end: 1440, temp: wd.BaseTemperature})
+	if cursor < schedule.ClimateEndOfDayMinutes {
+		stretches = append(stretches, stretch{end: schedule.ClimateEndOfDayMinutes, temp: wd.BaseTemperature})
 	}
 	if len(stretches) == 0 {
-		stretches = append(stretches, stretch{end: 1440, temp: wd.BaseTemperature})
+		stretches = append(stretches, stretch{end: schedule.ClimateEndOfDayMinutes, temp: wd.BaseTemperature})
 	}
 	if len(stretches) > schedule.MaxClimateSlots {
 		return nil, fmt.Errorf("too many periods: yielded %d slots, max %d",
@@ -1585,7 +1580,7 @@ func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 		if i < len(stretches) {
 			out[i] = rawSlot{endMin: stretches[i].end, temp: stretches[i].temp}
 		} else {
-			out[i] = rawSlot{endMin: 1440, temp: wd.BaseTemperature}
+			out[i] = rawSlot{endMin: schedule.ClimateEndOfDayMinutes, temp: wd.BaseTemperature}
 		}
 	}
 	return out, nil
