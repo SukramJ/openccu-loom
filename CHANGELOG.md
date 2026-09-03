@@ -29,6 +29,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **An RF week-program pointer resolved one profile too low.** The
+  subscription that keeps the active profile current called the parameter-less
+  `SyncProfilePointer`, which guesses which parameter a value came from by its
+  Go type: a string is read as `WEEK_PROGRAM_POINTER` (declared 0-based),
+  everything else as `ACTIVE_PROFILE` (declared 1-based). An RF pointer
+  arriving as an integer — its ordinary shape — was therefore read 1-based, so
+  a device on its third program reported its second. The subscription passes
+  the parameter it already has in hand now, and the guessing form, left without
+  a production caller, is deleted with its tests.
+
 - **The WebSocket and MCP planes published countdown kinds no client
   declares.** `AlarmCountdown.kind` is constrained to `exit_delay` /
   `entry_delay` by `assets/openapi.yaml` and typed as those two in the SPA. The

@@ -516,22 +516,6 @@ func (dp *ProfileDataPoint) SyncProfilePointerFor(param hmenum.Parameter, rawVal
 	return dp.SetCurrentProfile(key)
 }
 
-// SyncProfilePointer is the parameter-less form kept for the callers that
-// have not been given the parameter to pass. It reads every value as
-// ACTIVE_PROFILE's 1-based integer except a string, which it reads 0-based.
-//
-// That discriminator is unsound and it is why [SyncProfilePointerFor] exists:
-// the type a value arrives as says nothing about which parameter produced it,
-// and an RF WEEK_PROGRAM_POINTER read through this form lands one program too
-// low. Prefer the parameter-aware form; this one is only correct for
-// ACTIVE_PROFILE.
-func (dp *ProfileDataPoint) SyncProfilePointer(rawValue any) error {
-	if s, isString := rawValue.(string); isString {
-		return dp.SyncProfilePointerFor(hmenum.ParameterWeekProgramPointer, s)
-	}
-	return dp.SyncProfilePointerFor(hmenum.ParameterActiveProfile, rawValue)
-}
-
 // mapToProfileKey converts a raw CCU profile pointer value to a "P1".."P6"
 // key. Returns "" if the value cannot be mapped.
 func mapToProfileKey(param hmenum.Parameter, v any) string {

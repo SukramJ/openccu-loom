@@ -581,14 +581,20 @@ func subscribeProfilePointer(d *device.Device, wp *weekprofile.ProfileDataPoint)
 			if dp == nil {
 				continue
 			}
+			// Pass the parameter along: ACTIVE_PROFILE is declared 1-based
+			// and WEEK_PROGRAM_POINTER 0-based, so the same number means
+			// different profiles. The parameter-less form guesses from the
+			// Go type — a string is read as the RF pointer, everything else
+			// as ACTIVE_PROFILE — so an RF pointer arriving as an integer,
+			// which is its ordinary shape, resolved one profile too low.
 			dp.OnAnyUpdate(func(_, next any) {
-				_ = wp.SyncProfilePointer(next)
+				_ = wp.SyncProfilePointerFor(p, next)
 			})
 			// Seed once with the current value so the descriptor's
 			// CurrentProfile reflects the live state right after
 			// boot, not just after the next push event.
 			if v, observed := dp.RawValue(); observed {
-				_ = wp.SyncProfilePointer(v)
+				_ = wp.SyncProfilePointerFor(p, v)
 			}
 			return
 		}
