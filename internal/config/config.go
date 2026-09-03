@@ -478,13 +478,12 @@ const RetentionHourlyDefault = 13 * 30 * 24 * time.Hour
 // explicit value below this floor is clamped up to it at config load; zero
 // still means "use the daemon default", which is far above the floor.
 //
-// "Mirrors" is literal and unenforced: the recorder declares its lag as
-// its own constant (rollupHourlyLag in internal/history) and never reads
-// this one, so raising the lag alone leaves this floor too low and the
-// purge deletes raw rows the fold has not seen — silently, permanently,
-// and only for the operators whose retention sits between the two values.
-// Raising one means raising the other until the recorder derives its lag
-// from this constant.
+// The recorder derives its lag from this constant (rollupHourlyLag in
+// internal/history), so the two cannot drift: raising this value raises the
+// lag with it. They used to be independent, and the comment here said so —
+// raising the lag alone left this floor too low and the purge then deleted
+// raw rows the fold had not seen, silently and permanently, for exactly the
+// operators whose retention sat between the two values.
 const HistoryRetentionFloor = time.Hour
 
 // RetentionHourlyOrDefault returns RetentionHourly, falling back to

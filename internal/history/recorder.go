@@ -13,6 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -53,7 +54,15 @@ const (
 	// it is eligible for the hourly fold. An hour of slack means a bucket
 	// is never rolled up while it could still receive a late-arriving
 	// sample for the same hour.
-	rollupHourlyLag = time.Hour
+	//
+	// Derived from the retention floor rather than restated: a retention
+	// below this lag lets the purge delete raw rows before the fold has
+	// folded them, losing that data permanently, and the floor exists to
+	// prevent exactly that. The floor's own comment used to say it "mirrors"
+	// this constant and that the mirroring was unenforced — raising the lag
+	// alone left the floor too low, silently, and only for the operators
+	// whose retention sat between the two values.
+	rollupHourlyLag = config.HistoryRetentionFloor
 
 	// rollupDailyLag is the equivalent slack before an hourly bucket is
 	// eligible for the daily fold.

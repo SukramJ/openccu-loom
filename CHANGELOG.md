@@ -29,6 +29,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **A raised rollup lag would have deleted unfolded history, silently.** The
+  retention purge drops raw samples once they age out; the hourly fold only
+  folds samples older than `rollupHourlyLag`. `config.HistoryRetentionFloor`
+  exists to keep the purge behind the fold — and its own comment said it
+  "mirrors" the recorder's lag while stating in the same breath that the
+  mirroring was unenforced: raising the lag alone left the floor too low, and
+  the purge then deleted raw rows the fold had never seen. Permanently, and
+  only for operators whose retention happened to sit between the two values.
+  The recorder derives its lag from the floor now, so the two move together.
+
 - **Three more audited leftovers.** The `InterfaceRPCServerType` table
   documented itself as driving the callback servers' dispatcher; it drives
   nothing — the XML-RPC server routes by URL path and the BIN-RPC one by the
