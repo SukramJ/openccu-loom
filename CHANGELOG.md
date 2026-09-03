@@ -29,6 +29,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Firmware download reported success for a request the CCU never received.**
+  `CcuBackend.DownloadFirmware` posted `action=download_firmware` to
+  `/config/cp_maintenance.cgi`. That CGI defines `firmware_upload`,
+  `firmware_update_confirm` / `_go` / `_cancel` / `_invalid`, `createBackup`,
+  `put_page`, the reboot and shutdown actions — and no `download_firmware`. The
+  unknown action fell through to an HTML page under HTTP 200, which the method
+  read as success, so `POST /ccu/firmware/download` answered 2xx for a download
+  that never started. Four unit tests pinned the exchange in place; they passed
+  against a test server that answered anything with 200, which is how it
+  survived.
+
+  The CCU's own entry point is the JSON-RPC method `CCU.downloadFirmware`, and
+  it takes **no parameters**: it fetches the newest firmware for that box's own
+  serial from eQ-3's update server. A caller-supplied URL has nowhere to go, so
+  the call now reports `ErrUnsupported` — which the REST layer already handles
+  — with the firmware citation at the site. Wiring it to the JSON-RPC method
+  would change what the operation means ("install the CCU's own latest
+  firmware" rather than "fetch this URL") and therefore what the REST field is
+  for; that is a decision about the published surface, not a repair, and is
+  left open deliberately.
+
 - **The active-profile score was computed twice.** Both planes resolve which
   link profile is active — the SPA's schema over raw JSON constraints, the
   store over decoded ones — and each carried its own copy of the specificity

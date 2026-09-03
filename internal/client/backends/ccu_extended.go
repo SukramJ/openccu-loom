@@ -1132,49 +1132,32 @@ func (b *CcuBackend) HasProgramIDs(ctx context.Context, iseID string) (bool, err
 // whether the other copy still needs to exist at all.
 //
 // Only "http://" and "https://" scheme firmware URLs are accepted.
-func (b *CcuBackend) DownloadFirmware(ctx context.Context, firmwareURL string) error {
-	if b.baseURL == "" || b.sessionIDFn == nil {
-		return ErrUnsupported
-	}
-	if !strings.HasPrefix(firmwareURL, "http://") && !strings.HasPrefix(firmwareURL, "https://") {
-		return fmt.Errorf("ccu.DownloadFirmware: only http/https scheme allowed, got %q: %w", firmwareURL, ErrUnsupported)
-	}
-
-	sid := b.sessionIDFn()
-	if sid == "" {
-		return fmt.Errorf("ccu.DownloadFirmware: no active JSON-RPC session: %w", ErrUnsupported)
-	}
-
-	uploadURL := strings.TrimRight(b.baseURL, "/") + "/config/cp_maintenance.cgi"
-
-	form := url.Values{
-		"sid":    {sid},
-		"action": {"download_firmware"},
-		"url":    {firmwareURL},
-	}
-
-	hc := b.httpClient
-	if hc == nil {
-		hc = httpx.NewClient(firmwareDownloadTimeout)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return fmt.Errorf("ccu.DownloadFirmware: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("ccu.DownloadFirmware: post: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if _, err := readLimitedResponse(resp.Body, maxDownloadResponseSize); err != nil {
-		return fmt.Errorf("ccu.DownloadFirmware: read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ccu.DownloadFirmware: CCU returned HTTP %d", resp.StatusCode)
-	}
-	return nil
+func (b *CcuBackend) DownloadFirmware(_ context.Context, firmwareURL string) error {
+	// Not supported, and it never was: this posted `action=download_firmware`
+	// to /config/cp_maintenance.cgi, which defines no such action. That CGI's
+	// actions are firmware_upload, firmware_update_confirm / _go / _cancel /
+	// _invalid, createBackup, askCreateBackup, put_page, reboot_* and
+	// shutdown_* (../OpenCCU-Base/www/config/cp_maintenance.cgi). An unknown
+	// action fell through to an HTML page under HTTP 200, and this method read
+	// that as success — so every call reported a download the CCU never
+	// started.
+	//
+	// The CCU's own entry point is the JSON-RPC method CCU.downloadFirmware,
+	// and it takes NO parameters: it fetches the newest firmware for this
+	// box's own serial from eQ-3's update server into /tmp/fup.tgz
+	// (../OpenCCU-Base/www/api/methods/ccu/downloadFirmware.tcl; the WebUI
+	// calls it as `homematic('CCU.downloadFirmware', {}, …)` at
+	// www/config/cp_maintenance.cgi:897 and then re-enters the CGI with
+	// action=firmware_upload&directDownload=true).
+	//
+	// So a caller-supplied URL has nowhere to go. Wiring this to the JSON-RPC
+	// method would change what the operation means — "install the CCU's own
+	// latest firmware", not "fetch this URL" — which is a decision about the
+	// REST surface rather than a repair, so it reports unsupported until that
+	// decision is made.
+	return fmt.Errorf(
+		"ccu.DownloadFirmware: the CCU has no endpoint that downloads a caller-supplied URL (%q); "+
+			"its own CCU.downloadFirmware takes no parameters: %w",
+		firmwareURL, ErrUnsupported,
+	)
 }
