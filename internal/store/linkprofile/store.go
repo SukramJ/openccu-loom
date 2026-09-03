@@ -291,7 +291,7 @@ func (s *Store) MatchActiveProfile(receiverChannelType, senderChannelType string
 		if p.ID == 0 || len(p.Params) == 0 {
 			continue
 		}
-		if !profileMatches(p.Params, currentValues) {
+		if !ProfileMatches(p.Params, currentValues) {
 			continue
 		}
 		score := profileSpecificity(p.Params)
@@ -422,10 +422,17 @@ func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 	return bucket, nil
 }
 
-// profileMatches reports whether every constraint in params is satisfied by
-// the corresponding value in current. Missing keys in current are ignored
-// (no decision either way), mirroring the Python reference behaviour.
-func profileMatches(params map[string]ParamConstraint, current map[string]any) bool {
+// ProfileMatches reports whether every constraint in params is satisfied by
+// the corresponding value in current. Missing keys in current are ignored (no
+// decision either way).
+//
+// Exported because the decision is made on two planes — the SPA's link schema
+// resolves the active profile from raw JSON constraints while this store
+// resolves it from decoded ones — and the two had already drifted: the other
+// side compared floats with `!=` where this one uses a relative epsilon, so a
+// value that survived a wire round-trip matched here and not there. One rule,
+// one home; the caller converts its constraints and asks.
+func ProfileMatches(params map[string]ParamConstraint, current map[string]any) bool {
 	for name, c := range params {
 		raw, ok := current[name]
 		if !ok {

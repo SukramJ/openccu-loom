@@ -29,6 +29,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **A link profile matched on the SPA and not in the store, or the reverse.**
+  "Does this profile match the channel's current values" was implemented twice
+  — once on the raw JSON the link schema carries, once on the decoded values
+  the store holds — and the two had drifted in both directions. One compared
+  floats with `!=` where the other uses a relative epsilon, so a level that
+  survived a wire round-trip (`0.1 + 0.2`) matched in the store and not on the
+  schema; and the schema parsed numeric strings the store refuses, so `"1"`
+  matched there and not in the store. Same channel, same profile, two answers.
+
+  `linkprofile.ProfileMatches` is the single rule now; the schema converts its
+  constraints and asks. What stays separate is the input preparation, and the
+  comment says why: the schema reads values straight off the wire, where a
+  numeric string is a shape the CCU produces, while the store refuses strings
+  on purpose because reading one as a number in the wrong place risks a silent
+  mismatch — and whether a LINK paramset can carry one there is not decidable
+  from the CCU sources. `TestProfileMatchingAgreesWithTheStore` compares the
+  two planes on the same input rather than pinning either.
+
 - **"Supports last known level" was decided by a test no device can satisfy.**
   The rule read `MAX > 1.0`, on the claim that a device carrying the feature
   reports the extended bound. It does not: the firmware declares these level
