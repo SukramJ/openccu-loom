@@ -29,6 +29,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The WebSocket and MCP planes published countdown kinds no client
+  declares.** `AlarmCountdown.kind` is constrained to `exit_delay` /
+  `entry_delay` by `assets/openapi.yaml` and typed as those two in the SPA. The
+  REST handler filtered to them by restating the two tokens; the WS plane
+  published whatever the engine had stamped and MCP did the same. A zone in
+  pre-alarm, in trigger, or waiting to auto-rearm therefore sent one of three
+  further kinds through a field that admits neither. All three planes ask
+  `engine.IsCountdownTimerKind` now — the engine owns which timer kinds are a
+  user-facing countdown — and the handler's private copy of the two tokens is
+  gone.
+
 - **An installable access-point firmware update stayed hidden.**
   `IsFirmwareUpdateReady` held `{READY_FOR_UPDATE, DO_UPDATE_PENDING,
   PERFORMING_UPDATE}`. The CCU's own install precondition is
