@@ -260,8 +260,15 @@ var (
 )
 
 // InterfaceRPCServerType maps each Interface to the [RPCServerType] that
-// handles its callbacks. The mapping drives the dispatcher inside the
-// callback servers — unknown interfaces default to [RPCServerTypeNone].
+// would handle its callbacks. Unknown interfaces map to
+// [RPCServerTypeNone].
+//
+// It does NOT drive a dispatcher: the XML-RPC callback server routes by URL
+// path and the BIN-RPC one by the interface id in the envelope, neither of
+// them through this table. Its only reader is
+// [client.RPCServerTypeForInterface], whose own doc says the same — it is the
+// answer a future callback-server caller should reach for, not a record of
+// one that exists. Saying otherwise invited a reader to change routing here.
 //
 // Note: CUxD maps to [RPCServerTypeNone] here because openccu-loom routes
 // CUxD through a dedicated BIN-RPC callback server, not the XML-RPC

@@ -29,6 +29,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Three more audited leftovers.** The `InterfaceRPCServerType` table
+  documented itself as driving the callback servers' dispatcher; it drives
+  nothing — the XML-RPC server routes by URL path and the BIN-RPC one by the
+  interface id in the envelope. Its only reader already says so about itself,
+  so the claim invited a reader to change routing in the wrong place.
+  `hmtypes.ValidateHost` / `IsHost` had no caller outside their own tests and
+  are removed, with the one comment that referenced them reworded. And
+  `CcuBackend.GetInboxDevices` now carries the same warning its sibling
+  `GetServiceMessages` does: the `name` field is percent-encoded Latin-1 and
+  must not be unescaped without the transcode, because the unescape alone
+  corrupts every non-ASCII value irreversibly.
+
 - **Firmware download reported success for a request the CCU never received.**
   `CcuBackend.DownloadFirmware` posted `action=download_firmware` to
   `/config/cp_maintenance.cgi`. That CGI defines `firmware_upload`,

@@ -543,7 +543,16 @@ func (b *CcuBackend) GetSystemUpdateInfo(ctx context.Context) (map[string]any, e
 }
 
 // GetInboxDevices implements Operations via the get_inbox_devices ReGa
-// script. The pairing inbox is a central-wide ReGa query; the reference
+// script.
+//
+// The `name` field is returned percent-encoded Latin-1, undecoded, like the
+// human-readable fields of [CcuBackend.GetServiceMessages] and for the same
+// reason: the canonical ReGa decoder is not reachable from this package, and
+// a plain url.QueryUnescape is not a substitute — it turns an umlaut into an
+// invalid UTF-8 byte that every north-bound encoder then replaces with
+// U+FFFD. Callers decode before display; the live inbox path does
+// (adapter.loadInbox via decodeRegaField). Every other field is written raw
+// by the script and must not be unescaped at all. The pairing inbox is a central-wide ReGa query; the reference
 // stack reads it the same way (there is no JSON-RPC inbox method on the
 // CCU). When iface is non-empty the result is filtered to that interface.
 // Without a ScriptRunner the inbox is unavailable.

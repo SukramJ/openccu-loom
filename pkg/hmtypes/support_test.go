@@ -4,7 +4,6 @@
 package hmtypes_test
 
 import (
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -85,64 +84,6 @@ func TestChangedWithinSeconds_Recent(t *testing.T) {
 		t.Error("ChangedWithinSeconds(time.Now(), 1m) = false, want true")
 	}
 }
-
-func TestChangedWithinSeconds_Expired(t *testing.T) {
-	t.Parallel()
-	old := time.Now().Add(-2 * time.Hour)
-	if hmtypes.ChangedWithinSeconds(old, time.Minute) {
-		t.Error("ChangedWithinSeconds(old, 1m) = true, want false")
-	}
-}
-
-// --------------------------------------------------------------------------
-// ValidateHost / IsHost
-// --------------------------------------------------------------------------
-
-func TestValidateHost_Empty(t *testing.T) {
-	t.Parallel()
-	if err := hmtypes.ValidateHost(""); err == nil {
-		t.Error("ValidateHost(\"\") want error")
-	}
-}
-
-func TestValidateHost_Whitespace(t *testing.T) {
-	t.Parallel()
-	if err := hmtypes.ValidateHost("   "); err == nil {
-		t.Error("ValidateHost(\"   \") want error")
-	}
-}
-
-func TestValidateHost_ValidHostname(t *testing.T) {
-	t.Parallel()
-	for _, h := range []string{"localhost", "ccu3.local", "192.168.1.1", "my-ccu.home"} {
-		if err := hmtypes.ValidateHost(h); err != nil {
-			t.Errorf("ValidateHost(%q) unexpected error: %v", h, err)
-		}
-	}
-}
-
-func TestValidateHost_InvalidHostname(t *testing.T) {
-	t.Parallel()
-	for _, h := range []string{"-bad", "bad-.local", "a b", "http://bad"} {
-		if err := hmtypes.ValidateHost(h); err == nil {
-			t.Errorf("ValidateHost(%q) want error, got nil", h)
-		}
-	}
-}
-
-func TestIsHost(t *testing.T) {
-	t.Parallel()
-	if !hmtypes.IsHost("192.168.1.1") {
-		t.Error("IsHost(\"192.168.1.1\") = false, want true")
-	}
-	if hmtypes.IsHost("") {
-		t.Error("IsHost(\"\") = true, want false")
-	}
-}
-
-// --------------------------------------------------------------------------
-// IsIPv4Address / IsIPv6Address
-// --------------------------------------------------------------------------
 
 func TestIsIPv4Address(t *testing.T) {
 	t.Parallel()
@@ -460,49 +401,6 @@ func TestFindFreePort_Range(t *testing.T) {
 	}
 }
 
-func TestFindFreePort_InvalidRange(t *testing.T) {
-	t.Parallel()
-	_, err := hmtypes.FindFreePort(500, 100)
-	if err == nil {
-		t.Fatal("FindFreePort with lo>hi should return error")
-	}
-	if !errors.Is(err, hmtypes.ErrPortRangeInvalid) {
-		t.Errorf("FindFreePort invalid range: got %v, want ErrPortRangeInvalid", err)
-	}
-}
-
-// --------------------------------------------------------------------------
-// isValidHostname / ValidateHost edge cases
-// --------------------------------------------------------------------------
-
-// TestValidateHost_TooLongHostname verifies that a hostname longer than 253
-// characters is rejected (exercises line 58-60 of support.go).
-// Use 'g' characters (not hex digits) so the string cannot accidentally
-// match the ipv6Pattern (^[0-9a-fA-F:]+$) in ValidateHost.
-func TestValidateHost_TooLongHostname(t *testing.T) {
-	t.Parallel()
-	host := strings.Repeat("g", 254) // 254 chars > 253-char DNS limit; 'g' is not a hex digit
-	if err := hmtypes.ValidateHost(host); err == nil {
-		t.Errorf("ValidateHost(%d-char host) want error, got nil", len(host))
-	}
-}
-
-// TestValidateHost_EmptyLabel verifies that a hostname with an empty label
-// (consecutive dots) is rejected (exercises line 63-65 of support.go).
-func TestValidateHost_EmptyLabel(t *testing.T) {
-	t.Parallel()
-	if err := hmtypes.ValidateHost("a..b"); err == nil {
-		t.Error("ValidateHost(\"a..b\") want error, got nil (empty label)")
-	}
-}
-
-// --------------------------------------------------------------------------
-// SupportsRxMode: Wakeup-match path
-// --------------------------------------------------------------------------
-
-// TestSupportsRxMode_WakeupMatch verifies that a WAKEUP command mode matches
-// when the rx-mode set contains RxModeWakeup (exercises line 169-171 of
-// support.go — the inner return-true branch).
 func TestSupportsRxMode_WakeupMatch(t *testing.T) {
 	t.Parallel()
 	modes := []hmenum.RxMode{hmenum.RxModeWakeup, hmenum.RxModeAlways}

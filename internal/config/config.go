@@ -2219,7 +2219,7 @@ func validateCentralNames(centrals []CentralConfig) error {
 // URLs. The TCP port has its own config field.
 //
 // This is the authority for what centrals[].host may contain, and it is
-// deliberately more permissive than [hmtypes.ValidateHost]: underscores
+// deliberately permissive: underscores
 // are accepted here (see [centralHostLabel]) because home LANs hand them
 // out, while the public helper applies the strict DNS grammar and a
 // 63-octet label cap. The public helper has no production caller today,

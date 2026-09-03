@@ -56,25 +56,6 @@ var (
 	hostnameLabel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9]$|^[A-Za-z0-9]$`)
 )
 
-// isValidHostname returns true when host is a syntactically valid DNS
-// hostname per RFC 1123 (total ≤253 chars, labels ≤63 chars, no leading or
-// Trailing hyphens). Replaces the PCRE-only HOSTNAME_PATTERN.
-func isValidHostname(host string) bool {
-	if host == "" || len(host) > 253 {
-		return false
-	}
-	labels := strings.SplitSeq(host, ".")
-	for lbl := range labels {
-		if lbl == "" || len(lbl) > 63 {
-			return false
-		}
-		if !hostnameLabel.MatchString(lbl) {
-			return false
-		}
-	}
-	return true
-}
-
 // ToBool converts a bool or string to a bool.
 // Strings "y", "yes", "t", "true", "on", "1" (case-insensitive) are
 // considered true. Any other string returns false. Non-string,
@@ -112,27 +93,6 @@ var ErrHostEmpty = errors.New("hmtypes: host must not be empty")
 // ErrHostInvalid is returned by [ValidateHost] when the host string
 // does not match a valid hostname or IP address.
 var ErrHostInvalid = errors.New("hmtypes: host has invalid format")
-
-// ValidateHost validates that host is a well-formed hostname or IP
-// address. Returns [ErrHostEmpty] for blank input, [ErrHostInvalid] for
-// syntactically invalid values.
-func ValidateHost(host string) error {
-	cleaned := strings.TrimSpace(host)
-	if cleaned == "" {
-		return ErrHostEmpty
-	}
-	if isValidHostname(cleaned) ||
-		ipv4Pattern.MatchString(cleaned) ||
-		ipv6Pattern.MatchString(cleaned) {
-		return nil
-	}
-	return fmt.Errorf("%w: %q", ErrHostInvalid, host)
-}
-
-// IsHost reports whether host is a valid hostname or IP address.
-func IsHost(host string) bool {
-	return ValidateHost(host) == nil
-}
 
 // IsIPv4Address reports whether address is a valid IPv4 address string.
 func IsIPv4Address(address string) bool {
