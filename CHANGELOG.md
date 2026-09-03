@@ -29,6 +29,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **A device lookup answered from the wrong CCU.** Device addresses are unique
+  within one CCU and repeat verbatim across them — the virtual-remote roots
+  (`BidCoS-RF`, `BidCos-Wir`, `HmIP-RCV-1`) and the `INT000*` group devices
+  carry the identical address on every one. `central.Registry.List()` is
+  name-sorted, so every address-keyed lookup that walked it answered from the
+  alphabetically first central. On the MQTT plane that published another
+  installation's model, name, channel type and availability under this
+  central's topic, and drove the device-lifecycle event the WebSocket plane and
+  the Matter reachability forward consume. On the write path it delivered a
+  command to a different CCU's hardware.
+
+  The event bridge carries the central at every one of those call sites and
+  simply dropped it; its lookups take it now. The address-keyed REST facade
+  (`DevicesAdapter.Device`, `DataPointWriterAdapter.SetValue`) has no central
+  to take — its callers do not carry one — so an address several centrals share
+  is refused instead of resolved to an arbitrary CCU, and the write error names
+  the candidates. Single-CCU installations are unaffected, as is every address
+  only one central holds.
+
 - **An optical alarm flashed an acknowledgement blink instead of an alarm.**
   With no pattern configured, the driver took the last entry of the device's
   `OPTICAL_ALARM_SELECTION` list. On every HmIP-ASIR variant that entry is

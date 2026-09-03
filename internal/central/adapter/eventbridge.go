@@ -1397,7 +1397,7 @@ func (b *EventBridge) publishValueChangedWS(centralName string, envKind hmenum.W
 	// Resolve the channel once: it feeds both the inline DP
 	// classification (category / functional type) and the CDP-state
 	// aggregate below. The look-up is in-memory and nil-safe.
-	ch := lookupChannel(b.registry, deviceAddr, channelNo)
+	ch := lookupChannel(b.registry, centralName, deviceAddr, channelNo)
 	category, dpType := valueChangedClassification(ch, e.Key.Parameter)
 	serialSuffix := b.registry.SerialSuffix(centralName)
 	bucket := slotBucket(ch, e.Key)
@@ -1454,7 +1454,7 @@ func (b *EventBridge) publishValueChangedWS(centralName string, envKind hmenum.W
 	// the composing Custom-DP — see [customDPHostChannel].
 	cdpChannel, cdpChannelNo := ch, channelNo
 	if ch == nil || ch.CustomDataPoint() == nil {
-		if host, hostNo := customDPHostChannel(b.registry, deviceAddr, e.Key); host != nil {
+		if host, hostNo := customDPHostChannel(b.registry, centralName, deviceAddr, e.Key); host != nil {
 			cdpChannel, cdpChannelNo = host, hostNo
 		}
 	}
@@ -1476,7 +1476,7 @@ func (b *EventBridge) publishValueChangedWS(centralName string, envKind hmenum.W
 				// on its own member events; using the WireName keeps the
 				// state topic aligned with the catalogue entry.
 				wireName := cdp.DataPointKey().Parameter
-				if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
+				if dev := lookupDeviceObject(b.registry, centralName, deviceAddr); dev != nil {
 					wireName = custom.WireName(dev, cdp, cdpChannelNo)
 				}
 				// CHANNEL-level key (no parameter): the reference stack keys
@@ -1518,7 +1518,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 	channel, channelNo := parseChannel(e.Key.ChannelAddress)
 	deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
 	iface := inferInterface(e.Key)
-	model, name := lookupDevice(b.registry, deviceAddr)
+	model, name := lookupDevice(b.registry, centralName, deviceAddr)
 
 	ev, ch, ok, discoveryEligible := b.buildPublishEvent(centralName, iface, deviceAddr, channel, channelNo, model, name, e.Key, e.NewValue.Unwrap(), e.Key.ParamsetKey)
 	if !ok {
@@ -1632,7 +1632,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 	// two calls above are no-ops for them — resolve the hosting channel
 	// and publish its aggregate as well.
 	if ch == nil || ch.CustomDataPoint() == nil {
-		if host, hostNo := customDPHostChannel(b.registry, deviceAddr, e.Key); host != nil {
+		if host, hostNo := customDPHostChannel(b.registry, centralName, deviceAddr, e.Key); host != nil {
 			b.publishCustomDPState(ctx, centralName, iface, deviceAddr, hostNo, host)
 			b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, hostNo, host)
 		}
@@ -1657,7 +1657,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 // without this a single device the CCU stopped reaching reaches no consumer
 // at all.
 func (b *EventBridge) refreshDeviceAvailability(ctx context.Context, centralName, iface, deviceAddr, parameter string) {
-	dev := lookupDeviceObject(b.registry, deviceAddr)
+	dev := lookupDeviceObject(b.registry, centralName, deviceAddr)
 	if dev == nil {
 		return
 	}
@@ -1734,7 +1734,7 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 	value any,
 	paramset hmenum.ParamsetKey,
 ) (ev mqtt.Event, ch *device.Channel, ok, discoveryEligible bool) {
-	ch = lookupChannel(b.registry, deviceAddr, channelNo)
+	ch = lookupChannel(b.registry, centralName, deviceAddr, channelNo)
 	channelType := ""
 	if ch != nil {
 		channelType = ch.Type
@@ -1855,7 +1855,7 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 		ChannelType:    channelType,
 		Parameter:      key.Parameter,
 		Value:          value,
-		Device:         lookupDeviceObject(b.registry, deviceAddr),
+		Device:         lookupDeviceObject(b.registry, centralName, deviceAddr),
 	}
 	if ch != nil {
 		ev.Channel = ch
@@ -2715,8 +2715,8 @@ func customDPStatePayload(dp device.AttachableDataPoint) (map[string]any, bool) 
 // happens to change.
 //
 // Returns (nil, 0) when no Custom-DP on the device composes the key.
-func customDPHostChannel(reg *central.Registry, deviceAddr string, key hmtypes.DataPointKey) (host *device.Channel, channelNo int) {
-	dev := lookupDeviceObject(reg, deviceAddr)
+func customDPHostChannel(reg *central.Registry, centralName, deviceAddr string, key hmtypes.DataPointKey) (host *device.Channel, channelNo int) {
+	dev := lookupDeviceObject(reg, centralName, deviceAddr)
 	if dev == nil {
 		return nil, 0
 	}
@@ -2753,47 +2753,52 @@ func sameWireTarget(a, b hmtypes.DataPointKey) bool {
 	return a.ParamsetKey == b.ParamsetKey
 }
 
-func lookupDeviceObject(reg *central.Registry, address string) *device.Device {
+// lookupDeviceObject resolves a device within one central.
+//
+// The central is part of the key, not a hint: device addresses are unique per
+// CCU and repeat verbatim across them — the virtual remote, the BidCoS pseudo
+// devices and the INT000* internal devices carry the identical address on
+// every one. A walk over the registry answers from whichever central sorts
+// first by name, which publishes another installation's device under this
+// central's identity. Returns nil when the named central does not hold it,
+// which is the honest answer; a namesake elsewhere is not this device.
+func lookupDeviceObject(reg *central.Registry, centralName, address string) *device.Device {
 	if reg == nil {
 		return nil
 	}
-	for _, u := range reg.List() {
-		if d, ok := u.ModelRegistry.Get(address); ok {
-			return d
-		}
+	u, ok := reg.Get(centralName)
+	if !ok {
+		return nil
 	}
-	return nil
+	d, ok := u.ModelRegistry.Get(address)
+	if !ok {
+		return nil
+	}
+	return d
 }
 
-func lookupDevice(reg *central.Registry, address string) (model, name string) {
-	if reg == nil {
+// lookupDevice returns the model and name of a device within one central.
+// Scoped for the reason given on [lookupDeviceObject].
+func lookupDevice(reg *central.Registry, centralName, address string) (model, name string) {
+	d := lookupDeviceObject(reg, centralName, address)
+	if d == nil {
 		return "", ""
 	}
-	for _, u := range reg.List() {
-		if d, ok := u.ModelRegistry.Get(address); ok {
-			return d.Model, d.Name()
-		}
-	}
-	return "", ""
+	return d.Model, d.Name()
 }
 
 // lookupChannel returns the [*device.Channel] for a (device, no)
 // pair. The MQTT bridge consumes it through the
 // [mqtt.ChannelInspector] interface to decide which auxiliary
 // discovery topics actually apply on this channel.
-func lookupChannel(reg *central.Registry, deviceAddress string, channelNo int) *device.Channel {
-	if reg == nil {
+func lookupChannel(reg *central.Registry, centralName, deviceAddress string, channelNo int) *device.Channel {
+	dev := lookupDeviceObject(reg, centralName, deviceAddress)
+	if dev == nil {
 		return nil
 	}
-	for _, u := range reg.List() {
-		dev, ok := u.ModelRegistry.Get(deviceAddress)
-		if !ok {
-			continue
-		}
-		for _, ch := range dev.Channels() {
-			if ch.Number == channelNo {
-				return ch
-			}
+	for _, ch := range dev.Channels() {
+		if ch.Number == channelNo {
+			return ch
 		}
 	}
 	return nil
