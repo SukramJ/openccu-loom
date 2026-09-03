@@ -29,6 +29,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The LED flash duration sent four labels the device does not have, and
+  turned a ten-second flash into a permanent one.** `ON_TIME_LIST` was mapped
+  through a fixed table of our own that assumed a regular 100 ms ladder up to
+  5 s. A device declares 16 entries and skips three of ours — there is no
+  `600MS`, no `800MS`, no `900MS` and no `4S` — while continuing past 5 s with
+  `7S`, `10S`, `20S`, `40S` and `60S`
+  (`GeneralStateParameterFactory#createOnTimeListParameter`). Requests in
+  551-650, 751-850, 851-950 and 3501-4500 ms produced a label the device does
+  not declare, which the CCU's enum conversion rejects — failing the whole
+  atomic turn-on `put_paramset`, not just the duration. And because everything
+  above 5 s collapsed to `PERMANENTLY_ON`, an ordinary ten-second flash left
+  the LED on for good.
+
+  The entry is chosen from the device's own value list now, by parsing each
+  declared label, so no table of ours can disagree with the device again; only
+  a duration longer than the longest declared entry becomes `PERMANENTLY_ON`.
+
 - **Four of the eight fixed colours were reported as the wrong colour.**
   `FixedColorLight.Color()` cast the raw COLOR index straight to a
   `FixedColor` ordinal. The CCU orders its COLOR value list by the RGB bit

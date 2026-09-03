@@ -304,7 +304,8 @@ func TestLightGroupBrightness(t *testing.T) {
 	}
 }
 
-// TestConvertFlashTimeToOnTimeList verifies that flash-time mapping.
+// TestConvertFlashTimeToOnTimeList verifies the mapping when the descriptor
+// carries no value list and the fallback applies.
 func TestConvertFlashTimeToOnTimeList(t *testing.T) {
 	cases := []struct {
 		input int
@@ -312,7 +313,11 @@ func TestConvertFlashTimeToOnTimeList(t *testing.T) {
 	}{
 		{0, "PERMANENTLY_ON"},
 		{-1, "PERMANENTLY_ON"},
-		{6000, "PERMANENTLY_ON"},
+		// 6 s is expressible: it sits between the declared 5S and 7S, and the
+		// nearer-and-shorter entry wins. Only a duration past the longest
+		// declared entry becomes PERMANENTLY_ON.
+		{6000, "5S"},
+		{70_000, "PERMANENTLY_ON"},
 		{100, "100MS"},
 		{150, "100MS"}, // closer to 100MS than 200MS
 		{175, "200MS"}, // equidistant: math.Abs(175-100)=75 > math.Abs(175-200)=25 → 200MS
@@ -322,7 +327,7 @@ func TestConvertFlashTimeToOnTimeList(t *testing.T) {
 		{5000, "5S"},
 	}
 	for _, tc := range cases {
-		got := ConvertFlashTimeToOnTimeList(tc.input)
+		got := ConvertFlashTimeToOnTimeList(tc.input, nil)
 		if got != tc.want {
 			t.Errorf("ConvertFlashTimeToOnTimeList(%d)=%q, want %q", tc.input, got, tc.want)
 		}

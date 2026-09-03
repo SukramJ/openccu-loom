@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -15,49 +16,96 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// onTimeListValues maps ON_TIME_LIST millisecond values to their VALUE_LIST
-// labels.
-var onTimeListValues = [...]struct {
-	ms  int
-	str string
-}{
-	{100, "100MS"},
-	{200, "200MS"},
-	{300, "300MS"},
-	{400, "400MS"},
-	{500, "500MS"},
-	{600, "600MS"},
-	{700, "700MS"},
-	{800, "800MS"},
-	{900, "900MS"},
-	{1000, "1S"},
-	{2000, "2S"},
-	{3000, "3S"},
-	{4000, "4S"},
-	{5000, "5S"},
-}
-
 // permanentlyOn is the VALUE_LIST sentinel for "keep LED on
 // indefinitely".
 const permanentlyOn = "PERMANENTLY_ON"
 
 // ConvertFlashTimeToOnTimeList maps a flash duration in milliseconds to the
-// nearest ON_TIME_LIST VALUE_LIST entry. 0 / negative / > 5000 ms all yield
-// "PERMANENTLY_ON".
-func ConvertFlashTimeToOnTimeList(flashTimeMS int) string {
-	if flashTimeMS <= 0 || flashTimeMS > 5000 {
+// nearest entry of the device's own ON_TIME_LIST value list.
+//
+// The list is not a regular ladder — a device declares
+// 100MS…500MS, 700MS, 1S, 2S, 3S, 5S, 7S, 10S, 20S, 40S, 60S, PERMANENTLY_ON —
+// so the entry is chosen by parsing each declared label rather than from a
+// table of our own. A label the device does not declare is rejected by the
+// CCU's enum conversion and fails the whole atomic turn-on put_paramset, so
+// only members of valueList are ever returned.
+//
+// 0, a negative duration, and anything beyond the longest declared entry yield
+// PERMANENTLY_ON. An empty or unparsable valueList falls back to
+// [defaultOnTimeList].
+func ConvertFlashTimeToOnTimeList(flashTimeMS int, valueList []string) string {
+	list := valueList
+	if len(list) == 0 {
+		list = defaultOnTimeList
+	}
+	if flashTimeMS <= 0 {
 		return permanentlyOn
 	}
-	best := permanentlyOn
-	bestDiff := math.MaxFloat64
-	for _, entry := range onTimeListValues {
-		diff := math.Abs(float64(entry.ms - flashTimeMS))
+	best := ""
+	bestDiff := math.MaxInt
+	for _, label := range list {
+		ms, ok := onTimeListLabelMS(label)
+		if !ok {
+			continue
+		}
+		diff := ms - flashTimeMS
+		if diff < 0 {
+			diff = -diff
+		}
 		if diff < bestDiff {
 			bestDiff = diff
-			best = entry.str
+			best = label
+		}
+	}
+	if best == "" {
+		return permanentlyOn
+	}
+	// Beyond the longest declared duration the device cannot express the
+	// request; "keep it on" is the honest reading of "longer than the longest".
+	if longest, ok := onTimeListLabelMS(best); ok && flashTimeMS > longest && best == longestOnTimeLabel(list) {
+		return permanentlyOn
+	}
+	return best
+}
+
+// onTimeListLabelMS parses an ON_TIME_LIST label into milliseconds.
+// PERMANENTLY_ON carries no duration and reports (0, false).
+func onTimeListLabelMS(label string) (int, bool) {
+	switch {
+	case strings.HasSuffix(label, "MS"):
+		n, err := strconv.Atoi(strings.TrimSuffix(label, "MS"))
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	case strings.HasSuffix(label, "S"):
+		n, err := strconv.Atoi(strings.TrimSuffix(label, "S"))
+		if err != nil {
+			return 0, false
+		}
+		return n * 1000, true
+	default:
+		return 0, false
+	}
+}
+
+// longestOnTimeLabel returns the label with the longest parsable duration.
+func longestOnTimeLabel(list []string) string {
+	best, bestMS := "", -1
+	for _, label := range list {
+		if ms, ok := onTimeListLabelMS(label); ok && ms > bestMS {
+			bestMS, best = ms, label
 		}
 	}
 	return best
+}
+
+// defaultOnTimeList is the value list a device declares, used only when the
+// descriptor carries none.
+var defaultOnTimeList = []string{
+	"100MS", "200MS", "300MS", "400MS", "500MS", "700MS",
+	"1S", "2S", "3S", "5S", "7S", "10S", "20S", "40S", "60S",
+	permanentlyOn,
 }
 
 // LedOnConfig bundles optional arguments for [SoundPlayerLED.TurnOn].
@@ -313,7 +361,13 @@ func (l *SoundPlayerLED) TurnOn(ctx context.Context, cfg LedOnConfig, w custom.W
 	}
 
 	// Flash time → ON_TIME_LIST label.
-	flashValue := ConvertFlashTimeToOnTimeList(cfg.FlashTimeMS)
+	// The device's own list decides which durations are expressible; ours
+	// would invent labels it rejects.
+	var onTimeListValues []string
+	if l.onTimeList != nil {
+		onTimeListValues = l.onTimeList.Descriptor.ValueList
+	}
+	flashValue := ConvertFlashTimeToOnTimeList(cfg.FlashTimeMS, onTimeListValues)
 
 	// Repetitions → label. A count the grammar cannot express is operator
 	// input the device would reject; failing the whole command surfaces it
