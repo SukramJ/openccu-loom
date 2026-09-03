@@ -74,6 +74,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"Session.renew":  true,
 
 		// JSON-RPC — CCU
+		"CCU.downloadFirmware":        true,
 		"CCU.getAuthEnabled":          true,
 		"CCU.getHttpsRedirectEnabled": true,
 		"CCU.getHeatingGroupList":     true,

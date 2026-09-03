@@ -601,7 +601,7 @@ func (b *orchBackendStub) GetSuppressedServiceMessages(context.Context, string, 
 	return nil, nil
 }
 func (b *orchBackendStub) HasProgramIDs(context.Context, string) (bool, error) { return false, nil }
-func (b *orchBackendStub) DownloadFirmware(context.Context, string) error      { return nil }
+func (b *orchBackendStub) DownloadFirmware(context.Context) error              { return nil }
 func (b *orchBackendStub) GetMetadata(context.Context, string, string) (any, error) {
 	return nil, nil
 }

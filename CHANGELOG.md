@@ -6,6 +6,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (API 11.0.0): `POST /system/firmware/download` now downloads the
+  CCU's own firmware, and ignores the `url` field.** The endpoint offered to
+  fetch a caller-supplied image; no such call exists on a CCU. Its own entry
+  point resolves the download from the box's `/VERSION` and board serial and
+  writes the image to `/tmp/fup.tgz` — it takes no parameters, so there was
+  never anywhere for a URL to go.
+
+  What changes for a client: the request body is now optional apart from
+  `central`, a `url` is accepted and ignored rather than validated (a client
+  written against the old contract keeps working unchanged), and a 202 now
+  means the CCU reported the download succeeded. A 502 means it reported a
+  failure — no firmware matches this box's version and serial, or the
+  transfer failed. Previously every call answered 202, because the old
+  implementation POSTed an action the maintenance CGI does not define and read
+  the resulting HTML error page, served under HTTP 200, as success.
+
+  The audit entry records the central, not the discarded URL: recording a URL
+  the CCU never fetched made the trail claim something that did not happen.
+
+  Downloading is still not installing — `POST /system/firmware/update`
+  performs the install, matching the CCU's own two-step flow.
+
+  `SetDownloadFirmwareTransport` is renamed `SetHTTPTransport`. It never
+  served firmware; it wires the two operations that do reach the CCU over
+  plain HTTP, the backup download and the group editor.
+
 ### Fixed
 
 - **`reportValueUsage` was classified as a read, and it reconfigures the

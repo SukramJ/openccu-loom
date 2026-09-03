@@ -35,13 +35,15 @@ type CcuBackend struct {
 	// [CcuBackend.SetScriptRunner] after construction.
 	rega ScriptRunner
 	// baseURL is the CCU's HTTP root (e.g. "http://192.168.1.10"), used
-	// for direct HTTP POST calls that bypass the JSON-RPC surface (e.g.
-	// DownloadFirmware). Empty disables those calls.
+	// for the HTTP calls that bypass the JSON-RPC surface: the backup
+	// download (cp_security.cgi) and the group editor (jpages). Empty
+	// disables those calls.
 	baseURL string
-	// httpClient is shared for direct HTTP POSTs; if nil a default is used.
+	// httpClient is shared for those direct HTTP calls; if nil a default
+	// is used.
 	httpClient *http.Client
-	// sessionIDFn is a callback that returns the active JSON-RPC session ID.
-	// Required for DownloadFirmware; nil disables that method.
+	// sessionIDFn is a callback that returns the active JSON-RPC session ID,
+	// which both HTTP paths above authenticate with. Nil disables them.
 	sessionIDFn func() string
 	// sessionRenewFn forces a fresh JSON-RPC login and returns the new
 	// session ID. The backup download uses it to guarantee a valid session
@@ -85,11 +87,16 @@ func NewCcuBackendForInterface(iface hmenum.Interface, xml, json Caller, ann Ann
 	return &CcuBackend{xml: xml, json: json, ann: ann, ifaceType: iface}
 }
 
-// SetDownloadFirmwareTransport wires the CCU base URL, an optional HTTP
-// client, and a session-ID provider into the backend so that
-// [CcuBackend.DownloadFirmware] can reach the maintenance CGI. Call this once
-// after construction; it is not required for any other backend operation.
-func (b *CcuBackend) SetDownloadFirmwareTransport(baseURL string, hc *http.Client, sessionIDFn func() string) {
+// SetHTTPTransport wires the CCU base URL, an optional HTTP client and a
+// session-ID provider into the backend, for the two operations that reach
+// the CCU over plain HTTP rather than JSON-RPC: the backup download
+// ([CcuBackend.CreateBackupAndDownload], cp_security.cgi) and the group
+// editor (the jpages endpoints). Call this once after construction.
+//
+// The name says HTTP rather than firmware because firmware is the one
+// thing it does not serve: [CcuBackend.DownloadFirmware] goes through
+// JSON-RPC and needs nothing from here.
+func (b *CcuBackend) SetHTTPTransport(baseURL string, hc *http.Client, sessionIDFn func() string) {
 	b.baseURL = baseURL
 	b.httpClient = hc
 	b.sessionIDFn = sessionIDFn

@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 452.
+Guards without a doc comment: 7 of 451.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -372,7 +372,7 @@ Guards without a doc comment: 8 of 452.
 | TestVerifiedBasicCredentialIsNotReThrottled | wiring_pins/auth_credential_lifecycle_test.go | TestVerifiedBasicCredentialIsNotReThrottled is the counterpart: a valid credential must cost nothing, or an operator using HTTP Basic for automation would be rate-limited by their own successful requests. |
 | TestPin_BackupRestoreCacheInvalidator_WiredInDaemon | wiring_pins/backup_restore_cache_test.go | TestPin_BackupRestoreCacheInvalidator_WiredInDaemon pins that the daemon hands the cache-reset service to the backup adapter. |
 | TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring pins that the rename hook resolves the ReGa ISE-ID before calling setName. |
-| TestPin_CcuBackend_SetDownloadFirmwareTransport_CalledInWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_SetDownloadFirmwareTransport_CalledInWiring pins that ccu_wiring.go calls SetDownloadFirmwareTransport on the CcuBackend after construction. |
+| TestPin_CcuBackend_SetHTTPTransport_CalledInWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_SetHTTPTransport_CalledInWiring pins that ccu_wiring.go calls SetHTTPTransport on the CcuBackend after construction. |
 | TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring pins that ccu_wiring.go wires the per-central rename hook via SetRenameDeviceFn. |
 | TestPin_CcuBackend_SetScriptRunner_CalledInWiring | wiring_pins/ccu_wiring_test.go | TestPin_CcuBackend_SetScriptRunner_CalledInWiring pins that ccu_wiring.go calls SetScriptRunner on the CcuBackend after construction. |
 | TestPin_FactoryInput_JSONRPCField_SetInCCUWiring | wiring_pins/ccu_wiring_test.go | TestPin_FactoryInput_JSONRPCField_SetInCCUWiring pins that ccu_wiring.go sets the JSONRPC field of backends.FactoryInput. |

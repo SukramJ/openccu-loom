@@ -852,9 +852,9 @@ func wireInterface(
 		)
 	}
 
-	// Wire the ReGa script runner and HTTP download transport into the CCU
-	// backend so operations that require them (e.g. CreateBackupAndDownload,
-	// DownloadFirmware) are reachable in production. Both setters are no-ops
+	// Wire the ReGa script runner and the plain-HTTP transport into the CCU
+	// backend so the operations that need them (CreateBackupAndDownload and
+	// the group editor) are reachable in production. Both setters are no-ops
 	// on non-CCU backends; the type assertion ensures we only call them when
 	// the concrete type is *backends.CcuBackend.
 	if ccuBackend, ok := backend.(*backends.CcuBackend); ok {
@@ -876,7 +876,7 @@ func wireInterface(
 			// live session rather than displacing it: a forced login here
 			// would abandon the session the whole central is working with and
 			// burn a slot in the CCU's small, WebUI-shared session pool on
-			// every backup or firmware download.
+			// every backup.
 			rpcClient := jc.Client()
 			ccuBackend.SetSessionRenewer(func(ctx context.Context) (string, error) {
 				if err := rpcClient.EnsureSession(ctx); err != nil {
@@ -885,7 +885,7 @@ func wireInterface(
 				return rpcClient.SessionID(), nil
 			})
 		}
-		ccuBackend.SetDownloadFirmwareTransport(ccuBaseURLFor(cc), hc, sessionIDFn)
+		ccuBackend.SetHTTPTransport(ccuBaseURLFor(cc), hc, sessionIDFn)
 
 		// Persist device / channel renames to the CCU. The hook resolves
 		// the address to its ReGa ISE-ID, then dispatches to Device.setName

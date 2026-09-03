@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 10.4.0
+  version: 11.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2742,20 +2742,29 @@ paths:
   /system/firmware/download:
     post:
       operationId: downloadSystemFirmware
-      summary: Download a firmware image onto a CCU (admin-only)
+      summary: Download the newest firmware onto a CCU (admin-only)
       description: |
-        Instructs one CCU to fetch a firmware image from the supplied
-        http/https URL onto the central (posting to the CCU's maintenance
-        CGI) so it can be staged for a later install. The CCU performs the
-        transfer asynchronously; the endpoint returns 202 once the request
-        was accepted.
+        Asks one CCU to fetch the newest firmware **for itself** and stage
+        it for a later install (`POST /system/firmware/update` performs the
+        install).
+
+        The image cannot be chosen by the caller: the CCU resolves the
+        download from its own version and board serial. The request body's
+        `url` field is therefore accepted and ignored — it is kept in the
+        schema so clients written against an earlier version of this
+        contract keep working instead of failing validation.
+
+        Returns 202 once the CCU reported the download succeeded, and 502
+        when it reported a failure — there is no image for that version and
+        serial, or the transfer failed. The whole body is optional for
+        single-CCU deployments.
       tags: [system]
       security:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [admin]
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -14223,12 +14232,15 @@ components:
         already_configured: { type: boolean }
     DownloadSystemFirmwareRequest:
       type: object
-      required: [url]
       properties:
         url:
           type: string
           format: uri
-          description: http/https firmware image the CCU should fetch.
+          deprecated: true
+          description: >-
+            Accepted and ignored. The CCU has no call that fetches a
+            caller-supplied image; it downloads the firmware matching its
+            own version and board serial.
         central:
           type: string
           description: Target central (optional for single-CCU deployments).

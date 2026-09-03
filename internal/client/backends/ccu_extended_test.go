@@ -889,7 +889,7 @@ func TestCcuCreateBackupAndDownloadNoScriptRunner(t *testing.T) {
 
 	// No ScriptRunner wired at all.
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+	b.SetHTTPTransport(srv.URL, srv.Client(), func() string { return "testsid" })
 
 	data, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err != nil {
@@ -941,7 +941,7 @@ func TestCcuCreateBackupAndDownloadNeverRunsRegaScript(t *testing.T) {
 	runner := &recordingScriptRunner{t: t}
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
 	b.SetScriptRunner(runner)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+	b.SetHTTPTransport(srv.URL, srv.Client(), func() string { return "testsid" })
 
 	data, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err != nil {
@@ -968,7 +968,7 @@ func TestCcuCreateBackupAndDownloadBoundedByMaxWaitTime(t *testing.T) {
 	defer srv.Close()
 
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+	b.SetHTTPTransport(srv.URL, srv.Client(), func() string { return "testsid" })
 
 	start := time.Now()
 	_, err := b.CreateBackupAndDownload(context.Background(), 0.05, backupPollInterval)
@@ -1008,7 +1008,7 @@ func TestCcuCreateBackupAndDownloadHappyPath(t *testing.T) {
 
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
 	b.SetScriptRunner(runner)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+	b.SetHTTPTransport(srv.URL, srv.Client(), func() string { return "testsid" })
 
 	data, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err != nil {
@@ -1026,7 +1026,7 @@ func TestCcuCreateBackupAndDownloadStartFailed(t *testing.T) {
 	}
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
 	b.SetScriptRunner(runner)
-	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
+	b.SetHTTPTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
 
 	_, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err == nil {
@@ -1042,7 +1042,7 @@ func TestCcuCreateBackupAndDownloadStatusFailed(t *testing.T) {
 	}}
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
 	b.SetScriptRunner(runner)
-	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
+	b.SetHTTPTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
 
 	_, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err == nil {
@@ -1072,7 +1072,7 @@ func TestCcuCreateBackupAndDownloadRejectsOversizedResponse(t *testing.T) {
 
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
 	b.SetScriptRunner(runner)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+	b.SetHTTPTransport(srv.URL, srv.Client(), func() string { return "testsid" })
 
 	_, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err == nil {
@@ -1089,7 +1089,7 @@ func TestCcuCreateBackupAndDownloadTimeout(t *testing.T) {
 	}}
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
 	b.SetScriptRunner(runner)
-	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
+	b.SetHTTPTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
 
 	// maxWaitTime == pollInterval: the first poll tick arrives one interval
 	// in and the deadline check triggers immediately after, whatever the

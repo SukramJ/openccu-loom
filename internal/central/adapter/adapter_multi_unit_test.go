@@ -13264,7 +13264,7 @@ func (*configFakeOperations) GetSuppressedServiceMessages(context.Context, strin
 func (*configFakeOperations) HasProgramIDs(context.Context, string) (bool, error) {
 	return false, nil
 }
-func (*configFakeOperations) DownloadFirmware(context.Context, string) error { return nil }
+func (*configFakeOperations) DownloadFirmware(context.Context) error { return nil }
 func (*configFakeOperations) GetMetadata(_ context.Context, _, _ string) (any, error) {
 	return nil, nil
 }

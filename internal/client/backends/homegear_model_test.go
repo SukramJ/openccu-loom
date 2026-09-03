@@ -127,7 +127,7 @@ func TestHomegearUnsupportedSurface(t *testing.T) {
 		},
 		"SetInstallMode":   func() error { return b.SetInstallMode(ctx, true, 60, 1, "") },
 		"UpdateFirmware":   func() error { return b.UpdateFirmware(ctx, "ABC") },
-		"DownloadFirmware": func() error { return b.DownloadFirmware(ctx, "url") },
+		"DownloadFirmware": func() error { return b.DownloadFirmware(ctx) },
 		"TriggerFirmwareUpdate": func() error {
 			_, err := b.TriggerFirmwareUpdate(ctx)
 			return err

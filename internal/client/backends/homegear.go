@@ -666,6 +666,6 @@ func (*HomegearBackend) HasProgramIDs(context.Context, string) (bool, error) {
 	return false, ErrUnsupported
 }
 
-// DownloadFirmware implements Operations. Homegear has no maintenance CGI;
-// returns [ErrUnsupported].
-func (*HomegearBackend) DownloadFirmware(context.Context, string) error { return ErrUnsupported }
+// DownloadFirmware implements Operations. Homegear is not a CCU and
+// exposes no equivalent self-update call. Returns [ErrUnsupported].
+func (*HomegearBackend) DownloadFirmware(context.Context) error { return ErrUnsupported }

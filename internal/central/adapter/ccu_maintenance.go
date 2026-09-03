@@ -163,17 +163,21 @@ func (a *CCUMaintenanceDomain) EnterRecoveryMode(ctx context.Context, centralNam
 	return hc.EnterRecoveryMode(ctx)
 }
 
-// DownloadFirmware instructs the CCU behind the named central to fetch a
-// firmware image from firmwareURL onto the central (posting to the CCU's
-// maintenance CGI via the central's primary backend). When centralName is
-// empty and exactly one central is registered, that central is used —
-// matching the single-CCU convenience of the other system endpoints.
+// DownloadFirmware asks the CCU behind the named central to fetch the
+// newest firmware for itself and stage it for a later install. When
+// centralName is empty and exactly one central is registered, that central
+// is used — matching the single-CCU convenience of the other system
+// endpoints.
+//
+// There is no image parameter: the CCU resolves the download from its own
+// version and board serial, so the target is the box, not a caller's URL.
 //
 // Returns [hmerr.ErrUnknownCentral] when the central cannot be resolved
-// and [backends.ErrUnsupported] when the resolved backend has no
-// firmware-download path (CUxD, Homegear) or lacks an active JSON-RPC
-// session; the CCU-side transport error is propagated verbatim otherwise.
-func (a *CCUMaintenanceDomain) DownloadFirmware(ctx context.Context, centralName, firmwareURL string) error {
+// and [backends.ErrUnsupported] when the resolved backend is not a CCU
+// (CUxD, Homegear) or has no JSON-RPC session layer; the CCU-side error is
+// propagated verbatim otherwise, including the CCU's own report that the
+// download failed.
+func (a *CCUMaintenanceDomain) DownloadFirmware(ctx context.Context, centralName string) error {
 	if a.registry == nil || a.writer == nil {
 		return hmerr.ErrUnknownCentral
 	}
@@ -185,7 +189,7 @@ func (a *CCUMaintenanceDomain) DownloadFirmware(ctx context.Context, centralName
 	if err != nil {
 		return err
 	}
-	return backend.DownloadFirmware(ctx, firmwareURL)
+	return backend.DownloadFirmware(ctx)
 }
 
 // resolveCentral looks up the target central by name, defaulting to the

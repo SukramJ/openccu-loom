@@ -680,7 +680,7 @@ func (b *CcuBackend) GetDeviceDescription(ctx context.Context, address string) (
 // discarded. It also made the flow depend on a helper script only OpenCCU
 // and OpenCCU ship, which the fallback then had to work around.
 //
-// Requires the HTTP download transport (SetDownloadFirmwareTransport). The
+// Requires the plain-HTTP transport (SetHTTPTransport). The
 // ReGa scripts stay in the catalogue for the hub's own trigger/status
 // commands, which run the CCU's own backup tool and report what it
 // produced; that flow now removes its archive once it has read its name and
@@ -1118,46 +1118,42 @@ func (b *CcuBackend) HasProgramIDs(ctx context.Context, iseID string) (bool, err
 
 // --- firmware download (direct HTTP POST) ---------------------------------
 
-// DownloadFirmware implements Operations. Posts the firmware URL to the CCU's
-// maintenance CGI (`/config/cp_maintenance.cgi`) so the CCU can fetch and
-// stage the image for installation. Requires that
-// [SetDownloadFirmwareTransport] has been called with a valid base URL and
-// session-ID provider; returns [ErrUnsupported] otherwise.
+// DownloadFirmware implements Operations. Asks the CCU to fetch the newest
+// firmware for itself from eQ-3's update server, via the JSON-RPC method
+// CCU.downloadFirmware. Returns [ErrUnsupported] on backends without a
+// JSON-RPC session layer (CUxD, Homegear).
 //
-// This is the implementation a running daemon executes; the REST maintenance
-// handler reaches it through the primary backend. internal/client/transport/jsonrpc
-// holds a second, unreached implementation of the same POST, including its own
-// copy of the scheme allowlist below. The allowlist that governs what the
-// daemon will hand the CCU is THIS one — tighten or widen it here, and check
-// whether the other copy still needs to exist at all.
+// The operation takes no target: the CCU builds the download URL from its
+// own /VERSION and board serial and stores the image at /tmp/fup.tgz. The
+// firmware method also fails closed for a major version it does not know
+// (only 2 and 3 map to a product id).
 //
-// Only "http://" and "https://" scheme firmware URLs are accepted.
-func (b *CcuBackend) DownloadFirmware(_ context.Context, firmwareURL string) error {
-	// Not supported, and it never was: this posted `action=download_firmware`
-	// to /config/cp_maintenance.cgi, which defines no such action. That CGI's
-	// actions are firmware_upload, firmware_update_confirm / _go / _cancel /
-	// _invalid, createBackup, askCreateBackup, put_page, reboot_* and
-	// shutdown_* (../OpenCCU-Base/www/config/cp_maintenance.cgi). An unknown
-	// action fell through to an HTML page under HTTP 200, and this method read
-	// that as success — so every call reported a download the CCU never
-	// started.
-	//
-	// The CCU's own entry point is the JSON-RPC method CCU.downloadFirmware,
-	// and it takes NO parameters: it fetches the newest firmware for this
-	// box's own serial from eQ-3's update server into /tmp/fup.tgz
-	// (../OpenCCU-Base/www/api/methods/ccu/downloadFirmware.tcl; the WebUI
-	// calls it as `homematic('CCU.downloadFirmware', {}, …)` at
-	// www/config/cp_maintenance.cgi:897 and then re-enters the CGI with
-	// action=firmware_upload&directDownload=true).
-	//
-	// So a caller-supplied URL has nowhere to go. Wiring this to the JSON-RPC
-	// method would change what the operation means — "install the CCU's own
-	// latest firmware", not "fetch this URL" — which is a decision about the
-	// REST surface rather than a repair, so it reports unsupported until that
-	// decision is made.
-	return fmt.Errorf(
-		"ccu.DownloadFirmware: the CCU has no endpoint that downloads a caller-supplied URL (%q); "+
-			"its own CCU.downloadFirmware takes no parameters: %w",
-		firmwareURL, ErrUnsupported,
-	)
+// Two properties of the CCU-side method shape this implementation:
+//
+//   - It answers with a JSON boolean, and false is a real failure — the
+//     wget failed or the box's major version is unknown. Treating a
+//     successful transport exchange as a successful download is what the
+//     previous implementation did (it POSTed an action the maintenance CGI
+//     does not define and read the resulting HTML error page, served under
+//     HTTP 200, as success), so the result is checked here.
+//   - Downloading is not installing. The CCU's own WebUI follows a true
+//     result with a second, separate step. This method deliberately stops
+//     after the download; [CcuBackend.TriggerFirmwareUpdate] is the install.
+func (b *CcuBackend) DownloadFirmware(ctx context.Context) error {
+	if b.json == nil {
+		return ErrUnsupported
+	}
+	raw, err := b.json.Call(ctx, "CCU.downloadFirmware")
+	if err != nil {
+		return fmt.Errorf("ccu.DownloadFirmware: %w", err)
+	}
+	ok, isBool := raw.(bool)
+	if !isBool {
+		return fmt.Errorf("ccu.DownloadFirmware: CCU answered %T, want a boolean result", raw)
+	}
+	if !ok {
+		return errors.New("ccu.DownloadFirmware: the CCU reported the download failed " +
+			"(no firmware for its version and serial, or the transfer to /tmp/fup.tgz failed)")
+	}
+	return nil
 }

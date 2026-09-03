@@ -463,13 +463,11 @@ type downloadOps struct {
 	fakeOperations
 
 	downloadCalls int
-	lastURL       string
 	downloadErr   error
 }
 
-func (d *downloadOps) DownloadFirmware(_ context.Context, url string) error {
+func (d *downloadOps) DownloadFirmware(context.Context) error {
 	d.downloadCalls++
-	d.lastURL = url
 	return d.downloadErr
 }
 
@@ -477,11 +475,11 @@ func TestCCUMaintenanceDownloadFirmwareSuccess(t *testing.T) {
 	t.Parallel()
 	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
-	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); err != nil {
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01"); err != nil {
 		t.Fatalf("DownloadFirmware: %v", err)
 	}
-	if ops.downloadCalls != 1 || ops.lastURL != "https://x/fw.tgz" {
-		t.Fatalf("expected one download of the url, got calls=%d url=%q", ops.downloadCalls, ops.lastURL)
+	if ops.downloadCalls != 1 {
+		t.Fatalf("expected one download, got calls=%d", ops.downloadCalls)
 	}
 }
 
@@ -490,7 +488,7 @@ func TestCCUMaintenanceDownloadFirmwareSingleCentralDefault(t *testing.T) {
 	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	// Empty central resolves to the sole registered central.
-	if err := dom.DownloadFirmware(context.Background(), "", "https://x/fw.tgz"); err != nil {
+	if err := dom.DownloadFirmware(context.Background(), ""); err != nil {
 		t.Fatalf("DownloadFirmware: %v", err)
 	}
 	if ops.downloadCalls != 1 {
@@ -502,7 +500,7 @@ func TestCCUMaintenanceDownloadFirmwareUnknownCentral(t *testing.T) {
 	t.Parallel()
 	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
-	err := dom.DownloadFirmware(context.Background(), "nope", "https://x/fw.tgz")
+	err := dom.DownloadFirmware(context.Background(), "nope")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
@@ -518,7 +516,7 @@ func TestCCUMaintenanceDownloadFirmwarePropagatesError(t *testing.T) {
 		downloadErr:    errors.New("ccu unreachable"),
 	}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
-	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); err == nil {
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01"); err == nil {
 		t.Fatal("expected the backend download error to propagate")
 	}
 }
@@ -526,7 +524,7 @@ func TestCCUMaintenanceDownloadFirmwarePropagatesError(t *testing.T) {
 func TestCCUMaintenanceDownloadFirmwareNilRegistry(t *testing.T) {
 	t.Parallel()
 	dom := NewCCUMaintenanceDomain(nil, nil)
-	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); !errors.Is(err, hmerr.ErrUnknownCentral) {
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01"); !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
 }
@@ -562,7 +560,7 @@ func TestCCUMaintenanceDownloadFirmwareAmbiguousWithoutCentralName(t *testing.T)
 	}
 	dom := NewCCUMaintenanceDomain(reg, w)
 
-	err := dom.DownloadFirmware(context.Background(), "", "https://x/fw.tgz")
+	err := dom.DownloadFirmware(context.Background(), "")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral for an ambiguous default, got %v", err)
 	}

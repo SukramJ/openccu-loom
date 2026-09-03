@@ -563,22 +563,18 @@ func TestCcuBackendOperationsCompliance(t *testing.T) {
 // DownloadFirmware
 // ---------------------------------------------------------------------------
 
-// TestCcuBackendDownloadFirmware verifies that DownloadFirmware posts the
-// correct form fields to the CCU's maintenance CGI when a base URL and
-// session-ID provider are wired.
-
-// TestCcuBackendDownloadFirmwareReportsUnsupported replaces four tests that
-// pinned a CGI exchange the CCU never implemented: they asserted the form
-// fields, the scheme check and the HTTP handling of a POST to
-// cp_maintenance.cgi with `action=download_firmware`, an action that CGI does
-// not define. They passed against a test server that answered anything with
-// 200, which is exactly how the defect survived.
-func TestCcuBackendDownloadFirmwareReportsUnsupported(t *testing.T) {
+// TestCcuBackendDownloadFirmwareIgnoresTheHTTPTransport pins that the
+// operation does not depend on SetHTTPTransport. It replaces four tests
+// that asserted the form fields, the scheme check and the HTTP handling of
+// a POST to cp_maintenance.cgi with `action=download_firmware`, an action
+// that CGI does not define. They passed against a test server that answered
+// anything with 200, which is how the defect survived. The wire call itself
+// is covered in download_firmware_test.go.
+func TestCcuBackendDownloadFirmwareIgnoresTheHTTPTransport(t *testing.T) {
 	t.Parallel()
 	b := &CcuBackend{}
-	b.SetDownloadFirmwareTransport("https://ccu.example", http.DefaultClient, func() string { return "sid" })
-	err := b.DownloadFirmware(context.Background(), "https://example.com/fw.tar")
-	if !errors.Is(err, ErrUnsupported) {
-		t.Fatalf("DownloadFirmware error = %v, want ErrUnsupported", err)
+	b.SetHTTPTransport("https://ccu.example", http.DefaultClient, func() string { return "sid" })
+	if err := b.DownloadFirmware(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("DownloadFirmware error = %v, want ErrUnsupported without a JSON-RPC caller", err)
 	}
 }

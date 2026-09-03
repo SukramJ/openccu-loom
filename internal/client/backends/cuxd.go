@@ -388,9 +388,9 @@ func (*CuxdBackend) HasProgramIDs(context.Context, string) (bool, error) {
 	return false, ErrUnsupported
 }
 
-// DownloadFirmware implements Operations. CUxD has no maintenance CGI;
-// returns [ErrUnsupported].
-func (*CuxdBackend) DownloadFirmware(context.Context, string) error { return ErrUnsupported }
+// DownloadFirmware implements Operations. CUxD is a CCU add-on, not a
+// CCU: it has no firmware of its own to fetch. Returns [ErrUnsupported].
+func (*CuxdBackend) DownloadFirmware(context.Context) error { return ErrUnsupported }
 
 // GetMetadata implements Operations. Not available on CUxD; returns [ErrUnsupported].
 func (*CuxdBackend) GetMetadata(context.Context, string, string) (any, error) {

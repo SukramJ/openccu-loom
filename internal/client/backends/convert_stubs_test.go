@@ -449,7 +449,7 @@ func TestCuxdHasProgramIDs(t *testing.T) {
 func TestCuxdDownloadFirmware(t *testing.T) {
 	t.Parallel()
 	b := NewCuxdBackend(&fakeCaller{}, nil)
-	err := b.DownloadFirmware(context.Background(), "http://example.com/fw.tar")
+	err := b.DownloadFirmware(context.Background())
 	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
