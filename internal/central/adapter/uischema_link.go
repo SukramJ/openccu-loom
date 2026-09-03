@@ -98,7 +98,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 			entry.Value = raw
 			entry.Observed = true
 		}
-		enrichLinkParameter(&entry, locale)
+		enrichLinkParameter(&entry, pd.Special, locale)
 		params = append(params, entry)
 	}
 	schema.Parameters = params
@@ -153,7 +153,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 // classification to p and fills the Link* fields of the schema
 // parameter. Port of the enrich_link_metadata branch in
 // 's FormBuilder.
-func enrichLinkParameter(p *hmapi.UISchemaParameter, locale string) {
+func enrichLinkParameter(p *hmapi.UISchemaParameter, special json.RawMessage, locale string) {
 	meta := ClassifyLinkParameter(p.Name)
 	p.Category = string(meta.Category)
 	p.KeypressGroup = string(meta.KeypressGroup)
@@ -172,12 +172,27 @@ func enrichLinkParameter(p *hmapi.UISchemaParameter, locale string) {
 			})
 		}
 	}
-	// the CCU uses the extended range where 1.005 means "last known level").
-	if meta.DisplayAsPercent && rawFloatGreaterThan(p.Max, 1.0) {
-		p.HasLastValue = true
-	} else {
-		p.HasLastValue = meta.HasLastValue
-	}
+	// "Last known level" is declared, not inferred from the range.
+	//
+	// This used to read `MAX > 1.0`, on the claim that a device carrying the
+	// feature reports the extended bound. It does not: the firmware declares
+	// these parameters max="1.0" and carries the sentinel as a separate
+	// SPECIAL member — `<special_value id="OLD_LEVEL" value="1.005"/>`,
+	// src/devicetypes/rftypes/rf_d.xml:608 — which the paramset description
+	// exports as its own field. A write of 1.005 is accepted because the
+	// firmware widens an internal effective_max while leaving max alone, and
+	// that is the mechanism the old test mistook for a raised bound. Measured
+	// against the descriptor corpus: every dimmer offering the feature reports
+	// MAX 1.0 with SPECIAL {"OLD_LEVEL": 1.005}, so the branch never fired.
+	//
+	// Nothing was missing in practice, because the classification already
+	// grants the feature to every level parameter (see LinkParamCategoryLevel).
+	// The declared SPECIAL is kept as a second, descriptor-driven route so a
+	// parameter the classification does not recognise is still served by what
+	// its own device says. It is deliberately not gated on DisplayAsPercent:
+	// a parameter declaring OLD_LEVEL is a level parameter by the device's own
+	// account, whatever our classification made of its name.
+	p.HasLastValue = meta.HasLastValue || declaresSpecialValue(special, "OLD_LEVEL")
 	// Steer the keypress sub-group via GroupID so the SPA can render
 	// SHORT/LONG blocks without a second classification pass.
 	switch meta.KeypressGroup {
@@ -260,3 +275,19 @@ func (a *UISchemaAdapter) findCentralFor(deviceAddress string) *central.Unit {
 // _ guard against unused import when LINK is the only consumer of
 // hmenum from this file.
 var _ = hmenum.ParamsetKeyLink
+
+// declaresSpecialValue reports whether a parameter's SPECIAL field carries the
+// named member. The CCU exports SPECIAL as an object keyed by the member's id
+// — {"OLD_LEVEL": 1.005} — so membership is a key lookup, and a parameter that
+// declares none is simply absent.
+func declaresSpecialValue(special json.RawMessage, id string) bool {
+	if len(special) == 0 {
+		return false
+	}
+	var members map[string]any
+	if err := json.Unmarshal(special, &members); err != nil {
+		return false
+	}
+	_, ok := members[id]
+	return ok
+}

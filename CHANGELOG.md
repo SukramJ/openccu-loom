@@ -29,6 +29,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **"Supports last known level" was decided by a test no device can satisfy.**
+  The rule read `MAX > 1.0`, on the claim that a device carrying the feature
+  reports the extended bound. It does not: the firmware declares these level
+  parameters `max="1.0"` and carries the sentinel as a separate SPECIAL member
+  (`<special_value id="OLD_LEVEL" value="1.005"/>`), which the paramset
+  description exports as its own field. Every dimmer in the descriptor corpus
+  that offers the feature reports `MAX 1.0` with `SPECIAL {"OLD_LEVEL": 1.005}`.
+
+  Nothing was missing in practice — the classification grants the feature to
+  every level parameter regardless, which is why the dead branch went
+  unnoticed. What was wrong was the stated reason, and with it the only route a
+  parameter outside that classification could take. The declared SPECIAL is
+  that route now, and it is deliberately not gated on our percent display: a
+  parameter declaring `OLD_LEVEL` is a level parameter by the device's own
+  account, whatever our classification made of its name.
+
 - **A siren's `duration` meant two different things depending on which surface
   carried it.** The invoke plane — REST, WebSocket and the MQTT cdp-invoke
   topic — read a bare number as milliseconds; the siren's own service handler,

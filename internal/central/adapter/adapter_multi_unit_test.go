@@ -1264,7 +1264,7 @@ func TestLinkProfilesAdapter_NilRegistry_ResolveChannelType(t *testing.T) {
 func TestEnrichLinkParameter_UnknownParameter(t *testing.T) {
 	t.Parallel()
 	p := &hmapi.UISchemaParameter{Name: "UNKNOWN_PARAM", Type: "FLOAT"}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 	// Should not panic; category may be empty for unknown params — no panic is the primary goal.
 	_ = p.Category
 }
@@ -1276,7 +1276,7 @@ func TestEnrichLinkParameter_OnTimeName(t *testing.T) {
 		Name: "SHORT_ON_TIME",
 		Type: "INTEGER",
 	}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 	// KeypressGroup may or may not be set depending on the classifier; no panic is the goal.
 	_ = p.KeypressGroup
 }
@@ -1287,7 +1287,7 @@ func TestEnrichLinkParameter_LongOnTime(t *testing.T) {
 		Name: "LONG_ON_TIME",
 		Type: "INTEGER",
 	}
-	enrichLinkParameter(p, "de")
+	enrichLinkParameter(p, nil, "de")
 }
 
 func TestBuildKeypressGroups_NoGroupID(t *testing.T) {
@@ -2224,20 +2224,20 @@ func TestEnrichLinkParameter_ShortOnTimeBase(t *testing.T) {
 	t.Parallel()
 	// SHORT_ON_TIME_BASE is a time-selector parameter.
 	p := &hmapi.UISchemaParameter{Name: "SHORT_ON_TIME_BASE", Type: "INTEGER"}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 	// May or may not have a time selector type based on classifier — no panic is the goal.
 }
 
 func TestEnrichLinkParameter_ShortOnTimeFactor(t *testing.T) {
 	t.Parallel()
 	p := &hmapi.UISchemaParameter{Name: "SHORT_ON_TIME_FACTOR", Type: "INTEGER"}
-	enrichLinkParameter(p, "de")
+	enrichLinkParameter(p, nil, "de")
 }
 
 func TestEnrichLinkParameter_LevelOnEvent(t *testing.T) {
 	t.Parallel()
 	p := &hmapi.UISchemaParameter{Name: "SHORT_JT_ON", Type: "INTEGER"}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 }
 
 func TestEnrichLinkParameter_HasLastValueWithHighMax(t *testing.T) {
@@ -2253,7 +2253,7 @@ func TestEnrichLinkParameter_HasLastValueWithHighMax(t *testing.T) {
 		DisplayAsPercent: true,
 		Max:              importJSON(),
 	}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 	// When DisplayAsPercent and Max > 1.0, HasLastValue should be set.
 	if !p.HasLastValue {
 		// HasLastValue is set when DisplayAsPercent && Max > 1.0.
@@ -7554,7 +7554,7 @@ func TestInterfacePortOverride_Precedence(t *testing.T) {
 func TestEnrichLinkParameter_UnknownParam_NoGroupID(t *testing.T) {
 	t.Parallel()
 	p := &hmapi.UISchemaParameter{Name: "UNKNOWN_PARAM"}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 	// Should not panic; GroupID, Category etc. may be empty for unknown params.
 	_ = p.Category
 }
@@ -7563,7 +7563,7 @@ func TestEnrichLinkParameter_ShortPress_SetsGroupID(t *testing.T) {
 	t.Parallel()
 	// SHORT_COND_VALUE is a known short-press keypress parameter.
 	p := &hmapi.UISchemaParameter{Name: "SHORT_COND_VALUE"}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 	if p.GroupID != "keypress.short" {
 		t.Errorf("expected keypress.short, got %q", p.GroupID)
 	}
@@ -7576,7 +7576,7 @@ func TestEnrichLinkParameter_LongPress_SetsGroupID(t *testing.T) {
 	t.Parallel()
 	// LONG_COND_VALUE is a known long-press keypress parameter.
 	p := &hmapi.UISchemaParameter{Name: "LONG_COND_VALUE"}
-	enrichLinkParameter(p, "en")
+	enrichLinkParameter(p, nil, "en")
 	if p.GroupID != "keypress.long" {
 		t.Errorf("expected keypress.long, got %q", p.GroupID)
 	}
