@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -229,7 +231,7 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 		name         string
 		codeRevision uint16
 	}{
-		{matterClusterOnOff, "OnOff", matterOnOffClusterRevision},
+		{matterClusterOnOff, "OnOff", onoff.Revision()},
 		{matterClusterLevelControl, "LevelControl", matterLevelControlClusterRevision},
 		{uint32(0x0004), "Groups", uint16(4)},
 		// D-50: ColorControl is mounted on dimmable+colored lights via

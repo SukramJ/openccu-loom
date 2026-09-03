@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 )
 
@@ -162,7 +164,7 @@ func TestParityMatterJS_SirenClusterRevisions(t *testing.T) {
 		name         string
 		codeRevision uint16
 	}{
-		{matterClusterOnOff, "OnOff", matterOnOffClusterRevision},
+		{matterClusterOnOff, "OnOff", onoff.Revision()},
 		{matterClusterBooleanState, "BooleanState", matterBooleanStateClusterRevision},
 		{matterClusterSmokeCOAlarm, "SmokeCoAlarm", matterSmokeCOAlarmClusterRevision},
 	}

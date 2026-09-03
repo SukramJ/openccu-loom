@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -76,8 +78,6 @@ const (
 	matterCmdOffWithEffect           = wire.OnOffCmdOffWithEffect
 	matterCmdOnWithRecallGlobalScene = wire.OnOffCmdOnWithRecallGlobalScene
 	matterCmdOnWithTimedOff          = wire.OnOffCmdOnWithTimedOff
-
-	matterOnOffClusterRevision uint16 = 6
 )
 
 var (
@@ -179,7 +179,7 @@ func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 		// matter.js on-off.element.ts:24 (Field LT, constraint "0").
 		return matterFeatureOnOffLT, true
 	case matterAttrClusterRevision:
-		return matterOnOffClusterRevision, true
+		return onoff.Revision(), true
 	default:
 		return nil, false
 	}

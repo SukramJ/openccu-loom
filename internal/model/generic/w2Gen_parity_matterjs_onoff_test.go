@@ -9,6 +9,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 )
 
@@ -74,9 +76,9 @@ func TestW2GenParityMatterJSGenericOnOffIdentity(t *testing.T) {
 	if c.Name != "OnOff" {
 		t.Errorf("cluster 0x%04X is %q in matter.js, not OnOff", c.ID, c.Name)
 	}
-	if matterGenericOnOffClusterRevision != c.Revision {
-		t.Errorf("matterGenericOnOffClusterRevision = %d, matter.js OnOff revision = %d",
-			matterGenericOnOffClusterRevision, c.Revision)
+	if onoff.Revision() != c.Revision {
+		t.Errorf("onoff.Revision() = %d, matter.js OnOff revision = %d",
+			onoff.Revision(), c.Revision)
 	}
 }
 

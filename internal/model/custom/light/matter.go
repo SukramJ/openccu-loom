@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -132,7 +134,6 @@ const (
 	matterCmdStepWithOnOff        uint32 = 0x06
 	matterCmdStopWithOnOff        uint32 = 0x07
 
-	matterOnOffClusterRevision uint16 = 6
 	// matterLevelControlClusterRevision pinned to matter.js HEAD
 	// (@matter/model 0.16.11). Matter 1.5 bumped the revision from 6 to 7
 	// with additional level-control refinements (OnTransitionTime /
@@ -264,7 +265,7 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 		// (Field LT, constraint "0").
 		return matterFeatureOnOffLT, true
 	case matterAttrClusterRevision:
-		return matterOnOffClusterRevision, true
+		return onoff.Revision(), true
 	default:
 		return nil, false
 	}

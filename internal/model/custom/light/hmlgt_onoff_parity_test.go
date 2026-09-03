@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 )
 
@@ -115,8 +117,8 @@ func TestHmLgtLightOnOffMatchesMatterJS(t *testing.T) {
 	}
 	hmLgtAssertIDSet(t, "lightOnOffServer.MatterAttributes", s.MatterAttributes(), wantAttrs)
 
-	if matterOnOffClusterRevision != el.Revision {
-		t.Errorf("OnOff cluster revision %d, matter.js says %d", matterOnOffClusterRevision, el.Revision)
+	if onoff.Revision() != el.Revision {
+		t.Errorf("OnOff cluster revision %d, matter.js says %d", onoff.Revision(), el.Revision)
 	}
 }
 

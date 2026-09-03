@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -139,7 +141,6 @@ const (
 	matterCmdOnWithRecallGlobalScene uint32 = 0x41
 	matterCmdOnWithTimedOff          uint32 = 0x42
 
-	matterOnOffClusterRevision        uint16 = 6
 	matterBooleanStateClusterRevision uint16 = 3 // matter.js HEAD boolean-state.element.ts:19 default=3
 	// matterSmokeCOAlarmClusterRevision mirrors matter.js HEAD
 	// smoke-co-alarm-cluster.element.ts:21 default=2 (spec 1.5.1).
@@ -257,7 +258,7 @@ func (s sirenOnOffServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrFeatureMap:
 		return matterFeatureOnOffLT, true
 	case matterAttrClusterRevision:
-		return matterOnOffClusterRevision, true
+		return onoff.Revision(), true
 	default:
 		return nil, false
 	}

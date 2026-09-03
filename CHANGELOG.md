@@ -29,6 +29,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **The OnOff cluster's Matter identity was hand-transcribed in four
+  packages.** `internal/model/generic` and the switch, light and siren profiles
+  each declared the cluster id, the revision, the LT-gated attribute block and
+  the command set independently, with the matter.js citation copied along
+  rather than the values — while a generated single source of the revision
+  (`schema.ClusterRevisions`, produced from the matter.js snapshot) sat unused
+  by all four. They had already drifted: the siren omitted `Toggle` while
+  advertising the FeatureMap that makes it mandatory.
+
+  `internal/north/matter/cluster/onoff` carries it once now, and the revision
+  is *read* from the generated snapshot instead of restated, so a
+  regeneration moves all four projections at once. Bending the snapshot to
+  revision 7 now fails every projection's parity test; before, each kept its
+  own `6`.
+
 - **Two schedule constants left in the adapter after their home was created.**
   The lock-permission duration pair (`base 7, factor 31` — the CCU's own
   "Dauerhaft") was declared a third time in the adapter beside the two the
