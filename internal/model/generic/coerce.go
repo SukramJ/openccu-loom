@@ -55,10 +55,30 @@ func toBool(v any) (value, ok bool) { //nolint:nonamedreturns // documents retur
 	case bool:
 		return x, true
 	case string:
+		// The empty string is deliberately absent from both lists: it is
+		// "not a boolean", not a confirmed false. The CCU's own XML-RPC
+		// value library — the one rfd and hs485d link — rejects it as a
+		// parse failure in both textual boolean readers
+		// (../OpenCCU-Base/src/libXmlRpc/src/XmlRpcValue.cpp:425-437,
+		// boolFromXml takes only the decimal tokens 0 and 1 and fails when
+		// strtol consumed nothing; :470-488, boolFromText takes exactly
+		// "true" and "false"), and its emitters never produce one (:439
+		// writes "1"/"0", :490 writes "true"/"false").
+		//
+		// This reader sits on the ingest side: the REST and MQTT write paths
+		// coerce through internal/parameter.Coerce, which hands a typed Go
+		// bool down, so the empty string never reaches here from them. The
+		// same empty-string branch was removed there, where it did reach a
+		// device.
+		//
+		// The eight named literals are wider than that firmware set —
+		// "on"/"yes"/"off"/"no" appear in no CCU decoder. They rest on the
+		// Python port alone and are kept for client compatibility;
+		// unverified against the CCU.
 		switch strings.ToLower(strings.TrimSpace(x)) {
 		case "true", "1", "on", "yes":
 			return true, true
-		case "false", "0", "off", "no", "":
+		case "false", "0", "off", "no":
 			return false, true
 		}
 	case int:

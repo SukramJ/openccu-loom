@@ -83,6 +83,11 @@ func TestParameterIsWildcardIgnored(t *testing.T) {
 		{"ADJUSTING_SOMETHING", true},
 		{"ERR_TTM_SOMETHING", true},
 		{"HANDLE_SOMETHING", true},
+		// The only two HANDLE_* names any device is known to declare. The raw
+		// pattern still matches them — the carve-out that keeps them alive is
+		// the per-device un-ignore entry, checked one level up in the decider.
+		{"HANDLE_LOCK", true},
+		{"HANDLE_LED_MODE", true},
 		{"IDENTIFY_SOMETHING", true},
 		{"PARTY_START_SOMETHING", true},
 		{"PARTY_STOP_SOMETHING", true},

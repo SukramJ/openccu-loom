@@ -218,10 +218,46 @@ type SensorConfig struct {
 	//
 	// The load-bearing case is SMOKE_DETECTOR_ALARM_STATUS, whose value
 	// list is [IDLE_OFF, PRIMARY_ALARM, INTRUSION_ALARM,
-	// SECONDARY_ALARM]. Under the default rule INTRUSION_ALARM counts as
-	// a smoke detection, while it means the installation drove that
-	// detector as a siren for a burglary — the alarm system reading back
-	// its own output as an input.
+	// SECONDARY_ALARM] — that order verbatim from the firmware's own
+	// enum (HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.SmokeDetectorAlarmStatus,
+	// whose #getNames() fills the VALUE_LIST in ordinal order). Under the
+	// default rule INTRUSION_ALARM counts as a smoke detection, while it
+	// means the installation drove that detector as a siren for a
+	// burglary — the alarm system reading back its own output as an
+	// input.
+	//
+	// Two premises under the default rule, held apart because they rest
+	// on different authority:
+	//
+	// The positional half is firmware. The integer an ENUM delivers on
+	// the legacy XML-RPC surface IS its index in the declared VALUE_LIST:
+	// the description's list and the wire ordinal come from one
+	// getEnumStrings() array (HMIPServer
+	// de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#createParameterDescription
+	// and #convertParameterValue), and the shipped configuration turns
+	// that substitution on
+	// (../OpenCCU-Base/etc/config_templates/crRFD.conf:47,
+	// Legacy.Parameter.ReplaceEnumValueWithOrdinal=true). Note the
+	// physical radio bytes are not the ordinals — a window state maps
+	// {CLOSED, TILTED, OPEN} onto {0, 100, 200} — so this flag is what
+	// makes an index scan correct at all. On BidCos the same holds by a
+	// different route: an option list is emitted as VALUE_LIST[i] with
+	// MIN 0 and MAX size-1
+	// (../OpenCCU-Base/src/libhsscomm/HSSLogicalTypeOption.cpp).
+	//
+	// "Index 0 means idle" is NOT a firmware rule and is UNVERIFIED as a
+	// general one. The strongest statement the sources make is
+	// DEFAULT=MIN=first entry for the HmIP state-parameter enums, which
+	// is a default, not an idle semantic; for BidCos option lists they
+	// say nothing at all. It happens to hold for every enumeration a
+	// sensor can currently be enrolled on — CLOSED, DRY, NO_ERROR,
+	// IDLE_OFF all sit at 0 — so the rule is safe in today's scope and
+	// unbacked one step wider. A new enumerated family becoming
+	// enrollable has to be re-checked against its own value list; a
+	// firmware shipping an alarm state at position 0 would break this
+	// silently, and only naming the values explicitly here defends
+	// against it.
 	//
 	// Empty selects exactly the previous behaviour, so an existing
 	// enrollment keeps its meaning; a value is only ever narrowed by an

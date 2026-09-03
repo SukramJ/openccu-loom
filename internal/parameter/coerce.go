@@ -151,7 +151,15 @@ func asBool(raw any) (bool, error) {
 		switch s {
 		case "1", "true", "on", "yes":
 			return true, nil
-		case "0", "false", "off", "no", "":
+		// The empty string is deliberately absent: the CCU's own value
+		// library refuses it in both textual boolean readers
+		// (../OpenCCU-Base/src/libXmlRpc/src/XmlRpcValue.cpp:425-437 and
+		// :470-488), so accepting it here turned an input the device would
+		// have rejected into a confirmed switch-off on the REST write path.
+		// "on"/"yes"/"off"/"no" are wider than any CCU decoder and rest on
+		// the Python port; they are kept for client compatibility and are
+		// unverified against the CCU.
+		case "0", "false", "off", "no":
 			return false, nil
 		}
 		return false, fmt.Errorf("parameter: cannot coerce %q to bool", v)

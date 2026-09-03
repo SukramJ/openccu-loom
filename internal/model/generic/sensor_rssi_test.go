@@ -41,26 +41,30 @@ func TestFixRSSITable(t *testing.T) {
 		want  int32
 		valid bool
 	}{
-		// Already-correct negative dBm (passthrough).
+		// Already-correct negative dBm (passthrough), -128 < v < 0.
 		{name: "already_negative_low", input: -100, want: -100, valid: true},
 		{name: "already_negative_high", input: -1, want: -1, valid: true},
-		// Sign-flipped positive (1 < v < 127 → -v).
-		{name: "sign_flipped_low", input: 2, want: -2, valid: true},
-		{name: "sign_flipped_high", input: 126, want: -126, valid: true},
-		// Off-by-256 in negative range (-256 < v < -129 → -v - 256).
+		{name: "already_negative_edge", input: -127, want: -127, valid: true},
+		// Sign-flipped positive (0 < v < 128 → -v).
+		{name: "sign_flipped_low", input: 1, want: -1, valid: true},
+		{name: "sign_flipped_high", input: 127, want: -127, valid: true},
+		// Off-by-256 in negative range (-256 < v < -128 → -v - 256).
 		{name: "off256_neg_low", input: -255, want: -1, valid: true},
-		{name: "off256_neg_high", input: -130, want: -126, valid: true},
-		// Off-by-256 in positive range (129 < v < 256 → v - 256).
+		{name: "off256_neg_high", input: -129, want: -127, valid: true},
+		// Off-by-256 in positive range (129 < v < 256 → v - 256). Neither
+		// CCU stack publishes this range; the band rests on the port.
 		{name: "off256_pos_low", input: 130, want: -126, valid: true},
 		{name: "off256_pos_high", input: 255, want: -1, valid: true},
 		// Out-of-range inputs that FixRSSI must reject.
 		{name: "zero", input: 0, want: 0, valid: false},
-		{name: "boundary_127", input: 127, want: 0, valid: false},
-		{name: "boundary_neg127", input: -127, want: 0, valid: false},
+		// The raw byte 0x80 in both signs — the CCU's no-signal marker.
+		{name: "marker_128", input: 128, want: 0, valid: false},
+		{name: "marker_neg128", input: -128, want: 0, valid: false},
 		{name: "boundary_129", input: 129, want: 0, valid: false},
-		{name: "boundary_neg129", input: -129, want: 0, valid: false},
 		{name: "boundary_256", input: 256, want: 0, valid: false},
 		{name: "boundary_neg256", input: -256, want: 0, valid: false},
+		// BidCoS INVALID_RSSI_VALUE, dropped by the fall-through.
+		{name: "bidcos_invalid_rssi", input: -65535, want: 0, valid: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

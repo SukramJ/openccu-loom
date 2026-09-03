@@ -263,8 +263,12 @@ func (d *ParameterDecider) computeIgnoredValues(central, model string, channelNo
 		return true
 	}
 
-	// 4. Channel-specific parameter restriction. Without this branch the LOWBAT
-	// parameter surfaces on every actor channel (HmIP-PSM, HmIP-BSM, …).
+	// 4. Channel-specific parameter restriction: one battery data point per
+	// device rather than one per channel. Its sole entry, LOWBAT, is declared
+	// off channel 0 on 19 BidCos models, so without this branch those devices
+	// would carry several battery data points. It has no HmIP reach — HmIP
+	// devices declare LOW_BAT, a different name — and the trade the rule makes
+	// is written out at [acceptParameterOnlyOnChannel].
 	//
 	// Skip when the channel number is not known (channelNoUnknown == -1) —
 	// without a real channel we cannot check the restriction.

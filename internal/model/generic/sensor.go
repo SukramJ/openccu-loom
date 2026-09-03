@@ -12,21 +12,62 @@ import (
 )
 
 // FixRSSI normalises a raw RSSI integer reading into the canonical "negative
-// dBm" form.
+// dBm" form. All rejected inputs return (0, false) so callers suppress the
+// reading; the returned value is in dBm.
 //
-// -127 < v <    0 →  v       (already correct) 1 < v <  127 → -v       (sign
-// flipped on the wire) -256 < v < -129 → -v - 256 (off-by-256 in negative
-// range) 129 < v <  256 →  v - 256 (off-by-256 in positive range)
+// The two encodings the bands straddle are the CCU's own, and both are
+// negations of a single wire byte — which is why the boundaries sit at
+// |128| (the byte 0x80) rather than anywhere else:
 //
-// All other inputs return (0, false) so callers can suppress the reading. The
-// returned value is in dBm.
+//   - BidCoS negates an UNSIGNED byte, so it publishes [-255, 0]:
+//     ../OpenCCU-Base/src/rfd/RFDevice.cpp:502 `int rssi=-1*frame.GetByteData(13);`
+//     with `unsigned char StructuredFrame::GetByteData(int)` at
+//     ../OpenCCU-Base/src/libhsscomm/StructuredFrame.cpp:85; the same shape in
+//     ../OpenCCU-Base/src/rfd/RFCommMessage.cpp:174 and in multimacd's
+//     SerialFrame/HmLegacyFrameBidcos/HmLegacyFrameBidcosRxTelegram.cpp:38-40
+//     and SerialFrame/LowLevelMacFrame/LowLevelMacFrameRxTelegram.cpp:52-54.
+//   - HmIP negates a SIGNED byte, so it publishes [-127, +128]:
+//     HMIPServer de.eq3.cbcs.server.core.vertx.IncomingHMIPFrameHandler#handleIncomingFrame.
+//
+// Bands, and what each rests on:
+//
+//	-128 < v <    0 →  v        already-correct dBm (BidCoS bytes 1..127)
+//	   0 < v <  128 → -v        sign-flipped (HmIP bytes -1..-127)
+//	-256 < v < -128 → -v - 256  BidCoS bytes 129..255, reinterpreted signed
+//	 129 < v <  256 →  v - 256  no firmware stack produces this — see below
+//
+// Rejected, and why:
+//
+//   - ±128 is the raw byte 0x80, the CCU's own no-signal marker. HmIP tests
+//     it explicitly before publishing RSSI_PEER (HMIPServer
+//     de.eq3.cbcs.server.core.framehandling.HMIPApplicationHandler#handleStatusFrame,
+//     `(getRssiValue() & 0xFF) != 128`) and publishes RSSI_DEVICE with no such
+//     test, so the marker does reach us and has to be dropped here. That the
+//     BidCoS sign of the same byte (-128) is a marker rather than a -128 dBm
+//     reading is UNVERIFIED — BidCoS's own "never measured" marker is
+//     INVALID_RSSI_VALUE = -0xffff (../OpenCCU-Base/src/rfd/BidcosFrame.h:214),
+//     which the fall-through drops.
+//   - 0 is load-bearing. RFDevice.cpp:505 `if(receiver && rssi)` suppresses it
+//     for RSSI_DEVICE, but the two RSSI_PEER sites guard only against
+//     INVALID_RSSI_VALUE (../OpenCCU-Base/src/rfd/BidcosInterfaceConcentrator.cpp:382
+//     and :854), so a frame byte of 0 does arrive as RSSI_PEER = 0.
+//
+// The fourth band is UNVERIFIED and NOT PERFORMABLE from the CCU sources:
+// neither stack can publish 130..255 (BidCoS tops out at 0, HmIP at 128), and
+// the transformation `v - 256` — like band three's `-v - 256` — is a signed
+// reinterpretation the firmware performs nowhere. Both rest on the Python
+// port. What would settle them is a CUxD or Homegear parameter description
+// for RSSI_DEVICE / RSSI_PEER; the shipped HomeMatic device XMLs cannot
+// (e.g. ../OpenCCU-Base/src/devicetypes/rftypes/rf_wds_v1_1.xml:79-88 declares
+// both as a bare `<logical type="integer"/>` with no min, max or
+// special_value), so a runtime MIN/MAX read carries nothing here.
 func FixRSSI(v int32) (int32, bool) {
 	switch {
-	case v > -127 && v < 0:
+	case v > -128 && v < 0:
 		return v, true
-	case v > 1 && v < 127:
+	case v > 0 && v < 128:
 		return -v, true
-	case v > -256 && v < -129:
+	case v > -256 && v < -128:
 		return -v - 256, true
 	case v > 129 && v < 256:
 		return v - 256, true

@@ -32,18 +32,6 @@ func TestPatchIdempotent(t *testing.T) {
 	}
 }
 
-func TestRGBWSaturationEventBitPatch(t *testing.T) {
-	r := NewRegistry()
-	pd := &hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsWrite}
-	changes := r.ApplyTo("HmIP-RGBW", hmenum.ParamsetKeyValues, hmenum.ParameterSaturation, pd)
-	if changes == 0 {
-		t.Fatal("expected patch")
-	}
-	if !pd.Operations.IsEvent() {
-		t.Fatalf("operations=%d", pd.Operations)
-	}
-}
-
 func TestFwiCodeIDMaxPatch(t *testing.T) {
 	r := NewRegistry()
 	ps := hmproto.Paramset{

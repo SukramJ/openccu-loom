@@ -239,18 +239,25 @@ var nonRetryable = []error{
 // Do runs fn up to MaxAttempts times, returning the last error on
 // exhaustion.
 //
-// When [Retrier.Enabled] is false, fn is called exactly once (fast-
-// Path, mirrors.
+// When [Retrier.Enabled] is false, fn is called exactly once — the
+// kill-switch fast path, equivalent to a caller passing retry=false.
 //
 // Special-case delays for CCU XML-RPC faults take precedence over
-// the exponential backoff: DUTY_CYCLE waits a fixed
-// [RetryConfig.DutyCycleDelay] (default 40 s) so the RF window has
-// time to drain, and TRANSMISSION_PENDING waits a fixed
-// [RetryConfig.TransmissionPendingDelay] (default 5 s) to give the
-// in-flight command room to settle. Both special delays bypass the
-// jitter — the CCU itself enforces these windows, so adding random
-// Wiggle would just delay recovery further.
-// `_DUTY_CYCLE_DELAY` / `_TRANSMISSION_PENDING_DELAY` paths in
+// the exponential backoff: DUTY_CYCLE (-8) waits a fixed
+// [RetryConfig.DutyCycleDelay] (default 40 s) and
+// TRANSMISSION_PENDING (-10) a fixed
+// [RetryConfig.TransmissionPendingDelay] (default 5 s). Both bypass
+// the jitter, which is a de-synchronisation choice only: neither
+// window is enforced by the CCU. -8 is raised solely inside
+// RFDevice::UpdateFirmware (OpenCCU-Base src/rfd/RFDevice.cpp:1492)
+// behind an instantaneous airtime-budget test, and -10 is HmIP-only
+// and gated on the target device's reachability, not on elapsed time.
+// The durations are witness values carried over from the Python
+// reference implementation; how long either condition really takes to
+// clear is unverified — see [hmreliability.RetryDutyCycleDelay] and
+// [hmreliability.RetryTransmissionPendingDelay] for what each fault
+// actually means on the wire. The shape of the two special paths
+// follows the Python reference implementation's
 // `client/command_retry.py`.
 func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt int) error) error {
 	// enabled kill-switch — single attempt when disabled.

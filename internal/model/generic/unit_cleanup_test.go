@@ -36,22 +36,24 @@ func TestCleanupUnitParameterOverrides(t *testing.T) {
 	}
 }
 
-// TestCleanupUnitSubstringReplace pins the substring-replace
+// TestCleanupUnitWholeStringReplace pins the whole-string replace
 // fallback path (fixUnitReplace) for parameters not in the
-// per-param override map.
-func TestCleanupUnitSubstringReplace(t *testing.T) {
+// per-param override map, plus the quote strip that runs before it.
+func TestCleanupUnitWholeStringReplace(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		rawUnit string
 		want    string
 	}{
 		{`"`, ""},
-		{`some "thing" else`, ""}, // contains `"` → replace
+		{`""`, ""},                               // the HmIP legacy config declares this literally
+		{`some "thing" else`, "some thing else"}, // quotes stripped, unit kept
 		{"100%", "%"},
 		{"% rF", "%"},
 		{"Lux", "lx"},
 		{"m3", "m³"},
-		{"kWh", "kWh"}, // no replacement → unchanged
+		{"m3/Imp.", "m3/Imp."}, // compound unit keeps its suffix
+		{"kWh", "kWh"},         // no replacement → unchanged
 	}
 	for _, tc := range cases {
 		// Use an arbitrary parameter that has no override entry.

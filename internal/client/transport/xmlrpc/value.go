@@ -97,10 +97,21 @@ type IntValue int32
 // Kind implements [Value].
 func (IntValue) Kind() Kind { return KindInt }
 
-// MarshalXML implements xml.Marshaler. Emits <int>; the CCU firmware
-// (eQ-3 ReGaHss) accepts only this form on writes — <i4> is silently
-// rejected with xml-rpc fault -5 ("Invalid parameter or value"), even
-// though both tags are valid per the XML-RPC spec.
+// MarshalXML implements xml.Marshaler. Emits <int> for determinism, not
+// because the CCU requires it: on every parser this codec reaches, <int>
+// and <i4> are the same tag. libXmlRpc (rfd, hs485d) dispatches I4_TAG and
+// INT_TAG to one intFromXml — OpenCCU-Base
+// src/libXmlRpc/src/XmlRpcValue.cpp:260 — and serialises the CCU's own
+// integers as <i4> in XmlRpcValue::intToXml (:517), so a peer that rejected
+// <i4> could not read the CCU either. The Tcl surface accepts both prefixes
+// (src/tclrpc/tclrpc.cpp:111), and the HmIP legacy parser
+// (HMIPServer de.eq3.cbcs.legacy.communication.rpc.internal.format.xml.XmlRpcParser#parseValue)
+// puts "i4" and "int" in one switch case.
+//
+// Fault -5 is not involved: rfd raises it as "Unknown parameter"
+// (src/rfd/RFChannel.cpp:128), a parameter-identity failure, and ReGaHss is
+// reached over JSON-RPC, never over this codec. Whether a non-CCU peer
+// (Homegear) constrains the tag is unverified — no such peer was read.
 func (v IntValue) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 	return writeTagged(e, "int", strconv.FormatInt(int64(v), 10))
 }
@@ -138,10 +149,20 @@ type DoubleValue float64
 // Kind implements [Value].
 func (DoubleValue) Kind() Kind { return KindDouble }
 
-// MarshalXML implements xml.Marshaler. The CCU's putParamset validator
-// requires a literal decimal point even for whole numbers — "<double>1</double>"
-// is rejected with xml-rpc fault -5, "<double>1.0</double>" is accepted.
-// We therefore force at least one fractional digit.
+// MarshalXML implements xml.Marshaler. Forces at least one fractional digit
+// so a whole number still reads as a double on the wire. No CCU-side
+// validator can require this: libXmlRpc converts the literal with strtod
+// (OpenCCU-Base src/libXmlRpc/src/XmlRpcValue.cpp:577) and the HmIP legacy
+// parser with Double.parseDouble
+// (HMIPServer de.eq3.cbcs.legacy.communication.rpc.internal.format.xml.XmlRpcParser#parseValue),
+// both of which discard the text before any putParamset type check runs, so
+// "1" and "1.0" are indistinguishable downstream. The earlier claim that
+// "<double>1</double>" draws fault -5 is contradicted there; -5 in rfd means
+// "Unknown parameter" (src/rfd/RFChannel.cpp:128).
+//
+// The forced digit is kept because it is accepted everywhere and keeps the
+// encoding self-describing. Whether a non-CCU peer (Homegear) needs it is
+// unverified.
 func (v DoubleValue) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 	s := strconv.FormatFloat(float64(v), 'f', -1, 64)
 	if !strings.ContainsRune(s, '.') {

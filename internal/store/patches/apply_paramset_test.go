@@ -182,18 +182,19 @@ func TestBuiltInHMCCVG1Patch(t *testing.T) {
 		t.Fatal("HM-CC-VG-1 patch must fire")
 	}
 	pd := ps["SET_TEMPERATURE"]
-	if string(pd.Min) != "4.5" {
-		t.Fatalf("MIN=%s want 4.5", pd.Min)
+	// The bounds the CCU declares for the group — groupdefinitions.xml:504.
+	if string(pd.Min) != "5.0" {
+		t.Fatalf("MIN=%s want 5.0", pd.Min)
 	}
-	if string(pd.Max) != "30.5" {
-		t.Fatalf("MAX=%s want 30.5", pd.Max)
+	if string(pd.Max) != "30.0" {
+		t.Fatalf("MAX=%s want 30.0", pd.Max)
 	}
 }
 
 func TestBuiltInHMCCVG1PatchIdempotent(t *testing.T) {
 	r := NewRegistry()
-	goodMin, _ := json.Marshal(4.5)
-	goodMax, _ := json.Marshal(30.5)
+	goodMin, _ := json.Marshal(5.0)
+	goodMax, _ := json.Marshal(30.0)
 	ps := hmproto.Paramset{
 		"SET_TEMPERATURE": hmproto.ParameterData{
 			Type: hmenum.ParameterTypeFloat,

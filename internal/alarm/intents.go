@@ -239,6 +239,24 @@ func (r *intentRouter) handleKeypadPress(ctx context.Context, centralName string
 	r.mu.Unlock()
 
 	now := r.svc.clk.Now()
+	// codeID == pairIdx is an UNVERIFIED assumption about the keypad's own
+	// behaviour: that the device raises the press on the channel pair whose
+	// index equals the CODE_ID of the PIN just accepted. No CCU source
+	// settles it — the CCU only relays the two events, and nothing in its
+	// tree binds a CODE_ID to a channel. What the CCU does show is that both
+	// numbers live in one "User N" namespace, N in 1..8: it labels channel
+	// pair (chNumber+1)/2 "Access Control N" (see [wkpPairIndex]) and renders
+	// CODE_STATE=1 as "<user>: <CODE_ID>"
+	// (../OpenCCU-Base/www/rega/esp/controls/maintenanceWKP.fn) — consistent
+	// with the predicate, not proof of it. Settling it needs a live trace
+	// (notes/reference/alarm-assumptions.md Q4, "still needs live
+	// verification"). If it is wrong, no press ever correlates and every
+	// keypad arm/disarm lands in journalKeypadUnmatched, which records both
+	// numbers so a trace can tell that case from an ordinary miss.
+	//
+	// The 1..8 bound is the device's declared CODE_ID MIN/MAX, matching
+	// USER_AUTHORIZATION_01..08 on channel :0; the keypad is known to report
+	// out-of-range sentinels on idle, which this rejects.
 	correlated := c != nil && known && codeID >= 1 && codeID <= 8 &&
 		codeID == pairIdx && now.Sub(at) <= wkpCorrelationWindow
 	if !correlated {
@@ -464,6 +482,29 @@ func (r *intentRouter) append(ctx context.Context, entry engine.JournalEntry) {
 // wkpPairIndex maps a WKP ACCESS_TRANSCEIVER channel (1..16) to its
 // 1-based user-slot pair index. Channels alternate lock (odd) / unlock
 // (even), so pair n is channels (2n-1, 2n).
+//
+// The layout is the CCU's, not ours. ReGa labels a WKP channel with
+// `integer tmpChn = (chNumber + 1) / 2` — the same expression, on the
+// same 1-based index, guarded on exactly HmIP-WKP, while the sibling
+// HmIP-FWI is labelled with a plain chNumber
+// (../OpenCCU-Base/www/rega/pages/tabs/control/function.fn:159-169). The
+// config dialog states the other half from the other direction: a WKP
+// channel that carries no NUMERIC_PIN_CODE — the even, unlock member —
+// is told it uses the PIN of channel `[expr $chn / 2]`
+// (../OpenCCU-Base/www/config/easymodes/etc/hmipChannelConfigDialogs.tcl:7028).
+// The device declares the rest: :1..:16 are ACCESS_TRANSCEIVER, VALUES
+// carry PRESS_LOCK on every odd channel and PRESS_UNLOCK on every even
+// one, and MASTER NUMERIC_PIN_CODE exists only on the odd ones
+// (HmIP-WKP's own device description and paramset descriptions; the
+// project's descriptor corpus carries both verbatim).
+//
+// The 1..16 bound is that declared channel span written as a constant
+// rather than read from the device: [intentRouter.onEvent] routes on the
+// parameter, not on the model, so any device firing PRESS_LOCK /
+// PRESS_UNLOCK reaches here. In the descriptor corpus only HmIP-WKP
+// declares those two parameters at all, which is what keeps the WKP
+// formula off HmIP-FWI — containment by circumstance, not by
+// construction.
 func wkpPairIndex(channelAddress string) (int, bool) {
 	i := strings.LastIndexByte(channelAddress, ':')
 	if i < 0 {

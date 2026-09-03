@@ -29,6 +29,42 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   own procedure for the developer's live CCU treats as free of consequence, so
   a run that believed it was only reading could reconfigure device links.
 
+- **Eleven more rules grounded against the CCU firmware.** Each was carried by
+  a comment, a bare literal or the Python port; each is now either corrected or
+  explicitly labelled unverified at the site where a reader will look for it.
+
+  Behaviour changed where the firmware contradicted us:
+  - The HM-CC-VG-1 virtual-heating-group patch repaired the wrong thing. The
+    CCU serves that group's `SET_TEMPERATURE` bounds as *strings*, which is the
+    real defect; the patch instead overwrote the range with `4.5`/`30.5` — a
+    member thermostat's bounds substituted for the group's declared
+    `5.0`/`30.0`, widening the accepted setpoint at both ends. It now coerces
+    the type and leaves the CCU's own numbers alone, falling back to the
+    declared range only when none arrives.
+  - The `HmIP-DRDI3` MASTER channel list gained channels 4, 8 and 12, which the
+    descriptor declares and which therefore never became data points.
+  - The `ENERGY_COUNTER` unit patch reached one of the nine models that share
+    the declaration; it now covers all nine.
+  - An empty string no longer coerces to `false` on the REST write boundary.
+    The CCU's own value library rejects it in both textual boolean readers, so
+    accepting it turned an input the device would have refused into a confirmed
+    switch-off.
+  - `FixRSSI`'s bands were widened to the values the two transports actually
+    produce, and the unit cleanup matches whole units instead of substrings —
+    `m3/Imp.` used to be rewritten to `m³`.
+  - The `HmIP-RGBW` `SATURATION` operations patch was removed: it rested on a
+    claim with no reproducible condition.
+
+  Elsewhere the behaviour was right and only the stated reason was false — the
+  `<i4>` and `<double>` write formatting (the CCU emits `<i4>` itself, and
+  fault -5 means "Unknown parameter"), the duty-cycle and transmission-pending
+  retry windows (fault -8 is raised only on the firmware-update path, -10 is
+  HmIP-only and means the command is already queued), and the motion-reset and
+  alarm-sensor tables. Those comments now say what is measured and what is not.
+
+  The paramset cache schema version is bumped, without which an installed
+  daemon would keep serving the old bounds from SQLite.
+
 - **An unpaired device kept its measurement history and its recording
   overrides forever.** `MeasurementStore.DeleteDevice` and
   `RecordingOverrideStore.DeleteDevice` each carried a doc comment saying they

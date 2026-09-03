@@ -24,11 +24,52 @@ var configurableChannelTypes = map[string]struct{}{
 	"MULTI_MODE_INPUT_TRANSMITTER": {},
 }
 
+// decidableChannelOperationModes is the set of CHANNEL_OPERATION_MODE values
+// for which [channelOperationModeVisibility] is treated as a complete answer.
+// An observed mode outside this set is left ungated, exactly like a mode that
+// has not been observed yet.
+//
+// The set exists because the firmware defines several input-mode value lists
+// for these channel types, not one:
+// HMIPServer de.eq3.cbcs.devicedescription.channelspecification.configparameter.GeneralConfigurationParameterFactory
+// registers CHANNEL_OPERATION_MODE once per channel-specification subtype,
+// and beyond the four members below the input variants also carry
+// LEVEL_KEY_BEHAVIOR and CONDITIONAL_BEHAVIOR. The CCU offers both to the
+// operator whenever the channel's own VALUE_LIST contains them
+// (../OpenCCU-Base/www/config/easymodes/etc/hmipChannelConfigDialogs.tcl:1008-1035,
+// inside proc getMultiModeInputTransmitter at :975), and ships operator
+// translations for both. No source states which VALUES entries a channel in
+// either mode drops, so the gate must not decide: treating them as "no mode
+// matched" would force STATE and all four PRESS_* parameters to Ignored at
+// once, which presents as a dead device rather than as a rule.
+//
+// Neither mode has been observed on a device — the descriptor corpus carries
+// zero instances — so this is a boundary, not a repair of a seen failure.
+var decidableChannelOperationModes = map[string]struct{}{
+	"INACTIVE":        {},
+	"KEY_BEHAVIOR":    {},
+	"SWITCH_BEHAVIOR": {},
+	"BINARY_BEHAVIOR": {},
+}
+
 // channelOperationModeVisibility maps a wire parameter to the set of
 // CHANNEL_OPERATION_MODE values that keep the parameter visible.
 //
 // A parameter that is not a key here is *never* gated — the gate only applies
 // to the listed input-event parameters and STATE on multi-mode inputs.
+//
+// The mode spellings are the firmware's own, and the channel types above are
+// real firmware channel types. The parameter↔mode *pairing* is not: no
+// firmware source narrows a VALUES paramset by CHANNEL_OPERATION_MODE — the
+// HmIP server merely notifies the change
+// (HMIPServer de.eq3.cbcs.server.core.persistence.AbstractPersistency#updateAndNotifyChannelOperationMode),
+// and the CCU's config dialog gates MASTER configuration rows, a different
+// paramset from the VALUES entries gated here. On that separate surface the
+// dialog does show the key-timing rows for KEY_BEHAVIOR and the binary rows
+// for BINARY_BEHAVIOR (showHideKeyParams, hmipChannelConfigDialogs.tcl:1162-1207),
+// which corroborates those two pairings by analogy only. SWITCH_BEHAVIOR →
+// PRESS_* has no witness in either direction — mode 2 shows neither row group
+// — and stays **unverified**.
 var channelOperationModeVisibility = map[hmenum.Parameter]map[string]struct{}{
 	hmenum.ParameterState: {
 		"BINARY_BEHAVIOR": {},
@@ -157,6 +198,13 @@ func ApplyChannelOperationModeGating(ch *device.Channel) {
 		// click-event pass withholds the unknown-mode press *buttons* (see
 		// applyClickEventMarks); STATE and the event sources keep their base
 		// usage so a not-yet-read mode does not blank out real state/events.
+		return
+	}
+	if _, decidable := decidableChannelOperationModes[mode]; !decidable {
+		// A mode the table cannot decide (LEVEL_KEY_BEHAVIOR,
+		// CONDITIONAL_BEHAVIOR, or any member a later firmware adds). Leave
+		// every usage untouched rather than force-Ignoring the whole gated
+		// set — see [decidableChannelOperationModes].
 		return
 	}
 	for _, dp := range ch.DataPoints() {

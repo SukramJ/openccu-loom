@@ -47,11 +47,47 @@ const (
 	RetryInitialBackoff = 2 * time.Second
 	// RetryMaxBackoff bounds exponential growth.
 	RetryMaxBackoff = 30 * time.Second
-	// RetryDutyCycleDelay is the wait inserted when a CCU rejects a command with
-	// a duty-cycle / RF-throttle error.
+	// RetryDutyCycleDelay is the wait inserted on XML-RPC fault -8.
+	//
+	// The fault is far narrower than "the CCU is duty-cycle limited": -8 is
+	// raised at exactly one place in the CCU source tree, inside
+	// RFDevice::UpdateFirmware (OpenCCU-Base src/rfd/RFDevice.cpp:1492), when
+	// DutyCycleForUpdate reports that the image does not fit in the remaining
+	// airtime allowance (src/rfd/BidcosInterfaceConcentrator.cpp:1045 — an
+	// instantaneous byte-budget comparison, no time dimension). No value write
+	// produces it, and the HmIP legacy surface has no -8 at all — its fault
+	// mapping (HMIPServer
+	// de.eq3.cbcs.legacy.bidcos.rpc.internal.NotificationUtil#getRpcRemoteException)
+	// produces -1, -2, -5 and -10 only. So on a real
+	// CCU this delay is reachable only from a firmware update.
+	//
+	// The 40 s is carried over from the Python reference implementation
+	// (`const.py`, command_retry_duty_cycle_delay) and is therefore a witness
+	// value, not a measurement: rfd holds no duty-cycle recovery model — it
+	// reads the percentage out of the transceiver's HELLO frame
+	// (src/rfd/BidcosRemoteInterface.cpp:505) and re-notifies only when a
+	// threshold band is crossed — so how long the window takes to drain is
+	// unverified, and no readable source can settle it. Kept as-is for that
+	// reason: there is no measured number to replace it with.
 	RetryDutyCycleDelay = 40 * time.Second
-	// RetryTransmissionPendingDelay is the wait inserted when a CCU reports a
-	// transmission-pending stall.
+	// RetryTransmissionPendingDelay is the wait inserted on XML-RPC fault -10.
+	//
+	// -10 ("Transmission is pending.") exists only on the HmIP side; rfd and
+	// hs485d never emit it. It is raised behind a reachability test rather
+	// than a timer — DeviceSubcommandHandler#handleSetConfigCommand persists
+	// the configuration as pending and answers TRANSMISSION_PENDING when
+	// `device.isReachable()` is false — so on putParamset MASTER the command
+	// is already queued at the CCU and waiting cannot change the answer;
+	// #handleSetValueCommand does not produce it at all. Where it does mean
+	// something transient is deleteDevice and the link operations, whose
+	// mapping collapses AP_BUSY / STACK_BUSY / RESPONSE_NAK / TIMEOUT into the
+	// same -10 (NotificationUtil#createDeleteDeviceRpcRemoteException); a
+	// short retry is defensible there, which is why the delay stays.
+	//
+	// The 5 s is likewise a witness value from the Python reference
+	// implementation (`const.py`, command_retry_transmission_pending_delay).
+	// The pending window is bounded by the target device's own wake-up cycle,
+	// which no readable CCU source states, so the duration is unverified.
 	RetryTransmissionPendingDelay = 5 * time.Second
 	// RetryRecoveryWait caps how long the retrier blocks for a
 	// connection-recovery event before giving up. 120 s mirrors the
@@ -73,8 +109,12 @@ const (
 const (
 	// ThrottleInterCommandDelay is the minimum gap between two consecutive
 	// non-critical commands on the same interface. Default 0: writes are
-	// already serialised at one in-flight command per interface, and a CCU
-	// duty-cycle rejection is absorbed by [RetryDutyCycleDelay].
+	// already serialised at one in-flight command per interface. It is not
+	// backstopped by [RetryDutyCycleDelay] — that delay keys on fault -8,
+	// which a value write never receives — so nothing in this stack paces
+	// writes against the transceiver's duty cycle today. Whether a real CCU
+	// needs such pacing is unverified: it would have to be measured against
+	// the DUTY_CYCLE reading of a live interface.
 	ThrottleInterCommandDelay = 0 * time.Millisecond
 	// ThrottleBurstThreshold is the soft cap on non-critical commands per
 	// [ThrottleBurstWindow].

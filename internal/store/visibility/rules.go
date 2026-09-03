@@ -48,6 +48,27 @@ type ModelMasterEntry struct {
 
 // relevantMasterParamsetsByDevice maps device model names to their MASTER
 // paramset rules.
+//
+// Authority and its limit. Each row's channel set is the set of channels on
+// which that model's own paramset description declares the listed MASTER
+// parameters, read from the recorded device-descriptor corpus; it is not a
+// firmware statement about which channels *should* be whitelisted — no source
+// carries our data-point policy. The firmware attaches
+// CHANNEL_OPERATION_MODE to a channel specification, never to a
+// (model, channel) pair: HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.configparameter.GeneralConfigurationParameterFactory
+// registers it once per channel-specification subtype key, each with its own
+// value list. A per-model channel table therefore cannot be complete by
+// construction, and this one is knowingly incomplete: further models in the
+// descriptor corpus declare MASTER CHANNEL_OPERATION_MODE (HmIP-DLP, HmIP-ESI,
+// HmIP-SAM, HmIP-SMO230-A, HmIP-SPDR, HmIP-STV, HmIP-SWO-*, HmIP-UDI-SMI55,
+// HmIPW-DRD3) or a climate MASTER parameter (HmIP-FAL230-C10, HmIPW-FAL230-C6,
+// HmIPW-SCTHD, HmIPW-WTH, HmIP-SCTH230, ELV-SH-CTH) without matching any key
+// here. Adding them is a policy decision, not a firmware correction.
+//
+// Three rows are unverified in those words — HmIP-FCI6, HmIP-FSI6 and
+// HmIPW-DRI16 appear in neither the descriptor corpus nor the shipped BidCos
+// device XMLs, so their channel sets rest on the Python sibling alone.
 var relevantMasterParamsetsByDevice = map[string]ModelMasterEntry{
 	"ALPHA-IP-RBG": {
 		Channels:   channelSet(1),
@@ -77,8 +98,14 @@ var relevantMasterParamsetsByDevice = map[string]ModelMasterEntry{
 		Channels:   channelSet(1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 17, 21),
 		Parameters: channelOperationModeSet,
 	},
+	// Two flavours of the same parameter name on one device: :1/:2/:3 are
+	// MULTI_MODE_INPUT_TRANSMITTER channels whose CHANNEL_OPERATION_MODE is
+	// the input-mode enum [INACTIVE, KEY_BEHAVIOR, SWITCH_BEHAVIOR,
+	// BINARY_BEHAVIOR], while :4/:8/:12 are DIMMER_TRANSMITTER channels
+	// carrying the channel-enable enum [OFF, ON]. All six are declared
+	// OPERATIONS=3 FLAGS=1 in the device's own paramset description.
 	"HmIP-DRDI3": {
-		Channels:   channelSet(1, 2, 3),
+		Channels:   channelSet(1, 2, 3, 4, 8, 12),
 		Parameters: channelOperationModeSet,
 	},
 	"HmIP-DRSI1": {
@@ -195,10 +222,30 @@ var hiddenParameters = map[hmenum.Parameter]struct{}{
 	hmenum.ParameterWorking:                      {},
 }
 
-// ignoredParameters lists the VALUES-paramset parameter names for which no
-// data points are created. These are raw string names (not hmenum.Parameter)
-// because many appear only in older/niche firmware and are not allocated
-// named constants.
+// ignoredParameters lists the VALUES-paramset parameter names that are
+// force-marked [hmenum.DataPointUsageIgnored]. The data point is still
+// created — every wire parameter becomes a DP — so north-bound adapters skip
+// it and the un-ignore feature can offer it back; it is not withheld from the
+// model. Pinned by
+// internal/central/adapter/device_pipeline_visibility_test.go.
+//
+// These are raw string names (not hmenum.Parameter) because many appear only
+// in older/niche firmware and are not allocated named constants.
+//
+// Authority. The list is a product decision about the entity surface, ported
+// from the Python sibling, and the firmware does not ratify it: only
+// INSTALL_TEST is declared internal by the CCU itself (ui_flags="internal" on
+// every declaration in ../OpenCCU-Base/src/devicetypes/rftypes/, FLAGS with
+// the INTERNAL bit on every descriptor occurrence). Entries checked against
+// the firmware and found to be *visible* there — INHIBIT, SPEED, BOOST_TIME,
+// BOOST_STATE, ADAPTION_DRIVE, RELOCK_DELAY, SELF_CALIBRATION, USER_PROGRAM,
+// WEEK_PROGRAM_POINTER — carry FLAGS=1 (VISIBLE set, INTERNAL and SERVICE
+// clear) and several carry operator labels in the CCU's own parameter string
+// table (../OpenCCU-Base/src/webui/www/config/stringtable_de.txt). They stay
+// on the list as a deliberate noise policy, and their suppression is
+// therefore **unverified** against the firmware rather than grounded in it —
+// the sources say what the device declares, not what our entity surface
+// should show. The remaining names have not been measured at all.
 var ignoredParameters = map[string]struct{}{
 	"ACCESS_AUTHORIZATION":              {},
 	"ADAPTION_DRIVE":                    {},
@@ -278,6 +325,11 @@ var ignoredParametersEndPattern = regexp.MustCompile(`.*(_OVERFLOW|_OVERRUN|_REP
 
 // ignoredParametersStartPattern matches parameters whose names start with one
 // of the wildcard prefixes.
+//
+// The HANDLE_ prefix over-reaches and is carved out per device below: the only
+// two HANDLE_* parameters any model in the descriptor corpus declares are
+// HANDLE_LOCK and HANDLE_LED_MODE on HM-ReSC-Win-PCB-xx, both operator-facing.
+// The prefix is kept for names no device has been observed to declare.
 var ignoredParametersStartPattern = regexp.MustCompile(`^(ADJUSTING_|ERR_TTM_|HANDLE_|IDENTIFY_|PARTY_START_|PARTY_STOP_|STATUS_FLAG_)`)
 
 // parameterIsWildcardIgnored reports whether name matches any of the compiled
@@ -339,6 +391,18 @@ var unIgnoreParametersByDevice = map[string]map[hmenum.Parameter]struct{}{
 		hmenum.ParameterInterval:          {},
 	},
 	"HM-OU-LED16": {hmenum.ParameterLEDStatus: {}},
+	// The window-handle actor's two operator controls, caught by the blanket
+	// HANDLE_ prefix rule. The device declares both in VALUES with
+	// OPERATIONS=7 (read+write+event) and FLAGS=1 (VISIBLE set, INTERNAL and
+	// SERVICE clear), and the CCU labels both for the operator at
+	// ../OpenCCU-Base/src/webui/www/config/stringtable_de.txt:95-99
+	// (ACTOR_WINDOW|HANDLE_LED_MODE=OFF/DIMMED_ON/FULL_ON,
+	// ACTOR_WINDOW|HANDLE_LOCK=TRUE/FALSE). Spelled as string conversions
+	// because neither name has an hmenum constant.
+	"HM-ReSC-Win-PCB-xx": {
+		hmenum.Parameter("HANDLE_LOCK"):     {},
+		hmenum.Parameter("HANDLE_LED_MODE"): {},
+	},
 	"HM-Sec-Win": {
 		hmenum.ParameterDirection:   {},
 		hmenum.ParameterWorking:     {},
@@ -412,6 +476,27 @@ var ignoreParametersByDevice = map[string]map[string]struct{}{
 
 // acceptParameterOnlyOnChannel maps a parameter name to the single channel
 // number on which it should be accepted.
+//
+// This is a de-duplication policy, not a device property, and the firmware
+// contradicts the property reading: LOWBAT is declared off channel 0 too —
+// 19 BidCos models carry 38 such declarations, with read+event operations and
+// (unlike the FLAGS=9 service copy on channel 0) a visible flag set. Two of
+// them are what the CCU's own control pages render: the siren arming control
+// resolves DEVICE.LOWBAT on HM-Sec-Sir-WM channel 4
+// (../OpenCCU-Base/src/devicetypes/rftypes/rf_sec_sir_wm.xml:592, read by
+// ../OpenCCU-Base/src/webui/rega/www/esp/controls/alarmsirene.fn:5) and the
+// digital-state control resolves BATTERIE.LOWBAT on HM-MOD-EM-8Bit channel 3
+// (rf_em_8_bit.xml:323, read by .../controls/digitalstate.fn:5). Both lookups
+// are channel-scoped. Keeping only the channel-0 copy is therefore our choice
+// of one battery data point per device, and the CCU-parity of that choice is
+// **unverified**.
+//
+// Reach and the latent trap. The map keys the BidCos spelling; HmIP devices
+// declare LOW_BAT, a different name, so the rule has no HmIP effect at all.
+// No model in the descriptor corpus declares LOWBAT *only* off channel 0, so
+// no device loses its battery signal outright today — but nothing here checks
+// that, and a future device that did would lose it silently. Settling that
+// needs a device-wide view the per-parameter decider does not have.
 var acceptParameterOnlyOnChannel = map[string]int{
 	"LOWBAT": 0,
 }

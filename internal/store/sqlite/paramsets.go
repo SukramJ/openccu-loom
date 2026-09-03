@@ -30,7 +30,12 @@ var ErrParamsetNotFound = errors.New("sqlite: paramset not found")
 // 0: pre-versioning (rows written before migration 003 are tagged 0 and wiped
 // on first run with this binary) 1: initial versioned schema
 // 2: HmIP-FWI CODE_ID MAX patch — cached bounds rebuilt from the CCU (#3238)
-const ParamsetCacheSchemaVersion = 2
+// 3: HM-CC-VG-1 SET_TEMPERATURE bounds — the patch stopped overwriting the
+// group's declared 5.0/30.0 with a member thermostat's 4.5/30.5, and the
+// HM-ES-PMSw1-Pl ENERGY_COUNTER unit patch reached the eight sibling models.
+// Without the bump an installed daemon keeps serving the old bounds: the
+// cached description is only refetched when this version changes.
+const ParamsetCacheSchemaVersion = 3
 
 // ParamsetRecord persists a paramset description.
 type ParamsetRecord struct {
