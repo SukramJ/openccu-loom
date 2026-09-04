@@ -296,10 +296,6 @@ type InterfaceClient struct {
 	failureMu     sync.Mutex
 	lastFailureAt time.Time
 
-	// modifiedAt tracks the last time a DataPoint value was received for this
-	// interface. Protected by mu.
-	modifiedAt time.Time
-
 	// forcedAvailability stores the current forced-availability mode
 	// requested by MarkAllDevicesForced. Coordinators query this to decide
 	// what availability state to push to the device registry. Protected by mu.

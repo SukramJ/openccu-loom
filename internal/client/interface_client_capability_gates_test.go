@@ -5,7 +5,7 @@
 // BackendCaller.Priority, PingPong hooks,
 // AllCircuitBreakersClosed, IsInitialized, RPCServerTypeForInterface,
 // MetricsCircuitState, payload accessors, state machine predicates,
-// ModifiedAt/SetModifiedAt, ForcedAvailability, capability-gated delegates,
+// ForcedAvailability, capability-gated delegates,
 // GetDeviceDescriptionWithCoalescing, GetParamsetDescriptionOnDemand,
 // CreateSystemVariable*, and ValueWriter wiring.
 package client_test
@@ -344,28 +344,6 @@ func TestStateMachineAddOnStateChange(t *testing.T) {
 	_ = ic.TransitionTo(hmenum.ClientStateInitializing, "", true, hmenum.FailureReasonNone)
 	// from == to is allowed; just verify no panic occurred.
 	_ = from == to
-}
-
-// ---------------------------------------------------------------------------
-// ModifiedAt / SetModifiedAt
-// ---------------------------------------------------------------------------
-
-func TestModifiedAtZeroInitially(t *testing.T) {
-	t.Parallel()
-	ic := newExtraIC(t, hmenum.InterfaceHmIPRF)
-	if !ic.ModifiedAt().IsZero() {
-		t.Error("ModifiedAt should be zero before any update")
-	}
-}
-
-func TestSetModifiedAt(t *testing.T) {
-	t.Parallel()
-	ic := newExtraIC(t, hmenum.InterfaceHmIPRF)
-	now := time.Now().Truncate(time.Second)
-	ic.SetModifiedAt(now)
-	if got := ic.ModifiedAt(); !got.Equal(now) {
-		t.Errorf("ModifiedAt()=%v, want %v", got, now)
-	}
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 {
-  "generated": "124a7e63",
-  "head": "124a7e63",
+  "generated": "94e9a731",
+  "head": "94e9a731",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -2682,7 +2682,7 @@
       "package": "internal/client",
       "identifier": "DeviceDescriptionFinder",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 904,
+      "line": 883,
       "kind": "type"
     },
     {
@@ -2717,7 +2717,7 @@
       "package": "internal/client",
       "identifier": "ForcedAvailability",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 861,
+      "line": 840,
       "kind": "type"
     },
     {
@@ -2738,7 +2738,7 @@
       "package": "internal/client",
       "identifier": "ParamsetDescriptionPersister",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 910,
+      "line": 889,
       "kind": "type"
     },
     {

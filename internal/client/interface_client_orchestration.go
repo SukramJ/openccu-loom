@@ -832,27 +832,6 @@ func (c *InterfaceClient) PutParamset(
 }
 
 // ---------------------------------------------------------------------------
-// ModifiedAt — last-modification timestamp on IC
-// ---------------------------------------------------------------------------
-
-// ModifiedAt returns the timestamp of the last modification on this client.
-// The zero value is returned when the client has not been touched yet.
-func (c *InterfaceClient) ModifiedAt() time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.modifiedAt
-}
-
-// SetModifiedAt updates the last-modification timestamp. Called from the
-// central's event path whenever a DataPoint value is received for this
-// interface.
-func (c *InterfaceClient) SetModifiedAt(t time.Time) {
-	c.mu.Lock()
-	c.modifiedAt = t
-	c.mu.Unlock()
-}
-
-// ---------------------------------------------------------------------------
 // MarkAllDevicesForced — forced-availability marking
 // ---------------------------------------------------------------------------
 
