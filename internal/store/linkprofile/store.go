@@ -482,7 +482,10 @@ func ProfileMatches(params map[string]ParamConstraint, current map[string]any) b
 
 // ProfileSpecificityOfConstraints scores this plane's own constraint shape.
 // Exported so a parity test can compare the two planes through the entry point
-// each of them actually uses.
+// each of them actually uses; production calls the unexported form directly,
+// and this wrapper adds nothing but the export.
+//
+// loom:reachable:reason="test-only export over the unexported profileSpecificity this package uses in production; it exists so the cross-plane parity test drives the same arithmetic"
 func ProfileSpecificityOfConstraints(params map[string]ParamConstraint) float64 {
 	return profileSpecificity(params)
 }

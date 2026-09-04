@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 7e8fed27
-HEAD: 7e8fed27
+Generated: 15d996a6
+HEAD: 15d996a6
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 30191 |
-| Reachable | 5265 |
-| Whitelisted | 21915 |
-| **Unreachable** | **3011** |
+| Total Exported | 30521 |
+| Reachable | 5315 |
+| Whitelisted | 22173 |
+| **Unreachable** | **3033** |
 
 ## Top-20 Packages by Dead Code
 
@@ -18,8 +18,8 @@ HEAD: 7e8fed27
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/client/backends | 6 | 45 | 4 |
 | internal/central/adapter | 4 | 99 | 52 |
+| internal/client/backends | 4 | 45 | 4 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -28,14 +28,14 @@ HEAD: 7e8fed27
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
-| internal/model/device | 2 | 43 | 14 |
-| internal/model/hub | 2 | 65 | 46 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
-| pkg/hmenum | 2 | 105 | 44 |
+| pkg/hmenum | 2 | 104 | 44 |
 | pkg/hmerr | 2 | 5 | 38 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 | internal/addonupdate | 0 | 18 | 18 |
+| internal/alarm | 0 | 25 | 0 |
+| internal/alarm/codes | 0 | 13 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -61,20 +61,14 @@ HEAD: 7e8fed27
 | internal/central/events | WithKey | internal/central/events/bus.go | 66 |
 | internal/central/events | WithPriority | internal/central/events/bus.go | 59 |
 | internal/central/events | WithPriority | internal/central/events/bus.go | 59 |
-| internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
-| internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
+| internal/client/backends | DetectBackend | internal/client/backends/detection.go | 84 |
+| internal/client/backends | DetectBackend | internal/client/backends/detection.go | 84 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
-| internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
-| internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
-| internal/model/device | GenerateTranslationKey | internal/model/device/naming.go | 39 |
-| internal/model/device | GenerateTranslationKey | internal/model/device/naming.go | 39 |
-| internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 308 |
-| internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 308 |
+| internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 403 |
+| internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 403 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 111 |
@@ -91,6 +85,12 @@ HEAD: 7e8fed27
 | internal/payload | For | internal/payload/payload.go | 39 |
 | internal/payload | Merge | internal/payload/payload.go | 115 |
 | internal/payload | Merge | internal/payload/payload.go | 115 |
+| pkg/hmenum | SecurityVerbs | pkg/hmenum/security.go | 265 |
+| pkg/hmenum | SecurityVerbs | pkg/hmenum/security.go | 265 |
+| pkg/hmerr | ErrorContext | pkg/hmerr/errors.go | 219 |
+| pkg/hmerr | ErrorContext | pkg/hmerr/errors.go | 219 |
+| pkg/hmlog | ForSubsystem | pkg/hmlog/factory.go | 131 |
+| pkg/hmlog | ForSubsystem | pkg/hmlog/factory.go | 131 |
 
 ## Full By-Package Breakdown
 
@@ -98,8 +98,8 @@ HEAD: 7e8fed27
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/client/backends | 6 | 45 | 4 |
 | internal/central/adapter | 4 | 99 | 52 |
+| internal/client/backends | 4 | 45 | 4 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -108,17 +108,15 @@ HEAD: 7e8fed27
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
-| internal/model/device | 2 | 43 | 14 |
-| internal/model/hub | 2 | 65 | 46 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
-| pkg/hmenum | 2 | 105 | 44 |
+| pkg/hmenum | 2 | 104 | 44 |
 | pkg/hmerr | 2 | 5 | 38 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 | internal/addonupdate | 0 | 18 | 18 |
 | internal/alarm | 0 | 25 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
-| internal/alarm/engine | 0 | 30 | 6 |
+| internal/alarm/engine | 0 | 60 | 12 |
 | internal/alarm/journal | 0 | 1 | 0 |
 | internal/alarm/outputs | 0 | 26 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
@@ -131,7 +129,7 @@ HEAD: 7e8fed27
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 14 | 4 |
 | internal/channelflags | 0 | 2 | 0 |
-| internal/client | 0 | 28 | 8 |
+| internal/client | 0 | 27 | 8 |
 | internal/client/observer | 0 | 3 | 0 |
 | internal/client/transport/jsonrpc | 0 | 11 | 0 |
 | internal/clock | 0 | 5 | 0 |
@@ -147,7 +145,7 @@ HEAD: 7e8fed27
 | internal/model/calculated | 0 | 10 | 0 |
 | internal/model/combined | 0 | 6 | 0 |
 | internal/model/custom | 0 | 49 | 10 |
-| internal/model/custom/climate | 0 | 8 | 18 |
+| internal/model/custom/climate | 0 | 8 | 14 |
 | internal/model/custom/cover | 0 | 18 | 18 |
 | internal/model/custom/light | 0 | 20 | 22 |
 | internal/model/custom/lock | 0 | 12 | 14 |
@@ -156,9 +154,11 @@ HEAD: 7e8fed27
 | internal/model/custom/textdisplay | 0 | 5 | 18 |
 | internal/model/custom/valve | 0 | 2 | 0 |
 | internal/model/datapoint | 0 | 3 | 0 |
+| internal/model/device | 0 | 43 | 14 |
 | internal/model/device/definitionexport | 0 | 6 | 2 |
 | internal/model/event | 0 | 5 | 0 |
 | internal/model/group | 0 | 14 | 0 |
+| internal/model/hub | 0 | 65 | 46 |
 | internal/model/naming | 0 | 2 | 4 |
 | internal/model/safety | 0 | 2 | 0 |
 | internal/model/security | 0 | 5 | 0 |
@@ -200,7 +200,7 @@ HEAD: 7e8fed27
 | internal/store/linkprofile | 0 | 2 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 110 | 30 |
+| internal/store/sqlite | 0 | 110 | 28 |
 | pkg/hmapi | 0 | 163 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

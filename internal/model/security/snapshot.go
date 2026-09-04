@@ -123,6 +123,7 @@ type Fault struct {
 // facets make a different wording possible without re-deriving anything
 // from prose. Offering only one of the two forces every consumer into
 // the wrong half.
+// loom:reachable:reason="projected onto the REST DTO by handlers.apiSecurityNotification; RTA scores call edges, so a type used only structurally is invisible to it"
 type Notification struct {
 	Class    hmenum.SecurityClass
 	Severity hmenum.SecuritySeverity

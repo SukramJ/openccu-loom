@@ -89,6 +89,7 @@ type AlarmSchedule struct {
 // inert (codes disabled). Strongly-authenticated operator sources
 // (rest-operator, ws-operator, hmcli) bypass the requirement but still
 // surface duress when a code is supplied.
+// loom:reachable:reason="field ZoneConfig.CodePolicy, decoded from every persisted zone; RTA scores call edges, so a type used only structurally is invisible to it"
 type CodePolicy struct {
 	// RequireArm gates arming on a valid code (default off).
 	RequireArm bool `json:"require_arm,omitempty"`
@@ -138,6 +139,7 @@ func (p CodePolicy) requires(verb, source string) bool {
 }
 
 // ModeConfig configures one protection level of an zone.
+// loom:reachable:reason="value type of ZoneConfig.Modes, decoded from every persisted zone; RTA scores call edges, so a type used only structurally is invisible to it"
 type ModeConfig struct {
 	// ExitDelaySeconds is the arming countdown; 0 arms immediately.
 	ExitDelaySeconds int `json:"exit_delay_s,omitempty"`
@@ -186,6 +188,7 @@ type OutputPolicy struct {
 // BlockerPolicies maps each sensor-health class onto an arming policy
 // (notes/concepts/alarm-concept.md §5). Empty values fall back to the defaults:
 // open/unreachable/sabotage block, low battery warns.
+// loom:reachable:reason="field ZoneConfig.Blockers, decoded from every persisted zone; RTA scores call edges, so a type used only structurally is invisible to it"
 type BlockerPolicies struct {
 	Open        hmenum.AlarmBlockerPolicy `json:"open,omitempty"`
 	Unreachable hmenum.AlarmBlockerPolicy `json:"unreachable,omitempty"`
@@ -211,6 +214,7 @@ func (p BlockerPolicies) normalized() BlockerPolicies {
 
 // SensorConfig is the per-sensor configuration document stored in
 // alarm_sensors.config_json (notes/concepts/alarm-concept.md §6.2).
+// loom:reachable:reason="the sensor half of a persisted zone, read on every sensor event; RTA scores call edges, so a type used only structurally is invisible to it"
 type SensorConfig struct {
 	// Modes lists the protection levels the sensor participates in.
 	Modes []hmenum.AlarmMode `json:"modes"`

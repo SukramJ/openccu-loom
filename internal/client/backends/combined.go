@@ -4,6 +4,7 @@
 package backends
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -51,17 +52,23 @@ const (
 // constituent data points. A parameter listed on one side only is written as
 // sub-parameters and never reassembled, or reassembled from a value that was
 // never tracked.
+// loom:reachable:reason="read by IsCombinedParameter, which the callback handler gates every event on; RTA scores call edges only, so a slice read is invisible to it"
 var CombinedParameters = []hmenum.Parameter{
 	hmenum.ParameterCombinedParameter,
 	hmenum.ParameterLevelCombined,
 }
 
 // IsCombinedParameter reports whether name designates a wire shape
-// that needs structural decomposition before reaching the model
-// layer. Only two parameters are combined; the rest pass through
-// untouched.
+// that needs structural decomposition before reaching the model layer.
+//
+// It reads [CombinedParameters]. It used to compare against two string
+// constants instead, which made the exported set a description of this
+// function rather than its input: the two could drift, and the contract
+// test that compares the set against the write path's own
+// (TestConvertableParameterParity) would have kept passing while the
+// callback path decomposed a different set than it advertised.
 func IsCombinedParameter(name string) bool {
-	return name == parameterCombined || name == parameterLevelCombined
+	return slices.Contains(CombinedParameters, hmenum.Parameter(name))
 }
 
 // ParseCombinedParameter is the decode a running daemon uses for

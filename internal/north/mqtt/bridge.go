@@ -424,6 +424,7 @@ type CustomDPNamingInspector interface {
 // mirror channel, and the operator's own channel name when there is
 // one. The rules and their reference citations live on
 // device.BuildCustomDataPointName.
+// loom:reachable:reason="satisfied by *device.Channel and reached only through a type assertion in displayChannelName; RTA cannot follow an interface reached by assertion"
 type CustomDPDisplayNamer interface {
 	CustomDPDisplayName() string
 }

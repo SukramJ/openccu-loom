@@ -13,6 +13,7 @@ package health
 // every producer of a [Sample] can reach it. A note produced here that the
 // wiring layer could not see was the reason one static note shipped with no
 // key at all.
+// loom:reachable:reason="read by NoteKeyFor in this package, which the tracker calls on every static note; RTA scores call edges only, so a map read is invisible to it"
 var NoteKeys = map[string]string{
 	"initial-sync: connected":     "health.note.initial_sync_connected",
 	"initial-sync: not connected": "health.note.initial_sync_not_connected",

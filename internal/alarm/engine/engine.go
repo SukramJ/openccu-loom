@@ -131,6 +131,7 @@ func isPreAuthenticatedSource(source string) bool { return IsPreAuthenticatedSou
 
 // NotReadyError reports a refused arm together with the blocking
 // sensors, so surfaces can render the bypass sheet.
+// loom:reachable:reason="matched with errors.As in the REST arm handler so a refused arm renders its blockers; RTA scores call edges, so a type used only structurally is invisible to it"
 type NotReadyError struct {
 	Blockers []string
 	// Details carries the reason and the full source identity per
@@ -265,6 +266,7 @@ type Deps struct {
 // entry points (verbs, sensor events, timer fires) serialize on one
 // mutex; persistence is write-through under that lock so the stored
 // state never runs ahead of or behind the in-memory state.
+// loom:reachable:reason="held as alarm.Service.engine and handed to the REST and WS alarm panels through their Engine() accessors; RTA scores call edges, so a type used only structurally is invisible to it"
 type Engine struct {
 	clk          clock.Clock
 	sched        TimerScheduler

@@ -746,6 +746,11 @@ var ErrNoSysvarWriter = errors.New("hub: no sysvar value writer wired")
 // [ErrNoSysvarWriter]: a delegating method whose hook is absent has not done
 // the work it was asked to do, and reporting that as success hides the
 // missing wire from every caller's error branch.
+// The analyzer scores call edges (RTA), so a package-level error value
+// that production RETURNS rather than calls reads as unreachable. Each of
+// these is returned by the method named in its own comment below.
+//
+// loom:reachable:reason="returned by the HubCoordinator method named on each sentinel; RTA scores call edges only, so a returned error value is invisible to it"
 var (
 	// ErrNoServiceMessageSuppressor reports that no suppressor is wired, so
 	// an acknowledgement cannot reach the CCU.
