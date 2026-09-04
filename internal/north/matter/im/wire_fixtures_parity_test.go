@@ -4,14 +4,22 @@
 // Parity test: verifies that each Go MarshalTLV encoder produces the same wire
 // bytes as the matter.js HEAD reference encoder for the same logical input.
 //
-// Fixture source: notes/parity/matter/im-wire-fixtures.json
+// Fixture master: notes/parity/matter/im-wire-fixtures.json — what the
+// generator writes, and what notes/parity/matter/README.md documents.
+// Test input:     testdata/im-wire-fixtures.json, an embedded copy of that
+// master. Embedding keeps the test free of any path relative to the repo
+// root, so it survives both a change of working directory and a move of
+// this package within the tree.
 // Generator:      notes/parity/matter/generate-im-wire-fixtures.ts
 //
-// Regen command (run from inside the matter.js checkout):
-//   node /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/generate-im-wire-fixtures.ts \
-//       > /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json
-//   cp /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json \
-//       /Users/markus/Documents/GitHub/openccu-loom/internal/north/matter/im/testdata/im-wire-fixtures.json
+// Regen, from the repo root, with a built matter.js checkout at ../matter.js
+// (the generator resolves @matter/types from there):
+//
+//	root=$(pwd)
+//	(cd ../matter.js && node "$root/notes/parity/matter/generate-im-wire-fixtures.ts") \
+//	    > notes/parity/matter/im-wire-fixtures.json
+//	cp notes/parity/matter/im-wire-fixtures.json \
+//	    internal/north/matter/im/testdata/im-wire-fixtures.json
 //
 // Fixtures with byDesignDivergence=true are skipped in the byte-equality
 // assertion. These document cases where the Go encoder intentionally diverges
@@ -22,10 +30,10 @@
 package im
 
 import (
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -43,23 +51,20 @@ type fixtureRecord struct {
 	ByDesignNote       string          `json:"byDesignNote"`
 }
 
-// fixtureFile is the path to the JSON fixture relative to the repo root.
-const fixtureFile = "../../../../notes/parity/matter/im-wire-fixtures.json"
+//go:embed testdata/im-wire-fixtures.json
+var imFixturesJSON []byte
 
-// loadFixtures reads im-wire-fixtures.json from the notes/parity/matter/
-// directory (relative to this test file's package).
+// loadFixtures decodes the embedded fixture corpus. A missing file is a
+// compile error, so the only runtime failure left is a malformed or empty
+// corpus — which would otherwise make every parity subtest silently vanish.
 func loadFixtures(t *testing.T) []fixtureRecord {
 	t.Helper()
-	b, err := os.ReadFile(fixtureFile)
-	if err != nil {
-		t.Fatalf("load im-wire-fixtures.json: %v\n"+
-			"Regen: cd /Users/markus/Documents/GitHub/matter.js && "+
-			"node /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/generate-im-wire-fixtures.ts "+
-			"> /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json", err)
-	}
 	var records []fixtureRecord
-	if err := json.Unmarshal(b, &records); err != nil {
+	if err := json.Unmarshal(imFixturesJSON, &records); err != nil {
 		t.Fatalf("parse im-wire-fixtures.json: %v", err)
+	}
+	if len(records) == 0 {
+		t.Fatal("im-wire-fixtures.json is empty")
 	}
 	return records
 }
@@ -345,9 +350,7 @@ func TestIMWireFixtures_MarshalParity(t *testing.T) {
 					"Fixture: %s\n"+
 					"Description: %s\n"+
 					"%s\n"+
-					"Regen fixtures: cd /Users/markus/Documents/GitHub/matter.js && "+
-					"node /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/generate-im-wire-fixtures.ts "+
-					"> /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json",
+					"Regen fixtures: see the command in this file's header comment.",
 					rec.Type, rec.Label, rec.Description, diff)
 			}
 		})

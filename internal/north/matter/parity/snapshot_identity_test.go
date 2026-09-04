@@ -25,17 +25,16 @@ import (
 // tests would keep validating against a stale schema and silently pass — this
 // guard fails the build the moment the copies diverge, so the drift surfaces at
 // PR time rather than as a mysterious parity miss weeks later.
+//
+// The master is read from disk rather than embedded on purpose: embedding a
+// second copy alongside schema.json would compare one copy against another and
+// leave the actual master unchecked, which is exactly the drift this guard
+// exists to catch. The path is therefore anchored at the module root (see
+// moduleRoot) instead of being counted out in parent directories.
 func TestEmbeddedSchemaMatchesMasterSnapshot(t *testing.T) {
 	t.Parallel()
 
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-	// This file lives at internal/north/matter/parity/snapshot_identity_test.go,
-	// so the repo root is four directories up.
-	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
-	masterPath := filepath.Join(repoRoot, "notes", "parity", "matter", "matter-schema-snapshot.json")
+	masterPath := filepath.Join(moduleRoot(t), "notes", "parity", "matter", "matter-schema-snapshot.json")
 
 	master, err := os.ReadFile(masterPath)
 	if err != nil {
@@ -55,4 +54,27 @@ func TestEmbeddedSchemaMatchesMasterSnapshot(t *testing.T) {
 		"  master:   %d bytes, sha256 %s",
 		len(embedded), hex.EncodeToString(embedSum[:]),
 		len(master), hex.EncodeToString(masterSum[:]))
+}
+
+// moduleRoot walks up from this source file until it finds go.mod. Counting
+// parent directories instead would silently resolve to the wrong tree the day
+// this package moves, and the guard would then fail on a missing file rather
+// than on the divergence it is meant to report.
+func moduleRoot(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed: cannot locate the module root")
+	}
+	dir := filepath.Dir(thisFile)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("no go.mod found above %s", filepath.Dir(thisFile))
+		}
+		dir = parent
+	}
 }
