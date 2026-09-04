@@ -28,13 +28,34 @@ type motionResetter struct {
 // resetParameterFor maps a watched state parameter to the action that
 // clears it.
 //
-// The two families are separate devices, not synonyms: a motion
-// detector (HmIP-SMO, HM-Sec-MDIR) latches MOTION and clears it with
-// RESET_MOTION, while a presence detector (HmIP-SPI) latches
-// PRESENCE_DETECTION_STATE and clears it with RESET_PRESENCE. Both
-// enrol as sensor type "motion", so keying the reset off the sensor
+// The two families are separate devices, not synonyms: an HmIP motion
+// detector (HmIP-SMI, HmIP-SMO-2) latches MOTION and clears it with
+// RESET_MOTION, while an HmIP presence detector (HmIP-SPI, HmIPW-SPI)
+// latches PRESENCE_DETECTION_STATE and clears it with RESET_PRESENCE.
+// Both enrol as sensor type "motion", so keying the reset off the sensor
 // type instead of the parameter would silently skip every presence
 // detector.
+//
+// Both are registered as stop-shaped state parameters (HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.StateParameterFactory,
+// via #createStop — which also registers the unrelated STOP parameter, so
+// the pair is "the only two RESET_* parameters", not "the only two stops"),
+// and the descriptor corpus shows the pairing is
+// strict: RESET_MOTION occurs only beside MOTION (on
+// MOTIONDETECTOR_TRANSCEIVER and MOTIONDETECTOR_VIRTUAL_TRANSCEIVER),
+// RESET_PRESENCE only beside PRESENCE_DETECTION_STATE (on
+// PRESENCEDETECTOR_TRANSCEIVER), never crossed, and no third RESET_*
+// parameter exists on any channel.
+//
+// Both are HmIP-only. Nothing under ../OpenCCU-Base/src/devicetypes/
+// mentions RESET_MOTION, and a classic BidCos detector — HM-Sec-MDIR's
+// MOTION_DETECTOR channel, like all eleven of that channel type — carries
+// MOTION alone. Those devices are un-latched by the CCU rather than by a
+// write: the device XML declares MOTION with
+// `<domino_event value="0" delay_id="NEXT_TRANSMISSION"/>`
+// (../OpenCCU-Base/src/devicetypes/rftypes/rf_sec_mdir.xml:227-231), which
+// rfd turns into a server-side autotimer. They fall out of the resettable
+// set here by having no reset data point, which is the right answer.
 func resetParameterFor(stateParameter string) (hmenum.Parameter, bool) {
 	switch hmenum.Parameter(stateParameter) {
 	case hmenum.ParameterMotion:

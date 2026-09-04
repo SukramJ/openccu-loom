@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/clock"
@@ -217,7 +218,7 @@ func (h *sysvarHarness) seedZone(id, name string) {
 
 // seedOutput persists a sysvar_mirror output row under zoneID,
 // resolving under centralName, with cfg as its parsed configuration.
-func (h *sysvarHarness) seedOutput(id, zoneID, centralName string, cfg mirrorConfig) {
+func (h *sysvarHarness) seedOutput(id, zoneID, centralName string, cfg outputs.OutputConfig) {
 	h.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
@@ -307,7 +308,7 @@ func TestSysvarMirrorExisting_ExportsTrueWhenTriggered(t *testing.T) {
 	h := newSysvarHarness(t)
 	writer, creator := h.wireCentral("ccu1")
 	h.seedZone("eg", "Erdgeschoss")
-	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmState", SysvarExisting: true})
+	h.seedOutput("mirror1", "eg", "ccu1", outputs.OutputConfig{SysvarName: "AlarmState", SysvarExisting: true})
 	h.start()
 
 	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{
@@ -339,7 +340,7 @@ func TestSysvarMirrorExisting_ExportsFalseOnModeChange(t *testing.T) {
 	h := newSysvarHarness(t)
 	writer, creator := h.wireCentral("ccu1")
 	h.seedZone("eg", "Erdgeschoss")
-	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmState", SysvarExisting: true})
+	h.seedOutput("mirror1", "eg", "ccu1", outputs.OutputConfig{SysvarName: "AlarmState", SysvarExisting: true})
 	h.start()
 
 	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{
@@ -374,8 +375,8 @@ func TestSysvarMirrorOnInbound_ExistingModeTargetProducesNoIntentButManagedTarge
 	h.wireCentral("ccu1")
 	h.seedZone("existing", "Existing Zone")
 	h.seedZone("managed", "Managed Zone")
-	h.seedOutput("mirrorExisting", "existing", "ccu1", mirrorConfig{SysvarName: "ExistingVar", SysvarExisting: true})
-	h.seedOutput("mirrorManaged", "managed", "ccu1", mirrorConfig{SysvarName: "ManagedVar"})
+	h.seedOutput("mirrorExisting", "existing", "ccu1", outputs.OutputConfig{SysvarName: "ExistingVar", SysvarExisting: true})
+	h.seedOutput("mirrorManaged", "managed", "ccu1", outputs.OutputConfig{SysvarName: "ManagedVar"})
 	h.start()
 
 	// Index 2 is AlarmModeFull (sysvarIndexByMode). On the
@@ -427,7 +428,7 @@ func TestSysvarMirrorOnInbound_IntentTheEngineDoesNotCarryOutReExportsTheRealSta
 			writer, _ := h.wireCentral("ccu1")
 			h.seedZone("eg", "Erdgeschoss")
 			h.seedSensor("window", "eg", "ccu1")
-			h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+			h.seedOutput("mirror1", "eg", "ccu1", outputs.OutputConfig{SysvarName: "AlarmMode"})
 			h.start()
 			h.svc.Engine().HandleSensorEvent(h.ctx, "window", true)
 
@@ -459,7 +460,7 @@ func TestSysvarMirrorOnInbound_RefusedArmIsJournalled(t *testing.T) {
 	h.wireCentral("ccu1")
 	h.seedZone("eg", "Erdgeschoss")
 	h.seedSensor("window", "eg", "ccu1")
-	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+	h.seedOutput("mirror1", "eg", "ccu1", outputs.OutputConfig{SysvarName: "AlarmMode"})
 	h.start()
 	h.svc.Engine().HandleSensorEvent(h.ctx, "window", true)
 
@@ -493,7 +494,7 @@ func TestSysvarMirrorExport_LeavesAlarmVerbsAnswerableWhileTheCCUHangs(t *testin
 	writer := &blockingSysvarWriter{entered: make(chan struct{}), release: make(chan struct{})}
 	h.wireCentralWith("ccu1", writer, &fakeSysvarCreator{})
 	h.seedZone("eg", "Erdgeschoss")
-	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+	h.seedOutput("mirror1", "eg", "ccu1", outputs.OutputConfig{SysvarName: "AlarmMode"})
 	h.start()
 	t.Cleanup(func() { close(writer.release) })
 
@@ -547,7 +548,7 @@ func TestSysvarMirrorExport_RetriesEnumCreateAfterAFailure(t *testing.T) {
 	creator := &flakySysvarCreator{failures: 1}
 	h.wireCentralWith("ccu1", writer, creator)
 	h.seedZone("eg", "Erdgeschoss")
-	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+	h.seedOutput("mirror1", "eg", "ccu1", outputs.OutputConfig{SysvarName: "AlarmMode"})
 	h.start()
 
 	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{

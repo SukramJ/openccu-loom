@@ -5,47 +5,9 @@ package generic
 
 import (
 	"strings"
-	"unicode"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
-
-// generateTranslationKey converts a CCU parameter name to a lower-case HA
-// translation slug.
-// Inlined here to avoid an import cycle with the device package.
-//
-// Algorithm: lowercase the name; keep letters, digits, and underscores as-is;
-// replace dots, dashes, and runs of non-[a-z0-9_] with a single underscore;
-// strip leading/trailing underscores.
-func generateTranslationKey(name string) string {
-	var b strings.Builder
-	prevUnderscore := true
-	for _, r := range strings.ToLower(name) {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-			prevUnderscore = false
-		case r == '_', r == '.', r == '-':
-			if !prevUnderscore {
-				b.WriteRune('_')
-				prevUnderscore = true
-			}
-		default:
-			// drop all other characters
-		}
-	}
-	return strings.TrimRight(b.String(), "_")
-}
-
-// ─── TranslationKey ──────────────────────────────────────────────────
-
-// TranslationKey returns the HA-compatible translation slug for this data
-// point's parameter name.
-//
-// self._translation_key = generate_translation_key(name=parameter)
-func (d *DataPoint[T]) TranslationKey() string {
-	return generateTranslationKey(d.Key.Parameter)
-}
 
 // ─── Translation ─────────────────────────────────────────────────────
 

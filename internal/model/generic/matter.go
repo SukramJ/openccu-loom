@@ -38,6 +38,14 @@ var (
 // `ACTUAL_TEMPERATURE` and an Integer Sensor on `LEVEL` follow
 // different cluster paths regardless of T.
 func matterMeasurementForParameter(p hmenum.Parameter) interfaces.MatterMeasurementClass {
+	// Button / press events → 0x003B Switch (Generic Switch endpoint). The
+	// family is [isPressParameter]'s to name — Button, Action and this
+	// classifier all have to agree on it or a press data point is collected
+	// for a group that then refuses it.
+	if isPressParameter(p) {
+		return interfaces.MatterMeasurementMomentarySwitch
+	}
+
 	switch p {
 	// Temperature sensors → 0x0402 TemperatureMeasurement.
 	case hmenum.ParameterActualTemperature, hmenum.ParameterTemperature:
@@ -72,12 +80,6 @@ func matterMeasurementForParameter(p hmenum.Parameter) interfaces.MatterMeasurem
 		return interfaces.MatterMeasurementPower
 	case hmenum.ParameterEnergyCounter, hmenum.ParameterEnergyCounterFeedIn:
 		return interfaces.MatterMeasurementEnergy
-
-	// Button / press events → 0x003B Switch (Generic Switch endpoint).
-	case hmenum.ParameterPress, hmenum.ParameterPressShort,
-		hmenum.ParameterPressLong, hmenum.ParameterPressLongStart,
-		hmenum.ParameterPressLongRelease, hmenum.ParameterPressCont:
-		return interfaces.MatterMeasurementMomentarySwitch
 
 	default:
 		return interfaces.MatterMeasurementNone

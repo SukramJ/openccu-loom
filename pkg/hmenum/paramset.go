@@ -99,18 +99,24 @@ func (o Operations) IsDeterminable() bool { return o.Has(OperationsDetermine) }
 // Flag is the FLAGS bitmask from a paramset description. The CCU encodes
 // visibility and classification hints here.
 //
-// STICKY is documented as 0x10 but
-// the value stays faithful to that encoding for wire parity, even though
-// it is a known eQ-3 documentation bug.
+// Every member is a single bit, ORed into one accumulator by the CCU and
+// emitted verbatim onto the XML-RPC paramset description
+// (../OpenCCU-Base/src/libhsscomm/HSSParameter.cpp:82 over the enum at
+// HSSParameter.h:65-69). STICKY is bit 4, and 0x10 is what the firmware
+// implements — not, as an earlier comment here had it, a documentation
+// bug to be worked around: decimal 10 is INTERNAL|SERVICE, not a bit,
+// and since [Flag.Has] is an all-bits test it made IsSticky() answer
+// false for every genuinely sticky parameter and true for a large class
+// of non-sticky ones.
 type Flag int
 
 // Flag values.
 const (
-	FlagVisible   Flag = 1
-	FlagInternal  Flag = 2
-	FlagTransform Flag = 4
-	FlagService   Flag = 8
-	FlagSticky    Flag = 10
+	FlagVisible   Flag = 1  // FLG_VISIBLE   = 1<<0
+	FlagInternal  Flag = 2  // FLG_INTERNAL  = 1<<1
+	FlagTransform Flag = 4  // FLG_TRANSFORM = 1<<2
+	FlagService   Flag = 8  // FLG_SERVICE   = 1<<3
+	FlagSticky    Flag = 16 // FLG_STICKY    = 1<<4
 )
 
 // Has reports whether every bit of want is set in f.

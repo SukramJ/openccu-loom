@@ -14,9 +14,12 @@ import (
 // universal Source contract. ADR-0007 step 6 (Hub-DP migration).
 //
 // Program and Sysvar embed HubDataPoint + payload.ServiceRegistry and
-// provide their own payload methods below; sub-type wrappers
-// (ProgramDpButton, SysvarDpSwitch, SysvarDpBinarySensor, SysvarDpText)
-// embed *Program / *Sysvar and therefore inherit Source by promotion.
+// provide their own payload methods below; the program sub-type wrappers
+// (ProgramDpButton, ProgramDpSwitch) embed *Program and therefore inherit
+// Source by promotion. A parallel SysvarDp* family used to be listed here
+// too; it had no production caller, no accessor on Sysvar and no
+// constructor call, and its three duplicated coercion rules had already
+// drifted from the live ones, so it is gone.
 var (
 	_ payload.Source = (*Program)(nil)
 	_ payload.Source = (*Sysvar)(nil)

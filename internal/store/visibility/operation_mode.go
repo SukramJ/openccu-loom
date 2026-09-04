@@ -24,11 +24,52 @@ var configurableChannelTypes = map[string]struct{}{
 	"MULTI_MODE_INPUT_TRANSMITTER": {},
 }
 
+// decidableChannelOperationModes is the set of CHANNEL_OPERATION_MODE values
+// for which [channelOperationModeVisibility] is treated as a complete answer.
+// An observed mode outside this set is left ungated, exactly like a mode that
+// has not been observed yet.
+//
+// The set exists because the firmware defines several input-mode value lists
+// for these channel types, not one:
+// HMIPServer de.eq3.cbcs.devicedescription.channelspecification.configparameter.GeneralConfigurationParameterFactory
+// registers CHANNEL_OPERATION_MODE once per channel-specification subtype,
+// and beyond the four members below the input variants also carry
+// LEVEL_KEY_BEHAVIOR and CONDITIONAL_BEHAVIOR. The CCU offers both to the
+// operator whenever the channel's own VALUE_LIST contains them
+// (../OpenCCU-Base/www/config/easymodes/etc/hmipChannelConfigDialogs.tcl:1008-1035,
+// inside proc getMultiModeInputTransmitter at :975), and ships operator
+// translations for both. No source states which VALUES entries a channel in
+// either mode drops, so the gate must not decide: treating them as "no mode
+// matched" would force STATE and all four PRESS_* parameters to Ignored at
+// once, which presents as a dead device rather than as a rule.
+//
+// Neither mode has been observed on a device — the descriptor corpus carries
+// zero instances — so this is a boundary, not a repair of a seen failure.
+var decidableChannelOperationModes = map[string]struct{}{
+	"INACTIVE":        {},
+	"KEY_BEHAVIOR":    {},
+	"SWITCH_BEHAVIOR": {},
+	"BINARY_BEHAVIOR": {},
+}
+
 // channelOperationModeVisibility maps a wire parameter to the set of
 // CHANNEL_OPERATION_MODE values that keep the parameter visible.
 //
 // A parameter that is not a key here is *never* gated — the gate only applies
 // to the listed input-event parameters and STATE on multi-mode inputs.
+//
+// The mode spellings are the firmware's own, and the channel types above are
+// real firmware channel types. The parameter↔mode *pairing* is not: no
+// firmware source narrows a VALUES paramset by CHANNEL_OPERATION_MODE — the
+// HmIP server merely notifies the change
+// (HMIPServer de.eq3.cbcs.server.core.persistence.AbstractPersistency#updateAndNotifyChannelOperationMode),
+// and the CCU's config dialog gates MASTER configuration rows, a different
+// paramset from the VALUES entries gated here. On that separate surface the
+// dialog does show the key-timing rows for KEY_BEHAVIOR and the binary rows
+// for BINARY_BEHAVIOR (showHideKeyParams, hmipChannelConfigDialogs.tcl:1162-1207),
+// which corroborates those two pairings by analogy only. SWITCH_BEHAVIOR →
+// PRESS_* has no witness in either direction — mode 2 shows neither row group
+// — and stays **unverified**.
 var channelOperationModeVisibility = map[hmenum.Parameter]map[string]struct{}{
 	hmenum.ParameterState: {
 		"BINARY_BEHAVIOR": {},
@@ -157,6 +198,13 @@ func ApplyChannelOperationModeGating(ch *device.Channel) {
 		// click-event pass withholds the unknown-mode press *buttons* (see
 		// applyClickEventMarks); STATE and the event sources keep their base
 		// usage so a not-yet-read mode does not blank out real state/events.
+		return
+	}
+	if _, decidable := decidableChannelOperationModes[mode]; !decidable {
+		// A mode the table cannot decide (LEVEL_KEY_BEHAVIOR,
+		// CONDITIONAL_BEHAVIOR, or any member a later firmware adds). Leave
+		// every usage untouched rather than force-Ignoring the whole gated
+		// set — see [decidableChannelOperationModes].
 		return
 	}
 	for _, dp := range ch.DataPoints() {
@@ -293,8 +341,8 @@ func ApplyUnIgnoredMarks(dev *device.Device, decider *ParameterDecider) {
 // promoted it is gone.
 func reapplyValuesSuppression(dev *device.Device, ch *device.Channel, dp device.ParameterDataPoint, decider *ParameterDecider) {
 	markIfIgnored(dev, ch, dp, hmenum.ParamsetKeyValues, decider)
-	markIfInternal(dp, dev.Model, ch.Type, hmenum.ParamsetKeyValues, nil)
-	markIfHidden(dp, dev.Model, ch.Type, ch.Number, hmenum.ParamsetKeyValues, nil)
+	markIfInternal(dp, dev.Model)
+	markIfHidden(dp)
 }
 
 // ApplyIgnoredParameterMarks walks every channel of dev and force-usages
@@ -370,43 +418,36 @@ func ApplyInternalParameterMarks(dev *device.Device) {
 	ApplyInternalParameterMarksWithDecider(dev, nil)
 }
 
-// ApplyInternalParameterMarksWithDecider is the decider-aware variant
-// kept as a hook for future strategies. The current implementation
-// Keeps parity with
-// consulting the decider — the built-in `unIgnoreParametersByDevice`
-// exemption is applied at the DP-creation layer
-// (`resolveDataPointWithUnIgnore`) so the suppression mark stays
-// snapshot-symmetric (Python's `is_un_ignored` is custom_only=True).
+// ApplyInternalParameterMarksWithDecider keeps the decider-taking signature
+// callers pass through, but discards the argument: the pass consults the
+// built-in `unIgnoreParametersByDevice` list directly (see [markIfInternal])
+// rather than through the decider, and the operator's own un-ignore rules
+// reach it as the per-DP IsUnIgnored mark set at the DP-creation layer
+// (`resolveDataPointWithUnIgnore`). That keeps the suppression mark
+// snapshot-symmetric with the reference, whose `is_un_ignored` is
+// custom_only=True.
 func ApplyInternalParameterMarksWithDecider(dev *device.Device, _ *ParameterDecider) {
 	if dev == nil {
 		return
 	}
 	for _, ch := range dev.Channels() {
 		for _, dp := range ch.DataPoints() {
-			markIfInternal(dp, dev.Model, ch.Type, hmenum.ParamsetKeyValues, nil)
+			markIfInternal(dp, dev.Model)
 		}
 		for _, dp := range ch.MasterDataPoints() {
-			markIfInternal(dp, dev.Model, ch.Type, hmenum.ParamsetKeyMaster, nil)
+			markIfInternal(dp, dev.Model)
 		}
 	}
 }
 
 // markIfInternal is the per-DP body of [ApplyInternalParameterMarksWithDecider].
 // Extracted so VALUES + MASTER iterations share one implementation.
-func markIfInternal(dp device.ParameterDataPoint, model, channelType string, paramset hmenum.ParamsetKey, decider *ParameterDecider) {
+func markIfInternal(dp device.ParameterDataPoint, model string) {
 	pd := dp.ParameterData()
 	if !pd.Flags.IsInternal() {
 		return
 	}
 	if _, allowed := generic.AllowedInternalParameters[string(dp.Parameter())]; allowed {
-		return
-	}
-	// Built-in `unIgnoreParametersByDevice` exemption ( Lock-ERROR
-	// fix): when the decider reports the parameter as un-ignored
-	// (custom_only=false → consults user rules + built-in entries),
-	// the FLAG.INTERNAL filter is bypassed so HM-Sec-Key/HM-Sec-Win
-	// ERROR and HmIP-DLD/HmIP-DLP ERROR_JAMMED survive as DPs.
-	if decider != nil && decider.IsUnIgnoredCustomOnly(model, channelType, paramset, dp.Parameter(), false) {
 		return
 	}
 	if r, ok := dp.(unIgnoredReader); ok && r.IsUnIgnored() {
@@ -446,24 +487,22 @@ func ApplyHiddenParameterMarks(dev *device.Device) {
 	ApplyHiddenParameterMarksWithDecider(dev, nil)
 }
 
-// ApplyHiddenParameterMarksWithDecider is the decider-aware variant
-// kept as a hook for future bypass-strategies; the current
-// Implementation does not consult the decider because
-// snapshot does not flag built-in un-ignored params with
-// `is_un_ignored=True`. The pass therefore only respects the per-DP
-// `IsUnIgnored()` mark (custom_only=True semantics).
+// ApplyHiddenParameterMarksWithDecider keeps the decider-taking signature
+// callers pass through, but discards the argument: the pass does not consult
+// the decider, because the reference snapshot does not flag built-in
+// un-ignored params with `is_un_ignored=True`. It therefore respects only the
+// per-DP `IsUnIgnored()` mark (custom_only=True semantics) and the custom-DP
+// DataPoint promotion, both checked in [markIfHidden].
 func ApplyHiddenParameterMarksWithDecider(dev *device.Device, _ *ParameterDecider) {
 	if dev == nil {
 		return
 	}
-	model := dev.Model
 	for _, ch := range dev.Channels() {
-		chNo := ch.Number
 		for _, dp := range ch.DataPoints() {
-			markIfHidden(dp, model, ch.Type, chNo, hmenum.ParamsetKeyValues, nil)
+			markIfHidden(dp)
 		}
 		for _, dp := range ch.MasterDataPoints() {
-			markIfHidden(dp, model, ch.Type, chNo, hmenum.ParamsetKeyMaster, nil)
+			markIfHidden(dp)
 		}
 	}
 }
@@ -483,23 +522,18 @@ type forcedUsageReader interface {
 // RELEVANT_MASTER_PARAMSETS_BY_CHANNEL) is intentionally NOT consulted here.
 // `Channel.OperationMode()` and similar accessors read the DP value
 // regardless of the no_create mark.
-func markIfHidden(dp device.ParameterDataPoint, model, channelType string, _ int, paramset hmenum.ParamsetKey, decider *ParameterDecider) {
+func markIfHidden(dp device.ParameterDataPoint) {
 	if _, hidden := hiddenParameters[dp.Parameter()]; !hidden {
-		return
-	}
-	// Built-in `unIgnoreParametersByDevice` exemption ( Lock-DIRECTION fix):
-	// when the decider reports the parameter as un-ignored (custom_only=false →
-	// consults built-in entries), the HIDDEN_PARAMETERS suppression is bypassed
-	// so HM-Sec-Key/HM-Sec-Win DIRECTION + ERROR survive as data_point.
-	if decider != nil && decider.IsUnIgnoredCustomOnly(model, channelType, paramset, dp.Parameter(), false) {
 		return
 	}
 	if r, ok := dp.(unIgnoredReader); ok && r.IsUnIgnored() {
 		return
 	}
 	// skip hidden-mark when the custom-DP pipeline has already explicitly
-	// promoted this DP to DATA_POINT via markAdditionalDataPoints (e.g.
-	// DIRECTION / ERROR on HM-Sec-Key/HM-Sec-Win).
+	// promoted this DP to DATA_POINT via markAdditionalDataPoints. This is
+	// what keeps DIRECTION + ERROR on HM-Sec-Key / HM-Sec-Win as data_point:
+	// markIfHidden has no built-in unIgnoreParametersByDevice exemption of its
+	// own, so the promotion check is the only thing that spares them.
 	if r, ok := dp.(forcedUsageReader); ok {
 		if u, set := r.ForcedUsage(); set && u == hmenum.DataPointUsageDataPoint {
 			return
@@ -524,8 +558,9 @@ type unIgnoredReader interface {
 // The mark causes [generic.DataPoint.IsWritable] to return false regardless
 // of the descriptor's operations bitmask — REST / WS adapters reject writes
 // at the adapter layer instead of forwarding them to the CCU just to receive
-// a -5 / -1 fault. The MQTT layer already classifies these parameters as
-// Sensor in PR-8; this pass extends the override into the operator API.
+// a -5 / -1 fault. The MQTT discovery path reaches the same predicate,
+// generic.IsForceSensorParameter, at internal/north/mqtt/discovery.go:468
+// and :502; this pass extends the override into the operator API.
 func ApplyForceSensorMarks(dev *device.Device) {
 	if dev == nil || dev.Model == "" {
 		return

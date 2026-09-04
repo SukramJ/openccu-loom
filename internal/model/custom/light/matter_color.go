@@ -159,9 +159,21 @@ const (
 	// nullable uint8 attributes.
 	matterHueScale = 254.0
 
-	// Matter colour-temperature physical bounds. We use the typical
-	// "warm-cool LED" range; per-device-profile narrowing is not yet
-	// wired.
+	// Matter colour-temperature bounds. Per-device narrowing IS wired:
+	// both ColorControl projections report ColorTempPhysicalMin/MaxMireds
+	// from the light's own Kelvin bounds, which come from the
+	// COLOR_TEMPERATURE descriptor (see [kelvinBoundsFromChannel]).
+	//
+	// This pair is what [kelvinToMireds] clamps into — the typical
+	// "warm-cool LED" window. The clamp is loom-local and its width is
+	// **unverified**: matter.js color-control.element.ts constrains the
+	// attribute to the full uint16 range, not to this window, and no
+	// device descriptor in the fleet names 2000/6535 K. A device
+	// declaring a wider range therefore reaches Home Assistant unclamped
+	// (payload.go derives min/max mireds straight from the bounds) and
+	// Matter clamped. What would settle the width is a matter.js or
+	// firmware statement about the advertised range; until then the
+	// window stays as shipped rather than being widened on a guess.
 	matterMinMireds uint16 = 153 // ≈ 6535 K
 	matterMaxMireds uint16 = 500 // ≈ 2000 K
 )
@@ -688,12 +700,14 @@ func (s rgbwColorServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrColorColorCapabilities:
 		return matterColorCapHS | matterColorCapCT, true
 	case matterAttrColorColorTempPhysicalMinMir:
-		return matterMinMireds, true
+		// Same rule as ctColorServer: the light's own Kelvin bounds,
+		// reciprocated. One datum, one decision site.
+		return kelvinToMireds(s.l.MaxKelvin), true // higher Kelvin → lower mireds
 	case matterAttrColorColorTempPhysicalMaxMir:
-		return matterMaxMireds, true
+		return kelvinToMireds(s.l.MinKelvin), true
 	case matterAttrColorCoupleColorTempToLevelMinMir:
 		// No CoupleColorTempToLevel feature → floors at PhysicalMinMireds.
-		return matterMinMireds, true
+		return kelvinToMireds(s.l.MaxKelvin), true
 	case matterAttrColorStartUpColorTempMireds:
 		// Nullable; no stored start-up colour temperature.
 		return nil, true

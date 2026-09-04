@@ -3592,7 +3592,7 @@ Go path: `internal/health/tracker.go`, `internal/central/central.go::Stop`.
 
 Python `get_configurable_devices(*, locale: str = "en")` (`configuration.py:355`) accepts a locale. Go's `GetConfigurableDevices(iface)` (`internal/central/coordinators/configuration.go:241`) does not.
 
-The omission is by design: Go follows a request-scoped locale model (`internal/reqctx`). REST handlers carry the locale in the request context and resolve labels at the handler boundary, not inside the coordinator. Adding a locale parameter to the coordinator would push presentation concerns into the domain layer.
+The omission is by design: Go follows a request-scoped locale model (`pkg/hmreqctx`). REST handlers carry the locale in the request context and resolve labels at the handler boundary, not inside the coordinator. Adding a locale parameter to the coordinator would push presentation concerns into the domain layer.
 
 Go path: `internal/central/coordinators/configuration.go::GetConfigurableDevices`, `internal/reqctx`.
 

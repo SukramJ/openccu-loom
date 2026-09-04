@@ -303,7 +303,7 @@ func lightSetLevelRegistry(t *testing.T, w *lightSetLevelWriter, led bool, seedL
 	var dp device.AttachableDataPoint
 	if led {
 		ch.Put(lightSetLevelSelectDP(chAddr, hmenum.ParameterColor, w,
-			[]string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"}))
+			[]string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"}))
 		dp = light.NewSoundPlayerLED(cfg)
 	} else {
 		ch.Put(lightSetLevelIntDP(chAddr, hmenum.ParameterHue, w))

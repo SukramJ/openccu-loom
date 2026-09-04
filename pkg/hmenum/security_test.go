@@ -36,6 +36,19 @@ var allSecurityVerbs = []SecurityVerb{
 	SecurityVerbTest,
 }
 
+// allSecuritySeverities is the independently-enumerated set of every defined
+// SecuritySeverity constant. Tests derive their expectations from this list
+// rather than from SecuritySeverities() so that a severity added to the const
+// block but forgotten in SecuritySeverities() — and therefore missing from
+// the option list an HA enum sensor declares — is caught.
+var allSecuritySeverities = []SecuritySeverity{
+	SecuritySeverityOK,
+	SecuritySeverityInfo,
+	SecuritySeverityWarning,
+	SecuritySeverityAlarm,
+	SecuritySeverityCritical,
+}
+
 // TestSecurityClassValid verifies every defined class is Valid and an
 // invented one is not.
 func TestSecurityClassValid(t *testing.T) {
@@ -106,17 +119,33 @@ func TestSecurityClasses(t *testing.T) {
 }
 
 // TestSecuritySeverityRank verifies Rank is strictly ascending across the
-// defined severities and that an undefined severity ranks -1 and is
-// therefore not Valid.
+// ladder SecuritySeverities() publishes, that the published ladder covers
+// exactly the defined constants, and that an undefined severity ranks -1
+// and is therefore not Valid.
+//
+// The ascent walks the production list rather than a third literal, so the
+// two encodings of the ladder — the list and the Rank switch — are tied to
+// each other in both directions: a rung missing from the list fails the
+// coverage check, a rung the switch does not know fails Rank >= 0.
 func TestSecuritySeverityRank(t *testing.T) {
 	t.Parallel()
 
-	ascending := []SecuritySeverity{
-		SecuritySeverityOK,
-		SecuritySeverityInfo,
-		SecuritySeverityWarning,
-		SecuritySeverityAlarm,
-		SecuritySeverityCritical,
+	ascending := SecuritySeverities()
+
+	if len(ascending) != len(allSecuritySeverities) {
+		t.Errorf("SecuritySeverities() has %d entries, want %d", len(ascending), len(allSecuritySeverities))
+	}
+	published := make(map[SecuritySeverity]struct{}, len(ascending))
+	for _, s := range ascending {
+		published[s] = struct{}{}
+		if s.Rank() < 0 {
+			t.Errorf("SecuritySeverities() lists %q, which Rank() does not know", s)
+		}
+	}
+	for _, s := range allSecuritySeverities {
+		if _, ok := published[s]; !ok {
+			t.Errorf("SecuritySeverities() is missing %q", s)
+		}
 	}
 
 	for i := 1; i < len(ascending); i++ {
@@ -406,5 +435,22 @@ func TestDuressVisibilityAllowsNotificationAndRetained(t *testing.T) {
 	if DuressVisibilityNotifyOnly.AllowsRetained() {
 		t.Error("DuressVisibilityNotifyOnly.AllowsRetained() = true, want false — " +
 			"a duress report must never linger in retained state")
+	}
+}
+
+// TestSecurityClassesAreInEscalationOrder pins the sentence
+// SecurityClasses() carries — "escalation order (most severe first)" —
+// which the REST security handler consumes as its render order. Without
+// this the doc is a claim no test would notice going stale.
+func TestSecurityClassesAreInEscalationOrder(t *testing.T) {
+	t.Parallel()
+
+	classes := SecurityClasses()
+	for i := 1; i < len(classes); i++ {
+		prev, cur := classes[i-1], classes[i]
+		if SeverityForClass(prev).Rank() < SeverityForClass(cur).Rank() {
+			t.Errorf("SecurityClasses() is not most-severe-first: %q (rank %d) precedes %q (rank %d)",
+				prev, SeverityForClass(prev).Rank(), cur, SeverityForClass(cur).Rank())
+		}
 	}
 }

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // --------------------------------------------------------------------------
@@ -124,15 +124,15 @@ func TestWatchSlow_ZeroThreshold_UsesDefault(t *testing.T) {
 
 func TestWatchSlow_TraceIDPropagation(t *testing.T) {
 	var buf bytes.Buffer
-	// Wire reqctx.NewContextHandler so trace fields are injected.
+	// Wire hmreqctx.NewContextHandler so trace fields are injected.
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	logger := slog.New(reqctx.NewContextHandler(jsonHandler))
+	logger := slog.New(hmreqctx.NewContextHandler(jsonHandler))
 
-	rc := reqctx.RequestContext{
-		TraceID: reqctx.NewTraceID(),
-		SpanID:  reqctx.NewSpanID(),
+	rc := hmreqctx.RequestContext{
+		TraceID: hmreqctx.NewTraceID(),
+		SpanID:  hmreqctx.NewSpanID(),
 	}
-	ctx := reqctx.WithRequestContext(context.Background(), rc)
+	ctx := hmreqctx.WithRequestContext(context.Background(), rc)
 
 	done := hmlog.WatchSlow(ctx, logger, "traced", 1*time.Nanosecond)
 	time.Sleep(1 * time.Millisecond)

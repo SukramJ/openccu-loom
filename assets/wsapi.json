@@ -1084,7 +1084,7 @@
   },
   {
    "category": "schedules",
-   "description": "Select the active climate profile (P1..P6) on a thermostat channel.",
+   "description": "Select the active climate profile (P1..P6) on a thermostat channel. profile_index is 1-based here (P1 is 1); the REST field active_profile_index is 0-based, so add 1 when feeding one to the other.",
    "name": "schedules.active_profile.set",
    "args": {
     "channel_address": "string",

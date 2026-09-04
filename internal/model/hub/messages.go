@@ -123,7 +123,12 @@ func (a *AlarmMessages) List() []AlarmMessage {
 	return out
 }
 
-// Count returns the number of active alarm messages.
+// Count returns the number of active alarm messages. It is the aggregate's
+// only count accessor on purpose: north-bound planes receive the raw message
+// list, not a count, and derive the number themselves — the MQTT discovery
+// body with `{{ value_json | length }}`, the REST hub data points and the
+// WebSocket adapter by calling this method. A second accessor for the same
+// datum would be free to drift without any surface noticing.
 func (a *AlarmMessages) Count() int {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -818,7 +823,10 @@ func (a *AlarmMessages) DataType() string { return "INTEGER" }
 func (a *AlarmMessages) Available() bool { return a.Observed() }
 
 // AdditionalInformation returns a slice of maps, one per active service
-// message, containing the message's key fields.
+// message, containing the message's key fields. The caveat on
+// [AlarmMessages.AdditionalInformation] applies here too — this is not the
+// device-data-point capability of the same name, and no north-bound plane
+// calls it.
 func (s *ServiceMessages) AdditionalInformation() []map[string]any {
 	msgs := s.List()
 	out := make([]map[string]any, 0, len(msgs))
@@ -855,8 +863,14 @@ func (s *ServiceMessages) AdditionalInformation() []map[string]any {
 func (s *ServiceMessages) TranslationKey() string { return ServiceMessagesKey }
 
 // AdditionalInformation returns a slice of maps, one per active alarm
-// message, each containing the alarm's key fields. The map view is the
-// machine-readable form consumed by REST and the diagnostic dumps.
+// message, each containing the alarm's key fields.
+//
+// It is not the `additional_information` of a device data point: that
+// capability is asserted as `AdditionalInformation() map[string]any` — a
+// single map, not a slice — and only device parameter data points satisfy
+// it. Nothing north-bound calls this method today; the WebSocket hub query
+// builds its own entry shape from [AlarmMessages.List]. Treat the keys here
+// as this aggregate's own machine-readable view, not as a published contract.
 func (a *AlarmMessages) AdditionalInformation() []map[string]any {
 	msgs := a.List()
 	out := make([]map[string]any, 0, len(msgs))
@@ -874,52 +888,6 @@ func (a *AlarmMessages) AdditionalInformation() []map[string]any {
 			entry["last_timestamp"] = msgs[i].LastTimestamp.Unix()
 		}
 		out = append(out, entry)
-	}
-	return out
-}
-
-// AdditionalInformationIndexed returns the indexed-dict form of the
-// alarm-messages list that HA's MQTT json_attributes_template expects:
-// keys "alarm_1" .. "alarm_n" mapped to the alarm's Name (an alarm entry
-// has no device to prefix — see [AlarmMessage]). The first alarm's index
-// is 1 to match the human-counted reference; the dict follows the same
-// order as [AlarmMessages.List] (timestamp-desc).
-func (a *AlarmMessages) AdditionalInformationIndexed() map[string]string {
-	msgs := a.List()
-	out := make(map[string]string, len(msgs))
-	for i := range msgs {
-		key := fmt.Sprintf("alarm_%d", i+1)
-		out[key] = msgs[i].Name
-	}
-	return out
-}
-
-// Counter returns the number of active alarm messages — i.e. the
-// length of the message set. HA's MQTT statistics-template expects
-// the active-alarm count, so summing per-entry trigger counters
-// would surface a different number than the entity uses.
-func (a *AlarmMessages) Counter() int {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return len(a.messages)
-}
-
-// AdditionalInformationIndexed returns the indexed-dict form of the
-// service-messages list that HA's MQTT json_attributes_template expects:
-// keys "message_1" .. "message_n" mapped to "<device_name>: <name>"
-// strings. The first message's index is 1 to match the human-counted
-// reference; the dict is returned in timestamp-desc order (same as
-// [ServiceMessages.List]).
-func (s *ServiceMessages) AdditionalInformationIndexed() map[string]string {
-	msgs := s.List()
-	out := make(map[string]string, len(msgs))
-	for i := range msgs {
-		key := fmt.Sprintf("message_%d", i+1)
-		dev := msgs[i].DeviceName
-		if dev == "" {
-			dev = msgs[i].Address
-		}
-		out[key] = fmt.Sprintf("%s: %s", dev, msgs[i].Name)
 	}
 	return out
 }

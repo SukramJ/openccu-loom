@@ -6,6 +6,7 @@ package outputs
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -111,6 +112,21 @@ func (d *fakeSirenDevice) AvailableTones() []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.tones
+}
+
+// AlarmOpticalLabel reports the sustained alarm pattern the fake device
+// declares, mirroring the real model: the first entry of its optical list
+// whose name marks it as repeating. Deriving it here rather than taking a
+// position keeps the fake honest about which rule the driver relies on.
+func (d *fakeSirenDevice) AlarmOpticalLabel() (string, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, label := range d.lights {
+		if strings.HasSuffix(label, "_REPEATING") {
+			return label, true
+		}
+	}
+	return "", false
 }
 
 func (d *fakeSirenDevice) AvailableLights() []string {

@@ -127,27 +127,63 @@ var dutyCycleAliases = map[hmenum.Parameter]struct{}{
 }
 
 // excludedParameters can never be classified, whatever table would
-// otherwise match. Every entry is a parameter the alarm engine or an
-// operator *writes* — reading it back as a cause turns the domain's own
-// output into an input and produces self-sustaining alarms.
+// otherwise match. Three different reasons put an entry here, and the
+// admission test for a new one differs per reason — so each entry says
+// which it is:
+//
+//   - WRITTEN: a parameter the alarm engine or an operator writes.
+//     Reading it back as a cause turns the domain's own output into an
+//     input and produces self-sustaining alarms.
+//   - REPORTED: a device-reported reading that describes an actuator's
+//     own state rather than a sensed condition. A siren reporting that
+//     it is sounding is not evidence of an intrusion.
+//   - INERT: not a parameter identifier on any CCU surface, so the key
+//     never matches a lookup.
+//
+// The CCU decides which of the three an entry is, and it says so in the
+// parameter's IO operations: WRITTEN entries are registered write-only
+// (IOOperations.WRITE), REPORTED entries read+event, with no write bit.
+// Do not infer the reason from the parameter's name — the two ALARM
+// families read alike and split across both reasons.
 //
 // Keep this list ahead of every lookup: an exclusion that is merely
 // "not in the tables" silently stops holding the moment someone adds a
-// broader rule.
+// broader rule. No entry below is in [byParameter] or
+// [byChannelAndParameter] today, so all of them are belt-and-braces.
 var excludedParameters = map[hmenum.Parameter]struct{}{
-	// Siren feedback — the alarm engine drives these.
-	hmenum.ParameterAcousticAlarmActive:    {},
+	// REPORTED — the siren's own feedback that it is sounding/flashing.
+	// Registered through HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createReadEventBooleanParameter,
+	// i.e. read+event, never written.
+	hmenum.ParameterAcousticAlarmActive: {},
+	"OPTICAL_ALARM_ACTIVE":              {},
+	// WRITTEN — the siren's command half, write-only per HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createAcousticAlarmSelectionParameter
+	// and #createOpticalAlarmSelectionParameter.
 	hmenum.ParameterAcousticAlarmSelection: {},
-	"OPTICAL_ALARM_ACTIVE":                 {},
 	"OPTICAL_ALARM_SELECTION":              {},
-	// The command half of the smoke-detector chain: writing it makes
-	// every detector in the group sound, which is an output, not a
-	// detection.
+	// WRITTEN — the command half of the smoke-detector chain: writing it
+	// makes every detector in the group sound, which is an output, not a
+	// detection. Write-only per HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createSmokeDetectorCommandParameter.
 	hmenum.ParameterSmokeDetectorCommand: {},
-	// Emergency operation is a fallback mode an actuator enters on
-	// command loss; the technical class covers the real cause.
+	// REPORTED — a fallback mode an actuator enters on command loss; the
+	// technical class covers the real cause. Read+event per HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.StateParameterFactory#createReadEventBooleanIntegerParameter.
+	// Note it belongs to neither family this block is organised around:
+	// it is declared on the underfloor-heating actuator channels
+	// (CLIMATECONTROL_FLOOR_TRANSCEIVER / _PUMP_TRANSCEIVER /
+	// _DIRECT_TRANSMITTER), not on a siren or a smoke detector.
 	"EMERGENCY_OPERATION": {},
-	// The calculated intrusion signal is the engine's own verdict.
+	// INERT — INTRUSION_ALARM is not a parameter identifier on any CCU
+	// surface: it is a VALUE of SMOKE_DETECTOR_ALARM_STATUS and a member
+	// of the SmokeDetectorCommand vocabulary (the only INTRUSION_ALARM-
+	// prefixed parameter the firmware declares is the statistic
+	// INTRUSION_ALARM_COUNTER). So this key can never match a lookup, and
+	// the exclusion that actually holds is the value-level one:
+	// [hmenum.SmokeDetectorAlarmStatusSmokeLabels] leaves INTRUSION_ALARM
+	// out of the active set. Kept as a guard for the day a table keys on
+	// the name by mistake.
 	"INTRUSION_ALARM": {},
 }
 

@@ -152,7 +152,7 @@ func gateTestFaultXML(code int, message string) string {
 // them.
 //
 // Timeline (all durations are wireInterface's own hardcoded constants, not
-// test-configurable — see ccu_wiring.go's ingestBackoff and
+// test-configurable — see cuxd_wiring.go's ingestBackoff and
 // activateReadinessProbeTimeout in ccu_readiness.go):
 //
 //  1. Attempt 0: listDevices fails (forced) -> ingestLoop backs off 1s.
@@ -225,6 +225,7 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 			nil, // jsonCaller: CcuBackend only needs XML-RPC for the methods
 			// this scenario exercises (listDevices, Init, Deinit).
 			nil, "", // BIN-RPC callback server/addr: unused outside the CUxD branch.
+			nil, // adoptBINRPCHandlers: only the CUxD branch registers one.
 			logger,
 		)
 		resultCh <- wireResult{closer, err}

@@ -201,7 +201,7 @@ func CreateCustomDataPoint(dev *device.Device, ch *device.Channel, profile Profi
 	// _mark_data_points: AdditionalDataPoints (relative, must be
 	// rebased by group_no) plus the legacy Extended.AdditionalDataPoints
 	// (already absolute).
-	markAdditionalDataPoints(dev, ch, profile, groupNo)
+	markAdditionalDataPoints(ch, profile, groupNo)
 
 	// Constructor lookup. Missing constructor is a no-op (D.12 fills
 	// these in for the seven sub-packages).
@@ -342,7 +342,7 @@ func applyFieldVisibility(
 			}
 			continue
 		}
-		target := lookupChannelByNumber(dev, ch, chNo)
+		target := ch.Sibling(chNo)
 		if target == nil {
 			continue
 		}
@@ -353,7 +353,7 @@ func applyFieldVisibility(
 
 	// Fixed channel fields from the profile config (already absolute).
 	for chNo, fields := range rebased.FixedChannelFields {
-		target := lookupChannelByNumber(dev, ch, chNo)
+		target := ch.Sibling(chNo)
 		if target == nil {
 			continue
 		}
@@ -421,7 +421,7 @@ func applyFieldValueToChannel(ch *device.Channel, field hmenum.Field, fv FieldVa
 // The profile config carries relative offsets (rebased here by
 // `groupNo`); the Extended config carries absolute channel numbers
 // already.
-func markAdditionalDataPoints(dev *device.Device, ch *device.Channel, profile Profile, groupNo int) {
+func markAdditionalDataPoints(ch *device.Channel, profile Profile, groupNo int) {
 	if profile.Config != nil {
 		// IncludeDefaultDataPoints: when the profile carries the flag (default:
 		// true), apply the global [DefaultDataPoints] map first. The default DPs
@@ -431,17 +431,17 @@ func markAdditionalDataPoints(dev *device.Device, ch *device.Channel, profile Pr
 		// them.
 		if profile.Config.IncludeDefaultDataPoints {
 			for absCh, params := range DefaultDataPoints {
-				markParametersOnChannel(dev, ch, absCh, params)
+				markParametersOnChannel(ch, absCh, params)
 			}
 		}
 		for relCh, params := range profile.Config.AdditionalDataPoints {
 			absCh := relCh + groupNo
-			markParametersOnChannel(dev, ch, absCh, params)
+			markParametersOnChannel(ch, absCh, params)
 		}
 	}
 	if profile.Extended != nil {
 		for absCh, params := range profile.Extended.AdditionalDataPoints {
-			markParametersOnChannel(dev, ch, absCh, params)
+			markParametersOnChannel(ch, absCh, params)
 		}
 	}
 }
@@ -655,12 +655,11 @@ type forcedUsageReader interface {
 // the device's [device.Channel] and force-usage-marks every named
 // parameter.
 func markParametersOnChannel(
-	dev *device.Device,
 	ch *device.Channel,
 	channelNo int,
 	params []hmenum.Parameter,
 ) {
-	target := lookupChannelByNumber(dev, ch, channelNo)
+	target := ch.Sibling(channelNo)
 	if target == nil {
 		return
 	}
@@ -671,26 +670,6 @@ func markParametersOnChannel(
 		}
 		forceUsageOnDataPoint(dp, hmenum.DataPointUsageDataPoint)
 	}
-}
-
-// lookupChannelByNumber returns the device's channel whose Number
-// equals chNo. Returns nil when no such channel exists. The current
-// channel `ch` is preferred (avoids walking the device when chNo
-// matches it) — this mirrors Python's `device.get_generic_data_point`
-// which looks up by composed channel address.
-func lookupChannelByNumber(dev *device.Device, ch *device.Channel, chNo int) *device.Channel {
-	if ch != nil && ch.Number == chNo {
-		return ch
-	}
-	if dev == nil {
-		return nil
-	}
-	for _, sibling := range dev.Channels() {
-		if sibling.Number == chNo {
-			return sibling
-		}
-	}
-	return nil
 }
 
 // forceDataPointUsage maps the FieldMapping's `IsVisible` to a

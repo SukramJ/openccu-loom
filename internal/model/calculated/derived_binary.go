@@ -105,16 +105,6 @@ func (s *DerivedBinarySensor) StateUncertain() bool {
 	return s.sourceSink.StateUncertain()
 }
 
-// NewWindowOpenSensor is a convenience constructor pre-configured with
-// the CCU's WINDOW_STATE enum labels.
-func NewWindowOpenSensor() *DerivedBinarySensor {
-	return NewDerivedBinarySensor(
-		hmenum.CalculatedParameterWindowOpen,
-		[]string{"OPEN", "TILTED"},
-		[]string{"CLOSED"},
-	)
-}
-
 // DerivedBinaryMapping records a per-model derived-binary registration.
 type DerivedBinaryMapping struct {
 	// Models is the prefix-match list of device models this mapping
@@ -159,8 +149,16 @@ func (m DerivedBinaryMapping) AppliesToChannel(chNo int) bool {
 // derivedBinaryRegistry is the per-CalculatedParameter mapping table.
 var derivedBinaryRegistry = []DerivedBinaryMapping{
 	{
-		Models:              []string{"HmIP-SRH", "HM-Sec-RHS"},
-		SourceParameter:     hmenum.ParameterState,
+		Models:          []string{"HmIP-SRH", "HM-Sec-RHS"},
+		SourceParameter: hmenum.ParameterState,
+		// Narrowed, not confirmed: the ROTARY_HANDLE_SENSOR channel is
+		// declared with count_from_sysinfo, so the number of such channels is
+		// read from the device's own sysinfo at pairing time rather than fixed
+		// at one, and the descriptor corpus carries STATE on channels 1, 2 and
+		// 3 for HM-Sec-RHS. Whether a shipped unit reports more than one is a
+		// runtime field no source in this tree carries — it is unverified. On
+		// a unit that does, channels 2 and 3 get no derived WINDOW_OPEN;
+		// [SourceChannelNoOpen] is the form that would cover them.
 		SourceChannelNo:     1,
 		CalculatedParameter: hmenum.CalculatedParameterWindowOpen,
 		OnValues:            []string{"OPEN", "TILTED"},
@@ -172,15 +170,28 @@ var derivedBinaryRegistry = []DerivedBinaryMapping{
 		SourceChannelNo:     1,
 		CalculatedParameter: hmenum.CalculatedParameterSmokeAlarm,
 		OnValues:            hmenum.SmokeDetectorAlarmStatusSmokeLabels(),
-		OffValues:           []string{"IDLE_OFF", "IDLE_ON", "INTRUSION_ALARM"},
+		// Spelled through the enum, not as literals: both halves of a row
+		// state the same vocabulary, and a hand-written label that no
+		// VALUE_LIST carries is invisible until the device sends something
+		// neither half names. This set carried "IDLE_ON", which
+		// SMOKE_DETECTOR_ALARM_STATUS does not declare on any device in the
+		// corpus.
+		OffValues: []string{
+			string(hmenum.SmokeDetectorAlarmStatusIdleOff),
+			string(hmenum.SmokeDetectorAlarmStatusIntrusionAlarm),
+		},
 	},
 	{
 		Models:              []string{"HmIP-SWSD"},
 		SourceParameter:     hmenum.ParameterSmokeDetectorAlarmStatus,
 		SourceChannelNo:     1,
 		CalculatedParameter: hmenum.CalculatedParameterIntrusionAlarm,
-		OnValues:            []string{"INTRUSION_ALARM"},
-		OffValues:           []string{"IDLE_OFF", "IDLE_ON", "PRIMARY_ALARM", "SECONDARY_ALARM"},
+		OnValues:            []string{string(hmenum.SmokeDetectorAlarmStatusIntrusionAlarm)},
+		OffValues: []string{
+			string(hmenum.SmokeDetectorAlarmStatusIdleOff),
+			string(hmenum.SmokeDetectorAlarmStatusPrimaryAlarm),
+			string(hmenum.SmokeDetectorAlarmStatusSecondaryAlarm),
+		},
 	},
 }
 

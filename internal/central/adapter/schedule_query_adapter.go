@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ScheduleQueryAdapter wraps a [SchedulesDomain] in the
@@ -124,22 +125,17 @@ func (a *ScheduleQueryAdapter) CopyClimateProfile(
 }
 
 // splitChannelAddress separates "<dev>:<chn>" into its components.
-// Returns (channelAddress, 0) when the suffix is missing.
+// What counts as a channel suffix is decided by
+// [hmtypes.SplitChannelAddress], so this parser and the canonical one
+// cannot disagree. An address it does not accept is handed back whole with
+// channel 0 — callers use the result to look a channel up, and a malformed
+// address must not resolve to the device's channel 0.
 func splitChannelAddress(channelAddress string) (device string, channelIdx int) {
-	for i := len(channelAddress) - 1; i >= 0; i-- {
-		if channelAddress[i] == ':' {
-			n := 0
-			for j := i + 1; j < len(channelAddress); j++ {
-				c := channelAddress[j]
-				if c < '0' || c > '9' {
-					return channelAddress, 0
-				}
-				n = n*10 + int(c-'0')
-			}
-			return channelAddress[:i], n
-		}
+	dev, n, ok := hmtypes.SplitChannelAddress(channelAddress)
+	if !ok {
+		return channelAddress, 0
 	}
-	return channelAddress, 0
+	return dev, n
 }
 
 // scheduleToMap turns a typed ClimateSchedule DTO into the JSON shape

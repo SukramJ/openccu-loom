@@ -1674,13 +1674,11 @@ func TestRouter_CCUReboot_route(t *testing.T) {
 // it was asked to download and returns a configurable error.
 type fakeFirmwareDownloadService struct {
 	lastCentral string
-	lastURL     string
 	err         error
 }
 
-func (f *fakeFirmwareDownloadService) DownloadFirmware(_ context.Context, central, url string) error {
+func (f *fakeFirmwareDownloadService) DownloadFirmware(_ context.Context, central string) error {
 	f.lastCentral = central
-	f.lastURL = url
 	return f.err
 }
 
@@ -1737,11 +1735,11 @@ func TestRouter_FirmwareDownload_route(t *testing.T) {
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("admin download must return 202, got %d body=%s", rr.Code, rr.Body.String())
 	}
-	if svc.lastCentral != "home" || svc.lastURL != "https://x/fw.tgz" {
-		t.Fatalf("expected download dispatched for central=home url=https://x/fw.tgz, got central=%q url=%q", svc.lastCentral, svc.lastURL)
+	if svc.lastCentral != "home" {
+		t.Fatalf("expected download dispatched for central=home, got %q", svc.lastCentral)
 	}
 	if entries := rec.List(10); len(entries) != 1 || entries[0].Action != audit.ActionSystemFirmwareDownload ||
-		entries[0].Note != "home https://x/fw.tgz" {
+		entries[0].Note != "home" {
 		t.Fatalf("expected 1 system_firmware_download audit entry for home, got %+v", entries)
 	}
 }

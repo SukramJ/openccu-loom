@@ -69,12 +69,12 @@ func putWritableInteger(ch *device.Channel, address string, p hmenum.Parameter, 
 	}))
 }
 
-// fixedColorValueList lists the eight COLOR labels in [FixedColor] index
-// order (BLACK=0 .. WHITE=7). A CCU orders its own descriptor by the RGB bit
-// pattern instead, which is why the wire value is the label and never an
-// index — see [FixedColorLight.SetColorByName].
+// fixedColorValueList lists the eight COLOR labels in the order a CCU
+// reports them: the RGB bit pattern (bit 0 blue, bit 1 green, bit 2 red),
+// which agrees with [FixedColor] on only four of eight slots. The wire
+// value is the label, and a raw index is resolved through this list.
 var fixedColorValueList = []string{
-	"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE",
+	"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE",
 }
 
 // putWritableSelect adds a *generic.Select DP to ch. Used for enum parameters

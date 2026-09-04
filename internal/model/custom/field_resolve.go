@@ -78,7 +78,7 @@ func resolveChannelKeyedField(
 		if !found {
 			continue
 		}
-		sibling := siblingChannel(ch, chNo)
+		sibling := ch.Sibling(chNo)
 		if sibling == nil {
 			continue
 		}
@@ -86,27 +86,6 @@ func resolveChannelKeyedField(
 		return sibling, p, true
 	}
 	return nil, "", false
-}
-
-// siblingChannel returns the channel with the given number on the same
-// device as ch, or nil when the device does not carry it.
-func siblingChannel(ch *device.Channel, chNo int) *device.Channel {
-	if ch == nil {
-		return nil
-	}
-	if ch.Number == chNo {
-		return ch
-	}
-	dev := ch.Device()
-	if dev == nil {
-		return nil
-	}
-	for _, sibling := range dev.Channels() {
-		if sibling.Number == chNo {
-			return sibling
-		}
-	}
-	return nil
 }
 
 // ResolveSlotOr resolves one composed field through the profile schema and

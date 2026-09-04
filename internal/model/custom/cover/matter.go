@@ -822,10 +822,14 @@ func (s blindWCServer) MatterGeneratedCommands() []uint32 { return nil }
 // bare-uint16 and string-keyed shapes are kept for the in-package
 // tests.
 //
-// The value is clamped to 10000 (Percent100ths max, Matter §5.3):
-// matter.js WindowCoveringServer rejects an out-of-range percentage via
-// the schema constraint, and an unclamped value would otherwise convert
-// to an HM domain level above 1.0.
+// The value is clamped to [matterCoverPctMax] (Percent100ths max,
+// Matter §5.3): matter.js WindowCoveringServer rejects an out-of-range
+// percentage via the schema constraint. The HM conversion is not what
+// the clamp protects — [matterPct100thsToHMLevel] saturates on its own
+// at that same bound. What an unclamped value would reach is the stored
+// Matter target: the invoke handlers hand the extracted value straight
+// to matterTarget.setLift / setTilt, so it would be read back on
+// TargetPosition{Lift,Tilt}Percent100ths outside the attribute's range.
 //
 // This deliberately ignores the variants that carry an `OptionsMask`
 // and `OptionsOverride` field — those are the v1.0 GoToLiftPercentage
@@ -859,11 +863,11 @@ func extractGoToPercentage(fields any) (uint16, error) {
 	}
 }
 
-// clampPercent100ths bounds a Percent100ths value to its spec maximum of
-// 10000 (100.00 %).
+// clampPercent100ths bounds a Percent100ths value to [matterCoverPctMax],
+// the Matter spec maximum (100.00 %).
 func clampPercent100ths(pct uint16) uint16 {
-	if pct > 10000 {
-		return 10000
+	if pct > matterCoverPctMax {
+		return matterCoverPctMax
 	}
 	return pct
 }

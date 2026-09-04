@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // SpanCloser finalises a span opened by [StartOp]. Pass nil for
@@ -30,7 +30,7 @@ type OpOptions struct {
 	SlowThreshold time.Duration
 	// Attrs are merged into both the start and end records. Use for
 	// caller-specific context (interface_id, device_address, etc.)
-	// that is not already in the [reqctx.RequestContext].
+	// that is not already in the [hmreqctx.RequestContext].
 	Attrs []slog.Attr
 }
 
@@ -91,7 +91,7 @@ func toleranceFrom(ctx context.Context) opTolerance {
 }
 
 // StartOp opens a tracing span for a named operation and returns:
-//   - a derived context whose [reqctx.RequestContext] carries a fresh
+//   - a derived context whose [hmreqctx.RequestContext] carries a fresh
 //     SpanID (with ParentSpanID copied from the previous SpanID), and
 //   - a [SpanCloser] that callers MUST invoke (typically via
 //     `defer`) to record the end of the span.
@@ -101,7 +101,7 @@ func toleranceFrom(ctx context.Context) opTolerance {
 // is exceeded, and Error when the closer is called with a non-nil
 // error. The end record always carries an `elapsed_ms` attribute,
 // alongside the W3C trace_id / span_id / parent_span_id pair that
-// the [reqctx.ContextHandler] surfaces automatically.
+// the [hmreqctx.ContextHandler] surfaces automatically.
 //
 // Use this everywhere an operation crosses a meaningful boundary —
 // REST handler entry, coordinator method, RPC dispatch, store query —
@@ -111,13 +111,13 @@ func StartOp(ctx context.Context, op string, opts OpOptions) (context.Context, S
 	if logger == nil {
 		logger = slog.Default()
 	}
-	ctx = reqctx.StartChildSpan(ctx)
+	ctx = hmreqctx.StartChildSpan(ctx)
 	// Propagate the op name through the RequestContext so downstream
 	// log records — even from helpers that do not pass through StartOp
 	// themselves — still carry the operation tag.
-	if rc, ok := reqctx.FromContext(ctx); ok {
+	if rc, ok := hmreqctx.FromContext(ctx); ok {
 		rc.Operation = op
-		ctx = reqctx.WithRequestContext(ctx, rc)
+		ctx = hmreqctx.WithRequestContext(ctx, rc)
 	}
 	startAttrs := append([]slog.Attr{}, opts.Attrs...)
 	logger.LogAttrs(ctx, slog.LevelDebug, "op.start", append(startAttrs, slog.String("op", op))...)

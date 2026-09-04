@@ -94,6 +94,10 @@ func (a *ActionSelect) RecordLabel(label string) {
 }
 
 // TriggerIndex sends the given 0-based enum index.
+//
+// An index-typed caller always puts the index on the wire, whichever domain
+// the descriptor declares — the reference implementation makes the same
+// allowance for a numeric argument (action_select.py:45-47).
 func (a *ActionSelect) TriggerIndex(ctx context.Context, idx int32, priority hmenum.CommandPriority) error {
 	if err := checkEnumIndex(a.Descriptor.ValueList, int(idx)); err != nil {
 		return err
@@ -110,17 +114,16 @@ func (a *ActionSelect) TriggerIndex(ctx context.Context, idx int32, priority hme
 	)
 }
 
-// TriggerLabel resolves label through [Descriptor.ValueList] and dispatches
-// the wire value. For parameters whose VALUE_LIST entries are string labels
-// (the HmIP convention for ACTION parameters such as EFFECT), the label
-// itself is sent on the wire. For parameters whose VALUE_LIST is empty or
-// whose MIN descriptor indicates an integer range, the resolved index is
-// sent instead — matching the HM/classic convention.
+// TriggerLabel resolves label through [Descriptor.ValueList] and dispatches it
+// in the form the descriptor declares: the label itself when the parameter's
+// bounds are strings (the HmIP shape, e.g. EFFECT with MIN "NO_EFFECT"), the
+// resolved index when they are integers (the HM shape, e.g. HM-RC-19-B BEEP
+// with MIN 0). A VALUE_LIST is a precondition for resolving the label at all,
+// not the answer to which form goes on the wire — see
+// [DataPoint.EnumWireValue] for who decides and on what authority.
 //
-// The distinction mirrors the _enum_value_is_index logic in the reference
-// implementation (action_select.py:43-60): a non-empty VALUE_LIST with at
-// least one entry means "send the string label"; an empty list means
-// "send the integer index".
+// Callers holding an index use [ActionSelect.TriggerIndex] instead; a
+// parameter with no VALUE_LIST has no label to resolve and is rejected here.
 func (a *ActionSelect) TriggerLabel(ctx context.Context, label string, priority hmenum.CommandPriority) error {
 	if len(a.Descriptor.ValueList) == 0 {
 		return ErrEmptyValueList
@@ -129,18 +132,14 @@ func (a *ActionSelect) TriggerLabel(ctx context.Context, label string, priority 
 	if !ok {
 		return fmt.Errorf("%q: %w", label, ErrUnknownLabel)
 	}
-	// When a VALUE_LIST is present the wire value is the string label, not the
-	// integer index. Devices without a VALUE_LIST use integer indices — those
-	// callers should use TriggerIndex directly.
 	if a.Writer == nil {
 		return ErrNoWriter
 	}
-	_ = idx // index validated above; not used for the wire call when labels are present
 	return a.Writer.SetValue(
 		ctx,
 		a.Key.ChannelAddress,
 		hmenum.Parameter(a.Key.Parameter),
-		label,
+		a.EnumWireValue(label, int32(idx)), //nolint:gosec // a VALUE_LIST index is bounded by the list length
 		priority,
 	)
 }

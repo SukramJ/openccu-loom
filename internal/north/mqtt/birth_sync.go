@@ -8,6 +8,8 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // HABirthTopic is the topic Home Assistant publishes its lifecycle
@@ -16,7 +18,12 @@ import (
 // topic and re-publish every Discovery payload whenever HA comes
 // back online — retained discoveries stay in the broker but HA
 // occasionally misses them across firmware-updates / addon reloads.
-const HABirthTopic = "homeassistant/status"
+//
+// It shares HA's Discovery root with the config topics but not their
+// grammar: this is HA's own lifecycle topic, not a `.../config` entry,
+// so it is built from the prefix rather than from
+// [naming.DiscoveryConfigTopic].
+const HABirthTopic = naming.DiscoveryTopicPrefix + "status"
 
 // birthDispatchWorkers is 1: RepublishDiscovery is idempotent and there
 // is nothing to gain from running two republishes concurrently, so a

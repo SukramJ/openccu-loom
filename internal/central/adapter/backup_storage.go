@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -159,7 +160,7 @@ func (s *FilesystemBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, 
 			continue
 		}
 		name := e.Name()
-		if !strings.HasSuffix(name, ".sbk") {
+		if !strings.HasSuffix(name, sbk.Extension) {
 			continue
 		}
 		info, err := e.Info()
@@ -172,7 +173,7 @@ func (s *FilesystemBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, 
 			// empty file for download and lets Restore push it to a CCU.
 			continue
 		}
-		id := strings.TrimSuffix(name, ".sbk")
+		id := strings.TrimSuffix(name, sbk.Extension)
 		out = append(out, hmapi.BackupEntry{
 			ID:        id,
 			Bytes:     info.Size(),
@@ -340,7 +341,7 @@ func (s *FilesystemBackupStorage) namePathForID(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSuffix(archive, ".sbk") + backupNameSuffix, nil
+	return strings.TrimSuffix(archive, sbk.Extension) + backupNameSuffix, nil
 }
 
 // Delete implements [BackupStorage]. A missing file is not an error.
@@ -368,7 +369,7 @@ func (s *FilesystemBackupStorage) pathForID(id string) (string, error) {
 	if strings.ContainsAny(id, "/\\") || id == "" || id == "." || id == ".." {
 		return "", fmt.Errorf("backup: invalid id %q", id)
 	}
-	path := filepath.Clean(filepath.Join(s.Dir, id+".sbk"))
+	path := filepath.Clean(filepath.Join(s.Dir, id+sbk.Extension))
 	if !strings.HasPrefix(path, filepath.Clean(s.Dir)+string(filepath.Separator)) {
 		return "", fmt.Errorf("backup: invalid id %q", id)
 	}
@@ -439,9 +440,14 @@ func (a *BackupAdapter) RestorerForCentral(centralName string) BackupRestorer {
 }
 
 // uploadedBackupPrefix marks ids of archives the operator supplied rather
-// than ones this daemon pulled from a CCU. It keeps them apart in the
-// listing and, more importantly, keeps the scheduled-backup pruner from
-// ever treating an imported archive as one of its own rotations.
+// than ones this daemon pulled from a CCU, so they are unmistakable in a
+// listing.
+//
+// What actually keeps the scheduled-backup pruner off them is the width,
+// not the prefix: the pruner filters by backupBelongsTo (stubs.go), which
+// strips exactly backupIDSuffixLen characters. An uploaded id survives that
+// strip as the fragment "upload-202", which matches no central's
+// backupSafeName. The prefix is what makes that fragment recognisable.
 const uploadedBackupPrefix = "upload-"
 
 // SaveUploaded stores an externally-supplied archive under a generated id
@@ -456,6 +462,10 @@ func (s *FilesystemBackupStorage) SaveUploaded(
 	ctx context.Context, _ string, data []byte,
 ) (hmapi.BackupEntry, error) {
 	now := time.Now().UTC()
+	// Deliberately wider than backupTimestampLayout (stubs.go): the
+	// millisecond field distinguishes two uploads inside one second, and
+	// the extra width is what keeps backupBelongsTo from ever attributing
+	// an upload to a central.
 	id := uploadedBackupPrefix + now.Format("20060102-150405.000")
 	// The generated id carries a dot from the millisecond field, which
 	// pathForID tolerates; only separators and the dot-only names are

@@ -3,9 +3,9 @@
 
 // Package textdisplay implements the text-display custom data point.
 //
-// A TextDisplay is the HmIP-SDV* family: a screen with multiple rows,
-// each one addressable through DISPLAY_DATA_ID + DISPLAY_DATA_STRING
-// plus optional icon, alignment, and colour parameters. A separate
+// A TextDisplay is a screen with multiple rows, each one addressable
+// through DISPLAY_DATA_ID + DISPLAY_DATA_STRING plus optional icon,
+// alignment, and colour parameters. A separate
 // DISPLAY_DATA_COMMIT pulse commits the current row's configuration
 // to the physical display.
 package textdisplay
@@ -25,7 +25,7 @@ import (
 )
 
 // ErrInvalidRow is returned when a caller writes to a row index outside
-// the supported 1…5 range.
+// the 1..[maxDisplayID] range the device declares.
 var ErrInvalidRow = errors.New("textdisplay: invalid row index")
 
 // ErrInvalidRepetitions is returned when an opts.Repetitions label is not in
@@ -60,12 +60,35 @@ var ErrInvalidAlignment = errors.New("textdisplay: invalid alignment value")
 // device's available interval list.
 var ErrInvalidInterval = errors.New("textdisplay: invalid interval value")
 
-// maxDisplayID is the maximum DISPLAY_DATA_ID slot index (1-based).
-const maxDisplayID = 5
+// maxDisplayID is the maximum DISPLAY_DATA_ID slot index (1-based), and
+// MaxRowLength is the maximum text length of a single display row.
+//
+// Both are scoped to the HmIP-WRCD, the one device this profile is registered
+// for (internal/model/custom/profiles.go registers IPTextDisplay for
+// DeviceType "hmip-wrcd", channel 3), and both are read off that device's own
+// declaration for channel :3 — DISPLAY_DATA_ID {MIN 1, MAX 5} and
+// DISPLAY_DATA_STRING {MAX "[0x20-0x7E]{16}"}.
+//
+// Neither number generalises, which is why they are not fleet-wide rules:
+// HMIPServer de.eq3.cbcs.devicedescription.channelspecification.stateparameter.
+// GeneralStateParameterFactory registers DISPLAY_DATA_ID in three variants —
+// (1,2), (1,5) and (0,7) — and DISPLAY_DATA_STRING with four different
+// max-value patterns. A profile serving a second display model must read the
+// bounds from that device's descriptor rather than reuse these.
+//
+// Two things the declaration says that these constants do not carry. Its MAX
+// for a STRING parameter is a constraint pattern, not a number, so nothing
+// can read a length out of it numerically. And it counts characters over the
+// alphabet 0x20..0x7E, while [Row.Validate] counts bytes — the two coincide
+// inside that alphabet, so a UTF-8 row outside it is measured by a rule the
+// device did not state. What the device does with an over-long row is
+// unverified: the converter bound to this parameter does not truncate, and no
+// length check was found on the legacy put_paramset path.
+const (
+	maxDisplayID = 5
 
-// MaxRowLength is the maximum allowed text length for a single display row.
-// Matches the HmIP-SDV* firmware limit.
-const MaxRowLength = 24
+	MaxRowLength = 16
+)
 
 // defaultIcons is the static fallback icon list for HmIP-WRCD when no
 // runtime paramset is available. Sourced from the DISPLAY_DATA_ICON
@@ -215,8 +238,8 @@ type TextDisplay struct {
 	burstLimitWarningDP *generic.BinarySensor
 }
 
-// SoundOptions bundles the optional acoustic / repetition parameters that the
-// HmIP-SDV-class displays accept alongside a row write.
+// SoundOptions bundles the optional acoustic / repetition parameters the
+// display accepts alongside a row write.
 type SoundOptions struct {
 	// Sound is the ACOUSTIC_NOTIFICATION_SELECTION label (e.g.
 	// "DISABLE_ACOUSTIC_SIGNAL", "SOUND_SHORT", "SOUND_LONG"). Empty
@@ -516,7 +539,8 @@ func applyRowDefaults(r Row) Row {
 // Write lays out r on the display and commits the change in a single atomic
 // put_paramset (every populated row field plus DISPLAY_DATA_COMMIT=true).
 // DISPLAY_DATA_ID, DISPLAY_DATA_STRING, ..., DISPLAY_DATA_COMMIT: True})`).
-// Validation: ID must be ≥ 1.
+// Validation: ID must be within 1..[maxDisplayID] and the row text within
+// [MaxRowLength].
 //
 // Falls back to sequential SetValue + Commit when the writer is not a
 // [generic.ParamsetWriter].
@@ -553,34 +577,7 @@ func (t *TextDisplay) Write(ctx context.Context, r Row, priority hmenum.CommandP
 		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	if pw, ok := t.Writer.(generic.ParamsetWriter); ok {
-		values := map[string]any{
-			string(hmenum.ParameterDisplayDataID):     r.ID,
-			string(hmenum.ParameterDisplayDataCommit): true,
-			// STRING is always sent, even when empty — an empty string clears the
-			// display row. Skipping it leaves the previous text visible.
-			string(hmenum.ParameterDisplayDataString): r.Text,
-		}
-		// Icon is always sent. When the caller supplies an empty string the
-		// first available icon (conventionally "NO_ICON") is used, so a
-		// previously set icon is cleared rather than left visible.
-		iconValue := r.Icon
-		if iconValue == "" {
-			if len(t.availableIcons) > 0 {
-				iconValue = t.availableIcons[0]
-			} else {
-				iconValue = noIcon
-			}
-		}
-		values[string(hmenum.ParameterDisplayDataIcon)] = iconValue
-		if r.Alignment != nil && *r.Alignment != "" {
-			values[string(hmenum.ParameterDisplayDataAlignment)] = *r.Alignment
-		}
-		if r.TextColor != nil && *r.TextColor != "" {
-			values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor
-		}
-		if r.BackgroundColor != nil && *r.BackgroundColor != "" {
-			values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
-		}
+		values := t.rowParamset(r)
 		return pw.PutParamset(ctx, t.Address, hmenum.ParamsetKeyValues, values, priority)
 	}
 	if err := t.writeRowFields(ctx, r, priority); err != nil {
@@ -689,34 +686,7 @@ func (t *TextDisplay) WriteWithSound(
 		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	if pw, ok := t.Writer.(generic.ParamsetWriter); ok {
-		values := map[string]any{
-			string(hmenum.ParameterDisplayDataID):     r.ID,
-			string(hmenum.ParameterDisplayDataCommit): true,
-			// STRING is always sent, even when empty — an empty string clears the
-			// display row. Skipping it leaves the previous text visible.
-			string(hmenum.ParameterDisplayDataString): r.Text,
-		}
-		// Icon is always sent. When the caller supplies an empty string the
-		// first available icon (conventionally "NO_ICON") is used, so a
-		// previously set icon is cleared rather than left visible.
-		iconValueWS := r.Icon
-		if iconValueWS == "" {
-			if len(t.availableIcons) > 0 {
-				iconValueWS = t.availableIcons[0]
-			} else {
-				iconValueWS = noIcon
-			}
-		}
-		values[string(hmenum.ParameterDisplayDataIcon)] = iconValueWS
-		if r.Alignment != nil && *r.Alignment != "" {
-			values[string(hmenum.ParameterDisplayDataAlignment)] = *r.Alignment
-		}
-		if r.TextColor != nil && *r.TextColor != "" {
-			values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor
-		}
-		if r.BackgroundColor != nil && *r.BackgroundColor != "" {
-			values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
-		}
+		values := t.rowParamset(r)
 		if opts.Sound != "" {
 			values[string(hmenum.ParameterAcousticNotificationSelection)] = opts.Sound
 		}
@@ -772,6 +742,45 @@ func (t *TextDisplay) SubDataPointKeys() []hmtypes.DataPointKey {
 	return t.aggregate().SubDataPointKeys()
 }
 
+// iconOrFallback resolves the icon label a row write sends. An icon is always
+// sent, even when the caller supplies none: falling back to the first
+// available label (conventionally "NO_ICON") clears a previously set icon
+// rather than leaving it on the display.
+func (t *TextDisplay) iconOrFallback(icon string) string {
+	if icon != "" {
+		return icon
+	}
+	if len(t.availableIcons) > 0 {
+		return t.availableIcons[0]
+	}
+	return noIcon
+}
+
+// rowParamset builds the VALUES paramset for one display row: the fields
+// [Write] and [WriteWithSound] both send, including COMMIT. The two entry
+// points must put the same row on the wire, so the bundle is built here once
+// and each adds only what is its own.
+func (t *TextDisplay) rowParamset(r Row) map[string]any {
+	values := map[string]any{
+		string(hmenum.ParameterDisplayDataID):     r.ID,
+		string(hmenum.ParameterDisplayDataCommit): true,
+		// STRING is always sent, even when empty — an empty string clears the
+		// display row. Skipping it leaves the previous text visible.
+		string(hmenum.ParameterDisplayDataString): r.Text,
+		string(hmenum.ParameterDisplayDataIcon):   t.iconOrFallback(r.Icon),
+	}
+	if r.Alignment != nil && *r.Alignment != "" {
+		values[string(hmenum.ParameterDisplayDataAlignment)] = *r.Alignment
+	}
+	if r.TextColor != nil && *r.TextColor != "" {
+		values[string(hmenum.ParameterDisplayDataTextColor)] = *r.TextColor
+	}
+	if r.BackgroundColor != nil && *r.BackgroundColor != "" {
+		values[string(hmenum.ParameterDisplayDataBackgroundColor)] = *r.BackgroundColor
+	}
+	return values
+}
+
 // writeRowFields writes every populated wire field of `r` without
 // committing. Shared by [Write], [WriteRows] and [WriteWithSound].
 func (t *TextDisplay) writeRowFields(ctx context.Context, r Row, priority hmenum.CommandPriority) error {
@@ -784,15 +793,7 @@ func (t *TextDisplay) writeRowFields(ctx context.Context, r Row, priority hmenum
 		return fmt.Errorf("textdisplay: STRING: %w", err)
 	}
 	// Icon is always sent, even when empty — clears any previously set icon.
-	iconValueFB := r.Icon
-	if iconValueFB == "" {
-		if len(t.availableIcons) > 0 {
-			iconValueFB = t.availableIcons[0]
-		} else {
-			iconValueFB = noIcon
-		}
-	}
-	if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataIcon, iconValueFB, priority); err != nil {
+	if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterDisplayDataIcon, t.iconOrFallback(r.Icon), priority); err != nil {
 		return fmt.Errorf("textdisplay: ICON: %w", err)
 	}
 	if r.Alignment != nil && *r.Alignment != "" {

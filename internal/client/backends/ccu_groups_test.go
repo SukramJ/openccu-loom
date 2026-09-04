@@ -30,7 +30,7 @@ func newJpagesTestBackend(t *testing.T, handler http.HandlerFunc) *CcuBackend {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	b := NewCcuBackend(nil, nil, nil)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "SID" })
+	b.SetHTTPTransport(srv.URL, srv.Client(), func() string { return "SID" })
 	return b
 }
 

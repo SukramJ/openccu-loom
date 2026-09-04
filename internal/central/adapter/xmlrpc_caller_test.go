@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 )
@@ -249,5 +250,29 @@ func TestXMLRPCValueToGoEmptyArray(t *testing.T) {
 	}
 	if len(arr) != 0 {
 		t.Errorf("len = %d, want 0", len(arr))
+	}
+}
+
+// TestXMLRPCValueToGoDateTimeValue pins that a dateTime.iso8601 survives the
+// conversion instead of collapsing to nil.
+//
+// The decoder produces DateTimeValue and Base64Value (decode.go), and the
+// callback handlers run every wire value through this converter — an
+// unhandled kind reaches them as a nil parameter value, indistinguishable
+// from a value the CCU did not send.
+func TestXMLRPCValueToGoDateTimeValue(t *testing.T) {
+	t.Parallel()
+	ts := time.Date(2026, 9, 3, 14, 5, 6, 0, time.UTC)
+	want := ts.Format(xmlrpc.ISO8601CompactLayout)
+	if got := xmlRPCValueToGo(xmlrpc.DateTimeValue(ts)); got != want {
+		t.Errorf("DateTimeValue → %v, want %q", got, want)
+	}
+}
+
+// TestXMLRPCValueToGoBase64Value pins the base64 kind for the same reason.
+func TestXMLRPCValueToGoBase64Value(t *testing.T) {
+	t.Parallel()
+	if got := xmlRPCValueToGo(xmlrpc.Base64Value([]byte("hi"))); got != "aGk=" {
+		t.Errorf("Base64Value → %v, want %q", got, "aGk=")
 	}
 }

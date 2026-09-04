@@ -115,8 +115,8 @@ func TestAlarmState_ExitDelayCountdown(t *testing.T) {
 	if zone.Countdown == nil {
 		t.Fatal("countdown = nil, want an active exit-delay countdown")
 	}
-	if zone.Countdown.Kind != alarmCountdownExit {
-		t.Errorf("countdown.kind = %q, want %q", zone.Countdown.Kind, alarmCountdownExit)
+	if zone.Countdown.Kind != engine.TimerKindExit {
+		t.Errorf("countdown.kind = %q, want %q", zone.Countdown.Kind, engine.TimerKindExit)
 	}
 	if zone.Countdown.TotalS != 30 {
 		t.Errorf("countdown.total_s = %d, want 30", zone.Countdown.TotalS)

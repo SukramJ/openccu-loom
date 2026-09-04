@@ -69,8 +69,8 @@ func ChannelNo(address string) (n int, ok bool) {
 //
 // Python equivalent: support/address.get_device_address
 func DeviceAddress(address string) string {
-	if before, _, ok := strings.Cut(address, ":"); ok {
-		return before
+	if i := strings.IndexByte(address, addressSeparator); i >= 0 {
+		return address[:i]
 	}
 	return address
 }

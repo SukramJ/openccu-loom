@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -695,5 +696,20 @@ func TestRequeue_BoundedByMaxBufferCountsDrops(t *testing.T) {
 	// The two oldest were dropped; the three newest survive.
 	if got[0].Value != 3 || got[2].Value != 5 {
 		t.Errorf("kept values = %v..%v, want the three newest (3..5)", got[0].Value, got[2].Value)
+	}
+}
+
+// TestNewDefaultsHourlyRetentionFromConfig covers the fallback branch the
+// daemon never reaches: cmd wiring always passes
+// HistoryConfig.RetentionHourlyOrDefault(), which is already positive, so
+// New's own `<= 0` branch only fires for a caller that omits the option.
+// The assertion reads the config constant rather than a literal, so the
+// recorder's fallback and the config default cannot drift apart.
+func TestNewDefaultsHourlyRetentionFromConfig(t *testing.T) {
+	t.Parallel()
+	r := New(nil, Options{})
+	if r.retentionHourly != config.RetentionHourlyDefault {
+		t.Errorf("retentionHourly = %v, want config.RetentionHourlyDefault (%v)",
+			r.retentionHourly, config.RetentionHourlyDefault)
 	}
 }

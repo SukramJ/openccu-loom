@@ -20,8 +20,11 @@ type enumCoverageCase struct {
 	// enumValues is the declared enum at that location.
 	enumValues []any
 	// goFile / goType locate the Go const block the values must cover.
-	goFile string
-	goType string
+	// goPrefix is the alternative for a vocabulary declared as untyped
+	// string constants: exactly one of goType and goPrefix is set.
+	goFile   string
+	goType   string
+	goPrefix string
 	// omit lists wire values the location legitimately excludes, with the
 	// reason. A request schema may narrow a response enum — an arm request
 	// cannot ask for "disarmed" — but the exclusion has to be stated.
@@ -93,6 +96,17 @@ func TestOpenAPIEnumsCoverEveryEmittedValue(t *testing.T) {
 			},
 		},
 		{
+			// The alarm-panel states are untyped string constants, so this
+			// case selects them by Go-name prefix. The spec listed the same
+			// nine tokens in the same order and nothing checked it: a tenth
+			// HA state added to the daemon would have shipped a response the
+			// published enum forbids.
+			where:      "components.schemas.AlarmPanelEntity.state",
+			enumValues: propertyEnum(t, doc, "AlarmPanelEntity", "state"),
+			goFile:     filepath.Join(root, "internal", "model", "alarmpanel", "statemap.go"),
+			goPrefix:   "HAAlarmState",
+		},
+		{
 			where:      "components.schemas.Identity.scheme",
 			enumValues: propertyEnum(t, doc, "Identity", "scheme"),
 			goFile:     filepath.Join(root, "internal", "auth", "auth.go"), goType: "Scheme",
@@ -106,8 +120,17 @@ func TestOpenAPIEnumsCoverEveryEmittedValue(t *testing.T) {
 			declared := make([]any, len(tc.enumValues))
 			copy(declared, tc.enumValues)
 
+			emitted := extractEnumConstantsFromSource(t, tc.goFile, tc.goType)
+			if tc.goPrefix != "" {
+				emitted = extractUntypedStringConstsWithPrefix(t, tc.goFile, tc.goPrefix)
+			}
+			if len(emitted) == 0 {
+				t.Fatalf("%s: no constants extracted from %s — the extraction stopped matching "+
+					"and this case is measuring nothing", tc.where, tc.goFile)
+			}
+
 			var missing []string
-			for _, wire := range extractEnumConstantsFromSource(t, tc.goFile, tc.goType) {
+			for _, wire := range emitted {
 				if _, omitted := tc.omit[wire]; omitted {
 					if slices.Contains(declared, any(wire)) {
 						t.Errorf("%s declares %q although it is listed as omitted", tc.where, wire)

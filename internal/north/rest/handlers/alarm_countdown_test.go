@@ -23,7 +23,7 @@ func TestAlarmCountdownTotalComesFromTheEngine(t *testing.T) {
 	t.Parallel()
 	snap := engine.ZoneSnapshot{
 		ID:             "zone-1",
-		TimerKind:      alarmCountdownEntry,
+		TimerKind:      engine.TimerKindEntry,
 		TimerRemaining: 75 * time.Second,
 		// What the engine armed: the sensor's override, not the zone's 30 s.
 		TimerTotal: 90 * time.Second,
@@ -46,7 +46,7 @@ func TestAlarmCountdownTotalComesFromTheEngine(t *testing.T) {
 func TestAlarmCountdownTotalNeverBelowRemaining(t *testing.T) {
 	t.Parallel()
 	got := alarmCountdown(engine.ZoneSnapshot{
-		ID: "zone-1", TimerKind: alarmCountdownExit, TimerRemaining: 20 * time.Second,
+		ID: "zone-1", TimerKind: engine.TimerKindExit, TimerRemaining: 20 * time.Second,
 	})
 	if got == nil {
 		t.Fatal("no countdown for a running exit timer")

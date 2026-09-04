@@ -116,17 +116,21 @@ func TestParityMatterJS_SirenDataVersionStableOnUnknownAttrWrite(t *testing.T) {
 
 // TestParityMatterJS_SirenDataVersionStableOnUnknownCommand verifies that
 // a MatterInvoke with an unknown command ID does not increment
-// MatterDataVersion. Toggle (0x02) is deliberately absent from this
-// projection's accepted-command set — Siren has no toggle-alarm role —
-// so it remains a genuinely unimplemented command ID.
+// MatterDataVersion.
+//
+// The unknown id used to be Toggle (0x02), on the grounds that a siren has no
+// toggle-alarm role. That is not what decides it: matter.js gives Toggle
+// conformance "!OFFONLY" (on-off.element.ts:39), so it is mandatory on any
+// OnOff cluster that does not advertise OffOnly, and this one does not. It is
+// accepted now, so the test uses an id the cluster genuinely does not define.
 func TestParityMatterJS_SirenDataVersionStableOnUnknownCommand(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
 	before := r.siren.MatterDataVersion()
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
-	const toggleCmdID = 0x02
-	_, _ = srv.MatterInvoke(context.Background(), toggleCmdID, nil, hmenum.CommandPriorityHigh)
+	const undefinedCmdID = 0x7F // no OnOff command carries this id
+	_, _ = srv.MatterInvoke(context.Background(), undefinedCmdID, nil, hmenum.CommandPriorityHigh)
 
 	if after := r.siren.MatterDataVersion(); after != before {
 		t.Fatalf("failed invoke bumped DataVersion: before=%d after=%d", before, after)

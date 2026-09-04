@@ -42,15 +42,6 @@ const (
 	// CUxD/CCU callback frame without an early re-grow.
 	initialPayloadCap int64 = 64 * 1024
 
-	// maxDecodeDepth bounds how deeply nested arrays/structs may be in
-	// a single decoded value. Without it, a crafted message of ~1.3M
-	// nested arrays (≈10 MB, under MaxMessageSize) drives readValue into
-	// unbounded recursion and crashes the process with a non-recoverable
-	// "stack overflow" fatal error. Real CCU/CUxD paramsets nest only a
-	// few levels (a struct of values, an array of structs); 64 is far
-	// above any legitimate Homematic response.
-	maxDecodeDepth = 64
-
 	// minValueWireBytes and minMemberWireBytes are the smallest number of
 	// wire bytes an array element / struct member is guaranteed to consume
 	// before it can be satisfied: every value starts with a 4-byte type tag,

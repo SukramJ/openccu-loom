@@ -538,30 +538,6 @@ func TestClimateOnMatterValueChangedNilSafe(t *testing.T) {
 	r.setpoint.OnEvent(20.0) // must not panic with no subscriber
 }
 
-// TestHumidityToMatterRounds pins the same rounding contract
-// [celsiusToMatter] carries: 20.4*100 is 2039.9999999999998 in binary64,
-// and truncation would report 20.39 % where every other surface shows
-// 20.4 %.
-func TestHumidityToMatterRounds(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		in   float64
-		want uint16
-	}{
-		{20.4, 2040},
-		{55.7, 5570},
-		{0, 0},
-		{100, 10000},
-		{-1, 0},
-		{101, 10000},
-	}
-	for _, tc := range cases {
-		if got := humidityToMatter(tc.in); got != tc.want {
-			t.Errorf("humidityToMatter(%v) = %d, want %d", tc.in, got, tc.want)
-		}
-	}
-}
-
 // TestClimateClusterCompositionIsThermostatOnly pins the projection to the
 // two clusters the Matter Device Library specifies for device type 0x0301 as
 // server clusters: Thermostat (0x0201, conformance M) and

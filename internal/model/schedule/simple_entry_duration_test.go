@@ -44,29 +44,53 @@ func TestSimpleEntryValidateDurationFactor1(t *testing.T) {
 	}
 }
 
-// TestSimpleEntryValidateDurationFactorAbove30Rejected verifies that a
-// factor of 31 is rejected for every time unit.
-func TestSimpleEntryValidateDurationFactorAbove30Rejected(t *testing.T) {
+// TestSimpleEntryValidateDurationNumeralIsNotTheWireFactor records what these
+// tests used to assert and why it was wrong.
+//
+// They read the numeral in the string as the CCU's DURATION_FACTOR and
+// required 1..30, so "31s" and "999h" were rejected. The numeral is not the
+// factor: the wire pair is (base, factor) and the reader multiplies the factor
+// out in the base's own unit, so the read path emits "50min" for (MIN_10, 5)
+// and "500ms" for (MS_100, 5) — both perfectly ordinary slots that the bound
+// refused. Whether a duration is representable is decided where the pair is
+// searched for, in weekprofile.ParseTimeBaseFactor, which fails the write when
+// no base divides the value into a factor of 1..30.
+//
+// So the domain validator checks the spelling and lets the encoder decide the
+// arithmetic. "31h" is a case worth keeping visible: it is representable, as
+// the CCU's own "Dauerhaft" pair.
+func TestSimpleEntryValidateDurationNumeralIsNotTheWireFactor(t *testing.T) {
 	t.Parallel()
 
-	for _, d := range []string{"31ms", "31s", "31min", "31h"} {
+	for _, d := range []string{"31ms", "31s", "31min", "31h", "999h", "50min", "500ms"} {
 		e := baseEntry()
 		e.Duration = d
-		if err := e.Validate(); err == nil {
-			t.Errorf("Validate() with Duration=%q want error, got nil", d)
+		if err := e.Validate(); err != nil {
+			t.Errorf("Validate() with Duration=%q returned error: %v; the numeral is the "+
+				"duration in the unit shown, not the wire factor", d, err)
 		}
 	}
 }
 
-// TestSimpleEntryValidateDurationFactor999Rejected verifies that very
-// large factors (999) are also rejected.
-func TestSimpleEntryValidateDurationFactor999Rejected(t *testing.T) {
+// TestSimpleEntryValidateAcceptsTheReservedDurationWords pins the two
+// spellings that are not numerals: the CCU's permanent pair and a real zero
+// duration. The daemon's own lock encoder mints both, and the validator used
+// to reject them — "permanent" did not match the numeric pattern and "0ms"
+// failed the lower bound.
+func TestSimpleEntryValidateAcceptsTheReservedDurationWords(t *testing.T) {
 	t.Parallel()
 
-	e := baseEntry()
-	e.Duration = "999h"
-	if err := e.Validate(); err == nil {
-		t.Error("Validate() with Duration=999h want error, got nil")
+	for _, d := range []string{schedule.PermanentDuration, schedule.ZeroDuration} {
+		e := baseEntry()
+		e.Duration = d
+		if err := e.Validate(); err != nil {
+			t.Errorf("Validate() with Duration=%q returned error: %v", d, err)
+		}
+		e = baseEntry()
+		e.RampTime = d
+		if err := e.Validate(); err != nil {
+			t.Errorf("Validate() with RampTime=%q returned error: %v", d, err)
+		}
 	}
 }
 

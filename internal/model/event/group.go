@@ -105,11 +105,17 @@ func (g *Group) TranslationKey() string {
 	return GenerateTranslationKey(g.Kind)
 }
 
-// Usage returns the canonical [hmenum.DataPointUsage] for the group.
-// A Group's usage mirrors that of its member sources: when at least one member
-// is explicitly enabled by the channel-operation-mode gate the group as a whole
-// exposes EventGroup usage. When no sources have been added yet, the default is
-// also EventGroup — the group is visible until a membership update overrides it.
+// Usage returns [hmenum.DataPointUsageEvent] unconditionally: a group's
+// own usage does not depend on its membership.
+//
+// The channel-operation-mode gate is applied per member by
+// [Source.Usage], which pins a gated-out source onto Ignored. A group
+// whose every member is gated out therefore stays visible — the group is
+// the container, and the members carry the visibility decision.
+//
+// g.sources is deliberately not read here. No production code calls this
+// method today, so there is no consumer to define what a
+// membership-derived answer should be.
 func (g *Group) Usage() hmenum.DataPointUsage {
 	return hmenum.DataPointUsageEvent
 }

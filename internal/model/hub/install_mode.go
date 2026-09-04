@@ -48,16 +48,6 @@ type InstallMode struct {
 	expiresAt time.Time
 	observed  bool
 	callbacks []func(enabled bool, remaining time.Duration)
-
-	// hasPublished / publishedEnabled / publishedRemainingS track the
-	// (enabled, remaining_s) pair last reported by
-	// [InstallMode.ConsumeChangeSincePublish], so the periodic refresh
-	// job can skip re-publishing an identical steady-state tuple every
-	// poll. See ConsumeChangeSincePublish for why this does not affect
-	// the live countdown while install mode is actually active.
-	hasPublished        bool
-	publishedEnabled    bool
-	publishedRemainingS int
 }
 
 // NewInstallMode constructs an InstallMode for interfaceID.
@@ -88,28 +78,6 @@ func (m *InstallMode) InstallState() (enabled bool, remaining time.Duration, obs
 	}
 	remain := max(time.Until(m.expiresAt), 0)
 	return true, remain, m.observed
-}
-
-// ConsumeChangeSincePublish returns the current (enabled, remaining_s) pair
-// and reports whether it differs from the pair the last call returned,
-// then records the current pair as "last published". The first call always
-// reports changed=true so the initial state is never suppressed.
-//
-// remaining_s is a live countdown while install mode is active (see
-// InstallState), so this only ever suppresses the steady-state case — the
-// same (false, 0) tuple every poll while install mode stays off the whole
-// time — never a genuine countdown tick, because a running countdown's
-// remaining_s changes on almost every call by construction.
-func (m *InstallMode) ConsumeChangeSincePublish() (enabled bool, remainingS int, changed bool) {
-	enabled, remaining, _ := m.InstallState()
-	remainingS = int(remaining.Seconds())
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	changed = !m.hasPublished || enabled != m.publishedEnabled || remainingS != m.publishedRemainingS
-	m.hasPublished = true
-	m.publishedEnabled = enabled
-	m.publishedRemainingS = remainingS
-	return enabled, remainingS, changed
 }
 
 // OnState records a CCU-driven install-mode update.
@@ -196,9 +164,9 @@ func (m *InstallMode) MQTTTopics(base, centralName string) payload.MQTTTopicSet 
 	}
 }
 
-// Press enables install mode for the default duration (60 seconds).
-// which calls activate with the default time. Returns an error if no
-// Writer is configured.
+// Press enables install mode for [DefaultInstallModeDuration], passed to the
+// writer explicitly — this daemon never omits the duration and so never
+// inherits a firmware default. Returns an error if no Writer is configured.
 func (m *InstallMode) Press(ctx context.Context) error {
 	return m.Enable(ctx, defaultInstallModeDuration)
 }
@@ -207,10 +175,22 @@ func (m *InstallMode) Press(ctx context.Context) error {
 // by Press().
 const defaultInstallModeDuration = DefaultInstallModeDuration
 
-// DefaultInstallModeDuration is the pairing window a CCU opens when no
-// duration is given. It is a property of the pairing behaviour, not of the
-// surface that happens to trigger it, so a north plane that defaults an
-// omitted duration reads it here rather than restating the number.
+// DefaultInstallModeDuration is this daemon's own pairing window for a
+// request that names no duration. A north plane that defaults an omitted
+// duration reads it here rather than restating the number.
+//
+// It is not "the CCU default": no firmware default is ever exercised from
+// here, because every path puts an explicit `time` on the wire, and the
+// firmware defaults are not one number anyway. rfd's XML-RPC setInstallMode
+// substitutes 60 s when `seconds` is omitted
+// (../OpenCCU-Base/src/rfd/XmlRpcMethods.cpp:608-609, matching the method's
+// own doc comment at :594-595, which states a maximum of 600 and a default
+// of 60), and the CCU's own BidCos teach-in relies on exactly that by
+// passing no seconds argument
+// (../OpenCCU-Base/www/config/cp_add_device.cgi:903). The
+// JSON-RPC Interface.setInstallModeHMIP surface carries its own default,
+// which is not in the trees read here — unverified. 60 s is a defensible
+// choice of ours that happens to agree with rfd; it is not derived from it.
 const DefaultInstallModeDuration = 60 * time.Second
 
 // EnableForDevice enables install mode and restricts pairing to the given

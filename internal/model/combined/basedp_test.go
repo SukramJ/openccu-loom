@@ -359,10 +359,7 @@ func TestCombinedConcurrentAfterMigration(t *testing.T) {
 // [cover.Cover]).
 func TestLevelCombinedSatisfiesBaseDataPoint(t *testing.T) {
 	t.Parallel()
-	var iface datapoint.BaseDataPoint = NewLevelCombinedWithCentral(
-		"ccu-prod", "VCU0123:4", &stubWriter{},
-		hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined,
-	)
+	var iface datapoint.BaseDataPoint = NewLevelCombinedWithCentral("ccu-prod", "VCU0123:4", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if got, want := iface.UniqueID(), "ccu-prod:VCU0123:4:COMBINED/LEVEL_COMBINED"; got != want {
 		t.Fatalf("iface.UniqueID() = %q, want %q", got, want)
 	}
@@ -379,8 +376,7 @@ func TestLevelCombinedSatisfiesBaseDataPoint(t *testing.T) {
 // UniqueID ends with the canonical family suffix.
 func TestLevelCombinedLegacyConstructor(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombined("VCU9:4", &stubWriter{},
-		hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("VCU9:4", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if !strings.HasSuffix(lc.UniqueID(), ":COMBINED/LEVEL_COMBINED") {
 		t.Fatalf("legacy UniqueID() = %q must end with COMBINED/LEVEL_COMBINED", lc.UniqueID())
 	}

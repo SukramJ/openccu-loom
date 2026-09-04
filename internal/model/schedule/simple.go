@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -122,7 +121,7 @@ type SimpleEntry struct {
 
 	Condition          Condition
 	AstroType          Astro
-	AstroOffsetMinutes int // -720 .. +720
+	AstroOffsetMinutes int // bounded by the channel's declared ASTRO_OFFSET range
 
 	TargetChannels []string
 
@@ -148,29 +147,52 @@ type SimpleEntry struct {
 
 // --- validation ---
 
-// maxDurationFactor is the maximum allowed numeric factor in a duration string
-// (e.g. "30s", "30min", "30h"). Values above 30 are rejected to match CCU
-// firmware limits; larger values are silently clipped by the CCU.
-const maxDurationFactor = 30
+// AstroOffsetFallbackLimit bounds an astro offset, in minutes, when nothing
+// better is known about the channel.
+//
+// The CCU holds no constant for this: its weekly-program editor reads
+// ASTRO_OFFSET_MIN / ASTRO_OFFSET_MAX out of the paramset description and
+// clamps its input to them, so the accepted range is whatever the channel
+// declares — every model in the descriptor corpus declares INTEGER MIN -128
+// MAX 127. This ±12 h bound describes nothing about a device; it is this
+// project's long-standing conservative limit, kept so a channel whose
+// descriptor has not been loaded is no less protected than it used to be.
+//
+// It is declared here rather than beside the encoder because both the domain
+// validator and the raw converter's undeclared-range fallback state it, and
+// the two must move together.
+const AstroOffsetFallbackLimit = 720
 
 var (
 	timePattern     = regexp.MustCompile(`^(?:[01]?\d|2[0-3]):[0-5]\d$`)
 	channelPattern  = regexp.MustCompile(`^[1-8]_[123]$`)
 	durationPattern = regexp.MustCompile(`^\d+(?:ms|s|min|h)$`)
-	durationUnitRE  = regexp.MustCompile(`(?:ms|s|min|h)$`)
 )
 
-// validateDuration checks the format and that the numeric factor is within
-// the CCU-accepted range [1, maxDurationFactor].
+// validateDuration checks that d is spelled like a duration this schedule
+// domain can carry: a whole number with one of the four units, or one of the
+// two reserved words ([PermanentDuration], [ZeroDuration]).
+//
+// It deliberately does NOT bound the numeral. The digits are the duration in
+// the unit shown, not the CCU's DURATION_FACTOR: the wire pair is (base,
+// factor), the reader multiplies the factor out in the base's own unit, and a
+// coarse base therefore emits "50min" (base MIN_10, factor 5) or "500ms"
+// (base MS_100, factor 5). Reading the digits as the factor and capping them
+// at 30 rejected values the daemon's own read path produces — every slot on a
+// coarse base, "0ms" for a lock's auto-relock start, and the "permanent"
+// sentinel the CCU holds for a standing user permission.
+//
+// What decides whether a duration is representable is the encoder that has to
+// produce the pair: weekprofile.ParseTimeBaseFactor picks the coarsest base
+// that divides the value into a factor of 1..30 and fails the write when none
+// does. This function is the domain's spelling check, not that search.
 func validateDuration(d string) error {
+	switch d {
+	case PermanentDuration, ZeroDuration:
+		return nil
+	}
 	if !durationPattern.MatchString(d) {
 		return fmt.Errorf("schedule: invalid duration %q", d)
-	}
-	unit := durationUnitRE.FindString(d)
-	factorStr := strings.TrimSuffix(d, unit)
-	factor, err := strconv.Atoi(factorStr)
-	if err != nil || factor < 1 || factor > maxDurationFactor {
-		return fmt.Errorf("schedule: duration factor %d out of range (1..%d)", factor, maxDurationFactor)
 	}
 	return nil
 }
@@ -194,7 +216,12 @@ func (e *SimpleEntry) Validate() error {
 	if !timePattern.MatchString(e.Time) {
 		return fmt.Errorf("schedule: invalid time %q", e.Time)
 	}
-	if e.AstroOffsetMinutes < -720 || e.AstroOffsetMinutes > 720 {
+	// A device-independent sanity bound only. The range that decides is the
+	// one the channel declares for ASTRO_OFFSET, enforced on the way to the
+	// wire in weekprofile.BuildSimpleRawParamset — the CCU's own editor reads
+	// ASTRO_OFFSET_MIN / MAX out of the paramset description rather than
+	// holding a number, and every model in the corpus declares ±128.
+	if e.AstroOffsetMinutes < -AstroOffsetFallbackLimit || e.AstroOffsetMinutes > AstroOffsetFallbackLimit {
 		return fmt.Errorf("schedule: astro offset out of range: %d", e.AstroOffsetMinutes)
 	}
 	if e.Level < 0 || e.Level > 1.01 {
@@ -214,7 +241,10 @@ func (e *SimpleEntry) Validate() error {
 		}
 	}
 	if e.RampTime != "" {
-		if !durationPattern.MatchString(e.RampTime) {
+		// The same grammar and the same reserved words: the CCU builds the
+		// duration and ramp-time editors from one helper, so the encoding is
+		// shared.
+		if err := validateDuration(e.RampTime); err != nil {
 			return fmt.Errorf("schedule: invalid ramp_time %q", e.RampTime)
 		}
 	}
@@ -222,6 +252,54 @@ func (e *SimpleEntry) Validate() error {
 		return fmt.Errorf("schedule: condition %s requires astro_type", e.Condition)
 	}
 	return nil
+}
+
+// UnsupportedFieldsFor reports which of the three optional schedule fields a
+// category rejects: level_2, ramp_time and duration.
+//
+// It is the single catalogue of that fact. [SimpleEntry.ValidateFor] enforces
+// it on the write path, and the schedule adapter strips the same set off a
+// parsed entry on the read path — the CCU's COMBINED_PARAMETER carries fields
+// a given channel type never uses, and an entry that keeps them fails the
+// validator on the way back in. Two spellings of this table drift into a read
+// that emits a field the write then rejects.
+//
+// A category with no schedule constraints supports all three.
+func UnsupportedFieldsFor(category hmenum.DataPointCategory) (level2, rampTime, duration bool) {
+	switch category { //nolint:exhaustive // only categories with schedule constraints are listed
+	case hmenum.DataPointCategorySwitch:
+		return true, true, false
+	case hmenum.DataPointCategoryLight:
+		return true, false, false
+	case hmenum.DataPointCategoryCover:
+		return false, true, true
+	case hmenum.DataPointCategoryValve:
+		return true, true, false
+	case hmenum.DataPointCategoryLock:
+		return true, true, true
+	default:
+		return false, false, false
+	}
+}
+
+// rejectUnsupportedFields reports the fields the entry carries that
+// [UnsupportedFieldsFor] says the category does not accept.
+func (e *SimpleEntry) rejectUnsupportedFields(category hmenum.DataPointCategory) error {
+	noLevel2, noRampTime, noDuration := UnsupportedFieldsFor(category)
+	var offending []string
+	if noLevel2 && e.Level2 != nil {
+		offending = append(offending, "level_2")
+	}
+	if noRampTime && e.RampTime != "" {
+		offending = append(offending, "ramp_time")
+	}
+	if noDuration && e.Duration != "" {
+		offending = append(offending, "duration")
+	}
+	if len(offending) == 0 {
+		return nil
+	}
+	return fmt.Errorf("schedule/%s: %s not supported", category, strings.Join(offending, "/"))
 }
 
 // ValidateFor enforces category-specific rules on top of [Validate].
@@ -234,30 +312,9 @@ func (e *SimpleEntry) ValidateFor(category hmenum.DataPointCategory) error {
 		if e.Level != 0 && e.Level != 1 {
 			return fmt.Errorf("schedule/switch: level must be 0 or 1, got %v", e.Level)
 		}
-		if e.Level2 != nil {
-			return errors.New("schedule/switch: level_2 not supported")
-		}
-		if e.RampTime != "" {
-			return errors.New("schedule/switch: ramp_time not supported")
-		}
-	case hmenum.DataPointCategoryLight:
-		if e.Level2 != nil {
-			return errors.New("schedule/light: level_2 not supported")
-		}
-	case hmenum.DataPointCategoryCover:
-		if e.RampTime != "" {
-			return errors.New("schedule/cover: ramp_time not supported")
-		}
-		if e.Duration != "" {
-			return errors.New("schedule/cover: duration not supported")
-		}
-	case hmenum.DataPointCategoryValve:
-		if e.Level2 != nil {
-			return errors.New("schedule/valve: level_2 not supported")
-		}
-		if e.RampTime != "" {
-			return errors.New("schedule/valve: ramp_time not supported")
-		}
+		return e.rejectUnsupportedFields(category)
+	case hmenum.DataPointCategoryLight, hmenum.DataPointCategoryCover, hmenum.DataPointCategoryValve:
+		return e.rejectUnsupportedFields(category)
 	case hmenum.DataPointCategoryLock:
 		if e.LockMode == "" {
 			return errors.New("schedule/lock: lock_mode required")
@@ -280,9 +337,7 @@ func (e *SimpleEntry) ValidateFor(category hmenum.DataPointCategory) error {
 		default:
 			return fmt.Errorf("schedule/lock: unknown mode %q", e.LockMode)
 		}
-		if e.Level2 != nil || e.RampTime != "" || e.Duration != "" {
-			return errors.New("schedule/lock: level_2/ramp_time/duration not supported")
-		}
+		return e.rejectUnsupportedFields(category)
 	}
 	return nil
 }

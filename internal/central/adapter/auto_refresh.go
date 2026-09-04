@@ -17,14 +17,38 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// configPendingSettleDelay is the carenz that elapses between
-// CONFIG_PENDING True→False and the targeted MASTER read. The CCU's
-// interface daemon needs a moment to update its on-disk file cache
-// with the just-resynced device state; reading earlier would race
-// with that update and force a fresh radio validation. 10s is large
-// enough that the file cache is stable, small enough that the
-// daemon's MQTT/UI surface sees the new values inside a human
-// reaction time.
+// configPendingSettleDelay is the pause between CONFIG_PENDING True→False and
+// the targeted MASTER read.
+//
+// It is a client-side choice, not a CCU mechanism, and no firmware source
+// carries a settle interval for this transition — the value is unverified in
+// that sense. What is established is that the read is not duty-cycle-bound at
+// any delay, so the pause buys ordering headroom, not radio budget:
+//
+//   - HmIP, the only surface this hook runs on (it is gated by
+//     [hmenum.PushesConfigPendingFor]): getParamset(address, "MASTER") maps to
+//     a persistence load of the device's stored config file, never to an
+//     over-the-air read — that is a different command
+//     (HMIPServer de.eq3.cbcs.server.core.vertx.backendhandler.DeviceSubcommandHandler#handleGetConfigCommand
+//     versus #handleAskConfigCommand). On the ordinary write path the config
+//     file is saved by an earlier task of the same transaction than the one
+//     that emits the CONFIG_PENDING notification
+//     (de.eq3.cbcs.server.core.task.TransactionTaskFactory#createDeviceConfigurationTransaction),
+//     so the values are already on disk when we are told the flag cleared.
+//   - BidCos, which this hook does not run on but which shows the same shape:
+//     rfd serves MASTER from memory and reads from the device only while the
+//     chunk was never read at all (`must_be_read`,
+//     ../OpenCCU-Base/src/rfd/RFConfigData.h:99-106, consulted at
+//     ../OpenCCU-Base/src/rfd/RFLogicalInstance.cpp:39), and it requests its
+//     save with a 0 ms idle timer issued before the event
+//     (../OpenCCU-Base/src/rfd/RFDevice.cpp:766, :1384-1389).
+//
+// So what the pause protects against is a narrow ordering window on the
+// pending-cleanup path, where the notification precedes the save; the cost of
+// reading too early there is a stale value, not radio traffic. 10 s is chosen
+// to sit well clear of one synchronous file write while staying inside a human
+// reaction time on the MQTT/UI surface. Settling the number would need a
+// firmware source that states the interval, and none does.
 const configPendingSettleDelay = 10 * time.Second
 
 // wireConfigPendingHook installs the CONFIG_PENDING True→False handler on
@@ -48,16 +72,15 @@ const configPendingSettleDelay = 10 * time.Second
 //     gated on the profile already holding a schedule); naive
 //     per-channel reload would trigger redundant set/get-Schedule
 //     round-trips on climate groups that span multiple channels.
-//   - after [configPendingSettleDelay] (10 s carenz so the CCU's file
-//     cache has stabilised) a targeted getParamset(MASTER) per channel
-//     of the affected device, with the result persisted into the
-//     [sqlite.MasterValuesStore]. The carenz is what makes the read
-//     duty-cycle-neutral: by then the interface daemon's sync state
-//     is "ok" and the read is served from its on-disk file cache
-//     without forcing a fresh radio validation. Without the cache
-//     write, subsequent cold-boots would re-issue this read for every
-//     channel of every device at hydration time and burn the
-//     duty-cycle budget; with it, cold boots skip the RPC entirely.
+//   - after [configPendingSettleDelay] a targeted getParamset(MASTER) per
+//     channel of the affected device, with the result persisted into the
+//     [sqlite.MasterValuesStore]. The read itself is duty-cycle-neutral at any
+//     delay — on HmIP getParamset(MASTER) is answered from the server's
+//     persisted device file and never reaches the radio; see the note on
+//     [configPendingSettleDelay] for what the pause does and does not buy.
+//     The cache write is what saves radio budget elsewhere: without it,
+//     subsequent cold boots would re-issue this read for every channel of
+//     every device at hydration time; with it, cold boots skip the RPC.
 //   - visibility re-apply for CHANNEL_OPERATION_MODE.
 //
 // `getter`, `masterValues` or `centralName` may be nil/empty — the

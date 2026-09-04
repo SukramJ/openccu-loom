@@ -502,7 +502,7 @@ func TestDerivedBinarySensorP2Remaining(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDerivedBinarySensorIsRefreshedTransitions(t *testing.T) {
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 
 	if s.IsRefreshed() {
 		t.Fatal("IsRefreshed() must be false before any label is fed")
@@ -519,7 +519,7 @@ func TestDerivedBinarySensorIsRefreshedTransitions(t *testing.T) {
 
 // TestDerivedBinarySensorIsStateChange verifies IsStateChange transitions.
 func TestDerivedBinarySensorIsStateChange(t *testing.T) {
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 
 	src := &stubSourceDP{}
 	s.RegisterSource(src)
@@ -883,7 +883,7 @@ func TestMasterSubscribeNilDP(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDerivedBinarySensorSubscribeNilChannel(t *testing.T) {
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 	s.SourceParameter = hmenum.ParameterState
 	unsub := s.Subscribe(nil)
 	if unsub != nil {

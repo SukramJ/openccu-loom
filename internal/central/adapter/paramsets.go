@@ -14,10 +14,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -278,11 +278,17 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 		return
 	}
 	changes := auditChanges(before, after)
-	rc, _ := reqctx.FromContext(ctx)
+	rc, _ := hmreqctx.FromContext(ctx)
+	// SplitChannelAddress, not channelNumberOf: a device-level write
+	// carries a bare device address, for which channelNumberOf answers 0
+	// — the audit row then reads as a write to channel 0, an existing and
+	// unrelated channel. The canonical parser answers -1, the model's own
+	// device.ChannelNumberDevice.
+	_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
 	p.audit.Record(audit.Entry{
 		Action:        audit.ActionParamsetWrite,
 		DeviceAddress: deviceAddressOf(channelAddress),
-		ChannelNo:     channelNumberOf(channelAddress),
+		ChannelNo:     auditChannelNo,
 		Paramset:      paramset,
 		Changes:       changes,
 		Note:          rc.Operation,
@@ -484,10 +490,13 @@ func (p *ParamsetsDomain) PutLinkParamset(
 	_, _ = b.GetLinkParamset(ctx, channelAddress, peerAddress)
 	if p.audit != nil {
 		changes := auditChanges(before, values)
+		// See recordParamsetWrite: the canonical parser reports the
+		// device level as -1 rather than as channel 0.
+		_, auditChannelNo, _ := hmtypes.SplitChannelAddress(channelAddress)
 		p.audit.Record(audit.Entry{
 			Action:        audit.ActionLinkParamsetWrite,
 			DeviceAddress: deviceAddressOf(channelAddress),
-			ChannelNo:     channelNumberOf(channelAddress),
+			ChannelNo:     auditChannelNo,
 			Peer:          peerAddress,
 			Changes:       changes,
 		})

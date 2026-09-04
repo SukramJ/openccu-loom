@@ -54,10 +54,8 @@ type Handlers interface {
 // central/interface.
 var ErrNoHandlers = errors.New("rpcserver: no handlers registered")
 
-// asFault collapses an arbitrary error into an XML-RPC fault.
+// asFault collapses an arbitrary error into an XML-RPC fault, through
+// the rule that lives with the type ([hmerr.FaultFromError]).
 func asFault(err error) *hmerr.XMLRPCFault {
-	if fault, ok := errors.AsType[*hmerr.XMLRPCFault](err); ok {
-		return fault
-	}
-	return &hmerr.XMLRPCFault{Code: -1, Message: err.Error()}
+	return hmerr.FaultFromError(err)
 }

@@ -323,7 +323,7 @@ func TestSimpleScheduleWriteAgreesAcrossSurfaces(t *testing.T) {
 			t.Parallel()
 
 			restEntries := parseSimpleSchedule(tc.raw, wireParityBits)
-			restRaw, err := serializeSimpleSchedule(restEntries, 0, wireParityBits)
+			restRaw, err := serializeSimpleSchedule(restEntries, 0, wireParityBits, weekprofile.AstroOffsetLimits{})
 			if err != nil {
 				t.Fatalf("serializeSimpleSchedule: %v", err)
 			}
@@ -332,7 +332,7 @@ func TestSimpleScheduleWriteAgreesAcrossSurfaces(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseSimpleRawParamset: %v", err)
 			}
-			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, 0, wireParityBits)
+			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, 0, wireParityBits, weekprofile.AstroOffsetLimits{})
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}
@@ -360,7 +360,7 @@ func TestSimpleScheduleDeactivationSweepAgrees(t *testing.T) {
 		t.Run(fmt.Sprintf("bound_%d", bound), func(t *testing.T) {
 			t.Parallel()
 
-			restRaw, err := serializeSimpleSchedule(parseSimpleSchedule(raw, wireParityBits), bound, wireParityBits)
+			restRaw, err := serializeSimpleSchedule(parseSimpleSchedule(raw, wireParityBits), bound, wireParityBits, weekprofile.AstroOffsetLimits{})
 			if err != nil {
 				t.Fatalf("serializeSimpleSchedule: %v", err)
 			}
@@ -368,7 +368,7 @@ func TestSimpleScheduleDeactivationSweepAgrees(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseSimpleRawParamset: %v", err)
 			}
-			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, bound, wireParityBits)
+			wpRaw, err := weekprofile.BuildSimpleRawParamset(s, bound, wireParityBits, weekprofile.AstroOffsetLimits{})
 			if err != nil {
 				t.Fatalf("BuildSimpleRawParamset: %v", err)
 			}

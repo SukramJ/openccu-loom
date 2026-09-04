@@ -74,8 +74,25 @@ func (s *Switch) TurnOff(ctx context.Context, priority hmenum.CommandPriority) e
 	return s.Set(ctx, false, priority)
 }
 
-// SetOnTime writes the paired ON_TIME parameter on the same channel.
-// Value is clamped to ≥ 0.
+// SetOnTime writes the paired ON_TIME parameter on the same channel, in
+// seconds. Value is clamped to ≥ 0.
+//
+// Seconds is the CCU's own unit on both stacks, and the CCU owns the
+// encoding, so the raw figure must not be pre-scaled here: BidCos declares
+// `<logical type="float" min="0.0" max="85825945.6" unit="s"/>` and applies
+// a ×10 scale followed by an 11+5-bit tinyfloat
+// (../OpenCCU-Base/src/devicetypes/rftypes/rf_s_644.xml:274-279), and the
+// HmIP receivers declare `.Unit=s`
+// (../OpenCCU-Base/opt/HmIP/legacy-parameter-definition.config:271, :625,
+// :688, :691) with the
+// same tinyfloat converter (HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createOnTimeParameter,
+// max 8580000.0).
+//
+// Only the lower bound is clamped. The two stacks declare different
+// ceilings, and neither is readable from a single place at this layer, so
+// an oversized duration is reshaped or refused downstream rather than
+// rejected here.
 func (s *Switch) SetOnTime(ctx context.Context, d time.Duration, priority hmenum.CommandPriority) error {
 	if s.Writer == nil {
 		return ErrNoWriter
@@ -124,8 +141,23 @@ func (s *Switch) turnOnWithTimer(ctx context.Context, explicit *time.Duration, p
 		onTime = s.consumePending()
 	}
 	// A nil or negative timer means "no timer requested" — collapse to a
-	// plain STATE=true write. An explicit zero is intentional: the CCU
-	// interprets ON_TIME=0 as a timer-cancel, so we must carry it through.
+	// plain STATE=true write. An explicit zero is carried through, but not
+	// because it is an opcode: neither stack has a timer-cancel value. On
+	// BidCos the LEVEL_SET frame carries `omit_if="0"` on its ON_TIME field
+	// (../OpenCCU-Base/src/devicetypes/rftypes/rf_s_644.xml:230; FLAG_OMIT
+	// means "leave the parameter out of the frame when its value equals
+	// this one" — ../OpenCCU-Base/src/libhsscomm/FrameDescription.h:60), so
+	// an encoded 0 vanishes from the radio frame and the device sees a
+	// plain unbounded switch-on. `<reset_after_send param="ON_TIME"/>` at
+	// :270 then restores ON_TIME's default of 0.0 after every STATE write,
+	// so a stale timer cannot leak either. Carrying the zero is therefore a
+	// no-op on BidCos, not a necessity — it is kept so the caller's explicit
+	// intent is not silently reshaped into a different wire call.
+	//
+	// What ON_TIME=0 does on a plain HmIP VALUES write is UNVERIFIED: the
+	// legacy layer passes a FLOAT through unchanged, and whether the valve
+	// firmware reads a zero direct-execution time as "no timer" is device
+	// behaviour no readable CCU source states.
 	if onTime == nil || *onTime < 0 {
 		return s.Set(ctx, true, priority)
 	}

@@ -90,9 +90,35 @@ func PutOrSet(
 // PutParamsetForce writes `values` through PutParamset whenever the
 // writer supports it — even when `len(values) == 1`. The single-slot
 // case still resolves to a put_paramset envelope so collector-scoped
-// callers see uniform wire shape. Some CCU firmware variants reject a
-// raw setValue for parameters they accept inside put_paramset —
-// HmIP CONTROL_MODE=0 (AUTO) is the canonical case.
+// callers see uniform wire shape.
+//
+// The asymmetry that makes this worth having is unconditional, not a
+// firmware-variant lottery. On the CCU's HmIP legacy XML-RPC surface,
+// HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#setValue
+// guards its dispatch with #checkRequiredValues and returns false without
+// sending a frame or raising a fault when the guard rejects the write;
+// #putParameterSet has no such call and goes straight to the send. The guard
+// is a branch on the channel's ChannelType, so the outcome is a pure function
+// of (channel type, key set) — deterministic, and identical on every build of
+// that surface. A refused single-key setValue is the worst failure shape
+// there is: no error reaches the caller.
+//
+// The keys it refuses alone are the ones the guard requires as a set:
+// DURATION_UNIT with DURATION_VALUE and RAMP_TIME_UNIT with RAMP_TIME_VALUE
+// on any channel type; SET_POINT_MODE with SET_POINT_TEMPERATURE on
+// HEATING_CLIMATECONTROL_TRANSCEIVER; STATE on the switch virtual receivers;
+// LEVEL on the servo / dimmer / blind virtual receivers; the COLOR /
+// COLOR_BEHAVIOUR pair; the DISPLAY_DATA_* set on ACOUSTIC_DISPLAY_RECEIVER;
+// and, on ALARM_SWITCH_VIRTUAL_RECEIVER, all four of DURATION_UNIT,
+// DURATION_VALUE, OPTICAL_ALARM_SELECTION and ACOUSTIC_ALARM_SELECTION as
+// soon as any one of them is present — so a bare setValue of
+// ACOUSTIC_ALARM_SELECTION is dropped in silence, which is the case closest
+// to this repo's siren paths.
+//
+// CONTROL_MODE is not one of them: on HEATING_CLIMATECONTROL_TRANSCEIVER the
+// required set is {SET_POINT_TEMPERATURE} and the guard's predicate lets any
+// key outside the set through, so a bare setValue(CONTROL_MODE, 0) is
+// dispatched normally. Using this helper there is safe but not load-bearing.
 //
 // Falls back to PutOrSet (per-parameter SetValue) when the writer
 // does not implement ParamsetWriter.
@@ -158,11 +184,27 @@ const TimerNotUsed = 111600.0
 
 // RepetitionsNone and RepetitionsInfinite are the two boundary labels of the
 // REPETITIONS parameter's VALUE_LIST, and MaxRepetitions is the highest count
-// the label grammar can express.
+// that list has a slot for.
+//
+// All three come from the firmware, not from a convention. HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.Repetitions#getNames
+// builds the list as NO_REPETITION at index 0, INFINITE_REPETITIONS at the
+// last index and String.format("REPETITIONS_%03d", i) in between — the
+// zero-padded three-digit grammar RepetitionsLabel formats. HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.
+// GeneralStateParameterFactory#createRepetitionParameter builds the
+// VALUES-paramset REPETITIONS parameter over getNames(16), so the list has
+// sixteen slots and the numbered run stops at REPETITIONS_014.
+//
+// Sixteen, not more, is what every writer in this repo faces: all of them
+// stage REPETITIONS into the VALUES paramset. The 256-slot list ending at
+// REPETITIONS_254 that the same enum can produce belongs to the MASTER /
+// LINK profile-repetition config parameters (POWERUP_/SHORT_/LONG_
+// PROFILE_REPETITIONS), which no path here writes.
 const (
 	RepetitionsNone     = "NO_REPETITION"
 	RepetitionsInfinite = "INFINITE_REPETITIONS"
-	MaxRepetitions      = 18
+	MaxRepetitions      = 14
 )
 
 // RepetitionsLabel maps a repetition count onto the REPETITIONS VALUE_LIST
@@ -170,18 +212,19 @@ const (
 //
 //   - 0     → "NO_REPETITION"
 //   - -1    → "INFINITE_REPETITIONS"
-//   - 1..18 → "REPETITIONS_001" .. "REPETITIONS_018"
+//   - 1..14 → "REPETITIONS_001" .. "REPETITIONS_014"
 //
-// Any other count returns an error, because the grammar cannot express it.
+// Any other count returns an error, because the VALUES-paramset list has no
+// slot for it — see [MaxRepetitions] for where the sixteen slots come from.
 // Declared once so the profiles that write REPETITIONS from a numeric count
 // — the sound-player LED and the text display — cannot drift apart on the
 // label a given count maps to.
 //
-// Which of those labels a concrete device accepts is the narrower question and
-// is not answered here: a device's own REPETITIONS VALUE_LIST may stop well
-// short of 18 (the captured HmIP-MP3P and HmIP-WRCD descriptions both end at
-// REPETITIONS_014), so a caller that holds the device list should still check
-// membership before writing. TextDisplay.WriteWithSound does exactly that.
+// A caller holding the concrete device's VALUE_LIST should still check
+// membership before writing, because a device may in principle advertise a
+// shorter list than the factory builds. TextDisplay.WriteWithSound does
+// exactly that; the sound-player LED does not, which is why the ceiling here
+// has to match the firmware's rather than sit above it.
 func RepetitionsLabel(n int) (string, error) {
 	switch {
 	case n == 0:
@@ -413,6 +456,10 @@ func (g *GroupState) GroupValue() bool {
 // helper. Common to covers and valves.
 type Position struct{ level float64 }
 
+// VentLevel is the intermediate ventilation position a garage door
+// reports between fully closed and fully open.
+const VentLevel = 0.5
+
 // NewPosition clamps level into [0, 1] and returns a Position.
 func NewPosition(level float64) Position {
 	if level < 0 {
@@ -427,8 +474,15 @@ func NewPosition(level float64) Position {
 // Level returns the underlying 0–1 value.
 func (p Position) Level() float64 { return p.level }
 
+// levelToPercent converts a 0–1 level to a 0–100 integer percentage,
+// rounding half up. Half-up is load-bearing rather than cosmetic: the CCU
+// reports LEVEL on a 0.01 grid, and 0.29, 0.57 and 0.58 land just under
+// their exact hundredth in binary64 (0.29*100 is 28.999999999999996), so
+// truncation reports those three one percent low.
+func levelToPercent(level float64) int { return int(level*100 + 0.5) }
+
 // OpenFraction returns the position as a 0–100 percentage.
-func (p Position) OpenFraction() int { return int(p.level*100 + 0.5) }
+func (p Position) OpenFraction() int { return levelToPercent(p.level) }
 
 // Closed reports whether the position is exactly 0.
 func (p Position) Closed() bool { return p.level == 0 }
@@ -437,10 +491,10 @@ func (p Position) Closed() bool { return p.level == 0 }
 func (p Position) Open() bool { return p.level == 1 }
 
 // Vent reports whether the position matches the garage door's
-// intermediate ventilation step (level == 0.5). Used by Garage's
+// intermediate ventilation step ([VentLevel]). Used by Garage's
 // IsStateChangeArgs / Vent service path; covers without an
 // intermediate position never see this true.
-func (p Position) Vent() bool { return p.level == 0.5 }
+func (p Position) Vent() bool { return p.level == VentLevel }
 
 // ---------- Brightness ----------
 
@@ -448,15 +502,10 @@ func (p Position) Vent() bool { return p.level == 0.5 }
 // projection useful for MQTT and REST consumers.
 type Brightness struct{ level float64 }
 
-// NewBrightness clamps level into [0, 1].
+// NewBrightness clamps level into [0, 1]. The bound is the one
+// [NewPosition] defines — the same rule, stated once.
 func NewBrightness(level float64) Brightness {
-	if level < 0 {
-		level = 0
-	}
-	if level > 1 {
-		level = 1
-	}
-	return Brightness{level: level}
+	return Brightness{level: NewPosition(level).Level()}
 }
 
 // Level returns the 0–1 value.
@@ -465,14 +514,13 @@ func (b Brightness) Level() float64 { return b.level }
 // Byte returns the value as 0–255.
 func (b Brightness) Byte() uint8 { return uint8(b.level * 255) }
 
-// Pct returns the brightness as a 0–100 integer percentage.
-//
-// return int(level * 100)
+// Pct returns the brightness as a 0–100 integer percentage, by the same
+// rule [Position.OpenFraction] applies.
 //
 // Note: unlike [Byte] (which uses 255 as the ceiling), Pct uses 100 so that
 // the HA brightness_pct entity field receives an integer in the [0, 100]
 // range without any float-to-byte rounding.
-func (b Brightness) Pct() int { return int(b.level * 100) }
+func (b Brightness) Pct() int { return levelToPercent(b.level) }
 
 // IsOn reports whether brightness is above zero.
 func (b Brightness) IsOn() bool { return b.level > 0 }
@@ -562,9 +610,10 @@ type (
 	CoverCapabilities struct {
 		SupportsTilt bool
 		SupportsStop bool
-		// SupportsPosition advertises that the device accepts a position write
-		// (LEVEL parameter). HA discovery uses this to decide whether to emit a
-		// `position_topic`/`set_position_topic` pair.
+		// SupportsPosition reports that the channel carries a writable LEVEL,
+		// i.e. the drive accepts an absolute position rather than only
+		// open/stop/close. The discovery builder in cover/payload.go turns
+		// this into the position topic pair.
 		SupportsPosition bool
 		// SupportsVent advertises the garage "vent" intermediate position the
 		// IP-Garage drive supports.
@@ -578,8 +627,10 @@ type (
 		SupportsColor     bool
 		SupportsColorTemp bool
 		SupportsEffects   bool
-		// Transition indicates the device accepts RAMP_TIME, enabling HA's
-		// transition field in JSON-Schema MQTT light mode.
+		// Transition reports that the channel carries a writable RAMP_TIME,
+		// i.e. the light can be commanded to fade over a given time. The
+		// discovery builder in light/payload.go turns this into the
+		// transition field.
 		Transition bool
 	}
 
@@ -594,14 +645,14 @@ type (
 		SupportsAcoustic bool
 		SupportsOptical  bool
 		SupportsDuration bool
-		// SupportsSoundfiles advertises a SOUND_PLAYER preset that allows selecting
-		// one of the device's recorded sound files rather than just an alarm tone.
-		// HA discovery uses this to decide whether to emit a `available_tones`
-		// array in the siren entity payload.
+		// SupportsSoundfiles reports that the device carries a SOUND_PLAYER
+		// preset list, so a recorded sound file can be selected rather than
+		// only an alarm tone. The discovery builder in siren/payload.go turns
+		// this into the available-tones list.
 		SupportsSoundfiles bool
-		// SupportsVolumeSet reports whether the siren can adjust its volume. HA
-		// discovery uses this for the `support_volume_set` field in the siren
-		// entity payload.
+		// SupportsVolumeSet reports that the siren has a settable volume. The
+		// discovery builder in siren/payload.go turns this into the
+		// volume-set support flag.
 		SupportsVolumeSet bool
 	}
 )

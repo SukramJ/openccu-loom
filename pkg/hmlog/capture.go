@@ -34,9 +34,12 @@ type CaptureSink struct {
 	maxLen int
 	events int
 	closed bool
-	// anonymise replaces device-address-shaped values with stable
-	// hashes so the resulting archive is safe to attach to an issue
-	// ticket without leaking the operator's CCU fleet.
+	// anonymise replaces the operator-identifying attributes listed in
+	// [anonymiseValue] — login subject, user name, remote client address —
+	// with stable hashes, so the resulting archive is safe to attach to an
+	// issue ticket without naming who was on the system. Operations data,
+	// device addresses and CCU host names among it, is left in clear text
+	// on purpose: the operator reading their own archive needs it.
 	anonymise bool
 }
 
@@ -113,9 +116,11 @@ func (s *CaptureSink) Bytes() int {
 	return s.buf.Len()
 }
 
-// Anonymise reports whether the sink was configured to anonymise
-// device-address-shaped values. The encoder ([TeeHandler]) consults
-// this flag before emitting individual attributes.
+// Anonymise reports whether the sink was configured to hash the
+// operator-identifying attributes listed in [anonymiseValue]. It does not
+// cover device addresses or host names, which stay in clear text either
+// way. The encoder ([TeeHandler]) consults this flag before emitting
+// individual attributes.
 func (s *CaptureSink) Anonymise() bool {
 	return s != nil && s.anonymise
 }
@@ -320,10 +325,10 @@ func anonymiseValue(key string, value any) any {
 	return value
 }
 
-// AnonymiseToken returns a stable hash prefix for value, intended for
-// device addresses, hostnames, and other operator-identifying
-// strings. Empty input returns an empty string so absence stays
-// visible.
+// AnonymiseToken returns a stable hash prefix for value. It is the hash
+// shape, not a policy: which attributes a capture archive runs through it is
+// decided by [anonymiseValue] alone. Empty input returns an empty string so
+// absence stays visible.
 func AnonymiseToken(value string) string {
 	if value == "" {
 		return ""

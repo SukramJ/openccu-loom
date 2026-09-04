@@ -14,12 +14,21 @@ import "strings"
 // (`Watchdog:_CCU-Jack`, `s0_Sensoren_Hülle_EG`, …) get HA to drop
 // the discovery message with a warning, so the entity never appears.
 //
-// It is the ONE normaliser every discovery identifier goes through —
-// per-device node ids ([PathData.DiscoveryNodeID]), hub node ids, and
-// the retained-config orphan sweep that has to match them again. When
-// a producer and the sweep disagree about the spelling of the same
+// It is the one normaliser for the identifiers that carry a central
+// name: per-device node ids ([PathData.DiscoveryNodeID]), hub node ids,
+// and the retained-config orphan sweep that has to match them again.
+// When a producer and the sweep disagree about the spelling of the same
 // central, the sweep matches nothing and every retired entity keeps
 // its retained config forever.
+//
+// Object ids do NOT go through it. [PathData.DiscoveryObjectID] takes
+// the weaker [TopicSafe] route, which replaces only `+ # /` and space
+// and leaves `:` and umlauts intact. That is safe exactly as long as
+// object-id suffixes stay inside `[A-Za-z0-9_-]` — they are wire
+// parameter names and component labels today. Routing them through
+// DiscoverySlug would additionally collapse underscore runs and trim
+// edges, changing published object ids and therefore retained-topic
+// identity, so it is not a free tightening.
 //
 // Rules:
 //   - German umlauts and ß are transliterated (ü→ue, ö→oe, ä→ae,

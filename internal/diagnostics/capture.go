@@ -90,9 +90,14 @@ type StartOptions struct {
 	// when the capture starts and removed when it ends. Use this to
 	// dial up debug logging for the recording window only.
 	LogLevelOverrides map[string]string
-	// Anonymise hashes device-address-shaped values in the recorded
-	// records. Defaults to true; set explicitly to false for local
-	// debugging where you want raw values in the archive.
+	// Anonymise hashes the operator-identifying attributes of the recorded
+	// records — the `subject`, `user`, `username`, `remote` and
+	// `remote_addr` keys, per [hmlog.AnonymiseToken]. Device addresses,
+	// channel addresses, parameter names and interface ids stay in clear
+	// text: an operator reading their own archive needs them to make sense
+	// of the trace.
+	//
+	// Defaults to true; set explicitly to false for local debugging.
 	Anonymise bool
 	// Triggered carries an operator subject for the audit trail.
 	Triggered string

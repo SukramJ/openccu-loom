@@ -21,7 +21,10 @@ type AlarmZoneRow struct {
 	// Slug is the stable, human-readable external identifier. It is
 	// derived from the name once and then frozen: it reaches consumer
 	// entity ids and MQTT topics, so letting it follow a rename would
-	// orphan every entity of that zone on every rename.
+	// orphan every entity of that zone on every rename. That it is the
+	// slug and not the UUID which arrives there is measured, not
+	// assumed — TestSecurityZoneTopicsCarryTheStoredSlug drives a row
+	// written through this store all the way to the published topics.
 	//
 	// Empty on read means a row written before the column existed; the
 	// caller derives one rather than falling back to the UUID, which is

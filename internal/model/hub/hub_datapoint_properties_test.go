@@ -3,7 +3,7 @@
 
 // Tests for HubDataPoint properties: Available, FullName, TranslationKey;
 // AlarmMessages.AdditionalInformation; ServiceMessages.AdditionalInformation;
-// ProgramDpButton.Available; SysvarDpBinarySensor.BoolValue.
+// ProgramDpButton.Available.
 package hub
 
 import (
@@ -284,68 +284,6 @@ func TestProgramDpButtonAvailableReturnsFalseWhenInactive(t *testing.T) {
 	btn := &ProgramDpButton{Program: pg}
 	if btn.Available() {
 		t.Fatal("Available() must be false when program is inactive")
-	}
-}
-
-// ─── SysvarDpBinarySensor.BoolValue ───────────────────────────────────
-
-// TestSysvarDpBinarySensorBoolValueUnobserved verifies that BoolValue
-// returns (false, false) before the first observation — mirroring
-// Python's None return for an unobserved sysvar.
-func TestSysvarDpBinarySensorBoolValueUnobserved(t *testing.T) {
-	sv := NewSysvar("c1", "motion", "", hmenum.HubValueTypeLogic, nil)
-	bs := &SysvarDpBinarySensor{Sysvar: sv}
-	val, ok := bs.BoolValue()
-	if ok {
-		t.Fatal("BoolValue() ok must be false before first observation")
-	}
-	if val {
-		t.Fatal("BoolValue() value must be false before first observation")
-	}
-}
-
-// TestSysvarDpBinarySensorBoolValueTrue verifies that BoolValue
-// returns (true, true) after a true observation.
-func TestSysvarDpBinarySensorBoolValueTrue(t *testing.T) {
-	sv := NewSysvar("c1", "motion", "", hmenum.HubValueTypeLogic, nil)
-	bs := &SysvarDpBinarySensor{Sysvar: sv}
-	sv.OnValue(hmtypes.BoolValue(true))
-	val, ok := bs.BoolValue()
-	if !ok {
-		t.Fatal("BoolValue() ok must be true after observation")
-	}
-	if !val {
-		t.Fatal("BoolValue() value must be true after true observation")
-	}
-}
-
-// TestSysvarDpBinarySensorBoolValueFalse verifies that BoolValue
-// returns (false, true) after a false observation.
-func TestSysvarDpBinarySensorBoolValueFalse(t *testing.T) {
-	sv := NewSysvar("c1", "motion", "", hmenum.HubValueTypeLogic, nil)
-	bs := &SysvarDpBinarySensor{Sysvar: sv}
-	sv.OnValue(hmtypes.BoolValue(false))
-	val, ok := bs.BoolValue()
-	if !ok {
-		t.Fatal("BoolValue() ok must be true after observation (even false value)")
-	}
-	if val {
-		t.Fatal("BoolValue() value must be false after false observation")
-	}
-}
-
-// TestSysvarDpBinarySensorBoolValueNonBoolKind verifies that BoolValue
-// returns (false, false) when the stored value is not a bool.
-func TestSysvarDpBinarySensorBoolValueNonBoolKind(t *testing.T) {
-	sv := NewSysvar("c1", "count", "", hmenum.HubValueTypeInteger, nil)
-	bs := &SysvarDpBinarySensor{Sysvar: sv}
-	sv.OnValue(hmtypes.IntValue(5))
-	val, ok := bs.BoolValue()
-	if ok {
-		t.Fatal("BoolValue() ok must be false for non-bool value")
-	}
-	if val {
-		t.Fatal("BoolValue() value must be false for non-bool value")
 	}
 }
 

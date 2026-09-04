@@ -57,6 +57,31 @@ func NewDiagramConfigStore(db *sql.DB) *DiagramConfigStore {
 // series list capped at [maxDiagramSeries], and every series carrying a
 // non-empty central (multi-CCU routing safety). The rest of the blob is
 // opaque to the daemon.
+//
+// Two properties of this validator are worth knowing before relying on it.
+//
+// Neither cap is published. The REST schema documents `config` as an opaque
+// object, the SPA's diagram editor enforces no series limit and measures no
+// blob size, and no i18n key exists for either message — so a diagram with
+// more series than the cap is constructible in the editor, passes every check
+// the operator can see, and comes back rejected with the English sentence
+// below rendered verbatim in a toast. Raising or lowering the cap here does
+// not change what the editor lets an operator build.
+//
+// The blob cap is additionally restated in the REST handler, over the whole
+// request body rather than over the blob alone, so on the REST path the
+// handler's is the binding one and this cap is defence-in-depth for a
+// non-REST caller. The two literals are pinned to one value by
+// TestW2StoDiagramBlobCapHasOneValue in tests/contract — the series cap has
+// no such counterpart anywhere, which is the asymmetry above.
+//
+// And the check keys on the document's shape by name: json.Unmarshal ignores
+// unknown keys, so a blob whose series list is not called `series`, or whose
+// entries do not carry `central`, unmarshals into an empty slice, skips both
+// loops and validates clean. The central check is a routing-safety check, so
+// its silent form is the dangerous one — a renamed key on the SPA side turns
+// it off with a 200, not with an error. TestDiagram_ValidationKeysOnSeriesKey
+// measures that, so the coupling is visible rather than assumed.
 func validateDiagram(name, visibility, configJSON string) error {
 	if name == "" {
 		return fmt.Errorf("%w: name required", ErrDiagramInvalid)

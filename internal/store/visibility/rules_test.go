@@ -83,6 +83,11 @@ func TestParameterIsWildcardIgnored(t *testing.T) {
 		{"ADJUSTING_SOMETHING", true},
 		{"ERR_TTM_SOMETHING", true},
 		{"HANDLE_SOMETHING", true},
+		// The only two HANDLE_* names any device is known to declare. The raw
+		// pattern still matches them — the carve-out that keeps them alive is
+		// the per-device un-ignore entry, checked one level up in the decider.
+		{"HANDLE_LOCK", true},
+		{"HANDLE_LED_MODE", true},
 		{"IDENTIFY_SOMETHING", true},
 		{"PARTY_START_SOMETHING", true},
 		{"PARTY_STOP_SOMETHING", true},
@@ -544,5 +549,25 @@ func TestDeciderHiddenParametersAddedToRules(t *testing.T) {
 	r.mu.RUnlock()
 	if !ok {
 		t.Error("UNREACH must be in hiddenGlobal after NewRules() (from hiddenParameters)")
+	}
+}
+
+// TestDeciderPcbsSuppressEntriesReachOnlyLongerVariants pins what the
+// HmIP-PCBS entries in ignoreParametersByDevice actually do. Measured: for
+// the model HmIP-PCBS itself the entries never fire, because step 0 of
+// computeIgnoredValues returns not-ignored first — deviceUnIgnoresByPrefix
+// matches the un-ignore key HmIP-PCBS-BAT, which STARTS WITH the model. The
+// entries reach only longer variants that are not a prefix of an un-ignore
+// key, HmIP-PCBS2 being the one such model in the tree.
+func TestDeciderPcbsSuppressEntriesReachOnlyLongerVariants(t *testing.T) {
+	t.Parallel()
+	d := NewParameterDecider(nil)
+	for _, p := range []hmenum.Parameter{hmenum.ParameterOperatingVoltage, hmenum.ParameterLowBat} {
+		if d.IsParameterIgnored("HmIP-PCBS", "X", channelNoUnknown, hmenum.ParamsetKeyValues, p) {
+			t.Errorf("%s must NOT be ignored for HmIP-PCBS: the HmIP-PCBS-BAT un-ignore entry wins in step 0", p)
+		}
+		if !d.IsParameterIgnored("HmIP-PCBS2", "X", channelNoUnknown, hmenum.ParamsetKeyValues, p) {
+			t.Errorf("%s must be ignored for HmIP-PCBS2: no un-ignore key starts with it, so the suppress entry applies", p)
+		}
 	}
 }

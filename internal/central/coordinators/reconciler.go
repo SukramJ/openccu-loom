@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/observability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // InterfaceReachability is one (interface_id, reachable) pair returned
@@ -41,11 +42,12 @@ type InterfaceReachability struct {
 // ResolvedInterface returns the typed interface enum: the explicit Interface
 // field when set, otherwise InterfaceID parsed as an interface token (valid
 // only when InterfaceID is still a bare name).
+//
+// The rule is delegated to [hub.InterfaceReachability.ResolvedInterface] so
+// the two reachability types — this one and the hub's, which differ only in
+// the LatencyMs field — cannot drift apart on the fallback.
 func (r InterfaceReachability) ResolvedInterface() hmenum.Interface {
-	if r.Interface != "" {
-		return r.Interface
-	}
-	return hmenum.Interface(r.InterfaceID)
+	return hub.InterfaceReachability{InterfaceID: r.InterfaceID, Interface: r.Interface}.ResolvedInterface()
 }
 
 // ConnectivityProbe is the south-bound contract the [Reconciler] calls
@@ -291,7 +293,14 @@ func (r *Reconciler) reconcileVanishedInterfaces(conn *hub.Connectivity, probed 
 		// The interface keeps its tracker entry with Reachable=false
 		// instead of dropping out of it, so the north-bound surfaces
 		// show it as down rather than as never-seen.
-		conn.OnStateWithInterface(id, hmenum.Interface(id), false)
+		//
+		// The ids in this set come from the previous probe, so they carry
+		// the wire form `<central>-<interface>`; casting one straight to
+		// hmenum.Interface produced "ccu1-BidCos-RF", which matches no enum
+		// value. Bare strips the central prefix and returns a bare id
+		// unchanged, so a probe that never got the prefix stamped on still
+		// resolves.
+		conn.OnStateWithInterface(id, hmtypes.ParseWireInterfaceID(id).Bare(r.CentralName), false)
 		if observed && !cached {
 			continue
 		}

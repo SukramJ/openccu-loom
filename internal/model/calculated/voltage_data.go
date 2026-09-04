@@ -3,6 +3,8 @@
 
 package calculated
 
+import "github.com/SukramJ/openccu-loom/pkg/hmenum"
+
 // BatteryType identifies the cell chemistry / form-factor a Homematic device
 // uses.
 type BatteryType string
@@ -195,15 +197,15 @@ func IsOperatingVoltageLevelRelevant(ch ChannelInspector, model string) bool {
 		return false
 	}
 	vi, hasVI := ch.(voltageChannelInspector)
-	if ch.HasParameter("OPERATING_VOLTAGE") {
+	if ch.HasParameter(string(hmenum.ParameterOperatingVoltage)) {
 		if hasVI {
-			return vi.HasMasterParameter("LOW_BAT_LIMIT")
+			return vi.HasMasterParameter(string(hmenum.ParameterLowBatLimit))
 		}
 		return true // fallback: MASTER check unavailable
 	}
-	if ch.HasParameter("BATTERY_STATE") {
+	if ch.HasParameter(string(hmenum.ParameterBatteryState)) {
 		if hasVI {
-			return vi.HasDeviceMasterParameter("LOW_BAT_LIMIT")
+			return vi.HasDeviceMasterParameter(string(hmenum.ParameterLowBatLimit))
 		}
 		return true // fallback: MASTER check unavailable
 	}

@@ -305,19 +305,54 @@ func (d *Device) runLoadMaster(ctx context.Context, loader ValueLoader, cache *v
 //     fill can never overwrite a restored / already-known value with a fresh
 //     read that may be a not-yet-measured placeholder.
 func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey, direct bool) error {
-	// For some interfaces a per-parameter GetParamset/GetValue fallback during
-	// init cannot return a device-fresh reading — only a CCU-internal placeholder
-	// (reported with *_STATUS = NORMAL so the status cannot be used to reject it),
-	// which would be marked valid and thereby mask an actually uncertain state:
-	//   - VirtualDevices (e.g. heating groups) have no physical device behind them;
-	//     their VALUES are aggregated by the CCU (e.g. 0 for a not-yet-measured
-	//     ACTUAL_TEMPERATURE right after a CCU restart).
-	//   - BidCos-RF hosts passive/battery devices that cannot be actively queried;
-	//     the fallback then returns the paramset default instead of a real reading.
-	// The bulk seeder already gates these data points on a valid LastTimestamp()
-	// and is the only trustworthy source for these interfaces, so skip the
-	// per-parameter fallback entirely. The data point stays unobserved (sentinel)
-	// until a real value arrives via the event callback (#3228, #3260).
+	// For these two interfaces a per-parameter GetParamset fallback during init
+	// cannot be trusted to return a device-fresh reading, so it is skipped
+	// entirely: the bulk seeder gates its data points on a valid
+	// LastTimestamp() and is the trustworthy source. The data point stays
+	// unobserved (sentinel) until a real value arrives via the event callback
+	// (#3228, #3260).
+	//
+	// What the CCU actually does, per interface:
+	//
+	//   - BidCos-RF: rfd answers a VALUES read from its own value store. It
+	//     sends a get-request frame to the device only when the parameter
+	//     declares one AND the device does not need waking — 282 `<get>`
+	//     frames across 65 of the 127 shipped RF device types
+	//     (RFPhysicalDataInterfaceCommand.cpp:147-176, the empty-frame
+	//     return at :152 ahead of the RxNeedsWakeup branch at :166). For every
+	//     other parameter the read is answered from the store, and a store
+	//     miss is a hard failure, not a substituted value: HSSParamset::Get
+	//     aborts on the first unreadable parameter (HSSParamset.cpp:162-176)
+	//     and the call comes back as fault -1 "Failure"
+	//     (rfd/XmlRpcMethods.cpp:228-244). The paramset DEFAULT is used only
+	//     where the device XML sets use_default_on_failure, which in the
+	//     shipped rftypes is 65 empty-string parameters across 56 files
+	//     (HSSParameter.cpp:220-234, HSSLogicalType.cpp:25). So the risk here
+	//     is not a plausible-looking placeholder marked valid, and it is not
+	//     interface-wide either — this skip is broader than the firmware's own
+	//     condition, which is (declares a get frame) AND (mains-powered or
+	//     already stored).
+	//   - VirtualDevices (e.g. heating groups) have no physical device behind
+	//     them; their VALUES are aggregated by the CCU (e.g. 0 for a
+	//     not-yet-measured ACTUAL_TEMPERATURE right after a CCU restart). That
+	//     read path is served by the HmIP server's group stack, not by rfd,
+	//     and it is unverified against any source — this leg of the rule is
+	//     the reason to keep it, and the reason it cannot be narrowed yet.
+	//
+	// An earlier version of this comment justified the skip with a CCU-internal
+	// placeholder "reported with *_STATUS = NORMAL so the status cannot be used
+	// to reject it". That convention is an HmIP one: the `*_STATUS` ids in the
+	// shipped RF device types are device-specific signals (LED_STATUS,
+	// BACKLIGHT_AT_STATUS and similar), none of them a per-parameter validity
+	// flag of the kind the HmIP paramsets carry.
+	//
+	// What would settle this properly: rfd tracks exactly the flag this skip is
+	// guessing at — `undefined`, true from construction (HSSParameter.cpp:28)
+	// and cleared only when a device frame delivered the value (:355) — and
+	// exposes it through the three-argument getValue/getParamset form, which
+	// answers {VALUE, UNDEFINED} (:252-279). Reading that flag replaces the
+	// heuristic with the CCU's own verdict; widening or narrowing the interface
+	// list without it would be a second guess.
 	//
 	// direct=true is excluded from the skip: it is only ever set by
 	// scheduleSelfReload (callback_handlers.go), which fires right after a

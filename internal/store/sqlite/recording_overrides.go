@@ -112,16 +112,19 @@ func (s *RecordingOverrideStore) Clear(
 	return nil
 }
 
-// DeleteDevice removes every override for every channel of the given
-// device. Called on device-remove / unpair alongside the measurement
-// purge. Prefix-safe ("DEVICE" never matches "DEVICE2:0").
+// DeleteDevice removes every override for every channel of the given device.
+// Prefix-safe ("DEVICE" never matches "DEVICE2:0").
+//
+// Reached on device-remove / unpair alongside the measurement purge, through
+// [adapter.WireMeasurementEviction] and pinned with it. Like the measurement
+// purge it had no caller until that seam existed.
 func (s *RecordingOverrideStore) DeleteDevice(
 	ctx context.Context, centralName, interfaceID, deviceAddress string,
 ) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := deviceAddress + ":"
+	prefix := channelLikePrefix(deviceAddress)
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM measurement_recording_overrides
          WHERE central_name = ?

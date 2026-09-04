@@ -2,10 +2,10 @@
 // Copyright (C) 2026 SukramJ.
 
 // Tests for InterfaceClient capability-gated operations and helpers:
-// SanitizeErrorMessage, BackendCaller.Priority, PingPong hooks,
+// BackendCaller.Priority, PingPong hooks,
 // AllCircuitBreakersClosed, IsInitialized, RPCServerTypeForInterface,
 // MetricsCircuitState, payload accessors, state machine predicates,
-// ModifiedAt/SetModifiedAt, ForcedAvailability, capability-gated delegates,
+// ForcedAvailability, capability-gated delegates,
 // GetDeviceDescriptionWithCoalescing, GetParamsetDescriptionOnDemand,
 // CreateSystemVariable*, and ValueWriter wiring.
 package client_test
@@ -23,72 +23,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
-
-// ---------------------------------------------------------------------------
-// SanitizeErrorMessage
-// ---------------------------------------------------------------------------
-
-func TestSanitizeErrorMessageRedactsIP(t *testing.T) {
-	t.Parallel()
-	msg := "cannot connect to 192.168.1.100:2001"
-	got := client.SanitizeErrorMessage(msg)
-	if got == msg {
-		t.Error("expected IP to be redacted")
-	}
-	for _, forbidden := range []string{"192.168.1.100"} {
-		if contains(got, forbidden) {
-			t.Errorf("redacted string still contains %q: %q", forbidden, got)
-		}
-	}
-}
-
-func TestSanitizeErrorMessageRedactsHostname(t *testing.T) {
-	t.Parallel()
-	msg := "dial tcp ccu3.local:80: connection refused"
-	got := client.SanitizeErrorMessage(msg)
-	if contains(got, "ccu3.local") {
-		t.Errorf("hostname not redacted: %q", got)
-	}
-}
-
-func TestSanitizeErrorMessageRedactsSessionID(t *testing.T) {
-	t.Parallel()
-	msg := `failed with session_id: "abc123"`
-	got := client.SanitizeErrorMessage(msg)
-	if contains(got, "abc123") {
-		t.Errorf("session id not redacted: %q", got)
-	}
-}
-
-func TestSanitizeErrorMessageRedactsPassword(t *testing.T) {
-	t.Parallel()
-	msg := `password: "s3cr3t"`
-	got := client.SanitizeErrorMessage(msg)
-	if contains(got, "s3cr3t") {
-		t.Errorf("password not redacted: %q", got)
-	}
-}
-
-func TestSanitizeErrorMessagePassesThroughSafeMessage(t *testing.T) {
-	t.Parallel()
-	msg := "connection refused"
-	got := client.SanitizeErrorMessage(msg)
-	if got != msg {
-		t.Errorf("safe message mutated: got %q, want %q", got, msg)
-	}
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || sub == "" ||
-		func() bool {
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
-			}
-			return false
-		}())
-}
 
 // ---------------------------------------------------------------------------
 // BackendCaller.Priority and coalesceKeyFor
@@ -410,28 +344,6 @@ func TestStateMachineAddOnStateChange(t *testing.T) {
 	_ = ic.TransitionTo(hmenum.ClientStateInitializing, "", true, hmenum.FailureReasonNone)
 	// from == to is allowed; just verify no panic occurred.
 	_ = from == to
-}
-
-// ---------------------------------------------------------------------------
-// ModifiedAt / SetModifiedAt
-// ---------------------------------------------------------------------------
-
-func TestModifiedAtZeroInitially(t *testing.T) {
-	t.Parallel()
-	ic := newExtraIC(t, hmenum.InterfaceHmIPRF)
-	if !ic.ModifiedAt().IsZero() {
-		t.Error("ModifiedAt should be zero before any update")
-	}
-}
-
-func TestSetModifiedAt(t *testing.T) {
-	t.Parallel()
-	ic := newExtraIC(t, hmenum.InterfaceHmIPRF)
-	now := time.Now().Truncate(time.Second)
-	ic.SetModifiedAt(now)
-	if got := ic.ModifiedAt(); !got.Equal(now) {
-		t.Errorf("ModifiedAt()=%v, want %v", got, now)
-	}
 }
 
 // ---------------------------------------------------------------------------

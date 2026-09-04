@@ -192,6 +192,15 @@ func IsExcludedSysvar(name, id string) bool {
 
 // sysvarParamValue converts the raw JSON-decoded param value to the
 // [hmtypes.ParamValue] kind expected for the given [hmenum.HubValueType].
+//
+// A string is carried through untouched rather than parsed here. The
+// write path already owns that decision — [Sysvar.boolToWire],
+// [Sysvar.floatToWire] and [Sysvar.intToWire] are what actually reach the
+// CCU — and the copies that used to stand here disagreed with it in both
+// directions: the boolean set was case-sensitive and did not know "yes"
+// or "t", while the numeric ones used fmt.Sscanf, which reads "12abc" as
+// 12 and applies no bounds. So a caller could be refused a value the
+// daemon would have written, or have a malformed one accepted.
 func sysvarParamValue(vt hmenum.HubValueType, raw any) (hmtypes.ParamValue, error) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	switch vt {
 	case hmenum.HubValueTypeLogic:
@@ -201,12 +210,7 @@ func sysvarParamValue(vt hmenum.HubValueType, raw any) (hmtypes.ParamValue, erro
 		case float64:
 			return hmtypes.BoolValue(v != 0), nil
 		case string:
-			switch v {
-			case "true", "True", "TRUE", "1", "on", "ON":
-				return hmtypes.BoolValue(true), nil
-			case "false", "False", "FALSE", "0", "off", "OFF":
-				return hmtypes.BoolValue(false), nil
-			}
+			return hmtypes.StringValue(v), nil
 		}
 		return hmtypes.ParamValue{}, fmt.Errorf("%w: %q expects boolean", payload.ErrServiceInvalidParam, "value")
 	case hmenum.HubValueTypeFloat:
@@ -220,10 +224,7 @@ func sysvarParamValue(vt hmenum.HubValueType, raw any) (hmtypes.ParamValue, erro
 		case int64:
 			return hmtypes.FloatValue(float64(v)), nil
 		case string:
-			var f float64
-			if _, err := fmt.Sscanf(v, "%f", &f); err == nil {
-				return hmtypes.FloatValue(f), nil
-			}
+			return hmtypes.StringValue(v), nil
 		}
 		return hmtypes.ParamValue{}, fmt.Errorf("%w: %q expects float", payload.ErrServiceInvalidParam, "value")
 	case hmenum.HubValueTypeInteger:
@@ -235,10 +236,7 @@ func sysvarParamValue(vt hmenum.HubValueType, raw any) (hmtypes.ParamValue, erro
 		case int64:
 			return hmtypes.IntValue(int(v)), nil
 		case string:
-			var n int
-			if _, err := fmt.Sscanf(v, "%d", &n); err == nil {
-				return hmtypes.IntValue(n), nil
-			}
+			return hmtypes.StringValue(v), nil
 		}
 		return hmtypes.ParamValue{}, fmt.Errorf("%w: %q expects integer", payload.ErrServiceInvalidParam, "value")
 	case hmenum.HubValueTypeString:

@@ -121,13 +121,15 @@ func contains(s, sub string) bool {
 	return false
 }
 
-// TestCentralInfoPayloadOmitsCCUSecurityFlags pins that the CCU security
-// posture stays out of the MQTT-Discovery hub-device block. AuthEnabled and
-// HTTPSRedirectEnabled are deliberately untagged in [central.SystemInfo]:
-// they are a status-page concern, and leaking them into the discovery
-// payload would change a published wire contract. A `payload:"info"` tag
-// added to either field in a future edit fails here.
-func TestCentralInfoPayloadOmitsCCUSecurityFlags(t *testing.T) {
+// TestCentralInfoProjectionOmitsCCUSecurityFlags pins that [Unit.Info]'s
+// hand-written payload.CentralInfo projection carries no CCU security flag.
+// AuthEnabled and HTTPSRedirectEnabled are a status-page concern; adding
+// either to the projection would put it on a wire contract that HA-side
+// consumers already read.
+//
+// This marshals the projection, so it sees only what Info builds. It does
+// not observe [central.SystemInfo] itself.
+func TestCentralInfoProjectionOmitsCCUSecurityFlags(t *testing.T) {
 	t.Parallel()
 	unit, err := central.New(central.Config{Name: "GoOtto"})
 	if err != nil {
@@ -153,10 +155,10 @@ func TestCentralInfoPayloadOmitsCCUSecurityFlags(t *testing.T) {
 		"https_redirect_enabled", "HTTPSRedirectEnabled",
 	} {
 		if _, present := decoded[key]; present {
-			t.Errorf("discovery payload carries %q — the CCU security flags must stay untagged: %s", key, buf)
+			t.Errorf("CentralInfo projection carries %q — the CCU security flags must stay out of it: %s", key, buf)
 		}
 	}
-	// Sanity: the tagged neighbours are still there, so the assertion above
+	// Sanity: the projected neighbours are still there, so the assertion above
 	// is not passing merely because the payload is empty.
 	if _, present := decoded["serial_number"]; !present {
 		t.Errorf("expected serial_number in payload, got %s", buf)

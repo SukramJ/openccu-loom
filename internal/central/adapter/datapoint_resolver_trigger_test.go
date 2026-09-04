@@ -35,7 +35,7 @@ func TestButtonActionParametersResolveToActionTrigger(t *testing.T) {
 		t.Run(string(param), func(t *testing.T) {
 			t.Parallel()
 
-			dp := resolveDataPoint(generic.Spec{
+			dp := resolveDataPointWithUnIgnore(generic.Spec{
 				Key: hmtypes.DataPointKey{
 					ChannelAddress: "0001D3C99C1234:1",
 					Parameter:      string(param),
@@ -45,7 +45,7 @@ func TestButtonActionParametersResolveToActionTrigger(t *testing.T) {
 					Type:       hmenum.ParameterTypeAction,
 					Operations: hmenum.OperationsWrite,
 				},
-			})
+			}, false)
 			if dp == nil {
 				t.Fatalf("%s resolved to no data point", param)
 			}

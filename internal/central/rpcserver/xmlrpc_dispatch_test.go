@@ -52,6 +52,7 @@ type recordingHandlers struct {
 	readdedDevice   atomic.Int32
 	listDeviceCalls atomic.Int32
 	errorCalls      atomic.Int32
+	lastErrorCode   atomic.Int32
 }
 
 func (r *recordingHandlers) Event(_ context.Context, _, _, _ string, _ xmlrpc.Value) error {
@@ -89,8 +90,9 @@ func (r *recordingHandlers) ListDevices(_ context.Context, _ string) (xmlrpc.Arr
 	return xmlrpc.ArrayValue{xmlrpc.StringValue("DEV001")}, nil
 }
 
-func (r *recordingHandlers) Error(_ context.Context, _ string, _ int, _ string) error {
+func (r *recordingHandlers) Error(_ context.Context, _ string, code int, _ string) error {
 	r.errorCalls.Add(1)
+	r.lastErrorCode.Store(int32(code))
 	return nil
 }
 
@@ -229,6 +231,11 @@ func TestXMLRPCErrorCallbackWithStringCode(t *testing.T) {
 	}
 	if h.errorCalls.Load() != 1 {
 		t.Fatalf("error handler called %d times, want 1", h.errorCalls.Load())
+	}
+	// The decoded code, not merely the call: a dropped string branch
+	// would still deliver the callback, with 0.
+	if got := h.lastErrorCode.Load(); got != -5 {
+		t.Fatalf("error code = %d, want -5", got)
 	}
 }
 
@@ -928,6 +935,11 @@ func TestBINRPCDispatchErrorWithStringCode(t *testing.T) {
 	waitFor(t, func() bool { return h.errorCalls.Load() == 1 })
 	if h.errorCalls.Load() != 1 {
 		t.Fatalf("error handler called %d times, want 1", h.errorCalls.Load())
+	}
+	// The decoded code, not merely the call: a dropped string branch
+	// would still deliver the callback, with 0.
+	if got := h.lastErrorCode.Load(); got != -7 {
+		t.Fatalf("error code = %d, want -7", got)
 	}
 }
 

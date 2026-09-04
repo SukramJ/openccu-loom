@@ -3,7 +3,11 @@
 
 package config
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
+)
 
 // TestNorthMatter_WithDefaults_ZeroValue verifies that every documented
 // zero-value default is applied when the struct is entirely unset. This is
@@ -31,8 +35,23 @@ func TestNorthMatter_WithDefaults_ZeroValue(t *testing.T) {
 	if got.MDNSAdvertise != "zeroconf" {
 		t.Errorf("MDNSAdvertise = %q, want %q", got.MDNSAdvertise, "zeroconf")
 	}
-	if got.Commissioning.Iterations != 1000 {
-		t.Errorf("Commissioning.Iterations = %d, want 1000", got.Commissioning.Iterations)
+	// Named against the PBKDF package's own floor rather than a literal
+	// 1000: the default and the validator's lower bound have to be the
+	// same number, and a literal here would let the default drift under
+	// its own validator and turn the shipped default into a config the
+	// operator cannot save.
+	if got.Commissioning.Iterations != spake2.IterationsMin {
+		t.Errorf("Commissioning.Iterations = %d, want the PBKDF floor %d",
+			got.Commissioning.Iterations, spake2.IterationsMin)
+	}
+	if err := validateMatter(&got); err != nil {
+		t.Errorf("the shipped default must survive its own validator: %v", err)
+	}
+	below := got
+	below.Commissioning.Iterations = spake2.IterationsMin - 1
+	if err := validateMatter(&below); err == nil {
+		t.Errorf("iterations %d is below the PBKDF floor %d and must be rejected",
+			below.Commissioning.Iterations, spake2.IterationsMin)
 	}
 }
 

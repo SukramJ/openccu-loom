@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -987,10 +986,11 @@ func (p *DevicePipeline) finishIngest(
 	// (CONFIG_PENDING, UNREACH, UPDATE_PENDING, CHANNEL_OPERATION_MODE,
 	// LOW_BAT_LIMIT, …).
 	p.applyHiddenParameterMarks(interfaceID)
-	// Force usage=event on click-event parameters (PRESS_*) of physical
-	// devices: the reference stack models them as events (HA spawns keypress
-	// event groups, never generic button entities). Virtual remotes are
-	// the exception — their press parameters are real clickable actions.
+	// Decide the usage of click-event parameters (PRESS_*) on physical
+	// devices from the parameter's own OPERATIONS bitmask: a press without
+	// the WRITE bit is an event source only, so it is forced to
+	// usage=event. Virtual remotes are skipped entirely — their press
+	// parameters are writable actions the operator triggers.
 	p.applyClickEventMarks(interfaceID)
 	// Force NoCreate on every parameter whose FLAGS bitmask carries
 	// `Flag.INTERNAL`, unless it appears in the
@@ -1176,19 +1176,19 @@ func (p *DevicePipeline) applyHiddenParameterMarks(interfaceID string) {
 }
 
 // applyClickEventMarks decides the usage of click-event parameters
-// (PRESS_SHORT, PRESS_LONG, PRESS, …) on non-virtual-remote devices, mirroring
-// the reference stack's two-object model: each click parameter is BOTH a button
-// (DpButton) and a keypress event, each with its own usage. The daemon carries
-// one data point per parameter, so its single usage is mapped as:
+// (PRESS_SHORT, PRESS_LONG, PRESS, …) on non-virtual-remote devices. A click
+// parameter is conceptually two objects — a button and a keypress event — but
+// the daemon carries one data point per parameter, so its single usage is
+// mapped as:
 //
 //   - data_point — button entity AND keypress event (data_point is not a
 //     suppressed event-group usage, so the event survives);
 //   - event      — no button, keypress event only;
 //   - ignored    — neither (left in place by an earlier visibility pass).
 //
-// Button-vs-event follows the reference type resolver: a click parameter
-// becomes a button only when it is WRITABLE (its OPERATIONS bitmask carries the
-// WRITE bit — e.g. a HM-RC KEY channel's PRESS_SHORT, OPS=6). A purely
+// Button-vs-event is decided by the parameter's OPERATIONS bitmask: a click
+// parameter becomes a button only when it is WRITABLE (the WRITE bit is set —
+// e.g. a HM-RC KEY channel's PRESS_SHORT, OPS=6). A purely
 // event-driven press (OPS=4, every KEY_TRANSCEIVER / MULTI_MODE_INPUT_TRANSMITTER
 // transmitter and the central/long-press parameters) resolves to a read-only
 // click and never spawns a button — it stays an event source only. Writable
@@ -2280,17 +2280,11 @@ func (p *DevicePipeline) restoreValuesFromCache(
 }
 
 // splitChannel reports whether addr is a channel address (contains
-// ":<n>"). Returns (channel_no, true) on hit.
+// ":<n>"). Returns (channel_no, true) on hit. Delegates to
+// [hmtypes.ChannelNo] so the pipeline reads addresses by the same grammar
+// the rest of the daemon does.
 func splitChannel(addr string) (int, bool) {
-	i := strings.LastIndexByte(addr, ':')
-	if i < 0 {
-		return 0, false
-	}
-	n, err := strconv.Atoi(addr[i+1:])
-	if err != nil {
-		return 0, false
-	}
-	return n, true
+	return hmtypes.ChannelNo(addr)
 }
 
 func channelNumber(addr string) int {

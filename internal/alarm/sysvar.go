@@ -5,10 +5,10 @@ package alarm
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -185,7 +185,7 @@ func (m *sysvarMirror) mirrorTargets(ctx context.Context, zoneID string) []mirro
 		if row.Class != hmenum.AlarmOutputClassSysvarMirror {
 			continue
 		}
-		cfg, err := parseMirrorConfig(row.ConfigJSON)
+		cfg, err := outputs.ParseOutputConfig(row.ConfigJSON)
 		if err != nil || cfg.SysvarName == "" {
 			continue
 		}
@@ -210,13 +210,6 @@ type mirrorTarget struct {
 	// false otherwise, never creates or retypes the variable, and
 	// accepts no inbound intents through it (a bool carries no mode).
 	existing bool
-}
-
-// mirrorConfig is the sysvar-relevant slice of the output config.
-type mirrorConfig struct {
-	SysvarName        string `json:"sysvar_name"`
-	SysvarAllowDisarm bool   `json:"sysvar_allow_disarm"`
-	SysvarExisting    bool   `json:"sysvar_existing"`
 }
 
 // onStateChanged queues the zone state for export to every mirror
@@ -437,17 +430,4 @@ func sysvarValueIndex(v hmtypes.ParamValue) (int, bool) {
 	default:
 	}
 	return 0, false
-}
-
-// parseMirrorConfig decodes the sysvar-relevant slice of an output
-// config document.
-func parseMirrorConfig(raw string) (mirrorConfig, error) {
-	var cfg mirrorConfig
-	if raw == "" {
-		raw = "{}"
-	}
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return mirrorConfig{}, err
-	}
-	return cfg, nil
 }

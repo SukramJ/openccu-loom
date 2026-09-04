@@ -14,13 +14,18 @@ import (
 	"time"
 )
 
-// maxDecodeDepth bounds how deeply nested <struct>/<array> values may be
+// MaxDecodeDepth bounds how deeply nested <struct>/<array> values may be
 // in a single decoded value. Without it, a crafted payload of deeply
 // nested arrays drives the decoder into unbounded recursion and crashes
-// the process with a non-recoverable stack-overflow. Real CCU responses
-// nest only a few levels; 64 mirrors the equivalent guard in
-// transport/binrpc/decode.go and is far above any legitimate response.
-const maxDecodeDepth = 64
+// the process with a non-recoverable stack-overflow — in the BIN-RPC
+// framing ~1.3M nested arrays (≈10 MB, under MaxMessageSize) suffice.
+// Real CCU/CUxD responses and paramsets nest only a few levels (a struct
+// of values, an array of structs); 64 is far above any legitimate
+// Homematic response.
+//
+// It is one policy for both codecs: transport/binrpc's readValue bounds
+// itself by this same constant, so the two decoders cannot drift apart.
+const MaxDecodeDepth = 64
 
 // DecodeValue reads a single <value>…</value> element from d, starting
 // at start. The returned Value is one of the concrete types in value.go.
@@ -38,13 +43,13 @@ func DecodeValue(d *xml.Decoder, start xml.StartElement) (Value, error) {
 // decodeValue is the depth-tracking implementation behind [DecodeValue].
 // depth counts <struct>/<array> nesting so a crafted deeply-nested
 // payload cannot drive unbounded recursion into a stack-overflow crash;
-// see [maxDecodeDepth].
+// see [MaxDecodeDepth].
 func decodeValue(d *xml.Decoder, start xml.StartElement, depth int) (Value, error) {
 	if start.Name.Local != "value" {
 		return nil, fmt.Errorf("xmlrpc: expected <value>, got <%s>", start.Name.Local)
 	}
-	if depth > maxDecodeDepth {
-		return nil, fmt.Errorf("xmlrpc: nesting exceeds max depth %d", maxDecodeDepth)
+	if depth > MaxDecodeDepth {
+		return nil, fmt.Errorf("xmlrpc: nesting exceeds max depth %d", MaxDecodeDepth)
 	}
 
 	var chardata strings.Builder

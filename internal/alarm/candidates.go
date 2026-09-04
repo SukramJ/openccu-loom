@@ -174,14 +174,6 @@ func (s *Service) OutputCandidates(class hmenum.AlarmOutputClass) []OutputCandid
 	return out
 }
 
-// remoteKeyParams is the press-parameter dispatch set of the intent
-// router (intents.go onEvent): remote-key bindings only ever fire on
-// these parameters, so only channels emitting them are candidates.
-var remoteKeyParams = []hmenum.Parameter{
-	hmenum.ParameterPressShort,
-	hmenum.ParameterPressLong,
-}
-
 // RemoteKeyCandidate is one channel that emits the key-press events
 // remote-key code bindings dispatch on — a physical remote-control or
 // wall-button key. Virtual remote channels are excluded (they would
@@ -216,8 +208,13 @@ func (s *Service) RemoteKeyCandidates() []RemoteKeyCandidate {
 				// the pipeline materialises every wire parameter as a
 				// DP (device_pipeline.go), so presence in the VALUES
 				// paramset is the authoritative key-channel signal.
+				// The dispatch set comes from the router itself
+				// ([RemotePressParameters]) — a parameter the picker
+				// offers but the router never routes binds a key that
+				// silently never fires, and one it routes but the
+				// picker hides cannot be bound at all.
 				var params []string
-				for _, p := range remoteKeyParams {
+				for _, p := range RemotePressParameters() {
 					if ch.Parameter(p) != nil {
 						params = append(params, string(p))
 					}

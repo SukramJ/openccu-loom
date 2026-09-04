@@ -354,7 +354,7 @@ func pickFirstCentral(cfg *config.Config) string {
 // singleCentralName returns the name of the registered central when
 // the registry contains exactly one entry, otherwise the empty
 // string. The REST router uses the result to pre-populate
-// `central_name` in every request's [reqctx.RequestContext]. Multi-
+// `central_name` in every request's [hmreqctx.RequestContext]. Multi-
 // central deployments leave the request scope unset and rely on
 // per-handler resolution.
 func singleCentralName(reg *central.Registry) string {

@@ -187,8 +187,19 @@ func (d *DataPoint[T]) State() payload.StatePayload {
 	return st
 }
 
-// timestampLayout is the wire format the payload methods emit for
-// time fields. RFC3339 with nanoseconds matches the existing JSON
-// payload format the MQTT bridge produces in
-// [internal/north/mqtt/bridge.go::renderStatePayload].
+// timestampLayout is the wire format the payload methods emit for time
+// fields: RFC3339 in UTC with the fractional second padded to a fixed nine
+// digits.
+//
+// It is deliberately not [time.RFC3339Nano], which trims trailing zeros and
+// therefore varies its width with the value: an instant at .5 s renders as
+// ".500000000Z" through this layout and ".5Z" through that one. Both
+// spellings are live in the daemon — the MQTT bridge's state payload and the
+// WebSocket value-changed payload format the same `modified_at` key with
+// time.RFC3339Nano — so this constant is one plane's answer, not the
+// daemon-wide one. The two re-parse to the same instant; only a consumer that
+// string-compares or assumes a fixed width can tell them apart.
+//
+// TestW2GenTimestampLayoutIsFixedWidth pins the padding against a silent
+// swap to time.RFC3339Nano.
 const timestampLayout = "2006-01-02T15:04:05.000000000Z07:00"

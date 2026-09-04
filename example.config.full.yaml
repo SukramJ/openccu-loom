@@ -849,12 +849,23 @@ centrals:
 
     # Visibility overrides: promote parameters from the default hidden set
     # into the visible data points.
-    # Format: "MODEL:CHANNEL:PARAMETER" (wildcards * for MODEL/CHANNEL).
-    # Bare parameter names (without colons) → "*:*:PARAMETER".
+    #
+    # Two accepted forms:
+    #   "PARAMETER"                         — every VALUES paramset, any
+    #                                         model, any channel
+    #   "PARAMETER:PARAMSET@MODEL:CHANNEL"  — fully qualified; MODEL may be
+    #                                         "all" and CHANNEL may be "all"
+    #                                         or left empty for any channel
+    # A colon without an "@" is rejected, so "MODEL:CHANNEL:PARAMETER" is
+    # not a valid entry.
+    #
+    # Entries are stored per central but take effect across the whole
+    # fleet: a pattern names a model, a channel and a parameter, none of
+    # which identify a CCU.
     visibility:
       un_ignore: []
-      # - "*:*:RSSI_DEVICE"
-      # - "HM-CC-RT-DN:4:VALVE_STATE"
+      # - "RSSI_DEVICE"
+      # - "VALVE_STATE:VALUES@HM-CC-RT-DN:4"
 
   # Second CCU (multi-CCU example)
   # - name: Office

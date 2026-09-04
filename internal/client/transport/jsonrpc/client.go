@@ -19,6 +19,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -333,7 +334,7 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	// when the body is not already valid UTF-8, so a proper UTF-8 response is
 	// left untouched.
 	if !utf8.Valid(raw) {
-		raw = latin1ToUTF8(raw)
+		raw = hmtypes.Latin1ToUTF8(raw)
 	}
 
 	switch resp.StatusCode {
@@ -823,16 +824,4 @@ func (c *Client) wrap(method string, err error) error {
 		Method:   method,
 		Host:     c.host,
 	})
-}
-
-// latin1ToUTF8 reinterprets an ISO-8859-1 (Latin-1) byte slice as UTF-8: each
-// byte 0x00-0xFF maps to the same Unicode code point. ASCII bytes are
-// unchanged, so a JSON structure is preserved while its high-byte string
-// contents (e.g. a program name with an umlaut) become valid UTF-8.
-func latin1ToUTF8(b []byte) []byte {
-	runes := make([]rune, len(b))
-	for i, c := range b {
-		runes[i] = rune(c)
-	}
-	return []byte(string(runes))
 }

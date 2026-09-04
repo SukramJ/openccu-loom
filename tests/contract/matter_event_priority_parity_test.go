@@ -144,13 +144,17 @@ func TestMatterEventPrioritiesMatchMatterJS(t *testing.T) {
 
 // exprText renders an expression the way the source writes it, so a
 // qualified identifier (core.EventReachableChanged) and a package-local one
-// (basicInfoEventStartUp) are both usable as table keys.
+// (basicInfoEventStartUp) are both usable as table keys. A literal renders
+// as written, quotes included, for callers that resolve constants and
+// literals through the same path.
 func exprText(e ast.Expr) string {
 	switch v := e.(type) {
 	case *ast.Ident:
 		return v.Name
 	case *ast.SelectorExpr:
 		return exprText(v.X) + "." + v.Sel.Name
+	case *ast.BasicLit:
+		return v.Value
 	default:
 		return ""
 	}

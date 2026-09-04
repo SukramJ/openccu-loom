@@ -40,24 +40,28 @@ func discoveryPayload(t *testing.T, uniqueID, originName string) []byte {
 func TestUnscopedDiscoveryCleanupClearsOnlyAmbiguousOwnPayloads(t *testing.T) {
 	t.Parallel()
 
-	const (
-		unscopedTopic = "homeassistant/event/ccu_bidcos-rf/10_event/config"
-		scopedTopic   = "homeassistant/event/ccu_bidcos-rf/11_event/config"
-		foreignTopic  = "homeassistant/sensor/zigbee2mqtt_x/temp/config"
-		unrelatedID   = "homeassistant/switch/other/thing/config"
-	)
-
-	mc := &mockRetainClient{
-		retained: []retainedMsg{
-			{topic: unscopedTopic, payload: discoveryPayload(t, "loom__bidcos_rf_10_event", originName)},
-			{topic: scopedTopic, payload: discoveryPayload(t, "loom_4993d962_bidcos_rf_11_event", originName)},
-			// Another integration whose ids happen to start the same way
-			// must not be touched — the origin block is what separates us.
-			{topic: foreignTopic, payload: discoveryPayload(t, "loom__something", "zigbee2mqtt")},
-			{topic: unrelatedID, payload: []byte(`not json`)},
-		},
-	}
+	mc := &mockRetainClient{}
 	b := NewBridge(BridgeConfig{Base: "openccu-loom", HADiscoveryEnabled: true, CentralName: "ccu"}, mc)
+
+	// Seeded through the producer, not typed out: the sweep filters on
+	// the Discovery root and the producer builds it, so a root that
+	// moved on one side only must leave nothing for the sweep to match.
+	// The scoped orphan sweep is already pinned this way; this is the
+	// unscoped half.
+	var (
+		unscopedTopic = b.Topics().DiscoveryConfig("event", "ccu_bidcos-rf", "10_event")
+		scopedTopic   = b.Topics().DiscoveryConfig("event", "ccu_bidcos-rf", "11_event")
+		foreignTopic  = b.Topics().DiscoveryConfig("sensor", "zigbee2mqtt_x", "temp")
+		unrelatedID   = b.Topics().DiscoveryConfig("switch", "other", "thing")
+	)
+	mc.retained = []retainedMsg{
+		{topic: unscopedTopic, payload: discoveryPayload(t, "loom__bidcos_rf_10_event", originName)},
+		{topic: scopedTopic, payload: discoveryPayload(t, "loom_4993d962_bidcos_rf_11_event", originName)},
+		// Another integration whose ids happen to start the same way
+		// must not be touched — the origin block is what separates us.
+		{topic: foreignTopic, payload: discoveryPayload(t, "loom__something", "zigbee2mqtt")},
+		{topic: unrelatedID, payload: []byte(`not json`)},
+	}
 	// The stale topic is in `declared` from this boot's publish; the sweep
 	// has to drop it there too, or the diff gate suppresses the corrected
 	// republish against the payload it just cleared.

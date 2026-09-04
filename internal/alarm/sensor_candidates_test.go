@@ -179,6 +179,29 @@ func TestSensorCandidateFor(t *testing.T) {
 			parameter: "ACTUAL_TEMPERATURE",
 			wantOK:    false,
 		},
+		{
+			// The third detection-state parameter the intrusion branch
+			// accepts. HmIP-SPI channel 1 is a PRESENCEDETECTOR_TRANSCEIVER
+			// and declares PRESENCE_DETECTION_STATE as a BOOL, so it is a
+			// motion-role candidate exactly like MOTION.
+			name:              "presence detector detection state",
+			model:             "HmIP-SPI",
+			channelType:       "PRESENCEDETECTOR_TRANSCEIVER",
+			parameter:         hmenum.ParameterPresenceDetectionState,
+			wantOK:            true,
+			wantSensorType:    hmenum.AlarmSensorTypeMotion,
+			wantSecurityClass: hmenum.SecurityClassIntrusion,
+			wantRecommended:   true,
+		},
+		{
+			// The same channel's illumination reading is not a detection
+			// state and must not be offered.
+			name:        "presence detector illumination is not a candidate",
+			model:       "HmIP-SPI",
+			channelType: "PRESENCEDETECTOR_TRANSCEIVER",
+			parameter:   "ILLUMINATION",
+			wantOK:      false,
+		},
 	}
 
 	for _, tc := range cases {

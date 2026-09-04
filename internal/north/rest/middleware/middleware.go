@@ -90,7 +90,7 @@ func Logger(logger *slog.Logger) func(http.Handler) http.Handler {
 			case sw.status >= 400:
 				level = slog.LevelWarn
 			}
-			// request_id is not added here: reqctx.ContextHandler already
+			// request_id is not added here: hmreqctx.ContextHandler already
 			// injects it from the RequestContext that ReqContextWithCentral
 			// installs upstream of this middleware. Adding it again would
 			// emit the key twice in the same JSON record.
@@ -154,7 +154,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 			defer func() {
 				if rec := recover(); rec != nil {
 					// request_id is not added here for the same reason as in
-					// Logger: reqctx.ContextHandler already injects it.
+					// Logger: hmreqctx.ContextHandler already injects it.
 					logger.LogAttrs(
 						r.Context(), slog.LevelError, "http.panic",
 						slog.String("panic", fmt.Sprint(rec)),

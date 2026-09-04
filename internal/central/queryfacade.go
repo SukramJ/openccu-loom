@@ -434,17 +434,38 @@ func isIgnoredDataPoint(dp device.ParameterDataPoint) bool {
 // operationsMatchParamset reports whether dp's OPERATIONS bitmask
 // satisfies the per-paramset filter for un-ignore candidates:
 //
-//   - VALUES: READ | EVENT both set
+//   - VALUES: READ *or* EVENT set
 //   - MASTER: READ set
 //
 // DPs that fail the filter are skipped — they would never be
 // observable / event-emitting if un-ignored, so listing them is
 // noise.
+//
+// Authority for the VALUES arm being a disjunction. Event delivery in the
+// firmware is gated on OP_EVENT alone: HSSParameter::ReportEvent opens with
+// `if(!(operations & OP_EVENT))return;`
+// (../OpenCCU-Base/src/libhsscomm/HSSParameter.cpp:363) and never consults
+// READ, over the bit values at
+// ../OpenCCU-Base/src/libhsscomm/HSSParameter.h:54-58 (READ=1, WRITE=2,
+// EVENT=4). Event-without-read is the normal shape for every button press
+// and for INSTALL_TEST — 64 VALUES parameters across the shipped device
+// descriptions declare `event` without `read`, OPERATIONS=4 or 6. Requiring
+// both bits therefore hid exactly the parameters an operator is most likely
+// to want back, INSTALL_TEST above all: it is forced to Ignored by
+// internal/store/visibility/rules.go, which makes it a candidate, and the
+// conjunction then dropped it from the picker with no diagnostic. The
+// daemon's own event resolver already encodes the correct rule — see
+// internal/central/adapter/datapoint_resolver.go on click-event parameters
+// being EVENT-only on the wire.
+//
+// The MASTER arm is untouched: MASTER is a paramset read/write surface, and
+// requiring READ there matches the descriptor the CCU publishes
+// (HSSParameter.cpp:209 emits OPERATIONS verbatim).
 func operationsMatchParamset(dp device.ParameterDataPoint, paramsetKey hmenum.ParamsetKey) bool {
 	ops := dp.ParameterData().Operations
 	switch paramsetKey {
 	case hmenum.ParamsetKeyValues:
-		return ops.Has(hmenum.OperationsRead | hmenum.OperationsEvent)
+		return ops.Has(hmenum.OperationsRead) || ops.Has(hmenum.OperationsEvent)
 	case hmenum.ParamsetKeyMaster:
 		return ops.Has(hmenum.OperationsRead)
 	default:

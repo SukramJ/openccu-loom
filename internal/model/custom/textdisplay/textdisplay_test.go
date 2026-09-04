@@ -313,11 +313,12 @@ func TestTextDisplaySubDataPointKeysEmptyWithoutBurstLimitWarning(t *testing.T) 
 	}
 }
 
-// ─── L12: HADiscoveryPayload max=24 ──────────────────────────────────────────
+// ─── HADiscoveryPayload max ─────────────────────────────────────────────────
 
-// TestTextDisplayHADiscoveryPayloadMaxIs24 verifies that the HA Discovery payload
-// advertises max=24 (matching MaxRowLength), not the old value of 64.
-func TestTextDisplayHADiscoveryPayloadMaxIs24(t *testing.T) {
+// TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength verifies that the HA
+// Discovery payload advertises the profile's own row-length limit rather than
+// a second literal.
+func TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength(t *testing.T) {
 	t.Parallel()
 	d := New("VCU0001:3", nil)
 	_, body := d.HADiscoveryPayload(discoveryCtx{})
@@ -698,5 +699,57 @@ func TestTextDisplayWriteRowsZeroIDReturnsError(t *testing.T) {
 	err := d.WriteRows(context.Background(), []Row{{ID: 0}}, hmenum.CommandPriorityHigh)
 	if err == nil {
 		t.Error("WriteRows with ID=0 must return ErrInvalidRow")
+	}
+}
+
+// TestWriteAndWriteWithSoundEmitTheSameRowFields pins the two atomic entry
+// points to one row bundle. They differ only in the acoustic options
+// WriteWithSound adds; every display field — ID, COMMIT, STRING, ICON and the
+// three optional styling fields — must be identical, because a row written
+// with a sound is the same row.
+func TestWriteAndWriteWithSoundEmitTheSameRowFields(t *testing.T) {
+	align := AlignCenter
+	fg := "RED"
+	bg := "BLUE"
+	row := func() Row {
+		return Row{
+			ID:              1,
+			Text:            "Alarm",
+			Icon:            "LAMP_ON",
+			Alignment:       &align,
+			TextColor:       &fg,
+			BackgroundColor: &bg,
+		}
+	}
+
+	plain := &putWriter{}
+	if err := New("VCU3756007:3", plain).Write(
+		context.Background(), row(), hmenum.CommandPriorityHigh,
+	); err != nil {
+		t.Fatal(err)
+	}
+	withSound := &putWriter{}
+	if err := New("VCU3756007:3", withSound).WriteWithSound(
+		context.Background(),
+		row(),
+		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_5", Interval: "1S"},
+		hmenum.CommandPriorityHigh,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if len(plain.puts) != 1 || len(withSound.puts) != 1 {
+		t.Fatalf("put_paramset counts: Write=%d WriteWithSound=%d, want 1 each",
+			len(plain.puts), len(withSound.puts))
+	}
+	got := maps.Clone(withSound.puts[0])
+	for _, p := range []hmenum.Parameter{
+		hmenum.ParameterAcousticNotificationSelection,
+		hmenum.ParameterRepetitions,
+		hmenum.ParameterInterval,
+	} {
+		delete(got, string(p))
+	}
+	if !maps.Equal(got, plain.puts[0]) {
+		t.Errorf("WriteWithSound row fields = %v, Write row fields = %v", got, plain.puts[0])
 	}
 }

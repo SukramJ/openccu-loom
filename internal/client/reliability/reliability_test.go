@@ -304,15 +304,22 @@ func TestPingPongStatsSeverity(t *testing.T) {
 	if got := tr.Stats().Severity; got != "ok" {
 		t.Fatalf("empty severity=%q want ok", got)
 	}
-	// Two unmatched PINGs → pending=2, unknown=0 → degraded.
+	// Exactly at the threshold is not over it: the severity boundary is
+	// the same strict one every emit decision uses.
 	tr.RecordPing("a")
 	tr.RecordPing("b")
-	if got := tr.Stats().Severity; got != "degraded" {
-		t.Fatalf("pending=2 severity=%q want degraded", got)
+	if got := tr.Stats().Severity; got != "ok" {
+		t.Fatalf("pending=2 (== threshold) severity=%q want ok", got)
 	}
-	// Two orphan PONGs → unknown=2 → both crossed → critical.
+	// Three unmatched PINGs → pending=3, unknown=0 → degraded.
+	tr.RecordPing("c")
+	if got := tr.Stats().Severity; got != "degraded" {
+		t.Fatalf("pending=3 severity=%q want degraded", got)
+	}
+	// Three orphan PONGs → unknown=3 → both tables over → critical.
 	tr.RecordPong("orphan1")
 	tr.RecordPong("orphan2")
+	tr.RecordPong("orphan3")
 	if got := tr.Stats().Severity; got != "critical" {
 		t.Fatalf("both severity=%q want critical", got)
 	}

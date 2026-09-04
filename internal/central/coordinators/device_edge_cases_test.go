@@ -392,3 +392,37 @@ func (s *stubListerHooked) ListDevices(ctx context.Context, iface hmtypes.WireIn
 	}
 	return s.inner.ListDevices(ctx, iface)
 }
+
+// ---------------------------------------------------------------------------
+// Cache-restart path — device/channel classification
+// ---------------------------------------------------------------------------
+
+// TestCheckAndCreateDevicesFromCacheClassifiesByParentNotByColon pins the
+// cache-restart path on the descriptor's PARENT field, the rule the live
+// ingest path (ingestDescriptions) and the pull path (applyPull) already
+// apply. The address's colon is the CCU's naming convention for a channel,
+// not the contract, and a second rule in one of the three paths is a source
+// of drift the registry itself can settle.
+func TestCheckAndCreateDevicesFromCacheClassifiesByParentNotByColon(t *testing.T) {
+	t.Parallel()
+	dc, _, devs, descs, _ := newDCFull(t)
+	iface := wireKey(hmenum.InterfaceHmIPRF)
+
+	// A parent-less description is a device even though its address carries
+	// a colon.
+	descs.Put(iface, hmproto.DeviceDescription{Address: "ABC:1", Parent: "", Type: "HmIP-DEV"})
+	// A description with a PARENT is a channel even though its address
+	// carries none.
+	descs.Put(iface, hmproto.DeviceDescription{Address: "ABC", Parent: "XYZ", Type: "HmIP-DEV"})
+
+	if err := dc.CheckAndCreateDevicesFromCache(context.Background()); err != nil {
+		t.Fatalf("CheckAndCreateDevicesFromCache err: %v", err)
+	}
+
+	if !devs.Has(iface, "ABC:1") {
+		t.Error("parent-less description ABC:1 must be registered as a device")
+	}
+	if devs.Has(iface, "ABC") {
+		t.Error("description ABC with PARENT=XYZ is a channel and must not be registered")
+	}
+}

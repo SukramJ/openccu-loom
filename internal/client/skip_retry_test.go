@@ -242,7 +242,7 @@ func (b *countingBackend) GetSuppressedServiceMessages(_ context.Context, _, _ s
 }
 
 func (b *countingBackend) HasProgramIDs(_ context.Context, _ string) (bool, error) { return false, nil }
-func (b *countingBackend) DownloadFirmware(_ context.Context, _ string) error      { return nil }
+func (b *countingBackend) DownloadFirmware(_ context.Context) error                { return nil }
 func (b *countingBackend) GetMetadata(_ context.Context, _, _ string) (any, error) {
 	return nil, nil
 }

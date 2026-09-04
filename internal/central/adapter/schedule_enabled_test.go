@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -318,25 +319,25 @@ func TestSetActiveProfileDeviceNotFound(t *testing.T) {
 }
 
 // ============================================================
-// isValidProfileID — additional paths
+// profile-key grammar — additional paths
 // ============================================================
 
-func TestIsValidProfileIDValidRange(t *testing.T) {
+func TestScheduleProfileKeyValidRange(t *testing.T) {
 	t.Parallel()
 	valid := []string{"P1", "P2", "P3", "P4", "P5", "P6"}
 	for _, id := range valid {
-		if !isValidProfileID(id) {
-			t.Errorf("isValidProfileID(%q) = false, want true", id)
+		if !schedule.IsValidProfileKey(id) {
+			t.Errorf("schedule.IsValidProfileKey(%q) = false, want true", id)
 		}
 	}
 }
 
-func TestIsValidProfileIDInvalid(t *testing.T) {
+func TestScheduleProfileKeyInvalid(t *testing.T) {
 	t.Parallel()
 	invalid := []string{"P0", "P7", "P10", "", "p1", "1", "PROFILE1"}
 	for _, id := range invalid {
-		if isValidProfileID(id) {
-			t.Errorf("isValidProfileID(%q) = true, want false", id)
+		if schedule.IsValidProfileKey(id) {
+			t.Errorf("schedule.IsValidProfileKey(%q) = true, want false", id)
 		}
 	}
 }
@@ -552,12 +553,12 @@ func TestApplyScheduleEnabledToModelNilRegistry(t *testing.T) {
 
 func TestMapToScheduleAndBack(t *testing.T) {
 	t.Parallel()
-	schedule := &hmapi.ClimateSchedule{
+	dto := &hmapi.ClimateSchedule{
 		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {},
 		},
 	}
-	m, err := scheduleToMap(schedule)
+	m, err := scheduleToMap(dto)
 	if err != nil {
 		t.Fatalf("scheduleToMap: %v", err)
 	}

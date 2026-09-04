@@ -4,8 +4,11 @@
 package backends
 
 import (
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // Combined-Parameter wire-shape conversion. Mirrors the Python
@@ -22,26 +25,61 @@ import (
 // LEVEL_COMBINED — so contract tests against the Python output match.
 
 // Combined-parameter shorthand keys + their canonical Parameter names.
+//
+// The parameter names are taken from [hmenum] rather than written out
+// again: the same membership rule is stated on the write path
+// (internal/parameter.ConvertableParameters), and two independently typed
+// copies of one rule can drift without either side failing to compile.
 const (
-	parameterCombined      = "COMBINED_PARAMETER"
-	parameterLevelCombined = "LEVEL_COMBINED"
+	parameterCombined      = string(hmenum.ParameterCombinedParameter)
+	parameterLevelCombined = string(hmenum.ParameterLevelCombined)
 
-	parameterLevel      = "LEVEL"
-	parameterLevel2     = "LEVEL_2"
-	parameterLevelSlats = "LEVEL_SLATS"
+	parameterLevel      = string(hmenum.ParameterLevel)
+	parameterLevel2     = string(hmenum.ParameterLevel2)
+	parameterLevelSlats = string(hmenum.ParameterLevelSlats)
 
 	combinedShortLevel  = "L"
 	combinedShortLevel2 = "L2"
 )
 
-// IsCombinedParameter reports whether name designates a wire shape
-// that needs structural decomposition before reaching the model
-// layer. Only two parameters are combined; the rest pass through
-// untouched.
-func IsCombinedParameter(name string) bool {
-	return name == parameterCombined || name == parameterLevelCombined
+// CombinedParameters is the set of parameters this package decomposes on the
+// callback path, exported so the membership can be compared against the write
+// path's own set rather than sampled.
+//
+// It has to hold the same members as internal/parameter.ConvertableParameters:
+// that set decides whether a write is decomposed into the command tracker,
+// this one decides whether the callback coming back is decomposed into
+// constituent data points. A parameter listed on one side only is written as
+// sub-parameters and never reassembled, or reassembled from a value that was
+// never tracked.
+// loom:reachable:reason="read by IsCombinedParameter, which the callback handler gates every event on; RTA scores call edges only, so a slice read is invisible to it"
+var CombinedParameters = []hmenum.Parameter{
+	hmenum.ParameterCombinedParameter,
+	hmenum.ParameterLevelCombined,
 }
 
+// IsCombinedParameter reports whether name designates a wire shape
+// that needs structural decomposition before reaching the model layer.
+//
+// It reads [CombinedParameters]. It used to compare against two string
+// constants instead, which made the exported set a description of this
+// function rather than its input: the two could drift, and the contract
+// test that compares the set against the write path's own
+// (TestConvertableParameterParity) would have kept passing while the
+// callback path decomposed a different set than it advertised.
+func IsCombinedParameter(name string) bool {
+	return slices.Contains(CombinedParameters, hmenum.Parameter(name))
+}
+
+// ParseCombinedParameter is the decode a running daemon uses for
+// COMBINED_PARAMETER and LEVEL_COMBINED callbacks: the callback handler gates
+// on [IsCombinedParameter] and calls this, and the command tracker resolves
+// optimistic values through it. internal/model/value carries a second,
+// exported CPV decode pair with the same scale constants but a different
+// parser; the two do not agree on every input (a decimal LEVEL_COMBINED byte
+// yields a float there and passes through as a string here), so a caller must
+// not treat them as interchangeable.
+//
 // ParseCombinedParameter parses a CCU combined-parameter wire string
 // into the resulting paramset map. Returns ok=false (and a nil map)
 // When the value cannot be parsed — mirrors

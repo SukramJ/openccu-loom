@@ -56,8 +56,8 @@ func TestParityCodeMatchesGeneratedSchema(t *testing.T) {
 	//   wire/genericswitch.go         → switchClusterRevision
 	//   wire/admincommissioning.go    → admCommClusterRevision
 	//   wire/groups.go                → groupsClusterRevision
-	//   model/generic/switch_matter.go → matterGenericOnOffClusterRevision
-	//   model/custom/light/matter.go  → matterOnOffClusterRevision, matterLevelControlClusterRevision, etc.
+	//   model/generic/switch_matter.go → onoff.Revision()
+	//   model/custom/light/matter.go  → onoff.Revision(), matterLevelControlClusterRevision, etc.
 	//   model/custom/climate/matter.go → matterThermClusterRevision, etc.
 	//   model/custom/cover/matter.go  → matterWindowCoveringClusterRevision
 	//   model/custom/lock/matter.go   → the DoorLock cluster's revision constant

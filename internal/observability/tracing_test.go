@@ -26,7 +26,7 @@ func isLowerHex(s string) bool {
 // TestStartSpan_IDsMatchW3CSchema guards against the 32-bit collision
 // risk of a truncated UUID span id: root spans must mint TraceID/SpanID
 // using the same W3C Trace Context shape (128-bit / 64-bit lowercase
-// hex, no dashes) [reqctx.NewTraceID] / [reqctx.NewSpanID] produce, so
+// hex, no dashes) [hmreqctx.NewTraceID] / [hmreqctx.NewSpanID] produce, so
 // the whole daemon shares one collision-resistant ID scheme.
 func TestStartSpan_IDsMatchW3CSchema(t *testing.T) {
 	sp, _ := observability.StartSpan(context.Background(), "test_op", nil)

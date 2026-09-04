@@ -5,7 +5,6 @@ package combined
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -163,13 +162,16 @@ func (c *HSColor) Subscribe(ch *device.Channel) func() {
 // OnAnyUpdate satisfies the adapter.CombinedDataPoint interface. The typed
 // HS value is JSON-encoded to a string so BridgeCombinedDataPoint can wrap
 // it in a ParamValue and publish it on the event bus.
+//
+// Encoding goes through [EncodeHSJSON], the same renderer the combined
+// state topic uses, so one value never reaches two planes spelled two
+// ways. Measured difference between the two spellings: fmt's %g and
+// encoding/json pick different exponent thresholds, so a saturation
+// below 1e-4 on the 0..100 scale rendered as "1e-05" under one and
+// "0.00001" under the other. Both parse to the same float64.
 func (c *HSColor) OnAnyUpdate(fn func(old, next any)) func() {
 	return c.OnUpdate(func(_, next HS) {
-		data, _ := json.Marshal(map[string]any{
-			"hue":        next.Hue,
-			"saturation": next.Saturation,
-		})
-		fn(nil, string(data))
+		fn(nil, EncodeHSJSON(next))
 	})
 }
 

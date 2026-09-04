@@ -14,6 +14,21 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// resumedTimerFloor is the shortest delay a countdown resumed at boot
+// is rescheduled with: an already-elapsed deadline still fires, but one
+// tick later, so the restore path never schedules a zero-length timer.
+const resumedTimerFloor = time.Second
+
+// flooredRemaining applies resumedTimerFloor. The restore paths that
+// resume a countdown share it; the paths that escalate on an elapsed
+// deadline (restorePending, restoreTriggered) deliberately do not floor.
+func flooredRemaining(d time.Duration) time.Duration {
+	if d <= 0 {
+		return resumedTimerFloor
+	}
+	return d
+}
+
 // Start loads the configured zones and sensors, bumps the boot
 // counter, and restores every persisted zone state per the restart
 // table of notes/concepts/alarm-concept.md §10.2. It is not idempotent — call
@@ -267,7 +282,7 @@ func (e *Engine) restoreZone(ctx context.Context, a *zone, row sqlitestore.Alarm
 // is relative and therefore trustworthy.
 func (e *Engine) restoreArming(ctx context.Context, a *zone, timers []persistedTimer, plausible bool, now time.Time) {
 	a.state = hmenum.AlarmZoneStateArming
-	t := findTimer(timers, timerKindExit)
+	t := findTimer(timers, TimerKindExit)
 	mcfg := a.cfg.Modes[a.mode]
 	fullExit := time.Duration(mcfg.ExitDelaySeconds) * time.Second
 
@@ -329,16 +344,14 @@ func (e *Engine) restoreArming(ctx context.Context, a *zone, timers []persistedT
 		e.publishState(a, from, "engine:restore", "engine")
 		return
 	}
-	if remaining <= 0 {
-		remaining = time.Second
-	}
-	e.scheduleStateTimer(a, timerKindExit, remaining)
+	remaining = flooredRemaining(remaining)
+	e.scheduleStateTimer(a, TimerKindExit, remaining)
 	// The tick chain is a separate timer from the state timer, and it
 	// is the only producer of AlarmCountdownEvent and of the countdown
 	// chirps. Resuming the state timer alone left a restored countdown
 	// silent for the rest of the delay: no live countdown on the WS
 	// plane and, with Outputs.CountdownTicks on, no exit chirps.
-	e.startTicks(a, timerKindExit)
+	e.startTicks(a, TimerKindExit)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassArm, Event: "arming_resumed",
@@ -362,7 +375,7 @@ func (e *Engine) restorePending(ctx context.Context, a *zone, timers []persisted
 		e.reEvaluateAfterRestore(ctx, a)
 		return
 	}
-	t := findTimer(timers, timerKindEntry)
+	t := findTimer(timers, TimerKindEntry)
 	if t == nil || time.UnixMilli(t.DeadlineMS).Sub(now) <= 0 {
 		cause := pendingElapsedCause(a)
 		a.state = hmenum.AlarmZoneStateArmed // trigger() records the transition from an armed-side state
@@ -373,11 +386,11 @@ func (e *Engine) restorePending(ctx context.Context, a *zone, timers []persisted
 		return
 	}
 	a.state = hmenum.AlarmZoneStatePending
-	e.scheduleStateTimer(a, timerKindEntry, time.UnixMilli(t.DeadlineMS).Sub(now))
+	e.scheduleStateTimer(a, TimerKindEntry, time.UnixMilli(t.DeadlineMS).Sub(now))
 	// Same as the exit case, with more at stake: the entry-warning
 	// chirps are what tell a returning resident to enter their code
 	// before the zone triggers.
-	e.startTicks(a, timerKindEntry)
+	e.startTicks(a, TimerKindEntry)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassTrigger, Event: "pending_resumed",
@@ -438,7 +451,7 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *zone, timers []persist
 	}
 
 	deadline := time.UnixMilli(inc.TriggerDeadlineMS)
-	if t := findTimer(timers, timerKindTrigger); t != nil && inc.TriggerDeadlineMS == 0 {
+	if t := findTimer(timers, TimerKindTrigger); t != nil && inc.TriggerDeadlineMS == 0 {
 		deadline = time.UnixMilli(t.DeadlineMS)
 	}
 	if wasPreAlarm {
@@ -446,12 +459,12 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *zone, timers []persist
 	}
 
 	if !plausible {
-		t := findTimer(timers, timerKindTrigger)
+		t := findTimer(timers, TimerKindTrigger)
 		remaining := mcfg.triggerDuration()
 		if t != nil && t.RemainingMS > 0 {
 			remaining = time.Duration(t.RemainingMS) * time.Millisecond
 		}
-		e.scheduleStateTimer(a, timerKindTrigger, remaining)
+		e.scheduleStateTimer(a, TimerKindTrigger, remaining)
 		e.persist(ctx, a)
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassFault, Event: "triggered_restored_implausible_clock",
@@ -477,7 +490,7 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *zone, timers []persist
 	}
 
 	remaining := deadline.Sub(now)
-	e.scheduleStateTimer(a, timerKindTrigger, remaining)
+	e.scheduleStateTimer(a, TimerKindTrigger, remaining)
 	e.persist(ctx, a)
 
 	if inc.Silenced {
@@ -522,13 +535,17 @@ func (e *Engine) finishTriggeredOnRestore(ctx context.Context, a *zone, closeRea
 		e.journalFault(ctx, a, "output_stop_failed", err, incID)
 	}
 	e.closeIncident(ctx, a, closeReason)
+	// The incident that recorded the always-on interruption is closed,
+	// so its pre-trigger tuple is spent. It has to go on both branches
+	// below: a persisted Triggered zone whose incident row is
+	// unrecoverable reaches this function with the tuple still set
+	// (restoreTriggered's inc == nil arm), and a residual
+	// preTriggerState re-routes the next ordinary trigger through
+	// finishAlwaysOn.
+	a.preTriggerState = ""
+	a.preTriggerMode = ""
 	if a.cfg.PostTrigger == hmenum.AlarmPostTriggerDisarm {
-		a.state = hmenum.AlarmZoneStateDisarmed
-		a.mode = hmenum.AlarmModeDisarmed
-		a.bypassed = map[string]bool{}
-		a.openAtArm = map[string]bool{}
-		e.persist(ctx, a)
-		e.publishState(a, from, "engine:restore", "engine")
+		e.disarmAfterTrigger(ctx, a, from, "engine:restore")
 		return
 	}
 	e.completeArm(ctx, a, from, "engine:restore", "engine")
@@ -549,7 +566,7 @@ func (e *Engine) restoreAutoRearm(ctx context.Context, a *zone, timers []persist
 		a.autoRearmMode = ""
 		return
 	}
-	t := findTimer(timers, timerKindAutoRearm)
+	t := findTimer(timers, TimerKindAutoRearm)
 	var remaining time.Duration
 	switch {
 	case t == nil:
@@ -565,9 +582,7 @@ func (e *Engine) restoreAutoRearm(ctx context.Context, a *zone, timers []persist
 	default:
 		remaining = time.Duration(t.RemainingMS) * time.Millisecond
 	}
-	if remaining <= 0 {
-		remaining = time.Second
-	}
+	remaining = flooredRemaining(remaining)
 	e.scheduleAutoRearm(a, a.autoRearmMode, remaining)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_resumed",

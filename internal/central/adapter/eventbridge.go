@@ -6,7 +6,6 @@ package adapter
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -670,10 +669,14 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 // MQTT side (retained topic with the same payload is a no-op for
 // most brokers).
 //
-// MASTER-paramset values are deliberately skipped: they are
-// configuration parameters, not runtime state, and are surfaced
-// through the Config UI / REST paramset endpoints instead of the
-// MQTT broker.
+// MASTER-paramset values ARE published on this pass (ADR 0011 phase 1c):
+// they are seeded once via OnWireValue and generate no value-change bus
+// events, so the snapshot synthesises them onto
+// `channels/<ch>/master/<param>/state`. The volume is bounded by which
+// MASTER parameters became data points at all during hydration (the
+// week-profile slot filter is the largest such cut) and by the
+// southbound-ready gate in [EventBridge.publishCentralSnapshot] —
+// widening either widens the broker surface.
 func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 	if b.registry == nil {
 		return
@@ -1397,7 +1400,7 @@ func (b *EventBridge) publishValueChangedWS(centralName string, envKind hmenum.W
 	// Resolve the channel once: it feeds both the inline DP
 	// classification (category / functional type) and the CDP-state
 	// aggregate below. The look-up is in-memory and nil-safe.
-	ch := lookupChannel(b.registry, deviceAddr, channelNo)
+	ch := lookupChannel(b.registry, centralName, deviceAddr, channelNo)
 	category, dpType := valueChangedClassification(ch, e.Key.Parameter)
 	serialSuffix := b.registry.SerialSuffix(centralName)
 	bucket := slotBucket(ch, e.Key)
@@ -1454,7 +1457,7 @@ func (b *EventBridge) publishValueChangedWS(centralName string, envKind hmenum.W
 	// the composing Custom-DP — see [customDPHostChannel].
 	cdpChannel, cdpChannelNo := ch, channelNo
 	if ch == nil || ch.CustomDataPoint() == nil {
-		if host, hostNo := customDPHostChannel(b.registry, deviceAddr, e.Key); host != nil {
+		if host, hostNo := customDPHostChannel(b.registry, centralName, deviceAddr, e.Key); host != nil {
 			cdpChannel, cdpChannelNo = host, hostNo
 		}
 	}
@@ -1476,7 +1479,7 @@ func (b *EventBridge) publishValueChangedWS(centralName string, envKind hmenum.W
 				// on its own member events; using the WireName keeps the
 				// state topic aligned with the catalogue entry.
 				wireName := cdp.DataPointKey().Parameter
-				if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
+				if dev := lookupDeviceObject(b.registry, centralName, deviceAddr); dev != nil {
 					wireName = custom.WireName(dev, cdp, cdpChannelNo)
 				}
 				// CHANNEL-level key (no parameter): the reference stack keys
@@ -1518,7 +1521,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 	channel, channelNo := parseChannel(e.Key.ChannelAddress)
 	deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
 	iface := inferInterface(e.Key)
-	model, name := lookupDevice(b.registry, deviceAddr)
+	model, name := lookupDevice(b.registry, centralName, deviceAddr)
 
 	ev, ch, ok, discoveryEligible := b.buildPublishEvent(centralName, iface, deviceAddr, channel, channelNo, model, name, e.Key, e.NewValue.Unwrap(), e.Key.ParamsetKey)
 	if !ok {
@@ -1632,7 +1635,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 	// two calls above are no-ops for them — resolve the hosting channel
 	// and publish its aggregate as well.
 	if ch == nil || ch.CustomDataPoint() == nil {
-		if host, hostNo := customDPHostChannel(b.registry, deviceAddr, e.Key); host != nil {
+		if host, hostNo := customDPHostChannel(b.registry, centralName, deviceAddr, e.Key); host != nil {
 			b.publishCustomDPState(ctx, centralName, iface, deviceAddr, hostNo, host)
 			b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, hostNo, host)
 		}
@@ -1657,7 +1660,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 // without this a single device the CCU stopped reaching reaches no consumer
 // at all.
 func (b *EventBridge) refreshDeviceAvailability(ctx context.Context, centralName, iface, deviceAddr, parameter string) {
-	dev := lookupDeviceObject(b.registry, deviceAddr)
+	dev := lookupDeviceObject(b.registry, centralName, deviceAddr)
 	if dev == nil {
 		return
 	}
@@ -1734,7 +1737,7 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 	value any,
 	paramset hmenum.ParamsetKey,
 ) (ev mqtt.Event, ch *device.Channel, ok, discoveryEligible bool) {
-	ch = lookupChannel(b.registry, deviceAddr, channelNo)
+	ch = lookupChannel(b.registry, centralName, deviceAddr, channelNo)
 	channelType := ""
 	if ch != nil {
 		channelType = ch.Type
@@ -1855,7 +1858,7 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 		ChannelType:    channelType,
 		Parameter:      key.Parameter,
 		Value:          value,
-		Device:         lookupDeviceObject(b.registry, deviceAddr),
+		Device:         lookupDeviceObject(b.registry, centralName, deviceAddr),
 	}
 	if ch != nil {
 		ev.Channel = ch
@@ -2620,27 +2623,24 @@ func (b *EventBridge) onCentralReadiness(centralName string, e hmevent.CentralRe
 
 // --- helpers ---
 
+// parseChannel returns the address unchanged plus its channel number, or 0
+// when it carries none. Delegating to [hmtypes.ChannelNo] keeps one grammar
+// for what a channel suffix is; a hand-rolled copy drifts silently, because
+// nothing compares the two.
 func parseChannel(channelAddress string) (addr string, number int) {
-	idx := strings.LastIndexByte(channelAddress, ':')
-	if idx < 0 {
-		return channelAddress, 0
-	}
-	if n, err := strconv.Atoi(channelAddress[idx+1:]); err == nil {
-		number = n
-	}
-	return channelAddress, number
+	n, _ := hmtypes.ChannelNo(channelAddress)
+	return channelAddress, n
 }
 
+// deviceAddrAndChannel splits a channel address into its device part and
+// channel number, reporting channel 0 when the address carries no parsable
+// suffix. Same grammar as [parseChannel].
 func deviceAddrAndChannel(channelAddress string) (deviceAddr string, channel int) {
-	idx := strings.LastIndexByte(channelAddress, ':')
-	if idx < 0 {
-		return channelAddress, 0
+	dev, n, ok := hmtypes.SplitChannelAddress(channelAddress)
+	if !ok {
+		return dev, 0
 	}
-	deviceAddr = channelAddress[:idx]
-	if n, err := strconv.Atoi(channelAddress[idx+1:]); err == nil {
-		channel = n
-	}
-	return deviceAddr, channel
+	return dev, n
 }
 
 // inferInterface returns the interface id carried in the data-point
@@ -2715,8 +2715,8 @@ func customDPStatePayload(dp device.AttachableDataPoint) (map[string]any, bool) 
 // happens to change.
 //
 // Returns (nil, 0) when no Custom-DP on the device composes the key.
-func customDPHostChannel(reg *central.Registry, deviceAddr string, key hmtypes.DataPointKey) (host *device.Channel, channelNo int) {
-	dev := lookupDeviceObject(reg, deviceAddr)
+func customDPHostChannel(reg *central.Registry, centralName, deviceAddr string, key hmtypes.DataPointKey) (host *device.Channel, channelNo int) {
+	dev := lookupDeviceObject(reg, centralName, deviceAddr)
 	if dev == nil {
 		return nil, 0
 	}
@@ -2753,47 +2753,52 @@ func sameWireTarget(a, b hmtypes.DataPointKey) bool {
 	return a.ParamsetKey == b.ParamsetKey
 }
 
-func lookupDeviceObject(reg *central.Registry, address string) *device.Device {
+// lookupDeviceObject resolves a device within one central.
+//
+// The central is part of the key, not a hint: device addresses are unique per
+// CCU and repeat verbatim across them — the virtual remote, the BidCoS pseudo
+// devices and the INT000* internal devices carry the identical address on
+// every one. A walk over the registry answers from whichever central sorts
+// first by name, which publishes another installation's device under this
+// central's identity. Returns nil when the named central does not hold it,
+// which is the honest answer; a namesake elsewhere is not this device.
+func lookupDeviceObject(reg *central.Registry, centralName, address string) *device.Device {
 	if reg == nil {
 		return nil
 	}
-	for _, u := range reg.List() {
-		if d, ok := u.ModelRegistry.Get(address); ok {
-			return d
-		}
+	u, ok := reg.Get(centralName)
+	if !ok {
+		return nil
 	}
-	return nil
+	d, ok := u.ModelRegistry.Get(address)
+	if !ok {
+		return nil
+	}
+	return d
 }
 
-func lookupDevice(reg *central.Registry, address string) (model, name string) {
-	if reg == nil {
+// lookupDevice returns the model and name of a device within one central.
+// Scoped for the reason given on [lookupDeviceObject].
+func lookupDevice(reg *central.Registry, centralName, address string) (model, name string) {
+	d := lookupDeviceObject(reg, centralName, address)
+	if d == nil {
 		return "", ""
 	}
-	for _, u := range reg.List() {
-		if d, ok := u.ModelRegistry.Get(address); ok {
-			return d.Model, d.Name()
-		}
-	}
-	return "", ""
+	return d.Model, d.Name()
 }
 
 // lookupChannel returns the [*device.Channel] for a (device, no)
 // pair. The MQTT bridge consumes it through the
 // [mqtt.ChannelInspector] interface to decide which auxiliary
 // discovery topics actually apply on this channel.
-func lookupChannel(reg *central.Registry, deviceAddress string, channelNo int) *device.Channel {
-	if reg == nil {
+func lookupChannel(reg *central.Registry, centralName, deviceAddress string, channelNo int) *device.Channel {
+	dev := lookupDeviceObject(reg, centralName, deviceAddress)
+	if dev == nil {
 		return nil
 	}
-	for _, u := range reg.List() {
-		dev, ok := u.ModelRegistry.Get(deviceAddress)
-		if !ok {
-			continue
-		}
-		for _, ch := range dev.Channels() {
-			if ch.Number == channelNo {
-				return ch
-			}
+	for _, ch := range dev.Channels() {
+		if ch.Number == channelNo {
+			return ch
 		}
 	}
 	return nil
@@ -3242,16 +3247,33 @@ func simpleEntryJSON(e schedule.SimpleEntry) map[string]any {
 		weekdays = append(weekdays, string(w))
 	}
 	var (
-		level2     any
-		duration   any
-		rampTime   any
-		astroType  any
-		lockMode   any
-		lockAction any
-		permission any
+		level2          any
+		duration        any
+		rampTime        any
+		astroType       any
+		lockMode        any
+		lockAction      any
+		permission      any
+		colorType       any
+		colorValue      any
+		outputBehaviour any
 	)
 	if e.Level2 != nil {
 		level2 = *e.Level2
+	}
+	// The universal-light colour fields (HmIP-BSL / HmIP-RGBW `<NN>_WP_*`)
+	// come off the same parsed paramset the REST DTO is built from and are
+	// carried opaquely for a lossless round-trip. Dropping them here made a
+	// coloured switch point unrenderable from the retained MQTT attribute
+	// while REST returned it in full.
+	if e.ColorType != nil {
+		colorType = *e.ColorType
+	}
+	if e.ColorValue != nil {
+		colorValue = *e.ColorValue
+	}
+	if e.OutputBehaviour != nil {
+		outputBehaviour = *e.OutputBehaviour
 	}
 	// An empty Duration/RampTime means "no duration — leave the device's
 	// value alone", which is a different wire pair from the genuine (base
@@ -3300,6 +3322,9 @@ func simpleEntryJSON(e schedule.SimpleEntry) map[string]any {
 		"lock_mode":            lockMode,
 		"lock_action":          lockAction,
 		"permission":           permission,
+		"color_type":           colorType,
+		"color_value":          colorValue,
+		"output_behaviour":     outputBehaviour,
 	}
 }
 
@@ -3336,7 +3361,7 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 	for _, key := range orderedTargetKeys(targets) {
 		info := targets[key]
 		label := b.tr("discovery.schedule_channel", "ch", strconv.Itoa(info.ChannelNo))
-		if info.Name != "" && info.Name != fmt.Sprintf("Channel %d", info.ChannelNo) {
+		if info.Name != "" && !info.NameSynthetic {
 			label = b.tr("discovery.schedule_named", "name", info.Name)
 		}
 		notePublish(ctx, bridge.PublishScheduleSwitchDiscovery(ctx, centralName, mqtt.ScheduleSwitchEvent{
@@ -3433,7 +3458,7 @@ func (b *EventBridge) publishScheduleEntityPayload(
 	if bridge == nil {
 		return
 	}
-	chAddr := fmt.Sprintf("%s:%d", address, channelNo)
+	chAddr := hmtypes.ChannelAddress(address, channelNo)
 	scheduleType := "default"
 	if wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
 		scheduleType = "climate"
@@ -3483,9 +3508,10 @@ func (b *EventBridge) publishScheduleEntityPayload(
 		attrs["schedule_domain"] = b.scheduleDomainForChannel(address, channelNo)
 	}
 	notePublish(ctx, bridge.PublishScheduleEntityAttrs(ctx, centralName, iface, address, channelNo, attrs))
-	// state := count of active entries. Currently 0 until the
-	// non-climate schedule-data hydrator lands; climate counters are
-	// available via CountClimateEntries.
+	// state := count of ACTIVE entries. Both arms read their counter from
+	// internal/model/weekprofile, which is also what the hub tool reports as
+	// EntryCount — one schedule must not have two entry counts depending on
+	// which plane an operator looks at.
 	count := 0
 	if cp := wp.Climate(); cp != nil {
 		if sched, err := cp.Current(); err == nil && sched != nil {
@@ -3494,7 +3520,7 @@ func (b *EventBridge) publishScheduleEntityPayload(
 	}
 	if sp := wp.Simple(); sp != nil {
 		if sched, err := sp.Current(); err == nil && sched != nil {
-			count = len(sched.Entries)
+			count = weekprofile.CountSimpleEntries(sched)
 		}
 	}
 	notePublish(ctx, bridge.PublishScheduleEntityState(ctx, centralName, iface, address, channelNo, count))

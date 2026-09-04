@@ -30,24 +30,26 @@ type PendingDevice struct {
 	// It is what lets an operator tell a decision they postponed
 	// yesterday from one that arrived a minute ago.
 	FirstSeen string
-	// Phase is where the device stands in onboarding:
-	// [PhasePending] (held out of the model) or [PhaseUnreleased]
-	// (materialised and configurable, withheld from the ecosystems).
-	// An absent row means fully onboarded.
+	// Phase is where the device stands in onboarding: "pending" (held
+	// out of the model) or "unreleased" (materialised and configurable,
+	// withheld from the ecosystems). An absent row means fully
+	// onboarded. The store persists the string it is given and never
+	// interprets it.
 	Phase string
 }
 
-// Onboarding phases. A device moves pending → unreleased → (row gone).
-const (
-	// PhasePending holds the device out of the model entirely: no
-	// ise_id, no channels, nothing to configure.
-	PhasePending = "pending"
-	// PhaseUnreleased holds it out of the ecosystems only. It is
-	// materialised, configurable and visible in this daemon's own
-	// surfaces — which it has to be, or the wizard would have nothing
-	// to configure.
-	PhaseUnreleased = "unreleased"
-)
+// PhasePending is the phase a row gets when [PendingDeviceStore.Put] is
+// handed none — the device is held out of the model entirely: no ise_id,
+// no channels, nothing to configure. It matches the column default that
+// migration 042_pending_devices_phase.sql declares.
+//
+// The vocabulary itself is owned by internal/central/coordinators
+// (PhasePending / PhaseUnreleased); that is what the onboarding loop
+// writes and reads, and the adapter passes it through untranslated. A
+// second "unreleased" constant lived here with no reader or writer, so
+// editing it changed nothing while looking like it changed the persisted
+// vocabulary; it is gone.
+const PhasePending = "pending"
 
 // PendingDeviceStore persists the deferred-creation queue in the main
 // application database.

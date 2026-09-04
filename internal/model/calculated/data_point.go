@@ -63,8 +63,15 @@ func calcValues() []string { return nil }
 // calcDataPointNamePostfix returns "".
 func calcDataPointNamePostfix() string { return "" }
 
-// calcTranslationKey builds the HA translation key for a calculated
-// parameter.
+// calcTranslationKey lower-cases a calculated parameter name into the
+// i18n slug the package's TranslationKey accessors return.
+//
+// Measured: no plane consumes it. The MQTT discovery bodies take
+// translation_key from their own entity-description table
+// (north/mqtt/entity_descriptions_apply.go), and the only production
+// .TranslationKey() calls in the tree are on event.Group, a different
+// type with its own grammar. This is an internal accessor, not a key any
+// consumer holds a contract on.
 func calcTranslationKey(p hmenum.CalculatedParameter) string {
 	s := string(p)
 	result := make([]byte, len(s))

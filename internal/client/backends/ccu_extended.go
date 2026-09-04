@@ -132,8 +132,12 @@ func (b *CcuBackend) SetInstallModeLocal(ctx context.Context, duration int, sgti
 	return err
 }
 
-// comTestTimeLayout is the ReGa `system.Date("%Y-%m-%d %H:%M:%S")` format
-// the com-test scripts emit for the start / completed timestamps.
+// comTestTimeLayout is the layout the CCU renders LastTestCompletedTime() in.
+// It is settled by the firmware's own formatter, not by system.Date: ReGa
+// TimeStamp.fn::TimeStampToString3 slices the value at fixed character offsets
+// 0/4, 5/2, 8/2, 11/2, 14/2, 17/2, which can only be "YYYY-MM-DD HH:MM:SS",
+// and no step in that chain applies an offset. The value is therefore CCU-local
+// wall clock with no zone — see [CcuBackend.SetCCUTimezone].
 const comTestTimeLayout = "2006-01-02 15:04:05"
 
 type comTestStart struct {
@@ -191,7 +195,7 @@ func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs
 		}
 		if poll.Passed {
 			completedAt := startedAt
-			if t, perr := time.ParseInLocation(comTestTimeLayout, poll.Completed, time.Local); perr == nil {
+			if t, perr := time.ParseInLocation(comTestTimeLayout, poll.Completed, b.ccuLocation()); perr == nil {
 				completedAt = t
 			}
 			return hmapi.CommunicationTestResult{
@@ -222,6 +226,16 @@ func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs
 // a direct JSON-RPC call, which may not be supported on all CCU firmware
 // versions. The messageType filter is applied client-side on the ReGa path
 // because the script returns all messages unconditionally.
+//
+// Human-readable fields (name, device_name, and each rooms / functions entry)
+// arrive percent-encoded Latin-1 and are passed through UNDECODED. Decoding
+// them here would need the canonical ReGa decoder, which is not reachable
+// from this package; a plain url.QueryUnescape is not a substitute, because
+// it turns an umlaut into an invalid UTF-8 byte that every north-bound
+// encoder then replaces with U+FFFD. Callers must decode before display.
+// The live hub path reads the same script through the schema in
+// internal/client/rega and does apply that decode; the two field sets are
+// pinned to each other by a test in this package.
 func (b *CcuBackend) GetServiceMessages(ctx context.Context, messageType string) ([]map[string]any, error) {
 	if b.rega != nil {
 		type svcMsg struct {
@@ -303,6 +317,10 @@ func (b *CcuBackend) SuppressServiceMessage(ctx context.Context, channelAddress,
 // from the CCU via the get_alarm_messages ReGa script — the reference stack
 // reads alarms the same way; there is no JSON-RPC alarm method on the CCU.
 // Without a ScriptRunner alarm messages are unavailable.
+//
+// The name and description fields arrive percent-encoded Latin-1 and are
+// passed through UNDECODED — see [CcuBackend.GetServiceMessages] for why the
+// decode does not happen here and what callers owe.
 func (b *CcuBackend) GetAlarmMessages(ctx context.Context) ([]map[string]any, error) {
 	if b.rega == nil {
 		return nil, ErrUnsupported
@@ -535,27 +553,58 @@ func (b *CcuBackend) GetHeatingGroupList(ctx context.Context) (string, error) {
 // --- bulk device data ---------------------------------------------------
 
 // GetAllDeviceData implements Operations. Fetches all current data-point
-// values for all devices on the interface. Returns a map of
-// dpName → value.
+// values for all devices on the interface, keyed channelAddress → parameter
+// → value. Both branches below produce that one grammar; it is the shape the
+// wrapping call documents, and a caller that has to ask which branch answered
+// has no contract at all.
 //
 // When a ScriptRunner is wired in (via [CcuBackend.SetScriptRunner]), the
 // operation runs the fetch_all_device_data ReGa script, which requires the
 // interface name as a parameter. Without a ScriptRunner the backend falls
 // back to a direct JSON-RPC call.
+//
+// Values are returned as the script emits them. String-valued data points
+// arrive percent-encoded (fetch_all_device_data.fn writes
+// `oDP.Value().UriEncode()` for value type 20) and are NOT decoded here: the
+// decode is Latin-1-aware, a plain unescape corrupts every umlaut
+// irreversibly, and the one implementation of it is not reachable from this
+// package. Callers must decode string values through the canonical ReGa
+// decoder before seeding them anywhere. Exporting that decoder into a package
+// both readers can import is what would let this method finish the job.
 func (b *CcuBackend) GetAllDeviceData(ctx context.Context) (map[string]map[string]any, error) {
 	if b.rega != nil {
-		// The ReGa script returns a flat {"DPName": value, ...} map where
-		// the keys are dot-separated DP names (e.g. "HmIP-RF.ADDR:1.LEVEL").
-		// We re-wrap each entry as map[string]any so callers get a uniform
-		// two-level structure keyed by the full DP name.
+		// The script returns one flat object whose keys are the data point's
+		// full ReGa name, UriEncoded (`oDP.Name().UriEncode()` in
+		// internal/client/rega/scripts/fetch_all_device_data.fn) — three
+		// dot-separated components, "<interface>.<channelAddress>.<PARAM>".
+		// Unescaping before the split is what makes it irrelevant whether
+		// UriEncode escapes the channel separator ':', which no source here
+		// states.
 		var flat map[string]any
 		if err := b.rega.RunJSON(ctx, hmenum.RegaScriptFetchAllDeviceData,
 			map[string]string{"interface": string(b.ifaceType)}, &flat); err != nil {
 			return nil, err
 		}
 		out := make(map[string]map[string]any, len(flat))
-		for k, v := range flat {
-			out[k] = map[string]any{"value": v}
+		for rawKey, v := range flat {
+			key, err := url.QueryUnescape(rawKey)
+			if err != nil {
+				continue
+			}
+			parts := strings.SplitN(key, ".", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			channelAddress, parameter := parts[1], parts[2]
+			if channelAddress == "" || parameter == "" {
+				continue
+			}
+			params, ok := out[channelAddress]
+			if !ok {
+				params = make(map[string]any, 4)
+				out[channelAddress] = params
+			}
+			params[parameter] = v
 		}
 		return out, nil
 	}
@@ -598,18 +647,7 @@ func (b *CcuBackend) GetDeviceDetails(ctx context.Context, _ []string) ([]map[st
 // GetDeviceDescription implements Operations. Returns the raw device
 // description for a single address via XML-RPC.
 func (b *CcuBackend) GetDeviceDescription(ctx context.Context, address string) (map[string]any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getDeviceDescription", address)
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetDeviceDescription: unexpected type %T", raw)
-	}
-	return m, nil
+	return getDeviceDescriptionViaCaller(ctx, b.xml, "ccu", address)
 }
 
 // --- backup -------------------------------------------------------------
@@ -635,7 +673,7 @@ func (b *CcuBackend) GetDeviceDescription(ctx context.Context, address string) (
 // discarded. It also made the flow depend on a helper script only OpenCCU
 // and OpenCCU ship, which the fallback then had to work around.
 //
-// Requires the HTTP download transport (SetDownloadFirmwareTransport). The
+// Requires the plain-HTTP transport (SetHTTPTransport). The
 // ReGa scripts stay in the catalogue for the hub's own trigger/status
 // commands, which run the CCU's own backup tool and report what it
 // produced; that flow now removes its archive once it has read its name and
@@ -1073,56 +1111,42 @@ func (b *CcuBackend) HasProgramIDs(ctx context.Context, iseID string) (bool, err
 
 // --- firmware download (direct HTTP POST) ---------------------------------
 
-// DownloadFirmware implements Operations. Posts the firmware URL to the CCU's
-// maintenance CGI (`/config/cp_maintenance.cgi`) so the CCU can fetch and
-// stage the image for installation. Requires that
-// [SetDownloadFirmwareTransport] has been called with a valid base URL and
-// session-ID provider; returns [ErrUnsupported] otherwise.
+// DownloadFirmware implements Operations. Asks the CCU to fetch the newest
+// firmware for itself from eQ-3's update server, via the JSON-RPC method
+// CCU.downloadFirmware. Returns [ErrUnsupported] on backends without a
+// JSON-RPC session layer (CUxD, Homegear).
 //
-// Only "http://" and "https://" scheme firmware URLs are accepted.
-func (b *CcuBackend) DownloadFirmware(ctx context.Context, firmwareURL string) error {
-	if b.baseURL == "" || b.sessionIDFn == nil {
+// The operation takes no target: the CCU builds the download URL from its
+// own /VERSION and board serial and stores the image at /tmp/fup.tgz. The
+// firmware method also fails closed for a major version it does not know
+// (only 2 and 3 map to a product id).
+//
+// Two properties of the CCU-side method shape this implementation:
+//
+//   - It answers with a JSON boolean, and false is a real failure — the
+//     wget failed or the box's major version is unknown. Treating a
+//     successful transport exchange as a successful download is what the
+//     previous implementation did (it POSTed an action the maintenance CGI
+//     does not define and read the resulting HTML error page, served under
+//     HTTP 200, as success), so the result is checked here.
+//   - Downloading is not installing. The CCU's own WebUI follows a true
+//     result with a second, separate step. This method deliberately stops
+//     after the download; [CcuBackend.TriggerFirmwareUpdate] is the install.
+func (b *CcuBackend) DownloadFirmware(ctx context.Context) error {
+	if b.json == nil {
 		return ErrUnsupported
 	}
-	if !strings.HasPrefix(firmwareURL, "http://") && !strings.HasPrefix(firmwareURL, "https://") {
-		return fmt.Errorf("ccu.DownloadFirmware: only http/https scheme allowed, got %q: %w", firmwareURL, ErrUnsupported)
-	}
-
-	sid := b.sessionIDFn()
-	if sid == "" {
-		return fmt.Errorf("ccu.DownloadFirmware: no active JSON-RPC session: %w", ErrUnsupported)
-	}
-
-	uploadURL := strings.TrimRight(b.baseURL, "/") + "/config/cp_maintenance.cgi"
-
-	form := url.Values{
-		"sid":    {sid},
-		"action": {"download_firmware"},
-		"url":    {firmwareURL},
-	}
-
-	hc := b.httpClient
-	if hc == nil {
-		hc = httpx.NewClient(firmwareDownloadTimeout)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, strings.NewReader(form.Encode()))
+	raw, err := b.json.Call(ctx, "CCU.downloadFirmware")
 	if err != nil {
-		return fmt.Errorf("ccu.DownloadFirmware: build request: %w", err)
+		return fmt.Errorf("ccu.DownloadFirmware: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("ccu.DownloadFirmware: post: %w", err)
+	ok, isBool := raw.(bool)
+	if !isBool {
+		return fmt.Errorf("ccu.DownloadFirmware: CCU answered %T, want a boolean result", raw)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if _, err := readLimitedResponse(resp.Body, maxDownloadResponseSize); err != nil {
-		return fmt.Errorf("ccu.DownloadFirmware: read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ccu.DownloadFirmware: CCU returned HTTP %d", resp.StatusCode)
+	if !ok {
+		return errors.New("ccu.DownloadFirmware: the CCU reported the download failed " +
+			"(no firmware for its version and serial, or the transfer to /tmp/fup.tgz failed)")
 	}
 	return nil
 }

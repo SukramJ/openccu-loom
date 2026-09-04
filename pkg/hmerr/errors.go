@@ -135,8 +135,16 @@ var (
 	ErrScheduleCopyNoOp = errors.New("schedules: copy source and destination are identical")
 
 	// ErrScheduleCopyProfileRange signals that a profile index falls outside
-	// the supported 1..6 range. Like [ErrScheduleCopyNoOp] this is rejected
+	// the supported range. Like [ErrScheduleCopyNoOp] this is rejected
 	// before any wire call and maps to 422 / Unprocessable Entity.
+	//
+	// The bound itself is owned by internal/model/weekprofile
+	// (MinProfileIndex / MaxProfileIndex, enforced by ValidProfileIndex);
+	// the "1..6" in the message below is that bound quoted for the caller,
+	// not a second declaration of it. hmerr cannot import the domain
+	// package, so the two are tied by
+	// TestW2PkgScheduleRangeMessageMatchesTheDomainBound in tests/contract
+	// instead — move the bound and that guard reports this string.
 	ErrScheduleCopyProfileRange = errors.New("schedules: profile index out of range (1..6)")
 )
 
@@ -264,19 +272,31 @@ const (
 	// firmware update in its current state. Permanent for this call;
 	// the operator resolves it, not the retrier.
 	XMLRPCFaultUpdateNotPossible XMLRPCFaultCode = -7
-	// XMLRPCFaultDutyCycle — RF duty-cycle exhausted (CCU code
-	// "INSUFFICIENT_DUTYCYCLE"). Retryable after the throttle drains;
-	// the retrier applies a fixed 40 s delay rather than the
-	// exponential backoff to avoid making the duty-cycle window
-	// worse.
+	// XMLRPCFaultDutyCycle — the interface has too little duty cycle left.
+	//
+	// The CCU raises it in exactly one place: RFDevice::UpdateFirmware
+	// (src/rfd/RFDevice.cpp:1492, "not enough DutyCycle free"), gated by an
+	// instantaneous airtime-budget test. No setValue or putParamset path
+	// emits it, and the HmIP surface has no -8 at all — so on the write paths
+	// the retrier's fixed 40 s delay describes, this code does not occur.
+	// The code string "INSUFFICIENT_DUTYCYCLE" this comment used to cite
+	// appears nowhere in the CCU sources.
 	XMLRPCFaultDutyCycle XMLRPCFaultCode = -8
-	// XMLRPCFaultDeviceOutOfRange — temporary RF problem
-	// (CCU code "DEVICE_OUT_OF_RANGE"). Retryable.
+	// XMLRPCFaultDeviceOutOfRange — temporary RF problem. Retryable. The
+	// code string "DEVICE_OUT_OF_RANGE" is not in the CCU sources either;
+	// the mapping rests on the fault catalogue and is unverified against the
+	// firmware.
 	XMLRPCFaultDeviceOutOfRange XMLRPCFaultCode = -9
-	// XMLRPCFaultTransmissionPending — CCU is already transmitting a
-	// previous command for the same device (CCU code
-	// "TRANSMISSION_PENDING"). Retryable; the retrier applies a fixed
-	// 5 s delay to give the in-flight transmission room to complete.
+	// XMLRPCFaultTransmissionPending — the target device is not currently
+	// reachable and the command has been persisted as pending configuration,
+	// to be delivered when the device next talks to the access point.
+	//
+	// It is HmIP-only: rfd and hs485d never emit it. It does not mean the CCU
+	// is busy for a moment, which is what the retrier's fixed 5 s delay was
+	// written for — the state is cleared by the device making contact, not by
+	// waiting. Retrying is still right on the link and delete paths, where
+	// the call itself can be re-driven; on a plain setConfig it cannot change
+	// the answer.
 	XMLRPCFaultTransmissionPending XMLRPCFaultCode = -10
 	// XMLRPCFaultInvalidParameter — the catalogue's "Unbekannter
 	// Parameter oder Wert"; read back live as "Unknown parameter"
@@ -381,6 +401,21 @@ func isPermanentFaultMessage(msg string) bool {
 // Error implements error.
 func (f *XMLRPCFault) Error() string {
 	return fmt.Sprintf("xml-rpc fault %d: %s", f.Code, f.Message)
+}
+
+// FaultFromError collapses an arbitrary error into the XML-RPC fault a
+// CCU-facing surface answers with. An error that already carries a typed
+// fault passes through untouched; anything else becomes code -1, the
+// CCU's catch-all.
+//
+// It lives here because [XMLRPCFault] does: the callback server and the
+// client-side handler each had a byte-identical copy, and a fault code is
+// the kind of value two copies drift on without anything failing.
+func FaultFromError(err error) *XMLRPCFault {
+	if fault, ok := errors.AsType[*XMLRPCFault](err); ok {
+		return fault
+	}
+	return &XMLRPCFault{Code: -1, Message: err.Error()}
 }
 
 // Is reports that every fault is-a ClientException.

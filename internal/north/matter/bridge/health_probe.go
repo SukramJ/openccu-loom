@@ -36,6 +36,10 @@ type Status interface {
 // [health.Tracker] satisfies it.
 type HealthRecorder interface {
 	Record(name string, sample health.Sample)
+	// RecordUnhealthy states an unhealthy condition rather than sampling one,
+	// so it takes effect without the flap-damping Record applies. See
+	// [health.Tracker.RecordUnhealthy].
+	RecordUnhealthy(name string, sample health.Sample)
 }
 
 // StartHealthProbe spawns a goroutine that polls the Matter bridge on
@@ -91,12 +95,10 @@ func probeOnce(status Status, tracker HealthRecorder) {
 	}
 	// Listener gone. Escalate immediately via the double-sample
 	// flap-damp rule — matches the MQTT-disconnected handling.
-	tracker.Record(HealthComponentName, health.Sample{
-		Healthy: false,
-		Note:    "bridge listener not bound",
-	})
-	tracker.Record(HealthComponentName, health.Sample{
-		Healthy: false,
-		Note:    "bridge listener not bound (escalated)",
+	// A listener that is not bound is a condition, not a sample, so it is
+	// reported rather than probed — this used to record twice with an
+	// invented "(escalated)" note to get past the tracker's flap-damping.
+	tracker.RecordUnhealthy(HealthComponentName, health.Sample{
+		Note: "bridge listener not bound",
 	})
 }

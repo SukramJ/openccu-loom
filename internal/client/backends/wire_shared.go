@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Shared wire-call logic for the six Operations methods that are
-// identical (modulo the underlying [Caller] and the backend name used
-// in error messages) across CcuBackend, CuxdBackend, and
-// HomegearBackend: ListDevices, GetParamsetDescription, GetParamset,
-// PutParamset, SetValue, GetValue. Each backend method is a thin
-// wrapper around the corresponding helper here so the wire-decoding
-// logic exists exactly once.
+// Shared wire-call logic for the Operations methods that are identical
+// (modulo the underlying [Caller] and the backend name used in error
+// messages) across two or more backends. ListDevices,
+// GetParamsetDescription, GetParamset, PutParamset, SetValue and
+// GetValue are shared by CcuBackend, CuxdBackend and HomegearBackend;
+// GetLinks, GetLinkPeers, GetLinkParamsetDescription, GetLinkParamset,
+// PutLinkParamset and GetDeviceDescription are shared by CcuBackend and
+// HomegearBackend. Each backend method is a thin wrapper around the
+// corresponding helper here so the wire-decoding logic exists exactly
+// once.
 
 package backends
 
@@ -189,4 +192,156 @@ func getValueViaCaller(ctx context.Context, caller Caller, address string, param
 		return nil, ErrNotWired
 	}
 	return caller.Call(ctx, "getValue", address, string(parameter))
+}
+
+// getLinksViaCaller implements the GetLinks wire call shared by the CCU
+// and Homegear backends. The trailing 0 is the flag word; what each side
+// makes of it is documented on the calling method.
+func getLinksViaCaller(ctx context.Context, caller Caller, prefix, channelAddress string) ([]hmproto.LinkDescription, error) {
+	if caller == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := caller.Call(ctx, "getLinks", channelAddress, 0)
+	if err != nil {
+		return nil, err
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.GetLinks: unexpected type %T", prefix, raw)
+	}
+	out := make([]hmproto.LinkDescription, 0, len(list))
+	for _, entry := range list {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		ld := hmproto.LinkDescription{
+			Sender:      asString(m["SENDER"]),
+			Receiver:    asString(m["RECEIVER"]),
+			Name:        asString(m["NAME"]),
+			Description: asString(m["DESCRIPTION"]),
+		}
+		if f, ok := m["FLAGS"].(int); ok {
+			ld.Flags = f
+		}
+		if ld.Sender == "" || ld.Receiver == "" {
+			continue
+		}
+		out = append(out, ld)
+	}
+	return out, nil
+}
+
+// getLinkPeersViaCaller implements the GetLinkPeers wire call shared by
+// the CCU and Homegear backends.
+func getLinkPeersViaCaller(ctx context.Context, caller Caller, prefix, channelAddress string) ([]string, error) {
+	if caller == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := caller.Call(ctx, "getLinkPeers", channelAddress)
+	if err != nil {
+		return nil, err
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.GetLinkPeers: unexpected type %T", prefix, raw)
+	}
+	out := make([]string, 0, len(list))
+	for _, entry := range list {
+		if s, ok := entry.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+// getLinkParamsetDescriptionViaCaller implements the
+// GetLinkParamsetDescription wire call shared by the CCU and Homegear
+// backends. The paramset key is the LINK enum member, not the peer
+// address: the schema is identical across peers, only the values key on
+// the peer.
+func getLinkParamsetDescriptionViaCaller(
+	ctx context.Context,
+	caller Caller,
+	prefix, channelAddress string,
+) (map[string]hmproto.ParameterData, error) {
+	if caller == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := caller.Call(ctx, "getParamsetDescription", channelAddress, string(hmenum.ParamsetKeyLink))
+	if err != nil {
+		return nil, err
+	}
+	outer, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.GetLinkParamsetDescription: unexpected type %T", prefix, raw)
+	}
+	out := make(map[string]hmproto.ParameterData, len(outer))
+	for param, inner := range outer {
+		m, ok := inner.(map[string]any)
+		if !ok {
+			continue
+		}
+		pd, err := toParameterData(m)
+		if err != nil {
+			return nil, fmt.Errorf("%s.GetLinkParamsetDescription[%s]: %w", prefix, param, err)
+		}
+		out[param] = pd
+	}
+	return out, nil
+}
+
+// getLinkParamsetViaCaller implements the GetLinkParamset wire call
+// shared by the CCU and Homegear backends. The peer address takes the
+// place of the paramset key, which is how per-peer link values are
+// addressed.
+func getLinkParamsetViaCaller(
+	ctx context.Context,
+	caller Caller,
+	prefix, channelAddress, peerAddress string,
+) (map[string]any, error) {
+	if caller == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := caller.Call(ctx, "getParamset", channelAddress, peerAddress)
+	if err != nil {
+		return nil, err
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.GetLinkParamset: unexpected type %T", prefix, raw)
+	}
+	return m, nil
+}
+
+// putLinkParamsetViaCaller implements the PutLinkParamset wire call
+// shared by the CCU and Homegear backends.
+func putLinkParamsetViaCaller(
+	ctx context.Context,
+	caller Caller,
+	channelAddress, peerAddress string,
+	values map[string]any,
+) error {
+	if caller == nil {
+		return ErrNotWired
+	}
+	_, err := caller.Call(ctx, "putParamset", channelAddress, peerAddress, values)
+	return err
+}
+
+// getDeviceDescriptionViaCaller implements the GetDeviceDescription wire
+// call shared by the CCU and Homegear backends.
+func getDeviceDescriptionViaCaller(ctx context.Context, caller Caller, prefix, address string) (map[string]any, error) {
+	if caller == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := caller.Call(ctx, "getDeviceDescription", address)
+	if err != nil {
+		return nil, err
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.GetDeviceDescription: unexpected type %T", prefix, raw)
+	}
+	return m, nil
 }

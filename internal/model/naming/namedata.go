@@ -167,6 +167,14 @@ func composeName(channelName, parameterName, deviceName string) string {
 	base = strings.TrimSpace(base)
 	if deviceName != "" && strings.HasPrefix(base, deviceName) {
 		base = strings.TrimSpace(base[len(deviceName):])
+		// Whatever joined the device name to the rest goes with it. The
+		// CCU's own rename-all-channels dialog lets the operator pick
+		// that character — it defaults to ":" but the field accepts
+		// anything — so a channel named "Wohnzimmer Licht-Kanal" left a
+		// leading dash in the entity name once the prefix was gone.
+		// A ":"-joined name never showed it, because the ":N" suffix is
+		// stripped one step earlier.
+		base = strings.TrimSpace(strings.TrimLeft(base, "-:_/."))
 	}
 	return base
 }

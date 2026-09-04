@@ -266,14 +266,14 @@ func DownloadBackup(svc BackupService) http.HandlerFunc {
 func downloadFilename(ctx context.Context, svc BackupService, id string) string {
 	entries, err := svc.List(ctx)
 	if err != nil {
-		return id + ".sbk"
+		return id + sbk.Extension
 	}
 	for _, e := range entries {
 		if e.ID == id && e.Filename != "" {
 			return e.Filename
 		}
 	}
-	return id + ".sbk"
+	return id + sbk.Extension
 }
 
 // errEmptyBackupStream reports a stream that completed without writing a

@@ -16,8 +16,17 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// installModeNormal is the CCU's "normal" install-mode flavour (mode=1).
-// mode=2 means "ready for re-pairing"; only the normal mode is exposed.
+// installModeNormal is rfd's INSTALL_NORMAL (rfd RFManager.h, enum
+// InstallModes). It governs the address-less broadcast below; the
+// per-device path sends an address, and rfd then selects
+// INSTALL_DEVICE_WHITELIST regardless of this value.
+//
+// Mode 2 is INSTALL_PUSH_DEFAULT_CONFIG, and it is deliberately not
+// exposed: rfd notes above that case body that it writes the device's
+// default configuration and, in the same breath, deletes every existing
+// link (rfd RFDevice.cpp, the INSTALL_PUSH_DEFAULT_CONFIG case).
+// Describing it as "ready for re-pairing" made a destructive operation
+// read like a harmless one.
 const installModeNormal = 1
 
 // installModeWriter resolves the per-interface backend at call time and

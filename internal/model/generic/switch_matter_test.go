@@ -7,6 +7,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -188,8 +190,8 @@ func TestSwitchMatter_MatterRead_ClusterRevision(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool, hmenum.OperationsRead))
 	v, ok := s.MatterRead(matterGenericSwitchAttrClusterRevision)
-	if !ok || v != matterGenericOnOffClusterRevision {
-		t.Errorf("ClusterRevision: want (%v, true), got (%v, %v)", matterGenericOnOffClusterRevision, v, ok)
+	if !ok || v != onoff.Revision() {
+		t.Errorf("ClusterRevision: want (%v, true), got (%v, %v)", onoff.Revision(), v, ok)
 	}
 }
 

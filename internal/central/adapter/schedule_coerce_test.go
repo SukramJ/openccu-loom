@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
@@ -265,7 +266,7 @@ func TestSerializeSimpleScheduleWithDomainNonLock(t *testing.T) {
 			Level:    1.0,
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot, nil)
+	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot, nil, weekprofile.AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain switch: %v", err)
 	}
@@ -300,7 +301,7 @@ func TestSerializeSimpleScheduleWithDomainLock(t *testing.T) {
 					LockAction: string(action),
 				},
 			}
-			m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedule.SimpleMaxSlot, nil)
+			m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedule.SimpleMaxSlot, nil, weekprofile.AstroOffsetLimits{})
 			if err != nil {
 				t.Fatalf("serializeSimpleScheduleWithDomain lock: %v", err)
 			}
@@ -325,7 +326,7 @@ func TestSerializeSimpleScheduleWithDomainError(t *testing.T) {
 	entries := []hmapi.SimpleScheduleEntry{
 		{SlotNo: 0, Weekdays: []string{"MONDAY"}, Time: "07:00"},
 	}
-	_, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot, nil)
+	_, err := serializeSimpleScheduleWithDomain(entries, "switch", schedule.SimpleMaxSlot, nil, weekprofile.AstroOffsetLimits{})
 	if err == nil {
 		t.Fatal("expected error for slot_no=0")
 	}

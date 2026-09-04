@@ -65,8 +65,11 @@ func TestDeviceFirmwareStatePredicates(t *testing.T) {
 		if !s.IsFirmwareUpdateInProgress() {
 			t.Errorf("%s should be InProgress", s)
 		}
-		if !s.IsFirmwareUpdateReady() {
-			t.Errorf("%s should be Ready", s)
+		// Not "ready": the CCU's install precondition excludes a state whose
+		// install is already running. See
+		// TestFirmwareUpdateReadyMatchesTheCCUsInstallPrecondition.
+		if s.IsFirmwareUpdateReady() {
+			t.Errorf("%s must not report as installable while its install runs", s)
 		}
 	}
 	ready := []DeviceFirmwareState{

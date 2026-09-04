@@ -63,6 +63,7 @@
   "discovery.week_profile": "Week profile",
   "health.component": "Component",
   "health.note": "Note",
+  "health.note.event_received": "Event received",
   "health.note.breaker_closed": "Breaker closed",
   "health.note.breaker_half_open": "Breaker half-open",
   "health.note.breaker_open": "Breaker open",

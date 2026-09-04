@@ -82,10 +82,18 @@ func (r SecuritySourceRef) DisplayName() string {
 // SourceDisplayNames maps refs onto their display names, dropping the ones
 // that name nothing.
 //
-// The rule lives with the type because every surface that lists sources needs
-// it — the security renderer in the domain and the MQTT reconciler both had
-// byte-identical copies, and a copy of a display rule diverges silently: one
-// plane starts showing addresses where another shows names.
+// The rule lives with the type because a copy of a display rule diverges
+// silently: one plane starts showing addresses where another shows names.
+// This is where a new consumer takes it from — but it is not yet the only
+// spelling in the tree, so the sentence "everyone uses this" is one no reader
+// should take from here. What is true is narrower: [SecuritySourceRef]
+// carries the rule, and any surface listing sources can call this instead of
+// restating it.
+//
+// One behavioural detail a caller relying on the rule has to know: an empty
+// input yields an empty, non-nil slice, which encodes as [] rather than null.
+// A copy that returns a bare nil for the same input serialises differently on
+// any field without omitempty.
 func SourceDisplayNames(refs []SecuritySourceRef) []string {
 	out := make([]string, 0, len(refs))
 	for i := range refs {

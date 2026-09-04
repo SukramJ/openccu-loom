@@ -294,3 +294,22 @@ func TestEncodeTimerDurationTruncatesTowardZero(t *testing.T) {
 		})
 	}
 }
+
+// TestLevelToPercentIsOneRuleForPositionAndBrightness pins the two 0–100
+// accessors to a single rule. The CCU reports LEVEL on a 0.01 grid, and three
+// of those hundredths (0.29, 0.57, 0.58) land just below their exact value in
+// binary64 — truncating reports them one percent low, which is visible to an
+// operator as a slider that snaps back a step. Walking the whole grid catches
+// exactly that.
+func TestLevelToPercentIsOneRuleForPositionAndBrightness(t *testing.T) {
+	t.Parallel()
+	for i := range 101 {
+		level := float64(i) / 100
+		if got := NewPosition(level).OpenFraction(); got != i {
+			t.Errorf("NewPosition(%v).OpenFraction() = %d, want %d", level, got, i)
+		}
+		if got := NewBrightness(level).Pct(); got != i {
+			t.Errorf("NewBrightness(%v).Pct() = %d, want %d", level, got, i)
+		}
+	}
+}

@@ -66,6 +66,24 @@ type SensorCandidate struct {
 // sensorTypeByChannelType suggests the alarm role for a channel type.
 // The mapping is deliberately small: it covers the channel types whose
 // role is unambiguous, and leaves everything else to the operator.
+//
+// Every name below is a channel TYPE the CCU declares, and each one's
+// detection-state parameter is the one the intrusion branch accepts
+// below (STATE / MOTION / PRESENCE_DETECTION_STATE), read off the
+// devices' own device descriptions and paramset descriptions.
+//
+// Two boundaries a reader should know. The three hazard rows are
+// behaviour-neutral: sensorCandidateFor consults this map only inside
+// the safety.Classify branch, whose fallback is already
+// AlarmSensorTypeHazard, and the intrusion branch below skips
+// role==Hazard. They are kept because they state the role of those
+// channel types, not because removing them would change an outcome.
+// And the table is narrower than the firmware: DOOR_STATE_TRANSCEIVER
+// (STATE={CLOSED,OPEN} on HmIP-DLP), ACCELERATION_TRANSCEIVER (MOTION on
+// HmIP-SAM and HmIP-STV) and the BidCos SMOKE_DETECTOR_TEAM channels all
+// declare a detection state and are absent here, so they never become
+// candidates. Whether they should is a product decision, not a firmware
+// one — widening the table widens what the picker offers.
 var sensorTypeByChannelType = map[string]hmenum.AlarmSensorType{
 	"SHUTTER_CONTACT":                    hmenum.AlarmSensorTypeWindow,
 	"TILT_SENSOR":                        hmenum.AlarmSensorTypeWindow,
@@ -152,12 +170,26 @@ func sensorCandidateFor(model, channelType string, parameter hmenum.Parameter) (
 		return cand, true
 	}
 
-	// Intrusion sensors are recognised by channel type: their state
-	// parameter is a plain boolean with no security classification of
-	// its own.
+	// Intrusion sensors are recognised by channel type: their detection
+	// state carries no security classification of its own, so nothing
+	// upstream of this branch marks them.
+	//
+	// It is NOT a plain boolean. The HmIP firmware builds these states as
+	// enumerations — HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory
+	// #createStateWindowOpenClosed over {CLOSED, OPEN} and
+	// #createStateWindowOpenTiltedClosed over {CLOSED, TILTED, OPEN} — and
+	// the descriptors agree: SHUTTER_CONTACT STATE is an ENUM on the five
+	// HmIP contacts and a BOOL only on the eight classic ones, while
+	// ROTARY_HANDLE_SENSOR and ROTARY_HANDLE_TRANSCEIVER STATE is
+	// {CLOSED, TILTED, OPEN} everywhere. That is why the candidate carries
+	// the declared ValueList out to the picker: without it an operator
+	// cannot narrow a window handle to OPEN alone, and every non-CLOSED
+	// index — TILTED included — counts as an activation by default
+	// (safety.ActiveFromRaw).
 	if role, ok := sensorTypeByChannelType[channelType]; ok && role != hmenum.AlarmSensorTypeHazard {
 		if parameter != hmenum.ParameterState && parameter != hmenum.ParameterMotion &&
-			parameter != "PRESENCE_DETECTION_STATE" {
+			parameter != hmenum.ParameterPresenceDetectionState {
 			return SensorCandidate{}, false
 		}
 		cand.SensorType = role

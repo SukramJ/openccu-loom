@@ -8,6 +8,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 )
 
 // ProfileDoc is the outer shape of an
@@ -145,64 +147,93 @@ func matchActiveProfile(profiles []profileDef, current map[string]any) int {
 
 // profileMatches reports whether every constraint in `params` is
 // satisfied by the corresponding value in `current`. Missing keys in
-// `current` are ignored (no decision either way), mirroring the
-// Python reference.
+// `current` are ignored (no decision either way).
+//
+// The rule itself lives in [linkprofile.ProfileMatches]; this converts the raw
+// JSON constraints the schema carries into the decoded ones the store uses and
+// asks it. It used to be a second implementation, and the two had drifted in
+// both directions: this side compared floats with `!=` where the store uses a
+// relative epsilon, so a value that survived a wire round-trip matched there
+// and not here; and this side parsed numeric strings where the store refuses
+// them, so `"1"` matched here and not there. Same channel, same profile,
+// different answers on the SPA and in the store.
+//
+// What is shared is the rule; what stays here is the input preparation, and
+// the difference is deliberate. This plane reads values straight off the wire,
+// where a numeric string is a shape the CCU does produce, so it parses one
+// before asking. The store reads values it decoded itself and refuses strings
+// on purpose (see its toFloat64): whether a LINK paramset can carry one there
+// is not decidable from the CCU sources, and reading a string as a number in
+// the wrong place risks a silent mismatch. Same rule, different inputs, both
+// stated.
 func profileMatches(params map[string]profileParamConstraint, current map[string]any) bool {
+	converted := make(map[string]linkprofile.ParamConstraint, len(params))
 	for name := range params {
 		c := params[name]
-		raw, ok := current[name]
-		if !ok {
-			continue
-		}
-		num, ok := toFloat(raw)
-		if !ok {
-			return false
-		}
-		switch c.ConstraintType {
-		case "fixed":
-			v, ok := decodeFloat(c.Value)
-			if ok && num != v {
-				return false
-			}
-		case "list":
-			if len(c.Values) == 0 {
-				continue
-			}
-			found := false
-			for _, entry := range c.Values {
-				if v, ok := decodeFloat(entry); ok && v == num {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
-			}
-		case "range":
-			lo, hasLo := decodeFloat(c.MinValue)
-			hi, hasHi := decodeFloat(c.MaxValue)
-			if hasLo && hasHi && (num < lo || num > hi) {
-				return false
-			}
+		converted[name] = linkprofile.ParamConstraint{
+			ConstraintType: c.ConstraintType,
+			Value:          decodeFloatPtr(c.Value),
+			Values:         decodeFloatSlice(c.Values),
+			Default:        decodeFloatPtr(c.Default),
+			MinValue:       decodeFloatPtr(c.MinValue),
+			MaxValue:       decodeFloatPtr(c.MaxValue),
 		}
 	}
-	return true
+	return linkprofile.ProfileMatches(converted, normalizeProfileValues(current))
 }
 
-// profileSpecificity scores a profile: every fixed constraint gains
-// one point, every non-fixed (list / range) subtracts 100. All-fixed
-// profiles therefore always beat profiles with loose constraints,
-// regardless of total parameter count.
-func profileSpecificity(params map[string]profileParamConstraint) float64 {
-	fixed, loose := 0, 0
-	for name := range params {
-		if params[name].ConstraintType == "fixed" {
-			fixed++
-		} else {
-			loose++
+// normalizeProfileValues parses numeric strings so a wire value that arrived
+// as `"1"` is compared as the number it denotes. Applied on this plane only —
+// see [profileMatches].
+func normalizeProfileValues(current map[string]any) map[string]any {
+	out := make(map[string]any, len(current))
+	for name, raw := range current {
+		if str, ok := raw.(string); ok {
+			if f, err := strconv.ParseFloat(str, 64); err == nil {
+				out[name] = f
+				continue
+			}
+		}
+		out[name] = raw
+	}
+	return out
+}
+
+// decodeFloatPtr decodes a raw JSON number, or nil when absent or unreadable.
+func decodeFloatPtr(raw json.RawMessage) *float64 {
+	v, ok := decodeFloat(raw)
+	if !ok {
+		return nil
+	}
+	return &v
+}
+
+// decodeFloatSlice decodes a list of raw JSON numbers, dropping unreadable
+// entries rather than failing the whole constraint.
+func decodeFloatSlice(raws []json.RawMessage) []float64 {
+	if len(raws) == 0 {
+		return nil
+	}
+	out := make([]float64, 0, len(raws))
+	for _, raw := range raws {
+		if v, ok := decodeFloat(raw); ok {
+			out = append(out, v)
 		}
 	}
-	return float64(fixed) - float64(loose)*100
+	return out
+}
+
+// profileSpecificity scores a profile through the one implementation, in
+// [linkprofile.ProfileSpecificity]. It used to be a second copy of the same
+// arithmetic over this plane's own constraint shape; both planes resolve the
+// active profile, so two scorers could name different profiles for one
+// channel.
+func profileSpecificity(params map[string]profileParamConstraint) float64 {
+	types := make([]string, 0, len(params))
+	for name := range params {
+		types = append(types, params[name].ConstraintType)
+	}
+	return linkprofile.ProfileSpecificity(types)
 }
 
 // toFloat narrows whatever the CCU returned (int / float / string)

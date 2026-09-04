@@ -116,7 +116,7 @@ func (s *ChannelFlagsStore) DeleteDevice(ctx context.Context, centralName, devic
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := deviceAddress + ":"
+	prefix := channelLikePrefix(deviceAddress)
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM channel_flags
          WHERE central_name = ?

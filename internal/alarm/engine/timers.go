@@ -11,15 +11,41 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
-// Timer kinds persisted in alarm_state.timers_json. The strings are
-// part of the persisted format — keep them stable.
+// Timer kinds persisted in alarm_state.timers_json and stamped into
+// [ZoneSnapshot.TimerKind]. The strings are part of the persisted
+// format — keep them stable.
+//
+// Exported together with [IsCountdownTimerKind] because every
+// north-bound surface that renders a snapshot has to answer the same
+// question about them, and each surface that spells the tokens out
+// again answers it independently.
 const (
-	timerKindExit      = "exit_delay"
-	timerKindEntry     = "entry_delay"
-	timerKindTrigger   = "trigger_time"
-	timerKindPreAlarm  = "pre_alarm"
-	timerKindAutoRearm = "auto_rearm"
+	TimerKindExit      = "exit_delay"
+	TimerKindEntry     = "entry_delay"
+	TimerKindTrigger   = "trigger_time"
+	TimerKindPreAlarm  = "pre_alarm"
+	TimerKindAutoRearm = "auto_rearm"
 )
+
+// IsCountdownTimerKind reports whether a timer kind is a user-facing
+// countdown — one a panel renders as a running ring with a remaining
+// time, and the only kinds the AlarmCountdown DTO admits (its schema in
+// assets/openapi.yaml constrains the field to exit_delay and
+// entry_delay, and the SPA's generated type mirrors that).
+//
+// The other kinds are internal phase timers: trigger_time and pre_alarm
+// bound an incident the panel already shows as triggered, and
+// auto_rearm runs on a disarmed zone. Publishing one of them as a
+// countdown puts an out-of-enum value on the wire and renders a
+// pre-alarm as an exit delay.
+func IsCountdownTimerKind(kind string) bool {
+	switch kind {
+	case TimerKindExit, TimerKindEntry:
+		return true
+	default:
+		return false
+	}
+}
 
 // persistedTimer is the redundant countdown tuple stored per active
 // timer (notes/concepts/alarm-concept.md §5): the wall-clock deadline for

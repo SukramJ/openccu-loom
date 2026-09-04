@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -212,41 +213,14 @@ func (e *EnumSelect) Subscribe(ch *device.Channel) func() {
 		if !ok {
 			return
 		}
-		e.OnState(resolveEnumToken(raw, stateDP.ParameterData().ValueList))
+		label, _ := parameter.EnumLabel(stateDP.ParameterData(), raw)
+		e.OnState(label)
 	}
 	unsub := stateDP.OnAnyUpdate(func(_, _ any) { push() })
 	// Seed immediately: after a cache hydration the value is already
 	// there and no further update is coming.
 	push()
 	return unsub
-}
-
-// resolveEnumToken maps a raw wire value onto its VALUE_LIST token. A
-// read-only ENUM arrives as a 0-based index projected onto an integer
-// sensor, so the index has to be resolved against the list; a device that
-// already reports the token passes through.
-func resolveEnumToken(raw any, valueList []string) string {
-	switch v := raw.(type) {
-	case string:
-		return v
-	case int32:
-		return enumTokenAt(valueList, int(v))
-	case int64:
-		return enumTokenAt(valueList, int(v))
-	case int:
-		return enumTokenAt(valueList, v)
-	case float64:
-		return enumTokenAt(valueList, int(v))
-	default:
-		return ""
-	}
-}
-
-func enumTokenAt(valueList []string, idx int) string {
-	if idx < 0 || idx >= len(valueList) {
-		return ""
-	}
-	return valueList[idx]
 }
 
 // OnState records a device-reported state token. A token that is not a

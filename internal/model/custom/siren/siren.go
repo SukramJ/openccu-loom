@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
@@ -196,6 +197,35 @@ func (s *Siren) DisableAcousticLabel() (string, bool) {
 	}
 	return "", false
 }
+
+// AlarmOpticalLabel returns the optical selection an alarm activation should
+// use when the operator picked none, and whether one could be named.
+//
+// It is the optical counterpart to [Siren.DisableAcousticLabel], and it exists
+// for the same reason: the label must come from a property the device states,
+// never from a position in the list. The device's own naming carries that
+// property — every sustained alarm pattern ends in _REPEATING
+// (BLINKING_ALTERNATELY_REPEATING, BLINKING_BOTH_REPEATING,
+// DOUBLE_FLASHING_REPEATING, FLASHING_BOTH_REPEATING), while the
+// CONFIRMATION_SIGNAL_* entries are one-shot acknowledgement blinks and
+// DISABLE_OPTICAL_SIGNAL turns the light off.
+//
+// Returns false when the device offers no repeating pattern. The caller then
+// writes no optical selection at all and the device keeps the one it has,
+// which is safer than sending an acknowledgement blink that would satisfy
+// OPTICAL_ALARM_ACTIVE while showing nobody an alarm.
+func (s *Siren) AlarmOpticalLabel() (string, bool) {
+	for _, label := range s.availableLights {
+		if strings.HasSuffix(label, opticalRepeatingSuffix) {
+			return label, true
+		}
+	}
+	return "", false
+}
+
+// opticalRepeatingSuffix marks a sustained optical alarm pattern in the
+// device's own OPTICAL_ALARM_SELECTION naming.
+const opticalRepeatingSuffix = "_REPEATING"
 
 // AvailableTones returns the labels of acoustic-alarm selections this
 // siren accepts (e.g. "DISABLE_ACOUSTIC_SIGNAL", "FREQUENCY_RISING",

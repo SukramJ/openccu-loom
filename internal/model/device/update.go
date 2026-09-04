@@ -119,7 +119,7 @@ func (u *Update) Config() payload.ConfigPayload {
 	}
 	return map[string]any{
 		"device_class":    "firmware",
-		"entity_category": "config",
+		"entity_category": payload.CombinedEntityCategoryConfig,
 	}
 }
 
@@ -180,7 +180,7 @@ func (u *Update) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component s
 	}
 	body = map[string]any{
 		"device_class":            "firmware",
-		"entity_category":         "config",
+		"entity_category":         payload.CombinedEntityCategoryConfig,
 		"state_topic":             stateTopic,
 		"value_template":          "{{ value_json.firmware }}",
 		"latest_version_topic":    stateTopic,

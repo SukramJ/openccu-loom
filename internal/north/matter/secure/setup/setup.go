@@ -71,7 +71,7 @@ func (p Payload) Validate() error {
 	if p.CustomFlow > 0x03 {
 		return fmt.Errorf("setup: CustomFlow=%d exceeds 2-bit width", p.CustomFlow)
 	}
-	if p.Discriminator > 0x0FFF {
+	if p.Discriminator > MaxDiscriminator {
 		return fmt.Errorf("setup: Discriminator=0x%X exceeds 12-bit width", p.Discriminator)
 	}
 	if p.Passcode == 0 || p.Passcode > 99999998 {
@@ -79,6 +79,18 @@ func (p Payload) Validate() error {
 	}
 	return nil
 }
+
+// MaxDiscriminator is the widest value the commissioning discriminator
+// carries. matter.js declares the field as `BitField(45, 12)` in the
+// QR-code payload and rejects anything above 4095 outright
+// (packages/types/src/schema/PairingCodeSchema.ts: the QrPairingCode bit
+// map, and the manual-pairing-code encoder's
+// "discriminator value must be less than 4096").
+//
+// It is exported because the config validator has to reject an
+// out-of-range discriminator before the daemon boots, and a second
+// spelling there would be a copy of this package's own bit-width rule.
+const MaxDiscriminator = 0x0FFF
 
 // base38Alphabet is the 38-character set from Matter §5.7.4.
 const base38Alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-."
@@ -165,7 +177,7 @@ func base38Encode(b []byte) string {
 // vendor/product carry is needed, supply a 21-digit code via a
 // future ManualCodeLong helper.
 func ManualCode(discriminator uint16, passcode uint32) (string, error) {
-	if discriminator > 0x0FFF {
+	if discriminator > MaxDiscriminator {
 		return "", fmt.Errorf("setup: Discriminator=0x%X exceeds 12-bit width", discriminator)
 	}
 	if passcode == 0 || passcode > 99999998 {

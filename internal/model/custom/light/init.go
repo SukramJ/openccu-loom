@@ -204,7 +204,7 @@ func applyGroupLevel(l *Light, ch *device.Channel, rebased custom.RebasedChannel
 		if param == "" {
 			continue
 		}
-		groupCh := siblingChannel(ch, chNo)
+		groupCh := ch.Sibling(chNo)
 		if groupCh == nil {
 			continue
 		}
@@ -216,19 +216,6 @@ func applyGroupLevel(l *Light, ch *device.Channel, rebased custom.RebasedChannel
 }
 
 // siblingChannel returns the channel of ch's device carrying number no.
-func siblingChannel(ch *device.Channel, no int) *device.Channel {
-	dev := ch.Device()
-	if dev == nil {
-		return nil
-	}
-	for _, sibling := range dev.Channels() {
-		if sibling.Number == no {
-			return sibling
-		}
-	}
-	return nil
-}
-
 // newDimmerConstructor builds a plain dimmable Light.
 func newDimmerConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	l := New(configFromChannel(ch, custom.LightCapabilities{Dimmable: true}, rebased))
@@ -237,11 +224,15 @@ func newDimmerConstructor(ch *device.Channel, rebased custom.RebasedChannelGroup
 }
 
 // newDaliConstructor builds a DRGDaliLight for the HmIP-DRG-DALI.
-// Kelvin bounds match
+// Kelvin bounds are the device's own, read from the COLOR_TEMPERATURE
+// descriptor (HmIP-DRG-DALI declares 1000-10200 K); the
+// [defaultMinKelvin] / [defaultMaxKelvin] pair applies only when the
+// channel carries no bounds.
 func newDaliConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	// The reference CustomDpIpDrgDaliLight declares HUE+SATURATION, COLOR_TEMPERATURE
 	// and EFFECT fields, so it supports hs colour, colour temperature AND effects
 	// (has_hs_color / has_color_temperature / has_effects all resolve true).
+	minK, maxK := kelvinBoundsFromChannel(ch)
 	return NewDRGDaliLight(
 		configFromChannel(ch, custom.LightCapabilities{
 			Dimmable:          true,
@@ -249,7 +240,7 @@ func newDaliConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupCo
 			SupportsColorTemp: true,
 			SupportsEffects:   true,
 		}, rebased),
-		2000, 6500,
+		minK, maxK,
 	), nil
 }
 
@@ -315,7 +306,7 @@ func newColorTempConstructor(ch *device.Channel, rebased custom.RebasedChannelGr
 
 // kelvinBoundsFromChannel reads the COLOR_TEMPERATURE parameter descriptor
 // MIN / MAX bounds as Kelvin integers. Falls back to (0, 0) when absent so
-// [NewColorTempLight] applies its own defaults (2000 / 6500).
+// the caller applies [defaultMinKelvin] / [defaultMaxKelvin].
 func kelvinBoundsFromChannel(ch *device.Channel) (minK, maxK int32) {
 	if ch == nil {
 		return 0, 0
@@ -358,7 +349,7 @@ func programChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig
 		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterProgram {
 			continue
 		}
-		if sibling := siblingChannel(ch, chNo); sibling != nil {
+		if sibling := ch.Sibling(chNo); sibling != nil {
 			return sibling
 		}
 	}
@@ -380,7 +371,7 @@ func colorChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) 
 		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterColor {
 			continue
 		}
-		if sibling := siblingChannel(ch, chNo); sibling != nil {
+		if sibling := ch.Sibling(chNo); sibling != nil {
 			return sibling
 		}
 	}
@@ -401,7 +392,7 @@ func whitePointChannel(ch *device.Channel, rebased custom.RebasedChannelGroupCon
 		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterLevel {
 			continue
 		}
-		if sibling := siblingChannel(ch, chNo); sibling != nil {
+		if sibling := ch.Sibling(chNo); sibling != nil {
 			return sibling
 		}
 	}

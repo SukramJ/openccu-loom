@@ -448,13 +448,13 @@ func TestPutCCUPosition_HappyPath_Returns204AndAudits(t *testing.T) {
 // and returns a configurable error.
 type fakeFirmwareDownloader struct {
 	lastCentral string
-	lastURL     string
+	calls       int
 	err         error
 }
 
-func (f *fakeFirmwareDownloader) DownloadFirmware(_ context.Context, central, url string) error {
+func (f *fakeFirmwareDownloader) DownloadFirmware(_ context.Context, central string) error {
 	f.lastCentral = central
-	f.lastURL = url
+	f.calls++
 	return f.err
 }
 
@@ -473,29 +473,37 @@ func TestPostSystemFirmwareDownload_NilService_Returns503(t *testing.T) {
 	}
 }
 
-func TestPostSystemFirmwareDownload_MissingURL_Returns422(t *testing.T) {
+// TestPostSystemFirmwareDownload_NoURL_Proceeds pins that a body without a
+// url is a complete request. The CCU downloads the firmware matching its own
+// version and board serial, so there is nothing for the caller to name; the
+// endpoint used to answer 422 for a field it could not have used.
+func TestPostSystemFirmwareDownload_NoURL_Proceeds(t *testing.T) {
 	t.Parallel()
 	svc := &fakeFirmwareDownloader{}
 	w := httptest.NewRecorder()
 	PostSystemFirmwareDownload(svc, nil).ServeHTTP(w, firmwareDownloadRequest(`{"central":"home"}`))
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
 	}
-	if svc.lastURL != "" {
-		t.Fatalf("backend must not be called on missing url, got %q", svc.lastURL)
+	if svc.calls != 1 || svc.lastCentral != "home" {
+		t.Fatalf("expected one download for central home, got calls=%d central=%q", svc.calls, svc.lastCentral)
 	}
 }
 
-func TestPostSystemFirmwareDownload_NonHTTPScheme_Returns422(t *testing.T) {
+// TestPostSystemFirmwareDownload_URLIsAcceptedAndIgnored pins the
+// compatibility half of that decision: a client written against the earlier
+// contract still sends a url, and even an unusable one must not turn into a
+// validation error for a field the daemon no longer reads.
+func TestPostSystemFirmwareDownload_URLIsAcceptedAndIgnored(t *testing.T) {
 	t.Parallel()
 	svc := &fakeFirmwareDownloader{}
 	w := httptest.NewRecorder()
 	PostSystemFirmwareDownload(svc, nil).ServeHTTP(w, firmwareDownloadRequest(`{"url":"ftp://x/fw.tgz"}`))
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
 	}
-	if svc.lastURL != "" {
-		t.Fatalf("backend must not be called on non-http url, got %q", svc.lastURL)
+	if svc.calls != 1 {
+		t.Fatalf("expected the download to proceed, got calls=%d", svc.calls)
 	}
 }
 
@@ -548,33 +556,35 @@ func TestPostSystemFirmwareDownload_HappyPath_Returns202AndAudits(t *testing.T) 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
 	}
-	if svc.lastCentral != "home" || svc.lastURL != "https://x/fw.tgz" {
-		t.Fatalf("backend args mismatch: central=%q url=%q", svc.lastCentral, svc.lastURL)
+	if svc.lastCentral != "home" {
+		t.Fatalf("backend central mismatch: %q", svc.lastCentral)
 	}
 	if len(rec.entries) != 1 {
 		t.Fatalf("expected 1 audit entry, got %d", len(rec.entries))
 	}
-	if got := rec.entries[0]; got.Action != audit.ActionSystemFirmwareDownload ||
-		got.Note != "home https://x/fw.tgz" {
+	// The note names the central, never the ignored url: an audit trail
+	// that records an image the CCU never fetched is a false record.
+	if got := rec.entries[0]; got.Action != audit.ActionSystemFirmwareDownload || got.Note != "home" {
 		t.Fatalf("audit entry mismatch: %+v", got)
 	}
 }
 
-func TestPostSystemFirmwareDownload_SingleCentral_TrimsURLAndAudits(t *testing.T) {
+func TestPostSystemFirmwareDownload_SingleCentral_Audits(t *testing.T) {
 	t.Parallel()
 	svc := &fakeFirmwareDownloader{}
 	rec := &captureRecorder{}
 	w := httptest.NewRecorder()
-	// No central supplied (single-CCU convenience) and surrounding
-	// whitespace on the URL is trimmed before dispatch.
-	PostSystemFirmwareDownload(svc, rec).ServeHTTP(w, firmwareDownloadRequest(`{"url":"  https://x/fw.tgz  "}`))
+	// No central supplied: the single-CCU convenience the other system
+	// endpoints share. The empty body is a valid request now that the url
+	// carries no meaning.
+	PostSystemFirmwareDownload(svc, rec).ServeHTTP(w, firmwareDownloadRequest(`{}`))
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
 	}
-	if svc.lastURL != "https://x/fw.tgz" {
-		t.Fatalf("expected trimmed url, got %q", svc.lastURL)
+	if svc.calls != 1 {
+		t.Fatalf("expected the download to be dispatched, got calls=%d", svc.calls)
 	}
-	if got := rec.entries[0]; got.Note != "https://x/fw.tgz" {
-		t.Fatalf("expected note without central, got %q", got.Note)
+	if got := rec.entries[0]; got.Note != "" {
+		t.Fatalf("expected an empty note when no central was named, got %q", got.Note)
 	}
 }

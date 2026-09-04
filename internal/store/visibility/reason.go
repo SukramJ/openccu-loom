@@ -70,11 +70,13 @@ const (
 	ReasonReadOnly HiddenReason = "read_only"
 	// ReasonUnknown — no known rule matched. A candidate carrying this
 	// reason means the classifier has drifted from the suppression
-	// passes. The check that fails on it is the
+	// passes. Two checks fail on it: the
 	// `every_candidate_has_a_known_reason` subtest of
-	// TestVisibilityCandidateGroups (tests/integration), which runs only
-	// under `-tags=integration` — so a unit run stays green while the
-	// drift is present.
+	// TestVisibilityCandidateGroups (tests/integration), which needs
+	// `-tags=integration`, and TestClassifyExplainsEveryValuesSuppression
+	// in this package, which cross-multiplies a fixed model / channel /
+	// parameter corpus against [ParameterDecider.computeIgnoredValues] and
+	// so runs on every unit build.
 	ReasonUnknown HiddenReason = "unknown"
 )
 
@@ -105,9 +107,19 @@ var reasonPrecedence = []HiddenReason{
 }
 
 // AllHiddenReasons returns every reason [Classify] can emit, in
-// precedence order, excluding [ReasonUnknown]. The SPA builds its
-// filter chips from this list (via the REST schema) so a new reason
-// appears in the UI without a second enumeration.
+// precedence order, excluding [ReasonUnknown]. It is shipped over the REST
+// schema so a reason the SPA does not recognise still renders instead of
+// being dropped.
+//
+// It is not the UI's single enumeration. Measured: the SPA keeps its own chip
+// order (REASON_ORDER in assets/ui/src/lib/visibility/candidates.ts, which
+// puts master_gate before week_profile and hidden right after
+// device_specific, unlike the precedence order below), its own noise subset
+// (NOISE_REASONS in the same file), its own TypeScript union
+// (assets/ui/src/lib/api/visibility-types.ts), a hand-written enum in
+// assets/openapi.yaml, and one `unignore.reason.*` label per reason in both
+// catalogues of assets/ui/src/lib/i18n.ts. A reason added here alone reaches
+// the UI appended last and labelled with its raw key until those follow.
 func AllHiddenReasons() []HiddenReason {
 	out := make([]HiddenReason, len(reasonPrecedence))
 	copy(out, reasonPrecedence)

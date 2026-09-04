@@ -45,7 +45,7 @@ func TestHSColorStateUncertain_AlwaysFalse(t *testing.T) {
 
 func TestLevelCombinedStateUncertain_AlwaysFalse(t *testing.T) {
 	t.Parallel()
-	lc := combined.NewLevelCombined("addr", nil, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := combined.NewLevelCombined("addr", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if lc.StateUncertain() {
 		t.Error("LevelCombined.StateUncertain() must always be false")
 	}

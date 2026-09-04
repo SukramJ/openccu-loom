@@ -586,29 +586,10 @@ func (d *DefaultDiscoveryBuilder) channelBaseBody(ev Event, name, uniqueID strin
 //   - **Channels without custom-DP context** (the historic fallback
 //     path): channel 0 → empty, channel N > 0 → "<N>".
 func displayChannelName(ev Event) string {
-	if insp, ok := ev.Channel.(CustomDPNamingInspector); ok {
-		// Secondary channels always carry the `vch<N>` suffix
-		// regardless of how many primaries the device hosts —
-		// HmIP-PSM ch4/ch5 are secondaries even though the device
-		// has only one SWITCH primary, so the secondary check must
-		// run BEFORE [HasSinglePrimaryCustomDP] (which only counts
-		// primary channels and therefore returns true even when
-		// invoked from a secondary).
-		if insp.IsCustomDPSecondaryChannel() {
-			return fmt.Sprintf("vch%d", ev.ChannelNo)
-		}
-		if insp.IsCustomDPPrimaryChannel() {
-			if insp.HasSinglePrimaryCustomDP() {
-				return ""
-			}
-			// _ignore_multiple_channels_for_name override (Python
-			// data_point.py:542 + custom/lock.py:65). When the
-			// channel's custom DP opts in, the discovery name builder
-			// drops the `ch<N>` suffix even for multi-primary devices.
-			if ig, ok := ev.Channel.(IgnoreMultipleChannelsForNameInspector); ok && ig.IgnoreMultipleChannelsForName() {
-				return ""
-			}
-			return fmt.Sprintf("ch%d", ev.ChannelNo)
+	if insp, ok := ev.Channel.(CustomDPNamingInspector); ok &&
+		(insp.IsCustomDPPrimaryChannel() || insp.IsCustomDPSecondaryChannel()) {
+		if namer, ok := ev.Channel.(CustomDPDisplayNamer); ok {
+			return namer.CustomDPDisplayName()
 		}
 	}
 	if ev.ChannelNo > 0 {

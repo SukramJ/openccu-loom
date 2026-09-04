@@ -367,17 +367,29 @@ func newFixedColorLightFixture(t *testing.T, w *fakeWriter) *light.FixedColorLig
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-			ValueList:  []string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"},
+			ValueList:  []string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"},
 		},
 		Writer: w,
 	})
 	ch.Put(colorSel)
+	// COLOR_BEHAVIOUR as an HmIP-BSL declares it. MIN/MAX/DEFAULT are part of
+	// the fixture because they carry the parameter's value domain: all three
+	// are VALUE_LIST labels here, which is what makes the label — not the
+	// index — the wire form. A descriptor without them encodes no device.
 	cbSel := generic.NewSelect(generic.Spec{
 		Key: hmtypes.DataPointKey{ChannelAddress: "FC0001:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterColorBehaviour)},
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-			ValueList:  []string{"DO_NOT_CARE", "OFF", "OLD_VALUE", "ON"},
+			Min:        json.RawMessage(`"OFF"`),
+			Max:        json.RawMessage(`"DO_NOT_CARE"`),
+			Default:    json.RawMessage(`"OFF"`),
+			ValueList: []string{
+				"OFF", "ON", "BLINKING_SLOW", "BLINKING_MIDDLE", "BLINKING_FAST",
+				"FLASH_SLOW", "FLASH_MIDDLE", "FLASH_FAST",
+				"BILLOW_SLOW", "BILLOW_MIDDLE", "BILLOW_FAST",
+				"OLD_VALUE", "DO_NOT_CARE",
+			},
 		},
 		Writer: w,
 	})
@@ -519,7 +531,7 @@ func newSoundPlayerLEDFixture(t *testing.T, w *fakeWriter) (*light.SoundPlayerLE
 		Key: hmtypes.DataPointKey{ChannelAddress: addr, ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterColor)},
 		Descriptor: hmproto.ParameterData{
 			Type:      hmenum.ParameterTypeEnum,
-			ValueList: []string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"},
+			ValueList: []string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"},
 		},
 		Writer: w,
 	})
@@ -685,7 +697,7 @@ func newSoundPlayerFixture(t *testing.T, w *fakeWriter) *siren.SoundPlayer {
 }
 
 // buildSoundfileList returns a minimal VALUE_LIST for the SOUNDFILE parameter.
-// Real devices ship SOUNDFILE_001..SOUNDFILE_189; we use a 5-entry stub.
+// The HmIP-MP3P ships SOUNDFILE_001..SOUNDFILE_252; we use a 5-entry stub.
 func buildSoundfileList() []string {
 	return []string{"SOUNDFILE_001", "SOUNDFILE_002", "SOUNDFILE_003", "SOUNDFILE_004", "SOUNDFILE_005"}
 }

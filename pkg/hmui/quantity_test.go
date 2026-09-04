@@ -265,3 +265,22 @@ func TestHintFor_FallbackLayers(t *testing.T) {
 		t.Errorf("type-fallback Semantic=%q, want state", h.Semantic)
 	}
 }
+
+// TestGasEnergyCounterIsNotClassifiedAsEnergy drives HintFor with the
+// parameter the CCU actually reports for a gas meter. GAS_ENERGY_COUNTER
+// contains ENERGY_COUNTER, so the substring table's order decides the
+// answer: the gas row has to be reached first. The generic energy row is
+// pinned alongside it so the reordering cannot be "fixed" by dropping it.
+func TestGasEnergyCounterIsNotClassifiedAsEnergy(t *testing.T) {
+	t.Parallel()
+
+	gas := HintFor("GAS_ENERGY_COUNTER", "m³", "FLOAT", nil)
+	if gas.Semantic != "gas_energy" || gas.Icon != "mdi:fire-circle" {
+		t.Errorf("HintFor(GAS_ENERGY_COUNTER) = %+v, want semantic gas_energy / icon mdi:fire-circle", gas)
+	}
+
+	electric := HintFor("ENERGY_COUNTER", "Wh", "FLOAT", nil)
+	if electric.Semantic != "energy" || electric.Icon != "mdi:counter" {
+		t.Errorf("HintFor(ENERGY_COUNTER) = %+v, want semantic energy / icon mdi:counter", electric)
+	}
+}

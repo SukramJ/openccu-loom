@@ -636,9 +636,12 @@ func TestChannelAvailabilityInfoBatteryLevel(t *testing.T) {
 	})
 	ch0 := d.AddChannel("ABC0001:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
 
-	// batteryLevel from ParameterBatteryState > 10.
+	// batteryLevel from the calculated OPERATING_VOLTAGE_LEVEL percentage —
+	// the only source. The fixture used to feed BATTERY_STATE = 85, a value
+	// no device can report: BATTERY_STATE is declared as a cell voltage with
+	// max 4.6 V.
 	dp := &fakeParameterDP{
-		param: hmenum.ParameterBatteryState,
+		param: hmenum.Parameter(hmenum.CalculatedParameterOperatingVoltageLevel),
 		raw:   float64(85),
 	}
 	ch0.Put(dp)
@@ -646,7 +649,7 @@ func TestChannelAvailabilityInfoBatteryLevel(t *testing.T) {
 	avail := d.Availability()
 	info := avail.Info()
 	if info.BatteryLevel == nil {
-		t.Error("expected non-nil BatteryLevel from BATTERY_STATE")
+		t.Error("expected non-nil BatteryLevel from OPERATING_VOLTAGE_LEVEL")
 	} else if *info.BatteryLevel != 85 {
 		t.Errorf("BatteryLevel = %d, want 85", *info.BatteryLevel)
 	}
@@ -941,20 +944,6 @@ func TestSortKeysNilSlice(t *testing.T) {
 	}
 }
 
-// TestChannelUniqueIDNoColon verifies UniqueID for a device address without colon.
-func TestChannelUniqueIDNoColon(t *testing.T) {
-	// Channel whose address has no colon (device root channel).
-	ch := &Channel{
-		Address: "ABC0001",
-		Number:  ChannelNumberDevice,
-	}
-	uid := ch.UniqueID()
-	// Should use the full address as device prefix.
-	if uid == "" {
-		t.Error("UniqueID must be non-empty")
-	}
-}
-
 // TestChannel0FloatInt32 exercises channel0Float with int32 raw value.
 func TestChannel0FloatInt32(t *testing.T) {
 	d := New(Config{InterfaceID: "HmIP-RF", Address: "INT320001", Model: "HmIP-X"})
@@ -1006,19 +995,20 @@ func TestBatteryLevelFromOperatingVoltageLevel(t *testing.T) {
 	}
 }
 
-// TestBatteryStateLowValue verifies BATTERY_STATE <= 10 is not treated as a percentage.
+// TestBatteryStateLowValue verifies a BATTERY_STATE reading inside its
+// declared range (1.5-4.6 V) is not surfaced as a battery percentage.
 func TestBatteryStateLowValue(t *testing.T) {
 	d := New(Config{InterfaceID: "HmIP-RF", Address: "BATLOW0001", Model: "HmIP-X"})
 	ch0 := d.AddChannel("BATLOW0001:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
 
-	// BATTERY_STATE = 2.4 (voltage, not percentage) → should NOT produce a BatteryLevel.
+	// BATTERY_STATE = 2.4 (cell voltage, not a percentage).
 	dp := &fakeParameterDP{param: hmenum.ParameterBatteryState, raw: float64(2.4)}
 	ch0.Put(dp)
 
 	avail := d.Availability()
 	info := avail.Info()
 	if info.BatteryLevel != nil {
-		t.Errorf("BATTERY_STATE <= 10 must not produce BatteryLevel, got %v", *info.BatteryLevel)
+		t.Errorf("BATTERY_STATE must not produce BatteryLevel, got %v", *info.BatteryLevel)
 	}
 }
 

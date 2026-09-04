@@ -35,15 +35,6 @@ var (
 	degradedLatencyBudget = 500 * time.Millisecond
 )
 
-// sqliteBusyTimeout mirrors the `busy_timeout` pragma every pooled
-// connection carries (dsn.go's connectionPragmas, applyPragmas in
-// store.go): SQLite itself will hold a writer-blocked query open for up to
-// this long before returning SQLITE_BUSY, so the probe's own deadline below
-// must clear it — otherwise a lock wait the database is configured to
-// tolerate gets reported as a probe failure before SQLite ever gives up on
-// it.
-const sqliteBusyTimeout = 5 * time.Second
-
 // HealthRecorder is the slim contract the probe needs from the
 // [*health.Tracker]. Defined here so tests can drop in a fake
 // without pulling the full tracker.
@@ -95,11 +86,16 @@ func StartHealthProbe(ctx context.Context, db *sql.DB, tracker HealthRecorder, i
 
 // probeOnce runs a single `SELECT 1` round-trip and converts the
 // outcome to a [health.Sample]. The query itself is cheap; the
-// per-conn budget is bounded — above [sqliteBusyTimeout] — so a stuck
+// per-conn budget is bounded — above [busyTimeout] — so a stuck
 // DB cannot block the probe goroutine indefinitely while a lock wait
 // SQLite itself would still resolve is not misreported as a failure.
+//
+// The deadline is derived from [busyTimeout] rather than restated: SQLite
+// holds a writer-blocked query open for up to that long before returning
+// SQLITE_BUSY, so a deadline below it would trip the probe — and with it
+// /health's 503 — on a database that is waiting exactly as configured.
 func probeOnce(ctx context.Context, db *sql.DB, tracker HealthRecorder) {
-	queryCtx, cancel := context.WithTimeout(ctx, sqliteBusyTimeout+degradedLatencyBudget)
+	queryCtx, cancel := context.WithTimeout(ctx, busyTimeout+degradedLatencyBudget)
 	defer cancel()
 	started := time.Now()
 	var one int

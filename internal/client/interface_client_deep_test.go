@@ -541,27 +541,6 @@ func TestInterfaceClientCloseUnblocksWaiters(t *testing.T) {
 	}
 }
 
-// TestInterfaceClientVirtualRemoteForVirtualDevicesInterface specifically
-// covers the VirtualDevices interface (not in the existing test which does
-// cover it, but adds a focused assertion with a clear explanatory comment).
-// This test acts as a specification anchor: VirtualDevices has no virtual
-// remote because it is a synthetic interface, not a radio channel.
-func TestInterfaceClientVirtualRemoteForVirtualDevicesInterface(t *testing.T) {
-	t.Parallel()
-	c, err := New(Config{
-		CentralName: "test-central",
-		Interface:   hmenum.InterfaceVirtualDevices,
-		Caller:      minimalCaller(nil),
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	addr, has := c.VirtualRemote()
-	if has || addr != "" {
-		t.Fatalf("VirtualDevices VirtualRemote = (%q, %v), want (%q, false)", addr, has, "")
-	}
-}
-
 // TestInterfaceClientNewRejectsEmptyCentralName verifies that New validates
 // Config.CentralName is non-empty.
 func TestInterfaceClientNewRejectsEmptyCentralName(t *testing.T) {

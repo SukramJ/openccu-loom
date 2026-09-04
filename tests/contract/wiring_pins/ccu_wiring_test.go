@@ -22,16 +22,35 @@ func TestPin_CcuBackend_SetScriptRunner_CalledInWiring(t *testing.T) {
 	)
 }
 
-// TestPin_CcuBackend_SetDownloadFirmwareTransport_CalledInWiring pins that
-// ccu_wiring.go calls SetDownloadFirmwareTransport on the CcuBackend after
-// construction. Without this call, DownloadFirmware and
-// CreateBackupAndDownload return ErrUnsupported in production because the
-// base URL and session-ID provider are never wired.
-func TestPin_CcuBackend_SetDownloadFirmwareTransport_CalledInWiring(t *testing.T) {
+// TestPin_CcuBackend_SetHTTPTransport_CalledInWiring pins that
+// ccu_wiring.go calls SetHTTPTransport on the CcuBackend after
+// construction. Without this call, CreateBackupAndDownload and the group
+// editor return ErrUnsupported in production because the base URL and
+// session-ID provider are never wired. DownloadFirmware does not depend
+// on it — it goes through JSON-RPC.
+func TestPin_CcuBackend_SetHTTPTransport_CalledInWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/ccu_wiring.go",
-		"ccuBackend", "SetDownloadFirmwareTransport",
+		"ccuBackend", "SetHTTPTransport",
+	)
+}
+
+// TestPin_CcuBackend_SetCCUTimezone_CalledInWiring pins that ccu_wiring.go
+// hands the CCU's own IANA zone to the backend after construction.
+//
+// Without this call the backend falls back to time.Local, and the
+// communication-test timestamps the ReGa scripts return are offset-free
+// CCU-local wall clock — so a daemon in a different zone than its CCU
+// reports the completion instant wrong by the offset between them, with
+// nothing failing. The effect of a wired zone is covered in
+// internal/client/backends/ccu_comtest_timezone_test.go; what only a pin
+// can catch is the wiring going away.
+func TestPin_CcuBackend_SetCCUTimezone_CalledInWiring(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"ccuBackend", "SetCCUTimezone",
 	)
 }
 

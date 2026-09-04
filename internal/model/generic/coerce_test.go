@@ -28,7 +28,9 @@ func TestToBoolAllBranches(t *testing.T) {
 		{"0", false, true},
 		{"off", false, true},
 		{"no", false, true},
-		{"", false, true},
+		// The CCU's own decoders reject an empty string as a parse
+		// failure, so it is "not a boolean", never a confirmed false.
+		{"", false, false},
 		{int(1), true, true},
 		{int(0), false, true},
 		{int32(1), true, true},

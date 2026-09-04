@@ -26,8 +26,9 @@ type AvailabilityInfo struct {
 	LastUpdated time.Time `json:"LastUpdated"`
 
 	// BatteryLevel is a 0-100 percentage derived from
-	// OPERATING_VOLTAGE_LEVEL (preferred) or BATTERY_STATE when the
-	// latter looks like a percentage (> 10).
+	// OPERATING_VOLTAGE_LEVEL. It is nil on devices that report only a
+	// raw cell voltage — see [Availability.batteryLevel] for why
+	// BATTERY_STATE is not a second source.
 	BatteryLevel *int `json:"BatteryLevel"`
 
 	// LowBattery is the LOW_BAT parameter. Nil when the device has
@@ -226,12 +227,31 @@ func floatFromRaw(raw any) (float64, bool) {
 	return 0, false
 }
 
+// batteryLevel returns the 0-100 battery percentage, or nil when the device
+// reports none.
+//
+// OPERATING_VOLTAGE_LEVEL is the only source. BATTERY_STATE is deliberately
+// NOT a fallback: every device type that declares it declares it as a cell
+// voltage — `<logical type="float" min="1.5" max="4.6" unit="V"/>`, docu
+// brief "Batteriespannung" — on all three declaring models
+// (../OpenCCU-Base/src/devicetypes/rftypes/rf_cc_rt_dn.xml:2350-2359,
+// rf_cc_rt_dn_bom.xml:2313-2319, rf_tc_it_wm-w-eu.xml:5211-5220, the complete
+// set in the shipped rftypes/hs485types corpus). None of them is on channel
+// 0 either — HM-CC-RT-DN and its BoM variant put it on channel 4, HM-TC-IT on
+// channel 2 — while this reader looks only at `<address>:0`.
+//
+// This replaces a `BATTERY_STATE > 10` test that read the value as a
+// percentage whenever it exceeded 10. No firmware-declared BATTERY_STATE can
+// exceed 4.6, so that branch was unreachable, and its premise was the
+// opposite of what the descriptor says.
+//
+// Turning the voltage into a percentage would need a per-model discharge
+// curve. The descriptor carries MIN/MAX/UNIT but no such curve, and no other
+// source in this repository does either, so that conversion is unverified and
+// is not attempted here — LOW_BAT/LOWBAT remains the battery signal for these
+// devices.
 func (a *Availability) batteryLevel() *int {
 	if f, ok := a.channel0Float(hmenum.Parameter(hmenum.CalculatedParameterOperatingVoltageLevel)); ok {
-		v := int(f)
-		return &v
-	}
-	if f, ok := a.channel0Float(hmenum.ParameterBatteryState); ok && f > 10 {
 		v := int(f)
 		return &v
 	}

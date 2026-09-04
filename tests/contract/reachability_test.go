@@ -366,7 +366,25 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // payload type in pkg/hmapi/rest_contract.go lands here -- 94 of them,
 // hmapi.ClimateSchedule and hmapi.ClimatePeriod among them. These two join
 // that established class; no new production dead code came with them.
-const reachabilityUnreachableCeiling = 3011
+//
+// Lowered 3033 -> 1385 by fixing what the number counts.
+//
+// The array held one entry per exported identifier PER LOADED SSA PACKAGE,
+// and go/packages loads a package again for each test binary that links
+// it. Two things followed. The count multiplied, so the ceiling could rise
+// while the set of dead identifiers fell — which is how it last moved. And
+// RTA answers per object, so one variant could call a symbol reachable
+// while another did not: 443 identifiers were listed as dead AND counted
+// as reachable in the same run, among them addonupdate.Updater, a field of
+// the composition root, and addonupdate.PeriodicChecker, constructed in
+// addon_update_wiring.go.
+//
+// The analyzer folds the variants now — whitelisted, then reachable in any
+// variant, then dead — and prints how many disagreed, so the next one is
+// visible rather than absorbed. 1385 is the unique count, which is what
+// this ceiling was always meant to be: from here a newly dead export moves
+// it by exactly one.
+const reachabilityUnreachableCeiling = 1385
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's

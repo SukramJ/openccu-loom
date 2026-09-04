@@ -27,6 +27,7 @@ import (
 	paramconvert "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -63,11 +64,11 @@ func (c *ReconnectConfig) applyDefaults() {
 }
 
 // reconnectJitterFraction bounds the random wiggle applied to the reconnect
-// backoff. Mirrors the retrier's ±20% jitter (internal/client/reliability/
-// retry.go applyJitter): without it every interface of one central computes
-// the same deterministic backoff and reconnects in lockstep, hammering a
-// just-booted CCU (thundering herd).
-const reconnectJitterFraction = 0.2
+// backoff. It reads the same [hmreliability.RetryJitterFraction] the retrier
+// applies (internal/client/reliability/retry.go applyJitter): without jitter
+// every interface of one central computes the same deterministic backoff and
+// reconnects in lockstep, hammering a just-booted CCU (thundering herd).
+const reconnectJitterFraction = hmreliability.RetryJitterFraction
 
 // reconnectDelay computes the wait before a reconnect attempt:
 // InitialDelay * BackoffFactor^attempts, capped at MaxDelay, then perturbed
@@ -323,7 +324,12 @@ func (c *InterfaceClient) WriteUnconfirmedValue(
 ) {
 	if paramconvert.IsConvertable(parameter) {
 		if s, ok := value.(string); ok {
-			c.CommandTracker().AddCombinedParameter(channelAddress, string(parameter), s)
+			// Parse here rather than inside the tracker: the combined-string
+			// grammar is a wire concern owned by the backends package, and
+			// the reliability primitives carry no transport dependency.
+			if values, ok := backends.ParseCombinedParameter(string(parameter), s); ok && len(values) > 0 {
+				c.CommandTracker().AddPutParamset(channelAddress, paramsetKey, values)
+			}
 			return
 		}
 	}
@@ -752,9 +758,23 @@ func (c *InterfaceClient) SetValue(
 	// Notify the optional session-recorder hook so CacheCoordinator can
 	// capture the CCU communication trace when recording is active.
 	if hook := c.cfg.SessionRecorderHook; hook != nil {
-		hook("xml-rpc", "setValue", []any{channelAddress, string(parameter), value}, nil)
+		hook(rpcTypeLabel(c.cfg.BackendKind), "setValue", []any{channelAddress, string(parameter), value}, nil)
 	}
 	return nil
+}
+
+// rpcTypeLabel names the transport the session-recorder hook is reporting
+// on. CUxD is driven over BIN-RPC — the daemon runs its own BIN-RPC callback
+// server for it, and its wiring records the trace under the BIN-RPC session
+// type; every other backend flavour reaches the CCU over XML-RPC.
+//
+// The label is the hook's own spelling, not a session.RPCType value: this
+// package does not import the store, so the wiring maps it.
+func rpcTypeLabel(k backends.Kind) string {
+	if k == backends.KindCUxD {
+		return "bin-rpc"
+	}
+	return "xml-rpc"
 }
 
 // PutParamset sends a full paramset atomically to the backend, passing
@@ -762,8 +782,8 @@ func (c *InterfaceClient) SetValue(
 //
 // paramsetKeyOrLinkAddress is either a [hmenum.ParamsetKey] (e.g. "MASTER")
 // or a peer channel address for LINK paramsets. The method dispatches to
-// PutLinkParamset when paramsetKeyOrLinkAddress looks like a channel address
-// (contains ":"), otherwise to PutParamset.
+// PutLinkParamset when paramsetKeyOrLinkAddress matches
+// [hmtypes.IsChannelAddress], otherwise to PutParamset.
 //
 // When skipRetry is true the call is executed exactly once without backoff or
 // retry tracking.
@@ -786,8 +806,10 @@ func (c *InterfaceClient) PutParamset(
 			return err
 		}
 		defer throttle.Release()
-		// A second arg containing ":" is a channel address → LINK paramset.
-		if isChannelAddress(paramsetKeyOrLinkAddress) {
+		// A second arg matching the CCU channel-address grammar is a peer
+		// channel → LINK paramset; a paramset key ("MASTER", "VALUES", …)
+		// never does.
+		if hmtypes.IsChannelAddress(paramsetKeyOrLinkAddress) {
 			return b.PutLinkParamset(ctx, channelAddress, paramsetKeyOrLinkAddress, values)
 		}
 		pKey := hmenum.ParamsetKey(paramsetKeyOrLinkAddress)
@@ -804,41 +826,9 @@ func (c *InterfaceClient) PutParamset(
 	}
 	// Notify the optional session-recorder hook.
 	if hook := c.cfg.SessionRecorderHook; hook != nil {
-		hook("xml-rpc", "putParamset", []any{channelAddress, paramsetKeyOrLinkAddress, values}, nil)
+		hook(rpcTypeLabel(c.cfg.BackendKind), "putParamset", []any{channelAddress, paramsetKeyOrLinkAddress, values}, nil)
 	}
 	return nil
-}
-
-// isChannelAddress reports whether addr looks like a channel address
-// (contains ":"— e.g. "MEQ0123456:1").
-func isChannelAddress(addr string) bool {
-	for _, r := range addr {
-		if r == ':' {
-			return true
-		}
-	}
-	return false
-}
-
-// ---------------------------------------------------------------------------
-// ModifiedAt — last-modification timestamp on IC
-// ---------------------------------------------------------------------------
-
-// ModifiedAt returns the timestamp of the last modification on this client.
-// The zero value is returned when the client has not been touched yet.
-func (c *InterfaceClient) ModifiedAt() time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.modifiedAt
-}
-
-// SetModifiedAt updates the last-modification timestamp. Called from the
-// central's event path whenever a DataPoint value is received for this
-// interface.
-func (c *InterfaceClient) SetModifiedAt(t time.Time) {
-	c.mu.Lock()
-	c.modifiedAt = t
-	c.mu.Unlock()
 }
 
 // ---------------------------------------------------------------------------

@@ -17,8 +17,23 @@ import (
 // this package, removing the model→northbound coupling. This alias
 // keeps all cluster-internal callers unchanged.
 //
-// See [hmtypes.DataVersionTracker] for the full rationale and Matter
-// §10.6.5 reference.
+// Mirrors matter.js packages/protocol/src/interaction/
+// InteractionServer.ts DataVersion tracking on per-cluster state. The
+// initial value is a uniformly random non-zero uint32 chosen at first
+// access — matter.js samples observed in the field carry values like
+// 3408898508 / 3191265986 / 2061169561 (per-cluster initial randoms
+// from a `Crypto.getRandomUint32()` call). Apple Home's MTRDevice
+// cache appears to treat a uniform DataVersion=1 across every cluster
+// as an "uninitialised" signal and refuses to persist those clusters
+// to its on-disk cache (surface symptom: `Storing cluster information
+// count: 3` despite 207 attribute reports landing live). Random init
+// makes each (endpoint, cluster) carry a distinct DataVersion before
+// the first mutation, which is what Apple looks for.
+//
+// Matter §10.6.5: "A DataVersion of zero is reserved for absent or
+// invalid"; the random generator skips zero accordingly.
+//
+// See [hmtypes.DataVersionTracker] for the counter itself.
 //
 // Usage:
 //

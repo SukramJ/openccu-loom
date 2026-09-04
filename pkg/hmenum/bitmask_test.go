@@ -46,11 +46,16 @@ func TestFlagBitmask(t *testing.T) {
 	}
 }
 
-func TestFlagStickyKeepsAiohomematicEncoding(t *testing.T) {
-	// STICKY is documented as 0x10 but
-	// The contract test locks the wire-incompatible-but-compatible value.
-	if FlagSticky != 10 {
-		t.Fatalf("FlagSticky=%d, want 10 (aiohomematic parity)", FlagSticky)
+func TestFlagStickyIsASingleBit(t *testing.T) {
+	// FLAGS is an OR of single bits, so every member must be a power of
+	// two. The value this test used to lock (decimal 10) was not one:
+	// it is INTERNAL|SERVICE. See TestHmEnumFlagStickyIsFirmwareBit4 for
+	// the firmware citation and the two descriptor values that a
+	// non-bit constant misclassifies.
+	for _, f := range []Flag{FlagVisible, FlagInternal, FlagTransform, FlagService, FlagSticky} {
+		if f&(f-1) != 0 {
+			t.Errorf("Flag %d is not a single bit", f)
+		}
 	}
 }
 
@@ -145,24 +150,6 @@ func TestRxModeHas(t *testing.T) {
 	}
 	if m.Has(RxModeWakeup) {
 		t.Error("Has(RxModeWakeup) should be false")
-	}
-}
-
-func TestDeviceTriggerEventTypeShort(t *testing.T) {
-	cases := map[DeviceTriggerEventType]string{
-		DeviceTriggerEventTypeDeviceError: "device_error",
-		DeviceTriggerEventTypeImpulse:     "impulse",
-		DeviceTriggerEventTypeKeypress:    "keypress",
-	}
-	for k, want := range cases {
-		if got := k.Short(); got != want {
-			t.Errorf("%s.Short() = %q, want %q", k, got, want)
-		}
-	}
-	// No dot in the string → returns the full string.
-	plain := DeviceTriggerEventType("nodot")
-	if got := plain.Short(); got != "nodot" {
-		t.Errorf("nodot.Short() = %q, want %q", got, "nodot")
 	}
 }
 

@@ -7,47 +7,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmproto"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
-
-// ─── TranslationKey ──────────────────────────────────────────────────────────
-
-// TestTranslationKeyLowercase verifies that TranslationKey() lowercases the
-// parameter name.
-func TestTranslationKeyLowercase(t *testing.T) {
-	t.Parallel()
-
-	dp := NewDataPoint[float64](baseCfg(hmenum.ParameterActualTemperature, hmenum.ParameterTypeFloat, hmenum.OperationsRead))
-	got := dp.TranslationKey()
-	want := "actual_temperature"
-	if got != want {
-		t.Errorf("TranslationKey() = %q, want %q", got, want)
-	}
-}
-
-// TestTranslationKeySpecialChars verifies that non-[a-z0-9_] characters are
-// replaced by underscores and trailing underscores are stripped.
-func TestTranslationKeySpecialChars(t *testing.T) {
-	t.Parallel()
-
-	cfg := Spec{
-		Key: hmtypes.DataPointKey{
-			InterfaceID:    "iface",
-			ChannelAddress: "A:1",
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      "WIND-DIR.RANGE",
-		},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead},
-	}
-	dp := NewDataPoint[float64](cfg)
-	got := dp.TranslationKey()
-	// dots and dashes become underscores; consecutive underscores collapse.
-	want := "wind_dir_range"
-	if got != want {
-		t.Errorf("TranslationKey() = %q, want %q", got, want)
-	}
-}
 
 // ─── Translation ─────────────────────────────────────────────────────────────
 
@@ -348,29 +308,3 @@ func TestEnabledByChannelOperationModeFalse(t *testing.T) {
 // ─── Device / Channel — IseID ────────────────────────────────────────────────
 // (Device and Channel IseID tests live in device package; here we just verify
 // the Config fields compile and flow through to the struct correctly.)
-
-// TestGenerateTranslationKeyExamples verifies the inlined slug algorithm
-func TestGenerateTranslationKeyExamples(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		in   string
-		want string
-	}{
-		{"ACTUAL_TEMPERATURE", "actual_temperature"},
-		{"STATE", "state"},
-		{"WIND-DIR.RANGE", "wind_dir_range"},
-		{"SHORT_INPUT", "short_input"},
-		{"CO2", "co2"},
-		{"", ""},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.in, func(t *testing.T) {
-			t.Parallel()
-			if got := generateTranslationKey(tc.in); got != tc.want {
-				t.Errorf("generateTranslationKey(%q) = %q, want %q", tc.in, got, tc.want)
-			}
-		})
-	}
-}

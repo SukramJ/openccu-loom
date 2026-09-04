@@ -201,7 +201,7 @@ func publishEnumDiscoveryWith(t *testing.T, values []string, labeler mqtt.Parame
 	ch := dev.AddChannel("000ENUMD:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
 
 	// A read+write ENUM is what the resolver turns into a select.
-	dp := resolveDataPoint(generic.Spec{
+	dp := resolveDataPointWithUnIgnore(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
 			ChannelAddress: ch.Address,
@@ -213,7 +213,7 @@ func publishEnumDiscoveryWith(t *testing.T, values []string, labeler mqtt.Parame
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
 			ValueList:  values,
 		},
-	})
+	}, false)
 	if dp == nil {
 		t.Fatal("the resolver produced no data point for a read+write ENUM")
 	}

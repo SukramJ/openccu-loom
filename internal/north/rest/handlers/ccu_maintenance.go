@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -235,30 +234,40 @@ func PutCCUPosition(svc CCUPositionPort, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
-// FirmwareDownloadPort tells a CCU to fetch a firmware image from a URL
-// onto the central so it can be staged for installation.
-// *adapter.CCUMaintenanceDomain satisfies it; the call resolves the
-// central's primary backend and posts to the CCU's maintenance CGI.
+// FirmwareDownloadPort tells a CCU to fetch the newest firmware for itself
+// and stage it for a later install. *adapter.CCUMaintenanceDomain satisfies
+// it; the call resolves the central's primary backend and goes out over
+// JSON-RPC.
 type FirmwareDownloadPort interface {
-	DownloadFirmware(ctx context.Context, central, firmwareURL string) error
+	DownloadFirmware(ctx context.Context, central string) error
 }
 
 // FirmwareDownloadRequest is the body of `POST /system/firmware/download`.
 type FirmwareDownloadRequest struct {
-	// URL is the http/https firmware image the CCU should fetch (required).
-	URL string `json:"url"`
+	// URL is accepted and ignored. The CCU has no call that downloads a
+	// caller-supplied image: it resolves the download from its own version
+	// and board serial. The field stays in the schema so clients written
+	// against the earlier contract keep working rather than failing
+	// validation on a field the daemon no longer needs.
+	URL string `json:"url,omitempty"`
 	// Central selects the target CCU; optional for single-CCU deployments.
 	Central string `json:"central,omitempty"`
 }
 
-// PostSystemFirmwareDownload asks the named CCU to download a firmware
-// image onto the central (the CCU fetches and stages it for a later
-// install). The router gates it on the admin role.
+// PostSystemFirmwareDownload asks the named CCU to download the newest
+// firmware for itself and stage it for a later install (which
+// `POST /system/firmware/update` performs). The router gates it on the
+// admin role.
+//
+// The request body is optional apart from selecting the central; see
+// [FirmwareDownloadRequest.URL] for why a supplied URL is ignored rather
+// than rejected.
 //
 // Responses: 202 once the download was triggered, 400 on a malformed
-// body, 404 when the central is unknown, 422 when the URL is missing /
-// not http(s) or the backend cannot download (CUxD, Homegear), 502 when
-// the CCU-side call failed, 503 when the service is unwired.
+// body, 404 when the central is unknown, 422 when the backend is not a CCU
+// (CUxD, Homegear), 502 when the CCU-side call failed — including the
+// CCU's own report that it could not fetch an image — and 503 when the
+// service is unwired.
 func PostSystemFirmwareDownload(svc FirmwareDownloadPort, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -272,18 +281,7 @@ func PostSystemFirmwareDownload(svc FirmwareDownloadPort, rec audit.Recorder) ht
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		req.URL = strings.TrimSpace(req.URL)
-		if req.URL == "" {
-			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "url is required", ""))
-			return
-		}
-		if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "url must be http or https", ""))
-			return
-		}
-		if err := svc.DownloadFirmware(r.Context(), req.Central, req.URL); err != nil {
+		if err := svc.DownloadFirmware(r.Context(), req.Central); err != nil {
 			switch {
 			case errors.Is(err, hmerr.ErrUnknownCentral):
 				problem.Write(w, http.StatusNotFound,
@@ -297,14 +295,13 @@ func PostSystemFirmwareDownload(svc FirmwareDownloadPort, rec audit.Recorder) ht
 			return
 		}
 		if rec != nil {
-			note := req.URL
-			if req.Central != "" {
-				note = req.Central + " " + req.URL
-			}
+			// The note carries the central, not the request's url field:
+			// the url is ignored, and recording it would make the audit
+			// trail claim an image was fetched that never was.
 			rec.Record(audit.Entry{
 				User:   identityFromCtx(r.Context()),
 				Action: audit.ActionSystemFirmwareDownload,
-				Note:   note,
+				Note:   req.Central,
 			})
 		}
 		w.WriteHeader(http.StatusAccepted)

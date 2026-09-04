@@ -158,7 +158,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		failed:           map[string]string{},
 	}
 	if m.defaultSiren <= 0 {
-		m.defaultSiren = 180 * time.Second
+		m.defaultSiren = DefaultSirenSeconds * time.Second
 	}
 	if m.maxPerIncident <= 0 {
 		m.maxPerIncident = 900 * time.Second
@@ -472,9 +472,7 @@ func (m *Manager) sirenOnConfig(
 		}
 		p := o.cfg.OpticalPattern
 		if p == "" && on.OpticalSelection == nil {
-			if lights := dev.AvailableLights(); len(lights) > 1 {
-				p = lights[len(lights)-1]
-			}
+			p = alarmOpticalSelection(dev)
 		}
 		if p != "" {
 			on.OpticalSelection = &p

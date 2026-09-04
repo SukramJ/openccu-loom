@@ -34,7 +34,22 @@ type centralBringUp struct {
 	// central (nil without a callback route). The gated bring-up installs
 	// the hot-plug ingestor on it once the pipeline and backends exist.
 	cbHandlers *CallbackHandlers
-	logger     *slog.Logger
+	// binCbHandlers holds the BIN-RPC callback handlers this central's
+	// bring-up registered — one per CUxD interface, created deep inside
+	// [wireCUxDInterface] rather than by [registerCentralCallbacks].
+	//
+	// They carry the same per-instance operator state as cbHandlers, above
+	// all the delay-new-device-creation flag that
+	// [BringUpManager.ApplyDeferredCreationBehavior] flips at runtime. While
+	// only the XML-RPC instance was reachable, flipping the toggle left the
+	// CUxD instance on its boot-time value, and the branch in
+	// [CallbackHandlers.NewDevices] that decides park-versus-ingest answered
+	// differently depending on which transport announced the device.
+	//
+	// Reset per bring-up generation: a re-init builds new handlers, and a
+	// stale one would keep receiving toggle writes it can no longer act on.
+	binCbHandlers []*CallbackHandlers
+	logger        *slog.Logger
 
 	parentCtx context.Context //nolint:containedctx // teardown-bounded daemon-lifetime ctx; the handle re-derives a child per (re)start
 
@@ -102,12 +117,43 @@ func (b *centralBringUp) start() {
 	b.cancel = cancel
 	b.mu.Unlock()
 
+	b.mu.Lock()
+	b.binCbHandlers = nil
+	b.mu.Unlock()
+
 	b.wg.Add(1)
 	SafeGo("central_bringup."+b.cc.Name, func() {
 		defer b.wg.Done()
 		ccCopy := b.cc
-		gatedCentralBringUp(ctx, b.cfg, &ccCopy, b.unit, b.deps, b.callbackURL, b.binRPCCallbackAddr, b.cbHandlers, b.addCloser, b.logger)
+		gatedCentralBringUp(ctx, b.cfg, &ccCopy, b.unit, b.deps, b.callbackURL, b.binRPCCallbackAddr,
+			b.cbHandlers, b.adoptBINRPCHandlers, b.addCloser, b.logger)
 	})
+}
+
+// adoptBINRPCHandlers records a BIN-RPC callback handler this central's
+// bring-up registered, so runtime operator state reaches every live handler of
+// the central and not only the XML-RPC one. See the field comment on
+// [centralBringUp.binCbHandlers].
+func (b *centralBringUp) adoptBINRPCHandlers(h *CallbackHandlers) {
+	if h == nil {
+		return
+	}
+	b.mu.Lock()
+	b.binCbHandlers = append(b.binCbHandlers, h)
+	b.mu.Unlock()
+}
+
+// callbackHandlers returns every live callback handler of this central: the
+// XML-RPC one plus every BIN-RPC one the bring-up adopted.
+func (b *centralBringUp) callbackHandlers() []*CallbackHandlers {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]*CallbackHandlers, 0, len(b.binCbHandlers)+1)
+	if b.cbHandlers != nil {
+		out = append(out, b.cbHandlers)
+	}
+	out = append(out, b.binCbHandlers...)
+	return out
 }
 
 // teardown cancels the current generation, waits for its goroutine to drain,
@@ -301,10 +347,23 @@ func (m *BringUpManager) ApplyDeferredCreationBehavior(ctx context.Context, cfg 
 			continue
 		}
 		want := cc.Behavior.DelayNewDeviceCreationEnabled()
-		if h.cbHandlers == nil || h.cbHandlers.DelayNewDeviceCreation() == want {
+		// Every live handler of the central, not only the XML-RPC one: a
+		// CUxD interface registers its own instance on the BIN-RPC callback
+		// server, and the park-versus-ingest branch is per instance. Writing
+		// only one of them made the same operator decision answer differently
+		// depending on which transport announced the device.
+		handlers := h.callbackHandlers()
+		flipped := false
+		for _, cb := range handlers {
+			if cb.DelayNewDeviceCreation() == want {
+				continue
+			}
+			cb.SetDelayNewDeviceCreation(want)
+			flipped = true
+		}
+		if !flipped {
 			continue
 		}
-		h.cbHandlers.SetDelayNewDeviceCreation(want)
 		changed++
 		if want {
 			continue

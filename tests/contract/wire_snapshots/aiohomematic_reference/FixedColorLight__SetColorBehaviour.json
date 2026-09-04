@@ -11,7 +11,7 @@
           "method": "SetValue",
           "address": "FC0001:1",
           "parameter": "COLOR_BEHAVIOUR",
-          "value": 0
+          "value": "DO_NOT_CARE"
         }
       ]
     },
@@ -22,7 +22,7 @@
           "method": "SetValue",
           "address": "FC0001:1",
           "parameter": "COLOR_BEHAVIOUR",
-          "value": 2
+          "value": "OLD_VALUE"
         }
       ]
     },
@@ -33,9 +33,10 @@
           "method": "SetValue",
           "address": "FC0001:1",
           "parameter": "COLOR_BEHAVIOUR",
-          "value": 3
+          "value": "ON"
         }
       ]
     }
-  ]
+  ],
+  "note": "COLOR_BEHAVIOUR is an ENUM whose MIN is a string on the devices that carry it (HmIP-BSL declares MIN 'OFF', VALUE_LIST OFF..DO_NOT_CARE), so both stacks send the label rather than the index: aiohomematic through DpSelect's string branch for HmIP enums, openccu-loom through Select.SetLabel/EnumWireValue. This file previously asserted the indices 0/2/3, which matched neither stack and matched no device \u2014 the test fixture beside it declared a six-entry value list invented so those indices would come out."
 }

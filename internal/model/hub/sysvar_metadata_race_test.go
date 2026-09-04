@@ -85,8 +85,6 @@ func TestSysvarMetadataConcurrentRefreshAndRead(t *testing.T) {
 				_ = sv.Info()
 				_ = sv.State()
 				_ = sv.Config()
-				_ = WrapSysvar(sv)
-				_, _ = (&SysvarDpSensor{Sysvar: sv}).SensorValue()
 				// Exercise the write-coercion path (toWire / resolveListIndex),
 				// which snapshots ValueType and ValueList under the same lock.
 				_ = sv.Set(ctx, hmtypes.IntValue(1))
@@ -99,9 +97,10 @@ func TestSysvarMetadataConcurrentRefreshAndRead(t *testing.T) {
 // TestSysvarNameConcurrentRenameAndErrorFormatting is the race tripwire for
 // [Sysvar.SetName] rewriting the name in place (an operator renames the
 // system variable) while error-formatting paths read it — toWire's
-// value-rejection branches, SetTextValue's length guard, and
-// SysvarDpNumber.SendVariable's range guard all interpolate the sysvar's
-// name into the returned error. Every one of those sites must read
+// value-rejection branches interpolate the sysvar's name into the
+// returned error. Two further sites used to be exercised here through the
+// SysvarDp* wrapper family; that family had no production caller and is
+// gone, so the live rejection path is what this drives. It must read
 // through [HubDataPoint.LegacyName] (which takes the data point's own
 // lock, the same one SetName writes under) rather than the bare Name
 // field — a direct field read races the rename's string-header write. Run
@@ -117,8 +116,6 @@ func TestSysvarNameConcurrentRenameAndErrorFormatting(t *testing.T) {
 		Min:       &minVal,
 		Max:       &maxVal,
 	})
-	text := &SysvarDpText{Sysvar: sv, MaxLength: 2}
-	number := &SysvarDpNumber{Sysvar: sv}
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -140,8 +137,6 @@ func TestSysvarNameConcurrentRenameAndErrorFormatting(t *testing.T) {
 			defer wg.Done()
 			for range 3000 {
 				_ = sv.Set(ctx, hmtypes.ParamValue{Kind: hmtypes.ValueKindNone})
-				_ = text.SetTextValue(ctx, "too long for MaxLength")
-				_ = number.SendVariable(ctx, 999.0) // out of the configured [0,10] range
 			}
 		}()
 	}

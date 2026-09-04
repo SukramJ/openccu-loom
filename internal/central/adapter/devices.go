@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
@@ -50,27 +51,32 @@ func (a *DevicesAdapter) Devices() []*device.Device {
 	return out
 }
 
-// Device returns the first matching device across every central.
+// Device resolves a device by address, provided exactly one central holds it.
 //
 // An address is unique within one CCU but not across a registry holding
 // several: the virtual-remote roots (BidCoS-RF, BidCos-Wir, HmIP-RCV-1) and
 // the INT000* group devices repeat verbatim on every CCU, which is why the
 // routing keys namespace themselves per central (see internal/routingkey).
-// [central.Registry.List] walks in central-name order, so for those addresses
-// a multi-CCU daemon consistently resolves the first CCU by name while the
-// later ones stay unreachable through every address-keyed surface. Resolving
-// them correctly needs the central alongside the address, which the callers
-// of this facade do not carry today.
+// [central.Registry.List] walks in central-name order, so first-match served
+// the alphabetically first CCU's device for those addresses — one
+// installation's data under a bare address, and the later CCUs unreachable
+// through every address-keyed surface.
+//
+// Resolving them correctly needs the central alongside the address, which the
+// callers of this facade do not carry. Until they do, an ambiguous address
+// resolves to nothing: answering "not found" is wrong in a way the caller can
+// see, while answering with an arbitrary CCU's device is wrong in a way it
+// cannot. Single-CCU installations are unaffected, and so is every address
+// only one central holds.
 func (a *DevicesAdapter) Device(address string) (*device.Device, bool) {
 	if a.registry == nil {
 		return nil, false
 	}
-	for _, u := range a.registry.List() {
-		if d, ok := u.ModelRegistry.Get(address); ok {
-			return d, true
-		}
+	d, _, err := resolveUniqueDevice(a.registry, address)
+	if err != nil {
+		return nil, false
 	}
-	return nil, false
+	return d, d != nil
 }
 
 // RefreshDevices triggers a fresh ListDevices on every wired backend
@@ -210,12 +216,14 @@ func NewDataPointWriterAdapter(r *central.Registry, w ValueWriter) *DataPointWri
 // concrete ValueWriter.
 var ErrNoWriter = errors.New("adapter: no value writer wired")
 
-// SetValue implements handlers.DataPointWriter. It walks every
-// central, finds the device that owns channelAddress, and dispatches
-// through the central's writer. The lookup is address-keyed, so it
-// inherits the multi-CCU limitation documented on [DevicesAdapter.Device]:
-// a channel whose address exists on several CCUs is written on the first
-// one by name.
+// SetValue implements handlers.DataPointWriter. It finds the device that owns
+// channelAddress and dispatches through that central's writer.
+//
+// The lookup is address-keyed, so it carries the constraint documented on
+// [DevicesAdapter.Device]: a channel whose address exists on several CCUs is
+// refused rather than written on an arbitrary one. Delivering a command to
+// the wrong installation's hardware is the one outcome that cannot be
+// noticed from the outside.
 func (a *DataPointWriterAdapter) SetValue(
 	ctx context.Context, channelAddress string, parameter hmenum.Parameter,
 	value any, priority hmenum.CommandPriority,
@@ -224,16 +232,56 @@ func (a *DataPointWriterAdapter) SetValue(
 		return ErrNoWriter
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
-	for _, u := range a.registry.List() {
-		dev, ok := u.ModelRegistry.Get(deviceAddr)
+	dev, centralName, err := resolveUniqueDevice(a.registry, deviceAddr)
+	if err != nil {
+		return err
+	}
+	if dev == nil {
+		return fmt.Errorf("adapter: device %s not found", deviceAddr)
+	}
+	return a.writer.SetValue(ctx, centralName, dev.InterfaceID, channelAddress, parameter, value, priority)
+}
+
+// resolveUniqueDevice finds the device with the given address and the name of
+// the central that holds it.
+//
+// Returns (nil, "", nil) when no central holds the address, and an error
+// naming every candidate when more than one does — the caller has not said
+// which installation it means, and picking one silently routes reads and
+// writes to a foreign CCU.
+func resolveUniqueDevice(reg *central.Registry, deviceAddress string) (*device.Device, string, error) {
+	if reg == nil {
+		return nil, "", nil
+	}
+	var (
+		found      *device.Device
+		foundOn    string
+		candidates []string
+	)
+	for _, u := range reg.List() {
+		d, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
-		return a.writer.SetValue(ctx, u.Name(), dev.InterfaceID, channelAddress, parameter, value, priority)
+		candidates = append(candidates, u.Name())
+		if found == nil {
+			found, foundOn = d, u.Name()
+		}
 	}
-	return fmt.Errorf("adapter: device %s not found", deviceAddr)
+	if len(candidates) > 1 {
+		return nil, "", fmt.Errorf("adapter: device %s exists on several centrals (%s); the address alone does not say which",
+			deviceAddress, strings.Join(candidates, ", "))
+	}
+	return found, foundOn, nil
 }
 
+// The domain rule is [hmtypes.DeviceAddress], which cuts at the FIRST colon.
+// This copy cuts at the last one. The two agree on every address a CCU
+// produces — a scan of the 5818 ADDRESS values in the reference device
+// descriptors finds none with more than one colon — and nothing in the
+// firmware or the descriptors says which half a two-colon address would name,
+// so the copies are left as they are rather than folded onto a convention
+// no source carries.
 func deviceAddressOf(channel string) string {
 	for i := len(channel) - 1; i >= 0; i-- {
 		if channel[i] == ':' {
