@@ -131,7 +131,14 @@ func main() {
 	productionOnly := flag.Bool("production-only", false, "Nur production-only Inventory erzeugen (Test-Roots werden nicht als Entry-Points behandelt)")
 	flag.Parse()
 
-	level := slog.LevelWarn
+	// Info by default. The progress lines say how much was loaded, how many
+	// entry points were found and how large the whitelist is — the numbers
+	// that tell a reader whether the run measured what they think it did.
+	// At Warn they were invisible, which cost a debugging round: a
+	// diagnostic added at Info to report that package variants disagreed
+	// printed nothing, and the silence read as "nothing disagreed" when 443
+	// identifiers had. -verbose still adds the per-file Debug detail.
+	level := slog.LevelInfo
 	if *verbose {
 		level = slog.LevelDebug
 	}
@@ -153,7 +160,7 @@ func main() {
 	}
 
 	// Dann production-only run für zweites Inventory
-	logger.Info("starte production-only run...")
+	logger.Info("starting production-only run")
 	if err := run(logger, *repoRoot, *prodOutPath, "", true); err != nil {
 		logger.Error("analyzer failed (production-only)", "err", err)
 		os.Exit(1)
@@ -189,7 +196,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		"github.com/SukramJ/openccu-loom/tests/...",
 	}
 
-	logger.Info("lade packages...", "patterns", len(patterns))
+	logger.Info("loading packages", "patterns", len(patterns))
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return fmt.Errorf("packages.Load: %w", err)
@@ -204,15 +211,15 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		return true
 	}, nil)
 	if loadErrors > 0 {
-		logger.Warn("packages mit Ladefehlern", "count", loadErrors)
+		logger.Warn("packages with load errors", "count", loadErrors)
 	}
-	logger.Info("packages geladen", "count", len(pkgs))
+	logger.Info("packages loaded", "count", len(pkgs))
 
 	// --- 2. SSA bauen ---
-	logger.Info("baue SSA-Programm...")
+	logger.Info("building the SSA program")
 	prog, ssaPkgs := ssautil.AllPackages(pkgs, ssa.InstantiateGenerics)
 	prog.Build()
-	logger.Info("SSA gebaut", "packages", len(ssaPkgs))
+	logger.Info("SSA built", "packages", len(ssaPkgs))
 
 	// --- 3. Entry-Points sammeln ---
 	var entryFuncs []*ssa.Function
@@ -283,13 +290,13 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 			reflectiveEntries++
 		}
 	}
-	logger.Info("entry-points gesammelt", "count", len(entryFuncs),
+	logger.Info("entry points collected", "count", len(entryFuncs),
 		"reflective_handlers", reflectiveEntries, "production_only", productionOnly)
 
 	// --- 4. RTA-Analyse ---
-	logger.Info("starte RTA-Analyse (kann 30-60s dauern)...")
+	logger.Info("running RTA (30-60s)")
 	rtaResult := rta.Analyze(entryFuncs, true)
-	logger.Info("RTA abgeschlossen")
+	logger.Info("RTA complete")
 
 	reachableFuncs := make(map[*ssa.Function]bool)
 	for fn := range rtaResult.Reachable {
@@ -322,12 +329,12 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 			}
 		}
 	}
-	logger.Debug("erreichbare Funktionen", "count", len(reachableFuncs))
+	logger.Debug("reachable functions", "count", len(reachableFuncs))
 
 	// --- 5. Explizite Whitelist aus AST-Kommentaren einlesen ---
 	whitelisted := make(map[whitelistKey]WhitelistEntry)
 	collectWhitelisted(pkgs, absRoot, whitelisted, logger)
-	logger.Info("whitelist geladen", "entries", len(whitelisted))
+	logger.Info("whitelist loaded", "entries", len(whitelisted))
 
 	// --- 6. Alle exported Identifiers sammeln und klassifizieren ---
 	//
@@ -473,14 +480,6 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		}
 	}
 
-	logger.Info(
-		"analyse fertig",
-		"total_exported", totalExported,
-		"reachable", reachableCount,
-		"whitelisted", len(whitelistedItems),
-		"unreachable", len(unreachableItems),
-	)
-
 	// --- 7. By-Package-Summary berechnen (Verfeinerung 3) ---
 	byPackage := buildPackageSummary(unreachableItems)
 
@@ -564,25 +563,24 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		if err := writeSummaryMD(absSummary, inv); err != nil {
 			return fmt.Errorf("write summary markdown: %w", err)
 		}
-		fmt.Printf("dead-code-summary.md    geschrieben: %s\n", absSummary)
+		fmt.Printf("dead-code-summary.md     written: %s\n", absSummary)
 	}
 
-	fmt.Printf("dead-code-inventory.json geschrieben: %s\n", absOut)
+	fmt.Printf("dead-code-inventory.json written: %s\n", absOut)
 	fmt.Printf("  total_exported: %d\n", totalExported)
 	fmt.Printf("  reachable:      %d\n", reachableCount)
 	fmt.Printf("  whitelisted:    %d\n", len(whitelistedItems))
 	fmt.Printf("  unreachable:    %d\n", len(unreachableItems))
 	if disagreements > 0 {
-		// Printed rather than logged: the logger defaults to Warn, and this
-		// is a fact about the quality of the run. Each of these is an
-		// identifier one SSA variant called reachable and another did not.
-		// Before the fold they were listed as dead AND counted as reachable
-		// in the same run.
+		// Printed with the counts rather than logged, because it qualifies
+		// them: each of these is an identifier one SSA variant called
+		// reachable and another did not, and before the fold they were
+		// listed as dead AND counted as reachable in the same run.
 		fmt.Printf("  (%d identifiers were reachable in one package variant and not in another; resolved as reachable)\n", disagreements)
 	}
 
 	if len(byPackage) > 0 {
-		fmt.Println("\nTop-10 Pakete nach Dead-Code-Count:")
+		fmt.Println("\nTop 10 packages by unreachable count:")
 		limit := min(len(byPackage), 10)
 		for _, ps := range byPackage[:limit] {
 			fmt.Printf("  %-60s funcs=%d types=%d\n", ps.Package, ps.UnreachableFuncs, ps.UnreachableTypes)
