@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package matterport
+package mattercontract
 
 // SwitchEventEmitter is the press-event sink of the Matter §1.13
 // GenericSwitch cluster (0x003B), as seen from the model side. The

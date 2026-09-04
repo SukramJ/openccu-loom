@@ -72,7 +72,7 @@ func TestSendReceive_LevelControl(t *testing.T) {
 	// so 127 is distinct from the pre-state and cannot be pre-satisfied
 	// by the subscribe's own priming read.
 	//
-	// Light is not a [interfaces.MatterClusterServer] (unlike e.g.
+	// Light is not a [mattercontract.ClusterServer] (unlike e.g.
 	// switch.Switch for OnOff), so a confirmed LEVEL change dirty-marks
 	// the FULL endpoint and OnOff.OnOff may co-report alongside
 	// CurrentLevel in the same ReportData. want() only checks for the

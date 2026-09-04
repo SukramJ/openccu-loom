@@ -5,7 +5,7 @@
 // for light device types (OnOffLight, DimmableLight, ColorTemperatureLight,
 // ExtendedColorLight). The servers in this package are thin, stateless
 // wrappers whose state is owned by the caller; they implement
-// [interfaces.MatterClusterServer] and the optional lister interfaces so the
+// [mattercontract.ClusterServer] and the optional lister interfaces so the
 // endpoint assembler in internal/north/matter/endpoint can attach them without
 // knowing the device-specific model types.
 //

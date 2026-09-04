@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ScenesManagement is a minimal stub for the Matter ScenesManagement
@@ -38,14 +38,14 @@ var errScenesStub = errors.New("matter: ScenesManagement is a read-only stub (HM
 
 // Compile-time assertions.
 var (
-	_ matterport.ClusterServer          = ScenesManagement{}
-	_ matterport.ClusterAttributeLister = ScenesManagement{}
+	_ mattercontract.ClusterServer          = ScenesManagement{}
+	_ mattercontract.ClusterAttributeLister = ScenesManagement{}
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (ScenesManagement) MatterClusterID() uint32 { return scenesManagementClusterID }
 
-// MatterRead implements [matterport.ClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (ScenesManagement) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case scenesManagementAttrSceneTableSize:

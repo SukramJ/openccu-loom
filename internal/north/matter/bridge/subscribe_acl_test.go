@@ -24,7 +24,7 @@ import (
 	core "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // aclStoreFake backs both the AccessControl cluster server's
@@ -74,7 +74,7 @@ func newACLTestBridge(t *testing.T, fake *aclStoreFake) *Bridge {
 	if err != nil {
 		t.Fatalf("NewAccessControl: %v", err)
 	}
-	b.AttachRootClusters([]matterport.ClusterServer{ac})
+	b.AttachRootClusters([]mattercontract.ClusterServer{ac})
 	b.AttachACLLister(fake)
 	if err := b.Reassemble(context.Background()); err != nil {
 		t.Fatalf("Reassemble: %v", err)

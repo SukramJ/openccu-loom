@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ---- fakeGenericSwitchSource ----
@@ -29,14 +29,14 @@ type emittedEvent struct {
 	cluster  uint32
 	event    uint32
 	data     any
-	priority matterport.EventPriority
+	priority mattercontract.EventPriority
 }
 
 type fakeEventEmitter struct {
 	calls []emittedEvent
 }
 
-func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, cluster, event uint32, data any, priority matterport.EventPriority) {
+func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, cluster, event uint32, data any, priority mattercontract.EventPriority) {
 	f.calls = append(f.calls, emittedEvent{
 		endpoint: endpoint,
 		cluster:  cluster,
@@ -266,7 +266,7 @@ func TestGenericSwitch_FireInitialPress_WithEmitter_CorrectEvent(t *testing.T) {
 	if ev.event != switchEventInitialPress {
 		t.Errorf("event = 0x%02X, want 0x%02X (InitialPress)", ev.event, switchEventInitialPress)
 	}
-	if ev.priority != matterport.EventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (matter.js switch.element.ts:48)", ev.priority)
 	}
 }
@@ -287,7 +287,7 @@ func TestGenericSwitch_FireShortRelease_WithEmitter_InfoPriority(t *testing.T) {
 	if ev.event != switchEventShortRelease {
 		t.Errorf("event = 0x%02X, want 0x%02X (ShortRelease)", ev.event, switchEventShortRelease)
 	}
-	if ev.priority != matterport.EventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info", ev.priority)
 	}
 }
@@ -321,7 +321,7 @@ func TestGenericSwitch_FireLongPress_WithLongPressSupport_EmitsInfo(t *testing.T
 	if ev.event != switchEventLongPress {
 		t.Errorf("event = 0x%02X, want 0x%02X (LongPress)", ev.event, switchEventLongPress)
 	}
-	if ev.priority != matterport.EventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (matter.js switch.element.ts:52)", ev.priority)
 	}
 }
@@ -355,7 +355,7 @@ func TestGenericSwitch_FireLongRelease_WithLongPressSupport_EmitsInfoPriority(t 
 	if ev.event != switchEventLongRelease {
 		t.Errorf("event = 0x%02X, want 0x%02X (LongRelease)", ev.event, switchEventLongRelease)
 	}
-	if ev.priority != matterport.EventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info", ev.priority)
 	}
 }

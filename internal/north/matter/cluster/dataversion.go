@@ -4,15 +4,15 @@
 package cluster
 
 import (
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // DataVersionTracker is a per-cluster monotonic counter that cluster
-// servers embed to satisfy [interfaces.MatterClusterDataVersion]. Every
+// servers embed to satisfy [mattercontract.ClusterDataVersion]. Every
 // successful attribute write SHOULD call [DataVersionTracker.Bump] so
 // subscribers see a fresh version number in their cached state.
 //
-// The concrete implementation lives in pkg/matterport so that model
+// The concrete implementation lives in pkg/mattercontract so that model
 // packages (internal/model/custom/*) can embed it without importing
 // this package, removing the model→northbound coupling. This alias
 // keeps all cluster-internal callers unchanged.
@@ -33,7 +33,7 @@ import (
 // Matter §10.6.5: "A DataVersion of zero is reserved for absent or
 // invalid"; the random generator skips zero accordingly.
 //
-// See [matterport.DataVersionTracker] for the counter itself.
+// See [mattercontract.DataVersionTracker] for the counter itself.
 //
 // Usage:
 //
@@ -49,4 +49,4 @@ import (
 //	    c.DataVersionTracker.Bump()
 //	    return nil
 //	}
-type DataVersionTracker = matterport.DataVersionTracker
+type DataVersionTracker = mattercontract.DataVersionTracker

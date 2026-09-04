@@ -13,7 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 func validBridgedConfig() core.BridgedConfig {
@@ -252,7 +252,7 @@ type recordedEvent struct {
 	priority any
 }
 
-// fakeEmitter implements [matterport.EventEmitter] by appending
+// fakeEmitter implements [mattercontract.EventEmitter] by appending
 // every call into a slice. Mirrors the GenericSwitch test pattern at
 // `cluster/wire/genericswitch_test.go`.
 type fakeEmitter struct {
@@ -260,7 +260,7 @@ type fakeEmitter struct {
 	events []recordedEvent
 }
 
-func (f *fakeEmitter) MatterEmitEvent(endpoint uint16, clusterID, event uint32, data any, priority matterport.EventPriority) {
+func (f *fakeEmitter) MatterEmitEvent(endpoint uint16, clusterID, event uint32, data any, priority mattercontract.EventPriority) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events = append(f.events, recordedEvent{endpoint: endpoint, cluster: clusterID, event: event, data: data, priority: priority})
@@ -304,7 +304,7 @@ func TestBridgedBasicInfo_SetReachableEmitsReachableChanged(t *testing.T) {
 	if ev.event != 0x0003 {
 		t.Errorf("event = 0x%04X, want 0x0003 (ReachableChanged)", ev.event)
 	}
-	if ev.priority != matterport.EventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (matter.js bridged-device-basic-information.element.ts:55)", ev.priority)
 	}
 	payload, ok := ev.data.(core.ReachableChangedEvent)
@@ -377,7 +377,7 @@ func TestBridgedBasicInfo_InvokeReturnsError(t *testing.T) {
 func TestBridgedBasicInfo_MatterEvents(t *testing.T) {
 	t.Parallel()
 	b := newValidBridged(t)
-	var lister matterport.ClusterEventLister = b
+	var lister mattercontract.ClusterEventLister = b
 	events := lister.MatterEvents()
 	if len(events) != 1 {
 		t.Fatalf("MatterEvents() len = %d, want 1", len(events))

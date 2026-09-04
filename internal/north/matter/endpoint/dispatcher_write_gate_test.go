@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // recordingServer records every attribute ID passed to MatterWrite so a
@@ -36,19 +36,19 @@ func (s *recordingServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any,
 }
 
 var (
-	_ matterport.ClusterServer          = (*recordingServer)(nil)
-	_ matterport.ClusterAttributeLister = (*recordingServer)(nil)
+	_ mattercontract.ClusterServer          = (*recordingServer)(nil)
+	_ mattercontract.ClusterAttributeLister = (*recordingServer)(nil)
 )
 
 // recordingSource is a MatterEndpointSource backed by one recordingServer.
 type recordingSource struct{ srv *recordingServer }
 
 func (s recordingSource) MatterDeviceType() uint16 { return 0x010A }
-func (s recordingSource) MatterClusterServers() []matterport.ClusterServer {
-	return []matterport.ClusterServer{s.srv}
+func (s recordingSource) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{s.srv}
 }
 
-var _ matterport.EndpointSource = recordingSource{}
+var _ mattercontract.EndpointSource = recordingSource{}
 
 func recordedWrite(calls []uint32, attr uint32) bool {
 	for _, a := range calls {

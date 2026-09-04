@@ -9,7 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // OTASoftwareUpdateRequestor implements the Matter cluster (0x002A)
@@ -70,14 +70,14 @@ func NewOTASoftwareUpdateRequestor() *OTASoftwareUpdateRequestor {
 // Compile-time assertions: OTASoftwareUpdateRequestor satisfies
 // MatterClusterServer and the attribute-lister capability.
 var (
-	_ matterport.ClusterServer          = (*OTASoftwareUpdateRequestor)(nil)
-	_ matterport.ClusterAttributeLister = (*OTASoftwareUpdateRequestor)(nil)
+	_ mattercontract.ClusterServer          = (*OTASoftwareUpdateRequestor)(nil)
+	_ mattercontract.ClusterAttributeLister = (*OTASoftwareUpdateRequestor)(nil)
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (o *OTASoftwareUpdateRequestor) MatterClusterID() uint32 { return otaRequestorClusterID }
 
-// MatterRead implements [matterport.ClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (o *OTASoftwareUpdateRequestor) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case otaRequestorAttrDefaultOTAProviders:

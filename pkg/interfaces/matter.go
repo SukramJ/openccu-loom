@@ -3,154 +3,154 @@
 
 package interfaces
 
-import "github.com/SukramJ/openccu-loom/pkg/matterport"
+import "github.com/SukramJ/openccu-loom/pkg/mattercontract"
 
 // The Matter port contracts live in
-// [github.com/SukramJ/openccu-loom/pkg/matterport], which depends on
+// [github.com/SukramJ/openccu-loom/pkg/mattercontract], which depends on
 // nothing else in this repository at all. They are re-exported here as
 // aliases so the call sites that reach for them through this package
-// keep compiling; new code should name the matterport symbol directly.
+// keep compiling; new code should name the mattercontract symbol directly.
 
-// MatterEndpointSource is a compatibility alias for [matterport.EndpointSource].
-type MatterEndpointSource = matterport.EndpointSource
+// MatterEndpointSource is a compatibility alias for [mattercontract.EndpointSource].
+type MatterEndpointSource = mattercontract.EndpointSource
 
-// MatterClusterServer is a compatibility alias for [matterport.ClusterServer].
-type MatterClusterServer = matterport.ClusterServer
+// MatterClusterServer is a compatibility alias for [mattercontract.ClusterServer].
+type MatterClusterServer = mattercontract.ClusterServer
 
-// FabricScopedReader is a compatibility alias for [matterport.FabricScopedReader].
-type FabricScopedReader = matterport.FabricScopedReader
+// FabricScopedReader is a compatibility alias for [mattercontract.FabricScopedReader].
+type FabricScopedReader = mattercontract.FabricScopedReader
 
-// MatterClusterAttributeLister is a compatibility alias for [matterport.ClusterAttributeLister].
-type MatterClusterAttributeLister = matterport.ClusterAttributeLister
+// MatterClusterAttributeLister is a compatibility alias for [mattercontract.ClusterAttributeLister].
+type MatterClusterAttributeLister = mattercontract.ClusterAttributeLister
 
-// MatterClusterCommandLister is a compatibility alias for [matterport.ClusterCommandLister].
-type MatterClusterCommandLister = matterport.ClusterCommandLister
+// MatterClusterCommandLister is a compatibility alias for [mattercontract.ClusterCommandLister].
+type MatterClusterCommandLister = mattercontract.ClusterCommandLister
 
-// MatterClusterDataVersion is a compatibility alias for [matterport.ClusterDataVersion].
-type MatterClusterDataVersion = matterport.ClusterDataVersion
+// MatterClusterDataVersion is a compatibility alias for [mattercontract.ClusterDataVersion].
+type MatterClusterDataVersion = mattercontract.ClusterDataVersion
 
-// MatterClusterEventLister is a compatibility alias for [matterport.ClusterEventLister].
-type MatterClusterEventLister = matterport.ClusterEventLister
+// MatterClusterEventLister is a compatibility alias for [mattercontract.ClusterEventLister].
+type MatterClusterEventLister = mattercontract.ClusterEventLister
 
-// MatterClusterAttributeReadPrivilege is a compatibility alias for [matterport.ClusterAttributeReadPrivilege].
-type MatterClusterAttributeReadPrivilege = matterport.ClusterAttributeReadPrivilege
+// MatterClusterAttributeReadPrivilege is a compatibility alias for [mattercontract.ClusterAttributeReadPrivilege].
+type MatterClusterAttributeReadPrivilege = mattercontract.ClusterAttributeReadPrivilege
 
-// MatterClusterAttributeWritePrivilege is a compatibility alias for [matterport.ClusterAttributeWritePrivilege].
-type MatterClusterAttributeWritePrivilege = matterport.ClusterAttributeWritePrivilege
+// MatterClusterAttributeWritePrivilege is a compatibility alias for [mattercontract.ClusterAttributeWritePrivilege].
+type MatterClusterAttributeWritePrivilege = mattercontract.ClusterAttributeWritePrivilege
 
-// MatterClusterCommandInvokePrivilege is a compatibility alias for [matterport.ClusterCommandInvokePrivilege].
-type MatterClusterCommandInvokePrivilege = matterport.ClusterCommandInvokePrivilege
+// MatterClusterCommandInvokePrivilege is a compatibility alias for [mattercontract.ClusterCommandInvokePrivilege].
+type MatterClusterCommandInvokePrivilege = mattercontract.ClusterCommandInvokePrivilege
 
-// MatterMeasurementClass is a compatibility alias for [matterport.MeasurementClass].
-type MatterMeasurementClass = matterport.MeasurementClass
+// MatterMeasurementClass is a compatibility alias for [mattercontract.MeasurementClass].
+type MatterMeasurementClass = mattercontract.MeasurementClass
 
-// MatterMeasurementClass values, aliasing the matterport constants.
+// MatterMeasurementClass values, aliasing the mattercontract constants.
 const (
-	// MatterMeasurementNone is a compatibility alias for [matterport.MeasurementNone].
-	MatterMeasurementNone = matterport.MeasurementNone
+	// MatterMeasurementNone is a compatibility alias for [mattercontract.MeasurementNone].
+	MatterMeasurementNone = mattercontract.MeasurementNone
 
-	// MatterMeasurementTemperature is a compatibility alias for [matterport.MeasurementTemperature].
-	MatterMeasurementTemperature = matterport.MeasurementTemperature
+	// MatterMeasurementTemperature is a compatibility alias for [mattercontract.MeasurementTemperature].
+	MatterMeasurementTemperature = mattercontract.MeasurementTemperature
 
-	// MatterMeasurementHumidity is a compatibility alias for [matterport.MeasurementHumidity].
-	MatterMeasurementHumidity = matterport.MeasurementHumidity
+	// MatterMeasurementHumidity is a compatibility alias for [mattercontract.MeasurementHumidity].
+	MatterMeasurementHumidity = mattercontract.MeasurementHumidity
 
-	// MatterMeasurementIlluminance is a compatibility alias for [matterport.MeasurementIlluminance].
-	MatterMeasurementIlluminance = matterport.MeasurementIlluminance
+	// MatterMeasurementIlluminance is a compatibility alias for [mattercontract.MeasurementIlluminance].
+	MatterMeasurementIlluminance = mattercontract.MeasurementIlluminance
 
-	// MatterMeasurementPressure is a compatibility alias for [matterport.MeasurementPressure].
-	MatterMeasurementPressure = matterport.MeasurementPressure
+	// MatterMeasurementPressure is a compatibility alias for [mattercontract.MeasurementPressure].
+	MatterMeasurementPressure = mattercontract.MeasurementPressure
 
-	// MatterMeasurementCO2 is a compatibility alias for [matterport.MeasurementCO2].
-	MatterMeasurementCO2 = matterport.MeasurementCO2
+	// MatterMeasurementCO2 is a compatibility alias for [mattercontract.MeasurementCO2].
+	MatterMeasurementCO2 = mattercontract.MeasurementCO2
 
-	// MatterMeasurementPM25 is a compatibility alias for [matterport.MeasurementPM25].
-	MatterMeasurementPM25 = matterport.MeasurementPM25
+	// MatterMeasurementPM25 is a compatibility alias for [mattercontract.MeasurementPM25].
+	MatterMeasurementPM25 = mattercontract.MeasurementPM25
 
-	// MatterMeasurementPM10 is a compatibility alias for [matterport.MeasurementPM10].
-	MatterMeasurementPM10 = matterport.MeasurementPM10
+	// MatterMeasurementPM10 is a compatibility alias for [mattercontract.MeasurementPM10].
+	MatterMeasurementPM10 = mattercontract.MeasurementPM10
 
-	// MatterMeasurementOccupancy is a compatibility alias for [matterport.MeasurementOccupancy].
-	MatterMeasurementOccupancy = matterport.MeasurementOccupancy
+	// MatterMeasurementOccupancy is a compatibility alias for [mattercontract.MeasurementOccupancy].
+	MatterMeasurementOccupancy = mattercontract.MeasurementOccupancy
 
-	// MatterMeasurementContact is a compatibility alias for [matterport.MeasurementContact].
-	MatterMeasurementContact = matterport.MeasurementContact
+	// MatterMeasurementContact is a compatibility alias for [mattercontract.MeasurementContact].
+	MatterMeasurementContact = mattercontract.MeasurementContact
 
-	// MatterMeasurementLeak is a compatibility alias for [matterport.MeasurementLeak].
-	MatterMeasurementLeak = matterport.MeasurementLeak
+	// MatterMeasurementLeak is a compatibility alias for [mattercontract.MeasurementLeak].
+	MatterMeasurementLeak = mattercontract.MeasurementLeak
 
-	// MatterMeasurementBattery is a compatibility alias for [matterport.MeasurementBattery].
-	MatterMeasurementBattery = matterport.MeasurementBattery
+	// MatterMeasurementBattery is a compatibility alias for [mattercontract.MeasurementBattery].
+	MatterMeasurementBattery = mattercontract.MeasurementBattery
 
-	// MatterMeasurementPower is a compatibility alias for [matterport.MeasurementPower].
-	MatterMeasurementPower = matterport.MeasurementPower
+	// MatterMeasurementPower is a compatibility alias for [mattercontract.MeasurementPower].
+	MatterMeasurementPower = mattercontract.MeasurementPower
 
-	// MatterMeasurementEnergy is a compatibility alias for [matterport.MeasurementEnergy].
-	MatterMeasurementEnergy = matterport.MeasurementEnergy
+	// MatterMeasurementEnergy is a compatibility alias for [mattercontract.MeasurementEnergy].
+	MatterMeasurementEnergy = mattercontract.MeasurementEnergy
 
-	// MatterMeasurementMomentarySwitch is a compatibility alias for [matterport.MeasurementMomentarySwitch].
-	MatterMeasurementMomentarySwitch = matterport.MeasurementMomentarySwitch
+	// MatterMeasurementMomentarySwitch is a compatibility alias for [mattercontract.MeasurementMomentarySwitch].
+	MatterMeasurementMomentarySwitch = mattercontract.MeasurementMomentarySwitch
 
-	// MatterMeasurementElectrical is a compatibility alias for [matterport.MeasurementElectrical].
-	MatterMeasurementElectrical = matterport.MeasurementElectrical
+	// MatterMeasurementElectrical is a compatibility alias for [mattercontract.MeasurementElectrical].
+	MatterMeasurementElectrical = mattercontract.MeasurementElectrical
 )
 
-// MatterElectricalReadings is a compatibility alias for [matterport.ElectricalReadings].
-type MatterElectricalReadings = matterport.ElectricalReadings
+// MatterElectricalReadings is a compatibility alias for [mattercontract.ElectricalReadings].
+type MatterElectricalReadings = mattercontract.ElectricalReadings
 
-// MatterMeasurementSource is a compatibility alias for [matterport.MeasurementSource].
-type MatterMeasurementSource = matterport.MeasurementSource
+// MatterMeasurementSource is a compatibility alias for [mattercontract.MeasurementSource].
+type MatterMeasurementSource = mattercontract.MeasurementSource
 
-// MatterFloatMeasurementSource is a compatibility alias for [matterport.FloatMeasurementSource].
-type MatterFloatMeasurementSource = matterport.FloatMeasurementSource
+// MatterFloatMeasurementSource is a compatibility alias for [mattercontract.FloatMeasurementSource].
+type MatterFloatMeasurementSource = mattercontract.FloatMeasurementSource
 
-// MatterBoolMeasurementSource is a compatibility alias for [matterport.BoolMeasurementSource].
-type MatterBoolMeasurementSource = matterport.BoolMeasurementSource
+// MatterBoolMeasurementSource is a compatibility alias for [mattercontract.BoolMeasurementSource].
+type MatterBoolMeasurementSource = mattercontract.BoolMeasurementSource
 
-// MatterChangeNotifier is a compatibility alias for [matterport.ChangeNotifier].
-type MatterChangeNotifier = matterport.ChangeNotifier
+// MatterChangeNotifier is a compatibility alias for [mattercontract.ChangeNotifier].
+type MatterChangeNotifier = mattercontract.ChangeNotifier
 
-// MatterEventPriority is a compatibility alias for [matterport.EventPriority].
-type MatterEventPriority = matterport.EventPriority
+// MatterEventPriority is a compatibility alias for [mattercontract.EventPriority].
+type MatterEventPriority = mattercontract.EventPriority
 
-// MatterEventPriority values, aliasing the matterport constants.
+// MatterEventPriority values, aliasing the mattercontract constants.
 const (
-	// MatterEventPriorityDebug is a compatibility alias for [matterport.EventPriorityDebug].
-	MatterEventPriorityDebug = matterport.EventPriorityDebug
+	// MatterEventPriorityDebug is a compatibility alias for [mattercontract.EventPriorityDebug].
+	MatterEventPriorityDebug = mattercontract.EventPriorityDebug
 
-	// MatterEventPriorityInfo is a compatibility alias for [matterport.EventPriorityInfo].
-	MatterEventPriorityInfo = matterport.EventPriorityInfo
+	// MatterEventPriorityInfo is a compatibility alias for [mattercontract.EventPriorityInfo].
+	MatterEventPriorityInfo = mattercontract.EventPriorityInfo
 
-	// MatterEventPriorityCritical is a compatibility alias for [matterport.EventPriorityCritical].
-	MatterEventPriorityCritical = matterport.EventPriorityCritical
+	// MatterEventPriorityCritical is a compatibility alias for [mattercontract.EventPriorityCritical].
+	MatterEventPriorityCritical = mattercontract.EventPriorityCritical
 )
 
-// MatterEventEmitter is a compatibility alias for [matterport.EventEmitter].
-type MatterEventEmitter = matterport.EventEmitter
+// MatterEventEmitter is a compatibility alias for [mattercontract.EventEmitter].
+type MatterEventEmitter = mattercontract.EventEmitter
 
-// MatterEventReceiver is a compatibility alias for [matterport.EventReceiver].
-type MatterEventReceiver = matterport.EventReceiver
+// MatterEventReceiver is a compatibility alias for [mattercontract.EventReceiver].
+type MatterEventReceiver = mattercontract.EventReceiver
 
-// MatterEligibilityState is a compatibility alias for [matterport.EligibilityState].
-type MatterEligibilityState = matterport.EligibilityState
+// MatterEligibilityState is a compatibility alias for [mattercontract.EligibilityState].
+type MatterEligibilityState = mattercontract.EligibilityState
 
-// MatterEligibilityState values, aliasing the matterport constants.
+// MatterEligibilityState values, aliasing the mattercontract constants.
 const (
-	// MatterEligibilityUnmappable is a compatibility alias for [matterport.EligibilityUnmappable].
-	MatterEligibilityUnmappable = matterport.EligibilityUnmappable
+	// MatterEligibilityUnmappable is a compatibility alias for [mattercontract.EligibilityUnmappable].
+	MatterEligibilityUnmappable = mattercontract.EligibilityUnmappable
 
-	// MatterEligibilityMappable is a compatibility alias for [matterport.EligibilityMappable].
-	MatterEligibilityMappable = matterport.EligibilityMappable
+	// MatterEligibilityMappable is a compatibility alias for [mattercontract.EligibilityMappable].
+	MatterEligibilityMappable = mattercontract.EligibilityMappable
 
-	// MatterEligibilityPartial is a compatibility alias for [matterport.EligibilityPartial].
-	MatterEligibilityPartial = matterport.EligibilityPartial
+	// MatterEligibilityPartial is a compatibility alias for [mattercontract.EligibilityPartial].
+	MatterEligibilityPartial = mattercontract.EligibilityPartial
 )
 
-// MatterEligibilityVerdict is a compatibility alias for [matterport.EligibilityVerdict].
-type MatterEligibilityVerdict = matterport.EligibilityVerdict
+// MatterEligibilityVerdict is a compatibility alias for [mattercontract.EligibilityVerdict].
+type MatterEligibilityVerdict = mattercontract.EligibilityVerdict
 
-// MatterEligibilitySource is a compatibility alias for [matterport.EligibilitySource].
-type MatterEligibilitySource = matterport.EligibilitySource
+// MatterEligibilitySource is a compatibility alias for [mattercontract.EligibilitySource].
+type MatterEligibilitySource = mattercontract.EligibilitySource
 
 // MatterMeasurementClassDeviceType returns the standalone Matter
 // Device Type (uint16) that best wraps the given measurement class
@@ -159,11 +159,11 @@ type MatterEligibilitySource = matterport.EligibilitySource
 // device-type counterpart (Battery / Power / Energy roll up to a
 // host endpoint instead).
 //
-// Compatibility wrapper; [matterport.MeasurementClassDeviceType] is
+// Compatibility wrapper; [mattercontract.MeasurementClassDeviceType] is
 // the single source of truth for the mapping and carries the full
 // rationale for each entry.
 func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
-	return matterport.MeasurementClassDeviceType(class)
+	return mattercontract.MeasurementClassDeviceType(class)
 }
 
 // MatterDeviceTypeName returns the operator-facing name for a Matter
@@ -172,19 +172,19 @@ func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
 // to — the UI then still has something stable to render and to filter
 // on.
 //
-// Compatibility wrapper; [matterport.DeviceTypeName] is the single
+// Compatibility wrapper; [mattercontract.DeviceTypeName] is the single
 // source of truth for the device-type → human label mapping and
 // carries the rule that every advertised device type needs a case
 // there.
 func MatterDeviceTypeName(id uint16) string {
-	return matterport.DeviceTypeName(id)
+	return mattercontract.DeviceTypeName(id)
 }
 
 // MatterMeasurementClassClusterID returns the cluster ID the given
 // measurement class projects to. Counterpart to
 // [MatterMeasurementClassDeviceType] for the cluster slot.
 //
-// Compatibility wrapper for [matterport.MeasurementClassClusterID].
+// Compatibility wrapper for [mattercontract.MeasurementClassClusterID].
 func MatterMeasurementClassClusterID(class MatterMeasurementClass) uint32 {
-	return matterport.MeasurementClassClusterID(class)
+	return mattercontract.MeasurementClassClusterID(class)
 }

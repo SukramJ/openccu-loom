@@ -13,15 +13,15 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // clusterDataVersion returns the current DataVersion for srv by
-// type-asserting to [matterport.ClusterDataVersion]. Falls back
+// type-asserting to [mattercontract.ClusterDataVersion]. Falls back
 // to 0 when the cluster does not implement the capability — the IM
 // layer then encodes 1 (the spec-minimum) per AttributeDataIB rules.
-func clusterDataVersion(srv matterport.ClusterServer) uint32 {
-	if dv, ok := srv.(matterport.ClusterDataVersion); ok {
+func clusterDataVersion(srv mattercontract.ClusterServer) uint32 {
+	if dv, ok := srv.(mattercontract.ClusterDataVersion); ok {
 		return dv.MatterDataVersion()
 	}
 	return 0
@@ -35,7 +35,7 @@ func clusterDataVersion(srv matterport.ClusterServer) uint32 {
 // on every read, so their version identity lives on the persistent
 // [Endpoint] keyed by cluster id instead. Mirrors matter.js
 // Datasource.ts:349 (version set once per lifetime, not per access).
-func clusterDataVersionFor(ep *Endpoint, srv matterport.ClusterServer) uint32 {
+func clusterDataVersionFor(ep *Endpoint, srv mattercontract.ClusterServer) uint32 {
 	if ep == nil || ep.IsRoot() || ep.IsAggregator() {
 		return clusterDataVersion(srv)
 	}
@@ -127,7 +127,7 @@ var (
 //   - HasCluster=false   → iterate every cluster server on the endpoint.
 //   - HasAttribute=false → globals (FeatureMap + ClusterRevision)
 //     PLUS every attribute the cluster server advertises via the
-//     [matterport.ClusterAttributeLister] optional interface.
+//     [mattercontract.ClusterAttributeLister] optional interface.
 //     Cluster servers that do not implement that interface fall back
 //     to globals-only — that is the v1.1 baseline preserved for
 //     backwards compatibility.
@@ -136,7 +136,7 @@ var (
 //
 // ctx carries the FabricFiltered flag + FabricIndex via
 // [im.WithFabricFilter] / [im.FabricFilterFromContext]. Cluster servers
-// that implement [matterport.FabricScopedReader] receive MatterReadFiltered
+// that implement [mattercontract.FabricScopedReader] receive MatterReadFiltered
 // instead of MatterRead so they can project fabric-sensitive list
 // attributes (OperationalCredentials.Fabrics, AccessControl.ACL) down
 // to the requesting fabric. Mirrors matter.js InteractionServer.ts:
@@ -370,14 +370,14 @@ func (d *TopologyDispatcher) resolveEndpoints(path im.ConcreteAttributePath) []*
 // path's cluster selector. Returns a slice (possibly empty) of cluster
 // servers; an empty slice on a concrete cluster means the endpoint
 // exists but the cluster is absent.
-func (d *TopologyDispatcher) serversFor(ep *Endpoint, path im.ConcreteAttributePath) []matterport.ClusterServer {
+func (d *TopologyDispatcher) serversFor(ep *Endpoint, path im.ConcreteAttributePath) []mattercontract.ClusterServer {
 	all := ClusterServers(ep)
 	if !path.HasCluster {
 		return all
 	}
 	for _, srv := range all {
 		if srv.MatterClusterID() == path.Cluster {
-			return []matterport.ClusterServer{srv}
+			return []mattercontract.ClusterServer{srv}
 		}
 	}
 	return nil
@@ -389,14 +389,14 @@ func (d *TopologyDispatcher) serversFor(ep *Endpoint, path im.ConcreteAttributeP
 // cluster's full attribute surface.
 //
 // Cluster servers expose their attribute set via the optional
-// [matterport.ClusterAttributeLister] interface. When a cluster
-// does not implement it, we fall back to [matterport.ClusterServer.MatterReportable]
+// [mattercontract.ClusterAttributeLister] interface. When a cluster
+// does not implement it, we fall back to [mattercontract.ClusterServer.MatterReportable]
 // — that is at least the subscribable attribute surface, which gives
 // Apple Home / matter.js something to bind to. The strict spec
 // behaviour (every defined attribute) is achieved by implementing
 // MatterAttributes on every cluster; the fallback is the safety net
 // for cluster servers that have not been migrated yet.
-func (d *TopologyDispatcher) attributesFor(srv matterport.ClusterServer, path im.ConcreteAttributePath) []uint32 {
+func (d *TopologyDispatcher) attributesFor(srv mattercontract.ClusterServer, path im.ConcreteAttributePath) []uint32 {
 	if path.HasAttribute {
 		return []uint32{path.Attribute}
 	}
@@ -427,7 +427,7 @@ func (d *TopologyDispatcher) attributesFor(srv matterport.ClusterServer, path im
 		cluster.AttrGlobalClusterRevision,
 	}
 	var extra []uint32
-	if lister, ok := srv.(matterport.ClusterAttributeLister); ok {
+	if lister, ok := srv.(mattercontract.ClusterAttributeLister); ok {
 		extra = lister.MatterAttributes()
 	} else {
 		// Fallback: subscribable attribute surface. Better than
@@ -460,21 +460,21 @@ func (d *TopologyDispatcher) attributesFor(srv matterport.ClusterServer, path im
 // each cluster server having to repeat the boilerplate.
 //
 // ctx carries the FabricFiltered flag + FabricIndex. When srv
-// implements [matterport.FabricScopedReader], MatterReadFiltered is
+// implements [mattercontract.FabricScopedReader], MatterReadFiltered is
 // called in preference to MatterRead so the server can project
 // fabric-sensitive lists (e.g. OperationalCredentials.Fabrics) to
 // the requesting fabric. Mirrors matter.js InteractionServer.ts:
 // startReadInteraction → OnlineContext.forFabricFilteredRead.
 //
-// DataVersion: when srv implements [matterport.ClusterDataVersion]
+// DataVersion: when srv implements [mattercontract.ClusterDataVersion]
 // its current DataVersion is stamped on the ReadResult. The IM layer
 // uses this in HandleReadRequest for DataVersionFilter evaluation.
 // Mirrors matter.js InteractionServer.ts attributeReportPayload building.
-func readOne(ctx context.Context, ep *Endpoint, srv matterport.ClusterServer, path im.ConcreteAttributePath) im.ReadResult {
+func readOne(ctx context.Context, ep *Endpoint, srv mattercontract.ClusterServer, path im.ConcreteAttributePath) im.ReadResult {
 	dv := clusterDataVersionFor(ep, srv)
 	// Fabric-scoped attributes: prefer MatterReadFiltered when the
 	// cluster server opts in by implementing FabricScopedReader.
-	if fsr, ok := srv.(matterport.FabricScopedReader); ok {
+	if fsr, ok := srv.(mattercontract.FabricScopedReader); ok {
 		v, ok := fsr.MatterReadFiltered(ctx, path.Attribute)
 		if ok {
 			if v == nil {
@@ -509,9 +509,9 @@ func readOne(ctx context.Context, ep *Endpoint, srv matterport.ClusterServer, pa
 // attribute (Spec §7.13.2) when the cluster server does not handle it
 // itself. Returns (value, true) for handled IDs; (nil, false) for any
 // non-global attribute. The synthesized values are computed from the
-// optional [matterport.ClusterAttributeLister] /
-// [matterport.ClusterCommandLister] /
-// [matterport.ClusterEventLister] surfaces — clusters that don't
+// optional [mattercontract.ClusterAttributeLister] /
+// [mattercontract.ClusterCommandLister] /
+// [mattercontract.ClusterEventLister] surfaces — clusters that don't
 // implement those lister interfaces get an empty list, which is the
 // spec-compliant minimum (a cluster with no commands legitimately
 // reports `AcceptedCommandList = []`).
@@ -521,7 +521,7 @@ func readOne(ctx context.Context, ep *Endpoint, srv matterport.ClusterServer, pa
 // Matter §7.13.2.4 ("AttributeList SHALL include the IDs of every
 // attribute the cluster server implements, including the global
 // attributes").
-func synthesizeGlobalRead(srv matterport.ClusterServer, attrID uint32) (any, bool) {
+func synthesizeGlobalRead(srv mattercontract.ClusterServer, attrID uint32) (any, bool) {
 	switch attrID {
 	case cluster.AttrGlobalAttributeList:
 		// EventList (0xFFFA) intentionally omitted — see comment in
@@ -543,7 +543,7 @@ func synthesizeGlobalRead(srv matterport.ClusterServer, attrID uint32) (any, boo
 			cluster.AttrGlobalClusterRevision,
 		}
 		var clusterAttrs []uint32
-		if lister, ok := srv.(matterport.ClusterAttributeLister); ok {
+		if lister, ok := srv.(mattercontract.ClusterAttributeLister); ok {
 			clusterAttrs = lister.MatterAttributes()
 		} else {
 			clusterAttrs = srv.MatterReportable()
@@ -558,12 +558,12 @@ func synthesizeGlobalRead(srv matterport.ClusterServer, attrID uint32) (any, boo
 		slices.Sort(out)
 		return out, true
 	case cluster.AttrGlobalAcceptedCommandList:
-		if lister, ok := srv.(matterport.ClusterCommandLister); ok {
+		if lister, ok := srv.(mattercontract.ClusterCommandLister); ok {
 			return lister.MatterAcceptedCommands(), true
 		}
 		return []uint32{}, true
 	case cluster.AttrGlobalGeneratedCommandList:
-		if lister, ok := srv.(matterport.ClusterCommandLister); ok {
+		if lister, ok := srv.(mattercontract.ClusterCommandLister); ok {
 			return lister.MatterGeneratedCommands(), true
 		}
 		return []uint32{}, true
@@ -586,7 +586,7 @@ func synthesizeGlobalRead(srv matterport.ClusterServer, attrID uint32) (any, boo
 // writeOne dispatches a single Write against srv. Errors are mapped
 // to spec-coded status values where the cluster surfaces them
 // distinctly; the catch-all is StatusFailure.
-func writeOne(ctx context.Context, srv matterport.ClusterServer, path im.ConcreteAttributePath, value im.AttributeValue) im.WriteResult {
+func writeOne(ctx context.Context, srv mattercontract.ClusterServer, path im.ConcreteAttributePath, value im.AttributeValue) im.WriteResult {
 	v := value.Value
 	if value.IsNull {
 		v = nil
@@ -687,7 +687,7 @@ func containsAny(s string, subs ...string) bool {
 
 // MinReadPrivilege implements [im.AttributeReadPrivilegeProvider]. It
 // looks up the cluster server for (endpoint, clusterID) and consults
-// the server's [matterport.ClusterAttributeReadPrivilege] optional
+// the server's [mattercontract.ClusterAttributeReadPrivilege] optional
 // interface for the given attrID. Returns 1 (View) when the cluster is
 // not found, does not implement the interface, or reports no elevated
 // requirement for the attribute. Returns the server-reported value (e.g.
@@ -704,7 +704,7 @@ func (d *TopologyDispatcher) MinReadPrivilege(endpoint uint16, clusterID, attrID
 		if srv.MatterClusterID() != clusterID {
 			continue
 		}
-		priv, ok := srv.(matterport.ClusterAttributeReadPrivilege)
+		priv, ok := srv.(mattercontract.ClusterAttributeReadPrivilege)
 		if !ok {
 			return 1
 		}
@@ -715,7 +715,7 @@ func (d *TopologyDispatcher) MinReadPrivilege(endpoint uint16, clusterID, attrID
 
 // MinWritePrivilege implements [im.AttributeWritePrivilegeProvider]. It
 // looks up the cluster server for (endpoint, clusterID) and consults the
-// server's [matterport.ClusterAttributeWritePrivilege] optional
+// server's [mattercontract.ClusterAttributeWritePrivilege] optional
 // interface for the given attrID. Returns 3 (Operate) — the Matter
 // §9.10.4.4 default write privilege — when the cluster is not found, does
 // not implement the interface, or reports no elevated requirement.
@@ -732,7 +732,7 @@ func (d *TopologyDispatcher) MinWritePrivilege(endpoint uint16, clusterID, attrI
 		if srv.MatterClusterID() != clusterID {
 			continue
 		}
-		priv, ok := srv.(matterport.ClusterAttributeWritePrivilege)
+		priv, ok := srv.(mattercontract.ClusterAttributeWritePrivilege)
 		if !ok {
 			return 3
 		}
@@ -743,7 +743,7 @@ func (d *TopologyDispatcher) MinWritePrivilege(endpoint uint16, clusterID, attrI
 
 // MinInvokePrivilege implements [im.CommandInvokePrivilegeProvider]. It
 // looks up the cluster server for (endpoint, clusterID) and consults the
-// server's [matterport.ClusterCommandInvokePrivilege] optional
+// server's [mattercontract.ClusterCommandInvokePrivilege] optional
 // interface for the given cmdID. Returns 3 (Operate) — the Matter
 // §9.10.4.4 default invoke privilege — when the cluster is not found,
 // does not implement the interface, or reports no elevated requirement.
@@ -760,7 +760,7 @@ func (d *TopologyDispatcher) MinInvokePrivilege(endpoint uint16, clusterID, cmdI
 		if srv.MatterClusterID() != clusterID {
 			continue
 		}
-		priv, ok := srv.(matterport.ClusterCommandInvokePrivilege)
+		priv, ok := srv.(mattercontract.ClusterCommandInvokePrivilege)
 		if !ok {
 			return 3
 		}
@@ -983,7 +983,7 @@ func privilegeRank(p uint8) int {
 
 // CurrentDataVersion implements [im.DataVersionReader]. It looks up the
 // cluster server for (endpoint, clusterID) and returns its current
-// DataVersion when the server implements [matterport.ClusterDataVersion].
+// DataVersion when the server implements [mattercontract.ClusterDataVersion].
 //
 // Mirrors matter.js packages/node/src/node/server/InteractionServer.ts
 // DataVersion check before write dispatch. Returns (0, false) when the
@@ -1004,7 +1004,7 @@ func (d *TopologyDispatcher) CurrentDataVersion(_ context.Context, endpoint uint
 		if !ep.IsRoot() && !ep.IsAggregator() {
 			return ep.ClusterDataVersion(clusterID), true
 		}
-		dv, ok := srv.(matterport.ClusterDataVersion)
+		dv, ok := srv.(mattercontract.ClusterDataVersion)
 		if !ok {
 			return 0, false
 		}

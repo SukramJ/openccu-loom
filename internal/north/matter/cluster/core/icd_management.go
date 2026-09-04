@@ -9,7 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ICDManagement implements the minimum required surface of the
@@ -40,14 +40,14 @@ const (
 func NewICDManagement() *ICDManagement { return &ICDManagement{} }
 
 var (
-	_ matterport.ClusterServer          = (*ICDManagement)(nil)
-	_ matterport.ClusterAttributeLister = (*ICDManagement)(nil)
+	_ mattercontract.ClusterServer          = (*ICDManagement)(nil)
+	_ mattercontract.ClusterAttributeLister = (*ICDManagement)(nil)
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (i *ICDManagement) MatterClusterID() uint32 { return icdClusterID }
 
-// MatterRead implements [matterport.ClusterServer]. Values
+// MatterRead implements [mattercontract.ClusterServer]. Values
 // signal "always-on, no idle" so commissioners that gate ICD-related
 // flows on these reads see the bridge as a non-ICD device.
 func (i *ICDManagement) MatterRead(attrID uint32) (any, bool) {
@@ -74,13 +74,13 @@ func (i *ICDManagement) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-// MatterWrite implements [matterport.ClusterServer]. Attributes
+// MatterWrite implements [mattercontract.ClusterServer]. Attributes
 // are read-only on the bridge.
 func (i *ICDManagement) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: ICDManagement attribute 0x%04X is read-only", attrID)
 }
 
-// MatterInvoke implements [matterport.ClusterServer]. ICD
+// MatterInvoke implements [mattercontract.ClusterServer]. ICD
 // commands (RegisterClient / UnregisterClient / StayActiveRequest)
 // all require feature flags we don't advertise.
 func (i *ICDManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {

@@ -104,13 +104,13 @@ func TestMatterEventPrioritiesMatchMatterJS(t *testing.T) {
 				return true
 			}
 			event := exprText(call.Args[2])
-			// The priority constants live in pkg/matterport; pkg/interfaces
+			// The priority constants live in pkg/mattercontract; pkg/interfaces
 			// keeps prefixed aliases for callers outside the Matter subtree,
 			// so accept either spelling. An unrecognised one keeps its
 			// qualifier and fails the comparison loudly rather than silently
 			// reading as a match.
 			priority := exprText(call.Args[4])
-			for _, prefix := range []string{"matterport.EventPriority", "interfaces.MatterEventPriority"} {
+			for _, prefix := range []string{"mattercontract.EventPriority", "interfaces.MatterEventPriority"} {
 				if after, found := strings.CutPrefix(priority, prefix); found {
 					priority = after
 					break

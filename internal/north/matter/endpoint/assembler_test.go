@@ -16,12 +16,12 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ─── stub types ──────────────────────────────────────────────────────
 
-// stubEndpointSource is a minimal [matterport.EndpointSource] for tests.
+// stubEndpointSource is a minimal [mattercontract.EndpointSource] for tests.
 // It only implements the interface; it has no real cluster logic.
 type stubEndpointSource struct {
 	key        hmtypes.DataPointKey
@@ -30,19 +30,19 @@ type stubEndpointSource struct {
 
 func (s *stubEndpointSource) DataPointKey() hmtypes.DataPointKey { return s.key }
 func (s *stubEndpointSource) MatterDeviceType() uint16           { return s.deviceType }
-func (s *stubEndpointSource) MatterClusterServers() []matterport.ClusterServer {
+func (s *stubEndpointSource) MatterClusterServers() []mattercontract.ClusterServer {
 	return nil
 }
 
-// stubMeasurementSource is a minimal [matterport.MeasurementSource]
+// stubMeasurementSource is a minimal [mattercontract.MeasurementSource]
 // that does NOT implement MatterEndpointSource.
 type stubMeasurementSource struct {
 	key   hmtypes.DataPointKey
-	class matterport.MeasurementClass
+	class mattercontract.MeasurementClass
 }
 
 func (s *stubMeasurementSource) DataPointKey() hmtypes.DataPointKey { return s.key }
-func (s *stubMeasurementSource) MatterMeasurementClass() matterport.MeasurementClass {
+func (s *stubMeasurementSource) MatterMeasurementClass() mattercontract.MeasurementClass {
 	return s.class
 }
 
@@ -402,7 +402,7 @@ func TestAssemble_MeasurementDP_ExcludedWhenFlagOff(t *testing.T) {
 
 	meas := &stubMeasurementSource{
 		key:   dpKey("TEMP0001:1", "APPARENT_TEMPERATURE"),
-		class: matterport.MeasurementTemperature,
+		class: mattercontract.MeasurementTemperature,
 	}
 	ch.AttachCalculatedDataPoint(meas)
 
@@ -430,7 +430,7 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 
 	meas := &stubMeasurementSource{
 		key:   dpKey("TEMP0002:1", "APPARENT_TEMPERATURE"),
-		class: matterport.MeasurementTemperature,
+		class: mattercontract.MeasurementTemperature,
 	}
 	ch.AttachCalculatedDataPoint(meas)
 
@@ -1175,7 +1175,7 @@ func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
 	ch := addChannel(dev, "TEMP0003:1", 1)
 	ch.AttachCalculatedDataPoint(&stubMeasurementSource{
 		key:   dpKey("TEMP0003:1", "APPARENT_TEMPERATURE"),
-		class: matterport.MeasurementTemperature,
+		class: mattercontract.MeasurementTemperature,
 	})
 
 	// The row an operator creates via the Matter allowlist for this

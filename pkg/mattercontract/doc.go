@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Package matterport holds the port contracts between the domain model
+// Package mattercontract holds the port contracts between the domain model
 // and the Matter bridge: the interfaces a data point implements to
 // materialise as a bridged endpoint, the cluster-server surface the
 // bridge dispatches through, and the measurement / eligibility
@@ -15,7 +15,7 @@
 // already says it — and pkg/interfaces re-exports every symbol that
 // had call sites there as a compatibility alias, so those keep
 // compiling. Symbols introduced here afterwards get no alias; new code
-// names the matterport symbol directly.
+// names the mattercontract symbol directly.
 //
 // The package depends on nothing else in this repository — its
 // imports are stdlib only. That is the property worth preserving: a
@@ -25,4 +25,4 @@
 //
 // See ADR 0012 for the rich-model / dumb-bridge split these contracts
 // implement, and SPECIFICATION.md §6.2 / §6.3 for the endpoint surface.
-package matterport
+package mattercontract

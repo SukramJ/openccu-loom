@@ -18,7 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // meteringPlugFloat adds a read-only float VALUES data point, the shape the
@@ -200,7 +200,7 @@ func TestElectricalSensorClusterSetDoesNotDependOnReportedValues(t *testing.T) {
 			t.Fatalf("%s is %T, which cannot be fed a float64 value; the test would measure nothing", p, dp)
 		}
 		fed.OnEvent(42.0)
-		src, ok := dp.(matterport.FloatMeasurementSource)
+		src, ok := dp.(mattercontract.FloatMeasurementSource)
 		if !ok {
 			t.Fatalf("%s is %T, not a Matter measurement source", p, dp)
 		}

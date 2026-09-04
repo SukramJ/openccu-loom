@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Groups is a minimal stub for the Matter Groups cluster (0x0004).
@@ -35,14 +35,14 @@ var errGroupsReadOnly = errors.New("matter: Groups cluster is a read-only stub")
 
 // Compile-time assertions.
 var (
-	_ matterport.ClusterServer          = Groups{}
-	_ matterport.ClusterAttributeLister = Groups{}
+	_ mattercontract.ClusterServer          = Groups{}
+	_ mattercontract.ClusterAttributeLister = Groups{}
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (Groups) MatterClusterID() uint32 { return groupsClusterID }
 
-// MatterRead implements [matterport.ClusterServer]. Only the
+// MatterRead implements [mattercontract.ClusterServer]. Only the
 // mandatory NameSupport bitmap8 + the global FeatureMap /
 // ClusterRevision are exposed.
 func (Groups) MatterRead(attrID uint32) (any, bool) {

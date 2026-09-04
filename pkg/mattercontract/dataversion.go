@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package matterport
+package mattercontract
 
 import (
 	"crypto/rand"
@@ -31,7 +31,7 @@ import (
 // Usage:
 //
 //	type MyCluster struct {
-//	    matterport.DataVersionTracker
+//	    mattercontract.DataVersionTracker
 //	    // ...
 //	}
 //

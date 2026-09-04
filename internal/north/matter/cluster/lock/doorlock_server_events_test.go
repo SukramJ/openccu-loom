@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // eventTestSource is a StateSource whose LockInvoke outcome is
@@ -39,16 +39,16 @@ type emitCall struct {
 	cluster  uint32
 	event    uint32
 	data     any
-	priority matterport.EventPriority
+	priority mattercontract.EventPriority
 }
 
-// fakeEventEmitter implements [matterport.EventEmitter] and
+// fakeEventEmitter implements [mattercontract.EventEmitter] and
 // records every call for assertion.
 type fakeEventEmitter struct {
 	calls []emitCall
 }
 
-func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, clusterID, eventID uint32, data any, priority matterport.EventPriority) {
+func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, clusterID, eventID uint32, data any, priority mattercontract.EventPriority) {
 	f.calls = append(f.calls, emitCall{endpoint: endpoint, cluster: clusterID, event: eventID, data: data, priority: priority})
 }
 
@@ -96,7 +96,7 @@ func TestDoorLockServer_EmitLockOperation_LockDoor(t *testing.T) {
 	if c.event != wire.DoorLockEventLockOperation {
 		t.Errorf("event = 0x%02X, want 0x%02X", c.event, wire.DoorLockEventLockOperation)
 	}
-	if c.priority != matterport.EventPriorityCritical {
+	if c.priority != mattercontract.EventPriorityCritical {
 		t.Errorf("priority = %v, want MatterEventPriorityCritical", c.priority)
 	}
 

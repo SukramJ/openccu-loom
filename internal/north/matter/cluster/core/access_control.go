@@ -13,7 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // AccessControl implements the Matter Access Control Cluster
@@ -38,7 +38,7 @@ type AccessControl struct {
 
 	// dataVersion tracks the per-cluster monotonic counter per Matter
 	// §10.6.5. Bumped after every successful ACL replace so subscribers
-	// can detect changes. Satisfies [matterport.ClusterDataVersion].
+	// can detect changes. Satisfies [mattercontract.ClusterDataVersion].
 	dataVersion cluster.DataVersionTracker
 
 	// extensions holds the per-fabric AccessControlExtensionStruct list
@@ -56,7 +56,7 @@ type AccessControl struct {
 	// packages/node/src/behaviors/access-control/AccessControlServer.ts where
 	// acl attribute writes trigger the entryChanged event.
 	endpoint uint16
-	emitter  matterport.EventEmitter
+	emitter  mattercontract.EventEmitter
 }
 
 // AccessControlExtensionEntry mirrors Matter §9.10.4.6
@@ -192,24 +192,24 @@ func NewAccessControl(s ACLStoreFacade) (*AccessControl, error) {
 
 // Compile-time assertions.
 var (
-	_ matterport.ClusterServer                  = (*AccessControl)(nil)
-	_ matterport.FabricScopedReader             = (*AccessControl)(nil)
-	_ matterport.EventReceiver                  = (*AccessControl)(nil)
-	_ matterport.ClusterDataVersion             = (*AccessControl)(nil)
-	_ matterport.ClusterAttributeReadPrivilege  = (*AccessControl)(nil)
-	_ matterport.ClusterAttributeWritePrivilege = (*AccessControl)(nil)
+	_ mattercontract.ClusterServer                  = (*AccessControl)(nil)
+	_ mattercontract.FabricScopedReader             = (*AccessControl)(nil)
+	_ mattercontract.EventReceiver                  = (*AccessControl)(nil)
+	_ mattercontract.ClusterDataVersion             = (*AccessControl)(nil)
+	_ mattercontract.ClusterAttributeReadPrivilege  = (*AccessControl)(nil)
+	_ mattercontract.ClusterAttributeWritePrivilege = (*AccessControl)(nil)
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (a *AccessControl) MatterClusterID() uint32 { return accessControlClusterID }
 
-// MatterDataVersion implements [matterport.ClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 // Returns the current per-cluster monotonic counter bumped on every
 // successful ACL replace. Mirrors matter.js AccessControlServer.ts
 // DataVersion tracking on ACL attribute mutations.
 func (a *AccessControl) MatterDataVersion() uint32 { return a.dataVersion.Current() }
 
-// MinReadPrivilege implements [matterport.ClusterAttributeReadPrivilege].
+// MinReadPrivilege implements [mattercontract.ClusterAttributeReadPrivilege].
 // ACL (0x0000) and Extension (0x0001) require Administer (5) per Matter
 // §9.10.5.3. Mirrors chip
 // src/app/clusters/access-control-server/access-control-server.cpp
@@ -225,7 +225,7 @@ func (*AccessControl) MinReadPrivilege(attrID uint32) uint8 {
 	}
 }
 
-// MinWritePrivilege implements [matterport.ClusterAttributeWritePrivilege].
+// MinWritePrivilege implements [mattercontract.ClusterAttributeWritePrivilege].
 // ACL (0x0000) and Extension (0x0001) require Administer (5) per Matter
 // §9.10.5.3 (access "RW … A"). Mirrors matter.js
 // packages/model/src/standard/elements/access-control.element.ts:28,32.
@@ -276,7 +276,7 @@ func (a *AccessControl) RemoveFabricExtension(fabricIndex uint8) {
 	}
 }
 
-// MatterRead implements [matterport.ClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (a *AccessControl) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case accessControlAttrACL:
@@ -343,7 +343,7 @@ func (a *AccessControl) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-// MatterReadFiltered implements [matterport.FabricScopedReader].
+// MatterReadFiltered implements [mattercontract.FabricScopedReader].
 // AccessControl.ACL is a fabric-scoped attribute per Matter §9.10.5.3
 // — every entry carries a FabricIndex and the wire MUST return only
 // entries for the requesting fabric when FabricFiltered=true. Apple
@@ -633,7 +633,7 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 					LatestValue:     nil,
 					FabricIndex:     fabric,
 				},
-				matterport.EventPriorityInfo,
+				mattercontract.EventPriorityInfo,
 			)
 		}
 		return nil
@@ -732,7 +732,7 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 					LatestValue:     latest,
 					FabricIndex:     fabric,
 				},
-				matterport.EventPriorityInfo,
+				mattercontract.EventPriorityInfo,
 			)
 		}
 		return nil
@@ -753,7 +753,7 @@ func (a *AccessControl) MatterReportable() []uint32 {
 	return []uint32{accessControlAttrACL, accessControlAttrExtension}
 }
 
-// MatterAttributes implements [matterport.ClusterAttributeLister]
+// MatterAttributes implements [mattercontract.ClusterAttributeLister]
 // so wildcard reads expand correctly. Returns the full attribute set
 // EXCLUDING the universal globals (FeatureMap, ClusterRevision) —
 // the dispatcher merges those automatically.
@@ -767,7 +767,7 @@ func (a *AccessControl) MatterAttributes() []uint32 {
 	}
 }
 
-// MatterEvents implements [matterport.ClusterEventLister] so the
+// MatterEvents implements [mattercontract.ClusterEventLister] so the
 // dispatcher synthesises the global EventList (0xFFFA) attribute
 // correctly for this cluster. Includes AccessControlExtensionChanged
 // (0x0001) per matter.js
@@ -780,11 +780,11 @@ func (a *AccessControl) MatterEvents() []uint32 {
 	return []uint32{accessControlEventEntryChanged, accessControlEventExtensionChanged}
 }
 
-// SetMatterEventEmitter implements [matterport.EventReceiver].
+// SetMatterEventEmitter implements [mattercontract.EventReceiver].
 // Called by the bridge during topology assembly so [MatterWrite] can
 // fire the §9.10.7.1 AccessControlEntryChanged event without the
 // cluster holding a direct reference to the bridge. Idempotent.
-func (a *AccessControl) SetMatterEventEmitter(emitter matterport.EventEmitter) {
+func (a *AccessControl) SetMatterEventEmitter(emitter mattercontract.EventEmitter) {
 	a.mu.Lock()
 	a.emitter = emitter
 	a.mu.Unlock()

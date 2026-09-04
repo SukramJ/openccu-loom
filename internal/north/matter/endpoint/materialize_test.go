@@ -8,24 +8,24 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // --- fakes ---
 
 type fakeSource struct {
-	servers []matterport.ClusterServer
+	servers []mattercontract.ClusterServer
 }
 
 func (f fakeSource) MatterDeviceType() uint16 { return 0x010A }
-func (f fakeSource) MatterClusterServers() []matterport.ClusterServer {
+func (f fakeSource) MatterClusterServers() []mattercontract.ClusterServer {
 	return f.servers
 }
 
 type fakeBoolMeasurement struct{}
 
-func (fakeBoolMeasurement) MatterMeasurementClass() matterport.MeasurementClass {
-	return matterport.MeasurementOccupancy
+func (fakeBoolMeasurement) MatterMeasurementClass() mattercontract.MeasurementClass {
+	return mattercontract.MeasurementOccupancy
 }
 func (fakeBoolMeasurement) MatterBoolValue() (value, observed bool) { return true, true }
 
@@ -48,7 +48,7 @@ func (s fakeServer) MatterReportable() []uint32 { return nil }
 // --- tests ---
 
 // fakeMomentarySwitchSource implements both
-// [matterport.MeasurementSource] (with MomentarySwitch) and
+// [mattercontract.MeasurementSource] (with MomentarySwitch) and
 // the wire.GenericSwitchSource shape, mirroring how a HM Button
 // surfaces in the live model. The struct lives in the test file so
 // it can pretend to be a Button without pulling the model package.
@@ -56,8 +56,8 @@ type fakeMomentarySwitchSource struct {
 	supportsLong bool
 }
 
-func (f fakeMomentarySwitchSource) MatterMeasurementClass() matterport.MeasurementClass {
-	return matterport.MeasurementMomentarySwitch
+func (f fakeMomentarySwitchSource) MatterMeasurementClass() mattercontract.MeasurementClass {
+	return mattercontract.MeasurementMomentarySwitch
 }
 func (f fakeMomentarySwitchSource) MatterSwitchPositions() uint8        { return 2 }
 func (f fakeMomentarySwitchSource) MatterSwitchSupportsLongPress() bool { return f.supportsLong }
@@ -94,7 +94,7 @@ func TestClusterServersRootReturnsNil(t *testing.T) {
 	t.Parallel()
 	ep := &Endpoint{
 		ID:     0,
-		Source: fakeSource{servers: []matterport.ClusterServer{fakeServer{id: 0x1234}}},
+		Source: fakeSource{servers: []mattercontract.ClusterServer{fakeServer{id: 0x1234}}},
 	}
 	if got := ClusterServers(ep); got != nil {
 		t.Errorf("ClusterServers(root) = %v, want nil", got)
@@ -107,7 +107,7 @@ func TestClusterServersFromSource(t *testing.T) {
 	sentinel := fakeServer{id: 0x1234}
 	ep := &Endpoint{
 		ID:     2,
-		Source: fakeSource{servers: []matterport.ClusterServer{sentinel}},
+		Source: fakeSource{servers: []mattercontract.ClusterServer{sentinel}},
 	}
 
 	first := ClusterServers(ep)

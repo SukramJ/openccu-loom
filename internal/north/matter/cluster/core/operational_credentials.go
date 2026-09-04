@@ -26,7 +26,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/mattercert"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // OperationalCredentials implements the Matter OperationalCredentials
@@ -144,7 +144,7 @@ type OperationalCredentials struct {
 	// §10.6.5. Bumped after every successful fabric mutation (AddNOC,
 	// UpdateNOC, UpdateFabricLabel, RemoveFabric) so DataVersionFilter
 	// evaluation correctly detects the cluster changed.
-	// Satisfies [matterport.ClusterDataVersion].
+	// Satisfies [mattercontract.ClusterDataVersion].
 	dataVersion cluster.DataVersionTracker
 }
 
@@ -516,17 +516,17 @@ var errOpcredsFailsafeRequired error = opcredsFailsafeRequiredErr{}
 
 // Compile-time assertions.
 var (
-	_ matterport.ClusterServer                 = (*OperationalCredentials)(nil)
-	_ matterport.FabricScopedReader            = (*OperationalCredentials)(nil)
-	_ matterport.ClusterDataVersion            = (*OperationalCredentials)(nil)
-	_ matterport.ClusterCommandLister          = (*OperationalCredentials)(nil)
-	_ matterport.ClusterCommandInvokePrivilege = (*OperationalCredentials)(nil)
+	_ mattercontract.ClusterServer                 = (*OperationalCredentials)(nil)
+	_ mattercontract.FabricScopedReader            = (*OperationalCredentials)(nil)
+	_ mattercontract.ClusterDataVersion            = (*OperationalCredentials)(nil)
+	_ mattercontract.ClusterCommandLister          = (*OperationalCredentials)(nil)
+	_ mattercontract.ClusterCommandInvokePrivilege = (*OperationalCredentials)(nil)
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (o *OperationalCredentials) MatterClusterID() uint32 { return opcredsClusterID }
 
-// MinReadPrivilege implements [matterport.ClusterAttributeReadPrivilege].
+// MinReadPrivilege implements [mattercontract.ClusterAttributeReadPrivilege].
 // NOCs (0x0000) requires Administer (5) per Matter §11.18.5.7 (access
 // "R F A") — the NOC / ICAC certificate bytes must not be readable by a
 // merely-View subject (nor streamed to one via a wildcard subscribe). Every
@@ -539,7 +539,7 @@ func (*OperationalCredentials) MinReadPrivilege(attrID uint32) uint8 {
 	return 1 // View
 }
 
-// MinInvokePrivilege implements [matterport.ClusterCommandInvokePrivilege].
+// MinInvokePrivilege implements [mattercontract.ClusterCommandInvokePrivilege].
 // Every OperationalCredentials command requires Administer (5) per
 // Matter §11.18 (access "A" / "F A"). Mirrors matter.js
 // packages/model/src/standard/elements/operational-credentials.element.ts.
@@ -561,7 +561,7 @@ func (o *OperationalCredentials) MinInvokePrivilege(cmdID uint32) uint8 {
 	}
 }
 
-// MatterDataVersion implements [matterport.ClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 // Returns the current per-cluster monotonic counter bumped after every
 // successful fabric mutation (AddNOC, UpdateNOC, UpdateFabricLabel,
 // RemoveFabric). Mirrors matter.js OperationalCredentialsServer.ts
@@ -590,7 +590,7 @@ type NOCStruct struct {
 	FabricIndex uint8
 }
 
-// MatterRead implements [matterport.ClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
 	ctx := context.Background()
 	switch attrID {
@@ -751,7 +751,7 @@ func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) { //nolin
 	return nil, false
 }
 
-// MatterReadFiltered implements [matterport.FabricScopedReader].
+// MatterReadFiltered implements [mattercontract.FabricScopedReader].
 // When the request carries FabricFiltered=true and a non-zero
 // FabricIndex, fabric-sensitive list attributes (Fabrics, NOCs) are
 // projected to only the entries owned by the requesting fabric.
@@ -931,7 +931,7 @@ type SignVidVerificationResponse struct {
 	Signature            []byte
 }
 
-// MatterInvoke implements [matterport.ClusterServer].
+// MatterInvoke implements [mattercontract.ClusterServer].
 func (o *OperationalCredentials) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	cmdName := opcredsCmdName(cmdID)
 	slog.Default().Info("matter.opcreds.cmd",
@@ -1008,7 +1008,7 @@ func (o *OperationalCredentials) MatterReportable() []uint32 {
 	return []uint32{opcredsAttrFabrics, opcredsAttrCommissionedFabrics, opcredsAttrCurrentFabricIndex}
 }
 
-// MatterAttributes implements [matterport.ClusterAttributeLister]
+// MatterAttributes implements [mattercontract.ClusterAttributeLister]
 // so wildcard subscribe enumerates every attribute. Apple Home reads
 // the full set during HAP-service construction — without NOCs +
 // SupportedFabrics + TrustedRootCertificates Apple cannot validate
@@ -1034,7 +1034,7 @@ func (o *OperationalCredentials) MatterAttributes() []uint32 {
 	}
 }
 
-// MatterAcceptedCommands implements [matterport.ClusterCommandLister].
+// MatterAcceptedCommands implements [mattercontract.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke. Only commands
 // whose handlers are implemented in dispatchCmd are included.
 //
@@ -1057,7 +1057,7 @@ func (o *OperationalCredentials) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [matterport.ClusterCommandLister].
+// MatterGeneratedCommands implements [mattercontract.ClusterCommandLister].
 // Lists the response command IDs this server may emit.
 func (o *OperationalCredentials) MatterGeneratedCommands() []uint32 {
 	return []uint32{

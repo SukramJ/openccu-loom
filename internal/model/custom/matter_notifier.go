@@ -9,7 +9,7 @@ package custom
 // directly even when the underlying DP is absent (those return a no-op
 // unsubscribe). Custom device types that project onto more than one Matter
 // attribute use this to fan every state data point into one
-// [interfaces.MatterChangeNotifier] and hand the bridge a single
+// [mattercontract.ChangeNotifier] and hand the bridge a single
 // unsubscribe.
 func CombineUnsubs(unsubs ...func()) func() {
 	return func() {

@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // SchedulesClusterID is the Schedules cluster ID per Matter Application
@@ -72,7 +72,7 @@ type SchedulesSource interface {
 	MatterScheduleEntries() []ScheduleEntry
 }
 
-// SchedulesServer is a read-only [matterport.ClusterServer] projection
+// SchedulesServer is a read-only [mattercontract.ClusterServer] projection
 // of a [SchedulesSource] onto the Matter Schedules cluster (0x0024).
 //
 // Write and invoke are rejected with [ErrSchedulesReadOnly]: HM week
@@ -98,14 +98,14 @@ func NewSchedulesServer(src SchedulesSource) *SchedulesServer {
 // Compile-time assertions: SchedulesServer satisfies MatterClusterServer
 // and the attribute-lister capability.
 var (
-	_ matterport.ClusterServer          = (*SchedulesServer)(nil)
-	_ matterport.ClusterAttributeLister = (*SchedulesServer)(nil)
+	_ mattercontract.ClusterServer          = (*SchedulesServer)(nil)
+	_ mattercontract.ClusterAttributeLister = (*SchedulesServer)(nil)
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (s *SchedulesServer) MatterClusterID() uint32 { return SchedulesClusterID }
 
-// MatterRead implements [matterport.ClusterServer]. It resolves the
+// MatterRead implements [mattercontract.ClusterServer]. It resolves the
 // requested attribute from the current schedule snapshot returned by the
 // source. Returns (nil, false) only for optional attributes that carry no
 // meaningful value (ScheduleProgrammingHandle, NextScheduleHandle) per the
@@ -147,19 +147,19 @@ func (s *SchedulesServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-// MatterWrite implements [matterport.ClusterServer]. All writes are
+// MatterWrite implements [mattercontract.ClusterServer]. All writes are
 // rejected: the Schedules cluster is read-only in the v1.1 bridge.
 func (s *SchedulesServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: attribute 0x%04X", ErrSchedulesReadOnly, attrID)
 }
 
-// MatterInvoke implements [matterport.ClusterServer]. All invocations
+// MatterInvoke implements [mattercontract.ClusterServer]. All invocations
 // are rejected: the Schedules cluster exposes no commands in the v1.1 bridge.
 func (s *SchedulesServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w: command 0x%02X", ErrSchedulesReadOnly, cmdID)
 }
 
-// MatterReportable implements [matterport.ClusterServer]. Only the
+// MatterReportable implements [mattercontract.ClusterServer]. Only the
 // Schedules array attribute is reportable; the counter attributes are
 // derived from the same source and would change in lockstep.
 func (s *SchedulesServer) MatterReportable() []uint32 {

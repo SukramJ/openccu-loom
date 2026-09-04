@@ -10,7 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // TimeSynchronization implements the minimum required surface of the
@@ -48,14 +48,14 @@ const (
 func NewTimeSynchronization() *TimeSynchronization { return &TimeSynchronization{} }
 
 var (
-	_ matterport.ClusterServer          = (*TimeSynchronization)(nil)
-	_ matterport.ClusterAttributeLister = (*TimeSynchronization)(nil)
+	_ mattercontract.ClusterServer          = (*TimeSynchronization)(nil)
+	_ mattercontract.ClusterAttributeLister = (*TimeSynchronization)(nil)
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (t *TimeSynchronization) MatterClusterID() uint32 { return timeSyncClusterID }
 
-// MatterRead implements [matterport.ClusterServer]. UTCTime is
+// MatterRead implements [mattercontract.ClusterServer]. UTCTime is
 // reported as Matter's epoch_us (microseconds since 2000-01-01 UTC,
 // per §A.2). Granularity is fixed at MILLISECONDS_GRANULARITY since
 // the bridge syncs from the host clock (typically NTP-disciplined).
@@ -80,7 +80,7 @@ func (t *TimeSynchronization) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-// MatterWrite implements [matterport.ClusterServer]. Every
+// MatterWrite implements [mattercontract.ClusterServer]. Every
 // attribute is read-only on the bridge — clients that try to set
 // TimeSource etc. get UnsupportedWrite.
 func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ any) error {
@@ -92,7 +92,7 @@ func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ an
 // command id 0x00.
 const timeSyncCmdSetUTCTime uint32 = 0x00
 
-// MatterInvoke implements [matterport.ClusterServer].
+// MatterInvoke implements [mattercontract.ClusterServer].
 // SetUTCTime (0x00) is a mandatory command per Matter §11.16.9.1 when the
 // UTC feature bit is advertised. The bridge does not adjust the host clock,
 // so the command is accepted and returns Success without acting —

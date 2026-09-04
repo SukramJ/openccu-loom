@@ -9,28 +9,28 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // --- fakes ---
 
 type fakeFloat struct {
-	class matterport.MeasurementClass
+	class mattercontract.MeasurementClass
 	val   float64
 	obs   bool
 }
 
-func (f fakeFloat) MatterMeasurementClass() matterport.MeasurementClass { return f.class }
-func (f fakeFloat) MatterFloatValue() (float64, bool)                   { return f.val, f.obs }
+func (f fakeFloat) MatterMeasurementClass() mattercontract.MeasurementClass { return f.class }
+func (f fakeFloat) MatterFloatValue() (float64, bool)                       { return f.val, f.obs }
 
 type fakeBool struct {
-	class matterport.MeasurementClass
+	class mattercontract.MeasurementClass
 	val   bool
 	obs   bool
 }
 
-func (f fakeBool) MatterMeasurementClass() matterport.MeasurementClass { return f.class }
-func (f fakeBool) MatterBoolValue() (value, observed bool)             { return f.val, f.obs }
+func (f fakeBool) MatterMeasurementClass() mattercontract.MeasurementClass { return f.class }
+func (f fakeBool) MatterBoolValue() (value, observed bool)                 { return f.val, f.obs }
 
 // fakeFloatNotifier implements both MatterFloatMeasurementSource and
 // MatterChangeNotifier so tests can verify that a cluster server forwards
@@ -39,14 +39,14 @@ func (f fakeBool) MatterBoolValue() (value, observed bool)             { return 
 // no-notifier fallback path), this fake records the subscribed callback and
 // counts unsubscribe calls.
 type fakeFloatNotifier struct {
-	class      matterport.MeasurementClass
+	class      mattercontract.MeasurementClass
 	val        float64
 	obs        bool
 	cb         func()
 	unsubCalls int
 }
 
-func (f *fakeFloatNotifier) MatterMeasurementClass() matterport.MeasurementClass {
+func (f *fakeFloatNotifier) MatterMeasurementClass() mattercontract.MeasurementClass {
 	return f.class
 }
 func (f *fakeFloatNotifier) MatterFloatValue() (float64, bool) { return f.val, f.obs }
@@ -58,8 +58,8 @@ func (f *fakeFloatNotifier) OnMatterValueChanged(cb func()) func() {
 
 // Compile-time assertions: both Electrical* servers satisfy MatterChangeNotifier.
 var (
-	_ matterport.ChangeNotifier = (*measurement.ElectricalPowerServer)(nil)
-	_ matterport.ChangeNotifier = (*measurement.ElectricalEnergyServer)(nil)
+	_ mattercontract.ChangeNotifier = (*measurement.ElectricalPowerServer)(nil)
+	_ mattercontract.ChangeNotifier = (*measurement.ElectricalEnergyServer)(nil)
 )
 
 // attrClusterRevision is the global cluster-revision attribute ID.
@@ -70,7 +70,7 @@ const attrClusterRevision uint32 = 0xFFFD
 // TestTemperatureServerHappyPath verifies ClusterID, MeasuredValue, and ClusterRevision for a normal reading.
 func TestTemperatureServerHappyPath(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementTemperature, val: 21.5, obs: true}
+	src := fakeFloat{class: mattercontract.MeasurementTemperature, val: 21.5, obs: true}
 	s := measurement.NewTemperatureServer(src)
 
 	if got := s.MatterClusterID(); got != measurement.ClusterTemperatureMeasurement {
@@ -210,7 +210,7 @@ func TestTemperatureServerDataVersion_DistinctAcrossInstances(t *testing.T) {
 
 // TestTemperatureServerDataVersion_ImplementsMatterClusterDataVersion verifies
 // at compile time that TemperatureServer satisfies the
-// matterport.ClusterDataVersion capability the IM dispatcher uses.
+// mattercontract.ClusterDataVersion capability the IM dispatcher uses.
 func TestTemperatureServerDataVersion_ImplementsMatterClusterDataVersion(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewTemperatureServer(fakeFloat{val: 0, obs: true})
@@ -577,8 +577,8 @@ func TestOccupancyServerPIRDelayNotAdvertised(t *testing.T) {
 // TestFromMeasurementClassTemperature verifies that Temperature class returns a TemperatureMeasurement cluster.
 func TestFromMeasurementClassTemperature(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementTemperature, val: 20.0, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementTemperature, src)
+	src := fakeFloat{class: mattercontract.MeasurementTemperature, val: 20.0, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementTemperature, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server, got %d", len(servers))
 	}
@@ -590,8 +590,8 @@ func TestFromMeasurementClassTemperature(t *testing.T) {
 // TestFromMeasurementClassHumidity verifies that Humidity class returns a HumidityMeasurement cluster.
 func TestFromMeasurementClassHumidity(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementHumidity, val: 50.0, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementHumidity, src)
+	src := fakeFloat{class: mattercontract.MeasurementHumidity, val: 50.0, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementHumidity, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server, got %d", len(servers))
 	}
@@ -603,8 +603,8 @@ func TestFromMeasurementClassHumidity(t *testing.T) {
 // TestFromMeasurementClassIlluminance verifies that Illuminance class returns an IlluminanceMeasurement cluster.
 func TestFromMeasurementClassIlluminance(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementIlluminance, val: 500.0, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementIlluminance, src)
+	src := fakeFloat{class: mattercontract.MeasurementIlluminance, val: 500.0, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementIlluminance, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server, got %d", len(servers))
 	}
@@ -616,8 +616,8 @@ func TestFromMeasurementClassIlluminance(t *testing.T) {
 // TestFromMeasurementClassPressure verifies that Pressure class returns a PressureMeasurement cluster.
 func TestFromMeasurementClassPressure(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementPressure, val: 1013.0, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementPressure, src)
+	src := fakeFloat{class: mattercontract.MeasurementPressure, val: 1013.0, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementPressure, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server, got %d", len(servers))
 	}
@@ -629,8 +629,8 @@ func TestFromMeasurementClassPressure(t *testing.T) {
 // TestFromMeasurementClassContact verifies that Contact class returns a BooleanState cluster.
 func TestFromMeasurementClassContact(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementContact, val: true, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementContact, src)
+	src := fakeBool{class: mattercontract.MeasurementContact, val: true, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementContact, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server, got %d", len(servers))
 	}
@@ -642,8 +642,8 @@ func TestFromMeasurementClassContact(t *testing.T) {
 // TestFromMeasurementClassLeak verifies that Leak class also returns a BooleanState cluster.
 func TestFromMeasurementClassLeak(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementLeak, val: false, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementLeak, src)
+	src := fakeBool{class: mattercontract.MeasurementLeak, val: false, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementLeak, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server, got %d", len(servers))
 	}
@@ -655,8 +655,8 @@ func TestFromMeasurementClassLeak(t *testing.T) {
 // TestFromMeasurementClassOccupancy verifies that Occupancy class returns an OccupancySensing cluster.
 func TestFromMeasurementClassOccupancy(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementOccupancy, val: true, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementOccupancy, src)
+	src := fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementOccupancy, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server, got %d", len(servers))
 	}
@@ -676,8 +676,8 @@ func TestFromMeasurementClassOccupancy(t *testing.T) {
 // so a float-only source silently produced zero cluster servers.
 func TestFromMeasurementClassBattery_FloatSource(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementBattery, val: 80.0, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementBattery, src)
+	src := fakeFloat{class: mattercontract.MeasurementBattery, val: 80.0, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementBattery, src)
 	if len(servers) != 1 {
 		t.Fatalf("want 1 server for Battery class with a float source, got %d", len(servers))
 	}
@@ -696,8 +696,8 @@ func TestFromMeasurementClassBattery_FloatSource(t *testing.T) {
 // TestFromMeasurementClassNoneReturnsNil verifies that None class returns nil.
 func TestFromMeasurementClassNoneReturnsNil(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementNone, val: 0.0, obs: true}
-	servers := measurement.FromMeasurementClass(matterport.MeasurementNone, src)
+	src := fakeFloat{class: mattercontract.MeasurementNone, val: 0.0, obs: true}
+	servers := measurement.FromMeasurementClass(mattercontract.MeasurementNone, src)
 	if servers != nil {
 		t.Errorf("want nil for None class, got %v", servers)
 	}
@@ -708,14 +708,14 @@ func TestFromMeasurementClassWrongTypedSourceReturnsNil(t *testing.T) {
 	t.Parallel()
 
 	// fakeFloat passed for Contact class (which expects MatterBoolMeasurementSource) → nil.
-	floatSrc := fakeFloat{class: matterport.MeasurementContact, val: 1.0, obs: true}
-	if got := measurement.FromMeasurementClass(matterport.MeasurementContact, floatSrc); got != nil {
+	floatSrc := fakeFloat{class: mattercontract.MeasurementContact, val: 1.0, obs: true}
+	if got := measurement.FromMeasurementClass(mattercontract.MeasurementContact, floatSrc); got != nil {
 		t.Errorf("float src for Contact: want nil, got %v", got)
 	}
 
 	// fakeBool passed for Temperature class (which expects MatterFloatMeasurementSource) → nil.
-	boolSrc := fakeBool{class: matterport.MeasurementTemperature, val: true, obs: true}
-	if got := measurement.FromMeasurementClass(matterport.MeasurementTemperature, boolSrc); got != nil {
+	boolSrc := fakeBool{class: mattercontract.MeasurementTemperature, val: true, obs: true}
+	if got := measurement.FromMeasurementClass(mattercontract.MeasurementTemperature, boolSrc); got != nil {
 		t.Errorf("bool src for Temperature: want nil, got %v", got)
 	}
 }
@@ -731,12 +731,12 @@ func TestFromMeasurementClassAirQualityMountsMandatoryCluster(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name       string
-		class      matterport.MeasurementClass
+		class      mattercontract.MeasurementClass
 		concentrID uint32
 	}{
-		{name: "co2", class: matterport.MeasurementCO2, concentrID: measurement.ClusterCO2Concentration},
-		{name: "pm25", class: matterport.MeasurementPM25, concentrID: measurement.ClusterPM25Concentration},
-		{name: "pm10", class: matterport.MeasurementPM10, concentrID: measurement.ClusterPM10Concentration},
+		{name: "co2", class: mattercontract.MeasurementCO2, concentrID: measurement.ClusterCO2Concentration},
+		{name: "pm25", class: mattercontract.MeasurementPM25, concentrID: measurement.ClusterPM25Concentration},
+		{name: "pm10", class: mattercontract.MeasurementPM10, concentrID: measurement.ClusterPM10Concentration},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -770,19 +770,19 @@ func TestAirQualityServerClassifiesAgainstGuideline(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name  string
-		class matterport.MeasurementClass
+		class mattercontract.MeasurementClass
 		val   float64
 		obs   bool
 		want  uint8
 	}{
-		{name: "co2 well ventilated", class: matterport.MeasurementCO2, val: 425, obs: true, want: 1},
-		{name: "co2 at guideline", class: matterport.MeasurementCO2, val: 1000, obs: true, want: 1},
-		{name: "co2 stale air", class: matterport.MeasurementCO2, val: 1800, obs: true, want: 4},
-		{name: "pm25 clean", class: matterport.MeasurementPM25, val: 8, obs: true, want: 1},
-		{name: "pm25 above guideline", class: matterport.MeasurementPM25, val: 40, obs: true, want: 4},
-		{name: "pm10 clean", class: matterport.MeasurementPM10, val: 20, obs: true, want: 1},
-		{name: "pm10 above guideline", class: matterport.MeasurementPM10, val: 90, obs: true, want: 4},
-		{name: "no reading yet", class: matterport.MeasurementCO2, val: 0, obs: false, want: 0},
+		{name: "co2 well ventilated", class: mattercontract.MeasurementCO2, val: 425, obs: true, want: 1},
+		{name: "co2 at guideline", class: mattercontract.MeasurementCO2, val: 1000, obs: true, want: 1},
+		{name: "co2 stale air", class: mattercontract.MeasurementCO2, val: 1800, obs: true, want: 4},
+		{name: "pm25 clean", class: mattercontract.MeasurementPM25, val: 8, obs: true, want: 1},
+		{name: "pm25 above guideline", class: mattercontract.MeasurementPM25, val: 40, obs: true, want: 4},
+		{name: "pm10 clean", class: mattercontract.MeasurementPM10, val: 20, obs: true, want: 1},
+		{name: "pm10 above guideline", class: mattercontract.MeasurementPM10, val: 90, obs: true, want: 4},
+		{name: "no reading yet", class: mattercontract.MeasurementCO2, val: 0, obs: false, want: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -807,8 +807,8 @@ func TestAirQualityServerClassifiesAgainstGuideline(t *testing.T) {
 func TestAirQualityServerGlobalAttributes(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewAirQualityServer(
-		matterport.MeasurementCO2,
-		fakeFloat{class: matterport.MeasurementCO2, val: 425, obs: true},
+		mattercontract.MeasurementCO2,
+		fakeFloat{class: mattercontract.MeasurementCO2, val: 425, obs: true},
 	)
 
 	if got, want := s.MatterClusterID(), uint32(0x005B); got != want {
@@ -835,8 +835,8 @@ func TestAirQualityServerGlobalAttributes(t *testing.T) {
 func TestAirQualityServerIsReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewAirQualityServer(
-		matterport.MeasurementCO2,
-		fakeFloat{class: matterport.MeasurementCO2, val: 425, obs: true},
+		mattercontract.MeasurementCO2,
+		fakeFloat{class: mattercontract.MeasurementCO2, val: 425, obs: true},
 	)
 	if err := s.MatterWrite(context.Background(), 0x0000, uint8(1)); err == nil {
 		t.Error("MatterWrite: want error, got nil")
@@ -854,7 +854,7 @@ func TestAirQualityServerIsReadOnly(t *testing.T) {
 // TestCO2ConcentrationServerHappyPath verifies ClusterID, MeasuredValue, Unit, Medium, FeatureMap, and ClusterRevision for a normal reading.
 func TestCO2ConcentrationServerHappyPath(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementCO2, val: 425.0, obs: true}
+	src := fakeFloat{class: mattercontract.MeasurementCO2, val: 425.0, obs: true}
 	s := measurement.NewCO2ConcentrationServer(src)
 
 	if got, want := s.MatterClusterID(), uint32(0x040D); got != want {
@@ -961,7 +961,7 @@ func TestCO2ConcentrationServerReportable(t *testing.T) {
 // TestPM25ConcentrationServerHappyPath verifies ClusterID, MeasuredValue, and Unit (µg/m³) for a normal reading.
 func TestPM25ConcentrationServerHappyPath(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementPM25, val: 42.5, obs: true}
+	src := fakeFloat{class: mattercontract.MeasurementPM25, val: 42.5, obs: true}
 	s := measurement.NewPM25ConcentrationServer(src)
 
 	if got, want := s.MatterClusterID(), uint32(0x042A); got != want {
@@ -1012,7 +1012,7 @@ func TestPM25ConcentrationServerMinMax(t *testing.T) {
 // TestPM10ConcentrationServerHappyPath verifies ClusterID, MeasuredValue, and Unit (µg/m³) for a normal reading.
 func TestPM10ConcentrationServerHappyPath(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementPM10, val: 65.0, obs: true}
+	src := fakeFloat{class: mattercontract.MeasurementPM10, val: 65.0, obs: true}
 	s := measurement.NewPM10ConcentrationServer(src)
 
 	if got, want := s.MatterClusterID(), uint32(0x042D); got != want {
@@ -1041,7 +1041,7 @@ func TestPM10ConcentrationServerHappyPath(t *testing.T) {
 // TestPowerSourceServerStatusActive verifies Status=uint8(1), Order=uint8(1), and Description="Battery".
 func TestPowerSourceServerStatusActive(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 
 	if got, want := s.MatterClusterID(), uint32(0x002F); got != want {
 		t.Errorf("ClusterID = 0x%04X, want 0x%04X", got, want)
@@ -1075,7 +1075,7 @@ func TestPowerSourceServerStatusActive(t *testing.T) {
 // TestPowerSourceServerBatChargeOK verifies that an observed false value maps to BatChargeLevel=uint8(0) (OK).
 func TestPowerSourceServerBatChargeOK(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	v, ok := s.MatterRead(0x000E)
 	if !ok {
 		t.Fatal("MatterRead(0x000E) ok = false")
@@ -1088,7 +1088,7 @@ func TestPowerSourceServerBatChargeOK(t *testing.T) {
 // TestPowerSourceServerBatChargeWarning verifies that an observed true value maps to BatChargeLevel=uint8(1) (Warning).
 func TestPowerSourceServerBatChargeWarning(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: true, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: true, obs: true})
 	v, ok := s.MatterRead(0x000E)
 	if !ok {
 		t.Fatal("MatterRead(0x000E) ok = false")
@@ -1101,7 +1101,7 @@ func TestPowerSourceServerBatChargeWarning(t *testing.T) {
 // TestPowerSourceServerBatChargeUnobservedDefaultsToOK verifies that an unobserved source defensively returns BatChargeLevel=uint8(0) with ok=true.
 func TestPowerSourceServerBatChargeUnobservedDefaultsToOK(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: false})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: false})
 	v, ok := s.MatterRead(0x000E)
 	if !ok {
 		t.Fatal("MatterRead(0x000E) ok = false, want true (defensive default)")
@@ -1114,7 +1114,7 @@ func TestPowerSourceServerBatChargeUnobservedDefaultsToOK(t *testing.T) {
 // TestPowerSourceServerBatReplacementNeededTrue verifies that an observed true value sets BatReplacementNeeded=true.
 func TestPowerSourceServerBatReplacementNeededTrue(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: true, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: true, obs: true})
 	v, ok := s.MatterRead(0x000F)
 	if !ok {
 		t.Fatal("MatterRead(0x000F) ok = false")
@@ -1127,7 +1127,7 @@ func TestPowerSourceServerBatReplacementNeededTrue(t *testing.T) {
 // TestPowerSourceServerBatReplacementNeededFalse verifies that an observed false value sets BatReplacementNeeded=false.
 func TestPowerSourceServerBatReplacementNeededFalse(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	v, ok := s.MatterRead(0x000F)
 	if !ok {
 		t.Fatal("MatterRead(0x000F) ok = false")
@@ -1140,7 +1140,7 @@ func TestPowerSourceServerBatReplacementNeededFalse(t *testing.T) {
 // TestPowerSourceServerBatReplaceability verifies that BatReplaceability (0x0010) = uint8(2) (UserReplaceable).
 func TestPowerSourceServerBatReplaceability(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	v, ok := s.MatterRead(0x0010)
 	if !ok {
 		t.Fatal("MatterRead(0x0010) ok = false")
@@ -1155,7 +1155,7 @@ func TestPowerSourceServerBatReplaceability(t *testing.T) {
 // power-source-cluster.element.ts.
 func TestPowerSourceServerFeatureMapAndRevision(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 
 	fm, ok := s.MatterRead(0xFFFC)
 	if !ok {
@@ -1177,7 +1177,7 @@ func TestPowerSourceServerFeatureMapAndRevision(t *testing.T) {
 // TestPowerSourceServerUnknownAttr verifies that an unknown attribute returns (nil, false).
 func TestPowerSourceServerUnknownAttr(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	v, ok := s.MatterRead(0x9999)
 	if ok || v != nil {
 		t.Errorf("want (nil, false) for unknown attr, got (%v, %v)", v, ok)
@@ -1187,7 +1187,7 @@ func TestPowerSourceServerUnknownAttr(t *testing.T) {
 // TestPowerSourceServerWriteRejected verifies that MatterWrite returns a non-nil error (read-only cluster).
 func TestPowerSourceServerWriteRejected(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	err := s.MatterWrite(context.Background(), 0x0000, uint8(0))
 	if err == nil {
 		t.Error("MatterWrite returned nil, want read-only error")
@@ -1197,7 +1197,7 @@ func TestPowerSourceServerWriteRejected(t *testing.T) {
 // TestPowerSourceServerInvokeRejected verifies that MatterInvoke returns a non-nil error (no commands).
 func TestPowerSourceServerInvokeRejected(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke returned nil error, want rejection")
@@ -1207,7 +1207,7 @@ func TestPowerSourceServerInvokeRejected(t *testing.T) {
 // TestPowerSourceServerReportable verifies that Reportable contains attr 0x000E (BatChargeLevel) and 0x000F (BatReplacementNeeded).
 func TestPowerSourceServerReportable(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	attrs := s.MatterReportable()
 
 	var hasCharge, hasReplacement bool
@@ -1234,7 +1234,7 @@ func TestPowerSourceServerReportable(t *testing.T) {
 // attribute is genuinely absent, not reported as null.
 func TestPowerSourceServerFromBool_BatPercentRemainingNotSupported(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 
 	if v, ok := s.MatterRead(0x000C); ok || v != nil {
 		t.Errorf("MatterRead(BatPercentRemaining) = (%v, %v), want (nil, false)", v, ok)
@@ -1258,7 +1258,7 @@ func TestPowerSourceServerFromBool_BatPercentRemainingNotSupported(t *testing.T)
 // to derive Warning from) without panicking on the nil bool source.
 func TestPowerSourceServerFromFloat_BatPercentRemaining(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: matterport.MeasurementBattery, val: 42.3, obs: true})
+	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: mattercontract.MeasurementBattery, val: 42.3, obs: true})
 
 	v, ok := s.MatterRead(0x000C)
 	if !ok {
@@ -1282,7 +1282,7 @@ func TestPowerSourceServerFromFloat_BatPercentRemaining(t *testing.T) {
 // null (present, quality X) rather than a fabricated value.
 func TestPowerSourceServerFromFloat_BatPercentRemaining_Unobserved(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: matterport.MeasurementBattery, val: 0, obs: false})
+	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: mattercontract.MeasurementBattery, val: 0, obs: false})
 	v, ok := s.MatterRead(0x000C)
 	if !ok {
 		t.Fatal("MatterRead(BatPercentRemaining) ok = false, want true (present, null)")
@@ -1307,7 +1307,7 @@ func TestPowerSourceServerFromFloat_BatPercentRemaining_Clamped(t *testing.T) {
 		{pct: -5, want: 0},    // ditto, negative
 	}
 	for _, tc := range tests {
-		s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: matterport.MeasurementBattery, val: tc.pct, obs: true})
+		s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: mattercontract.MeasurementBattery, val: tc.pct, obs: true})
 		v, ok := s.MatterRead(0x000C)
 		if !ok {
 			t.Fatalf("pct=%v: MatterRead(BatPercentRemaining) ok = false", tc.pct)
@@ -1325,7 +1325,7 @@ func TestPowerSourceServerFromFloat_BatPercentRemaining_Clamped(t *testing.T) {
 // TestPowerSourceServerFromBool_BatPercentRemainingNotSupported.
 func TestPowerSourceServerFromFloat_MatterAttributesIncludesBatPercentRemaining(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: matterport.MeasurementBattery, val: 50, obs: true})
+	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: mattercontract.MeasurementBattery, val: 50, obs: true})
 
 	var inAttrs, inReportable bool
 	for _, a := range s.MatterAttributes() {
@@ -1354,7 +1354,7 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 
 	type row struct {
 		name    string
-		class   matterport.MeasurementClass
+		class   mattercontract.MeasurementClass
 		src     any
 		wantIDs []uint32
 		wantNil bool
@@ -1366,32 +1366,32 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 	rows := []row{
 		{
 			name:    "CO2+fakeFloat→0x005B+0x040D",
-			class:   matterport.MeasurementCO2,
-			src:     fakeFloat{class: matterport.MeasurementCO2, val: 800.0, obs: true},
+			class:   mattercontract.MeasurementCO2,
+			src:     fakeFloat{class: mattercontract.MeasurementCO2, val: 800.0, obs: true},
 			wantIDs: []uint32{0x005B, 0x040D},
 		},
 		{
 			name:    "PM25+fakeFloat→0x005B+0x042A",
-			class:   matterport.MeasurementPM25,
-			src:     fakeFloat{class: matterport.MeasurementPM25, val: 15.0, obs: true},
+			class:   mattercontract.MeasurementPM25,
+			src:     fakeFloat{class: mattercontract.MeasurementPM25, val: 15.0, obs: true},
 			wantIDs: []uint32{0x005B, 0x042A},
 		},
 		{
 			name:    "PM10+fakeFloat→0x005B+0x042D",
-			class:   matterport.MeasurementPM10,
-			src:     fakeFloat{class: matterport.MeasurementPM10, val: 30.0, obs: true},
+			class:   mattercontract.MeasurementPM10,
+			src:     fakeFloat{class: mattercontract.MeasurementPM10, val: 30.0, obs: true},
 			wantIDs: []uint32{0x005B, 0x042D},
 		},
 		{
 			name:    "Battery+fakeBool→0x002F",
-			class:   matterport.MeasurementBattery,
-			src:     fakeBool{class: matterport.MeasurementBattery, val: false, obs: true},
+			class:   mattercontract.MeasurementBattery,
+			src:     fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true},
 			wantIDs: []uint32{0x002F},
 		},
 		{
 			name:    "CO2+fakeBool→nil(wrong type)",
-			class:   matterport.MeasurementCO2,
-			src:     fakeBool{class: matterport.MeasurementCO2, val: false, obs: true},
+			class:   mattercontract.MeasurementCO2,
+			src:     fakeBool{class: mattercontract.MeasurementCO2, val: false, obs: true},
 			wantNil: true,
 		},
 		{
@@ -1401,8 +1401,8 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 			// TestFromMeasurementClassBattery_FloatSource for the
 			// dedicated coverage of the wire-level projection.
 			name:    "Battery+fakeFloat→0x002F",
-			class:   matterport.MeasurementBattery,
-			src:     fakeFloat{class: matterport.MeasurementBattery, val: 80.0, obs: true},
+			class:   mattercontract.MeasurementBattery,
+			src:     fakeFloat{class: mattercontract.MeasurementBattery, val: 80.0, obs: true},
 			wantIDs: []uint32{0x002F},
 		},
 	}
@@ -1434,7 +1434,7 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 // conversion, fixed metadata attributes, FeatureMap, and ClusterRevision.
 func TestElectricalPowerServerHappyPath(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementPower, val: 1500.0, obs: true}
+	src := fakeFloat{class: mattercontract.MeasurementPower, val: 1500.0, obs: true}
 	s := measurement.NewElectricalPowerServer(src)
 
 	if got := s.MatterClusterID(); got != measurement.ClusterElectricalPower {
@@ -1529,7 +1529,7 @@ func TestElectricalPowerServerWriteRejected(t *testing.T) {
 // conversion, FeatureMap, and ClusterRevision.
 func TestElectricalEnergyServerHappyPath(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementEnergy, val: 12345.0, obs: true}
+	src := fakeFloat{class: mattercontract.MeasurementEnergy, val: 12345.0, obs: true}
 	s := measurement.NewElectricalEnergyServer(src)
 
 	if got := s.MatterClusterID(); got != measurement.ClusterElectricalEnergy {
@@ -1651,7 +1651,7 @@ func TestElectricalEnergyServerAccuracyRangesNonEmpty(t *testing.T) {
 // unsubscription to the wrapped source's MatterChangeNotifier.
 func TestElectricalPowerServerOnMatterValueChangedForwards(t *testing.T) {
 	t.Parallel()
-	src := &fakeFloatNotifier{class: matterport.MeasurementPower, val: 1500.0, obs: true}
+	src := &fakeFloatNotifier{class: mattercontract.MeasurementPower, val: 1500.0, obs: true}
 	s := measurement.NewElectricalPowerServer(src)
 
 	calls := 0
@@ -1692,7 +1692,7 @@ func TestElectricalPowerServerOnMatterValueChangedNoNotifierFallback(t *testing.
 // unsubscription to the wrapped source's MatterChangeNotifier.
 func TestElectricalEnergyServerOnMatterValueChangedForwards(t *testing.T) {
 	t.Parallel()
-	src := &fakeFloatNotifier{class: matterport.MeasurementEnergy, val: 12345.0, obs: true}
+	src := &fakeFloatNotifier{class: mattercontract.MeasurementEnergy, val: 12345.0, obs: true}
 	s := measurement.NewElectricalEnergyServer(src)
 
 	calls := 0
@@ -1737,7 +1737,7 @@ func TestElectricalEnergyServerOnMatterValueChangedNoNotifierFallback(t *testing
 // and the CCU reports neither.
 func TestPowerSourceServerFeatureMapHasBATWithoutREPLC(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true})
 	v, ok := s.MatterRead(0xFFFC) // AttrGlobalFeatureMap
 	if !ok {
 		t.Fatal("MatterRead(0xFFFC FeatureMap) ok = false")
@@ -1764,7 +1764,7 @@ func TestPowerSourceServerFeatureMapHasBATWithoutREPLC(t *testing.T) {
 //
 // Each test verifies that a freshly-constructed server carries a non-zero
 // DataVersion and that MatterDataVersion() satisfies the
-// matterport.ClusterDataVersion interface. The random-init rationale
+// mattercontract.ClusterDataVersion interface. The random-init rationale
 // is documented in cluster.DataVersionTracker; TemperatureServer carries
 // the extended commentary; these are the one-line analogs.
 
@@ -2140,8 +2140,8 @@ func TestTemperatureServer_MatterAttributes_NonEmpty(t *testing.T) {
 // hit via FromMeasurementClass, not via the individual server constructors.
 func TestFromMeasurementClass_Temperature(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementTemperature, val: 20, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementTemperature, src)
+	src := fakeFloat{class: mattercontract.MeasurementTemperature, val: 20, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementTemperature, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Temperature): want non-empty")
 	}
@@ -2149,8 +2149,8 @@ func TestFromMeasurementClass_Temperature(t *testing.T) {
 
 func TestFromMeasurementClass_Humidity(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementHumidity, val: 50, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementHumidity, src)
+	src := fakeFloat{class: mattercontract.MeasurementHumidity, val: 50, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementHumidity, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Humidity): want non-empty")
 	}
@@ -2158,8 +2158,8 @@ func TestFromMeasurementClass_Humidity(t *testing.T) {
 
 func TestFromMeasurementClass_Illuminance(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementIlluminance, val: 100, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementIlluminance, src)
+	src := fakeFloat{class: mattercontract.MeasurementIlluminance, val: 100, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementIlluminance, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Illuminance): want non-empty")
 	}
@@ -2167,8 +2167,8 @@ func TestFromMeasurementClass_Illuminance(t *testing.T) {
 
 func TestFromMeasurementClass_Pressure(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: matterport.MeasurementPressure, val: 1013, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementPressure, src)
+	src := fakeFloat{class: mattercontract.MeasurementPressure, val: 1013, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementPressure, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Pressure): want non-empty")
 	}
@@ -2176,8 +2176,8 @@ func TestFromMeasurementClass_Pressure(t *testing.T) {
 
 func TestFromMeasurementClass_Contact(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementContact, val: true, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementContact, src)
+	src := fakeBool{class: mattercontract.MeasurementContact, val: true, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementContact, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Contact): want non-empty")
 	}
@@ -2185,8 +2185,8 @@ func TestFromMeasurementClass_Contact(t *testing.T) {
 
 func TestFromMeasurementClass_Leak(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementLeak, val: false, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementLeak, src)
+	src := fakeBool{class: mattercontract.MeasurementLeak, val: false, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementLeak, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Leak): want non-empty")
 	}
@@ -2194,8 +2194,8 @@ func TestFromMeasurementClass_Leak(t *testing.T) {
 
 func TestFromMeasurementClass_Occupancy(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementOccupancy, val: false, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementOccupancy, src)
+	src := fakeBool{class: mattercontract.MeasurementOccupancy, val: false, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementOccupancy, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Occupancy): want non-empty")
 	}
@@ -2203,8 +2203,8 @@ func TestFromMeasurementClass_Occupancy(t *testing.T) {
 
 func TestFromMeasurementClass_Battery(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementBattery, val: false, obs: true}
-	got := measurement.FromMeasurementClass(matterport.MeasurementBattery, src)
+	src := fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementBattery, src)
 	if len(got) == 0 {
 		t.Error("FromMeasurementClass(Battery): want non-empty")
 	}
@@ -2212,7 +2212,7 @@ func TestFromMeasurementClass_Battery(t *testing.T) {
 
 func TestFromMeasurementClass_None_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	got := measurement.FromMeasurementClass(matterport.MeasurementNone, nil)
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementNone, nil)
 	if len(got) != 0 {
 		t.Errorf("FromMeasurementClass(None): want nil, got %v", got)
 	}
@@ -2220,7 +2220,7 @@ func TestFromMeasurementClass_None_ReturnsNil(t *testing.T) {
 
 func TestFromMeasurementClass_MomentarySwitch_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	got := measurement.FromMeasurementClass(matterport.MeasurementMomentarySwitch, nil)
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementMomentarySwitch, nil)
 	if len(got) != 0 {
 		t.Errorf("FromMeasurementClass(MomentarySwitch): want nil, got %v", got)
 	}
@@ -2230,8 +2230,8 @@ func TestFromMeasurementClass_MomentarySwitch_ReturnsNil(t *testing.T) {
 func TestFromMeasurementClass_WrongType_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	// Passing a fakeBool (BoolMeasurementSource) for a float class.
-	src := fakeBool{class: matterport.MeasurementTemperature}
-	got := measurement.FromMeasurementClass(matterport.MeasurementTemperature, src)
+	src := fakeBool{class: mattercontract.MeasurementTemperature}
+	got := measurement.FromMeasurementClass(mattercontract.MeasurementTemperature, src)
 	if len(got) != 0 {
 		t.Errorf("FromMeasurementClass(Temperature, boolSrc): want nil, got %v", got)
 	}
@@ -2245,7 +2245,7 @@ func TestFromMeasurementClass_WrongType_ReturnsNil(t *testing.T) {
 // Matter §11.7.6.20 permits an empty list when the endpoint is unspecified.
 func TestPowerSourceServer_EndpointList(t *testing.T) {
 	t.Parallel()
-	src := fakeBool{class: matterport.MeasurementBattery, val: false, obs: true}
+	src := fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: true}
 
 	t.Run("default/unset returns empty list", func(t *testing.T) {
 		t.Parallel()

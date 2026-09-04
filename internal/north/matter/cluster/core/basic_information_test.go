@@ -16,7 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 func validBasicInfoConfig() core.Config {
@@ -552,7 +552,7 @@ func TestBasicInfo_EmitStartUp_FiresEvent(t *testing.T) {
 	if ev.event != 0x0000 {
 		t.Errorf("event = 0x%04X, want 0x0000 (StartUp)", ev.event)
 	}
-	if ev.priority != matterport.EventPriorityCritical {
+	if ev.priority != mattercontract.EventPriorityCritical {
 		t.Errorf("priority = %v, want Critical", ev.priority)
 	}
 	payload, ok := ev.data.(core.StartUpEvent)
@@ -591,7 +591,7 @@ func TestBasicInfo_EmitShutDown_FiresEvent(t *testing.T) {
 	if ev.event != 0x0001 {
 		t.Errorf("event = 0x%04X, want 0x0001 (ShutDown)", ev.event)
 	}
-	if ev.priority != matterport.EventPriorityCritical {
+	if ev.priority != mattercontract.EventPriorityCritical {
 		t.Errorf("priority = %v, want Critical", ev.priority)
 	}
 	if _, ok := ev.data.(core.ShutDownEvent); !ok {
@@ -626,7 +626,7 @@ func TestBasicInfo_EmitLeave_FiresEvent(t *testing.T) {
 	if ev.event != 0x0002 {
 		t.Errorf("event = 0x%04X, want 0x0002 (Leave)", ev.event)
 	}
-	if ev.priority != matterport.EventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info", ev.priority)
 	}
 	payload, ok := ev.data.(core.LeaveEvent)
@@ -933,10 +933,10 @@ type fakeEventEmitter struct {
 	clusterID uint32
 	eventID   uint32
 	payload   any
-	priority  matterport.EventPriority
+	priority  mattercontract.EventPriority
 }
 
-func (f *fakeEventEmitter) MatterEmitEvent(ep uint16, clID, evID uint32, payload any, pri matterport.EventPriority) {
+func (f *fakeEventEmitter) MatterEmitEvent(ep uint16, clID, evID uint32, payload any, pri mattercontract.EventPriority) {
 	f.endpoint = ep
 	f.clusterID = clID
 	f.eventID = evID
@@ -997,7 +997,7 @@ func TestBasicInfo_EmitReachableChanged(t *testing.T) {
 	if em.eventID != wantEvent {
 		t.Errorf("emitted eventID=0x%04X, want 0x%04X (ReachableChanged)", em.eventID, wantEvent)
 	}
-	if em.priority != matterport.EventPriorityInfo {
+	if em.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority=%v, want Info", em.priority)
 	}
 	payload, ok := em.payload.(core.ReachableChangedEvent)

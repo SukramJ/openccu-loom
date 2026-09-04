@@ -18,7 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // BasicInformation implements the Matter BasicInformation cluster
@@ -86,7 +86,7 @@ type BasicInformation struct {
 	// via [SetMatterEventEmitter] + [SetEndpoint] so [EmitStartUp],
 	// [EmitShutDown], and [EmitLeave] can fire their respective events.
 	endpoint uint16
-	emitter  matterport.EventEmitter
+	emitter  mattercontract.EventEmitter
 
 	// dataVersion tracks the per-cluster monotonic counter (Matter
 	// §10.6.5). Bumped on every successful NodeLabel / Location /
@@ -464,17 +464,17 @@ type LeaveEvent struct {
 
 // Compile-time assertions.
 var (
-	_ matterport.ClusterServer                  = (*BasicInformation)(nil)
-	_ matterport.ClusterEventLister             = (*BasicInformation)(nil)
-	_ matterport.EventReceiver                  = (*BasicInformation)(nil)
-	_ matterport.ClusterDataVersion             = (*BasicInformation)(nil)
-	_ matterport.ClusterAttributeWritePrivilege = (*BasicInformation)(nil)
+	_ mattercontract.ClusterServer                  = (*BasicInformation)(nil)
+	_ mattercontract.ClusterEventLister             = (*BasicInformation)(nil)
+	_ mattercontract.EventReceiver                  = (*BasicInformation)(nil)
+	_ mattercontract.ClusterDataVersion             = (*BasicInformation)(nil)
+	_ mattercontract.ClusterAttributeWritePrivilege = (*BasicInformation)(nil)
 )
 
-// MatterClusterID implements [matterport.ClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (b *BasicInformation) MatterClusterID() uint32 { return basicInfoClusterID }
 
-// MinWritePrivilege implements [matterport.ClusterAttributeWritePrivilege].
+// MinWritePrivilege implements [mattercontract.ClusterAttributeWritePrivilege].
 // NodeLabel and LocalConfigDisabled require Manage (4); Location
 // requires Administer (5). Mirrors matter.js
 // packages/model/src/standard/elements/basic-information.element.ts:36
@@ -491,7 +491,7 @@ func (b *BasicInformation) MinWritePrivilege(attrID uint32) uint8 {
 	}
 }
 
-// MatterRead implements [matterport.ClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (b *BasicInformation) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -716,7 +716,7 @@ func (b *BasicInformation) MatterReportable() []uint32 {
 	}
 }
 
-// MatterAttributes implements [matterport.ClusterAttributeLister]
+// MatterAttributes implements [mattercontract.ClusterAttributeLister]
 // so wildcard subscribe / read enumerates the full attribute surface.
 // Apple Home builds its HAP service map from the post-CASE wildcard
 // subscribe — without VendorID / ProductID / NodeLabel / UniqueID
@@ -823,7 +823,7 @@ func (b *BasicInformation) firePersistentWrite() {
 	}
 }
 
-// MatterEvents implements [matterport.ClusterEventLister] so the
+// MatterEvents implements [mattercontract.ClusterEventLister] so the
 // dispatcher synthesises the global EventList (0xFFFA) attribute
 // correctly for this cluster.
 // ReachableChanged (0x0003) is always included because the Reachable
@@ -839,7 +839,7 @@ func (b *BasicInformation) MatterEvents() []uint32 {
 	}
 }
 
-// MatterDataVersion implements [matterport.ClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 // Bumped on every successful NodeLabel / Location / LocalConfigDisabled
 // write so DataVersionFilter evaluation correctly detects the cluster
 // changed; controllers cache via this counter and skip the cluster on
@@ -848,12 +848,12 @@ func (b *BasicInformation) MatterDataVersion() uint32 {
 	return b.dataVersion.Current()
 }
 
-// SetMatterEventEmitter implements [matterport.EventReceiver].
+// SetMatterEventEmitter implements [mattercontract.EventReceiver].
 // Called by the bridge during topology assembly so the emit methods can
 // fire their events without the cluster holding a direct reference to
 // the bridge. Idempotent — re-wiring during topology rebuild replaces
 // the emitter cleanly.
-func (b *BasicInformation) SetMatterEventEmitter(emitter matterport.EventEmitter) {
+func (b *BasicInformation) SetMatterEventEmitter(emitter mattercontract.EventEmitter) {
 	b.mu.Lock()
 	b.emitter = emitter
 	b.mu.Unlock()
@@ -891,7 +891,7 @@ func (b *BasicInformation) EmitStartUp() {
 		slog.Any("endpoint", endpoint), slog.Any("sw_version", swVersion))
 	emitter.MatterEmitEvent(endpoint, basicInfoClusterID, basicInfoEventStartUp,
 		StartUpEvent{SoftwareVersion: swVersion},
-		matterport.EventPriorityCritical)
+		mattercontract.EventPriorityCritical)
 }
 
 // EmitShutDown fires the Matter §11.1.8.2 ShutDown event (id 0x0001,
@@ -908,7 +908,7 @@ func (b *BasicInformation) EmitShutDown() {
 	}
 	emitter.MatterEmitEvent(endpoint, basicInfoClusterID, basicInfoEventShutDown,
 		ShutDownEvent{},
-		matterport.EventPriorityCritical)
+		mattercontract.EventPriorityCritical)
 }
 
 // EmitLeave fires the Matter §11.1.8.3 Leave event (id 0x0002, priority
@@ -925,7 +925,7 @@ func (b *BasicInformation) EmitLeave(fabricIndex uint8) {
 	}
 	emitter.MatterEmitEvent(endpoint, basicInfoClusterID, basicInfoEventLeave,
 		LeaveEvent{FabricIndex: fabricIndex},
-		matterport.EventPriorityInfo)
+		mattercontract.EventPriorityInfo)
 }
 
 // EmitReachableChanged fires the Matter §11.1.8.4 ReachableChanged event
@@ -945,5 +945,5 @@ func (b *BasicInformation) EmitReachableChanged(reachable bool) {
 	}
 	emitter.MatterEmitEvent(endpoint, basicInfoClusterID, basicInfoEventReachableChanged,
 		ReachableChangedEvent{ReachableNewValue: reachable},
-		matterport.EventPriorityInfo)
+		mattercontract.EventPriorityInfo)
 }

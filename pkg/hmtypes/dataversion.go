@@ -4,8 +4,8 @@
 package hmtypes
 
 import (
-	"github.com/SukramJ/openccu-loom/pkg/matterport"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
-// DataVersionTracker is a compatibility alias for [matterport.DataVersionTracker].
-type DataVersionTracker = matterport.DataVersionTracker
+// DataVersionTracker is a compatibility alias for [mattercontract.DataVersionTracker].
+type DataVersionTracker = mattercontract.DataVersionTracker

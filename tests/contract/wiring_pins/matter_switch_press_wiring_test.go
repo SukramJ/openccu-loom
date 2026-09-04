@@ -36,7 +36,7 @@ const (
 //
 // The seam is invisible when it breaks. It is a pair of type
 // assertions in internal/north/matter/bridge/bridge.go — the cluster
-// server to [matterport.SwitchEventEmitter], the endpoint's
+// server to [mattercontract.SwitchEventEmitter], the endpoint's
 // measurement source to the bridge's matterSwitchSubscribable. Both
 // are optional capability checks, so a failed assertion is not an
 // error, not a log line and not a compile failure: the topology

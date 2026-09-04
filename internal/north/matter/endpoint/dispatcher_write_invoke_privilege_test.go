@@ -84,8 +84,8 @@ var _ mattercore.StoreFacade = stubOpCredsStore{}
 // plainClusterID is an arbitrary cluster ID distinct from AccessControl
 // (0x001F), OperationalCredentials (0x003E) and GeneralCommissioning
 // (0x0030). It stands in for an ordinary cluster that implements neither
-// [interfaces.MatterClusterAttributeWritePrivilege] nor
-// [interfaces.MatterClusterCommandInvokePrivilege], so the dispatcher
+// [mattercontract.ClusterAttributeWritePrivilege] nor
+// [mattercontract.ClusterCommandInvokePrivilege], so the dispatcher
 // falls back to the Matter §9.10.4.4 default (Operate, 3) for every
 // attribute/command on it.
 const plainClusterID uint32 = 0x0201
