@@ -367,25 +367,24 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // hmapi.ClimateSchedule and hmapi.ClimatePeriod among them. These two join
 // that established class; no new production dead code came with them.
 //
-// Raised 3011 -> 3033 for a counting artefact, not for new dead code. The
-// snapshot's unreachable array carries one entry per (package, identifier)
-// PER LOADED SSA PACKAGE, and go/packages loads a package again for each
-// test binary that links it, so a symbol can be listed once or twice
-// depending on which variants exist. In this run internal/alarm/engine
-// flipped from single to double enumeration — 36 symbols, +36 entries —
-// which is where the growth came from.
+// Lowered 3033 -> 1385 by fixing what the number counts.
 //
-// Measured, so the claim is checkable: the array's UNIQUE (package,
-// identifier, kind) set went 1718 -> 1710. Zero symbols were added; eight
-// were removed, by deleting dead code this same change removed. The raw
-// count grew while the dead-code set shrank.
+// The array held one entry per exported identifier PER LOADED SSA PACKAGE,
+// and go/packages loads a package again for each test binary that links
+// it. Two things followed. The count multiplied, so the ceiling could rise
+// while the set of dead identifiers fell — which is how it last moved. And
+// RTA answers per object, so one variant could call a symbol reachable
+// while another did not: 443 identifiers were listed as dead AND counted
+// as reachable in the same run, among them addonupdate.Updater, a field of
+// the composition root, and addonupdate.PeriodicChecker, constructed in
+// addon_update_wiring.go.
 //
-// The honest repair is to make the analyzer emit one entry per symbol, at
-// which point this ceiling becomes the unique count and a single new dead
-// export moves it by exactly one instead of by one-or-two. That is a change
-// to the measurement rather than to the tree, so it does not belong in a
-// change about findings; it is recorded here as the next move.
-const reachabilityUnreachableCeiling = 3033
+// The analyzer folds the variants now — whitelisted, then reachable in any
+// variant, then dead — and prints how many disagreed, so the next one is
+// visible rather than absorbed. 1385 is the unique count, which is what
+// this ceiling was always meant to be: from here a newly dead export moves
+// it by exactly one.
+const reachabilityUnreachableCeiling = 1385
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's
