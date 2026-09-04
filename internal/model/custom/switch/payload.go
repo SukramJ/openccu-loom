@@ -57,8 +57,18 @@ func (s *Switch) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component s
 		// guard catches the eviction case where HA reads an empty
 		// retained payload (unobserved DPs after a register-and-
 		// load-data cycle); without it HA logs `'value_json' is
-		// undefined` template errors.
-		"value_template": `{% if value_json is defined %}{{ value_json.value | lower }}{% endif %}`,
+		// undefined` template errors. The `value is not none` clause
+		// covers the registered-but-unobserved DP, whose envelope is
+		// `{"value":null,"available":true}` — `none | lower` renders
+		// the literal string "none", which matches neither `state_on`
+		// nor `state_off` and leaves the entity in a wrong state
+		// rather than in "unknown".
+		//
+		// This is the same rule the per-parameter discovery plane
+		// applies (valueJSONValueLowerTemplate in
+		// internal/north/mqtt/discovery.go) to the same envelope on
+		// the same topic; the two spellings must not drift.
+		"value_template": `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`,
 		"state_on":       "true",
 		"state_off":      "false",
 		// Explicit false prevents HA MQTT Switch from applying optimistic

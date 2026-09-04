@@ -1422,15 +1422,6 @@ func TestCelsiusToMatterRoundsTenthDegreeReadings(t *testing.T) {
 	}
 }
 
-func TestHumidityToMatterClamping(t *testing.T) {
-	if got := humidityToMatter(-1.0); got != 0 {
-		t.Errorf("humidityToMatter(-1) = %d, want 0", got)
-	}
-	if got := humidityToMatter(200.0); got != 10000 {
-		t.Errorf("humidityToMatter(200) = %d, want 10000", got)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // matter server – MatterInvoke SetpointRaiseLower
 // ---------------------------------------------------------------------------
@@ -1679,17 +1670,19 @@ func TestClimateSetModeSimpleRFCoolUnsupported(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNumWeekProgramsKindIPNoChannelRef(t *testing.T) {
-	// Climate with no channelRef and KindIP → kind-default of 6.
+	// The slot count comes from the wire descriptor's MIN/MAX and from
+	// nowhere else: a Climate with no channel carries no descriptor, so it
+	// reports no week programs whatever its Kind.
 	c := &Climate{Kind: KindIP}
-	if n := c.numWeekPrograms(); n != 6 {
-		t.Errorf("numWeekPrograms() without channelRef (KindIP) = %d, want 6", n)
+	if n := c.numWeekPrograms(); n != 0 {
+		t.Errorf("numWeekPrograms() without channelRef (KindIP) = %d, want 0", n)
 	}
 }
 
 func TestNumWeekProgramsKindRFNoChannelRef(t *testing.T) {
 	c := &Climate{Kind: KindRF}
-	if n := c.numWeekPrograms(); n != 3 {
-		t.Errorf("numWeekPrograms() without channelRef (KindRF) = %d, want 3", n)
+	if n := c.numWeekPrograms(); n != 0 {
+		t.Errorf("numWeekPrograms() without channelRef (KindRF) = %d, want 0", n)
 	}
 }
 

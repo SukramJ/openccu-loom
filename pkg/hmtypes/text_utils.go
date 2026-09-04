@@ -9,6 +9,31 @@ import (
 	"golang.org/x/text/encoding/charmap"
 )
 
+// Latin1ToUTF8 reinterprets an ISO-8859-1 byte slice as UTF-8: each byte
+// 0x00-0xFF maps to the code point of the same value. ASCII bytes are
+// unchanged, so a JSON document keeps its structure while a high byte
+// inside a string value becomes a correct multi-byte rune.
+//
+// This is the forward direction. [FixXMLRPCEncoding] is the inverse — it
+// recovers a UTF-8 string that was mis-decoded as ISO-8859-1 — and the
+// two are easy to confuse, which is one reason this one had grown two
+// copies in different packages, one over []byte and one over string.
+//
+// Whether to apply it is per-transport policy and stays with the caller;
+// the byte loop is not policy.
+func Latin1ToUTF8(b []byte) []byte {
+	runes := make([]rune, len(b))
+	for i, c := range b {
+		runes[i] = rune(c)
+	}
+	return []byte(string(runes))
+}
+
+// Latin1ToUTF8String is [Latin1ToUTF8] for a string input.
+func Latin1ToUTF8String(s string) string {
+	return string(Latin1ToUTF8([]byte(s)))
+}
+
 // FixXMLRPCEncoding reverses the encoding mis-interpretation that occurs
 // when the CCU XML-RPC interface stores user-defined strings (link names,
 // room names, …) as raw UTF-8 bytes inside an ISO-8859-1 XML document.

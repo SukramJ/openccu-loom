@@ -57,14 +57,10 @@ func (a *Action) FireAction(ctx context.Context, priority hmenum.CommandPriority
 // §1.13 GenericSwitch); ACTION parameters with no press semantics
 // opt out by returning None.
 func (a *Action) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	switch hmenum.Parameter(a.Key.Parameter) {
-	case hmenum.ParameterPress, hmenum.ParameterPressShort,
-		hmenum.ParameterPressLong, hmenum.ParameterPressLongStart,
-		hmenum.ParameterPressLongRelease, hmenum.ParameterPressCont:
+	if isPressParameter(hmenum.Parameter(a.Key.Parameter)) {
 		return interfaces.MatterMeasurementMomentarySwitch
-	default:
-		return interfaces.MatterMeasurementNone
 	}
+	return interfaces.MatterMeasurementNone
 }
 
 // MatterSwitchPositions implements [cluster/wire.GenericSwitchSource].
@@ -73,13 +69,7 @@ func (a *Action) MatterSwitchPositions() uint8 { return 2 }
 // MatterSwitchSupportsLongPress implements
 // [cluster/wire.GenericSwitchSource].
 func (a *Action) MatterSwitchSupportsLongPress() bool {
-	switch hmenum.Parameter(a.Key.Parameter) {
-	case hmenum.ParameterPressLong, hmenum.ParameterPressLongStart,
-		hmenum.ParameterPressLongRelease, hmenum.ParameterPressCont:
-		return true
-	default:
-		return false
-	}
+	return isLongPressParameter(hmenum.Parameter(a.Key.Parameter))
 }
 
 // WireMatterSwitchHandler mirrors [Button.WireMatterSwitchHandler]

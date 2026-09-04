@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -37,11 +39,13 @@ var (
 )
 
 // Matter Device Type IDs and cluster IDs follow the Matter 1.5.1
-// Application Cluster Specification. They live here next to the
-// projection; the cluster-server packages under
-// internal/north/matter/cluster/ may later import them. Cluster
-// revisions verified against the Matter cluster sweep
-// (matter.js HEAD packages/model/src/standard/elements/).
+// Application Cluster Specification. The OnOff command ids come from
+// internal/north/matter/cluster/wire, which owns the wire contract; the
+// device types, cluster ids, LT attribute ids, the LT feature bit and the
+// cluster revisions are declared here next to the projection that
+// advertises them. The OnOff half is pinned against the matter.js
+// snapshot by TestHmLgtLightOnOffMatchesMatterJS, so the ids are not
+// reviewed by eye against a second hand-written list.
 const (
 	matterDeviceTypeOnOffLight    uint16 = 0x0100
 	matterDeviceTypeDimmableLight uint16 = 0x0101
@@ -107,15 +111,19 @@ const (
 	matterAttrFeatureMap      uint32 = 0xFFFC
 	matterAttrClusterRevision uint32 = 0xFFFD
 
-	matterCmdOff    uint32 = 0x00
-	matterCmdOn     uint32 = 0x01
-	matterCmdToggle uint32 = 0x02
-	// LT (Lighting) feature-gated OnOff commands — mandatory once LT is
-	// advertised. matter.js on-off.element.ts:41,46,51 mark all three
-	// conformance "LT".
-	matterCmdOffWithEffect           uint32 = 0x40
-	matterCmdOnWithRecallGlobalScene uint32 = 0x41
-	matterCmdOnWithTimedOff          uint32 = 0x42
+	// The six OnOff command IDs are the wire contract, so they are read
+	// from the package that owns it —
+	// internal/north/matter/cluster/wire/onoff.go — instead of being
+	// transcribed a second time here. matter.js
+	// packages/model/src/standard/elements/on-off.element.ts marks Off "M",
+	// On and Toggle "!OFFONLY", and the three 0x4x commands "LT": all six
+	// are mandatory for the FeatureMap this projection advertises.
+	matterCmdOff                     = wire.OnOffCmdOff
+	matterCmdOn                      = wire.OnOffCmdOn
+	matterCmdToggle                  = wire.OnOffCmdToggle
+	matterCmdOffWithEffect           = wire.OnOffCmdOffWithEffect
+	matterCmdOnWithRecallGlobalScene = wire.OnOffCmdOnWithRecallGlobalScene
+	matterCmdOnWithTimedOff          = wire.OnOffCmdOnWithTimedOff
 
 	matterCmdMoveToLevel          uint32 = 0x00
 	matterCmdMove                 uint32 = 0x01
@@ -126,7 +134,6 @@ const (
 	matterCmdStepWithOnOff        uint32 = 0x06
 	matterCmdStopWithOnOff        uint32 = 0x07
 
-	matterOnOffClusterRevision uint16 = 6
 	// matterLevelControlClusterRevision pinned to matter.js HEAD
 	// (@matter/model 0.16.11). Matter 1.5 bumped the revision from 6 to 7
 	// with additional level-control refinements (OnTransitionTime /
@@ -258,7 +265,7 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 		// (Field LT, constraint "0").
 		return matterFeatureOnOffLT, true
 	case matterAttrClusterRevision:
-		return matterOnOffClusterRevision, true
+		return onoff.Revision(), true
 	default:
 		return nil, false
 	}

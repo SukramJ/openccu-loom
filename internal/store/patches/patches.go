@@ -6,6 +6,7 @@ package patches
 import (
 	"encoding/json"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -206,18 +207,89 @@ func (r *Registry) HasPatches() bool {
 	return len(r.patches) > 0
 }
 
-// builtIns returns the factory-shipped patches. They.
+// powerMeterSwitchModels lists every device id that shares one
+// ENERGY_COUNTER declaration. They are the nine ids in the
+// <supported_types> block of
+// ../OpenCCU-Base/src/devicetypes/rftypes/rf_es_pmsw.xml (:9-40); the file
+// declares ENERGY_COUNTER once (:194-203) and every id inherits it, so a
+// patch keyed on one id would repair one device out of nine.
+var powerMeterSwitchModels = []string{
+	"HM-ES-PMSw1-Pl",
+	"HM-ES-PMSw1-Pl-DN-R1",
+	"HM-ES-PMSw1-Pl-DN-R2",
+	"HM-ES-PMSw1-Pl-DN-R3",
+	"HM-ES-PMSw1-Pl-DN-R4",
+	"HM-ES-PMSw1-Pl-DN-R5",
+	"HM-ES-PMSw1-DR",
+	"HM-ES-PMSw1-SM",
+	"HM-ES-PMSwX",
+}
+
+// Virtual-heating-group setpoint bounds, as the CCU declares them.
+//
+// ../OpenCCU-Base/opt/HMServer/groups/groupdefinitions.xml:504 carries
+// `<status_parameter … control="HEATING_CONTROL.SETPOINT" default="20.0"
+// max="30.0" min="5.0" name="SET_TEMPERATURE" operations="7" type="FLOAT"
+// unit="°C">` inside `<channel id="1" type="CLIMATECONTROL_RT_TRANSCEIVER">`
+// of the file's single group, whose `<virtual_device_type>` is HM-CC-VG-1
+// (:8113).
+//
+// The group is deliberately narrower than the devices it aggregates:
+// HM-CC-RT-DN's own SET_TEMPERATURE is min="4.5" max="30.5"
+// (../OpenCCU-Base/src/devicetypes/rftypes/rf_cc_rt_dn.xml:2395). Writing
+// the member device's range onto the group widens the accepted setpoint by
+// half a kelvin at each end.
+var (
+	heatingGroupSetpointMin = json.RawMessage(`5.0`)
+	heatingGroupSetpointMax = json.RawMessage(`30.0`)
+)
+
+// codeIDWireCeiling is the largest value the CODE_ID wire field can carry.
+// The HmIP server decodes the CODE_STATUS byte as CODE_STATE =
+// (valueData[0] & 0xFF) >> 5 and CODE_ID = valueData[0] & 0x1F
+// (HMIPServer de.eq3.cbcs.server.core.framehandling.HMIPApplicationHandler),
+// so the low five bits span 0..31 whatever the descriptor declares.
+const codeIDWireCeiling = 31
+
+// builtIns returns the factory-shipped patches.
+//
+// There is deliberately no patch for HmIP-RGBW SATURATION. The HmIP server
+// registers SATURATION exactly once, with read|write|event, and the legacy
+// XML-RPC path copies that OPERATIONS byte into the parameter description
+// verbatim; the single override file that can rewrite a description sets
+// only TabOrder, Unit, Control and Disabled, and a disabled parameter is
+// dropped from the description rather than served with reduced operations.
+// The two shapes a current CCU can produce for SATURATION are therefore
+// "present with OPERATIONS=7" and "absent" — restoring an EVENT bit that
+// is never missing would only mask a descriptor read that raced device
+// bring-up.
 func builtIns() []Patch {
 	ch0 := 0
 	ch1 := 1
-	return []Patch{
-		// ENERGY_COUNTER on HM-ES-PMSw1-Pl loses the UNIT annotation on
-		// some CCU firmwares — patch it back to "Wh".
-		{
-			Model:     "HM-ES-PMSw1-Pl",
+	out := make([]Patch, 0, len(powerMeterSwitchModels)+2)
+
+	// ENERGY_COUNTER carries unit="Wh" in the shipped device XML
+	// (../OpenCCU-Base/src/devicetypes/rftypes/rf_es_pmsw.xml:196), and the
+	// 10x factor lives in the conversion, so the logical value delivered
+	// over XML-RPC is already in Wh. The unit is a per-parameter fact, not
+	// a device-wide one: the sibling counters on the same channel declare
+	// W, mA, V and Hz, and the same channel type on HM-ES-TX-WM carries
+	// Wh, kWh and m3 counters side by side.
+	//
+	// The trigger condition is a defensive guard, and its premise is
+	// unverified for the shipped stack: HSSLogicalType::GetDescription
+	// (../OpenCCU-Base/src/libhsscomm/HSSLogicalType.cpp:56) writes UNIT
+	// into every parameter description unconditionally, and it is the only
+	// UNIT assignment in that library, so a current rfd cannot serve this
+	// parameter without a unit. The guard remains for fronts that present
+	// the device themselves rather than through rfd; it is a no-op
+	// whenever a UNIT arrives.
+	for _, model := range powerMeterSwitchModels {
+		out = append(out, Patch{
+			Model:     model,
 			Parameter: hmenum.Parameter("ENERGY_COUNTER"),
 			Paramset:  hmenum.ParamsetKeyValues,
-			Reason:    "CCU omits UNIT for ENERGY_COUNTER on some firmwares",
+			Reason:    "ENERGY_COUNTER is declared unit=Wh; supply it when the descriptor carries none",
 			Apply: func(pd *hmproto.ParameterData) bool {
 				if pd.Unit == "" {
 					pd.Unit = "Wh"
@@ -225,63 +297,137 @@ func builtIns() []Patch {
 				}
 				return false
 			},
-		},
-		// HmIP-RGBW sometimes reports SATURATION without the EVENT bit.
-		{
-			Model:     "HmIP-RGBW",
-			Parameter: hmenum.ParameterSaturation,
-			Paramset:  hmenum.ParamsetKeyValues,
-			Reason:    "HmIP-RGBW omits EVENT bit on SATURATION",
-			Apply: func(pd *hmproto.ParameterData) bool {
-				if !pd.Operations.IsEvent() {
-					pd.Operations |= hmenum.OperationsEvent
-					return true
-				}
-				return false
-			},
-		},
-		// HM-CC-VG-1 virtual heating group: CCU returns invalid MIN/MAX bounds for
-		// SET_TEMPERATURE (0/0 or string).
-		{
-			Model:     "HM-CC-VG-1",
-			Parameter: hmenum.ParameterSetTemperature,
-			Paramset:  hmenum.ParamsetKeyValues,
-			ChannelNo: &ch1,
-			Reason:    "CCU returns invalid MIN/MAX bounds for virtual heating groups",
-			Apply: func(pd *hmproto.ParameterData) bool {
-				wantMin := json.RawMessage(`4.5`)
-				wantMax := json.RawMessage(`30.5`)
-				changed := false
-				if string(pd.Min) != string(wantMin) {
-					pd.Min = wantMin
-					changed = true
-				}
-				if string(pd.Max) != string(wantMax) {
-					pd.Max = wantMax
-					changed = true
-				}
-				return changed
-			},
-		},
-		// HmIP-FWI fingerprint reader: the CCU declares MAX=21 for CODE_ID, but the
-		// device reports CODE_ID=31 in idle/standby (5-bit field, 31 = no active
-		// code). The too-low MAX dropped the idle value, so the entity never
-		// returned to 31 after a recognized code. Widen MAX to 31; MIN stays.
-		{
-			Model:     "HmIP-FWI",
-			Parameter: hmenum.ParameterCodeID,
-			Paramset:  hmenum.ParamsetKeyValues,
-			ChannelNo: &ch0,
-			Reason:    "CCU declares MAX=21 but device reports idle CODE_ID=31",
-			Ticket:    "#3238",
-			Apply: func(pd *hmproto.ParameterData) bool {
-				wantMax := json.RawMessage(`31`)
-				if string(pd.Max) != string(wantMax) {
-					pd.Max = wantMax
-					return true
-				}
-				return false
-			},
-		},
+		})
 	}
+
+	// HM-CC-VG-1 virtual heating group, channel 1 SET_TEMPERATURE.
+	//
+	// What this patch repairs is the *type*, not the range. HMServer
+	// de.eq3.ccu.groupdevice.service.GroupDeviceHandler#createParamsetDescriptions
+	// copies the group parameter's min/max straight into the RpcStruct, and
+	// both accessors are String-typed on HMServer
+	// de.eq3.ccu.virtualdevice.service.internal.bidcos.BidCosVirtualChannelParameter
+	// — so MIN and MAX reach us as XML-RPC strings ("5.0") rather than
+	// doubles, and every consumer that expects a JSON number sees a string.
+	//
+	// Three rules, in order:
+	//
+	//   - a bound that already arrives as a JSON number stays untouched.
+	//     The CCU is the authority on its own bounds; widening or
+	//     narrowing them here would substitute our opinion for its answer.
+	//   - a bound that arrives as a quoted number is coerced to that same
+	//     number. The value the CCU sent is preserved.
+	//   - a missing or unusable range falls back to the group definition
+	//     above. "Unusable" covers the 0/0 range the original patch was
+	//     written for: a setpoint whose MIN equals its MAX constrains
+	//     nothing. That 0/0 observation is itself unverified — no path in
+	//     the group definition or in the description-building code
+	//     produces it — so the fallback value is read from the firmware
+	//     rather than chosen.
+	//nolint:gocritic // appendCombine: each patch carries its own multi-paragraph
+	// derivation above it; folding the two calls into one argument list would
+	// put those blocks inside an expression and separate each from its patch.
+	out = append(out, Patch{
+		Model:     "HM-CC-VG-1",
+		Parameter: hmenum.ParameterSetTemperature,
+		Paramset:  hmenum.ParamsetKeyValues,
+		ChannelNo: &ch1,
+		Reason:    "CCU serves virtual-group SET_TEMPERATURE bounds as strings",
+		Apply: func(pd *hmproto.ParameterData) bool {
+			minValue, minRewrite, minOK := numericBound(pd.Min)
+			maxValue, maxRewrite, maxOK := numericBound(pd.Max)
+			if !minOK || !maxOK || minValue == maxValue {
+				pd.Min = heatingGroupSetpointMin
+				pd.Max = heatingGroupSetpointMax
+				return true
+			}
+			changed := false
+			if minRewrite {
+				pd.Min = formatBound(minValue)
+				changed = true
+			}
+			if maxRewrite {
+				pd.Max = formatBound(maxValue)
+				changed = true
+			}
+			return changed
+		},
+	})
+
+	// HmIP-FWI fingerprint reader, MAINTENANCE channel CODE_ID.
+	//
+	// The CCU's MAX=21 is deliberate and device-specific: the HmIP server
+	// registers CODE_ID three times under distinct keys — generic (0, 30),
+	// keypad (1, 8), and the FWI variant (1, 21) — via HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.GeneralStateParameterFactory#createCodeId,
+	// and the CCU's own FWI maintenance control renders CODE_ID == 21 as
+	// the bell button
+	// (../OpenCCU-Base/www/rega/esp/controls/maintenanceFWI.fn:82-84), i.e.
+	// 1..20 are the finger codes and 21 is the doorbell.
+	//
+	// What justifies raising MAX anyway is the wire, not the descriptor:
+	// CODE_ID is the low five bits of the CODE_STATUS byte and the event
+	// path applies no range check, so a raw value above the declared MAX
+	// is observable. Our read-path validity gate compares the observed
+	// value against MIN/MAX and suppresses the entity when it falls
+	// outside, which is how an out-of-range observation makes the sensor
+	// go unavailable.
+	//
+	// What 31 *means* is unverified in those words. The firmware assigns
+	// it no meaning; its idle indicator is a different parameter,
+	// CODE_STATE = 0 (CodeState.IDLE), and the CCU's own control reads
+	// CODE_ID only while CODE_STATE == 1. Reading "31 = no active code"
+	// out of the wire width is our convention, not the CCU's rule.
+	//
+	// The cost of the raise is that MIN/MAX also gates writes, so values
+	// 22..codeIDWireCeiling now pass our check and are then rejected by
+	// the CCU. Driving the entity off CODE_STATE — what the CCU's own
+	// surface does — would settle both halves; that lives with the data
+	// point, not here.
+	//
+	// The raise never lowers a declared MAX and never writes one where the
+	// CCU declared none.
+	out = append(out, Patch{
+		Model:     "HmIP-FWI",
+		Parameter: hmenum.ParameterCodeID,
+		Paramset:  hmenum.ParamsetKeyValues,
+		ChannelNo: &ch0,
+		Reason:    "CODE_ID is a 5-bit wire field; raw values above the declared MAX are observable",
+		Ticket:    "#3238",
+		Apply: func(pd *hmproto.ParameterData) bool {
+			declared, _, ok := numericBound(pd.Max)
+			if !ok || declared >= codeIDWireCeiling {
+				return false
+			}
+			pd.Max = json.RawMessage(strconv.Itoa(codeIDWireCeiling))
+			return true
+		},
+	})
+
+	return out
+}
+
+// numericBound decodes a MIN / MAX descriptor field.
+//
+// ok reports whether the field carries a number at all. rewrite reports
+// whether the wire form was a JSON string holding that number, which is the
+// shape a caller has to replace to hand downstream consumers a real number.
+func numericBound(raw json.RawMessage) (value float64, rewrite, ok bool) {
+	if len(raw) == 0 {
+		return 0, false, false
+	}
+	var n json.Number
+	if err := json.Unmarshal(raw, &n); err != nil {
+		return 0, false, false
+	}
+	f, err := n.Float64()
+	if err != nil {
+		return 0, false, false
+	}
+	return f, raw[0] == '"', true
+}
+
+// formatBound renders a coerced bound as a JSON number literal.
+func formatBound(v float64) json.RawMessage {
+	return json.RawMessage(strconv.FormatFloat(v, 'f', -1, 64))
 }

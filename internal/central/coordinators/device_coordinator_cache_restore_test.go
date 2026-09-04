@@ -21,6 +21,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -415,11 +416,13 @@ func TestCheckParamsetConsistencyNilCheckerErrors(t *testing.T) {
 	}
 }
 
-func TestCheckParamsetConsistencyNoHmIPInterfaceSkips(t *testing.T) {
+func TestCheckParamsetConsistencyNoHmIPInterfaceErrors(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _, _ := newDCFull(t)
 	checker := &stubParamsetChecker{}
-	// BidCos-RF is not affected by the HmIPServer bug.
+	// BidCos-RF is not affected by the HmIPServer bug, and the refusal is an
+	// error: an empty result would be indistinguishable from "checked and
+	// clean" for a caller that ever widens past HmIP-RF.
 	result, err := dc.CheckParamsetConsistency(
 		context.Background(),
 		hmenum.InterfaceBidCosRF,
@@ -427,8 +430,8 @@ func TestCheckParamsetConsistencyNoHmIPInterfaceSkips(t *testing.T) {
 		[]string{"AA"},
 		checker,
 	)
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, hmerr.ErrUnsupported) {
+		t.Fatalf("non-HmIP interface must be refused with hmerr.ErrUnsupported, got err=%v", err)
 	}
 	if len(result) != 0 {
 		t.Fatalf("non-HmIP interface must return no inconsistencies, got %+v", result)

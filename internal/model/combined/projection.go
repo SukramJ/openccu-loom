@@ -39,11 +39,13 @@ const (
 	KindHSColor       = "hs_color"
 )
 
-// timerMaxSeconds bounds the HA number input at a 24h window. The wire's
-// INTEGER max (16343) reinterpreted at the hours unit is ~678 days, far
-// past anything an operator sets by hand. SetDuration auto-promotes the
-// unit, so a user-entered 100 s still writes 100 at the seconds unit
-// rather than overflowing.
+// timerMaxSeconds bounds the HA number input at a 24h window — an operator
+// convenience, deliberately tighter than what the wire can carry. The pair's
+// own finite ceiling is [Timer.Max]: DURATION_VALUE's INTEGER maximum of 16343
+// counts at the minutes unit, since the CCU rewrites anything the encoder
+// would promote to the hours unit into its infinite marker. SetDuration
+// auto-promotes the unit, so a user-entered 100 s still writes 100 at the
+// seconds unit rather than overflowing.
 const timerMaxSeconds = 24 * 60 * 60
 
 // --- Timer ---------------------------------------------------------
@@ -105,8 +107,10 @@ func (t *Timer) OnCombinedChange(fn func()) func() {
 }
 
 // WriteCombined implements [payload.CombinedWritable]. The payload is a
-// duration in seconds; fractional values are honoured because the wire
-// unit promotion works on the seconds total, not on integers.
+// duration in seconds. A fractional payload is accepted, but it does not reach
+// the device as a fraction: DURATION_VALUE is an INTEGER parameter, so the
+// count truncates toward zero at the write boundary and 1.5 s is written as
+// 1 s.
 func (t *Timer) WriteCombined(ctx context.Context, raw string, priority hmenum.CommandPriority) error {
 	seconds, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil {

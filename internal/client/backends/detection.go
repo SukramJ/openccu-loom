@@ -54,8 +54,8 @@ type BackendDetectionResult struct {
 // best matching [Kind].
 //
 // Detection strategy (in order):
-// 1. Try a BIN-RPC ping → if the caller is wired and succeeds, this
-// is a CUxD endpoint → [KindCUxD].
+// 1. Try a BIN-RPC ping → if the caller is wired and succeeds, classify
+// as [KindCUxD].
 // 2. Try an XML-RPC "listDevices" call. If the response carries a
 // "Homegear" signature in any returned device description, classify
 // as [KindHomegear].
@@ -64,6 +64,23 @@ type BackendDetectionResult struct {
 // Errors from individual probes are swallowed — the function always
 // returns a result. The caller should check [BackendDetectionResult.Kind]
 // and not treat a nil error return as "all probes passed".
+//
+// Both discriminators are unsound, and neither is used by a running daemon:
+// nothing outside this package's tests calls DetectBackend. Read the caveats
+// on each step below before wiring it into anything.
+//
+// Step 1 is contradicted by the CCU firmware. Answering a BIN-RPC ping does
+// not identify CUxD: the shared XML-RPC server library switches to binary
+// framing on its ordinary listening socket the moment a request starts with
+// the three bytes "Bin" (OpenCCU-Base src/libXmlRpc/src/XmlRpcServerConnection.cpp:35,98),
+// rfd and hs485d both link that library and both register a `ping` method
+// taking one string — exactly the shape probed here
+// (src/rfd/XmlRpcMethods.cpp:1206, src/hs485d/XmlRpcMethods.cpp:601), and the
+// CCU's own interface list addresses BidCos-RF as `xmlrpc_bin://127.0.0.1:32001`
+// (OpenCCU buildroot-external/overlay/base/etc/config_templates/InterfacesList.xml:5).
+// A probe pointed at rfd therefore returns KindCUxD.
+//
+// Step 2 rests on signatures no source states — see [sniffHomegear].
 func DetectBackend(ctx context.Context, cfg DetectionConfig) (BackendDetectionResult, error) {
 	if cfg.XMLRPCCaller == nil {
 		return BackendDetectionResult{}, errors.New("backends.DetectBackend: XMLRPCCaller is required")
@@ -72,7 +89,8 @@ func DetectBackend(ctx context.Context, cfg DetectionConfig) (BackendDetectionRe
 		return BackendDetectionResult{}, errors.New("backends.DetectBackend: InterfaceID is required")
 	}
 
-	// Step 1 — try BIN-RPC ping (CUxD uses BIN-RPC exclusively).
+	// Step 1 — BIN-RPC ping. This does NOT establish CUxD; every CCU
+	// interface process answers it too (see the doc comment above).
 	if cfg.BINRPCCaller != nil {
 		_, err := cfg.BINRPCCaller.Call(ctx, "ping", cfg.InterfaceID)
 		if err == nil {
@@ -89,9 +107,6 @@ func DetectBackend(ctx context.Context, cfg DetectionConfig) (BackendDetectionRe
 		isHomegear, version := sniffHomegear(reply)
 		if isHomegear {
 			caps := CapabilityFor(KindHomegear)
-			if version != "" {
-				caps = UpdateCapabilitiesForVersion(caps, version)
-			}
 			return BackendDetectionResult{
 				Kind:            KindHomegear,
 				Capabilities:    caps,
@@ -111,9 +126,19 @@ func DetectBackend(ctx context.Context, cfg DetectionConfig) (BackendDetectionRe
 // sniffHomegear inspects the listDevices reply for Homegear signatures.
 // Returns (true, version) when the reply looks like a Homegear endpoint.
 //
-// Homegear encodes a "TYPE" field that starts with "HG-" on its
-// internal management device, and optionally encodes a "SOFTWARE_VERSION"
-// in the description. We match either signal.
+// The three signatures matched below — a TYPE starting "HG-", a TYPE equal to
+// "homegear", a FIRMWARE string containing "homegear" — are unverified: no
+// source in the reference set states any of them, and they were not carried
+// over from an existing implementation. Treat the doc claim "Homegear encodes
+// a TYPE field that starts with HG-" as an assertion about a data source that
+// was never read. What would settle it is Homegear's own listDevices output,
+// or its device-description sources.
+//
+// What IS measured is the false-positive risk against stock CCU firmware, and
+// it is nil: "homegear" occurs nowhere in the OpenCCU-Base sources, and no
+// device type in the shipped type descriptions or in the descriptor corpus
+// begins with "HG-". So the branch cannot fire against a real CCU — which is
+// also why its being wrong has cost nothing so far.
 func sniffHomegear(reply any) (isHomegear bool, version string) {
 	// listDevices returns []map[string]any on the wire.
 	devs, ok := reply.([]any)

@@ -253,3 +253,70 @@ func TestRegistryRequiredParametersIncludesChannelFields(t *testing.T) {
 		t.Error("RequiredParameters() missing ParameterConcentration from IPThermostat.ChannelFields")
 	}
 }
+
+// TestRegistryRequiredParametersIsScopedToItsOwnProfiles pins the answer to
+// the profiles the registry actually holds. Reading the package-global
+// ProfileConfigs catalogue instead let a registry that holds one profile
+// whitelist parameters from every profile in the catalogue — a visibility
+// whitelist wider than the registry it was asked about.
+func TestRegistryRequiredParametersIsScopedToItsOwnProfiles(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := r.Register(Profile{
+		Name:         "SyntheticSwitch",
+		DeviceType:   "SYN-SWITCH",
+		ProductGroup: hmenum.ProductGroupHmIP,
+		Category:     hmenum.DataPointCategorySwitch,
+		Config: &ProfileConfig{
+			ChannelGroup: ChannelGroupConfig{
+				Fields: map[hmenum.Field]FieldValue{
+					hmenum.FieldState: Bare(hmenum.ParameterState),
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	got := r.RequiredParameters()
+	// LOCK_TARGET_LEVEL is declared by the IPLock entry of the global
+	// catalogue and by no DefaultDataPoints entry, so it can only reach this
+	// registry's answer through a catalogue read.
+	if slices.Contains(got, hmenum.ParameterLockTargetLevel) {
+		t.Errorf("registry holding only SyntheticSwitch required %s — it came from the global catalogue",
+			hmenum.ParameterLockTargetLevel)
+	}
+	if !slices.Contains(got, hmenum.ParameterState) {
+		t.Errorf("registry holding SyntheticSwitch did not require %s", hmenum.ParameterState)
+	}
+}
+
+// TestDefaultRegistryRequiredParametersMatchItsOwnProfiles pins the shipping
+// whitelist across the scoping change: for the registry the daemon installs,
+// answering from its own profiles yields exactly the set it publishes.
+func TestDefaultRegistryRequiredParametersMatchItsOwnProfiles(t *testing.T) {
+	t.Parallel()
+	r := testDefaultRegistry()
+
+	want := map[hmenum.Parameter]struct{}{}
+	for _, params := range DefaultDataPoints {
+		for _, p := range params {
+			want[p] = struct{}{}
+		}
+	}
+	r.mu.RLock()
+	for _, profile := range r.items {
+		for _, p := range profile.RequiredParameters() {
+			want[p] = struct{}{}
+		}
+	}
+	r.mu.RUnlock()
+	got := r.RequiredParameters()
+	if len(got) != len(want) {
+		t.Fatalf("RequiredParameters() has %d entries, the registry's own profiles union to %d", len(got), len(want))
+	}
+	for _, p := range got {
+		if _, ok := want[p]; !ok {
+			t.Errorf("RequiredParameters() carries %s, which no registered profile requires", p)
+		}
+	}
+}

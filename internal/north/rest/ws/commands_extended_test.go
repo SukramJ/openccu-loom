@@ -307,6 +307,19 @@ func TestExtendedDeviceRenameChannelHandler(t *testing.T) {
 	dispatchExpectErr(t, r, "device.rename_channel", map[string]any{"address": "ABC0001", "channel": 1, "name": ""}, "name is required")
 }
 
+// TestExtendedDeviceRenameChannelRejectsNegativeChannel pins the range
+// check on the WS twin of PATCH /devices/{addr}/channels/{no}: the
+// channel address is built as address + ":" + channel, so a negative
+// ordinal must be refused before it reaches the domain.
+func TestExtendedDeviceRenameChannelRejectsNegativeChannel(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+	dispatchExpectErr(t, r, "device.rename_channel",
+		map[string]any{"address": "ABC0001", "channel": -1, "name": "Licht"}, "channel must not be negative")
+	if len(devs.renamedChannels) != 0 {
+		t.Fatalf("rename reached the domain: %v", devs.renamedChannels)
+	}
+}
+
 // TestExtendedDeviceSetChannelRooms exercises `device.set_channel_rooms`
 // end to end through the Router: the happy path forwards address/channel/
 // rooms to DeviceWriter.SetChannelRooms and echoes them back in the

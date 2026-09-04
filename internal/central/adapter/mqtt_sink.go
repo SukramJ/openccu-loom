@@ -285,13 +285,16 @@ func (s *MQTTCommandSink) SetProgramEnabled(ctx context.Context, centralName, id
 // the embedded [CustomDPDispatcher] using the source tag
 // "mqtt:custom-dp:invoke" for the audit log.
 //
-// The `central` argument is accepted for signature consistency with the
-// MQTT topic structure but is not forwarded to the dispatcher: the
-// dispatcher walks all centrals in the registry to find the device,
-// matching the same resolution strategy used by the REST handler.
+// The `centralName` the topic carried scopes the resolution, exactly as it
+// does for [MQTTCommandSink.InvokeChannelService]. It is not decorative: a
+// device address repeats across CCUs, and an unscoped registry walk stops at
+// the first central holding the address — the alphabetically first one — so a
+// command published under one CCU's topic was refused when that central's copy
+// carried no such data point, and dispatched to the wrong physical
+// installation when it did.
 func (s *MQTTCommandSink) InvokeCustomDP(
 	ctx context.Context,
-	_ string, // central — resolved by dispatcher via registry walk
+	centralName string,
 	deviceAddress, name, operation string,
 	params map[string]any,
 	priority hmenum.CommandPriority,
@@ -299,8 +302,10 @@ func (s *MQTTCommandSink) InvokeCustomDP(
 	if s.cdpDispatch == nil {
 		return errors.New("mqtt_sink: CDP dispatcher not wired")
 	}
-	deviceAddress = s.canonicalChannelAddress("", deviceAddress)
-	return s.cdpDispatch.InvokeCustomDP(ctx, deviceAddress, name, operation, params, priority, "mqtt:custom-dp:invoke")
+	deviceAddress = s.canonicalChannelAddress(centralName, deviceAddress)
+	return s.cdpDispatch.InvokeCustomDPOn(
+		ctx, centralName, deviceAddress, name, operation, params, priority, "mqtt:custom-dp:invoke",
+	)
 }
 
 // InvokeChannelService implements [mqtt.CDPInvocationSink]. It looks
@@ -322,7 +327,7 @@ func (s *MQTTCommandSink) InvokeChannelService(
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
 	}
-	chAddr := fmt.Sprintf("%s:%d", deviceAddress, channel)
+	chAddr := hmtypes.ChannelAddress(deviceAddress, channel)
 	ch := dev.Channel(chAddr)
 	if ch == nil {
 		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", chAddr, centralName)
@@ -411,7 +416,7 @@ func (s *MQTTCommandSink) SetScheduleSwitch(
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
 	}
-	chAddr := fmt.Sprintf("%s:%d", deviceAddress, channel)
+	chAddr := hmtypes.ChannelAddress(deviceAddress, channel)
 	ch := dev.Channel(chAddr)
 	if ch == nil {
 		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", chAddr, centralName)
@@ -453,7 +458,7 @@ func (s *MQTTCommandSink) SetCombinedValue(
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
 	}
-	chAddr := fmt.Sprintf("%s:%d", deviceAddress, channel)
+	chAddr := hmtypes.ChannelAddress(deviceAddress, channel)
 	ch := dev.Channel(chAddr)
 	if ch == nil {
 		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", chAddr, centralName)

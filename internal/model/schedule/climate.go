@@ -190,7 +190,7 @@ func NewClimate() *Climate {
 
 // Put registers a profile under key ("P1".."P6").
 func (c *Climate) Put(key string, p *ClimateProfile) error {
-	if !isValidProfileKey(key) {
+	if !IsValidProfileKey(key) {
 		return fmt.Errorf("schedule: invalid profile key %q", key)
 	}
 	if p == nil {
@@ -216,7 +216,7 @@ func (c *Climate) Keys() []string {
 // Validate runs [ClimateProfile.Validate] on every profile.
 func (c *Climate) Validate() error {
 	for k, p := range c.Profiles {
-		if !isValidProfileKey(k) {
+		if !IsValidProfileKey(k) {
 			return fmt.Errorf("schedule: invalid profile key %q", k)
 		}
 		if err := p.Validate(); err != nil {
@@ -232,7 +232,7 @@ func (c *Climate) Validate() error {
 // Use [Validate] for the strict write-path check.
 func (c *Climate) ValidateWire() error {
 	for k, p := range c.Profiles {
-		if !isValidProfileKey(k) {
+		if !IsValidProfileKey(k) {
 			return fmt.Errorf("schedule: invalid profile key %q", k)
 		}
 		if err := p.ValidateWire(); err != nil {
@@ -352,15 +352,34 @@ func IdentifyBaseTemperature(day ClimateWeekday) float64 {
 	return IdentifyBaseTemperatureFromSegments(segs)
 }
 
-func isValidProfileKey(k string) bool {
-	if len(k) < 2 || k[0] != 'P' {
-		return false
+// Climate-profile index range. The exported pair lives in
+// internal/model/weekprofile, which this package cannot import — weekprofile
+// already depends on schedule, so the reverse edge is a cycle. The two are
+// tied by a contract test instead; move one and that test reports the other.
+const (
+	minProfileIndex = 1
+	maxProfileIndex = 6
+)
+
+// ProfileKeyIndex parses a climate-profile key into its 1-based index. The
+// grammar is exactly one 'P' followed by one decimal digit: that is how the
+// CCU spells its own week-profile parameters, and a scan of every device
+// description in the firmware tree finds no zero-padded spelling at all. The
+// index is not range-checked here; see [IsValidProfileKey].
+func ProfileKeyIndex(k string) (int, bool) {
+	if len(k) != 2 || k[0] != 'P' || k[1] < '0' || k[1] > '9' {
+		return 0, false
 	}
-	var n int
-	if _, err := fmt.Sscanf(k, "P%d", &n); err != nil {
-		return false
-	}
-	return n >= 1 && n <= 6
+	return int(k[1] - '0'), true
+}
+
+// IsValidProfileKey reports whether k names one of the climate profiles
+// P1..P6. It is the single grammar every plane consults — the adapter's write
+// gates, the raw week-profile decoder and this package's own Put/Keys checks
+// — so a key one plane accepts cannot be rejected by the next.
+func IsValidProfileKey(k string) bool {
+	n, ok := ProfileKeyIndex(k)
+	return ok && n >= minProfileIndex && n <= maxProfileIndex
 }
 
 // ClimateEndOfDay is the CCU end-of-day marker used as the last slot's

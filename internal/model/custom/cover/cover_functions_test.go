@@ -1333,3 +1333,71 @@ func TestCoverStopNilWriterError(t *testing.T) {
 		t.Error("Cover.Stop with nil writer must return an error")
 	}
 }
+
+// TestGarageSubscribeUsesTheProfileResolvedSlots pins that Subscribe
+// listens on the data points [NewGarage] resolved through the profile
+// schema, not on a second own-channel lookup.
+//
+// The rig puts DOOR_STATE and SECTION on a sibling channel and lets the
+// schema say so. An own-channel lookup finds nothing there, so the
+// subscription is silently empty and the cached state never moves — no
+// error, no log line. Every other garage test constructs without a
+// Group, where both resolutions agree by accident.
+func TestGarageSubscribeUsesTheProfileResolvedSlots(t *testing.T) {
+	t.Parallel()
+
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "GAR0001"})
+	own := d.AddChannel("GAR0001:1", 1, "GARAGE_DOOR", hmenum.ParamsetKeyValues)
+	sibling := d.AddChannel("GAR0001:2", 2, "GARAGE_DOOR_SENSOR", hmenum.ParamsetKeyValues)
+
+	// VALUE_LIST as the CCU reports it for DOOR_STATE.
+	doorState := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: sibling.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterDoorState),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"CLOSED", "OPEN", "VENTILATION_POSITION", "POSITION_UNKNOWN"},
+		},
+	})
+	section := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: sibling.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterSection),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	sibling.Put(doorState)
+	sibling.Put(section)
+
+	group := custom.RebasedChannelGroupConfig{
+		ChannelFields: map[int]map[hmenum.Field]custom.FieldValue{
+			2: {
+				hmenum.FieldDoorState: {Parameter: hmenum.ParameterDoorState},
+				hmenum.FieldSection:   {Parameter: hmenum.ParameterSection},
+			},
+		},
+	}
+
+	g := NewGarage(GarageConfig{Channel: own, Group: group, Writer: &stubWriter{}})
+	unsub := g.Subscribe(own)
+	defer unsub()
+
+	fireDoorState(t, doorState, string(DoorStateOpen))
+	st, ok := g.DoorState()
+	if !ok || st != DoorStateOpen {
+		t.Errorf("DoorState after sibling-channel event = (%v, %v), want (OPEN, true)", st, ok)
+	}
+
+	section.OnEvent(int32(sectionOpening))
+	if !g.IsOpening() {
+		t.Error("IsOpening must be true after a sibling-channel SECTION event")
+	}
+}

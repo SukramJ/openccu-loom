@@ -6,6 +6,7 @@ package lock
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -174,10 +175,13 @@ func (l *Lock) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component str
 	var commandTopic, payloadLock, payloadUnlock string
 	switch l.Kind {
 	case KindRF:
-		// RF locks expose a bool STATE: false = locked, true = unlocked.
-		commandTopic = ctx.WireParameterCommandTopic("STATE")
-		payloadLock = "false"
-		payloadUnlock = "true"
+		// RF locks expose a bool STATE. The advertised payloads render
+		// the same constants [Lock.sendRF] writes, so a command from Home
+		// Assistant and one from the daemon reach the CCU as the same wire
+		// value — see [rfStateLocked].
+		commandTopic = ctx.WireParameterCommandTopic(string(hmenum.ParameterState))
+		payloadLock = strconv.FormatBool(rfStateLocked)
+		payloadUnlock = strconv.FormatBool(rfStateUnlocked)
 	case KindButton:
 		// A button lock's slot is GLOBAL_BUTTON_LOCK in the MASTER
 		// paramset (see [Lock.writeButtonParam]), so no wire-parameter

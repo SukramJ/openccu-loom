@@ -24,6 +24,16 @@ import (
 // device's own SOUNDFILE VALUE_LIST offers (SOUNDFILE_001 .. SOUNDFILE_252);
 // a lower bound silently drops the parameter for every file above it, and the
 // player then repeats whatever was selected before.
+//
+// 252 is the firmware's own count, not a rounded one. HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.SoundFile declares
+// INTERNAL_SOUNDFILE, then SOUNDFILE_001 through SOUNDFILE_252, then
+// RANDOM_SOUNDFILE, OLD_VALUE and DO_NOT_CARE — 256 members. HMIPServer
+// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.
+// GeneralStateParameterFactory#createSoundFileParameter builds SOUNDFILE as
+// an ENUM over the unmodified SoundFile.getNames(), so a device carrying the
+// parameter gets the whole list; the HmIP-MP3P's own paramset description
+// confirms it with a 256-entry VALUE_LIST on channels :1 and :2.
 const (
 	minSoundfileIndex = 1
 	maxSoundfileIndex = 252
@@ -61,8 +71,8 @@ func ConvertSoundfileIndex(index int) (string, error) {
 }
 
 // SoundPlayer is the HmIP-MP3P channel-2 sound-file playback unit. It wraps a
-// sound-file selector (1..189) with optional volume, duration and
-// repetitions.
+// sound-file selector (1..252, see [maxSoundfileIndex]) with optional volume,
+// duration and repetitions.
 type SoundPlayer struct {
 	custom.BaseDP
 
@@ -253,14 +263,17 @@ func (sp *SoundPlayer) IsStateChange(turnOn bool) bool {
 }
 
 // maxRepetitionsIndex is the highest allowed value for
-// [PlayConfig.RepetitionsIndex].
-const maxRepetitionsIndex = 18
+// [PlayConfig.RepetitionsIndex]. It is the shared ceiling
+// [custom.MaxRepetitions] rather than a second literal, so the index this
+// profile accepts and the count the label formatter accepts cannot drift
+// apart; the firmware citation for the number lives on that constant.
+const maxRepetitionsIndex = custom.MaxRepetitions
 
 // RepetitionsIndexNotSet is the sentinel value for [PlayConfig.RepetitionsIndex]
 // that means "do not write the REPETITIONS parameter". Use this when the caller
 // wants to trigger playback without overriding the device's current repetitions
-// setting. Values in the range -1..18 are valid write targets; any other value
-// is treated as RepetitionsIndexNotSet.
+// setting. Values in the range -1..[maxRepetitionsIndex] are valid write
+// targets; any other value is treated as RepetitionsIndexNotSet.
 const RepetitionsIndexNotSet = -2
 
 // ConvertPlayRepetitionsIndex maps the logical repetitions integer to the
@@ -270,11 +283,17 @@ const RepetitionsIndexNotSet = -2
 //     VALUE_LIST, conventionally "INFINITE" or "INFINITE_REPETITIONS")
 //   - 0  → no repeat (first entry, conventionally "NO_REP" or
 //     "NO_REPETITION")
-//   - 1..18 → play N+1 times (second through nineteenth entry)
+//   - 1..[maxRepetitionsIndex] → play N+1 times (second entry onwards)
 //
 // The concrete label is looked up from availableRep so the returned string
 // always matches the device's own VALUE_LIST verbatim. Returns an empty string
 // and a non-nil error when the list is empty or index is out of range.
+//
+// A finite index that the device's own list has no slot for is an error, not
+// a clamp. Clamping used to slide such an index onto the last entry — which
+// is INFINITE_REPETITIONS on every list the firmware builds — so a request
+// for a bounded number of repeats started an unbounded siren and reported
+// success.
 func ConvertPlayRepetitionsIndex(index int, availableRep []string) (string, error) {
 	if len(availableRep) == 0 {
 		return "", errors.New("siren: ConvertPlayRepetitionsIndex: REPETITIONS list is empty")
@@ -282,17 +301,24 @@ func ConvertPlayRepetitionsIndex(index int, availableRep []string) (string, erro
 	var slot int
 	switch {
 	case index == 0:
-		slot = 0
+		return availableRep[0], nil
 	case index == -1:
-		slot = len(availableRep) - 1
+		return availableRep[len(availableRep)-1], nil
 	case index >= 1 && index <= maxRepetitionsIndex:
 		slot = index
 	default:
 		return "", fmt.Errorf("siren: ConvertPlayRepetitionsIndex: index must be -1 (infinite), 0 (none), or 1-%d, got %d", maxRepetitionsIndex, index)
 	}
-	if slot >= len(availableRep) {
-		slot = len(availableRep) - 1
+	// The firmware puts INFINITE_REPETITIONS in the last slot of every list
+	// it builds (HMIPServer de.eq3.cbcs.devicedescription.channelspecification.
+	// Repetitions#getNames sets names[size-1]), so the last slot is not a
+	// repeat count. A finite index reaching it — or past the end — is out of
+	// range for this device.
+	if slot >= len(availableRep)-1 {
+		return "", fmt.Errorf("siren: ConvertPlayRepetitionsIndex: index %d has no repeat slot in the device's %d-entry REPETITIONS list", index, len(availableRep))
 	}
+	//nolint:gosec // G602: slot is bounded above by the len(availableRep)-1 check
+	// directly above and below by the switch, which only assigns slot >= 1.
 	return availableRep[slot], nil
 }
 
@@ -357,6 +383,14 @@ func (sp *SoundPlayer) PlaySound(
 		sfLabel, err := ConvertSoundfileIndex(cfg.SoundfileIndex)
 		if err != nil {
 			return fmt.Errorf("soundplayer: play: %w", err)
+		}
+		// Same membership rule as the label branch above: a tone the
+		// device does not offer is dropped by the CCU, the player repeats
+		// its previous file, and the call looks like success. The check is
+		// skipped only when the device list is unknown (no SOUNDFILE data
+		// point on the channel), where refusing everything would be worse.
+		if len(sp.availableSF) > 0 && !sp.offersSoundfile(sfLabel) {
+			return fmt.Errorf("%w %q", ErrUnknownSoundfile, sfLabel)
 		}
 		params[hmenum.ParameterSoundfile] = sfLabel
 	}

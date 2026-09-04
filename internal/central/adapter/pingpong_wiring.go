@@ -4,7 +4,6 @@
 package adapter
 
 import (
-	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -87,7 +86,7 @@ func WirePingPongBus(
 			if !ok || entry == nil || entry.Client == nil {
 				return
 			}
-			prefix, token, hasToken := strings.Cut(callerID, "#")
+			prefix, token, hasToken := clientpkg.ParsePingCallerID(callerID)
 			if !hasToken || prefix != entry.Client.WireBoundaryID() {
 				return
 			}

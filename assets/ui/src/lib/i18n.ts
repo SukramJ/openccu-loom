@@ -978,6 +978,7 @@ const EN: Catalog = {
   "health.note.initial_sync_not_connected": "Initial sync: not connected",
   "health.note.client_connected": "Client connected",
   "health.note.breaker_closed": "Breaker closed",
+  "health.note.event_received": "Event received",
   "health.note.breaker_half_open": "Breaker half-open",
   "health.note.breaker_open": "Breaker open",
   "health.note.breaker_open_escalated": "Breaker open (escalated)",
@@ -1175,6 +1176,8 @@ const EN: Catalog = {
     "Hidden parameters promoted to first-class data points. Use at your own risk.",
   "unignore.warning":
     "Excessive writes to MASTER paramset values can damage devices.",
+  "unignore.fleet_scope":
+    "Patterns are saved per central but apply to the whole fleet: a pattern names a model, channel and parameter, so it also unhides matching parameters on your other CCUs.",
   "unignore.central_label": "Central:",
   "unignore.search_placeholder": "Filter by name…",
   "unignore.add_pattern": "Add pattern",
@@ -4859,6 +4862,7 @@ const DE: Catalog = {
   "health.note.initial_sync_not_connected": "Erst-Sync: nicht verbunden",
   "health.note.client_connected": "Client verbunden",
   "health.note.breaker_closed": "Sicherung geschlossen",
+  "health.note.event_received": "Ereignis empfangen",
   "health.note.breaker_half_open": "Sicherung halb offen",
   "health.note.breaker_open": "Sicherung offen",
   "health.note.breaker_open_escalated": "Sicherung offen (eskaliert)",
@@ -5084,6 +5088,8 @@ const DE: Catalog = {
     "Versteckte Parameter als reguläre Datenpunkte verfügbar machen. Verwendung auf eigene Gefahr.",
   "unignore.warning":
     "Häufige Schreibvorgänge auf MASTER-Paramset-Werte können Geräte beschädigen.",
+  "unignore.fleet_scope":
+    "Muster werden pro Zentrale gespeichert, wirken aber auf die gesamte Anlage: Ein Muster benennt Modell, Kanal und Parameter und macht passende Parameter deshalb auch auf den anderen CCUs sichtbar.",
   "unignore.central_label": "Zentrale:",
   "unignore.search_placeholder": "Nach Name filtern…",
   "unignore.add_pattern": "Hinzufügen",

@@ -24,10 +24,6 @@ import (
 // up to five minutes on a loaded unit.
 const backupDownloadTimeout = 5 * time.Minute
 
-// firmwareDownloadTimeout is the per-request HTTP timeout for the CCU
-// firmware download initiated via the maintenance CGI.
-const firmwareTransportDownloadTimeout = 10 * time.Minute
-
 // The methods in this file are typed wrappers around [Client.Call] for the
 // most frequently used CCU JSON-RPC operations. Wire-method names and
 // Parameter keys mirror py (lines cited per method).
@@ -436,25 +432,6 @@ func (c *Client) CreateSystemVariableBool(ctx context.Context, name string, init
 	return result, nil
 }
 
-// CreateSystemVariableEnum creates a new enum system variable on the CCU.
-// valueList is joined as a semicolon-separated string (CCU wire format).
-//
-// Wire: SysVar.createEnum, params: {name, valList, internal, chnID} — the
-// key is valList, which is what www/api/methods.conf declares and what
-// sysvar/createenum.tcl's ReGa script reads (`sv.ValueList( valList )`).
-func (c *Client) CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error) {
-	var result map[string]any
-	if err := c.Call(ctx, "SysVar.createEnum", map[string]any{
-		"name":     name,
-		"valList":  joinSemicolon(valueList),
-		"internal": 0,
-		"chnID":    -1,
-	}, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 // CreateSystemVariableFloat creates a new float system variable on the CCU.
 // minValue and maxValue define the allowed range (CCU defaults: 0–65000).
 //
@@ -493,29 +470,6 @@ func (c *Client) GetAllSystemVariables(ctx context.Context) ([]map[string]any, e
 func (c *Client) GetAllPrograms(ctx context.Context) ([]map[string]any, error) {
 	var result []map[string]any
 	if err := c.Call(ctx, "Program.getAll", nil, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// GetValue reads a single parameter value from the CCU. When paramsetKey is
-// "MASTER" the Interface.getMasterValue method is used; for all other keys
-// (e.g. "VALUES") Interface.getValue is used.
-//
-// Wire: Interface.getValue or Interface.getMasterValue,
-//
-// params: {interface, address, valueKey}.
-func (c *Client) GetValue(ctx context.Context, iface, address, paramsetKey, parameter string) (any, error) {
-	method := "Interface.getValue"
-	if paramsetKey == "MASTER" {
-		method = "Interface.getMasterValue"
-	}
-	var result any
-	if err := c.Call(ctx, method, map[string]any{
-		"interface": iface,
-		"address":   address,
-		"valueKey":  parameter,
-	}, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -757,8 +711,16 @@ func (c *Client) GetSystemVariable(ctx context.Context, name string) (any, error
 // it back. Returns the raw archive bytes (typically a few MB).
 //
 // The call requires an active JSON-RPC session because the CCU's CGI uses the
-// session ID for authentication — the session ID is embedded in the URL in
-// the @sid@ form required by the CCU.
+// session ID for authentication, and the @…@ delimiters around it are not a
+// convention: the CGI's own extractor captures them inclusively
+// (`regexp "$sidname=(@[A-Za-z0-9]*@)"` in OpenCCU-Base
+// www/tcl/eq3_old/session.tcl, session_urlsid) and a companion proc strips
+// them again for the ReGa lookup. The WebUI builds byte-for-byte this URL
+// (www/config/cp_security.cgi), and `action=create_backup` is a real proc
+// there that streams the .sbk archive (www/config/backup.tcl). The JSON-RPC
+// login hands back the INNER value, so re-wrapping it here is right; the
+// url.QueryEscape is a provable no-op over the [A-Za-z0-9] session alphabet
+// and is kept only as a defensive measure.
 //
 // Wire: GET
 // {baseURL}/config/cp_security.cgi?sid=@{session_id}@&action=create_backup
@@ -810,66 +772,6 @@ func (c *Client) DownloadBackup(ctx context.Context) ([]byte, error) {
 		return nil, c.wrap("download_backup", fmt.Errorf("read response body: %w", err))
 	}
 	return data, nil
-}
-
-// DownloadFirmware instructs the CCU to fetch firmware from the given URL via
-// an HTTP POST to the maintenance CGI. Only "http://" and "https://" scheme
-// URLs are accepted; others return [hmerr.ErrUnsupported].
-//
-// Wire: POST {baseURL}/config/cp_maintenance.cgi (form params: sid, action,
-// url) (10-minute timeout).
-func (c *Client) DownloadFirmware(ctx context.Context, firmwareURL string) error {
-	if !strings.HasPrefix(firmwareURL, "http://") && !strings.HasPrefix(firmwareURL, "https://") {
-		return c.wrap("download_firmware", fmt.Errorf("only http/https scheme allowed, got %q: %w", firmwareURL, hmerr.ErrUnsupported))
-	}
-
-	c.mu.Lock()
-	sid := c.sessionID
-	c.mu.Unlock()
-	if sid == "" {
-		return c.wrap("download_firmware", fmt.Errorf("no active JSON-RPC session: %w", hmerr.ErrAuthFailure))
-	}
-
-	base := c.backupBaseURL()
-	if base == "" {
-		return c.wrap("download_firmware", fmt.Errorf("cannot derive base URL from endpoint %q: %w", c.cfg.Endpoint, hmerr.ErrUnsupported))
-	}
-
-	uploadURL := base + "/config/cp_maintenance.cgi"
-
-	form := url.Values{
-		"sid":    {sid},
-		"action": {"download_firmware"},
-		"url":    {firmwareURL},
-	}
-
-	hc := c.httpClient
-	if hc == nil {
-		hc = httpx.NewClient(firmwareTransportDownloadTimeout)
-	} else {
-		hc = &http.Client{
-			Transport: hc.Transport,
-			Timeout:   firmwareTransportDownloadTimeout,
-		}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return c.wrap("download_firmware", fmt.Errorf("build request: %w", err))
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := hc.Do(req)
-	if err != nil {
-		return c.wrap("download_firmware", fmt.Errorf("%w: %w", hmerr.ErrNoConnection, err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return c.wrap("download_firmware", fmt.Errorf("CCU returned HTTP %d: %w", resp.StatusCode, hmerr.ErrInternalBackendException))
-	}
-	return nil
 }
 
 // GetHTTPSRedirectEnabled queries the CCU for its current HTTPS-redirect flag.
@@ -964,9 +866,13 @@ func (c *Client) ListInterfaces(ctx context.Context) ([]InterfaceEntry, error) {
 }
 
 // backupBaseURL derives the CCU base URL from the configured JSON-RPC endpoint
-// By stripping the "/api/homematic.cgi" suffix (
-// constant, const.py:315). Returns an empty string when the endpoint does not
-// contain the expected suffix and cannot be safely trimmed.
+// by stripping the "/api/homematic.cgi" suffix. The suffix is not a borrowed
+// constant: the firmware's document root makes the JSON-RPC entry point and
+// the config CGIs siblings under /www/ (OpenCCU-Base www/api/homematic.cgi
+// sets DOCUMENT_ROOT to /www/, with www/config/cp_*.cgi alongside it), so the
+// trimmed prefix plus "/config/…" addresses the same server. Returns an empty
+// string when the endpoint does not contain the expected suffix and cannot be
+// safely trimmed.
 func (c *Client) backupBaseURL() string {
 	const jsonRPCPath = "/api/homematic.cgi"
 	ep := strings.TrimRight(c.cfg.Endpoint, "/")
@@ -979,17 +885,4 @@ func (c *Client) backupBaseURL() string {
 		return ""
 	}
 	return u.Scheme + "://" + u.Host
-}
-
-// joinSemicolon joins a string slice with semicolons. Used to format the
-// valueList parameter for SysVar.createEnum (CCU wire format).
-func joinSemicolon(s []string) string {
-	var result strings.Builder
-	for i, v := range s {
-		if i > 0 {
-			result.WriteString(";")
-		}
-		result.WriteString(v)
-	}
-	return result.String()
 }

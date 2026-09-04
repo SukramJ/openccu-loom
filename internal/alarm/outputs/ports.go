@@ -48,6 +48,31 @@ func disableAcousticSelection(dev SirenDevice) (string, bool) {
 	return d.DisableAcousticLabel()
 }
 
+// opticalPatterner is the optical counterpart of [acousticDisabler]: a device
+// that can name a sustained alarm pattern out of its own selection list. The
+// model answers it from the device's naming; the driver must not re-derive it
+// from AvailableLights by position, which used to pick the last entry — an
+// acknowledgement blink that satisfies OPTICAL_ALARM_ACTIVE while showing
+// nobody an alarm.
+type opticalPatterner interface {
+	AlarmOpticalLabel() (string, bool)
+}
+
+// alarmOpticalSelection returns the optical selection an activation should use
+// when the operator configured none. Empty means: write no optical selection,
+// leaving the device the one it holds.
+func alarmOpticalSelection(dev SirenDevice) string {
+	d, ok := dev.(opticalPatterner)
+	if !ok {
+		return ""
+	}
+	label, ok := d.AlarmOpticalLabel()
+	if !ok {
+		return ""
+	}
+	return label
+}
+
 // SmokeSounderDevice is the driver's view of a smoke detector used as
 // intrusion sounder (satisfied by *siren.SmokeSiren). It has no
 // duration parameter — the engine-side watchdog is its only bound.

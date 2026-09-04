@@ -492,7 +492,8 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 				_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, e.InterfaceID))
 				connectivityDiscovered[e.InterfaceID] = true
 			}
-			if err := b.PublishConnectivity(ctx, centralName, hubConnectivityTopics, e.InterfaceID, e.Reachable); err != nil {
+			conn := connectivityTopicProvider(hubModel)
+			if err := b.PublishConnectivity(ctx, centralName, conn, e.InterfaceID, e.Reachable); err != nil {
 				p.logger.Warn("mqtt.publish_connectivity",
 					slog.String("central", centralName),
 					slog.String("interface", e.InterfaceID),
@@ -950,13 +951,23 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 	}
 }
 
-// hubConnectivityTopics is a shared zero-value Connectivity used
-// purely as a topic provider — its MQTTTopicsForInterface method
-// is stateless and yields the canonical
-// `<base>/<central>/hub/connectivity/<iface>`. The reconciler owns
-// the real Connectivity state aggregate; here we only need the topic
-// shape, which lives on the model type.
-var hubConnectivityTopics = hub.NewConnectivity()
+// connectivityTopicProvider returns the connectivity aggregate the bridge
+// should render topics from: the unit's own — the object the reconciler
+// writes — rather than a shared throw-away one, so the topic provider is
+// the state holder whenever there is one.
+//
+// MQTTTopicsForInterface reads no field of its receiver today, so a central
+// whose aggregate is not wired yet is served by a stand-in of the same type
+// and gets the same topic. That fallback is the only reason an unwired
+// aggregate is not an error here.
+func connectivityTopicProvider(hubModel *hub.Hub) *hub.Connectivity {
+	if hubModel != nil {
+		if conn := hubModel.ConnectivityDataPoints(); conn != nil {
+			return conn
+		}
+	}
+	return hub.NewConnectivity()
+}
 
 // sysvarStateForMQTT maps the CCU-side value into the payload HA
 // expects on the state topic. For List sysvars the CCU reports the

@@ -10,8 +10,12 @@ diff is called out inline.
 
 The `un_ignore` mechanism promotes parameters that would otherwise be
 suppressed by the visibility decider (internal service parameters,
-rarely-used MASTER knobs) into first-class data points, on a per
-`MODEL:CHANNEL:PARAMETER` pattern basis. This document sketches the
+rarely-used MASTER knobs) into first-class data points, on a per-pattern
+basis. A pattern is either a bare `PARAMETER` (every VALUES paramset,
+any model, any channel) or the fully-qualified
+`PARAMETER:PARAMSET@MODEL:CHANNEL`; a colon without an `@` is rejected,
+so `MODEL:CHANNEL:PARAMETER` is not a form the parser accepts. The
+grammar lives in `visibility.ParseUnIgnoreLine`. This document sketches the
 UI + the thin wire-up layer that made the backend building blocks
 reachable from the SPA — all of it has since landed.
 
@@ -21,7 +25,7 @@ reachable from the SPA — all of it has since landed.
 | ---------------------------------------------- | --------------------------------------------------------------- | ------- |
 | Per-DP marking `MarkUnIgnored`/`IsUnIgnored`   | `internal/model/datapoint/base.go:271-287`                     | shipped |
 | Visibility decider                             | `internal/store/visibility/decider.go`                          | shipped |
-| Parser for `MODEL:CHANNEL:PARAMETER`           | `internal/store/visibility/parser.go`                            | shipped |
+| Parser for `PARAMETER:PARAMSET@MODEL:CHANNEL`  | `internal/store/visibility/parser.go`                            | shipped |
 | Materializer consideration                     | `internal/model/custom/materialize.go:496+`                      | shipped |
 | Per-interface pipeline application              | `internal/central/adapter/device_pipeline.go:443-454`            | shipped |
 | QueryFacade candidate list                     | `internal/central/queryfacade.go:329 GetUnIgnoreCandidates`      | shipped |
@@ -161,7 +165,7 @@ unignore.add_pattern          = Add custom pattern…
 unignore.save                 = Save
 unignore.discard              = Discard
 unignore.unsaved_changes      = {n} changes pending — devices will be re-materialised on Save
-unignore.invalid_pattern      = Invalid pattern (expected MODEL:CHANNEL:PARAMETER)
+unignore.invalid_pattern      = Invalid pattern (expected PARAMETER or PARAMETER:PARAMSET@MODEL:CHANNEL)
 unignore.no_candidates        = No hidden parameters available — all parameters already visible.
 unignore.saved                = Un-ignore list updated. {n} parameters now visible.
 ```
@@ -233,9 +237,29 @@ CREATE TABLE visibility_unignore (
 DROP TABLE visibility_unignore;
 ```
 
-The table is partitioned per `central_name` (multi-CCU first-class,
-per ADR 0002). On daemon start the list is read per central and
-replayed via `Registry.LoadUnIgnore(strings.NewReader(strings.Join(patterns, "\n")))`.
+The table is keyed by `central_name`, and that key is about ownership
+rather than scope. On daemon start every central's list is read and the
+**union** is replayed into the single shared `visibility.Registry` via
+`Registry.LoadUnIgnore(...)`; the suppression marks are then re-applied
+to every device of every central
+(`cmd/openccu-loom/visibility_wiring.go`, `applyVisibilityUnIgnore`).
+
+So a pattern takes effect across the whole fleet. That follows from what
+a pattern is: it names a device model, a channel and a parameter, and
+none of those identify a CCU. Adding `LOW_BAT:VALUES@HmIP-eTRV-2:0`
+while editing central A also unhides `LOW_BAT` on every `HmIP-eTRV-2`
+on central B.
+
+What the per-central key does buy: each central owns its own list, so
+the SPA edits one at a time and the audit trail names which list changed,
+and removing a central withdraws its patterns from the union
+(`DeleteForCentral`). Making the effect per-central as well would mean a
+per-central decider rather than the shared one, which is an
+architectural change and would silently narrow every un-ignore rule an
+operator has already saved — not a documentation fix.
+
+Pinned by `TestUnIgnorePatternsApplyAcrossTheFleet`, so the code and this
+paragraph cannot drift apart again.
 
 ## Config knob (YAML)
 
@@ -249,15 +273,15 @@ centrals:
     ...
     visibility:
       un_ignore:
-        - "HmIP-eTRV-2:0:LOW_BAT"
-        - "*:*:RSSI_PEER"
+        - "LOW_BAT:VALUES@HmIP-eTRV-2:0"
+        - "RSSI_PEER"
 ```
 
 Mapped to `config.CentralConfig.Visibility.UnIgnore []string`.
 
 ## Test plan
 
-- **Unit**: `parser_test.go` covers `MODEL:CHANNEL:PARAMETER` parsing.
+- **Unit**: `parser_test.go` covers both accepted pattern forms.
   `handlers/visibility_test.go` covers the PUT round-trip + malformed
   patterns.
 - **Integration** (`-tags=integration`): load a device via `godevccu`,

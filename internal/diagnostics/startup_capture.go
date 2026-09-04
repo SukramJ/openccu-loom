@@ -31,9 +31,11 @@ type StartupCaptureConfig struct {
 	// [DefaultCaptureDuration]; values larger than
 	// [MaxCaptureDuration] are clamped down to that cap.
 	DurationS int `json:"duration_seconds"`
-	// Anonymise controls whether device-address-shaped values in the
-	// archive are hashed. A body or file that omits the key means "yes"
-	// — see [StartupCaptureConfig.UnmarshalJSON].
+	// Anonymise controls whether the archive's operator-identifying
+	// attributes are hashed — the `subject`, `user`, `username`, `remote`
+	// and `remote_addr` keys; addresses and parameter names stay in clear
+	// text. A body or file that omits the key means "yes" — see
+	// [StartupCaptureConfig.UnmarshalJSON].
 	Anonymise bool `json:"anonymise"`
 }
 

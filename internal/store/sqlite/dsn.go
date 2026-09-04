@@ -3,6 +3,25 @@
 
 package sqlite
 
+import (
+	"fmt"
+	"time"
+)
+
+// busyTimeout is how long SQLite holds a lock-blocked statement open before
+// it gives up with SQLITE_BUSY. It is the single source for that value across
+// the daemon's connection pool: [connectionPragmas] formats it into the DSN
+// every pooled connection carries, applyPragmas formats it into the priming
+// statement, and the health probe's own query deadline is derived from it
+// (health_probe.go) so a lock wait the database is configured to tolerate is
+// never reported as a probe failure.
+//
+// The one-shot read-only opens ([SchemaVersionOfFile], the backup tool's
+// vacuum open) deliberately do not read this constant: they open an archived
+// or being-backed-up file outside the pool, so their lock tolerance is an
+// independent knob that happens to carry the same number today.
+const busyTimeout = 5 * time.Second
+
 // connectionPragmas are the modernc.org/sqlite `_pragma` query parameters the
 // driver applies to *every* new connection it opens for a pool — not just the
 // first. Connection-scoped pragmas must ride on the DSN because setting them
@@ -25,8 +44,11 @@ package sqlite
 // file-backed temp storage) instead of the SPECIFICATION §13.2 tuning —
 // nearly every write paid an extra fsync and reads got a tenth of the
 // intended page cache.
-const connectionPragmas = "_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)" +
-	"&_pragma=synchronous(NORMAL)&_pragma=cache_size(-20000)&_pragma=temp_store(MEMORY)"
+var connectionPragmas = fmt.Sprintf(
+	"_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"+
+		"&_pragma=synchronous(NORMAL)&_pragma=cache_size(-20000)&_pragma=temp_store(MEMORY)",
+	busyTimeout.Milliseconds(),
+)
 
 // FileDSN builds the canonical modernc.org/sqlite DSN for a file-backed
 // database at path. Every caller that opens a daemon database must build its

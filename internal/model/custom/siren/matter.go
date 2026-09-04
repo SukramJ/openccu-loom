@@ -7,6 +7,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
@@ -124,6 +127,13 @@ const (
 
 	matterCmdOff uint32 = 0x00
 	matterCmdOn  uint32 = 0x01
+	// matterCmdToggle carries conformance "!OFFONLY" (matter.js
+	// on-off.element.ts:39): mandatory on every OnOff cluster that does not
+	// advertise the OffOnly feature, which this projection does not. It was
+	// omitted on the grounds that a siren has no toggle in its wire surface —
+	// but conformance asks what the cluster must accept, not what the device
+	// spells, and the three sibling OnOff projections all carry it.
+	matterCmdToggle uint32 = 0x02
 	// LT (Lighting) feature-gated OnOff commands — mandatory once LT is
 	// advertised. matter.js on-off.element.ts:41,46,51 mark all three
 	// conformance "LT".
@@ -131,7 +141,6 @@ const (
 	matterCmdOnWithRecallGlobalScene uint32 = 0x41
 	matterCmdOnWithTimedOff          uint32 = 0x42
 
-	matterOnOffClusterRevision        uint16 = 6
 	matterBooleanStateClusterRevision uint16 = 3 // matter.js HEAD boolean-state.element.ts:19 default=3
 	// matterSmokeCOAlarmClusterRevision mirrors matter.js HEAD
 	// smoke-co-alarm-cluster.element.ts:21 default=2 (spec 1.5.1).
@@ -249,7 +258,7 @@ func (s sirenOnOffServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrFeatureMap:
 		return matterFeatureOnOffLT, true
 	case matterAttrClusterRevision:
-		return matterOnOffClusterRevision, true
+		return onoff.Revision(), true
 	default:
 		return nil, false
 	}
@@ -321,6 +330,16 @@ func (s sirenOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any,
 		err = s.s.TurnOff(ctx, priority)
 	case matterCmdOn:
 		err = s.s.TurnOn(ctx, OnConfig{}, priority)
+	case matterCmdToggle:
+		// An unobserved siren is treated as silent, so a first Toggle raises
+		// the alarm rather than doing nothing — the same reading the switch
+		// projection applies.
+		active, observed := s.s.IsActive()
+		if observed && active {
+			err = s.s.TurnOff(ctx, priority)
+		} else {
+			err = s.s.TurnOn(ctx, OnConfig{}, priority)
+		}
 	case matterCmdOffWithEffect:
 		// OffWithEffect (LT, mandatory): no dimming-effect engine on a
 		// siren, so the effect identifier/variant are ignored and the
@@ -370,12 +389,18 @@ func (s sirenOnOffServer) MatterAttributes() []uint32 {
 // three LT-mandatory commands so AcceptedCommandList is populated for
 // chip-tool / Apple Home conformance reads. matter.js on-off.element.ts:
 // Off (0x00, M), On (0x01), OffWithEffect (0x40, LT),
-// OnWithRecallGlobalScene (0x41, LT), OnWithTimedOff (0x42, LT). Toggle
-// (0x02) is absent — Siren has no toggle command in its wire surface.
+// OnWithRecallGlobalScene (0x41, LT), OnWithTimedOff (0x42, LT).
+//
+// Toggle (0x02) carries conformance "!OFFONLY" and this cluster does not
+// advertise OffOnly, so it is mandatory here. It used to be omitted because a
+// siren has no toggle in its wire surface; conformance asks what the cluster
+// accepts, not what the device spells, and a controller that finds a mandatory
+// command missing can abort the commissioning.
 func (s sirenOnOffServer) MatterAcceptedCommands() []uint32 {
 	return []uint32{
 		matterCmdOff,
 		matterCmdOn,
+		matterCmdToggle,
 		matterCmdOffWithEffect,
 		matterCmdOnWithRecallGlobalScene,
 		matterCmdOnWithTimedOff,
@@ -406,28 +431,48 @@ func (s *SmokeSiren) MatterClusterServers() []interfaces.MatterClusterServer {
 // smokeCOServer projects SmokeSiren onto the SmokeCOAlarm cluster.
 // Maps the HM SmokeAlarmStatus enum onto AlarmStateEnum:
 //
-//	IDLE_OFF / IDLE_ON       → Normal (0)
-//	SECONDARY_ALARM          → Warning (1) — peer is alarming
-//	PRIMARY_ALARM / INTRUSION → Critical (2) — local alarm fires
+//	IDLE_OFF / INTRUSION_ALARM → Normal (0)
+//	SECONDARY_ALARM            → Warning (1) — a peer detector sensed smoke
+//	PRIMARY_ALARM              → Critical (2) — this detector sensed smoke
 type smokeCOServer struct{ s *SmokeSiren }
 
 func (s smokeCOServer) MatterClusterID() uint32 { return matterClusterSmokeCOAlarm }
 
+// smokeStatusToAlarmState maps the HM status onto AlarmStateEnum.
+//
+// Which labels mean smoke is not decided here: it is read from
+// [hmenum.SmokeDetectorAlarmStatusSmokeLabels], the one place the domain
+// answers that question, so this plane cannot drift from the safety
+// classifier and the derived SMOKE_ALARM sensor. It did: INTRUSION_ALARM was
+// reported as Critical, i.e. as a fire, although it means the installation
+// drove this smoke detector as a *siren* for a burglar alarm — a command the
+// domain sent, not a detection the device made. Matter's SmokeState is
+// "whether the device's smoke sensor is currently triggering a smoke alarm"
+// (matter.js packages/types/src/clusters/smoke-co-alarm.d.ts:150), so an
+// intrusion belongs at Normal however loud the sounder is.
+//
+// Only the severity of a genuine smoke label is decided locally.
 func smokeStatusToAlarmState(st SmokeAlarmStatus) uint8 {
-	switch st {
-	case SmokeStatusPrimaryAlarm, SmokeStatusIntrusion:
-		return matterSmokeAlarmCritical
-	case SmokeStatusSecondaryAlarm:
-		return matterSmokeAlarmWarning
-	default:
+	if !slices.Contains(hmenum.SmokeDetectorAlarmStatusSmokeLabels(), string(st)) {
 		return matterSmokeAlarmNormal
 	}
+	if st == SmokeStatusSecondaryAlarm {
+		return matterSmokeAlarmWarning
+	}
+	return matterSmokeAlarmCritical
 }
 
 // smokeStatusToExpressedState maps the HM status onto ExpressedStateEnum.
-// The device has one sensor, so every non-normal state is expressed as
-// SmokeAlarm; the finer Warning/Critical distinction stays on SmokeState,
-// which is the attribute typed AlarmStateEnum.
+// The device has one sensor, so every smoke state is expressed as SmokeAlarm;
+// the finer Warning/Critical distinction stays on SmokeState, which is the
+// attribute typed AlarmStateEnum.
+//
+// An intrusion alarm reaches Normal here through the same gate: ExpressedState
+// SmokeAlarm means the device is expressing visual and audible indication of a
+// *smoke* alarm (smoke-co-alarm.d.ts:566-574), and the enum carries no member
+// for "sounding on someone else's behalf". Normal understates what the device
+// is doing; SmokeAlarm would misstate why, and only one of those sends a
+// controller a fire notification.
 func smokeStatusToExpressedState(st SmokeAlarmStatus) uint8 {
 	if smokeStatusToAlarmState(st) == matterSmokeAlarmNormal {
 		return matterExpressedStateNormal

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -1488,7 +1489,7 @@ func schedulesActiveProfileSetHandler(q ScheduleQuery) CommandHandler {
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
-		if args.ProfileIndex < 1 || args.ProfileIndex > 6 {
+		if !weekprofile.ValidProfileIndex(args.ProfileIndex) {
 			return nil, NewCommandError(CommandErrorBadRequest, "profile_index must be 1..6")
 		}
 		if err := q.SetActiveProfile(ctx, args.ChannelAddress, args.ProfileIndex); err != nil {
@@ -1621,7 +1622,7 @@ func schedulesClimateCopyProfileHandler(q ScheduleQuery) CommandHandler {
 		if args.SourceChannelAddress == "" || args.TargetChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "source_channel_address and target_channel_address required")
 		}
-		if args.SourceProfile < 1 || args.SourceProfile > 6 || args.TargetProfile < 1 || args.TargetProfile > 6 {
+		if !weekprofile.ValidProfileIndex(args.SourceProfile) || !weekprofile.ValidProfileIndex(args.TargetProfile) {
 			return nil, NewCommandError(CommandErrorBadRequest, "source_profile and target_profile must be 1..6")
 		}
 		if err := q.CopyClimateProfile(ctx, args.SourceChannelAddress, args.SourceProfile, args.TargetChannelAddress, args.TargetProfile); err != nil {

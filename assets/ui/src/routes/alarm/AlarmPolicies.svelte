@@ -28,12 +28,24 @@
   const MODES = ["perimeter", "full", "night", "vacation", "custom"] as const;
   type Mode = (typeof MODES)[number];
 
-  // Anonymous surfaces a per-source silence-code requirement can gate
-  // (CodePolicy.RequireSilence). Operator sessions (rest-operator /
-  // ws-operator / hmcli) always bypass every code check — the break-glass
-  // degradation in docs/alarm-concept.md §11 — so they are not offered
-  // here; toggling them would have no engine-side effect.
-  const SILENCE_SOURCES = ["mqtt", "keypad", "remote"] as const;
+  // The surfaces a per-source silence-code requirement can actually gate
+  // (CodePolicy.RequireSilence). The engine drops the requirement for
+  // every pre-authenticated source, so a switch offered for one of those
+  // is stored, ignored, and shows a protection that is not there: the
+  // operator sessions (rest-operator / ws-operator / hmcli) carry their
+  // own second factor — the break-glass degradation in
+  // docs/alarm-concept.md §11 — and a keypad or remote press is
+  // authenticated by its slot or binding match and carries no PIN that
+  // could be typed.
+  //
+  // This list offered keypad and remote as well. Neither could gate
+  // anything, and keypad never reaches the silence verb at all: the
+  // intent router uses it for arm and disarm only. MQTT is the one
+  // anonymous plane that silences.
+  //
+  // Pinned by TestSilenceGatesAreOfferedOnlyWhereTheyBite, which derives
+  // both halves from the sources rather than from this comment.
+  const SILENCE_SOURCES = ["mqtt"] as const;
 
   // Go's time.Weekday numbering (0=Sunday..6=Saturday), matching
   // AlarmSchedule.Days. Reuses the existing weekday.short.* catalogue

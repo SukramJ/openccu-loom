@@ -154,8 +154,11 @@ func PatchChannel(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 				problem.New(problem.TypeValidation, r, "No patchable field supplied", ""))
 			return
 		}
+		// A negative ordinal is rejected here rather than downstream:
+		// the channel address is built as addr + ":" + no, so "-1"
+		// would reach the CCU as a channel that cannot exist.
 		no, err := strconv.Atoi(chi.URLParam(r, "no"))
-		if err != nil {
+		if err != nil || no < 0 {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "Invalid channel number", ""))
 			return

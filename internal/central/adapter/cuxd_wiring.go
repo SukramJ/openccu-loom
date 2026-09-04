@@ -47,6 +47,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 	backendReg *backendRegistry,
 	binrpcCallbackServer *rpcserver.BINRPCServer,
 	binrpcCallbackAddr string,
+	adoptBINRPCHandlers func(*CallbackHandlers),
 	logger *slog.Logger,
 ) (closer func(), ingested bool, err error) {
 	iface := hmenum.InterfaceCUxD
@@ -177,6 +178,13 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 			handlers.SetWriter(writer)
 		}
 		handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
+		// Hand the instance to the central's bring-up handle. Without it the
+		// runtime delay-new-device-creation toggle reached only the XML-RPC
+		// handler, and the two instances answered the park-versus-ingest
+		// branch differently for the rest of the daemon's life.
+		if adoptBINRPCHandlers != nil {
+			adoptBINRPCHandlers(handlers)
+		}
 		binrpcCallbackServer.Register(initID, handlers)
 		// Also answer under the id a pre-prefix release registered. CUxD
 		// keys its callback registrations in a way the URL-only deinit does
@@ -246,10 +254,9 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 			if runner != nil {
 				ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
 			}
-			cuxdBackend := backend
 			unit.SetDeviceIngestFn(newHotplugIngestor(
 				unit, pipeline, writer, runner,
-				func(string) backends.Operations { return cuxdBackend },
+				cuxdHotplugBackendResolver(backendReg, wireID, backend),
 				ddLoader, logger,
 			))
 			hotplugInstalled.Store(true)
@@ -274,7 +281,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		return nil
 	}
 
-	ingested = runCUxDActivation(ctx, cuxdIngestBackoff, activate, ic, cc.Name, wireID, logger)
+	ingested = runCUxDActivation(ctx, ingestBackoff, activate, ic, cc.Name, wireID, logger)
 
 	// The bring-up has reported its result for this interface, so hand it to
 	// the recovery coordinator. Before this point every trigger for it is
@@ -361,11 +368,12 @@ func announceCUxDCallback(
 	ensureConnectedClientState(ic, logger)
 }
 
-// cuxdIngestBackoff is the boot-time retry schedule for the CUxD ingest.
-// Same shape as the XML-RPC path: a handful of short waits that cover the
-// window in which the CUxD addon is still starting up behind a CCU that
-// already reports ready.
-var cuxdIngestBackoff = []time.Duration{
+// ingestBackoff is the boot-time ingest retry schedule shared by the
+// XML-RPC path (ccu_wiring.go) and the CUxD path: a handful of short waits
+// that cover the window in which the interface is still starting up behind
+// a CCU that already reports ready. Read-only — the activation runners take
+// their schedule as a parameter, so tests inject their own.
+var ingestBackoff = []time.Duration{
 	1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
 }
 
@@ -476,4 +484,34 @@ func wireCUxDRecovery(unit *central.Unit, t cuxdRecoveryTarget, logger *slog.Log
 	}))
 	unit.Recovery.SetLogger(logger)
 	unit.Recovery.Subscribe() //nolint:contextcheck // Subscribe starts a background goroutine; it has no ctx parameter by design
+}
+
+// cuxdHotplugBackendResolver builds the backend resolver the CUxD hot-plug
+// ingestor installs on the per-unit device-ingest seam.
+//
+// That seam is per unit, not per interface: [central.Unit.SetDeviceIngestFn]
+// holds exactly one function, reached with whatever wire interface id the
+// announcement or the accepted deferred device carried. A resolver that
+// answers with the CUxD backend regardless of the id therefore hydrates an
+// HmIP-RF or BidCos device's paramsets over CUxD's BIN-RPC connection — the
+// wrong transport, and silently, because the ingestor's nil-backend skip is
+// never reached.
+//
+// So the shared registry decides, and the CUxD backend is used only for CUxD's
+// own wire id — the case where CUxD is the only wired interface and the
+// registry has nothing for it yet.
+func cuxdHotplugBackendResolver(
+	backendReg *backendRegistry,
+	cuxdWireID string,
+	cuxdBackend backends.Operations,
+) func(interfaceID string) backends.Operations {
+	return func(interfaceID string) backends.Operations {
+		if b := backendReg.operations(interfaceID); b != nil {
+			return b
+		}
+		if interfaceID != "" && interfaceID == cuxdWireID {
+			return cuxdBackend
+		}
+		return nil
+	}
 }

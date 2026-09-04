@@ -41,7 +41,17 @@ type ColorLight struct {
 // colorIndexWhite is the COLOR value that means "white": the wire
 // encodes the hue circle as 0..199 and reserves 200 for the white
 // point. Larger values are undefined and are read back as white for
-// robustness. Mirrors `CustomDpColorDimmer.hs_color` (light.py:447-460).
+// robustness.
+//
+// colorIndexSpan is the span BOTH directions divide by. The CCU's own
+// surfaces are unanimous and all three read `parseInt(colorVal / 199 *
+// 360)`: the RGBW easymode control
+// (www/rega/esp/controls/rgbw.fn, the emitted colorVal block), its
+// picker (www/config/easymodes/js/RGBW_Controller.js), and the WebUI's
+// ACT_HSV_COLOR_VALUE_STORE reader (www/webui/webui.js,
+// __activateColorPicker). 200 is the white point, not the span, so
+// dividing by it reads every hue about half a percent low and can never
+// report the top of the circle.
 const (
 	colorIndexWhite = 200
 	colorIndexSpan  = 199
@@ -178,7 +188,11 @@ func (l *ColorLight) colorFromIndex() (hue int32, saturation float64, observed b
 	if c < 0 {
 		c = 0
 	}
-	return int32(float64(c) / colorIndexWhite * 360), 100, true //nolint:gosec // c < 200 keeps the product below 360
+	// c is at most 199 here (200 and above returned white above), so the
+	// product is at most exactly 360 — the top of the circle, which is
+	// the same colour as 0 and which every consumer normalises
+	// ([hueToMatter] wraps it; Home Assistant's hue range includes it).
+	return int32(float64(c) / colorIndexSpan * 360), 100, true //nolint:gosec // c <= 199 caps the product at 360
 }
 
 // SetColor commands a new (hue, saturation) pair. Hue wraps around 360°;
@@ -189,8 +203,10 @@ func (l *ColorLight) colorFromIndex() (hue int32, saturation float64, observed b
 // _SATURATION_MULTIPLIER=100 (model/custom/light.py). [Color] performs the
 // inverse on read, so a north-bound round-trip is unit-consistent.
 //
-// Returns nil without writing when IsStateChangeFull reports no change for the
-// given HS color — matches the turn_on guard pattern.
+// Asks IsStateChangeFull first, matching the turn_on guard pattern. That
+// check cannot suppress a repeat today — the commanded-colour accessor
+// it consults holds no state (see the hook block in light.go) — so a
+// repeated colour command does reach the CCU.
 //
 // HUE and SATURATION are grouped into one atomic put_paramset: a
 // CallParameterCollector is attached to ctx, both dp.Set calls route through
@@ -291,10 +307,10 @@ func NewColorTempLight(cfg Config, minK, maxK int32) *ColorTempLight {
 // keeps the COLOR_TEMPERATURE-only behaviour.
 func newColorTempLightOn(cfg Config, minK, maxK int32, whitePoint *device.Channel) *ColorTempLight {
 	if minK <= 0 {
-		minK = 2000
+		minK = defaultMinKelvin
 	}
 	if maxK <= 0 {
-		maxK = 6500
+		maxK = defaultMaxKelvin
 	}
 	ct := &ColorTempLight{
 		Light:     New(cfg),
@@ -355,8 +371,10 @@ func (l *ColorTempLight) Subscribe(ch *device.Channel) func() {
 // SetKelvin commands a new colour temperature. Values are clamped to
 // the [MinKelvin, MaxKelvin] range.
 //
-// Returns nil without writing when IsStateChangeFull reports no change for the
-// given colour temperature — matches the turn_on guard pattern.
+// Asks IsStateChangeFull first, matching the turn_on guard pattern. That
+// check cannot suppress a repeat today — the commanded-kelvin accessor
+// it consults holds no state (see the hook block in light.go) — so a
+// repeated colour-temperature command does reach the CCU.
 func (l *ColorTempLight) SetKelvin(ctx context.Context, v int32, priority hmenum.CommandPriority) error {
 	if v < l.MinKelvin {
 		v = l.MinKelvin
@@ -401,6 +419,24 @@ const (
 	maxKelvinScale = 1_000_000
 	maxMireds      = 500
 	minMireds      = 153
+)
+
+// defaultMinKelvin / defaultMaxKelvin are the fallback colour-temperature
+// bounds for a channel whose COLOR_TEMPERATURE descriptor declares no
+// MIN/MAX. They apply only then: every light that carries the descriptor
+// takes its bounds from the device (see [kelvinBoundsFromChannel]).
+//
+// The pair itself is loom-local and its origin is **unverified**: no
+// source in the reference family carries it (the Python reference exposes
+// no Kelvin bounds at all, only the 1000000 mireds constant), and no
+// device descriptor in the simulated fleet declares 2000/6500. What would
+// settle it is a CCU-declared range for a tunable-white RF dimmer — the
+// two devices on this path (HM-LC-DW-WM, HM-DW-WM) carry no
+// COLOR_TEMPERATURE parameter at all, which is why the fallback is
+// reached for them in the first place.
+const (
+	defaultMinKelvin int32 = 2000
+	defaultMaxKelvin int32 = 6500
 )
 
 // kelvinFromColorLevel converts a 0..1 white-point level to kelvin.
@@ -521,7 +557,7 @@ func (l *FixedColorLight) bindChannelColor(ch *device.Channel, rebased custom.Re
 		}
 		target := ch
 		if chNo != custom.AnyChannelOffset && chNo != ch.Number {
-			target = siblingChannel(ch, chNo)
+			target = ch.Sibling(chNo)
 		}
 		dp := custom.EnumSensorField(target, param)
 		if dp == nil {
@@ -573,12 +609,18 @@ func (l *FixedColorLight) Subscribe(ch *device.Channel) func() {
 }
 
 // Color returns the last observed colour slot.
+//
+// The slot is resolved through the device's own VALUE_LIST, never by casting
+// the raw index: a CCU orders COLOR by the RGB bit pattern (bit 0 blue, bit 1
+// green, bit 2 red), which agrees with [FixedColor] on only four of its eight
+// slots. A label outside the eight known colours — the writable list also
+// carries RANDOM, OLD_VALUE and DO_NOT_CARE — reports as unobserved.
 func (l *FixedColorLight) Color() (FixedColor, bool) {
-	if l.color == nil {
+	name, ok := l.ColorName()
+	if !ok {
 		return 0, false
 	}
-	v, ok := l.color.Value()
-	return FixedColor(v), ok
+	return fixedColorByName(name)
 }
 
 // SetColor commands a new colour slot. The wire value is the string label
@@ -602,9 +644,38 @@ func (l *FixedColorLight) SetColor(ctx context.Context, c FixedColor, priority h
 		return fmt.Errorf("fixedcolor: SET: %w", err)
 	}
 	// Optimistic local update so Color() / ColorName() reflect the new slot
-	// immediately, before the CCU confirms the write.
-	l.color.OnEvent(int32(c))
+	// immediately, before the CCU confirms the write. The stored index is the
+	// label's position in the device's own VALUE_LIST — the value the CCU will
+	// echo — and not the [FixedColor] ordinal, which denotes a different slot
+	// on four of eight colours.
+	if idx, found := l.deviceSlotIndex(name); found {
+		l.color.OnEvent(idx)
+	}
 	return nil
+}
+
+// deviceSlotIndex returns the position of a COLOR label in the device's
+// VALUE_LIST, which is the raw index the CCU reports for that colour.
+func (l *FixedColorLight) deviceSlotIndex(name string) (int32, bool) {
+	if l.color == nil {
+		return 0, false
+	}
+	for i, label := range l.color.Descriptor.ValueList {
+		if label == name {
+			return int32(i), true
+		}
+	}
+	return 0, false
+}
+
+// fixedColorByName maps a CCU colour label onto its [FixedColor] slot.
+func fixedColorByName(name string) (FixedColor, bool) {
+	for c, n := range fixedColorNames {
+		if n == name {
+			return c, true
+		}
+	}
+	return 0, false
 }
 
 // SetColorByName commands a colour slot by its CCU enum name (e.g. "BLUE").
@@ -613,10 +684,8 @@ func (l *FixedColorLight) SetColor(ctx context.Context, c FixedColor, priority h
 // only has the descriptor must address the slot by name rather than by index.
 // Returns an error when the name is not one of the eight known colours.
 func (l *FixedColorLight) SetColorByName(ctx context.Context, name string, priority hmenum.CommandPriority) error {
-	for c, n := range fixedColorNames {
-		if n == name {
-			return l.SetColor(ctx, c, priority)
-		}
+	if c, known := fixedColorByName(name); known {
+		return l.SetColor(ctx, c, priority)
 	}
 	return fmt.Errorf("fixedcolor: unknown color name %q", name)
 }
@@ -638,14 +707,19 @@ var fixedColorNames = map[FixedColor]string{
 // (e.g. "WHITE", "RED"). Returns ("", false) when the value has never been
 // observed.
 func (l *FixedColorLight) ColorName() (string, bool) {
-	c, ok := l.Color()
+	if l.color == nil {
+		return "", false
+	}
+	name, ok := l.color.Label()
 	if !ok {
 		return "", false
 	}
-	if name, found := fixedColorNames[c]; found {
-		return name, true
+	// Only the eight known colours are reported; RANDOM / OLD_VALUE /
+	// DO_NOT_CARE are write-side selectors, not observed colours.
+	if _, known := fixedColorByName(name); !known {
+		return "", false
 	}
-	return "", false
+	return name, true
 }
 
 // CurrentColorBehaviour returns the last observed COLOR_BEHAVIOUR label
@@ -679,11 +753,9 @@ func (l *FixedColorLight) ChannelHsColor() (hue int32, saturation float64, ok bo
 		return 0, 0, false
 	}
 	// Map the CCU string name to a FixedColor index then to HS.
-	for fc, n := range fixedColorNames {
-		if n == name {
-			h, s := FixedColorToHS(fc)
-			return h, s, true
-		}
+	if fc, known := fixedColorByName(name); known {
+		h, s := FixedColorToHS(fc)
+		return h, s, true
 	}
 	// Unknown name: return minimum hue/saturation (mirrors Python's fallback
 	// of (_MIN_HUE, _MIN_SATURATION) in FIXED_COLOR_TO_HS_CONVERTER.get).

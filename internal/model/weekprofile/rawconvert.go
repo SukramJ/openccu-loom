@@ -57,21 +57,51 @@ var climateParamPattern = regexp.MustCompile(
 // device-specific caveat.
 const SimpleMaxGroup = schedule.SimpleMaxSlot
 
+// HighestSimpleGroup returns the largest group number any key in m names,
+// or 0 when none does. The map's value type is irrelevant to the answer,
+// which is why it is generic: the two callers hold a paramset-description
+// key set and a MASTER paramset, and both were walking the keys with
+// their own copy of this loop.
+func HighestSimpleGroup[V any](m map[string]V) int {
+	highest := 0
+	for key := range m {
+		if no, ok := SimpleGroupNo(key); ok && no > highest {
+			highest = no
+		}
+	}
+	return highest
+}
+
 // SimpleGroupNo extracts the group number from a simple week-profile
 // key ("01_WP_LEVEL" → 1). ok is false when the key is not of that
 // form. The number is returned unclamped, so callers can tell an
 // out-of-range group ("25_WP_LEVEL") apart from a key that is not a
 // week-profile cell at all.
 func SimpleGroupNo(key string) (groupNo int, ok bool) {
+	n, _, ok := SimpleGroupField(key)
+	return n, ok
+}
+
+// SimpleGroupField is [SimpleGroupNo] plus the field name after the
+// "_WP_" marker ("01_WP_LEVEL" → 1, "LEVEL"). One parse serves both, so
+// a reader that wants a specific cell asks for it rather than rebuilding
+// the key.
+//
+// Rebuilding is what a caller must not do: the CCU pads the slot number
+// to two digits only below ten (WebUI HmIPWeeklyProgram.js,
+// _addLeadingZero: `return (parseInt(val) < 10) ? "0"+val : val;`), so
+// the width is a minimum rather than a fixed shape, and a formatted
+// prefix encodes an assumption this parse does not need.
+func SimpleGroupField(key string) (groupNo int, field string, ok bool) {
 	parts := strings.SplitN(key, "_", 3)
 	if len(parts) != 3 || parts[1] != "WP" || parts[2] == "" {
-		return 0, false
+		return 0, "", false
 	}
 	n, err := strconv.Atoi(parts[0])
 	if err != nil || n < 1 {
-		return 0, false
+		return 0, "", false
 	}
-	return n, true
+	return n, parts[2], true
 }
 
 // IsParameterName reports whether a MASTER paramset key is one cell of a
@@ -301,7 +331,7 @@ func ClimateToRawWire(c *schedule.Climate) (rawClimateSchedule, error) { //nolin
 func RawToClimate(raw rawClimateSchedule) (*schedule.Climate, error) {
 	c := schedule.NewClimate()
 	for profileKey, ps := range raw {
-		if !isValidProfileKey(profileKey) {
+		if !schedule.IsValidProfileKey(profileKey) {
 			return nil, fmt.Errorf("weekprofile: invalid profile key %q", profileKey)
 		}
 		prof := schedule.NewClimateProfile()
@@ -318,19 +348,6 @@ func RawToClimate(raw rawClimateSchedule) (*schedule.Climate, error) {
 		c.Profiles[profileKey] = prof
 	}
 	return c, nil
-}
-
-// isValidProfileKey mirrors the schedule package helper but is package-local
-// to avoid importing it.
-func isValidProfileKey(k string) bool {
-	if len(k) < 2 || k[0] != 'P' {
-		return false
-	}
-	var n int
-	if _, err := fmt.Sscanf(k, "P%d", &n); err != nil {
-		return false
-	}
-	return n >= 1 && n <= 6
 }
 
 // isValidWeekday checks whether a string is a known CCU weekday.
@@ -402,9 +419,20 @@ func climateWeekdayToSlotsExpand(cwd schedule.ClimateWeekday) (weekdaySlots, err
 		prevEnd = p.endMins
 	}
 
-	if prevEnd < 24*60 {
-		// Trailing gap — fill to 24:00 with base temperature.
+	if prevEnd < schedule.ClimateEndOfDayMinutes {
+		// Trailing gap — fill to the end of day with base temperature.
 		ws[slotNo] = ScheduleSlot{EndTime: maxScheduleTime, Temperature: cwd.BaseTemperature}
+	}
+
+	// Refuse an over-capacity day rather than let [fillUpWeekdaySlots] trim it.
+	// A period preceded by a gap costs two slots, so a weekday that passes
+	// [schedule.ClimateWeekday.ValidateWire] — which does not require gapless
+	// coverage — can expand past what the CCU stores. The trim would drop the
+	// tail, and the entry that ends the day at 24:00 is in it, so the device
+	// would be written a day that stops in the afternoon with nothing reported.
+	if len(ws) > slotCount {
+		return nil, fmt.Errorf("weekprofile: weekday expands to %d slots, the CCU stores %d",
+			len(ws), slotCount)
 	}
 
 	return fillUpWeekdaySlots(cwd.BaseTemperature, ws), nil
@@ -445,6 +473,16 @@ func slotsToClimateWeekday(ws weekdaySlots) schedule.ClimateWeekday {
 	for _, n := range ordered {
 		endStr := n.slot.EndTime
 		temp := n.slot.Temperature
+
+		// A cell whose end time does not parse, or does not advance past the
+		// previous cell's end, spans no minutes: it can only produce a
+		// zero-length period. The base-temperature derivation drops the same
+		// cells, and so does the flat-paramset reader in
+		// internal/central/adapter.
+		endMins := toMinutes(endStr)
+		if endMins < 0 || endMins <= toMinutes(prevEnd) {
+			continue
+		}
 
 		if temp != baseTemp {
 			if current == nil {
@@ -687,7 +725,7 @@ func ParseSimpleRawParamset(raw map[string]any, bits TargetChannelBits) (*schedu
 		if groupNo < 1 || groupNo > SimpleMaxGroup {
 			continue
 		}
-		if g.weekday == 0 {
+		if !IsSimpleGroupActive(g.weekday) {
 			continue // inactive group
 		}
 		days := WeekdayBitmaskToList(g.weekday)
@@ -782,7 +820,7 @@ func decodeWireDuration(base, factor int) string {
 // the REST/WS schedules domain maps its DTOs onto [schedule.Simple] and
 // calls this rather than encoding the paramset a second time. Errors
 // name the offending group so a REST caller gets a usable 4xx.
-func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int, bits TargetChannelBits) (map[string]any, error) { //nolint:gocyclo,gocognit,funlen // flat per-field emit; length/complexity is field count, not control-flow depth
+func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int, bits TargetChannelBits, astro AstroOffsetLimits) (map[string]any, error) { //nolint:gocyclo,gocognit,funlen // flat per-field emit; length/complexity is field count, not control-flow depth
 	out := make(map[string]any, (deactivateUpTo+1)*4)
 	if s != nil {
 		for _, groupNo := range s.Slots() {
@@ -829,8 +867,12 @@ func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int, bits TargetC
 				return nil, fmt.Errorf("slot %d: unknown astro_type %q", groupNo, entry.AstroType)
 			}
 			out[prefix+"ASTRO_TYPE"] = astroID
-			if entry.AstroOffsetMinutes < -720 || entry.AstroOffsetMinutes > 720 {
-				return nil, fmt.Errorf("slot %d: astro_offset_minutes out of range", groupNo)
+			// The channel's own declared range decides, the way the CCU's
+			// editor does it. A wider value is not clipped: it is a different
+			// switching time from the one the operator asked for.
+			if lo, hi := astro.bounds(); entry.AstroOffsetMinutes < lo || entry.AstroOffsetMinutes > hi {
+				return nil, fmt.Errorf("slot %d: astro_offset_minutes %d outside the declared range %d..%d",
+					groupNo, entry.AstroOffsetMinutes, lo, hi)
 			}
 			out[prefix+"ASTRO_OFFSET"] = entry.AstroOffsetMinutes
 
@@ -1093,9 +1135,13 @@ const MaxTimeBaseFactor = 30
 //
 // The encoder passes this one pair through verbatim so a lock schedule read
 // from the CCU can be saved again.
+//
+// The numbers themselves are declared once, in the domain
+// ([schedule.PermanentDurationBase]), because the lock action table states the
+// same pair and a correction has to reach both.
 const (
-	permanentBase   = 7 // HOUR_1
-	permanentFactor = 31
+	permanentBase   = schedule.PermanentDurationBase
+	permanentFactor = schedule.PermanentDurationFactor
 )
 
 // timeBaseTable maps a CCU TimeBase integer to (unit string, multiplier in that
@@ -1147,7 +1193,7 @@ var durationUnitIn100ms = map[string]float64{
 // a string for it the write kept whatever the slot held — the firmware
 // default (7, 31), which reads back as `lock_autorelock_end`, the
 // opposite intent.
-const ZeroDuration = "0ms"
+const ZeroDuration = schedule.ZeroDuration
 
 // PermanentDuration is the string form of the (base 7, factor 31) pair — the
 // CCU's own encoding for a switch point that does not expire.
@@ -1168,7 +1214,7 @@ const ZeroDuration = "0ms"
 // The same pair and the same word cover RAMP_TIME: the CCU builds both
 // editors from one helper (`_getDurationRamptimeHTML`), so the encoding is
 // shared.
-const PermanentDuration = "permanent"
+const PermanentDuration = schedule.PermanentDuration
 
 // FormatTimeBaseFactor converts a (base, factor) pair from the CCU
 // paramset into a human-readable duration string used by [schedule.SimpleEntry].
@@ -1308,4 +1354,35 @@ func splitHHMM(hhmm string) (hour, minute int, err error) {
 		return 0, 0, fmt.Errorf("invalid minute in %q", hhmm)
 	}
 	return h, m, nil
+}
+
+// AstroOffsetLimits carries the ASTRO_OFFSET bounds a channel declares.
+//
+// The CCU holds no constant for this: its weekly-program editor reads
+// ASTRO_OFFSET_MIN / ASTRO_OFFSET_MAX out of the paramset description and
+// clamps its input field to them, so the accepted range is whatever the
+// channel declares. Every model in the descriptor corpus declares INTEGER
+// MIN -128 MAX 127.
+//
+// Declared is false when the channel carries no ASTRO_OFFSET descriptor. The
+// write is then bounded by [astroOffsetFallbackLimit], which is this project's
+// long-standing conservative bound and not a claim about any device.
+type AstroOffsetLimits struct {
+	Min      int
+	Max      int
+	Declared bool
+}
+
+// astroOffsetFallbackLimit bounds an astro offset when the channel declares no
+// range. The domain validator applies the same bound to the same field, so it
+// is stated once, in the domain — see [schedule.AstroOffsetFallbackLimit] for
+// what it rests on.
+const astroOffsetFallbackLimit = schedule.AstroOffsetFallbackLimit
+
+// bounds returns the range to enforce and how to name it in an error.
+func (l AstroOffsetLimits) bounds() (lo, hi int) {
+	if l.Declared {
+		return l.Min, l.Max
+	}
+	return -astroOffsetFallbackLimit, astroOffsetFallbackLimit
 }

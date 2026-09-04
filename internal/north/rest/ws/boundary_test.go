@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // TestRouterBoundaryEnrichesContext verifies that Dispatch installs a
-// [reqctx.RequestContext] tagged with the WS operation prefix and the
+// [hmreqctx.RequestContext] tagged with the WS operation prefix and the
 // configured central name before the handler runs. Mirrors the REST
 // ReqContext middleware so log aggregation across both transports
 // uses the same shape (audit O13).
@@ -24,10 +24,10 @@ func TestRouterBoundaryEnrichesContext(t *testing.T) {
 	r := NewRouter()
 	r.SetBoundary(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), "ccu-99")
 
-	var seen reqctx.RequestContext
+	var seen hmreqctx.RequestContext
 	var ok bool
 	r.Register("test.cmd", func(ctx context.Context, _ json.RawMessage) (any, error) {
-		seen, ok = reqctx.FromContext(ctx)
+		seen, ok = hmreqctx.FromContext(ctx)
 		return "ok", nil
 	})
 

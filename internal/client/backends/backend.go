@@ -203,12 +203,12 @@ type DeviceOps interface {
 	// [ErrUnsupported] when [Capabilities.FirmwareUpdate] is false.
 	TriggerFirmwareUpdate(ctx context.Context) (bool, error)
 
-	// DownloadFirmware instructs the CCU to fetch firmware from the given URL
-	// via an HTTP POST to the CCU's maintenance CGI. Only "http://" and
-	// "https://" scheme URLs are accepted; others return [ErrUnsupported].
-	// Backends without a JSON-RPC session layer (CUxD, Homegear, CCU-Jack)
-	// return [ErrUnsupported].
-	DownloadFirmware(ctx context.Context, firmwareURL string) error
+	// DownloadFirmware asks the CCU to fetch the newest firmware for
+	// itself and stage it for a later install. It takes no target: the
+	// CCU derives the image from its own version and board serial, so
+	// there is no caller-supplied URL to pass. Backends that cannot
+	// reach that call (CUxD, Homegear, CCU-Jack) return [ErrUnsupported].
+	DownloadFirmware(ctx context.Context) error
 
 	// CreateBackupAndDownload obtains a CCU config archive. maxWaitTime
 	// bounds the whole exchange in seconds; pollInterval survives for

@@ -34,9 +34,17 @@ func calcIsStateChangeWith(isRefreshed, stateUncertain bool, opts []StateChangeO
 
 // IsStateChangeWith reports whether the sensor represents a meaningful state
 // change, with optional overrides supplied as functional options.
-//
-// Without options the method is equivalent to [DewPointSensor.IsStateChange].
 // Pass [WithForceStateChange] to force a true result (e.g. after re-subscribe).
+//
+// The option form is NOT the same predicate as [DewPointSensor.IsStateChange],
+// which reads IsRefreshed — whether the sensor has emitted a value
+// (emitState.hasLast). This form reads IsRefreshedFromSources — whether every
+// registered source carries an observation. The two disagree in the window
+// where all sources are observed but emitState.feed has not set hasLast yet,
+// because a publish guard suppressed the emission. No production code calls
+// either method today, so which predicate the option form should carry is
+// undecided rather than settled: pick it when the first consumer states what
+// it needs.
 func (s *DewPointSensor) IsStateChangeWith(opts ...StateChangeOpt) bool {
 	return calcIsStateChangeWith(s.IsRefreshedFromSources(), s.StateUncertain(), opts)
 }

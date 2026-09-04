@@ -207,14 +207,7 @@ func (e *Engine) disarmLocked(ctx context.Context, a *zone, by, source string) {
 		e.silenceIncident(ctx, a, by, source)
 		e.closeIncident(ctx, a, closeReasonDisarm)
 	}
-	a.state = hmenum.AlarmZoneStateDisarmed
-	a.mode = hmenum.AlarmModeDisarmed
-	a.bypassed = map[string]bool{}
-	a.openAtArm = map[string]bool{}
-	a.pendingCause = ""
-	a.preTriggerState = ""
-	a.preTriggerMode = ""
-	a.preAlarm = false
+	a.resetToDisarmed()
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassDisarm, Event: "disarmed", Actor: by, Source: source,

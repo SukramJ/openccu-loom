@@ -4,31 +4,30 @@
 package adapter
 
 import (
-	"strings"
-
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
-// resolveDataPoint maps a paramset entry onto a concrete
+// resolveDataPointWithUnIgnore maps a paramset entry onto a concrete
 // [device.ParameterDataPoint]. The decision tree:
 //
 //	writable ACTION → Button / ActionSelect / Action / Switch
 //	writable non-ACTION, write-only → ActionSelect / ActionFloat / …
 //	writable read+write → Switch / Select / Float / Integer / Text
-//	readonly → BinarySensor / (typed) Sensor / nil for click events
+//	readonly → BinarySensor / Button (click events) / (typed) Sensor
 //
-// Returns nil when the parameter is a click event (handled as a
-// separate event stream), or when the (type, operations) tuple has
-// no meaningful data-point analogue (e.g. ENUM readonly without a
-// value list).
-func resolveDataPoint(cfg generic.Spec) device.ParameterDataPoint {
-	return resolveDataPointWithUnIgnore(cfg, false)
-}
-
-// resolveDataPointWithUnIgnore is the un-ignore-aware variant. When the
+// It returns nil in exactly three cases: an impulse event (SEQUENCE_OK —
+// see [ImpulseEvents]), a DEVICE_ERROR-prefixed parameter the visibility
+// decider has not un-ignored, and a descriptor whose TYPE is DUMMY or
+// empty. Click events are NOT dropped — they resolve to a Button in
+// [resolveReadonly], because dropping them left HmIP-BSM / HmIP-WRC buttons
+// with no data point at all. A read-only ENUM resolves to an integer sensor
+// whether or not it carries a VALUE_LIST.
+//
+// It is the un-ignore-aware entry point. When the
 // caller already knows from the visibility decider that an ERROR-prefixed
 // parameter is un-ignored for this device model (e.g. HM-Sec-Key HM-Sec-Win
 // ERROR or HmIP-DLD / HmIP-DLP ERROR_JAMMED — see
@@ -66,23 +65,52 @@ func resolveDataPointWithUnIgnore(cfg generic.Spec, parameterIsUnIgnored bool) d
 }
 
 // ImpulseEvents is the set of parameter names treated as impulse events.
-// Parameters in this set are not created as standalone data points they
+// Parameters in this set are not created as standalone data points; they
 // surface as device-level events instead.
-var ImpulseEvents = map[string]struct{}{
-	"SEQUENCE_OK": {},
+//
+// Derived from [modevent.Sources], not restated: the membership belongs to
+// the classifier that also has to emit the event. Restating it here meant
+// SEQUENCE_OK was declared twice, and the two copies were free to drift —
+// a name added on this side alone suppresses a data point for an event
+// nothing emits, and one added on the classifier's side alone emits an event
+// beside a data point that should not exist.
+var ImpulseEvents = impulseEventNames()
+
+// impulseEventNames projects the classifier's impulse parameters onto the
+// plain-string keys this package resolves parameters by.
+func impulseEventNames() map[string]struct{} {
+	params := modevent.Sources(modevent.KindImpulse)
+	out := make(map[string]struct{}, len(params))
+	for _, p := range params {
+		out[string(p)] = struct{}{}
+	}
+	return out
 }
 
-// isImpulseEvent reports whether the parameter name is in [ImpulseEvents].
+// isImpulseEvent reports whether the parameter name is in [ImpulseEvents],
+// which is the classifier's own impulse set projected onto strings — so this
+// answers the same question [modevent.Classify] does, for the same reason
+// [isDeviceErrorEvent] delegates: suppressing the data point is only safe
+// while the classifier keeps the parameter.
 func isImpulseEvent(parameter string) bool {
 	_, ok := ImpulseEvents[parameter]
 	return ok
 }
 
-// IsDeviceErrorEvent mirrors
-// prefix tuple (`("ERROR", "SENSOR_ERROR")`). The Python side uses
-// `str.startswith(tuple)`; we replicate it as two prefix checks.
+// isDeviceErrorEvent reports whether the parameter is a device-error
+// parameter, which is suppressed as a stateful data point and surfaces as a
+// device-trigger event instead.
+//
+// The verdict is asked of [modevent.Classify] rather than restated here.
+// Suppressing the data point is only safe because the classifier keeps the
+// parameter: a name this side suppressed but the classifier did not know
+// reached no plane at all — no data point, no device-trigger event, no
+// broadcast. A bare HasPrefix here answered true for /^ERROR[^_]/ names
+// (ERRORCODE, ERRORS) that the classifier's exact-or-underscore rule rejects,
+// so the two rules were the same rule in name only.
 func isDeviceErrorEvent(parameter string) bool {
-	return strings.HasPrefix(parameter, "ERROR") || strings.HasPrefix(parameter, "SENSOR_ERROR")
+	k, ok := modevent.Classify(hmenum.Parameter(parameter))
+	return ok && k == modevent.KindDeviceError
 }
 
 // buttonActionParameters are write-only ACTION parameters that are rendered

@@ -232,7 +232,7 @@ func TestPingPongClearThenRecord(t *testing.T) {
 // TestPingPongSeverityAfterClear verifies severity resets to "ok" after Clear
 // even when the previous state was degraded.
 //
-// Severity is "degraded" when the live pending-table size reaches
+// Severity is "degraded" when the live pending-table size is over
 // MismatchThreshold. A pending PING that has not yet been swept keeps
 // the table populated and the severity elevated. Clear empties the
 // pending table unconditionally — severity must return to "ok".
@@ -246,9 +246,10 @@ func TestPingPongSeverityAfterClear(t *testing.T) {
 		MismatchThreshold: 1,
 	})
 
-	// Record a PING without matching it. The pending table has 1 entry
-	// which equals MismatchThreshold → Stats.Severity must be "degraded".
-	tr.RecordPing("unmatched")
+	// Record two PINGs without matching them. The pending table has 2
+	// entries, over MismatchThreshold → Stats.Severity must be "degraded".
+	tr.RecordPing("unmatched-1")
+	tr.RecordPing("unmatched-2")
 
 	if s := tr.Stats(); s.Severity != "degraded" {
 		t.Fatalf("severity before Clear=%q, want degraded (pending=%d)", s.Severity, s.Pending)

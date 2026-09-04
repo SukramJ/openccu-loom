@@ -200,7 +200,7 @@ func TestDerivedBinarySensorNilOffValues(t *testing.T) {
 }
 
 func TestDerivedBinarySensorUnknownWithExplicitOffValues(t *testing.T) {
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 	s.OnLabel("WEIRD_LABEL")
 	_, ok := s.Value()
 	if ok {
@@ -209,7 +209,7 @@ func TestDerivedBinarySensorUnknownWithExplicitOffValues(t *testing.T) {
 }
 
 func TestDerivedBinarySensorNoRepeatFire(t *testing.T) {
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 	var fired int
 	s.OnUpdate(func(_, _ bool) { fired++ })
 	s.OnLabel("OPEN")

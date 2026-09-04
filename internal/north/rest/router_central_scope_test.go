@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // scopeCapturingRebooter records the request scope the router handed the
@@ -21,7 +21,7 @@ type scopeCapturingRebooter struct {
 }
 
 func (s *scopeCapturingRebooter) RebootCCU(ctx context.Context, _ string) error {
-	rc, _ := reqctx.FromContext(ctx)
+	rc, _ := hmreqctx.FromContext(ctx)
 	s.central = rc.CentralName
 	return nil
 }

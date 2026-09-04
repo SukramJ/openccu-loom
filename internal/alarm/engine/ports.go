@@ -133,11 +133,39 @@ type OutputPort interface {
 // MotionResetPort clears the latched motion state of enrolled sensors
 // by writing their channel's RESET_MOTION parameter.
 //
-// A motion detector holds its MOTION flag until the device's own
-// blocking time expires or the parameter is written. While it is held
-// the sensor reads as open, which blocks an arm or forces an
-// auto-bypass — so the engine needs a way to clear it rather than only
-// report it.
+// An HmIP motion detector holds its MOTION flag for its configured
+// blocking time unless the write-only RESET_MOTION action is fired.
+// While it is held the sensor reads as open, which blocks an arm or
+// forces an auto-bypass — so the engine needs a way to clear it rather
+// than only report it.
+//
+// The blocking time is the MASTER parameter MOTION_ACTIVE_TIME, an
+// ordinal 0..7 with default 4, not a duration: the CCU's own editor maps
+// it 0=15 s, 1=30 s, 2=1 min, 3=2 min, 4=4 min, 5=8 min, 6=16 min,
+// 7=32 min, each index written beside its value
+// (../OpenCCU-Base/www/config/easymodes/hmip/MOTIONDETECTOR_TRANSCEIVER.tcl:130-137;
+// the same table appears in PRESENCEDETECTOR_TRANSCEIVER.tcl). So the
+// shipped default holds MOTION for four minutes — long enough that
+// arming without a reset would routinely fail.
+//
+// The rule is HmIP-only, and narrower than "a motion detector":
+//   - Classic BidCos detectors expose no RESET_MOTION at all; the CCU
+//     un-latches them itself on a server-side timer. They report
+//     Supports=false, which is correct — see resetParameterFor in
+//     internal/alarm/motionreset.go for the sources.
+//   - What a successful write does is UNVERIFIED in the CCU sources:
+//     whether it clears MOTION at once or only ends the blocking
+//     interval is not stated anywhere in them, and only a live trace
+//     would settle it. Either way the sensor stops reading as held,
+//     which is what the arming path needs.
+//   - The CCU's own UI offers the reset button only when the device is a
+//     permanent listener (it reads MASTER PERMANENT_FULL_RX and hides the
+//     button while it is 0 —
+//     ../OpenCCU-Base/www/rega/esp/controls/motiondetector.fn:112-118).
+//     Supports below does not read that value, so on a non-permanent
+//     listener the daemon writes and counts the sensor as resettable
+//     where the CCU would not offer the action. Whether such a write
+//     eventually lands is likewise unverified.
 //
 // Contract:
 //   - Supports reports whether the sensor's channel exposes a writable

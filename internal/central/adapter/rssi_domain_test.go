@@ -108,8 +108,10 @@ func TestRSSIInfoDomain_PerDeviceRSSI(t *testing.T) {
 	})
 	putRSSIDevice(t, withRSSI, hmenum.ParameterRSSIDevice, -65)
 	putRSSIDevice(t, withRSSI, hmenum.ParameterRSSIPeer, -70)
-	// BATTERY_STATE > 10 triggers the percentage path in batteryLevel().
-	putRSSIDevice(t, withRSSI, hmenum.ParameterBatteryState, 80)
+	// OPERATING_VOLTAGE_LEVEL is the battery percentage. BATTERY_STATE used to
+	// stand in for it whenever it exceeded 10, which no device can satisfy: the
+	// three models declaring it declare a cell voltage, min 1.5 max 4.6 V.
+	putRSSIDevice(t, withRSSI, hmenum.Parameter(hmenum.CalculatedParameterOperatingVoltageLevel), 80)
 	// LOW_BAT on channel :0 is picked up by lowBattery().
 	putBoolDP(t, withRSSI, hmenum.ParameterLowBat, false)
 	c.ModelRegistry.Put(withRSSI)

@@ -115,11 +115,6 @@ type Capabilities struct {
 	// ExecuteProgram is true when the backend can trigger CCU programs.
 	ExecuteProgram bool
 
-	// HasSystemUpdate is true when the backend can report and trigger CCU
-	// firmware updates. Dynamically set to false when the CCU firmware version
-	// is too old.
-	HasSystemUpdate bool
-
 	// InboxDevices is true when the backend exposes the pairing inbox.
 	InboxDevices bool
 
@@ -179,9 +174,6 @@ type Capabilities struct {
 }
 
 // CapabilityFor returns the static capability profile for kind.
-// Dynamic capabilities (HasSystemUpdate) are set to the most optimistic
-// value here and may be overridden after probing the CCU version via
-// [UpdateCapabilitiesForVersion].
 func CapabilityFor(kind Kind) Capabilities {
 	switch kind {
 	case KindCCU:
@@ -205,7 +197,6 @@ func CapabilityFor(kind Kind) Capabilities {
 			DeleteDevice:           true,
 			DeleteSystemVariable:   true,
 			ExecuteProgram:         true,
-			HasSystemUpdate:        true,
 			InboxDevices:           true,
 			InstallMode:            true,
 			InstallModeLocal:       true,
@@ -257,54 +248,6 @@ func CapabilityFor(kind Kind) Capabilities {
 	default:
 		return Capabilities{}
 	}
-}
-
-// UpdateCapabilitiesForVersion adjusts dynamic capability flags based on the
-// probed CCU software version string. Some CCU features (system update info)
-// were added in specific firmware versions; older firmware lacks these
-// methods and the JSON-RPC client would receive an error.
-//
-// softwareVersion is the version string from
-// SystemInformation.SoftwareVersion (e.g. "3.55.10.20210601"). An empty
-// string is treated as unknown and no adjustment is applied.
-//
-// Currently known adjustments: - HasSystemUpdate requires CCU firmware ≥
-// 3.49.
-func UpdateCapabilitiesForVersion(caps Capabilities, softwareVersion string) Capabilities {
-	if softwareVersion == "" {
-		return caps
-	}
-	// Parse the major.minor version prefix. We only need the first two
-	// numeric components: "3.49.x.y" → major=3, minor=49.
-	major, minor := parseMajorMinor(softwareVersion)
-	if major == 0 && minor == 0 {
-		return caps
-	}
-	// System update info requires CCU firmware ≥ 3.49 for the ReGa
-	// get_system_update_info script to be available.
-	if major < 3 || (major == 3 && minor < 49) {
-		caps.HasSystemUpdate = false
-	}
-	return caps
-}
-
-// parseMajorMinor extracts the first two numeric components from a
-// dot-separated version string. Returns (0, 0) when parsing fails.
-func parseMajorMinor(version string) (major, minor int) {
-	i := 0
-	for i < len(version) && (version[i] >= '0' && version[i] <= '9') {
-		major = major*10 + int(version[i]-'0')
-		i++
-	}
-	if i >= len(version) || version[i] != '.' {
-		return 0, 0
-	}
-	i++
-	for i < len(version) && (version[i] >= '0' && version[i] <= '9') {
-		minor = minor*10 + int(version[i]-'0')
-		i++
-	}
-	return major, minor
 }
 
 // KindFor returns the backend kind the daemon should use for the given

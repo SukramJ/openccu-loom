@@ -111,7 +111,7 @@ func TestCombinedProjectionBodiesAreUnchanged(t *testing.T) {
 		},
 		{
 			name:          "level combined",
-			projection:    combined.NewLevelCombined("VCU0000001:1", nil, "LEVEL", "LEVEL_2", "LEVEL_COMBINED"),
+			projection:    combined.NewLevelCombined("VCU0000001:1", "LEVEL", "LEVEL_2"),
 			wantComponent: "sensor",
 			wantBody: map[string]any{
 				"name":            "discovery.level_combined",
@@ -191,7 +191,7 @@ func TestCombinedProjectionKindsAreStable(t *testing.T) {
 		want       string
 	}{
 		{combined.NewTimer("VCU0000001:1", nil, "DURATION_VALUE", "DURATION_UNIT"), "duration"},
-		{combined.NewLevelCombined("VCU0000001:1", nil, "LEVEL", "LEVEL_2", "LEVEL_COMBINED"), "level_combined"},
+		{combined.NewLevelCombined("VCU0000001:1", "LEVEL", "LEVEL_2"), "level_combined"},
 		{combined.NewHSColor("VCU0000001:1", nil, "HUE", "SATURATION"), "hs_color"},
 	}
 	for _, tc := range cases {
@@ -225,7 +225,7 @@ func TestCombinedProjectionStatePayloads(t *testing.T) {
 
 	t.Run("level combined", func(t *testing.T) {
 		t.Parallel()
-		lc := combined.NewLevelCombined("VCU0000001:1", nil, "LEVEL", "LEVEL_2", "LEVEL_COMBINED")
+		lc := combined.NewLevelCombined("VCU0000001:1", "LEVEL", "LEVEL_2")
 		if _, observed := lc.CombinedStatePayload(); observed {
 			t.Fatal("an unobserved level pair must not report a state")
 		}
@@ -272,7 +272,7 @@ func TestCombinedProjectionOnCombinedChangeFires(t *testing.T) {
 
 	t.Run("level combined", func(t *testing.T) {
 		t.Parallel()
-		lc := combined.NewLevelCombined("VCU0000001:1", nil, "LEVEL", "LEVEL_2", "LEVEL_COMBINED")
+		lc := combined.NewLevelCombined("VCU0000001:1", "LEVEL", "LEVEL_2")
 		fired := 0
 		unsub := lc.OnCombinedChange(func() { fired++ })
 		defer unsub()

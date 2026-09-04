@@ -385,53 +385,6 @@ func TestDiscoveryObjectID_EmptySuffix(t *testing.T) {
 	}
 }
 
-// --- DiscoveryUniqueID ---
-
-func TestDiscoveryUniqueID_Full(t *testing.T) {
-	t.Parallel()
-	pd := newChannelPD()
-	got := pd.DiscoveryUniqueID("openccu-loom", "ccu1", "STATE")
-	want := "openccu-loom_ccu1_vcu1234567_2_state"
-	if got != want {
-		t.Errorf("DiscoveryUniqueID = %q, want %q", got, want)
-	}
-}
-
-func TestDiscoveryUniqueID_NoCentral(t *testing.T) {
-	t.Parallel()
-	pd := newChannelPD()
-	got := pd.DiscoveryUniqueID("openccu-loom", "", "STATE")
-	want := "openccu-loom_vcu1234567_2_state"
-	if got != want {
-		t.Errorf("DiscoveryUniqueID (no central) = %q, want %q", got, want)
-	}
-}
-
-func TestDiscoveryUniqueID_EmptyPrefix(t *testing.T) {
-	t.Parallel()
-	pd := newChannelPD()
-	got := pd.DiscoveryUniqueID("", "ccu1", "STATE")
-	// empty prefix defaults to "openccu-loom"
-	want := "openccu-loom_ccu1_vcu1234567_2_state"
-	if got != want {
-		t.Errorf("DiscoveryUniqueID (empty prefix) = %q, want %q", got, want)
-	}
-}
-
-func TestDiscoveryUniqueID_EmptyAddress(t *testing.T) {
-	t.Parallel()
-	if got := EmptyPathData.DiscoveryUniqueID("gh", "ccu1", "STATE"); got != "" {
-		t.Errorf("empty address must return empty, got %q", got)
-	}
-}
-
-func TestDiscoveryUniqueID_EmptySuffix(t *testing.T) {
-	t.Parallel()
-	if got := newChannelPD().DiscoveryUniqueID("gh", "ccu1", ""); got != "" {
-		t.Errorf("empty suffix must return empty, got %q", got)
-	}
-}
-
 // --- DiscoveryConfigTopic ---
 
 func TestDiscoveryConfigTopic(t *testing.T) {

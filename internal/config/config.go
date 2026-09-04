@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -297,6 +298,13 @@ type AlarmConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 	// DefaultSirenSeconds bounds one acoustic activation when an
 	// output does not configure its own duration.
+	//
+	// This field, MaxAcousticPerIncidentSeconds and StopVerifySeconds
+	// are the operator-facing source of the three acoustic budgets: the
+	// daemon copies them into the alarm engine's settings at wiring
+	// time. Zero selects the default here; a negative value is refused
+	// by validateAlarmSeconds rather than silently rewritten further
+	// down.
 	DefaultSirenSeconds int `yaml:"default_siren_seconds" json:"default_siren_seconds" cfg:"basic"`
 	// MaxAcousticPerIncidentSeconds is the cumulative acoustic budget
 	// of one incident across all re-triggers and restarts.
@@ -470,6 +478,13 @@ const RetentionHourlyDefault = 13 * 30 * 24 * time.Hour
 // the hourly fold has folded them, permanently losing that data. An
 // explicit value below this floor is clamped up to it at config load; zero
 // still means "use the daemon default", which is far above the floor.
+//
+// The recorder derives its lag from this constant (rollupHourlyLag in
+// internal/history), so the two cannot drift: raising this value raises the
+// lag with it. They used to be independent, and the comment here said so —
+// raising the lag alone left this floor too low and the purge then deleted
+// raw rows the fold had not seen, silently and permanently, for exactly the
+// operators whose retention sat between the two values.
 const HistoryRetentionFloor = time.Hour
 
 // RetentionHourlyOrDefault returns RetentionHourly, falling back to
@@ -568,6 +583,58 @@ type LoggingConfig struct {
 	Level     string            `yaml:"level" json:"level" cfg:"basic"`   // debug|info|warn|error
 	Format    string            `yaml:"format" json:"format" cfg:"basic"` // json|text
 	Overrides map[string]string `yaml:"overrides,omitempty" json:"overrides,omitempty" cfg:"expert"`
+}
+
+// logLevels and logFormats are the accepted domains of [LoggingConfig].
+//
+// They are stated once because the same LoggingConfig value is validated
+// at both config tiers — by [BootstrapConfig.Validate] before the
+// database is open and by [Config.Validate] on every load and every
+// section save. While each tier spelled the domain out for itself, a
+// value added to one of them was invisible in the other: the daemon
+// would boot on the new level while `openccu-loom backup` refused the
+// same file, and the bootstrap parse error at daemon start is discarded,
+// so the operator's env_file setting would go missing without a log
+// line.
+var (
+	logLevels  = []string{"debug", "info", "warn", "error"}
+	logFormats = []string{"json", "text", "text-color"}
+)
+
+// Boot defaults shared by both config tiers. Both are resolved before
+// the database is open, and both are read again from the full tier, so a
+// one-sided edit would leave the daemon and a CLI subcommand pointing at
+// different state directories or bind addresses.
+const (
+	defaultDataDir    = "./var"
+	defaultRESTListen = ":8119"
+	defaultLogLevel   = "info"
+	defaultLogFormat  = "json"
+)
+
+// applyDefaults fills the two logging leaves every tier defaults the
+// same way. Overrides stays nil when unset — an empty map and no map
+// behave identically at the sink.
+func (l *LoggingConfig) applyDefaults() {
+	if l.Level == "" {
+		l.Level = defaultLogLevel
+	}
+	if l.Format == "" {
+		l.Format = defaultLogFormat
+	}
+}
+
+// validate rejects a level or format outside the accepted domain. The
+// error strings name the field as the operator typed it, so both tiers
+// and the SPA save toast read the same way.
+func (l LoggingConfig) validate() error {
+	if !slices.Contains(logLevels, l.Level) {
+		return fmt.Errorf("config: invalid logging.level %q", l.Level)
+	}
+	if !slices.Contains(logFormats, l.Format) {
+		return fmt.Errorf("config: invalid logging.format %q", l.Format)
+	}
+	return nil
 }
 
 // CallbackConfig governs the XML-RPC + BIN-RPC callback servers.
@@ -988,7 +1055,10 @@ func (m NorthMatter) WithDefaults() NorthMatter {
 		out.MDNSAdvertise = "zeroconf"
 	}
 	if out.Commissioning.Iterations == 0 {
-		out.Commissioning.Iterations = 1000
+		// The spec floor, taken from the package that owns the window
+		// the validator also checks against — a literal here could drift
+		// below its own validator and make the default unsavable.
+		out.Commissioning.Iterations = spake2.IterationsMin
 	}
 	return out
 }
@@ -1027,6 +1097,11 @@ type NorthMatterAttestation struct {
 type NorthMatterCommissioning struct {
 	// Passcode is the 27-bit Matter setup code (Spec §5.1.6.4),
 	// between 00000001 and 99999998. Leave 0 to disable PASE.
+	//
+	// The range is enforced — together with the trivially-guessable
+	// codes the spec forbids — by validateMatter, which asks
+	// internal/north/matter/secure/setup.IsValidSetupPIN so the config
+	// tier and the PASE builder accept exactly the same set.
 	Passcode uint32 `yaml:"passcode" json:"passcode" cfg:"secret"`
 
 	// Salt is the PBKDF2 salt persisted alongside the passcode
@@ -1575,7 +1650,10 @@ type HAIngressConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 	// TrustedProxyCIDR is the network the Ingress request must originate from
 	// (the request's real RemoteAddr). Empty uses the HA Supervisor default
-	// (172.30.32.0/23). Only the loopback / this CIDR are ever trusted.
+	// (172.30.32.0/23), which is applied — and spelled out a second time — as
+	// defaultSupervisorCIDR in the composition root's ingress auth wiring,
+	// the only consumer; a reader changing one has to change that one too.
+	// Only the loopback / this CIDR are ever trusted.
 	TrustedProxyCIDR string `yaml:"trusted_proxy_cidr" json:"trusted_proxy_cidr" cfg:"expert"`
 	// Role is the Loom role granted to a trusted Ingress request: "admin"
 	// (default), "operator" or "viewer".
@@ -1807,11 +1885,21 @@ func (b CentralBehavior) DelayNewDeviceCreationEnabled() bool {
 // fields mean "no bootstrap override — use whatever is persisted in
 // SQLite, or the built-in defaults when SQLite is empty".
 type VisibilityConfig struct {
-	// UnIgnore lists `MODEL:CHANNEL:PARAMETER` patterns (with `*`
-	// wildcards for MODEL / CHANNEL) that promote parameters out of
-	// the default-hidden set into the visible data-point surface.
-	// Bare parameter names (no colons) are treated as
-	// `*:*:PARAMETER`.
+	// UnIgnore lists patterns that promote parameters out of the
+	// default-hidden set into the visible data-point surface, in the
+	// two forms the parser accepts (see
+	// [visibility.ParseUnIgnoreLine]): a bare `PARAMETER`, matching
+	// every VALUES paramset on any model and channel, or the fully
+	// qualified `PARAMETER:PARAMSET@MODEL:CHANNEL`, where MODEL may be
+	// `all` and CHANNEL may be `all` or empty for any channel. A colon
+	// without an `@` is rejected.
+	//
+	// The list is written per central and takes effect across the
+	// whole fleet: the daemon unions every central's patterns into
+	// one shared visibility decider, and a pattern matches on model,
+	// channel and parameter — none of which identify a CCU. So a
+	// pattern added here for one central also unhides the matching
+	// parameter on every other central that has such a device.
 	UnIgnore []string `yaml:"un_ignore" json:"un_ignore" cfg:"expert"`
 }
 
@@ -1891,38 +1979,36 @@ func (c *Config) applyDefaults() {
 		c.Locale = "en"
 	}
 	if c.DataDir == "" {
-		c.DataDir = "./var"
+		c.DataDir = defaultDataDir
 	}
-	if c.Logging.Level == "" {
-		c.Logging.Level = "info"
-	}
-	if c.Logging.Format == "" {
-		c.Logging.Format = "json"
-	}
+	c.Logging.applyDefaults()
 	if c.Callback.Host == "" {
 		c.Callback.Host = "0.0.0.0"
 	}
 	if c.Callback.Port == 0 {
-		c.Callback.Port = 8120
+		c.Callback.Port = hmenum.DefaultXMLRPCCallbackPort
 	}
 	if c.Callback.BinPort == 0 {
-		c.Callback.BinPort = 8129
+		c.Callback.BinPort = hmenum.DefaultBINRPCCallbackPort
 	}
 	if c.Callback.MaxConnections == 0 {
 		c.Callback.MaxConnections = 64
 	}
 	if c.North.REST.Listen == "" {
-		c.North.REST.Listen = ":8119"
+		c.North.REST.Listen = defaultRESTListen
 	}
 	// Canonicalise the MQTT topic base. The topic builder trims leading and
 	// trailing slashes for every topic it declares, while the consumers that
-	// concatenate the raw base do not — the last will and the retained-cleanup
-	// subscribe filters among them. A base the operator wrote as "loom/" then
-	// declares availability on `loom/bridge/status` while the broker holds the
-	// will on `loom//bridge/status`, so the offline signal lands where nothing
-	// listens and every bridged entity keeps its last retained value. Trim
-	// before the empty-check so a base of nothing but slashes falls back to the
-	// default instead of failing validation.
+	// concatenate the raw base do not — the retained-cleanup matchers among
+	// them, which test `strings.HasPrefix(topic, topicBase+"/")`. A base the
+	// operator wrote as "loom/" then publishes state on `loom/<central>/…`
+	// while the matcher looks for `loom//<central>/…`, so the orphan sweep
+	// collects nothing and retained topics from a previous build keep feeding
+	// stale values forever. Trim before the empty-check so a base of nothing
+	// but slashes falls back to the default instead of failing validation.
+	// (The last will is no longer such a consumer — it goes through the
+	// trimming builder — so this normalisation is what keeps the remaining
+	// raw concatenations honest, not what the will depends on.)
 	c.North.MQTT.TopicBase = strings.Trim(c.North.MQTT.TopicBase, "/")
 	if c.North.MQTT.TopicBase == "" {
 		c.North.MQTT.TopicBase = "openccu-loom"
@@ -1991,6 +2077,19 @@ func (c *Config) applyDefaults() {
 	if c.AddonUpdate.CheckInterval == 0 {
 		c.AddonUpdate.CheckInterval = 24 * time.Hour
 	}
+	// Clamp an explicit history.retention below the hourly-rollup lag up
+	// to the floor: keeping it lower would let the purge delete raw rows
+	// before the hourly fold folds them (permanent loss). Zero is left
+	// untouched — it selects the daemon default, well above the floor.
+	//
+	// The clamp lives here as well as in Validate because the config store
+	// applies defaults without validating (configstore.Store.Effective),
+	// so a stored `persistence.history` row below the floor was reported
+	// by GET /api/v1/config as written while the running daemon held the
+	// clamped value.
+	if h := &c.Persistence.History; h.Retention > 0 && h.Retention < HistoryRetentionFloor {
+		h.Retention = HistoryRetentionFloor
+	}
 }
 
 // ApplyDefaults fills any still-unset field with its compiled-in default.
@@ -2034,13 +2133,15 @@ func validateCentralBehavior(idx int, b *CentralBehavior) error {
 }
 
 // Validate returns an error when required invariants are violated.
+//
+// It also normalises: an explicit history.retention below
+// [HistoryRetentionFloor] is clamped up to the floor, so the receiver is
+// written to and callers must not treat it as read-only. The same clamp runs
+// in applyDefaults; keeping it here too means every path is clamped whatever
+// its defaults/validate order.
 func (c *Config) Validate() error {
-	if c.Logging.Level != "debug" && c.Logging.Level != "info" &&
-		c.Logging.Level != "warn" && c.Logging.Level != "error" {
-		return fmt.Errorf("config: invalid logging.level %q", c.Logging.Level)
-	}
-	if c.Logging.Format != "json" && c.Logging.Format != "text" && c.Logging.Format != "text-color" {
-		return fmt.Errorf("config: invalid logging.format %q", c.Logging.Format)
+	if err := c.Logging.validate(); err != nil {
+		return err
 	}
 	if c.Callback.Port < 0 || c.Callback.Port > 65535 {
 		return fmt.Errorf("config: callback.port out of range: %d", c.Callback.Port)
@@ -2100,12 +2201,6 @@ func (c *Config) Validate() error {
 // the label.
 var centralHostLabel = regexp.MustCompile(`^[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?$`)
 
-// validateCentralHost enforces that centrals[].host is a bare hostname
-// or IP literal. The value is interpolated into every south-bound URL
-// (XML-RPC / JSON-RPC endpoints, the CCU readiness probe), so a scheme,
-// path, query, fragment, credentials, or an embedded port must be
-// rejected at this trust boundary rather than silently reshaping those
-// URLs. The TCP port has its own config field.
 // validateCentralNames enforces the two independent rules a central name
 // has to satisfy, in that order:
 //
@@ -2154,6 +2249,22 @@ func validateCentralNames(centrals []CentralConfig) error {
 	return nil
 }
 
+// validateCentralHost enforces that centrals[].host is a bare hostname
+// or IP literal. The value is interpolated into every south-bound URL
+// (XML-RPC / JSON-RPC endpoints, the CCU readiness probe), so a scheme,
+// path, query, fragment, credentials, or an embedded port must be
+// rejected at this trust boundary rather than silently reshaping those
+// URLs. The TCP port has its own config field.
+//
+// This is the authority for what centrals[].host may contain, and it is
+// deliberately permissive: underscores
+// are accepted here (see [centralHostLabel]) because home LANs hand them
+// out, while the public helper applies the strict DNS grammar and a
+// 63-octet label cap. The public helper has no production caller today,
+// so nothing observes the difference — but a future surface that reaches
+// for the obvious public helper would reject a host this validator
+// accepts on purpose. Unify the two only by deciding which grammar
+// centrals[].host is supposed to have, not by matching one to the other.
 func validateCentralHost(idx int, host string) error {
 	// IP literal, bare or bracketed (IPv6 URL form).
 	candidate := host

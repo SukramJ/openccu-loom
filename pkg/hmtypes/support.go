@@ -38,42 +38,13 @@ var InitTime = time.Unix(0, 0).UTC()
 // Hostname and IP validation patterns — mirror the Python reference
 // implementation's HOSTNAME_PATTERN, IPV4_PATTERN, IPV6_PATTERN constants.
 //
-// Note: Go's RE2 does not support PCRE lookaheads / lookbehinds, so the
-// hostname pattern is implemented as a programmatic validator instead of
-// a single compiled regexp. The ipv4 and ipv6 patterns use basic RE2.
-var (
-	ipv4Pattern = regexp.MustCompile(
-		`^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`,
-	)
-	ipv6Pattern = regexp.MustCompile(`^\[?[0-9a-fA-F:]+\]?$`)
-
-	// htmlTagPattern strips HTML tags and entities, mirroring the Python
-	// reference implementation's HTMLTAG_PATTERN.
-	htmlTagPattern = regexp.MustCompile(`<.*?>|&([a-z0-9]+|#\d{1,6}|#x[0-9a-f]{1,6});`)
-
-	// hostnameLabel validates a single DNS label (1-63 chars, alnum + hyphen,
-	// no leading or trailing hyphen). Used by isValidHostname.
-	hostnameLabel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9]$|^[A-Za-z0-9]$`)
-)
-
-// isValidHostname returns true when host is a syntactically valid DNS
-// hostname per RFC 1123 (total ≤253 chars, labels ≤63 chars, no leading or
-// Trailing hyphens). Replaces the PCRE-only HOSTNAME_PATTERN.
-func isValidHostname(host string) bool {
-	if host == "" || len(host) > 253 {
-		return false
-	}
-	labels := strings.SplitSeq(host, ".")
-	for lbl := range labels {
-		if lbl == "" || len(lbl) > 63 {
-			return false
-		}
-		if !hostnameLabel.MatchString(lbl) {
-			return false
-		}
-	}
-	return true
-}
+// htmlTagPattern strips HTML tags and entities, mirroring the Python
+// reference implementation's HTMLTAG_PATTERN.
+//
+// The host-validation patterns that stood beside it went with ValidateHost /
+// IsHost: nothing outside their own tests used them, and config's host
+// grammar — the one place that validates a host — is deliberately its own.
+var htmlTagPattern = regexp.MustCompile(`<.*?>|&([a-z0-9]+|#\d{1,6}|#x[0-9a-f]{1,6});`)
 
 // ToBool converts a bool or string to a bool.
 // Strings "y", "yes", "t", "true", "on", "1" (case-insensitive) are
@@ -112,27 +83,6 @@ var ErrHostEmpty = errors.New("hmtypes: host must not be empty")
 // ErrHostInvalid is returned by [ValidateHost] when the host string
 // does not match a valid hostname or IP address.
 var ErrHostInvalid = errors.New("hmtypes: host has invalid format")
-
-// ValidateHost validates that host is a well-formed hostname or IP
-// address. Returns [ErrHostEmpty] for blank input, [ErrHostInvalid] for
-// syntactically invalid values.
-func ValidateHost(host string) error {
-	cleaned := strings.TrimSpace(host)
-	if cleaned == "" {
-		return ErrHostEmpty
-	}
-	if isValidHostname(cleaned) ||
-		ipv4Pattern.MatchString(cleaned) ||
-		ipv6Pattern.MatchString(cleaned) {
-		return nil
-	}
-	return fmt.Errorf("%w: %q", ErrHostInvalid, host)
-}
-
-// IsHost reports whether host is a valid hostname or IP address.
-func IsHost(host string) bool {
-	return ValidateHost(host) == nil
-}
 
 // IsIPv4Address reports whether address is a valid IPv4 address string.
 func IsIPv4Address(address string) bool {

@@ -70,13 +70,15 @@ func CanonicalUniqueID(serialSuffix, address, parameter, eventPrefix string) str
 //
 //	loom_calculated_<device>_<channel>_<parameter>
 //
-// The marker is not decoration. A calculated data point and a real VALUES
-// parameter of the same name on the same channel would otherwise produce
-// the identical key, and consumers that key their entity registry on it -
-// the Home Assistant drop-in above all - migrate by exact string match.
-// Its migration rewrites the legacy key to `loom_calculated_…`, so a key
-// emitted without the marker orphans the migrated entity and spawns a
-// duplicate beside it.
+// The marker is not decoration. The invariant it carries is that a
+// calculated data point and a real VALUES parameter of the same name on the
+// same channel must not produce the same key; without it they do.
+//
+// That the constraint is real and not theoretical is shown by any consumer
+// that keys its entity registry on the key and migrates by exact string
+// match: the Home Assistant drop-in rewrites the legacy key to
+// `loom_calculated_…`, so a key emitted without the marker orphans the
+// migrated entity and spawns a duplicate beside it.
 const CalculatedFamilyPrefix = "calculated"
 
 // EventGroupFamilyPrefix marks a device-trigger event group inside a

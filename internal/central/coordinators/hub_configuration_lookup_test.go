@@ -135,8 +135,8 @@ func TestHubCoordinatorGetSystemVariableNoGetter(t *testing.T) {
 	bus := events.NewBus()
 	h := NewHubCoordinator("c", bus)
 	val, err := h.GetSystemVariable(context.Background(), "x")
-	if err != nil || val != nil {
-		t.Fatalf("GetSystemVariable with no getter: want (nil, nil), got (%v, %v)", val, err)
+	if !errors.Is(err, ErrNoSysvarGetter) || val != nil {
+		t.Fatalf("GetSystemVariable with no getter: want (nil, ErrNoSysvarGetter), got (%v, %v)", val, err)
 	}
 }
 
@@ -184,8 +184,8 @@ func TestHubCoordinatorGetSuppressedNoReader(t *testing.T) {
 	bus := events.NewBus()
 	h := NewHubCoordinator("c", bus)
 	got, err := h.GetSuppressedServiceMessages(context.Background(), "iface", "addr:1")
-	if err != nil || got != nil {
-		t.Fatalf("want (nil, nil), got (%v, %v)", got, err)
+	if !errors.Is(err, ErrNoServiceMessageReader) || got != nil {
+		t.Fatalf("want (nil, ErrNoServiceMessageReader), got (%v, %v)", got, err)
 	}
 }
 

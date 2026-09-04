@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // MasterValuesStore persists MASTER paramset values per channel so that
@@ -183,7 +182,7 @@ func (s *MasterValuesStore) DeleteDevice(
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := strings.TrimRight(deviceAddress, ":") + ":"
+	prefix := channelLikePrefix(deviceAddress)
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM master_values
          WHERE central_name = ? AND interface_id = ?

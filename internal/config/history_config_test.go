@@ -40,6 +40,22 @@ func TestConfig_Validate_ClampsHistoryRetention(t *testing.T) {
 	}
 }
 
+// TestConfig_ApplyDefaults_ClampsHistoryRetention drives the clamp through
+// the defaults pass alone, with no Validate call. That is the order the
+// config store uses: configstore.Store.Effective applies defaults and never
+// validates, so before the clamp existed in applyDefaults a stored retention
+// below the floor was reported back to the operator as written while the
+// running daemon held the clamped value.
+func TestConfig_ApplyDefaults_ClampsHistoryRetention(t *testing.T) {
+	t.Parallel()
+	c := Default()
+	c.Persistence.History.Retention = 30 * time.Minute
+	c.ApplyDefaults()
+	if got := c.Persistence.History.Retention; got != HistoryRetentionFloor {
+		t.Errorf("retention after ApplyDefaults = %v, want %v", got, HistoryRetentionFloor)
+	}
+}
+
 func TestHistoryConfig_NilEnabled(t *testing.T) {
 	t.Parallel()
 	c := HistoryConfig{}

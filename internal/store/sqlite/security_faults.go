@@ -157,7 +157,7 @@ func (s *SecurityFaultStore) query(ctx context.Context, q string, args ...any) (
 	return out, rows.Err()
 }
 
-func scanSecurityFault(sc rowScanner) (SecurityFault, error) {
+func scanSecurityFault(sc scannable) (SecurityFault, error) {
 	var f SecurityFault
 	err := sc.Scan(&f.ID, &f.Ref, &f.Class, &f.Reason, &f.Severity, &f.CentralName,
 		&f.InterfaceID, &f.DeviceAddress, &f.ChannelAddress, &f.Parameter, &f.Name,

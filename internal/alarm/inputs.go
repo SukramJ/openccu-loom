@@ -261,7 +261,7 @@ func (s *Service) journalDeviceBlocked(ctx context.Context, centralName string, 
 	if _, err := s.journal.Append(ctx, engine.JournalEntry{
 		Class:  hmenum.AlarmJournalClassFault,
 		Event:  "keypad_blocked",
-		Source: "keypad",
+		Source: engine.CodeSourceKeypad,
 		Details: map[string]any{
 			"central":   centralName,
 			"device":    hmtypes.DeviceAddress(key.ChannelAddress),
@@ -448,7 +448,8 @@ func (s *Service) warnContradictingEnrollments(rows []sqlitestore.AlarmSensorRow
 				"channel", row.ChannelAddress, "parameter", row.Parameter)
 			continue
 		}
-		cls, ok := safety.Classify("", s.channelTypeOf(row), param)
+		channelType, model := s.channelInfoOf(row)
+		cls, ok := safety.Classify(model, channelType, param)
 		if !ok {
 			continue
 		}
@@ -465,19 +466,25 @@ func (s *Service) warnContradictingEnrollments(rows []sqlitestore.AlarmSensorRow
 	}
 }
 
-// channelTypeOf resolves the channel type of an enrolled sensor from
-// the model, returning "" when the central or channel is unavailable.
-func (s *Service) channelTypeOf(row *sqlitestore.AlarmSensorRow) string {
+// channelInfoOf resolves the channel type and device model of an
+// enrolled sensor from the model, returning empty strings when the
+// central, the channel or its parent device is unavailable. The
+// classifier takes both, as every other call site already passes.
+func (s *Service) channelInfoOf(row *sqlitestore.AlarmSensorRow) (channelType, model string) {
 	if s.reg == nil {
-		return ""
+		return "", ""
 	}
 	u, ok := s.reg.Get(row.CentralName)
 	if !ok {
-		return ""
+		return "", ""
 	}
 	ch := u.GetChannel(row.ChannelAddress)
 	if ch == nil {
-		return ""
+		return "", ""
 	}
-	return ch.Type
+	dev := ch.Device()
+	if dev == nil {
+		return ch.Type, ""
+	}
+	return ch.Type, dev.Model
 }

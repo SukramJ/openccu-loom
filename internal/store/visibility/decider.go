@@ -124,11 +124,14 @@ func (d *ParameterDecider) LoadUnIgnore(entries []UnIgnoreEntry) {
 //
 // IsParameterIgnored answers for the central-agnostic ("global") scope: only
 // un-ignore entries with an empty [UnIgnoreEntry.Central] can re-enable a
-// parameter here. Callers that know which central they are answering for —
-// every production call site does, since multi-CCU is first class (ADR
-// 0002) — must use [ParameterDecider.IsParameterIgnoredForCentral] instead,
-// so a per-central un-ignore entry cannot decide visibility for a different
-// central sharing this decider instance.
+// parameter here.
+//
+// This is the variant every production call site uses, and every entry the
+// daemon loads carries an empty Central (see [UnIgnoreEntry.Central]), so the
+// per-central variant below is currently an unused seam rather than the
+// path callers are expected to take. Do not read the existence of
+// [ParameterDecider.IsParameterIgnoredForCentral] as a statement that
+// un-ignore rules are scoped per CCU today — they are not.
 //
 // Decision order
 // 1. For VALUES: static IGNORED_PARAMETERS / wildcard patterns → ignored,
@@ -146,6 +149,12 @@ func (d *ParameterDecider) IsParameterIgnored(model, channelType string, channel
 // IsParameterIgnoredForCentral is [ParameterDecider.IsParameterIgnored]
 // scoped to one central: an [UnIgnoreEntry] only re-enables the parameter
 // here when its Central field is empty (global) or equals `central`.
+//
+// No production caller passes a non-empty central, and nothing in production
+// stamps [UnIgnoreEntry.Central], so the scoping this method offers is not in
+// effect anywhere in the running daemon — it is reachable only from tests.
+// Making it live means stamping the field where the patterns are read back
+// per central (the composition root) as well as calling this variant.
 func (d *ParameterDecider) IsParameterIgnoredForCentral(central, model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	key := ignoreCacheKey{
 		central:     central,
@@ -263,8 +272,12 @@ func (d *ParameterDecider) computeIgnoredValues(central, model string, channelNo
 		return true
 	}
 
-	// 4. Channel-specific parameter restriction. Without this branch the LOWBAT
-	// parameter surfaces on every actor channel (HmIP-PSM, HmIP-BSM, …).
+	// 4. Channel-specific parameter restriction: one battery data point per
+	// device rather than one per channel. Its sole entry, LOWBAT, is declared
+	// off channel 0 on 19 BidCos models, so without this branch those devices
+	// would carry several battery data points. It has no HmIP reach — HmIP
+	// devices declare LOW_BAT, a different name — and the trade the rule makes
+	// is written out at [acceptParameterOnlyOnChannel].
 	//
 	// Skip when the channel number is not known (channelNoUnknown == -1) —
 	// without a real channel we cannot check the restriction.
@@ -336,8 +349,8 @@ func modelMatchesByPrefix(model string, models map[string]struct{}) bool {
 //
 // Without a whitelist match, MASTER DPs default to NoCreate so unlisted
 // devices like HmIP-STE2-PCB / HmIP-SFD don't surface ~25 configuration
-// entities (ARR_TIMEOUT, CYCLIC_INFO_MSG, COND_TX_*, …) HA users never tune
-// from the climate / sensor card.
+// entities (ARR_TIMEOUT, CYCLIC_INFO_MSG, COND_TX_*, …) — configuration
+// parameters no operator tunes from a device view.
 //
 // Decision order: 1. If the parameter is in relevantMasterParamsetsByChannel
 // for channelNo (or the nil-channel wildcard) → NOT ignored. 2. If the model
@@ -594,9 +607,9 @@ func (d *ParameterDecider) matchesUnIgnore(central, model string, channelNo int,
 // _check_parameter_is_un_ignored in parameter_decider.py):
 //
 //	(model_l, channelNo)           — exact model + exact channel
-//	(model_l, unIgnoreWildcard)    — exact model + any channel
-//	(unIgnoreWildcard, channelNo)  — any model + exact channel
-//	(unIgnoreWildcard, wildcard)   — any model + any channel
+//	(model_l, UnIgnoreWildcard)    — exact model + any channel
+//	(UnIgnoreWildcard, channelNo)  — any model + exact channel
+//	(UnIgnoreWildcard, wildcard)   — any model + any channel
 //
 // For non-VALUES (MASTER, LINK, …) only the exact (model_l, channelNo) point
 // is checked.
@@ -657,16 +670,16 @@ func entryMatchesSearchMatrix(e UnIgnoreEntry, modelL string, channelNo int, par
 		if entryModelChannelMatch(eModelL, modelL, e, channelNo) {
 			return true
 		}
-		// Point 2: (model_l, unIgnoreWildcard) — exact model + any channel.
+		// Point 2: (model_l, UnIgnoreWildcard) — exact model + any channel.
 		if eModelL == modelL && e.ChannelNoIsWildcard {
 			return true
 		}
-		// Point 3: (unIgnoreWildcard, channelNo) — any model + exact channel.
-		if eModelL == unIgnoreWildcard && entryChannelMatch(e, channelNo) {
+		// Point 3: (UnIgnoreWildcard, channelNo) — any model + exact channel.
+		if eModelL == UnIgnoreWildcard && entryChannelMatch(e, channelNo) {
 			return true
 		}
-		// Point 4: (unIgnoreWildcard, wildcard) — any model + any channel.
-		if eModelL == unIgnoreWildcard && e.ChannelNoIsWildcard {
+		// Point 4: (UnIgnoreWildcard, wildcard) — any model + any channel.
+		if eModelL == UnIgnoreWildcard && e.ChannelNoIsWildcard {
 			return true
 		}
 		return false

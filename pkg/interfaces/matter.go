@@ -520,16 +520,29 @@ func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
 }
 
 // MatterDeviceTypeName returns the operator-facing name for a Matter
-// Device Type ID. Covers every device type any model package (Custom
-// DP or measurement-class derivation) currently advertises. Returns
-// the empty string for `0` (no device type) and a hex fallback like
-// "0x0123" for IDs the model does not project to — the UI then still
-// has something stable to render and to filter on.
+// Device Type ID. Returns the empty string for `0` (no device type)
+// and a hex fallback like "0x0123" for IDs the model does not project
+// to — the UI then still has something stable to render and to filter
+// on.
 //
 // Single source of truth for the device-type → human label mapping;
 // the REST layer surfaces the result as `device_type_label` on each
 // `/api/v1/matter/exposable` row so the SPA does not have to maintain
-// a parallel map.
+// a parallel map. Because the SPA groups, filters and text-searches
+// the exposure list by that string, a device type reaching the hex
+// fallback is a device an operator cannot find by name.
+//
+// Every device type the model can advertise — from a MatterDeviceType
+// method or from [MatterMeasurementClassDeviceType] — must therefore
+// have a case here. That is measured, not asserted, by
+// TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType in
+// tests/contract, which also checks each ID against the matter.js HEAD
+// device-type table in internal/north/matter/schema.
+//
+// The labels spell out what the matter.js name compresses
+// ("OnOffPlugInUnit" → "On/Off Plug-in Unit"); the IDs and the
+// existence of each type come from that generated table, never from a
+// reading of the specification.
 func MatterDeviceTypeName(id uint16) string {
 	switch id {
 	case 0:
@@ -562,6 +575,10 @@ func MatterDeviceTypeName(id uint16) string {
 		return "Extended Color Light"
 	case 0x0202:
 		return "Window Covering"
+	case 0x0230:
+		// Advertised by cover.Garage. matter.js HEAD names it
+		// "Closure" (schema/devicetypes.go, 0x0230).
+		return "Closure"
 	case 0x0301:
 		return "Thermostat"
 	case 0x0302:
@@ -570,6 +587,10 @@ func MatterDeviceTypeName(id uint16) string {
 		return "Pressure Sensor"
 	case 0x0307:
 		return "Humidity Sensor"
+	case 0x0510:
+		// Advertised by MatterMeasurementElectrical. matter.js HEAD
+		// names it "ElectricalSensor" (schema/devicetypes.go, 0x0510).
+		return "Electrical Sensor"
 	default:
 		return fmt.Sprintf("0x%04X", id)
 	}

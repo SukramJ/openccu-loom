@@ -46,10 +46,11 @@ func (c RPCClass) String() string {
 	}
 }
 
-// readMethods enumerates every method that returns CCU state without
-// Mutating it.py +
-// homegear.py + the generated hmproto wire shapes — when adding new
-// transport methods, add their canonical wire name here.
+// readMethods enumerates every method that returns CCU state without mutating
+// it. When adding a new transport method, add its canonical wire name here —
+// and check what the method does on the CCU rather than what its name
+// suggests: this table is also what the project's rule for the developer's
+// live CCU treats as free of consequence.
 var readMethods = map[string]struct{}{
 	// XML-RPC reads
 	"listdevices":             {},
@@ -60,7 +61,6 @@ var readMethods = map[string]struct{}{
 	"getmetadata":             {},
 	"getlinkpeers":            {},
 	"getlinks":                {},
-	"reportvalueusage":        {},
 	"getinstallmode":          {},
 	"getserviceinformation":   {},
 	"getserviceformessages":   {},
@@ -89,13 +89,22 @@ var readMethods = map[string]struct{}{
 // curation source as readMethods.
 var writeMethods = map[string]struct{}{
 	// XML-RPC writes
-	"setvalue":             {},
-	"putparamset":          {},
-	"setmetadata":          {},
-	"setinstallmode":       {},
-	"setteamid":            {},
-	"addlink":              {},
-	"removelink":           {},
+	"setvalue":       {},
+	"putparamset":    {},
+	"setmetadata":    {},
+	"setinstallmode": {},
+	"setteamid":      {},
+	"addlink":        {},
+	"removelink":     {},
+	// reportValueUsage reads like a query and is a device reconfiguration:
+	// the CCU documents it as telling the interface process how often a value
+	// is used so that it can establish or delete the connection to the
+	// component (src/rfd/XmlRpcMethods.cpp:700-723). It persists the
+	// per-channel usage record and adds or removes the direct link peer
+	// between the channel and the central; a false return means the device
+	// was unreachable, the change is queued, and CONFIG_PENDING is set on its
+	// MAINTENANCE channel.
+	"reportvalueusage":     {},
 	"setlinkinfo":          {},
 	"deletedevice":         {},
 	"abortinstallmode":     {},

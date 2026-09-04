@@ -11,9 +11,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/observability"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -86,10 +86,18 @@ type HubCoordinator struct {
 	// index to surface duty-cycle / carrier-sense per radio interface.
 	bidcos map[string]BidcosInterfaceInfo
 
-	// refresh holds the nine per-type periodic-refresh slots. Each slot
+	// refresh holds the ten per-type periodic-refresh slots. Each slot
 	// owns its hook and its per-type serialisation semaphore; see
 	// hub_refresh.go for the slot type and hubRefreshSet.
 	refresh hubRefreshSet
+
+	// lastPublishedInstall records the (enabled, remaining_s) pair
+	// [HubCoordinator.PublishInstallModeRefreshed] last emitted, keyed by
+	// interface id. It lives on the publisher rather than on the
+	// install-mode model because it is the publisher's own bookkeeping: a
+	// second reader asking the model for its state must not consume this
+	// job's change flag. Guarded by mu.
+	lastPublishedInstall map[string]installPublishState
 
 	// programExecutor is the south-bound hook for ExecuteProgram.
 	// Nil = no-op. Wired via SetProgramExecutor.
@@ -221,7 +229,7 @@ func (h *HubCoordinator) Sysvars() []SysvarSnapshot {
 // daemon log can name the surface that asked instead of a generic "api".
 func (h *HubCoordinator) NotifyProgramExecuted(ctx context.Context, programID string, trigger hmenum.ProgramTrigger, success bool) {
 	source := ""
-	if rc, ok := reqctx.FromContext(ctx); ok {
+	if rc, ok := hmreqctx.FromContext(ctx); ok {
 		source = rc.Operation
 	}
 	events.Publish(h.bus, hmevent.ProgramExecutedEvent{
@@ -416,14 +424,14 @@ func (h *HubCoordinator) SetServiceMessageSuppressor(s ServiceMessageSuppressor)
 // service message identified by interfaceID, channelAddress, and
 // parameterID. Pass suppress=true to acknowledge, false to clear the
 // suppression. Pass an empty parameterID to affect all parameters on the
-// channel. Delegates to the wired [ServiceMessageSuppressor]; returns nil
-// when no suppressor is wired.
+// channel. Delegates to the wired [ServiceMessageSuppressor]; returns
+// [ErrNoServiceMessageSuppressor] when none is wired.
 func (h *HubCoordinator) SuppressServiceMessage(ctx context.Context, interfaceID, channelAddress, parameterID string, suppress bool) error {
 	h.mu.RLock()
 	sup := h.serviceMessageSuppressor
 	h.mu.RUnlock()
 	if sup == nil {
-		return nil
+		return ErrNoServiceMessageSuppressor
 	}
 	return sup.SuppressServiceMessage(ctx, interfaceID, channelAddress, parameterID, suppress)
 }
@@ -675,7 +683,7 @@ func (h *HubCoordinator) SetProgramExecutor(e ProgramExecutor) *HubCoordinator {
 }
 
 // ExecuteProgram triggers a CCU program run by ID. Delegates to the wired
-// [ProgramExecutor]; returns nil when no executor is wired. This is
+// [ProgramExecutor]; returns [ErrNoProgramExecutor] when none is wired. This is
 // semantically distinct from [SetProgramState]: ExecuteProgram fires a one-shot
 // run of the program's action sequence, whereas SetProgramState enables or
 // disables the program's scheduled execution.
@@ -684,19 +692,20 @@ func (h *HubCoordinator) ExecuteProgram(ctx context.Context, programID string) e
 	e := h.programExecutor
 	h.mu.RUnlock()
 	if e == nil {
-		return nil
+		return ErrNoProgramExecutor
 	}
 	return e.ExecuteProgram(ctx, programID)
 }
 
 // SetProgramState enables or disables a CCU program by ID. Delegates to the
-// wired [ProgramStateWriter]; returns nil when no writer is wired.
+// wired [ProgramStateWriter]; returns [ErrNoProgramStateWriter] when none is
+// wired.
 func (h *HubCoordinator) SetProgramState(ctx context.Context, programID string, active bool) error {
 	h.mu.RLock()
 	w := h.programStateWriter
 	h.mu.RUnlock()
 	if w == nil {
-		return nil
+		return ErrNoProgramStateWriter
 	}
 	return w.SetProgramActive(ctx, programID, active)
 }
@@ -732,6 +741,33 @@ func (h *HubCoordinator) SetSysvarValueWriter(w SysvarValueWriter) *HubCoordinat
 // ran. A CCU program reading that variable waited forever for a trigger
 // that could not arrive.
 var ErrNoSysvarWriter = errors.New("hub: no sysvar value writer wired")
+
+// The remaining unwired-hook sentinels. They carry the same reasoning as
+// [ErrNoSysvarWriter]: a delegating method whose hook is absent has not done
+// the work it was asked to do, and reporting that as success hides the
+// missing wire from every caller's error branch.
+// The analyzer scores call edges (RTA), so a package-level error value
+// that production RETURNS rather than calls reads as unreachable. Each of
+// these is returned by the method named in its own comment below.
+//
+// loom:reachable:reason="returned by the HubCoordinator method named on each sentinel; RTA scores call edges only, so a returned error value is invisible to it"
+var (
+	// ErrNoServiceMessageSuppressor reports that no suppressor is wired, so
+	// an acknowledgement cannot reach the CCU.
+	ErrNoServiceMessageSuppressor = errors.New("hub: no service message suppressor wired")
+	// ErrNoServiceMessageReader reports that no reader is wired, so the
+	// suppressed-parameter list is unknown rather than empty.
+	ErrNoServiceMessageReader = errors.New("hub: no service message reader wired")
+	// ErrNoProgramExecutor reports that no executor is wired, so a program
+	// run cannot be triggered.
+	ErrNoProgramExecutor = errors.New("hub: no program executor wired")
+	// ErrNoProgramStateWriter reports that no writer is wired, so a program
+	// cannot be enabled or disabled.
+	ErrNoProgramStateWriter = errors.New("hub: no program state writer wired")
+	// ErrNoSysvarGetter reports that no getter is wired, so a
+	// system-variable value is unknown rather than nil.
+	ErrNoSysvarGetter = errors.New("hub: no sysvar getter wired")
+)
 
 // SetSystemVariable writes a system-variable value to the CCU via the
 // wired [SysvarValueWriter]. It returns [ErrNoSysvarWriter] when none is
@@ -832,26 +868,28 @@ func (h *HubCoordinator) GetSysvarDataPoint(name string) *hub.Sysvar {
 }
 
 // GetSystemVariable reads the current value of a system variable from the CCU
-// via the wired [SysvarGetter]. Returns (nil, nil) when no getter is wired.
+// via the wired [SysvarGetter]. Returns [ErrNoSysvarGetter] when none is
+// wired, so an unknown value is not reported as a nil one.
 func (h *HubCoordinator) GetSystemVariable(ctx context.Context, name string) (any, error) {
 	h.mu.RLock()
 	g := h.sysvarGetter
 	h.mu.RUnlock()
 	if g == nil {
-		return nil, nil
+		return nil, ErrNoSysvarGetter
 	}
 	return g.GetSysvar(ctx, name)
 }
 
 // GetSuppressedServiceMessages returns the list of currently suppressed
-// service message parameter IDs for a channel. Returns nil when no reader is
-// wired.
+// service message parameter IDs for a channel. Returns
+// [ErrNoServiceMessageReader] when no reader is wired, so an unknown list is
+// not reported as an empty one.
 func (h *HubCoordinator) GetSuppressedServiceMessages(ctx context.Context, interfaceID, channelAddress string) ([]string, error) {
 	h.mu.RLock()
 	r := h.serviceMessageReader
 	h.mu.RUnlock()
 	if r == nil {
-		return nil, nil
+		return nil, ErrNoServiceMessageReader
 	}
 	return r.GetSuppressedServiceMessages(ctx, interfaceID, channelAddress)
 }
@@ -921,8 +959,22 @@ func (h *HubCoordinator) CreateSysvarFloat(ctx context.Context, name string, min
 
 // InitHub performs the hub-coordinator initialization sequence. It clears
 // any stale state from a previous run (sysvars, programs) and triggers an
-// initial load for every hub data category so the hub model is populated
-// as soon as the CCU connection comes up.
+// initial load for the eight categories listed in the body.
+//
+// Two of the ten slots [hubRefreshSet] declares are deliberately absent here:
+// systemUpdate is boot-loaded by the adapter instead
+// (runInitialSystemUpdateLoad in internal/central/adapter/hub_wiring.go, a
+// detached goroutine that outlives WireHub), and bidcosInterfaces has no boot
+// load at all — its only production driver is the periodic
+// "hub.bidcos_interfaces_refresh" scheduler job registered in
+// internal/central/jobs.go, which carries no RunOnStart, so the category
+// stays empty until the first tick.
+//
+// Ordering, measured against the single production call site: WireHub calls
+// InitHub before it calls [HubCoordinator.SetRefreshHooks], so on a first
+// bring-up every slot's hook is still nil and each run below returns without
+// doing anything — only the Clear() half has an effect there. The loads
+// matter on a repeat pass, where the previous pass's hooks are still set.
 //
 // The initial loads run best-effort: individual hook errors are ignored so a
 // partial CCU response does not block the rest of the init sequence.
@@ -952,6 +1004,15 @@ func (h *HubCoordinator) RefreshMetrics(ctx context.Context) error {
 	return h.refresh.metrics.run(ctx, h.recorder, "refresh_metrics")
 }
 
+// installPublishState is one interface's last published install-mode tuple.
+// has distinguishes "never published" from "published (false, 0)", which is
+// the steady state and must still be emitted once.
+type installPublishState struct {
+	has        bool
+	enabled    bool
+	remainingS int
+}
+
 // PublishInstallModeRefreshed fires an [hmevent.InstallModeChangedEvent] for
 // each registered install-mode data point whose (enabled, remaining_s) pair
 // changed since the last call, so north-bound adapters (MQTT, REST) pick up
@@ -964,7 +1025,17 @@ func (h *HubCoordinator) PublishInstallModeRefreshed() {
 		if dp == nil {
 			continue
 		}
-		enabled, remainingS, changed := dp.ConsumeChangeSincePublish()
+		enabled, remaining, _ := dp.InstallState()
+		remainingS := int(remaining.Seconds())
+		next := installPublishState{has: true, enabled: enabled, remainingS: remainingS}
+		h.mu.Lock()
+		prev := h.lastPublishedInstall[dp.InterfaceID]
+		changed := prev != next
+		if h.lastPublishedInstall == nil {
+			h.lastPublishedInstall = make(map[string]installPublishState)
+		}
+		h.lastPublishedInstall[dp.InterfaceID] = next
+		h.mu.Unlock()
 		if !changed {
 			continue
 		}

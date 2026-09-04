@@ -123,6 +123,7 @@ type Fault struct {
 // facets make a different wording possible without re-deriving anything
 // from prose. Offering only one of the two forces every consumer into
 // the wrong half.
+// loom:reachable:reason="projected onto the REST DTO by handlers.apiSecurityNotification; RTA scores call edges, so a type used only structurally is invisible to it"
 type Notification struct {
 	Class    hmenum.SecurityClass
 	Severity hmenum.SecuritySeverity
@@ -156,24 +157,6 @@ type Notification struct {
 	// level is delivered but never retained: it must reach a phone
 	// without lingering where an attacker could read it back.
 	Retainable bool
-}
-
-// SourceNames returns the display names of the notification's sources,
-// falling back to the channel address for an unnamed one.
-func (n Notification) SourceNames() []string {
-	if len(n.Sources) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(n.Sources))
-	for i := range n.Sources {
-		switch {
-		case n.Sources[i].Name != "":
-			out = append(out, n.Sources[i].Name)
-		case n.Sources[i].ChannelAddress != "":
-			out = append(out, n.Sources[i].ChannelAddress)
-		}
-	}
-	return out
 }
 
 // SourceView is one classified data point as an operator sees it in the

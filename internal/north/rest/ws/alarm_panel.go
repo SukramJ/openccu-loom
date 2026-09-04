@@ -383,7 +383,11 @@ func alarmZoneStatus(eng *engine.Engine, snap engine.ZoneSnapshot) hmapi.AlarmZo
 			Silenced: snap.IncidentSilenced,
 		}
 	}
-	if snap.TimerKind != "" && snap.TimerRemaining > 0 {
+	// Only the kinds the DTO's contract admits: assets/openapi.yaml constrains
+	// `kind` to exit_delay / entry_delay and the SPA types it as those two, so
+	// a zone in pre-alarm, in trigger or awaiting auto-rearm must not publish
+	// one here. The engine owns that question.
+	if engine.IsCountdownTimerKind(snap.TimerKind) && snap.TimerRemaining > 0 {
 		st.Countdown = &hmapi.AlarmCountdown{
 			Kind:       snap.TimerKind,
 			RemainingS: int(snap.TimerRemaining / time.Second),

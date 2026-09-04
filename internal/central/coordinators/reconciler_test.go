@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -411,5 +412,61 @@ func TestReconcilerConnectivityFollowsTheProbeMembership(t *testing.T) {
 	// it with an honest state.
 	if reachable, observed := connectivity.Reachable("BidCos-RF"); !observed || !reachable {
 		t.Fatalf("BidCos-RF reachable=%v observed=%v, want true/true after it returned", reachable, observed)
+	}
+}
+
+// TestReconcilerVanishedInterfaceCarriesTheBareEnum pins the typed enum the
+// vanished-interface path hands to the connectivity tracker's subscribers.
+//
+// Production stamps the wire form `<central>-<interface>` on every probe
+// entry, so the ids the vanished set is built from carry the central prefix.
+// Casting one straight to hmenum.Interface yields "ccu1-BidCos-RF", which is
+// no enum value at all — every consumer that matches on the enum then sees a
+// down interface it cannot classify. The existing membership walk cannot see
+// this: ConnectivityChangedEvent carries no Interface field.
+func TestReconcilerVanishedInterfaceCarriesTheBareEnum(t *testing.T) {
+	connectivity := hub.NewConnectivity()
+
+	var got []hub.InterfaceReachability
+	defer connectivity.OnUpdate(func(r hub.InterfaceReachability) {
+		got = append(got, r)
+	})()
+
+	var probed []coordinators.InterfaceReachability
+	r := &coordinators.Reconciler{
+		CentralName:  "ccu1",
+		Connectivity: connectivity,
+		Connect: coordinators.ProbeFunc(func(_ context.Context) ([]coordinators.InterfaceReachability, error) {
+			return probed, nil
+		}),
+	}
+
+	// First answer establishes the membership, in the wire form the adapter
+	// stamps.
+	probed = []coordinators.InterfaceReachability{
+		{InterfaceID: "ccu1-BidCos-RF", Interface: hmenum.InterfaceBidCosRF, Reachable: true},
+		{InterfaceID: "ccu1-HmIP-RF", Interface: hmenum.InterfaceHmIPRF, Reachable: true},
+	}
+	if err := r.Reconcile(context.Background()); err != nil {
+		t.Fatalf("first Reconcile err: %v", err)
+	}
+
+	// Second answer no longer lists BidCos-RF: it vanished.
+	got = nil
+	probed = []coordinators.InterfaceReachability{
+		{InterfaceID: "ccu1-HmIP-RF", Interface: hmenum.InterfaceHmIPRF, Reachable: true},
+	}
+	if err := r.Reconcile(context.Background()); err != nil {
+		t.Fatalf("second Reconcile err: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("connectivity updates = %+v, want exactly the vanished BidCos-RF", got)
+	}
+	if got[0].InterfaceID != "ccu1-BidCos-RF" || got[0].Reachable {
+		t.Fatalf("update = %+v, want ccu1-BidCos-RF unreachable", got[0])
+	}
+	if got[0].Interface != hmenum.InterfaceBidCosRF {
+		t.Fatalf("Interface = %q, want %q", got[0].Interface, hmenum.InterfaceBidCosRF)
 	}
 }

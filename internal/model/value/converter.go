@@ -1,27 +1,34 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Package value provides converters between Go-native types and
-// Homematic wire values, and between Homematic level values and
-// combined-parameter values (CPV) used by BidCos blinds / covers.
-//
-// The two converter families mirror
-// `converter.py`
+// Package value holds a second, older transcription of the Homematic value
+// conversions. Nothing in a running daemon reaches it: measured against the
+// tree, no non-test .go file imports this package. Read that as a warning
+// label, not as an invitation — it is NOT the home of these rules, and a new
+// caller belongs on the live sites named below, not here.
 //
 // 1. [ToHomematicValue] / [FromHomematicValue] — type-dispatch value
-// conversion (bool→int, float rounding, time.Duration→seconds, …)
-// 2. [ConvertCPVToHMLevel] / [ConvertCPVToHMIPLevel] — the BidCos
-// "hex level" → float64 decode for COMBINED_PARAMETER channels. The
-// encode direction lives in internal/parameter.ConvertHMLevelToCPV,
-// the single home of the LEVEL_COMBINED byte encoding.
+// conversion (bool→int, float rounding, time.Duration→seconds, …). The
+// same rule set is written out a second time in internal/parameter, and
+// that copy is the fuller one: it also converts the elements of a []any /
+// map[string]any payload, resolves a fmt.Stringer, and reports a parse
+// failure as an error instead of passing the value through. This copy in
+// turn accepts an int64 for a bool target, which the other does not. Neither
+// copy has a production caller — the outgoing value of a write is serialised
+// by the transport.
+// "hex level" → float64 decode for COMBINED_PARAMETER channels. The decode a
+// running daemon performs is backends.ParseCombinedParameter, which does not
+// agree with this pair on every input; the encode direction lives in
+// internal/parameter.ConvertHMLevelToCPV, the single home of the
+// LEVEL_COMBINED byte encoding.
 //
-// [ToHomematicValue] (mirrors `to_homematic_value`)
-// [FromHomematicValue] (mirrors `from_homematic_value`)
-// [ConvertableParameters] (mirrors `CONVERTABLE_PARAMETERS`)
+// The type-dispatch pair mirrors the Python reference `converter.py`
+// (`to_homematic_value` / `from_homematic_value`), which is where the rules
+// came from — provenance, not authority. The firmware authority for the
+// six-decimal float rounding is recorded on internal/parameter.ToHomematicValue.
 package value
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -30,6 +37,13 @@ import (
 
 // ConvertableParameters lists the parameter names whose values go through the
 // CPV ↔ level round-trip.
+//
+// It is a mirror with no production caller. The two declarations a running
+// daemon consults are internal/parameter.ConvertableParameters (write path)
+// and internal/client/backends.CombinedParameters (callback path); all three
+// are held to one membership by TestConvertableParameterSetsAgree in
+// tests/contract/. Add a combined parameter to the two live sets — this one
+// follows to keep the guard green, it does not gate anything.
 var ConvertableParameters = [...]hmenum.Parameter{
 	hmenum.ParameterCombinedParameter,
 	hmenum.ParameterLevelCombined,
@@ -104,28 +118,6 @@ func FromHomematicValue(v any, targetType string) any {
 		}
 	}
 	return v
-}
-
-// ConvertCPVToHMLevel converts a BidCos CPV hex string back to a
-// floating-point level (0..1).
-func ConvertCPVToHMLevel(cpv string) (float64, bool) {
-	var raw int
-	if _, err := fmt.Sscanf(cpv, "%v", &raw); err != nil {
-		return 0, false
-	}
-	return float64(raw) / 100 / 2, true
-}
-
-// ConvertCPVToHMIPLevel converts a BidCos CPV integer string to a
-// floating-point level for HmIP.
-//
-// int(value) / 100
-func ConvertCPVToHMIPLevel(cpv string) (float64, bool) {
-	var raw int
-	if _, err := fmt.Sscanf(cpv, "%d", &raw); err != nil {
-		return 0, false
-	}
-	return float64(raw) / 100, true
 }
 
 // roundFloat rounds f to decimals decimal places.

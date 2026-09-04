@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
+	mattersetup "github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 )
 
 // validateFieldRanges range-checks the config leaves whose out-of-range
@@ -47,6 +49,9 @@ func validateFieldRanges(c *Config) error {
 		return err
 	}
 	if err := validateHAIngressRole(c.North.REST.Auth.HAIngress.Role); err != nil {
+		return err
+	}
+	if err := validateAlarmSeconds(&c.Alarm); err != nil {
 		return err
 	}
 	if err := validateFiniteFloats(c); err != nil {
@@ -126,34 +131,42 @@ func validateMCP(m *NorthMCP) error {
 	return m.ValidateMountPath()
 }
 
-// maxMatterDiscriminator is the largest 12-bit commissioning
-// discriminator (Matter §5.1.1.1). The config field is a uint16, so a
-// larger value is representable and would be truncated on the wire —
-// commissioners then browse an mDNS subtype nobody advertises.
-const maxMatterDiscriminator = 0xFFF
-
-// Matter PBKDF2 iteration bounds (Matter §3.10). Values outside the
-// window are rejected by a certified commissioner during PASE, which
-// presents to the operator as a pairing that aborts for no stated reason.
-const (
-	minMatterPBKDFIterations = 1000
-	maxMatterPBKDFIterations = 100000
-)
-
 // validateMatter checks the bridge's bind address and the commissioning
 // parameters a commissioner verifies against the spec.
+//
+// The passcode check calls [mattersetup.IsValidSetupPIN] rather than
+// re-deriving the legal set, because that helper mirrors chip's
+// src/crypto/CHIPCryptoPAL.cpp IsValidSetupPIN — the same authority the
+// PASE builder consults at boot. Without the check here the two ends
+// disagreed: a save of a trivial code such as 12345678 answered 200 and
+// the REST setup endpoint minted a QR and a manual code from it, while
+// the boot path refused to build the PASE adapter and left one warning
+// behind. The bridge then advertises, reports itself enabled, and no
+// commissioner can pair with it.
 func validateMatter(m *NorthMatter) error {
 	if err := validateHostPort("north.matter.listen", m.Listen); err != nil {
 		return err
 	}
-	if m.Discriminator > maxMatterDiscriminator {
+	// The bounds are the owning packages' own declarations, not copies:
+	// the config field is a uint16, so an over-wide discriminator is
+	// representable here and would be truncated on the wire —
+	// commissioners then browse an mDNS subtype nobody advertises — and
+	// an iteration count outside the PBKDF window is rejected by a
+	// certified commissioner during PASE, which reaches the operator as
+	// a pairing that aborts for no stated reason.
+	if m.Discriminator > mattersetup.MaxDiscriminator {
 		return fmt.Errorf("config: north.matter.discriminator: out of range 0-%d (12-bit): %d",
-			maxMatterDiscriminator, m.Discriminator)
+			mattersetup.MaxDiscriminator, m.Discriminator)
 	}
 	if it := m.Commissioning.Iterations; it != 0 &&
-		(it < minMatterPBKDFIterations || it > maxMatterPBKDFIterations) {
+		(it < spake2.IterationsMin || it > spake2.IterationsMax) {
 		return fmt.Errorf("config: north.matter.commissioning.iterations: out of range %d-%d (0 selects the default): %d",
-			minMatterPBKDFIterations, maxMatterPBKDFIterations, it)
+			spake2.IterationsMin, spake2.IterationsMax, it)
+	}
+	if pc := m.Commissioning.Passcode; pc != 0 && !mattersetup.IsValidSetupPIN(pc) {
+		return fmt.Errorf(
+			"config: north.matter.commissioning.passcode: %d is not a usable Matter setup code — it must be in 1-99999998 and must not be a trivially guessable code such as 11111111 or 12345678 (0 disables PASE)", pc,
+		)
 	}
 	return nil
 }
@@ -224,6 +237,33 @@ func validateHAIngressRole(role string) error {
 			"config: north.rest.auth.ha_ingress.role must be one of admin|operator|viewer (empty selects \"admin\"), got %q", role,
 		)
 	}
+}
+
+// validateAlarmSeconds rejects a negative value on the three acoustic
+// knobs of the alarm engine. They are plain second counts rather than
+// [time.Duration] leaves, so validateNonNegativeDurations does not see
+// them, and [Config.applyDefaults] rewrites only the zero.
+//
+// A negative one is absorbed downstream: the alarm output manager
+// replaces any non-positive value with its own copy of the same three
+// numbers, so `default_siren_seconds: -1` produces a three-minute siren
+// the operator never asked for instead of a startup error. Rejecting it
+// here is what keeps that fallback out of reach of an operator-typed
+// value.
+func validateAlarmSeconds(a *AlarmConfig) error {
+	for _, f := range []struct {
+		field string
+		value int
+	}{
+		{"alarm.default_siren_seconds", a.DefaultSirenSeconds},
+		{"alarm.max_acoustic_per_incident_seconds", a.MaxAcousticPerIncidentSeconds},
+		{"alarm.stop_verify_seconds", a.StopVerifySeconds},
+	} {
+		if f.value < 0 {
+			return fmt.Errorf("config: %s must be >= 0 (0 selects the default): %d", f.field, f.value)
+		}
+	}
+	return nil
 }
 
 // durationType is the reflect type every duration leaf carries.

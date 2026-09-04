@@ -166,30 +166,6 @@ func TestInterfaceClientClearJSONRPCSessionHook(t *testing.T) {
 	}
 }
 
-func TestInterfaceClientVirtualRemote(t *testing.T) {
-	cases := []struct {
-		iface    hmenum.Interface
-		wantAddr string
-		wantHas  bool
-	}{
-		{hmenum.InterfaceHmIPRF, "HmIP-RF", true},
-		{hmenum.InterfaceBidCosRF, "BidCoS-RF", true},
-		{hmenum.InterfaceCUxD, "", false},
-		{hmenum.InterfaceVirtualDevices, "", false},
-	}
-	for _, tc := range cases {
-		c, _ := New(Config{
-			CentralName: "main",
-			Interface:   tc.iface,
-			Caller:      CallerFunc(func(context.Context, string, []any) (any, error) { return nil, nil }),
-		})
-		gotAddr, gotHas := c.VirtualRemote()
-		if gotAddr != tc.wantAddr || gotHas != tc.wantHas {
-			t.Errorf("%s VirtualRemote = (%q, %v), want (%q, %v)", tc.iface, gotAddr, gotHas, tc.wantAddr, tc.wantHas)
-		}
-	}
-}
-
 // TestInterfaceClientCloseCanelsActiveRetries verifies that Close()
 // drains all in-flight DoForKey retry chains so ActiveRetryCount
 // returns 0 after shutdown. This guards against stale retries keeping

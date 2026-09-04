@@ -33,7 +33,12 @@ func GatedLatestFirmware(iface hmenum.Interface, info FirmwareInfo) string {
 	}
 	switch iface {
 	case hmenum.InterfaceHmIPRF:
-		if info.UpdateState.IsFirmwareUpdateReady() {
+		// Installable, or already installing: both report the version the
+		// device is heading for. IsFirmwareUpdateReady carries the CCU's
+		// install precondition, which deliberately excludes the in-flight
+		// states — they are asked separately here so a running install keeps
+		// showing its target rather than falling back to the current version.
+		if info.UpdateState.IsFirmwareUpdateReady() || info.UpdateState.IsFirmwareUpdateInProgress() {
 			return info.Available
 		}
 		return info.Current

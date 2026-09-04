@@ -228,7 +228,7 @@ func (s *SchedulesDomain) resolveOps(
 		if !ok {
 			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}
-		channelAddr := fmt.Sprintf("%s:%d", deviceAddress, channelNo)
+		channelAddr := hmtypes.ChannelAddress(deviceAddress, channelNo)
 		return b, channelAddr, nil
 	}
 	return nil, "", fmt.Errorf("%w: device %s", ErrNoScheduleBackend, deviceAddress)

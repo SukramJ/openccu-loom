@@ -30,7 +30,11 @@ func newLSCLightRig(t *testing.T, w Writer) *RGBWLight {
 	putWritableFloat(ch, address, hmenum.ParameterLevel, w)
 	putWritableInteger(ch, address, hmenum.ParameterHue, w)
 	putWritableFloat(ch, address, hmenum.ParameterSaturation, w)
-	putWritableInteger(ch, address, hmenum.ParameterColorTemperature, w)
+	// The COLOR_TEMPERATURE descriptor carries the range HmIP-LSC.json
+	// declares (VCU7603954:1 VALUES COLOR_TEMPERATURE MIN 1000 / MAX
+	// 10200), so the rig cannot agree with a hard-coded range by
+	// declaring nothing.
+	hmLgtPutDeclaredColorTemperature(ch, address, w)
 	putWritableIntegerWithValueList(ch, address, hmenum.ParameterEffect, w, []string{"OFF", "EFFECT1", "EFFECT2"})
 	r := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsColorTemp: true}})
 	unsub := r.Subscribe(ch)
@@ -129,11 +133,11 @@ func TestLSCHADiscoveryAdvertisesColorTempAndHs(t *testing.T) {
 	if v, _ := body["max_kelvin"].(int32); v != r.MaxKelvin {
 		t.Errorf("max_kelvin = %v, want %v", v, r.MaxKelvin)
 	}
-	if r.MinKelvin != 2000 {
-		t.Errorf("MinKelvin = %v, want 2000", r.MinKelvin)
+	if r.MinKelvin != hmLgtDeclaredMinKelvin {
+		t.Errorf("MinKelvin = %v, want %v (the descriptor's MIN)", r.MinKelvin, hmLgtDeclaredMinKelvin)
 	}
-	if r.MaxKelvin != 6500 {
-		t.Errorf("MaxKelvin = %v, want 6500", r.MaxKelvin)
+	if r.MaxKelvin != hmLgtDeclaredMaxKelvin {
+		t.Errorf("MaxKelvin = %v, want %v (the descriptor's MAX)", r.MaxKelvin, hmLgtDeclaredMaxKelvin)
 	}
 }
 

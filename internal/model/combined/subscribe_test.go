@@ -204,8 +204,7 @@ func TestLevelCombinedSubscribeCombinesBothAxes(t *testing.T) {
 	level := newFloatParam(ch, address, hmenum.ParameterLevel)
 	level2 := newFloatParam(ch, address, hmenum.ParameterLevel2)
 
-	lc := combined.NewLevelCombined(address, nil,
-		hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := combined.NewLevelCombined(address, hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	unsub := lc.Subscribe(ch)
 	if unsub == nil {
 		t.Fatal("Subscribe returned nil for a channel carrying both axes")
@@ -231,8 +230,7 @@ func TestLevelCombinedSubscribeDeclinesAnIncompleteChannel(t *testing.T) {
 	ch := newChannel(t, address)
 	newFloatParam(ch, address, hmenum.ParameterLevel)
 
-	lc := combined.NewLevelCombined(address, nil,
-		hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := combined.NewLevelCombined(address, hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if unsub := lc.Subscribe(ch); unsub != nil {
 		t.Error("Subscribe must decline a channel without the slats parameter")
 	}

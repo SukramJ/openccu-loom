@@ -111,14 +111,26 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 	if cfg.Channel != nil {
 		chNo = cfg.Channel.Number
 	}
+	// The colour-temperature range is the device's own, read from the
+	// COLOR_TEMPERATURE descriptor by the same rule ColorTempLight uses
+	// (see [kelvinBoundsFromChannel]); HmIP-RGBW / HmIP-LSC declare
+	// 1000-10200 K, so a fixed pair would both misreport the range to
+	// Home Assistant and clamp requests the hardware accepts.
+	minK, maxK := kelvinBoundsFromChannel(cfg.Channel)
+	if minK <= 0 {
+		minK = defaultMinKelvin
+	}
+	if maxK <= 0 {
+		maxK = defaultMaxKelvin
+	}
 	r := &RGBWLight{
 		ColorLight: cl,
 		kelvin:     custom.IntegerField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldColorTemperature, hmenum.ParameterColorTemperature)),
 		mode:       deviceOperationModeDP(cfg.Channel),
 		effect:     custom.ActionSelectField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldEffect, hmenum.ParameterEffect)),
 		direction:  custom.EnumSensorField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldDirection, hmenum.ParameterDirection)),
-		MinKelvin:  2000,
-		MaxKelvin:  6500,
+		MinKelvin:  minK,
+		MaxKelvin:  maxK,
 		channelNo:  chNo,
 	}
 	if cfg.Channel != nil {

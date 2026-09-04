@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -248,6 +249,7 @@ func gatedCentralBringUp(
 	deps WireDeps,
 	callbackURL, binRPCCallbackAddr string,
 	cbHandlers *CallbackHandlers,
+	adoptBINRPCHandlers func(*CallbackHandlers),
 	addCloser func(func()),
 	logger *slog.Logger,
 ) {
@@ -257,7 +259,7 @@ func gatedCentralBringUp(
 		if !WaitForCCUReady(ctx, *cc, CCUReadinessConfig{Timeout: -1}, logger) {
 			return // teardown
 		}
-		if loaded, err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, addCloser, logger); err == nil {
+		if loaded, err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, adoptBINRPCHandlers, addCloser, logger); err == nil {
 			// Bring-up done: clear the transient "waiting for CCU" component so it
 			// does not linger and decay to UNKNOWN (which would drag the overall
 			// health verdict down forever even though the central is now healthy).
@@ -425,6 +427,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	deps WireDeps,
 	callbackURL, binRPCCallbackAddr string,
 	cbHandlers *CallbackHandlers,
+	adoptBINRPCHandlers func(*CallbackHandlers),
 	addCloser func(func()),
 	logger *slog.Logger,
 ) (loaded int, err error) {
@@ -504,7 +507,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	for _, ifaceSpec := range cc.Interfaces {
 		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
-		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
+		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, adoptBINRPCHandlers, logger)
 		if ifErr != nil {
 			logger.Warn("wire.interface.failed",
 				slog.String("central", cc.Name),
@@ -706,6 +709,7 @@ func wireInterface(
 	jsonCaller backends.Caller,
 	binrpcCallbackServer *rpcserver.BINRPCServer,
 	binrpcCallbackAddr string,
+	adoptBINRPCHandlers func(*CallbackHandlers),
 	logger *slog.Logger,
 ) (closer func(), ingested bool, err error) {
 	// CUxD speaks BIN-RPC natively. It gets its own dedicated wiring
@@ -717,7 +721,7 @@ func wireInterface(
 		// merely whether the client/backend wiring succeeded — a CUxD
 		// interface that exhausts every retry is wired but empty, and must
 		// not count toward the "interfaces loaded" tally.
-		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, logger)
+		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, adoptBINRPCHandlers, logger)
 	}
 
 	url, err := interfaceURL(cc, iface)
@@ -849,15 +853,20 @@ func wireInterface(
 		)
 	}
 
-	// Wire the ReGa script runner and HTTP download transport into the CCU
-	// backend so operations that require them (e.g. CreateBackupAndDownload,
-	// DownloadFirmware) are reachable in production. Both setters are no-ops
+	// Wire the ReGa script runner and the plain-HTTP transport into the CCU
+	// backend so the operations that need them (CreateBackupAndDownload and
+	// the group editor) are reachable in production. Both setters are no-ops
 	// on non-CCU backends; the type assertion ensures we only call them when
 	// the concrete type is *backends.CcuBackend.
 	if ccuBackend, ok := backend.(*backends.CcuBackend); ok {
 		if runner != nil {
 			ccuBackend.SetScriptRunner(runner)
 		}
+		// The ReGa com-test timestamps are offset-free CCU-local wall clock,
+		// so the backend needs the CCU's own zone to turn one into an
+		// instant. WireHub has already stamped it from the CCU's time
+		// configuration by the time any interface is wired.
+		ccuBackend.SetCCUTimezone(unit.SystemInformation().Timezone)
 		hc := jsonrpcHTTPClient(cc)
 		if hc == nil {
 			// No timeout here by design; the transport is ours either way.
@@ -873,7 +882,7 @@ func wireInterface(
 			// live session rather than displacing it: a forced login here
 			// would abandon the session the whole central is working with and
 			// burn a slot in the CCU's small, WebUI-shared session pool on
-			// every backup or firmware download.
+			// every backup.
 			rpcClient := jc.Client()
 			ccuBackend.SetSessionRenewer(func(ctx context.Context) (string, error) {
 				if err := rpcClient.EnsureSession(ctx); err != nil {
@@ -882,7 +891,7 @@ func wireInterface(
 				return rpcClient.SessionID(), nil
 			})
 		}
-		ccuBackend.SetDownloadFirmwareTransport(ccuBaseURLFor(cc), hc, sessionIDFn)
+		ccuBackend.SetHTTPTransport(ccuBaseURLFor(cc), hc, sessionIDFn)
 
 		// Persist device / channel renames to the CCU. The hook resolves
 		// the address to its ReGa ISE-ID, then dispatches to Device.setName
@@ -977,7 +986,7 @@ func wireInterface(
 
 		// Resolve the CCU's TCP address from the XML-RPC URL so the
 		// TCP-probe stage can dial without knowing the per-interface port.
-		ccuTCPAddr := cc.Host + ":2010" // fallback: CCU homematic2 port
+		ccuTCPAddr := interfaceTCPAddr(cc, iface)
 		if parsed, parseErr := neturl.Parse(url); parseErr == nil && parsed.Host != "" {
 			ccuTCPAddr = parsed.Host // already "host:port"
 		}
@@ -1337,9 +1346,6 @@ func wireInterface(
 	// wireInterface runs on the central's background bring-up goroutine, so a
 	// brief block is fine; ctx-cancel (teardown) aborts the wait. The interface
 	// is reported as wired regardless (the closer tracks it for shutdown).
-	ingestBackoff := []time.Duration{
-		1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
-	}
 	ingested = runXMLRPCActivation(ctx, ingestBackoff, activate, ic, cc.Name, wireID, logger)
 
 	// The bring-up has reported its result for this interface, so hand it to
@@ -1542,27 +1548,13 @@ func interfaceRemotePathOverride(cc config.CentralConfig, iface hmenum.Interface
 // and therefore rejected here — callers that want CUxD must wire the
 // BIN-RPC caller separately.
 func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, error) {
-	if iface == hmenum.InterfaceCUxD {
-		return "", errors.New("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
+	port, err := interfacePort(cc, iface)
+	if err != nil {
+		return "", err
 	}
-	ports, ok := hmenum.DetectionPorts[iface]
-	if !ok {
-		return "", fmt.Errorf("no known port for interface %q", iface)
-	}
-	port := ports.Plain
 	scheme := "http"
 	if cc.TLS {
-		if ports.TLS == 0 {
-			return "", fmt.Errorf("interface %q has no TLS port", iface)
-		}
-		port = ports.TLS
 		scheme = "https"
-	}
-	// Per-interface override takes precedence over the central-wide
-	// fallback so operators can pin, e.g., HmIP-RF to a non-standard
-	// port without disturbing other interfaces.
-	if ov := interfacePortOverride(cc, iface); ov > 0 {
-		port = ov
 	}
 	// Path mirrors the CCU's XML-RPC routing: /RPC2 is the default
 	// endpoint, /groups is the VirtualDevices variant. POSTing to the
@@ -1580,4 +1572,45 @@ func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, erro
 		path = ov
 	}
 	return fmt.Sprintf("%s://%s:%d%s", scheme, cc.Host, port, path), nil
+}
+
+// interfacePort resolves the TCP port for (central, interface): the
+// SPECIFICATION §7.2 detection port, its TLS variant when the central
+// speaks TLS, and finally the per-interface operator override. CUxD is
+// BIN-RPC only and is rejected here, like [interfaceURL].
+func interfacePort(cc config.CentralConfig, iface hmenum.Interface) (int, error) {
+	if iface == hmenum.InterfaceCUxD {
+		return 0, errors.New("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
+	}
+	ports, ok := hmenum.DetectionPorts[iface]
+	if !ok {
+		return 0, fmt.Errorf("no known port for interface %q", iface)
+	}
+	port := ports.Plain
+	if cc.TLS {
+		if ports.TLS == 0 {
+			return 0, fmt.Errorf("interface %q has no TLS port", iface)
+		}
+		port = ports.TLS
+	}
+	// Per-interface override takes precedence over the central-wide
+	// fallback so operators can pin, e.g., HmIP-RF to a non-standard
+	// port without disturbing other interfaces.
+	if ov := interfacePortOverride(cc, iface); ov > 0 {
+		port = ov
+	}
+	return port, nil
+}
+
+// interfaceTCPAddr is the "host:port" the recovery coordinator's TCP probe
+// dials for (central, interface). It answers the same port [interfaceURL]
+// puts in the endpoint, so the probe cannot end up watching a different
+// interface's port than the one the RPC calls use. Empty when the interface
+// has no XML-RPC port.
+func interfaceTCPAddr(cc config.CentralConfig, iface hmenum.Interface) string {
+	port, err := interfacePort(cc, iface)
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort(cc.Host, strconv.Itoa(port))
 }

@@ -51,8 +51,15 @@ func (m *Mux) Handle(method string, fn MethodHandler) {
 
 // HandleFallback registers a catch-all handler used when no specific
 // method has been registered. If unset, unknown methods produce a
-// fault with code -32601 ("method not found") to match JSON-RPC's
-// convention as the closest standardised codepoint.
+// fault with code -32601 ("method not found"). The number is arbitrary as
+// far as the CCU is concerned: HSSManager::XmlRpcCallSync tests only
+// c.isFault() and logs the fault struct's rendered text
+// (OpenCCU-Base src/libhsscomm/HSSManager.cpp:132), and
+// XmlRpcClient::parseResponse only sets a boolean — no CCU path reads a
+// fault code back from a callback. What the fault struct must carry is an
+// integer faultCode member: the HmIP server's XmlRpcParser casts it to
+// Integer while parsing, so an absent or non-integer code throws on its
+// side.
 func (m *Mux) HandleFallback(fn MethodHandler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -102,13 +109,21 @@ func (m *Mux) RegisterSystemMethods() {
 	})
 
 	m.Handle("system.methodHelp", func(_ context.Context, _ []Value) (Value, error) {
-		// Intentionally empty: the CCU only checks existence, not content.
+		// Intentionally empty. The CCU never calls methodHelp on a
+		// callback: it implements the method on its own surface
+		// (OpenCCU-Base src/libXmlRpc/src/XmlRpcServer.cpp:219), and the
+		// only caller in the firmware is the WebUI's devconfig.cgi probing
+		// an interface daemon's own URL, never a registered callback.
+		// Answered for XML-RPC completeness.
 		return StringValue(""), nil
 	})
 
 	m.Handle("system.methodSignature", func(_ context.Context, _ []Value) (Value, error) {
-		// Returns "undef" — the CCU treats an absent signature as "any types
-		// accepted" and never inspects the contents.
+		// Returns "undef" for XML-RPC completeness. The CCU never calls
+		// methodSignature — the method occurs nowhere in the CCU sources,
+		// and libXmlRpc does not implement it either
+		// (OpenCCU-Base src/libXmlRpc/src/XmlRpcServer.cpp:218 declares only
+		// listMethods and methodHelp).
 		return ArrayValue{StringValue("undef")}, nil
 	})
 

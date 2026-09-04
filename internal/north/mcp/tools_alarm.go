@@ -6,6 +6,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -82,8 +83,8 @@ func registerListAlarmZones(s *mcpsdk.Server, d Deps) {
 				TriggeredMotion: len(d.Alarm.TriggeredMotionSensors(z.ID)),
 				Bypassed:        z.Bypassed,
 				IncidentID:      z.IncidentID,
-				CountdownKind:   z.TimerKind,
-				CountdownS:      int(z.TimerRemaining.Seconds()),
+				CountdownKind:   countdownKind(z.TimerKind),
+				CountdownS:      countdownSeconds(z.TimerKind, z.TimerRemaining),
 			})
 		}
 		return nil, out, nil
@@ -267,4 +268,23 @@ func sortByClass(in []securityClassSummary) {
 			in[j], in[j-1] = in[j-1], in[j]
 		}
 	}
+}
+
+// countdownKind reports the timer kind only when it is one the countdown
+// contract admits (exit_delay / entry_delay). The engine owns that question;
+// this plane used to pass any kind through, so a zone in pre-alarm or trigger
+// reported a countdown kind no client declares.
+func countdownKind(kind string) string {
+	if !engine.IsCountdownTimerKind(kind) {
+		return ""
+	}
+	return kind
+}
+
+// countdownSeconds is [countdownKind]'s remaining-value counterpart.
+func countdownSeconds(kind string, remaining time.Duration) int {
+	if !engine.IsCountdownTimerKind(kind) {
+		return 0
+	}
+	return int(remaining.Seconds())
 }

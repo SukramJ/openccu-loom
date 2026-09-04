@@ -4,8 +4,6 @@
 package adapter
 
 import (
-	"strings"
-
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
@@ -52,15 +50,14 @@ func WireClimateLinkPeerRefresh(unit *central.Unit) func() {
 	// on the event-bus goroutine which is single-threaded per-subscriber.
 	peerClosers := make(map[string]func())
 
-	// resolveChannel locates *device.Channel by channel address.
-	// Channel addresses have the form "<device>:<no>"; the model registry
-	// is keyed by device address so we strip the suffix.
+	// resolveChannel locates *device.Channel by channel address. The model
+	// registry is keyed by device address, so the channel suffix comes off
+	// first — through [deviceAddressOf], the spelling this package already
+	// had. The inline copy that used to stand here differed from it on an
+	// address whose device part is empty, which reaches the same nil either
+	// way but is one more place for the grammar to drift.
 	resolveChannel := func(channelAddr string) *device.Channel {
-		devAddr := channelAddr
-		if idx := strings.LastIndex(channelAddr, ":"); idx > 0 {
-			devAddr = channelAddr[:idx]
-		}
-		d, ok := unit.ModelRegistry.Get(devAddr)
+		d, ok := unit.ModelRegistry.Get(deviceAddressOf(channelAddr))
 		if !ok {
 			return nil
 		}

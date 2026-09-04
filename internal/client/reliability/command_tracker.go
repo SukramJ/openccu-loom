@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -25,6 +24,57 @@ type CommandTrackerConfig struct {
 	WarningThreshold int
 
 	// TTL is the max age of a tracked entry. Default: 60s.
+	//
+	// 60 s is a POLICY bound of this daemon, not a CCU-stated latency, and
+	// no firmware value would settle it: for a device whose rx mode is
+	// wake-up only, rfd stores the written value in its own volatile store
+	// and QUEUES the frame (OpenCCU-Base src/rfd/RFPhysicalDataInterfaceCommand.cpp,
+	// PutData), so setValue/putParamset answer success without transmitting.
+	// The queue is drained only when the device itself next transmits
+	// (src/rfd/RFDevice.cpp SendAfterWakeupFrames, reached from the
+	// incoming-frame path); it carries no expiry at all — the only bound is
+	// a depth of 10, and an overflow silently drops the OLDEST frame. So the
+	// confirming VALUES callback can arrive minutes later or never, and no
+	// finite TTL can cover that path. Of the shipped RF device types a
+	// substantial minority declare a wake-up-only rx mode, including wall
+	// thermostats users write setpoints to.
+	//
+	// What the firmware does bound is the synchronous case, and 60 s covers
+	// it with room: per-frame BidCos wait times are 1500 / 4500 / 12500 ms
+	// (src/rfd/BidcosFrameWaitTime.h) and the HmIP legacy call budget is
+	// Legacy.ResponseTimeout, default 25 s
+	// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.LegacyServiceHandler).
+	// [TestHmCliCommandTrackerTTLCoversSynchronousBudgets] pins that margin.
+	//
+	// The daemon's OWN retry waits do not compete with this TTL either,
+	// which is the relation a reader is most likely to assume backwards:
+	// RetryConfig.DutyCycleDelay is 40 s and a three-attempt chain waits it
+	// twice, so a TTL of 60 s would look far too short. It is not, because
+	// the entry is stamped only after the reliability stack has returned
+	// success — InterfaceClient.SetValue calls WriteUnconfirmedValue below
+	// the Circuit/Retrier call and after its error check, and
+	// ValueWriter.SetValueWithOptions calls its command-tracker hook after
+	// the wire write. Every backoff is therefore spent BEFORE sentAt
+	// exists, not against it, and a write that exhausts its attempts
+	// records nothing at all.
+	// [TestW2CliCommandTrackerRecordsAfterTheRetryWindow] and
+	// [TestW2CliCommandTrackerRecordsNothingForAFailedWrite] pin both
+	// halves; stamping the entry before the chain would subtract the whole
+	// retry window from the TTL.
+	//
+	// On a real CCU that chain does not arise on this path in the first
+	// place: fault -8 is thrown at exactly one place in the CCU sources,
+	// inside RFDevice::UpdateFirmware (OpenCCU-Base
+	// src/rfd/RFDevice.cpp:1492 `throw XmlRpcException("not enough
+	// DutyCycle free",-8)`, the only XmlRpcException carrying -8 in the
+	// tree), so no value write produces it.
+	//
+	// Consequence of the uncovered path, stated so it is not mistaken for a
+	// guarantee: on a wake-up device the optimistic entry expires before the
+	// device answers, GetLastSentValue reports (nil, false), and the value
+	// reverts to whatever the model last knew. That is a deliberate
+	// bounded-memory choice; extending the TTL only widens the window, it
+	// does not close it.
 	TTL time.Duration
 
 	// CleanupThreshold triggers lazy cleanup when the tracker exceeds
@@ -109,26 +159,6 @@ func (t *CommandTracker) AddSetValue(
 	t.entries[dpk] = cachedCommand{value: value, sentAt: time.Now()}
 	t.mu.Unlock()
 	return dpk, true
-}
-
-// AddCombinedParameter parses a combined-parameter wire string (COMBINED_PARAMETER
-// or LEVEL_COMBINED) into its component key/value pairs and records each pair as
-// a tracked command under ParamsetKeyValues. Returns the list of DataPointKeys
-// registered, or nil when the wire string cannot be parsed.
-//
-// This mirrors the Python add_combined_parameter path: parse the combined string
-// into a paramset map, then delegate to AddPutParamset so both sends land in the
-// tracker as a single atomic unit.
-func (t *CommandTracker) AddCombinedParameter(
-	channelAddress string,
-	parameter string,
-	value string,
-) []hmtypes.DataPointKey {
-	values, ok := backends.ParseCombinedParameter(parameter, value)
-	if !ok || len(values) == 0 {
-		return nil
-	}
-	return t.AddPutParamset(channelAddress, hmenum.ParamsetKeyValues, values)
 }
 
 // AddPutParamset records a putParamset send for all values and returns

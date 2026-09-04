@@ -183,6 +183,14 @@ type Cover struct {
 	directionMu sync.RWMutex
 	direction   CoverDirection
 	hasDir      bool
+
+	// stopAddr / stopParam are the STOP write target resolved once at
+	// construction through the profile's channel-group schema. The schema
+	// states both the parameter and the channel a field binds to, so the
+	// STOP command follows it rather than assuming a fixed parameter name
+	// on the cover's own channel.
+	stopAddr  string
+	stopParam hmenum.Parameter
 }
 
 // Window-drive level constants.
@@ -209,6 +217,12 @@ func New(cfg Config) *Cover {
 		Variant:      cfg.Variant,
 		windowDrive:  cfg.WindowDrive,
 		direction:    DirectionUnknown,
+	}
+	stopCh, stopParam := custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldStop, hmenum.ParameterStop)
+	c.stopParam = stopParam
+	c.stopAddr = address
+	if stopCh != nil {
+		c.stopAddr = stopCh.Address
 	}
 	if c.Float != nil {
 		c.registerCoverServices()
@@ -438,7 +452,7 @@ func (c *Cover) Stop(ctx context.Context, _ hmenum.CommandPriority) error {
 	if c.writer == nil {
 		return errors.New("cover: STOP: no writer configured")
 	}
-	return c.writer.SetValue(custom.EnsureContext(ctx), c.address, hmenum.ParameterStop, true, hmenum.CommandPriorityCritical)
+	return c.writer.SetValue(custom.EnsureContext(ctx), c.stopAddr, c.stopParam, true, hmenum.CommandPriorityCritical)
 }
 
 // Open is a convenience for SetPosition(ctx, 1).

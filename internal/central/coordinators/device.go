@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/observability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -843,16 +844,20 @@ func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) 
 	// Walk all interfaces tracked in the description registry.
 	for _, iface := range c.descs.GetInterfaceIDs() {
 		for _, addr := range c.descs.GetAddresses(iface) {
-			// Only top-level devices (no colon → not a channel).
-			if strings.Contains(addr, ":") {
-				continue
-			}
 			// Already in the device registry? Skip.
 			if c.devices.Has(iface, addr) {
 				continue
 			}
 			desc, ok := c.descs.Get(iface, addr)
 			if !ok {
+				continue
+			}
+			// Only top-level devices. The test is the descriptor's PARENT
+			// field, the same rule ingestDescriptions and applyPull apply, so
+			// the cache-restart path cannot classify an address differently
+			// from the live pull path. A colon in the address is the CCU's
+			// convention for a channel, not the contract.
+			if !desc.IsDevice() {
 				continue
 			}
 			entry := registry.DeviceEntry{
@@ -1381,7 +1386,9 @@ type ParamsetInconsistency struct {
 // returned so the caller can record incidents publish integration issues.
 //
 // Only MASTER paramsets are checked; VALUES are volatile. Only HmIP devices
-// are checked because the stale-files bug is HmIPServer-specific.
+// are checked because the stale-files bug is HmIPServer-specific; any other
+// interface is rejected with [hmerr.ErrUnsupported] rather than yielding an
+// empty result that reads like a clean bill of health.
 //
 // The comparison is driven entirely by the paramset registry: it supplies both
 // the channels to visit and the description each is measured against. That
@@ -1407,17 +1414,22 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 		return nil, errors.New("device_coordinator: check_paramset_consistency: nil checker")
 	}
 
+	// Only HmIP devices are affected by the HmIPServer stale-files bug. Both
+	// HmIP-RF and HmIP-Wired devices share the HmIP-RF service on the CCU, so
+	// a single interface check covers both flavours. Rejecting the interface
+	// here rather than skipping every device inside the loop keeps the two
+	// gates from drifting apart: a caller widened past HmIP-RF would
+	// otherwise read the empty result as a clean bill of health for devices
+	// that were never looked at.
+	if iface != hmenum.InterfaceHmIPRF {
+		return nil, fmt.Errorf("device_coordinator: check_paramset_consistency: %w: applies to %s only, got %s",
+			hmerr.ErrUnsupported, hmenum.InterfaceHmIPRF, iface)
+	}
+
 	var result []ParamsetInconsistency
 	ifaceID := string(ifaceKey)
 
 	for _, deviceAddr := range deviceAddresses {
-		// Only HmIP devices are affected by the HmIPServer stale-files bug.
-		// Both HmIP-RF and HmIP-Wired devices share the HmIP-RF service on
-		// the CCU, so a single interface check covers both flavours.
-		if iface != hmenum.InterfaceHmIPRF {
-			continue
-		}
-
 		// Collect the device's channels from the paramset registry rather
 		// than from the device descriptions. Both hold the same channels once
 		// the daemon has been running for a while, but only the paramset

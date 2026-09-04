@@ -754,7 +754,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		// another integration's discovery configs.
 		return 0, nil
 	}
-	prefix := "homeassistant/"
+	prefix := naming.DiscoveryTopicPrefix
 	nodePrefixes := discoveryNodePrefixes(rawCentral)
 
 	var (
@@ -1113,7 +1113,7 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 		stale []string
 	)
 	handler := func(topic string, payload []byte, _ bool) {
-		if !strings.HasPrefix(topic, "homeassistant/") || !strings.HasSuffix(topic, "/config") {
+		if !strings.HasPrefix(topic, naming.DiscoveryTopicPrefix) || !strings.HasSuffix(topic, "/config") {
 			return
 		}
 		if len(payload) == 0 {
@@ -1127,7 +1127,7 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 		mu.Unlock()
 	}
 
-	if err := b.snapshotRetained(ctx, subClient, "homeassistant/#", b.cfg.QoS.Discovery, snapshotWindow, handler); err != nil {
+	if err := b.snapshotRetained(ctx, subClient, naming.DiscoveryTopicPrefix+"#", b.cfg.QoS.Discovery, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
 

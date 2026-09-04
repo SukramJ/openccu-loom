@@ -30,13 +30,13 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // parseFloat decodes a JSON-RawMessage as a float64. Returns ok=false
@@ -246,19 +246,52 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 	for actorIdx, group := range groups {
 		for subIdx, member := range group.Channels {
 			key := fmt.Sprintf("%d_%d", actorIdx+1, subIdx+1)
+			// Publish only keys the WEEK_PROGRAM_CHANNEL_LOCKS table can
+			// address. The table covers an 8x3 grid; a channel group with
+			// more than three members (IPRGBW: one primary plus three
+			// secondaries, so HmIP-RGBW / HmIP-LSC mint a fourth member)
+			// runs past it. Registering such a key anyway published a
+			// schedule switch the operator can never write — the REST lock
+			// handler's 404 gate passes because the key IS registered, and
+			// SetScheduleEnabled then fails with "unknown channel key" —
+			// while the broadcast path silently reported it as changed
+			// without ever setting a bit for it.
+			//
+			// The bit is not missing from the firmware, it is missing from
+			// our table. The CCU's own weekly-program editor derives the
+			// bit positionally from the device's schedule-relevant channel
+			// list — `Math.pow(2, index)` over getRelevantChannels, whose
+			// accepted channel types include UNIVERSAL_LIGHT_RECEIVER
+			// (../OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:357
+			// and :517-555) — so an HmIP-RGBW's fourth universal-light
+			// receiver is that firmware's bit 3. What cannot be expressed
+			// is the mapping: channelKeyBitmask is a fixed actor×sub grid
+			// keyed by the custom-DP channel groups, not by the firmware's
+			// relevant-channel list, and the two lists diverge per device
+			// family (see the note on channelKeyBitmask, which carries the
+			// families and the reason the fix does not belong there). Until
+			// the key is minted from the device's own channel list, the
+			// fourth member carries no schedule switch — a target this
+			// table cannot address, not a bit nobody knows.
+			if _, ok := weekprofile.ChannelKeyToBitmask(key); !ok {
+				continue
+			}
 			chType := "secondary"
 			if member.Primary {
 				chType = "primary"
 			}
-			address := fmt.Sprintf("%s:%d", dev.Address, member.ChannelNo)
+			address := hmtypes.ChannelAddress(dev.Address, member.ChannelNo)
 			name := fmt.Sprintf("Channel %d", member.ChannelNo)
+			synthetic := true
 			if ch := dev.Channel(address); ch != nil && ch.Name() != "" {
 				name = ch.Name()
+				synthetic = false
 			}
 			out[key] = weekprofile.TargetChannelInfo{
 				ChannelNo:      member.ChannelNo,
 				ChannelAddress: address,
 				Name:           name,
+				NameSynthetic:  synthetic,
 				ChannelType:    chType,
 			}
 		}
@@ -381,7 +414,7 @@ func existingClimateWeekProfileChannel(dev *device.Device) *device.Channel {
 // custom-DP channel. Returns nil when neither exists.
 func canonicalScheduleChannel(dev *device.Device) *device.Channel {
 	for _, ch := range dev.Channels() {
-		if strings.HasSuffix(ch.Type, "WEEK_PROFILE") {
+		if isWeekProfileChannel(ch.Type) {
 			return ch
 		}
 	}
@@ -411,7 +444,7 @@ func deviceHasRegisteredScheduleChannel(dev *device.Device, reg *custom.Registry
 		}
 	}
 	for _, ch := range dev.Channels() {
-		if strings.HasSuffix(ch.Type, "WEEK_PROFILE") {
+		if isWeekProfileChannel(ch.Type) {
 			return true
 		}
 	}
@@ -551,14 +584,20 @@ func subscribeProfilePointer(d *device.Device, wp *weekprofile.ProfileDataPoint)
 			if dp == nil {
 				continue
 			}
+			// Pass the parameter along: ACTIVE_PROFILE is declared 1-based
+			// and WEEK_PROGRAM_POINTER 0-based, so the same number means
+			// different profiles. The parameter-less form guesses from the
+			// Go type — a string is read as the RF pointer, everything else
+			// as ACTIVE_PROFILE — so an RF pointer arriving as an integer,
+			// which is its ordinary shape, resolved one profile too low.
 			dp.OnAnyUpdate(func(_, next any) {
-				_ = wp.SyncProfilePointer(next)
+				_ = wp.SyncProfilePointerFor(p, next)
 			})
 			// Seed once with the current value so the descriptor's
 			// CurrentProfile reflects the live state right after
 			// boot, not just after the next push event.
 			if v, observed := dp.RawValue(); observed {
-				_ = wp.SyncProfilePointer(v)
+				_ = wp.SyncProfilePointerFor(p, v)
 			}
 			return
 		}

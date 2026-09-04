@@ -160,7 +160,10 @@ func TestSmokeSirenStatusToAlarmState(t *testing.T) {
 		{SmokeStatusIdleOff, matterSmokeAlarmNormal},
 		{SmokeStatusSecondaryAlarm, matterSmokeAlarmWarning},
 		{SmokeStatusPrimaryAlarm, matterSmokeAlarmCritical},
-		{SmokeStatusIntrusion, matterSmokeAlarmCritical},
+		// Normal, not Critical: the detector is sounding for a burglar alarm
+		// the installation started, and its smoke sensor detected nothing.
+		// See TestIntrusionIsNotReportedAsSmoke.
+		{SmokeStatusIntrusion, matterSmokeAlarmNormal},
 	}
 	for _, tc := range cases {
 		r := newSmokeRig(t)

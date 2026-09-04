@@ -52,7 +52,7 @@ func newFixedColorLightRigWithOnTimeUnit(t *testing.T, address string, w *putWri
 	ch := d.AddChannel(address, 1, "SIGNAL_CHIME", hmenum.ParamsetKeyValues)
 	putWritableFloat(ch, address, hmenum.ParameterLevel, w)
 	putWritableSelect(ch, address, hmenum.ParameterColor, w, []string{
-		"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE",
+		"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE",
 	})
 	// DURATION_VALUE/DURATION_UNIT presence makes hasOnTimeUnit=true via
 	// resolveOnTimeParams, exactly as it does on a real HmIP-BSL channel.

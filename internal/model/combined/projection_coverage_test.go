@@ -61,7 +61,7 @@ func TestCombinedProjectionCoversEveryCombinedType(t *testing.T) {
 	// production type.
 	implementers := map[string]payload.CombinedProjection{
 		"Timer":         combined.NewTimer("VCU0000001:1", nil, "DURATION_VALUE", "DURATION_UNIT"),
-		"LevelCombined": combined.NewLevelCombined("VCU0000001:1", nil, "LEVEL", "LEVEL_2", "LEVEL_COMBINED"),
+		"LevelCombined": combined.NewLevelCombined("VCU0000001:1", "LEVEL", "LEVEL_2"),
 		"HSColor":       combined.NewHSColor("VCU0000001:1", nil, "HUE", "SATURATION"),
 		"EnumSelect": combined.NewEnumSelect(combined.EnumSelectConfig{
 			Address:           "VCU0000001:1",

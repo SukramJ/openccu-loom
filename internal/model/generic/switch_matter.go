@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -67,8 +69,6 @@ const (
 	matterGenericSwitchCmdOffWithEffect           uint32 = 0x40
 	matterGenericSwitchCmdOnWithRecallGlobalScene uint32 = 0x41
 	matterGenericSwitchCmdOnWithTimedOff          uint32 = 0x42
-
-	matterGenericOnOffClusterRevision uint16 = 6
 )
 
 // matterGenericStartUpOnOffNull is the sentinel stored in
@@ -189,7 +189,7 @@ func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 		// three LT commands to answer.
 		return matterGenericFeatureOnOffLT, true
 	case matterGenericSwitchAttrClusterRevision:
-		return matterGenericOnOffClusterRevision, true
+		return onoff.Revision(), true
 	default:
 		return nil, false
 	}

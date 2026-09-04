@@ -152,3 +152,29 @@ func TestDiagram_MultiCentralSeriesPersist(t *testing.T) {
 		t.Errorf("cross-central series not preserved: %q", got.ConfigJSON)
 	}
 }
+
+// TestDiagram_ValidationKeysOnSeriesKey measures what validateDiagram's
+// checks depend on: the document naming its series list `series` and each
+// entry naming its CCU `central`. A blob using different names is accepted
+// unchecked — json.Unmarshal ignores unknown keys, so the series cap and the
+// per-series central check both loop over nothing and the write returns 200.
+//
+// The point is not that the shape below is legitimate; it is that the
+// multi-CCU routing-safety check is silently off for it. If this ever starts
+// returning ErrDiagramInvalid the validator has been tightened, and the
+// comment on validateDiagram has to be rewritten with it.
+func TestDiagram_ValidationKeysOnSeriesKey(t *testing.T) {
+	t.Parallel()
+	s := newDiagramStore(t)
+	ctx := context.Background()
+
+	// Same nine entries the cap rejects above, under a different key, with
+	// no central anywhere.
+	renamed := `{"rows":[` +
+		`{"ccu":""},{"ccu":""},{"ccu":""},{"ccu":""},{"ccu":""},` +
+		`{"ccu":""},{"ccu":""},{"ccu":""},{"ccu":""}]}`
+	if _, err := s.Create(ctx, "a", "n", "private", renamed); err != nil {
+		t.Fatalf("a document the validator cannot read was rejected (%v); "+
+			"the validator was tightened — update the comment on validateDiagram", err)
+	}
+}

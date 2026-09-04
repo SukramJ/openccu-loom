@@ -3,12 +3,14 @@
 
 // Package routingkey is the Go side of the cross-backend routing-key
 // contract: the algorithm that turns a (central, address, parameter)
-// triple into the stable Home Assistant value-change routing key.
+// triple into the stable value-change routing key north-bound consumers
+// route on.
 //
 // Multiple backends rebuild this key independently and MUST produce
-// bit-identical output, otherwise events route to the wrong entity (or
-// no entity) and Home Assistant loses every entity's history on
-// cutover. The canonical artefact is the golden fixture set the
+// bit-identical output, otherwise events route to the wrong entity (or no
+// entity). A consumer that keys its entity registry on it loses every
+// entity's history on cutover; the Home Assistant drop-in is the instance
+// that makes this load-bearing. The canonical artefact is the golden fixture set the
 // contract test under tests/contract/ replays against these functions;
 // see docs/external-clients/ha-drop-in-identity-and-scoping.md for the
 // background and the owner split.
@@ -97,11 +99,11 @@ func addressRoot(address string) string {
 // INT000* addresses, the virtual-remote buses, and the CUxD addresses, all
 // of which repeat verbatim on every CCU.
 //
-// A north-bound plane that keys entities by unique_id has to consult
-// this before publishing without a serial: two CCUs would otherwise
-// declare the identical id, and the consumer keeps whichever arrived
-// first. Home Assistant does exactly that, and the payload is retained,
-// so the loss outlives the daemon that caused it.
+// A north-bound plane that keys entities by unique_id has to consult this
+// before publishing without a serial: two CCUs would otherwise declare the
+// identical id, and a consumer registry keyed on it keeps whichever arrived
+// first. Home Assistant is such a registry, and the payload is retained, so
+// the loss outlives the daemon that caused it.
 func NeedsCentralScope(address string) bool { return needsCentralPrefix(address) }
 
 // needsCentralPrefix reports whether the parameter-level key for the

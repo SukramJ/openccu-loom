@@ -6,6 +6,754 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (API 11.0.0): `POST /system/firmware/download` now downloads the
+  CCU's own firmware, and ignores the `url` field.** The endpoint offered to
+  fetch a caller-supplied image; no such call exists on a CCU. Its own entry
+  point resolves the download from the box's `/VERSION` and board serial and
+  writes the image to `/tmp/fup.tgz` — it takes no parameters, so there was
+  never anywhere for a URL to go.
+
+  What changes for a client: the request body is now optional apart from
+  `central`, a `url` is accepted and ignored rather than validated (a client
+  written against the old contract keeps working unchanged), and a 202 now
+  means the CCU reported the download succeeded. A 502 means it reported a
+  failure — no firmware matches this box's version and serial, or the
+  transfer failed. Previously every call answered 202, because the old
+  implementation POSTed an action the maintenance CGI does not define and read
+  the resulting HTML error page, served under HTTP 200, as success.
+
+  The audit entry records the central, not the discarded URL: recording a URL
+  the CCU never fetched made the trail claim something that did not happen.
+
+  Downloading is still not installing — `POST /system/firmware/update`
+  performs the install, matching the CCU's own two-step flow.
+
+  `SetDownloadFirmwareTransport` is renamed `SetHTTPTransport`. It never
+  served firmware; it wires the two operations that do reach the CCU over
+  plain HTTP, the backup download and the group editor.
+
+### Fixed
+
+- **`reportValueUsage` was classified as a read, and it reconfigures the
+  device.** The CCU documents the method as telling the interface process how
+  often a value is used *so that it can establish or delete the connection to
+  the component* (`src/rfd/XmlRpcMethods.cpp:700-723`): it persists the
+  per-channel usage record and adds or removes the direct link peer between
+  the channel and the central. Its BidCos return value is a transmission
+  verdict rather than a query result — `false` means the device was
+  unreachable, the change is queued, and `CONFIG_PENDING` is now set on its
+  MAINTENANCE channel. The daemon uses it for exactly that, calling it per
+  channel with `refCounter` 1 to create a central link and 0 to tear one down.
+
+  It sat in `readMethods`, whose own header said the table holds methods that
+  return CCU state without mutating it, so it was paced on the read throttle
+  and reported as a read. It is a write now. `TestNoMethodIsBothReadAndWrite`
+  keeps the tables disjoint, and `TestReportValueUsageIsAWrite` pins this one
+  against what the CCU does rather than against the table.
+
+  This matters beyond the throttle: the read/write split is what the project's
+  own procedure for the developer's live CCU treats as free of consequence, so
+  a run that believed it was only reading could reconfigure device links.
+
+- **`pkg/hmlog` was not importable from outside this module.** It imported
+  `internal/reqctx` — in the log factory, to install the request-context
+  handler, and in the operation logger, to read the span. Go refuses an
+  `internal/` path to an importer outside the module, so an external program
+  that embedded openccu-loom as a library and imported `pkg/hmlog` failed to
+  compile. Nothing in this repository could notice: the rule never applies to
+  importers inside the module, and every importer here is inside it, so
+  `go build ./...` stayed green.
+
+  That contradicted the promise `pkg/` carries, written on `pkg/hmapi`: the
+  package sits there so an external program can import it without pulling in
+  the whole `internal/` tree.
+
+  `internal/reqctx` is now `pkg/hmreqctx` (package `hmreqctx`, matching the
+  `pkg/hm*` convention every sibling follows). No behaviour changed and no
+  call site changed meaning — 31 files follow the rename.
+  `TestPkgDoesNotImportInternal` walks `pkg/` and fails on any `internal/`
+  import, with no exception list: one entry for `hmlog` would have made it
+  blind to the case it exists for. ADR 0017 carries an amendment recording
+  the move and why it was forced.
+
+- **The last seven low findings, all cross-package.** The `.sbk` suffix, the
+  ping caller-id and the XML-RPC fault collapse each had two spellings in
+  different packages; the Latin-1 byte loop had two, one over `[]byte` and
+  one over `string`, easy to confuse with its inverse
+  (`FixXMLRPCEncoding`) and now living beside it. `pkg/hmenum/ports.go`
+  cited SPECIFICATION §7.2 for its values; that section is the risk
+  register and the specification states no CCU-side port at all.
+
+  Two comments were corrected against the firmware rather than tidied. The
+  `get_serial` script claimed it compresses the serial to ten characters —
+  the script does nothing of the kind, the Go caller does, and the CCU
+  publishes the value untruncated where it publishes it (`get_serial_number`
+  in the UPnP device description feeds `SERIAL_NUMBER` straight from the
+  file). The reduction stays, because clients embed the result as the
+  central-id slot of their unique_ids, but it is this daemon's convention
+  and now says so.
+
+  The aggregate alarm panel's name is resolved the same way on every plane:
+  MQTT already treated a catalogue key echoed back as "no translation", the
+  REST/WS wiring did not, so a dropped row would have shown the raw key on
+  one plane and "Alarm system" on the other.
+
+- **Low-severity audit findings, final batch: 24 more, and the last of the
+  open ones.** The remaining set was the cross-package half — findings whose
+  fix reached into two or three packages at once, which is why they came last.
+
+  - *Backup archives are recognised by one constant.* The `.sbk` suffix was
+    spelled nine times across storage, restore and the REST download; a
+    mismatch would have made a written archive invisible to the list that
+    finds it.
+  - *Ping and pong now share one caller-id grammar.* The producer built the
+    id and the PONG parser took it apart with a separator of its own, and two
+    comments described that id as `<iface>` when the wire carries a triple.
+  - *A missing hook is reported instead of silently succeeding.* Five hub
+    coordinator methods returned nil when their write hook was never wired,
+    so an unwired program execution looked exactly like a successful one.
+  - *The profile-key grammar has one owner.* Five spellings, three of them
+    accepting `P01` and two not. Which form to keep was measured, not chosen:
+    no zero-padded profile key exists anywhere in the firmware tree or the
+    descriptor corpus, so the strict two-character form changes no reachable
+    input.
+
+  The `system.listMethods` advertisement, the `schedules.active_profile.set`
+  base, the CCU-timezone wiring seam and the localizable "event received"
+  health note each needed a decision or a file the fixing agent could not
+  reach; they are done here. `MaxDiscriminator` had picked up a Matter-spec
+  section citation on its way out of the config validator — it now cites
+  matter.js, which is what this project's rule requires.
+
+- **Low-severity audit findings, second batch: 62 more fixed across the model,
+  client, alarm, config, pkg and north-bound packages.** The same classes as
+  the first batch, plus three worth naming:
+
+  - *A guard that could not tell the two sides apart.* The forced-sensor
+    identity is spelled in three places; nothing compared them, so the model
+    and the MQTT discovery payload could name different entities. A new test
+    drives all three from one device and fails when they diverge.
+  - *A hint vocabulary with no cross-language check.* Every icon and
+    state-colour token `pkg/hmui` emits is now asserted to exist in the SPA's
+    own registries, so a token added on one side and not the other stops
+    silently rendering nothing.
+  - *A comment that taught a rule the body does not implement.* The event
+    group's usage doc described a membership condition; the body never reads
+    the member set. The doc now says what the code does, and the rule stays
+    unimplemented because no consumer defines which answer is right.
+
+  Eleven findings were not fixed. Three had their recipe's own text say no
+  change was sound, two needed a value no source carries, three were
+  duplicates or optional halves of another finding, and the rest reached
+  outside the package that owned them. Two more were reported as fixed
+  without a bite proof because measurement showed the proposed guard cannot
+  bite — in both cases the fix makes the two sides read one constant, so they
+  move together and no test can separate them.
+
+  Along the way `internal/model/device/naming.go`'s successor in
+  `internal/model/hub` went the same way as the naming family before it: the
+  `SysvarDp*` wrapper set had no production caller, no accessor on `Sysvar`
+  and no constructor call since the initial release, while carrying three
+  coercion rules that had drifted from the live ones. It is deleted. The
+  service route for `set_value` stopped parsing strings itself — its boolean
+  table was case-sensitive and knew neither "yes" nor "t", while its numeric
+  tables used `fmt.Sscanf`, which reads "12abc" as 12 and bounds nothing, so
+  a caller could be refused a value the daemon would write, or have a
+  malformed one accepted.
+
+- **Low-severity audit findings, first batch: 48 fixed across six packages.**
+  Each was re-verified against the current tree before anything was changed —
+  five of the original set had already been fixed by the high/medium work and
+  were left alone. The classes that recurred:
+
+  - *A constant that named no wire value.* The garage door's
+    `DoorStateUnknown` was `"UNKNOWN"`; every device declaring `DOOR_STATE`
+    declares `CLOSED, OPEN, VENTILATION_POSITION, POSITION_UNKNOWN`, so the
+    comparison matched nothing and an unknown door position was never
+    recognised as one.
+  - *One rule spelled several times.* Channel-address parsing and composition
+    across the adapter now go through `pkg/hmtypes`; the boot-time ingest
+    backoff, the CCU port table, the channel LIKE prefix and the lock
+    permission vocabulary each had two independent copies with a comment
+    asserting their equality and nothing enforcing it.
+  - *Code that could not run.* A duplicate error sanitiser in
+    `internal/client` with no production caller, two unreachable un-ignore
+    branches, a `PhaseUnreleased` no producer emits, an `ErrSchemaDrift` no
+    path returns, and two `LinkCoordinator` methods nothing called.
+  - *Wire kinds that decoded to nil.* The XML-RPC reply converter on the
+    callback path handled neither `DateTimeValue` nor `Base64Value`; both
+    arrived as an untyped nil indistinguishable from a genuine `NilValue`.
+  - *Comments describing something the code does not do.* The initial-snapshot
+    header said MASTER values are skipped while the pass publishes them; the
+    audit trail recorded channel 0 for a device-level paramset write.
+
+  Nine findings were deliberately not fixed and are recorded rather than
+  carried: two had their premise refuted by the firmware on re-reading, three
+  needed a decision about behaviour rather than a repair, and the rest reached
+  outside the package that owned them.
+
+- **Every documented un-ignore pattern was one the parser rejects.** The
+  annotated reference config, the concept document, the config field's own
+  comment, the store and the REST contract all taught
+  `MODEL:CHANNEL:PARAMETER` — `"*:*:RSSI_DEVICE"`,
+  `"HM-CC-RT-DN:4:VALVE_STATE"`. The parser refuses a colon without an `@`
+  outright. The accepted forms are a bare `PARAMETER`, matching every VALUES
+  paramset on any model and channel, or the fully-qualified
+  `PARAMETER:PARAMSET@MODEL:CHANNEL` — which the SPA's own input placeholder
+  had right all along.
+
+  An operator who followed the documentation got a silently empty list: a
+  parse failure is counted and logged, never surfaced as a config error, so
+  the parameter simply stayed hidden with nothing to say why. Every document
+  now carries the grammar the parser implements, and
+  `TestDocumentedUnIgnorePatternsParse` feeds each documented example through
+  that parser. Its extractor accepts any quoted list item under an
+  `un_ignore:` key rather than only well-formed ones — an extractor that
+  matched only valid patterns could never have caught this.
+
+- **Un-ignore patterns are documented as fleet-wide, which is what they are.**
+  They are stored per central and the visibility editor edits one central's
+  list at a time, so the storage shape and the editor both read as if the
+  effect were scoped to that CCU. It is not: the daemon unions every
+  central's patterns into one shared visibility decider and re-applies the
+  marks across every device of every central. Nor could it be otherwise as
+  written — a pattern names a model, a channel and a parameter, none of which
+  identify a CCU.
+
+  No behaviour changed. The config field, the store, the concept document and
+  the REST contract now say so, the visibility editor carries a line above
+  the central selector explaining that it picks whose list is edited rather
+  than where it applies, and `TestUnIgnorePatternsApplyAcrossTheFleet` pins
+  the scope so the documentation cannot drift from it again. Making the
+  effect per-central would mean a per-central decider, and it would silently
+  narrow every rule an operator has already saved — an architectural change,
+  not a fix.
+
+- **MQTT published `ch3` where the operator had named the channel.** The
+  discovery name builder derived its entity name from the custom-DP
+  classification alone and never looked at the channel's name, so every
+  channel of a multi-primary device was published under the `ch<N>` marker —
+  including one the operator had labelled on the CCU. REST, the SPA and the
+  model itself showed the operator's label; MQTT alone showed the marker.
+
+  The marker exists to keep two channels apart when neither carries a label:
+  the CCU reports the bare `<device>:<no>` form for a channel nobody renamed,
+  and those slugify onto one entity id in Home Assistant. A named channel
+  already distinguishes itself. The unnamed shapes are unchanged — `ch<N>`
+  for one of several primaries, `vch<N>` for a secondary mirror, and no name
+  at all for a device's only primary.
+
+  The builder now asks the model (`device.Channel.CustomDPDisplayName`)
+  instead of re-deriving, which is where the divergence came from and where
+  the other two name builders in the same package were already looking. Two
+  further name builders in that file — press events, and the impulse /
+  device-error entities — had preferred the operator's label all along, which
+  is what made this one the outlier rather than the convention.
+
+  What an existing installation sees: affected entities change their
+  displayed name. Their `entity_id` does not move — Home Assistant assigns it
+  once and only changes it on an explicit rename
+  (`homeassistant/helpers/entity_registry.py`: `async_get_or_create` reuses
+  the registered entry without passing `new_entity_id`, the one branch that
+  moves an id). Automations keep working; a channel discovered for the first
+  time after the upgrade gets its id from the new name.
+
+- **Two of the three silence-code switches were stored and ignored.** The
+  alarm policies view offered a per-source "require code to silence" gate for
+  `mqtt`, `keypad` and `remote`. The engine drops that requirement for every
+  pre-authenticated source, so only `mqtt` could ever gate anything: an
+  operator session carries its own second factor, and a keypad or remote press
+  is authenticated by its slot or binding match and carries no PIN that could
+  be typed. An operator who enabled either switch was shown a protection that
+  was not there — and `keypad` never reaches the silence verb at all, since
+  the intent router uses it for arming and disarming only.
+
+  The view now offers `mqtt` alone. Nothing changes for a stored
+  configuration: an entry for another source was already inert, and stays
+  accepted, so no existing zone document is rewritten.
+
+  `TestSilenceGatesAreOfferedOnlyWhereTheyBite` derives both halves from the
+  sources — which source strings reach a silence verb anywhere in the daemon,
+  and which of those the engine can gate — so the view and the engine cannot
+  drift apart again. The field's own documentation named `sysvar` as gateable;
+  sysvar arms and disarms and never silences.
+
+- **The capture archive's redaction was documented as the opposite of what it
+  does.** Two config comments and the REST contract said `anonymise` hashes
+  "device-address-shaped values". It hashes the operator-identifying attributes
+  — the `subject`, `user`, `username`, `remote` and `remote_addr` keys — while
+  device addresses, channel addresses, parameter names and interface ids stay
+  in clear text, which is deliberate: an operator reading their own archive
+  needs them to follow the trace. The `hmlog` side said so correctly all along.
+  An operator who read the contract had it backwards in both directions.
+
+- **A wire-parity reference asserted values no device and neither stack
+  produces.** `FixedColorLight__SetColorBehaviour.json` claimed aiohomematic
+  sends `COLOR_BEHAVIOUR` as the integers 0 / 2 / 3 and that openccu-loom is
+  equivalent. `COLOR_BEHAVIOUR` is an ENUM whose MIN is a string on every
+  device carrying it (HmIP-BSL: `MIN 'OFF'`, thirteen entries with `OLD_VALUE`
+  at 11 and `DO_NOT_CARE` at 12), so both stacks send the label — aiohomematic
+  through `DpSelect`'s string branch, openccu-loom through
+  `Select.EnumWireValue`. The asserted indices belong to no device's list; the
+  Go fixture beside the comparison declared a six-entry value list invented so
+  that exactly those indices would fall out. Reference, fixture and generator
+  now carry what both stacks actually send.
+
+- **Two more single-sourcings.** The climate profile carried a byte-identical
+  copy of the Matter centi-degree encoder — same rounding, same two clamps
+  (32767 is the NULL sentinel and must never be sent as a reading, -27315 is
+  absolute zero), same comments. It reads
+  `measurement.CelsiusToInt16` now, so a boundary corrected in one place cannot
+  leave the other emitting the old value.
+
+  And four device profiles resolved a group-scoped profile field by hand, of
+  which only the light profile read the group-wide declaration block; cover,
+  valve and switch looked at the per-channel blocks alone. No shipped profile
+  declares such a field group-wide, so the four agreed by accident — the first
+  one to do so would have bound on one device family and silently bound nothing
+  on the other three. `custom.ResolveGroupFieldSlot` resolves it once, reading
+  the group-wide block first.
+
+- **A raised rollup lag would have deleted unfolded history, silently.** The
+  retention purge drops raw samples once they age out; the hourly fold only
+  folds samples older than `rollupHourlyLag`. `config.HistoryRetentionFloor`
+  exists to keep the purge behind the fold — and its own comment said it
+  "mirrors" the recorder's lag while stating in the same breath that the
+  mirroring was unenforced: raising the lag alone left the floor too low, and
+  the purge then deleted raw rows the fold had never seen. Permanently, and
+  only for operators whose retention happened to sit between the two values.
+  The recorder derives its lag from the floor now, so the two move together.
+
+- **Three more audited leftovers.** The `InterfaceRPCServerType` table
+  documented itself as driving the callback servers' dispatcher; it drives
+  nothing — the XML-RPC server routes by URL path and the BIN-RPC one by the
+  interface id in the envelope. Its only reader already says so about itself,
+  so the claim invited a reader to change routing in the wrong place.
+  `hmtypes.ValidateHost` / `IsHost` had no caller outside their own tests and
+  are removed, with the one comment that referenced them reworded. And
+  `CcuBackend.GetInboxDevices` now carries the same warning its sibling
+  `GetServiceMessages` does: the `name` field is percent-encoded Latin-1 and
+  must not be unescaped without the transcode, because the unescape alone
+  corrupts every non-ASCII value irreversibly.
+
+- **Firmware download reported success for a request the CCU never received.**
+  `CcuBackend.DownloadFirmware` posted `action=download_firmware` to
+  `/config/cp_maintenance.cgi`. That CGI defines `firmware_upload`,
+  `firmware_update_confirm` / `_go` / `_cancel` / `_invalid`, `createBackup`,
+  `put_page`, the reboot and shutdown actions — and no `download_firmware`. The
+  unknown action fell through to an HTML page under HTTP 200, which the method
+  read as success, so `POST /ccu/firmware/download` answered 2xx for a download
+  that never started. Four unit tests pinned the exchange in place; they passed
+  against a test server that answered anything with 200, which is how it
+  survived.
+
+  The CCU's own entry point is the JSON-RPC method `CCU.downloadFirmware`, and
+  it takes **no parameters**: it fetches the newest firmware for that box's own
+  serial from eQ-3's update server. A caller-supplied URL has nowhere to go, so
+  the call now reports `ErrUnsupported` — which the REST layer already handles
+  — with the firmware citation at the site. Wiring it to the JSON-RPC method
+  would change what the operation means ("install the CCU's own latest
+  firmware" rather than "fetch this URL") and therefore what the REST field is
+  for; that is a decision about the published surface, not a repair, and is
+  left open deliberately.
+
+- **The active-profile score was computed twice.** Both planes resolve which
+  link profile is active — the SPA's schema over raw JSON constraints, the
+  store over decoded ones — and each carried its own copy of the specificity
+  arithmetic. Two scorers can rank two profiles differently, and then the
+  operator sees one active profile while everything reading the store sees
+  another. `linkprofile.ProfileSpecificity` is the one scorer now; it takes the
+  constraint types, which is all the score ever read, so neither plane has to
+  convert its whole constraint shape to ask.
+
+- **The OnOff cluster's Matter identity was hand-transcribed in four
+  packages.** `internal/model/generic` and the switch, light and siren profiles
+  each declared the cluster id, the revision, the LT-gated attribute block and
+  the command set independently, with the matter.js citation copied along
+  rather than the values — while a generated single source of the revision
+  (`schema.ClusterRevisions`, produced from the matter.js snapshot) sat unused
+  by all four. They had already drifted: the siren omitted `Toggle` while
+  advertising the FeatureMap that makes it mandatory.
+
+  `internal/north/matter/cluster/onoff` carries it once now, and the revision
+  is *read* from the generated snapshot instead of restated, so a
+  regeneration moves all four projections at once. Bending the snapshot to
+  revision 7 now fails every projection's parity test; before, each kept its
+  own `6`.
+
+- **Two schedule constants left in the adapter after their home was created.**
+  The lock-permission duration pair (`base 7, factor 31` — the CCU's own
+  "Dauerhaft") was declared a third time in the adapter beside the two the
+  domain now single-sources, and the climate day terminator was spelled as a
+  bare `1440` at four places in the adapter's weekday expander while
+  `schedule.ClimateEndOfDayMinutes` owns it. Both read from the domain now, so
+  the adapter's expander cannot drift from `weekprofile`'s about where a day
+  ends.
+
+- **The escalation threshold was rebuilt at five call sites.** `health.Tracker`
+  flap-damps deliberately: a probe's first failing sample yields DEGRADED, and
+  only a second consecutive one escalates. Five callers needed the opposite —
+  they were not sampling but reporting a condition (a client that failed or
+  stopped, a breaker that opened, a recovery that gave up, an unbound Matter
+  listener, a disconnected MQTT client) — and forced it by recording twice, the
+  second time with an invented `(escalated)` note. That re-encoded the
+  tracker's rule at every site and left a sample in the health history
+  describing something that never happened; two of those phantom notes even had
+  their own i18n keys.
+
+  `Tracker.RecordUnhealthy` is the missing entry point. The five sites report
+  once now, with their own note, and the phantom notes and their translation
+  keys are gone. `Record` keeps its damping unchanged, which the guard pins
+  alongside.
+
+- **An RF week-program pointer resolved one profile too low.** The
+  subscription that keeps the active profile current called the parameter-less
+  `SyncProfilePointer`, which guesses which parameter a value came from by its
+  Go type: a string is read as `WEEK_PROGRAM_POINTER` (declared 0-based),
+  everything else as `ACTIVE_PROFILE` (declared 1-based). An RF pointer
+  arriving as an integer — its ordinary shape — was therefore read 1-based, so
+  a device on its third program reported its second. The subscription passes
+  the parameter it already has in hand now, and the guessing form, left without
+  a production caller, is deleted with its tests.
+
+- **The WebSocket and MCP planes published countdown kinds no client
+  declares.** `AlarmCountdown.kind` is constrained to `exit_delay` /
+  `entry_delay` by `assets/openapi.yaml` and typed as those two in the SPA. The
+  REST handler filtered to them by restating the two tokens; the WS plane
+  published whatever the engine had stamped and MCP did the same. A zone in
+  pre-alarm, in trigger, or waiting to auto-rearm therefore sent one of three
+  further kinds through a field that admits neither. All three planes ask
+  `engine.IsCountdownTimerKind` now — the engine owns which timer kinds are a
+  user-facing countdown — and the handler's private copy of the two tokens is
+  gone.
+
+- **An installable access-point firmware update stayed hidden.**
+  `IsFirmwareUpdateReady` held `{READY_FOR_UPDATE, DO_UPDATE_PENDING,
+  PERFORMING_UPDATE}`. The CCU's own install precondition is
+  `READY_FOR_UPDATE || liveServerUpdateState == NEW_FIRMWARE_AVAILABLE ||
+  liveServerUpdateState == DELIVER_FIRMWARE_IMAGE`, and the live-server states
+  reach the legacy XML-RPC wire prefixed `LIVE_`. Both were missing, so
+  `GatedLatestFirmware` reported the device's current version as the latest one
+  and the update never surfaced. The two in-flight states were in the set and
+  are not installable — they answer `IsFirmwareUpdateInProgress`, which
+  `GatedLatestFirmware` now asks separately so a running install still shows
+  the version it is heading for.
+
+- **Four dead exported pairs removed.** `ConvertCPVToHMLevel` /
+  `ConvertCPVToHMIPLevel`, `Notification.SourceNames` and the JSON-RPC
+  transport's `DownloadFirmware` had no production caller — the live download
+  path builds its own request against `cp_maintenance.cgi` and never reached
+  the transport copy. Each had tests, so each looked maintained; a change to
+  any of them would have gone green while the live path kept its own answer.
+
+- **50 further audited rules corrected.** 16 changed behaviour, 34 corrected a
+  stated reason. The ones that reached a device:
+
+  - **A siren asked to repeat 15 times sounded until someone stopped it.**
+    `MaxRepetitions` was 18; the VALUES-paramset `REPETITIONS` list ends at
+    `REPETITIONS_014` on every device that carries it, and the silent clamp slid
+    15..18 onto the last slot — which is `INFINITE_REPETITIONS`. A finite
+    repetition count became an unbounded alarm. The ceiling is 14 now, one
+    literal instead of two, and an index the device does not offer is an error
+    rather than a clamp.
+  - A sound file the device does not offer was written anyway; the player
+    repeated its previous file and reported success. The index is checked
+    against the device's own list now.
+  - The text display's row length was 24 characters where HmIP-WRCD declares
+    16, and 24 was republished to Home Assistant as the input field's maximum.
+  - `ScheduleProfileNos` answered a static 6 while the published slots come from
+    the device; the two now answer through one path.
+  - The RF lock's `STATE` polarity was spelled independently on the read path,
+    the write path and the discovery payload — `payload_lock` advertised `true`
+    while the service path wrote `false`.
+
+  Every number that went into a comment was measured by reading the files, and
+  the method is stated beside it. That rule exists because a wave-1 comment
+  carried counts produced by `grep` without `-a`, which skips half the device
+  XMLs as binary.
+
+- **75 further audited rules corrected across nine packages.** 40 changed
+  behaviour, 35 corrected a stated reason that the CCU sources refute while the
+  behaviour stood. Each carries a test written before the fix and a bite proof;
+  each was then read by an independent reviewer against the original finding.
+  The ones a user can notice:
+
+  - A `NUMBER` system variable was typed float or integer depending on whether
+    its current value happened to contain a decimal point. The CCU has no
+    integer `NUMBER` sysvar at all — `getall.tcl` derives the type from
+    `ValueSubType()` alone and every creation path pairs `istGeneric` with
+    `ivtFloat`, so the payload carries no int/float distinction to recover.
+  - A custom data point invoked over MQTT was resolved against an arbitrary
+    central instead of the one the topic named — the same class as the device
+    lookup fixed above, on the command path.
+  - `deriveTargetChannels` minted schedule target keys that no
+    `WEEK_PROGRAM_CHANNEL_LOCKS` bit can address; they are withheld now rather
+    than written.
+  - The runtime `delay_new_device_creation` toggle never reached the CUxD
+    callback handler, so switching it off left CUxD devices held until restart
+    — the exact failure the function's own doc claims to fix.
+  - `setInstallMode` and firmware updates were accepted on interfaces that
+    cannot serve them; they consult the interface capability now.
+  - The backup-restore upload used an `action` verb and a form field the
+    firmware's CGI does not define.
+  - MQTT schedule entries dropped the colour fields the REST DTO carries from
+    the same domain struct.
+  - Device-error suppression and the model's event classification disagreed
+    about which parameters are error events, so a suppressed parameter the
+    classifier drops reached no plane at all.
+
+  Where the CCU sources cannot decide a rule, the comment now says so in those
+  words rather than asserting one — 27 rules are recorded as Tier-1-silent and
+  5 as not decidable from any available source.
+
+- **The siren's OnOff cluster omitted a mandatory command.** matter.js gives
+  `Toggle` conformance `!OFFONLY` (`on-off.element.ts:39`) — mandatory on any
+  OnOff cluster that does not advertise the OffOnly feature, and this
+  projection advertises LT and nothing else. It was left out on the grounds
+  that a siren has no toggle in its wire surface, but conformance asks what
+  the cluster must accept, not what the device spells; the three sibling OnOff
+  projections all carry it. A controller that finds a mandatory command
+  missing can abort the commissioning. `Toggle` is accepted now and raises the
+  alarm when it is silent, silences it when it is sounding.
+
+- **Two fault codes were documented as something the CCU does not do.**
+  `XMLRPCFaultDutyCycle` cited a code string `INSUFFICIENT_DUTYCYCLE` that
+  appears nowhere in the CCU sources; the fault is raised in exactly one place,
+  `RFDevice::UpdateFirmware` (`src/rfd/RFDevice.cpp:1492`), and never on a
+  value-write path. `XMLRPCFaultTransmissionPending` was described as the CCU
+  being busy with a previous command — it means the device is unreachable and
+  the command has been persisted as pending configuration, cleared when the
+  device next makes contact rather than by waiting. Both comments now say what
+  the firmware does, and `DEVICE_OUT_OF_RANGE` is labelled unverified because
+  that string is not in the sources either.
+
+- **A link profile matched on the SPA and not in the store, or the reverse.**
+  "Does this profile match the channel's current values" was implemented twice
+  — once on the raw JSON the link schema carries, once on the decoded values
+  the store holds — and the two had drifted in both directions. One compared
+  floats with `!=` where the other uses a relative epsilon, so a level that
+  survived a wire round-trip (`0.1 + 0.2`) matched in the store and not on the
+  schema; and the schema parsed numeric strings the store refuses, so `"1"`
+  matched there and not in the store. Same channel, same profile, two answers.
+
+  `linkprofile.ProfileMatches` is the single rule now; the schema converts its
+  constraints and asks. What stays separate is the input preparation, and the
+  comment says why: the schema reads values straight off the wire, where a
+  numeric string is a shape the CCU produces, while the store refuses strings
+  on purpose because reading one as a number in the wrong place risks a silent
+  mismatch — and whether a LINK paramset can carry one there is not decidable
+  from the CCU sources. `TestProfileMatchingAgreesWithTheStore` compares the
+  two planes on the same input rather than pinning either.
+
+- **"Supports last known level" was decided by a test no device can satisfy.**
+  The rule read `MAX > 1.0`, on the claim that a device carrying the feature
+  reports the extended bound. It does not: the firmware declares these level
+  parameters `max="1.0"` and carries the sentinel as a separate SPECIAL member
+  (`<special_value id="OLD_LEVEL" value="1.005"/>`), which the paramset
+  description exports as its own field. Every dimmer in the descriptor corpus
+  that offers the feature reports `MAX 1.0` with `SPECIAL {"OLD_LEVEL": 1.005}`.
+
+  Nothing was missing in practice — the classification grants the feature to
+  every level parameter regardless, which is why the dead branch went
+  unnoticed. What was wrong was the stated reason, and with it the only route a
+  parameter outside that classification could take. The declared SPECIAL is
+  that route now, and it is deliberately not gated on our percent display: a
+  parameter declaring `OLD_LEVEL` is a level parameter by the device's own
+  account, whatever our classification made of its name.
+
+- **A siren's `duration` meant two different things depending on which surface
+  carried it.** The invoke plane — REST, WebSocket and the MQTT cdp-invoke
+  topic — read a bare number as milliseconds; the siren's own service handler,
+  which the per-service MQTT topic reaches, read the same key as seconds. So
+  `{"duration": 30}` wrote `DURATION_VALUE=0` through one path and `30` through
+  the other, on the same device, with no error on either to say so. The invoke
+  branch also accepted neither the canonical `seconds` key that every other
+  timed operation takes, nor the shared helper — it had invented a third
+  vocabulary — and the service handler silently dropped a value it could not
+  parse, so `{"duration": "5s"}` worked on one plane and vanished on the other.
+
+  Both planes read through one function now (`siren.ParseOnDuration`). A bare
+  number is seconds, which is what Home Assistant's MQTT siren sends and what
+  the service handler always did; `seconds` and `duration_seconds` are accepted
+  alongside it, and an unreadable value fails the command instead of falling
+  through to the device default. `TestSirenDurationMeansTheSameOnBothPlanes`
+  asserts the two planes agree rather than pinning a number.
+
+- **A burglar alarm was reported to Matter controllers as a fire.**
+  `SMOKE_DETECTOR_ALARM_STATUS` carries `INTRUSION_ALARM` when the installation
+  drives a smoke detector as a *siren* for an intrusion alarm — a command the
+  domain sent, not a detection the device made. The safety classifier and the
+  derived `SMOKE_ALARM` sensor both exclude it, and `pkg/hmenum` spells out why
+  in the comment above the list. The Matter projection reversed that: it mapped
+  the label to `SmokeState = Critical` and `ExpressedState = SmokeAlarm`, which
+  Matter defines as the device's *smoke sensor* triggering
+  (`smoke-co-alarm.d.ts:150`, `:566-574`). Anyone whose alarm sounded a smoke
+  detector got a fire notification from Apple Home or Google Home.
+
+  Which labels mean smoke is no longer decided on the Matter plane at all: it
+  is read from `hmenum.SmokeDetectorAlarmStatusSmokeLabels`, the one place the
+  domain answers that question, so the two planes cannot drift apart again.
+  Only the severity of a genuine smoke label stays local.
+  `TestSmokeMatterPlaneAgreesWithTheDomainsSmokeLabels` asserts the agreement
+  rather than a value, which is what neither side's tests did before — each was
+  internally consistent, and that is why the reversal survived.
+
+- **Eleven more rules grounded against the CCU firmware.** Each was carried by
+  a comment, a bare literal or the Python port; each is now either corrected or
+  explicitly labelled unverified at the site where a reader will look for it.
+
+  Behaviour changed where the firmware contradicted us:
+  - The HM-CC-VG-1 virtual-heating-group patch repaired the wrong thing. The
+    CCU serves that group's `SET_TEMPERATURE` bounds as *strings*, which is the
+    real defect; the patch instead overwrote the range with `4.5`/`30.5` — a
+    member thermostat's bounds substituted for the group's declared
+    `5.0`/`30.0`, widening the accepted setpoint at both ends. It now coerces
+    the type and leaves the CCU's own numbers alone, falling back to the
+    declared range only when none arrives.
+  - The `HmIP-DRDI3` MASTER channel list gained channels 4, 8 and 12, which the
+    descriptor declares and which therefore never became data points.
+  - The `ENERGY_COUNTER` unit patch reached one of the nine models that share
+    the declaration; it now covers all nine.
+  - An empty string no longer coerces to `false` on the REST write boundary.
+    The CCU's own value library rejects it in both textual boolean readers, so
+    accepting it turned an input the device would have refused into a confirmed
+    switch-off.
+  - `FixRSSI`'s bands were widened to the values the two transports actually
+    produce, and the unit cleanup matches whole units instead of substrings —
+    `m3/Imp.` used to be rewritten to `m³`.
+  - The `HmIP-RGBW` `SATURATION` operations patch was removed: it rested on a
+    claim with no reproducible condition.
+
+  Elsewhere the behaviour was right and only the stated reason was false — the
+  `<i4>` and `<double>` write formatting (the CCU emits `<i4>` itself, and
+  fault -5 means "Unknown parameter"), the duty-cycle and transmission-pending
+  retry windows (fault -8 is raised only on the firmware-update path, -10 is
+  HmIP-only and means the command is already queued), and the motion-reset and
+  alarm-sensor tables. Those comments now say what is measured and what is not.
+
+  The paramset cache schema version is bumped, without which an installed
+  daemon would keep serving the old bounds from SQLite.
+
+- **An unpaired device kept its measurement history and its recording
+  overrides forever.** `MeasurementStore.DeleteDevice` and
+  `RecordingOverrideStore.DeleteDevice` each carried a doc comment saying they
+  run on device-remove / unpair, and neither had a production caller: the
+  removal path wires evictors for the values cache, the MASTER cache, the
+  paramsets and the channel flags, and none for these two. History across all
+  three tiers and the operator's per-channel recording decisions survived
+  unpairing indefinitely — and because the CCU reuses addresses when hardware
+  is swapped, a replacement paired into the same address inherited the previous
+  device's series and its recording settings. That is exactly the resurfacing
+  the multi-tier delete was written to prevent.
+
+  `WireMeasurementEviction` supplies the missing seam, registered per central
+  through the same observer the other evictors use so a CCU adopted at runtime
+  is covered too. A whole-model teardown is excluded, as elsewhere.
+  `TestRemovedDevicePurgesItsMeasurementHistory` asserts the effect in the
+  database through the real constructor, and both comments now name the seam
+  instead of claiming a caller.
+
+- **A device lookup answered from the wrong CCU.** Device addresses are unique
+  within one CCU and repeat verbatim across them — the virtual-remote roots
+  (`BidCoS-RF`, `BidCos-Wir`, `HmIP-RCV-1`) and the `INT000*` group devices
+  carry the identical address on every one. `central.Registry.List()` is
+  name-sorted, so every address-keyed lookup that walked it answered from the
+  alphabetically first central. On the MQTT plane that published another
+  installation's model, name, channel type and availability under this
+  central's topic, and drove the device-lifecycle event the WebSocket plane and
+  the Matter reachability forward consume. On the write path it delivered a
+  command to a different CCU's hardware.
+
+  The event bridge carries the central at every one of those call sites and
+  simply dropped it; its lookups take it now. The address-keyed REST facade
+  (`DevicesAdapter.Device`, `DataPointWriterAdapter.SetValue`) has no central
+  to take — its callers do not carry one — so an address several centrals share
+  is refused instead of resolved to an arbitrary CCU, and the write error names
+  the candidates. Single-CCU installations are unaffected, as is every address
+  only one central holds.
+
+- **An optical alarm flashed an acknowledgement blink instead of an alarm.**
+  With no pattern configured, the driver took the last entry of the device's
+  `OPTICAL_ALARM_SELECTION` list. On every HmIP-ASIR variant that entry is
+  `CONFIRMATION_SIGNAL_2` — "long short short", the third of three one-shot
+  acknowledgement blinks. The device's four sustained alarm patterns are the
+  `*_REPEATING` entries; the list order is fixed and identical across ASIR,
+  ASIR-2 and ASIR-O, so the positional rule resolved deterministically to the
+  entry furthest from what an alarm needs. Nothing failed: the device accepted
+  it, `OPTICAL_ALARM_ACTIVE` went true and the watchdog was satisfied, so an
+  optical-only activation or test fire showed a brief blink and nothing else.
+
+  The pattern now comes from a property the device states rather than from a
+  position: `Siren.AlarmOpticalLabel` picks the first selection the device
+  itself names as repeating, mirroring `DisableAcousticLabel` on the acoustic
+  half — whose own comment already warned against re-deriving the label
+  positionally. A device offering no repeating pattern gets no optical
+  selection written at all and keeps the one it holds, which beats sending a
+  blink that would satisfy the watchdog.
+
+- **A schedule could ask for an astro offset five times wider than any device
+  accepts.** `astro_offset_minutes` was validated against a constant ±720, and
+  anything inside that reached the wire. Every model in the descriptor corpus
+  declares `ASTRO_OFFSET` as `INTEGER MIN -128 MAX 127`, and the CCU's own
+  weekly-program editor carries no constant at all — it reads
+  `ASTRO_OFFSET_MIN` / `ASTRO_OFFSET_MAX` out of the paramset description and
+  clamps its input to them. An offset between 128 and 720 was written, and the
+  device either rejected the `putParamset` or stored a clipped switching time.
+
+  The bound is now the channel's declared range, resolved from the live model
+  the same way the target-channel bits already are. An out-of-range offset is
+  refused rather than clipped: a clipped offset is a different switching time
+  from the one the operator asked for. A channel whose descriptor has not been
+  loaded keeps the previous ±720 bound, which describes nothing about a device
+  and is documented as such. `TestSaveRejectsAnAstroOffsetTheChannelDoesNotDeclare`
+  pins the seam through the production save path rather than the helper.
+
+- **The LED flash duration sent four labels the device does not have, and
+  turned a ten-second flash into a permanent one.** `ON_TIME_LIST` was mapped
+  through a fixed table of our own that assumed a regular 100 ms ladder up to
+  5 s. A device declares 16 entries and skips three of ours — there is no
+  `600MS`, no `800MS`, no `900MS` and no `4S` — while continuing past 5 s with
+  `7S`, `10S`, `20S`, `40S` and `60S`
+  (`GeneralStateParameterFactory#createOnTimeListParameter`). Requests in
+  551-650, 751-850, 851-950 and 3501-4500 ms produced a label the device does
+  not declare, which the CCU's enum conversion rejects — failing the whole
+  atomic turn-on `put_paramset`, not just the duration. And because everything
+  above 5 s collapsed to `PERMANENTLY_ON`, an ordinary ten-second flash left
+  the LED on for good.
+
+  The entry is chosen from the device's own value list now, by parsing each
+  declared label, so no table of ours can disagree with the device again; only
+  a duration longer than the longest declared entry becomes `PERMANENTLY_ON`.
+
+- **Four of the eight fixed colours were reported as the wrong colour.**
+  `FixedColorLight.Color()` cast the raw COLOR index straight to a
+  `FixedColor` ordinal. The CCU orders its COLOR value list by the RGB bit
+  pattern — bit 0 blue, bit 1 green, bit 2 red — giving
+  `BLACK, BLUE, GREEN, TURQUOISE, RED, PURPLE, YELLOW, WHITE`, which agrees
+  with our enumeration on four slots and swaps the other four: what the device
+  called blue we reported as red, its turquoise as yellow, its red as blue, its
+  yellow as turquoise. The ordinal is what arrives on the wire, because the
+  CCU substitutes an ENUM's index for its label
+  (`etc/config_templates/crRFD.conf:47`,
+  `Legacy.Parameter.ReplaceEnumValueWithOrdinal=true`). Affected HmIP-BSL,
+  HmIP-MP3P channels 2-5 and HmIPW-WGC, in `ColorName()`, the MQTT
+  `fixed_color` field, and the optimistic update after a write, which seeded
+  the store with an index the CCU would never echo.
+
+  The slot is resolved through the device's own VALUE_LIST now, so the rule no
+  longer depends on any ordering assumption, and a label outside the eight
+  known colours — the writable list also carries `RANDOM`, `OLD_VALUE` and
+  `DO_NOT_CARE` — reports as unobserved instead of becoming a nonsense
+  ordinal. The write path was already correct: it writes the label, and its
+  own comment stated the CCU's order while `Color()` contradicted it.
+
+  Every test fixture in the repository declared the value list in our order
+  rather than the CCU's, which is why nothing caught this: the tests fed in the
+  convention they confirmed. The fixtures now carry the device's order, and
+  `TestFixedColorLightReadsSlotByLabelNotByIndex` pins each of the eight slots.
+
 ## [0.72.2] - 2026-09-02
 
 ### Fixed

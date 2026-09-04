@@ -254,7 +254,7 @@ func (*stubBackend) GetSuppressedServiceMessages(context.Context, string, string
 	return nil, nil
 }
 func (*stubBackend) HasProgramIDs(context.Context, string) (bool, error) { return false, nil }
-func (*stubBackend) DownloadFirmware(context.Context, string) error      { return nil }
+func (*stubBackend) DownloadFirmware(context.Context) error              { return nil }
 func (*stubBackend) GetMetadata(context.Context, string, string) (any, error) {
 	return nil, nil
 }

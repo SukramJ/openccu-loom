@@ -7,9 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -56,7 +54,9 @@ const (
 
 // TypeOfValue returns the [ValueType] discriminator for v. Returns
 // [ValueTypeNull] for nil. Used by [ValuesCacheStore.SaveValue] to
-// derive the persisted value_type column.
+// derive the persisted value_type column, which no production reader
+// consults today — [CachedValue.Type] is populated on load and read
+// only by this package's own tests.
 //
 // loom:reachable:reason="called internally by ValuesCacheStore.SaveValue and SaveBatch to determine column type"
 func TypeOfValue(v any) ValueType {
@@ -73,10 +73,15 @@ func TypeOfValue(v any) ValueType {
 	case string:
 		return ValueTypeString
 	}
-	// Fallback: encode as JSON and let the consumer figure it out. The
-	// only path that should hit this is a complex wire-shape (map,
-	// slice) — none of which the wire layer is supposed to emit for
-	// scalar VALUES, but we keep the cache permissive.
+	// Fallback for a complex wire-shape (map, slice), which the wire
+	// layer is not supposed to emit for scalar VALUES. It is labelled
+	// "string" rather than a distinct token because the label is never
+	// read back: the restore pass
+	// (central/adapter.DevicePipeline.restoreValuesFromCache) consults
+	// only value_json and the two timestamps, and a shape that survives
+	// the JSON round-trip but fails the data point's cast is counted
+	// through IncCastFailures. Adding a reader means adding a token here
+	// first.
 	return ValueTypeString
 }
 
@@ -89,12 +94,6 @@ type CachedValue struct {
 	LastSeenAt    time.Time
 	LastChangedAt time.Time
 }
-
-// ErrSchemaDrift signals that a cached value was found whose recorded
-// [ValueType] no longer matches the current paramset description.
-// Callers can attempt a cast (int → float etc.) and proceed, or skip
-// the entry.
-var ErrSchemaDrift = errors.New("values_cache: schema drift")
 
 // ValuesCacheStore persists wire-DP VALUES across daemon restarts.
 // See migration 016_values_cache.sql for the schema rationale and
@@ -430,7 +429,7 @@ func (s *ValuesCacheStore) DeleteDevice(
 	if s == nil || s.db == nil {
 		return nil
 	}
-	prefix := strings.TrimRight(deviceAddress, ":") + ":"
+	prefix := channelLikePrefix(deviceAddress)
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM values_cache
          WHERE central_name = ?

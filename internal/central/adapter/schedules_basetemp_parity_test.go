@@ -75,8 +75,11 @@ func TestClimateBaseTemperatureAgreesAcrossReadPaths(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name        string
+		name string
+		// slots renders the 13 well-formed MONDAY cells. rawOverride
+		// replaces it for a malformed paramset no slot list can express.
 		slots       []climateBaseTempParitySlot
+		rawOverride map[string]any
 		wantBase    float64
 		wantPeriods []climateBaseTempParityPeriod
 	}{
@@ -106,10 +109,22 @@ func TestClimateBaseTemperatureAgreesAcrossReadPaths(t *testing.T) {
 			wantPeriods: nil,
 		},
 		{
-			// No stretch holds a single minute. Both paths fall back, and
-			// they fall back to the same value.
+			// No stretch holds a single minute, and the temperature the
+			// cells carry is NOT the fallback — so a path that counted a
+			// zero-length cell would report 21.0 while the other reports
+			// the fallback. Both must fall back to the same value.
 			name:        "no_usable_stretch",
-			slots:       climateBaseTempParityZeroLength(schedule.DefaultBaseTemperature),
+			slots:       climateBaseTempParityZeroLength(21.0),
+			wantBase:    schedule.DefaultBaseTemperature,
+			wantPeriods: nil,
+		},
+		{
+			// A TEMPERATURE cell with no ENDTIME key at all. The cell spans
+			// no known minutes, so it holds none and cannot win the
+			// most-minutes contest; promoting it to a whole day instead
+			// would make it win outright.
+			name:        "temperature_without_endtime",
+			rawOverride: map[string]any{"P1_TEMPERATURE_MONDAY_1": 21.0},
 			wantBase:    schedule.DefaultBaseTemperature,
 			wantPeriods: nil,
 		},
@@ -118,7 +133,10 @@ func TestClimateBaseTemperatureAgreesAcrossReadPaths(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			raw := climateBaseTempParityParamset(tc.slots)
+			raw := tc.rawOverride
+			if raw == nil {
+				raw = climateBaseTempParityParamset(tc.slots)
+			}
 
 			// Path A: the REST / WebSocket read (schedules.go).
 			dto, err := parseClimateSchedule(t.Context(), raw)

@@ -270,9 +270,23 @@ func (s *Store) GetProfileByID(receiverChannelType, senderChannelType string, id
 // MatchActiveProfile returns the ID of the currently active profile (0 =
 // Expert / no match) given the live LINK-paramset values.
 //
-// Specificity is fixed_count − loose_count×100, porting
-// 's match_active_profile exactly. When multiple
-// profiles match, the most specific one wins.
+// Specificity is fixed_count − loose_count×100. When multiple profiles match,
+// the most specific one wins.
+//
+// This package is where "which link profile is active" is decided, because
+// two planes ask it of the same embedded archive: the WS link-profile list
+// calls this method, and the SPA's link UI schema resolves the same question
+// from the raw JSON constraints it forwards. The matching half of the rule is
+// shared — that plane converts its constraints and calls [ProfileMatches]
+// rather than comparing them itself, after the two had drifted (see that
+// function). The scoring half is still restated there: it scores the same
+// fixed − loose×100 over its own constraint type. Only this side's half is
+// measured: TestW2StoMatchActiveProfile_SpecificityOrdersMatchingProfiles pins
+// the weight, the per-constraint penalty and the match-before-score order
+// through this method, so the score cannot change here unnoticed. Nothing
+// measures that the other plane still agrees, so a change here is still a
+// change to be made on both planes; closing that needs the second plane to
+// score through this package rather than through its own copy.
 func (s *Store) MatchActiveProfile(receiverChannelType, senderChannelType string, currentValues map[string]any) int {
 	if s == nil {
 		return 0
@@ -291,7 +305,7 @@ func (s *Store) MatchActiveProfile(receiverChannelType, senderChannelType string
 		if p.ID == 0 || len(p.Params) == 0 {
 			continue
 		}
-		if !profileMatches(p.Params, currentValues) {
+		if !ProfileMatches(p.Params, currentValues) {
 			continue
 		}
 		score := profileSpecificity(p.Params)
@@ -422,10 +436,17 @@ func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 	return bucket, nil
 }
 
-// profileMatches reports whether every constraint in params is satisfied by
-// the corresponding value in current. Missing keys in current are ignored
-// (no decision either way), mirroring the Python reference behaviour.
-func profileMatches(params map[string]ParamConstraint, current map[string]any) bool {
+// ProfileMatches reports whether every constraint in params is satisfied by
+// the corresponding value in current. Missing keys in current are ignored (no
+// decision either way).
+//
+// Exported because the decision is made on two planes — the SPA's link schema
+// resolves the active profile from raw JSON constraints while this store
+// resolves it from decoded ones — and the two had already drifted: the other
+// side compared floats with `!=` where this one uses a relative epsilon, so a
+// value that survived a wire round-trip matched here and not there. One rule,
+// one home; the caller converts its constraints and asks.
+func ProfileMatches(params map[string]ParamConstraint, current map[string]any) bool {
 	for name, c := range params {
 		raw, ok := current[name]
 		if !ok {
@@ -459,13 +480,40 @@ func profileMatches(params map[string]ParamConstraint, current map[string]any) b
 	return true
 }
 
-// profileSpecificity scores a profile: fixed constraints gain one point,
-// non-fixed (list / range) subtract 100. All-fixed profiles always beat
-// profiles with loose constraints regardless of total parameter count.
+// ProfileSpecificityOfConstraints scores this plane's own constraint shape.
+// Exported so a parity test can compare the two planes through the entry point
+// each of them actually uses; production calls the unexported form directly,
+// and this wrapper adds nothing but the export.
+//
+// loom:reachable:reason="test-only export over the unexported profileSpecificity this package uses in production; it exists so the cross-plane parity test drives the same arithmetic"
+func ProfileSpecificityOfConstraints(params map[string]ParamConstraint) float64 {
+	return profileSpecificity(params)
+}
+
+// profileSpecificity is the internal form: it projects this package's
+// constraints onto the shared scorer.
 func profileSpecificity(params map[string]ParamConstraint) float64 {
-	fixed, loose := 0, 0
+	types := make([]string, 0, len(params))
 	for _, c := range params {
-		if c.ConstraintType == "fixed" {
+		types = append(types, c.ConstraintType)
+	}
+	return ProfileSpecificity(types)
+}
+
+// ProfileSpecificity scores a profile from its constraint types alone: every
+// "fixed" constraint gains a point, every other kind subtracts 100, so an
+// all-fixed profile always beats one with a loose constraint regardless of how
+// many parameters each carries.
+//
+// It takes the types rather than the constraints because that is all the score
+// reads, and because the other plane holds its constraints in a different
+// shape — the SPA's link schema keeps them as raw JSON. Both planes resolve
+// the active profile, and a second implementation of the score would let them
+// name different profiles for one channel.
+func ProfileSpecificity(constraintTypes []string) float64 {
+	fixed, loose := 0, 0
+	for _, t := range constraintTypes {
+		if t == "fixed" {
 			fixed++
 		} else {
 			loose++

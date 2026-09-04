@@ -224,7 +224,7 @@ func (b *orchBackend) GetSuppressedServiceMessages(context.Context, string, stri
 	return nil, nil
 }
 func (b *orchBackend) HasProgramIDs(context.Context, string) (bool, error) { return false, nil }
-func (b *orchBackend) DownloadFirmware(context.Context, string) error      { return nil }
+func (b *orchBackend) DownloadFirmware(context.Context) error              { return nil }
 func (b *orchBackend) GetMetadata(context.Context, string, string) (any, error) {
 	return nil, nil
 }

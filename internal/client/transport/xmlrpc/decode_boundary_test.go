@@ -27,7 +27,7 @@ func nestedArrayValue(n int) string {
 func TestDecodeValueRejectsExcessiveNesting(t *testing.T) {
 	t.Parallel()
 
-	raw := nestedArrayValue(maxDecodeDepth + 50)
+	raw := nestedArrayValue(MaxDecodeDepth + 50)
 	_, err := decodeValueFromString(t, raw)
 	if err == nil {
 		t.Fatal("deeply nested array payload must be rejected, got nil error")

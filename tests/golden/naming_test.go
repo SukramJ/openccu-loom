@@ -42,15 +42,29 @@ type namingCase struct {
 	Prefix        string `json:"prefix,omitempty"`
 
 	// Expected outputs.
-	WantDpName      string `json:"want_dp_name"`
-	WantDpFullName  string `json:"want_dp_full_name"`
-	WantTranslation string `json:"want_translation_key"`
+	WantDpName     string `json:"want_dp_name"`
+	WantDpFullName string `json:"want_dp_full_name"`
 }
 
-// TestNamingPipelineGoldfiles freezes the device/channel/parameter
-// → name pipeline against a golden table. Each case mirrors a
-// Concrete
-// regression net for `M-P0-16` (Naming-Parität).
+// TestNamingPipelineGoldfiles freezes the device/channel/parameter →
+// name pipeline against a golden table.
+//
+// It drives [device.BuildDataPointName] and
+// [device.BuildCustomDataPointName] — the functions the device pipeline,
+// the event bridge and the REST handlers actually call. It used to drive
+// a second naming family on *Channel that no production code reached,
+// and the two had drifted apart in eighteen of these twenty cases: the
+// dead one emitted raw wire parameter names ("LOW_BAT") where the daemon
+// emits title-cased ones ("Low Bat"), and it collapsed every custom-DP
+// postfix onto the postfix word where the daemon emits the channel-group
+// marker. So this table froze names no operator ever saw. The dead
+// family is gone; these expectations are what the daemon produces.
+//
+// Two of them are recorded rather than endorsed. Case 14 yields "Wind
+// Wind Speed" and case 19 "Display Display Data String": a channel or
+// device name that is also the first word of the parameter stutters.
+// That is what the pipeline does today, and freezing it is how a change
+// to it becomes visible.
 //
 // Refresh with: go test -update-naming ./tests/golden/...
 func TestNamingPipelineGoldfiles(t *testing.T) {
@@ -66,9 +80,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "LEVEL",
 			CentralID:     "central1",
 
-			WantDpName:      "Kanal LEVEL",
-			WantDpFullName:  "Wohnzimmer Licht Kanal LEVEL",
-			WantTranslation: "wohnzimmer_licht_kanal_level",
+			WantDpName:     "Kanal Level",
+			WantDpFullName: "Wohnzimmer Licht Kanal Level",
 		},
 		// 2: Channel without explicit name → falls back to parameter alone.
 		{
@@ -80,9 +93,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "LOW_BAT",
 			CentralID:     "central1",
 
-			WantDpName:      "LOW_BAT",
-			WantDpFullName:  "Sensor LOW_BAT",
-			WantTranslation: "sensor_low_bat",
+			WantDpName:     "Low Bat",
+			WantDpFullName: "Sensor Low Bat",
 		},
 		// 3: No parameter → device-only fallback for full name.
 		{
@@ -93,9 +105,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			ChannelType:   "CLIMATE",
 			CentralID:     "central1",
 
-			WantDpName:      "",
-			WantDpFullName:  "Heizkoerper Bad",
-			WantTranslation: "heizkoerper_bad",
+			WantDpName:     "",
+			WantDpFullName: "Heizkoerper Bad",
 		},
 		// 4: Custom-DP with postfix — base name overridden by upper-cased postfix.
 		{
@@ -109,9 +120,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Postfix:       "color",
 			CentralID:     "central1",
 
-			WantDpName:      "Kanal COLOR",
-			WantDpFullName:  "Wohnzimmer Licht Kanal COLOR",
-			WantTranslation: "wohnzimmer_licht_kanal_color",
+			WantDpName:     "Kanal",
+			WantDpFullName: "Wohnzimmer Licht Kanal",
 		},
 		// (Translation derived from fullName "Wohnzimmer Licht Kanal COLOR" → "wohnzimmer_licht_kanal_color".)
 		// 5: ButtonLock postfix.
@@ -125,9 +135,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Postfix:       "BUTTON_LOCK",
 			CentralID:     "central2",
 
-			WantDpName:      "BUTTON_LOCK",
-			WantDpFullName:  "Aussentuere BUTTON_LOCK",
-			WantTranslation: "aussentuere_button_lock",
+			WantDpName:     "vch1",
+			WantDpFullName: "Aussentuere vch1",
 		},
 		// 6: Hub-style address gets the central_id prefix in unique_id.
 		{
@@ -138,9 +147,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "PRES",
 			CentralID:     "central42",
 
-			WantDpName:      "PRES",
-			WantDpFullName:  "System PRES",
-			WantTranslation: "system_pres",
+			WantDpName:     "Pres",
+			WantDpFullName: "System Pres",
 		},
 		// 7: Internal address (INT000…) namespaced by central_id.
 		{
@@ -151,9 +159,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "STATE",
 			CentralID:     "central42",
 
-			WantDpName:      "STATE",
-			WantDpFullName:  "Virtual STATE",
-			WantTranslation: "virtual_state",
+			WantDpName:     "State",
+			WantDpFullName: "Virtual State",
 		},
 		// 8: Address with dash gets normalised to underscore.
 		{
@@ -164,9 +171,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "DOOR_STATE",
 			CentralID:     "central3",
 
-			WantDpName:      "DOOR_STATE",
-			WantDpFullName:  "Garage DOOR_STATE",
-			WantTranslation: "garage_door_state",
+			WantDpName:     "Door State",
+			WantDpFullName: "Garage Door State",
 		},
 		// 9: Prefix-based unique_id (events / button presses).
 		{
@@ -178,9 +184,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Prefix:        "event",
 			CentralID:     "central4",
 
-			WantDpName:      "PRESS_SHORT",
-			WantDpFullName:  "Funk-Taster PRESS_SHORT",
-			WantTranslation: "funk_taster_press_short",
+			WantDpName:     "Press Short",
+			WantDpFullName: "Funk-Taster Press Short",
 		},
 		// 10: ColorTemp postfix — postfix replaces parameter slot.
 		{
@@ -193,9 +198,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Postfix:       "color_temp",
 			CentralID:     "central5",
 
-			WantDpName:      "COLOR_TEMP",
-			WantDpFullName:  "Tisch Lampe COLOR_TEMP",
-			WantTranslation: "tisch_lampe_color_temp",
+			WantDpName:     "vch2",
+			WantDpFullName: "Tisch Lampe vch2",
 		},
 		// 11: Effect postfix.
 		{
@@ -208,9 +212,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Postfix:       "effect",
 			CentralID:     "central6",
 
-			WantDpName:      "EFFECT",
-			WantDpFullName:  "RGB-Strip EFFECT",
-			WantTranslation: "rgb_strip_effect",
+			WantDpName:     "vch1",
+			WantDpFullName: "RGB-Strip vch1",
 		},
 		// 12: HS postfix (RGBW light).
 		{
@@ -222,9 +225,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Postfix:       "hs",
 			CentralID:     "central7",
 
-			WantDpName:      "HS",
-			WantDpFullName:  "Decken-Spot HS",
-			WantTranslation: "decken_spot_hs",
+			WantDpName:     "vch3",
+			WantDpFullName: "Decken-Spot vch3",
 		},
 		// 13: Cover with no parameter and no channel name.
 		{
@@ -235,9 +237,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			ChannelType:   "BLIND",
 			CentralID:     "central8",
 
-			WantDpName:      "",
-			WantDpFullName:  "Rolladen",
-			WantTranslation: "rolladen",
+			WantDpName:     "",
+			WantDpFullName: "Rolladen",
 		},
 		// 14: Channel name without device prefix passes through.
 		{
@@ -249,9 +250,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "WIND_SPEED",
 			CentralID:     "central9",
 
-			WantDpName:      "Wind WIND_SPEED",
-			WantDpFullName:  "Wetterstation Wind WIND_SPEED",
-			WantTranslation: "wetterstation_wind_wind_speed",
+			WantDpName:     "Wind Wind Speed",
+			WantDpFullName: "Wetterstation Wind Wind Speed",
 		},
 		// 15: Lower-case device name + uppercase parameter.
 		{
@@ -263,9 +263,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "STATE",
 			CentralID:     "central10",
 
-			WantDpName:      "STATE",
-			WantDpFullName:  "Steckdose STATE",
-			WantTranslation: "steckdose_state",
+			WantDpName:     "State",
+			WantDpFullName: "Steckdose State",
 		},
 		// 16: Mehrere Bindestriche im Device-Namen.
 		{
@@ -277,9 +276,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "ACTUAL_TEMPERATURE",
 			CentralID:     "central11",
 
-			WantDpName:      "ACTUAL_TEMPERATURE",
-			WantDpFullName:  "Smart-Home-Heizung-1 ACTUAL_TEMPERATURE",
-			WantTranslation: "smart_home_heizung_1_actual_temperature",
+			WantDpName:     "Actual Temperature",
+			WantDpFullName: "Smart-Home-Heizung-1 Actual Temperature",
 		},
 		// 17: Sound postfix (MP3P) — postfix replaces parameter slot.
 		{
@@ -291,9 +289,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Postfix:       "sound",
 			CentralID:     "central12",
 
-			WantDpName:      "SOUND",
-			WantDpFullName:  "MP3 Player SOUND",
-			WantTranslation: "mp3_player_sound",
+			WantDpName:     "vch2",
+			WantDpFullName: "MP3 Player vch2",
 		},
 		// 18: BidCoS-RF special-prefix address gets central_id namespace.
 		{
@@ -304,9 +301,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "PRESS_SHORT",
 			CentralID:     "central13",
 
-			WantDpName:      "PRESS_SHORT",
-			WantDpFullName:  "BidCoS-RF PRESS_SHORT",
-			WantTranslation: "bidcos_rf_press_short",
+			WantDpName:     "Press Short",
+			WantDpFullName: "BidCoS-RF Press Short",
 		},
 		// 19: Display row.
 		{
@@ -317,9 +313,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			Parameter:     "DISPLAY_DATA_STRING",
 			CentralID:     "central14",
 
-			WantDpName:      "DISPLAY_DATA_STRING",
-			WantDpFullName:  "Display DISPLAY_DATA_STRING",
-			WantTranslation: "display_display_data_string",
+			WantDpName:     "Display Data String",
+			WantDpFullName: "Display Display Data String",
 		},
 		// 20: Empty parameter on a named channel — channel only.
 		{
@@ -331,9 +326,8 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			ChannelType:   "MAINTENANCE",
 			CentralID:     "central15",
 
-			WantDpName:      "Kanal",
-			WantDpFullName:  "Wohnung Kanal",
-			WantTranslation: "wohnung_kanal",
+			WantDpName:     "Kanal",
+			WantDpFullName: "Wohnung Kanal",
 		},
 	}
 
@@ -349,17 +343,11 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			ch.SetName(c.ChannelName)
 		}
 
-		var dpName, fullName string
+		nd := device.BuildDataPointName(ch, c.Parameter, "")
 		if c.Postfix != "" {
-			dpName = ch.CustomDataPointName(c.Parameter, c.Postfix)
-			fullName = ch.CustomDataPointFullName(c.Parameter, c.Postfix)
-		} else {
-			dpName = ch.DataPointName(c.Parameter)
-			fullName = ch.DataPointFullName(c.Parameter)
+			nd = device.BuildCustomDataPointName(ch, c.Postfix, "")
 		}
-		// Translation key is the slug of the user-facing full name — including the
-		// postfix slot for custom DPs.
-		tk := device.GenerateTranslationKey(fullName)
+		dpName, fullName := nd.Name(), nd.FullName()
 
 		row := map[string]any{
 			"case_no":              i + 1,
@@ -371,7 +359,7 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			"central_id":           c.CentralID,
 			"data_point_name":      dpName,
 			"data_point_full_name": fullName,
-			"translation_key":      tk,
+			"channel_postfix":      nd.ChannelPostfix,
 		}
 		got = append(got, row)
 
@@ -382,10 +370,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 		if fullName != c.WantDpFullName {
 			t.Errorf("case %d (%s): DataPointFullName=%q, want %q",
 				i+1, c.DeviceName, fullName, c.WantDpFullName)
-		}
-		if tk != c.WantTranslation {
-			t.Errorf("case %d (%s): TranslationKey=%q, want %q",
-				i+1, c.DeviceName, tk, c.WantTranslation)
 		}
 	}
 

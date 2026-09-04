@@ -89,6 +89,7 @@ type AlarmSchedule struct {
 // inert (codes disabled). Strongly-authenticated operator sources
 // (rest-operator, ws-operator, hmcli) bypass the requirement but still
 // surface duress when a code is supplied.
+// loom:reachable:reason="field ZoneConfig.CodePolicy, decoded from every persisted zone; RTA scores call edges, so a type used only structurally is invisible to it"
 type CodePolicy struct {
 	// RequireArm gates arming on a valid code (default off).
 	RequireArm bool `json:"require_arm,omitempty"`
@@ -100,6 +101,22 @@ type CodePolicy struct {
 	RequireDisarm *bool `json:"require_disarm,omitempty"`
 	// RequireSilence gates silence per source surface (default off per
 	// S3; keyed by the source string, e.g. "mqtt").
+	//
+	// It reaches the anonymous planes only. resolveCode drops the
+	// requirement for every pre-authenticated source — the operator
+	// surfaces (CodeSourceRESTOperator, CodeSourceWSOperator,
+	// CodeSourceHmcli) carry a session, and CodeSourceKeypad /
+	// CodeSourceRemote are authenticated by the slot or binding match
+	// and carry no PIN that could be typed — so an entry keyed on one of
+	// those is accepted, persisted and inert. Pinned by
+	// TestRequireSilenceGatesOnlyAnonymousSources.
+	//
+	// Of the anonymous sources the engine could gate, only "mqtt"
+	// reaches a silence verb at all: "sysvar" arms and disarms, and the
+	// keypad intent router likewise never silences. So "mqtt" is the one
+	// key that changes anything today, which is what the alarm policies
+	// view offers — pinned from both sides by
+	// TestSilenceGatesAreOfferedOnlyWhereTheyBite.
 	RequireSilence map[string]bool `json:"require_silence,omitempty"`
 }
 
@@ -107,14 +124,14 @@ type CodePolicy struct {
 // policy, before the CodeValidator resolves whether any code exists.
 func (p CodePolicy) requires(verb, source string) bool {
 	switch verb {
-	case codeVerbArm:
+	case CodeVerbArm:
 		return p.RequireArm
-	case codeVerbDisarm:
+	case CodeVerbDisarm:
 		if p.RequireDisarm == nil {
 			return true
 		}
 		return *p.RequireDisarm
-	case codeVerbSilence:
+	case CodeVerbSilence:
 		return p.RequireSilence[source]
 	default:
 		return false
@@ -122,6 +139,7 @@ func (p CodePolicy) requires(verb, source string) bool {
 }
 
 // ModeConfig configures one protection level of an zone.
+// loom:reachable:reason="value type of ZoneConfig.Modes, decoded from every persisted zone; RTA scores call edges, so a type used only structurally is invisible to it"
 type ModeConfig struct {
 	// ExitDelaySeconds is the arming countdown; 0 arms immediately.
 	ExitDelaySeconds int `json:"exit_delay_s,omitempty"`
@@ -170,6 +188,7 @@ type OutputPolicy struct {
 // BlockerPolicies maps each sensor-health class onto an arming policy
 // (notes/concepts/alarm-concept.md §5). Empty values fall back to the defaults:
 // open/unreachable/sabotage block, low battery warns.
+// loom:reachable:reason="field ZoneConfig.Blockers, decoded from every persisted zone; RTA scores call edges, so a type used only structurally is invisible to it"
 type BlockerPolicies struct {
 	Open        hmenum.AlarmBlockerPolicy `json:"open,omitempty"`
 	Unreachable hmenum.AlarmBlockerPolicy `json:"unreachable,omitempty"`
@@ -195,6 +214,7 @@ func (p BlockerPolicies) normalized() BlockerPolicies {
 
 // SensorConfig is the per-sensor configuration document stored in
 // alarm_sensors.config_json (notes/concepts/alarm-concept.md §6.2).
+// loom:reachable:reason="the sensor half of a persisted zone, read on every sensor event; RTA scores call edges, so a type used only structurally is invisible to it"
 type SensorConfig struct {
 	// Modes lists the protection levels the sensor participates in.
 	Modes []hmenum.AlarmMode `json:"modes"`
@@ -218,10 +238,46 @@ type SensorConfig struct {
 	//
 	// The load-bearing case is SMOKE_DETECTOR_ALARM_STATUS, whose value
 	// list is [IDLE_OFF, PRIMARY_ALARM, INTRUSION_ALARM,
-	// SECONDARY_ALARM]. Under the default rule INTRUSION_ALARM counts as
-	// a smoke detection, while it means the installation drove that
-	// detector as a siren for a burglary — the alarm system reading back
-	// its own output as an input.
+	// SECONDARY_ALARM] — that order verbatim from the firmware's own
+	// enum (HMIPServer
+	// de.eq3.cbcs.devicedescription.channelspecification.stateparameter.SmokeDetectorAlarmStatus,
+	// whose #getNames() fills the VALUE_LIST in ordinal order). Under the
+	// default rule INTRUSION_ALARM counts as a smoke detection, while it
+	// means the installation drove that detector as a siren for a
+	// burglary — the alarm system reading back its own output as an
+	// input.
+	//
+	// Two premises under the default rule, held apart because they rest
+	// on different authority:
+	//
+	// The positional half is firmware. The integer an ENUM delivers on
+	// the legacy XML-RPC surface IS its index in the declared VALUE_LIST:
+	// the description's list and the wire ordinal come from one
+	// getEnumStrings() array (HMIPServer
+	// de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#createParameterDescription
+	// and #convertParameterValue), and the shipped configuration turns
+	// that substitution on
+	// (../OpenCCU-Base/etc/config_templates/crRFD.conf:47,
+	// Legacy.Parameter.ReplaceEnumValueWithOrdinal=true). Note the
+	// physical radio bytes are not the ordinals — a window state maps
+	// {CLOSED, TILTED, OPEN} onto {0, 100, 200} — so this flag is what
+	// makes an index scan correct at all. On BidCos the same holds by a
+	// different route: an option list is emitted as VALUE_LIST[i] with
+	// MIN 0 and MAX size-1
+	// (../OpenCCU-Base/src/libhsscomm/HSSLogicalTypeOption.cpp).
+	//
+	// "Index 0 means idle" is NOT a firmware rule and is UNVERIFIED as a
+	// general one. The strongest statement the sources make is
+	// DEFAULT=MIN=first entry for the HmIP state-parameter enums, which
+	// is a default, not an idle semantic; for BidCos option lists they
+	// say nothing at all. It happens to hold for every enumeration a
+	// sensor can currently be enrolled on — CLOSED, DRY, NO_ERROR,
+	// IDLE_OFF all sit at 0 — so the rule is safe in today's scope and
+	// unbacked one step wider. A new enumerated family becoming
+	// enrollable has to be re-checked against its own value list; a
+	// firmware shipping an alarm state at position 0 would break this
+	// silently, and only naming the values explicitly here defends
+	// against it.
 	//
 	// Empty selects exactly the previous behaviour, so an existing
 	// enrollment keeps its meaning; a value is only ever narrowed by an

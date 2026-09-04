@@ -16,7 +16,7 @@ import (
 // contract of the stdout log stack: an `"error", err` attribute must
 // reach the JSON output as the error's message. The stdlib JSON
 // handler special-cases error values already; this pin guards the
-// full handler chain (reqctx → tee → redact → core) against any
+// full handler chain (hmreqctx → tee → redact → core) against any
 // future wrapper or ReplaceAttr hook regressing it to a marshalled
 // `"error": {}`.
 func TestBuildFullStack_ErrorAttrsRenderAsStrings(t *testing.T) {

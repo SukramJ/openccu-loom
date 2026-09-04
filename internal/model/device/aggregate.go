@@ -356,10 +356,21 @@ func (d *Device) AddChannelToGroup(groupNo, channelNo int) {
 		d.groupChannels[groupNo] = members
 	}
 	members[channelNo] = struct{}{}
-	// Keep the reverse map in sync so GroupForChannel is O(1).
-	d.channelToGroup[channelNo] = groupNo
-	// The group number itself also maps to its own group (mirrors the Python
-	// _channel_to_group initialisation that seeds group_no → group_no).
+	// Keep the reverse map in sync so the single-group lookup is O(1).
+	//
+	// First claim wins, which is the tie-break [Channel.AssignGroupNumber]
+	// applies — and it has to be the same one: a device that matches several
+	// profiles can have one channel claimed twice (HmIP-WGT claims channels 3
+	// and 4 for both its dimmer and its switch group), and the two stores
+	// answer the same question. Writing this one unconditionally made it
+	// last-wins, so the device-level lookup reported the later group while
+	// every channel-level consumer reported the earlier one.
+	if _, exists := d.channelToGroup[channelNo]; !exists {
+		d.channelToGroup[channelNo] = groupNo
+	}
+	// The group number itself also maps to its own group — the reference
+	// stack seeds group_no → group_no so a group's base channel resolves even
+	// when it is not enumerated as a member.
 	if _, exists := d.channelToGroup[groupNo]; !exists {
 		d.channelToGroup[groupNo] = groupNo
 	}

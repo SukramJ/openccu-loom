@@ -41,10 +41,36 @@ const (
 )
 
 // valuesClose reports whether two values of type T are equivalent
-// for confirmation purposes. Floats compare with two-decimal
-// tolerance (matching python's `round(v, 2)`); everything else
-// uses Go's == (which works because T is constrained to
-// comparable).
+// for confirmation purposes. Floats compare after rounding to two
+// decimals — a fixed ±0.005 window; everything else uses Go's ==
+// (which works because T is constrained to comparable).
+//
+// The fixed window is NOT the CCU's rule, and it is not a conservative
+// approximation of it either. The CCU quantises every scaled FLOAT
+// parameter to 1/factor on write and echoes back the round-tripped
+// quantised value
+// (../OpenCCU-Base/src/libhsscomm/HSSTypeConversionFloatInteger.cpp:56-66
+// and :69-77, half away from zero), and the factor is per parameter:
+// SET_TEMPERATURE is factor 2, i.e. a step of 0.5 °C
+// (../OpenCCU-Base/src/devicetypes/rftypes/rf_cc_rt_dn.xml:2392-2401);
+// ON_TIME and RAMP_TIME are factor 10; LEVEL on some dimmers is factor
+// 200, i.e. a step of 0.005. So the window is far too tight for the
+// coarse parameters — a written 20.3 comes back as 20.5 and reads as a
+// mismatch — and, on the callers that use it to decide whether to send
+// at all, too loose for the fine ones, because it swallows a step the
+// device can actually execute.
+//
+// The right driver is that per-parameter step, and it is NOT PERFORMABLE
+// at runtime: getParamsetDescription exports ID, OPERATIONS, FLAGS,
+// TAB_ORDER, CONTROL, TYPE, MIN, MAX, DEFAULT, SPECIAL and UNIT and
+// nothing about the physical scaling
+// (../OpenCCU-Base/src/libhsscomm/HSSParameter.cpp:205-218,
+// HSSLogicalTypeFloat.cpp:105-119, HSSLogicalType.cpp:53-61) on both the
+// BidCos and the HmIP legacy surface. Deriving a step from MIN/MAX or
+// from the unit string would be a guess. What would settle it is a
+// per-parameter step table sourced from the device XMLs' `factor`
+// attributes; until that exists the constant stays, unverified and
+// deliberately unchanged rather than replaced by an invented one.
 func valuesClose[T comparable](a, b T) bool {
 	if af, aok := any(a).(float64); aok {
 		if bf, bok := any(b).(float64); bok {
@@ -59,9 +85,9 @@ func valuesClose[T comparable](a, b T) bool {
 	return a == b
 }
 
-// roundToTwoDecimals rounds v half-up to two decimal places —
-// Matches the precision
-// vs. confirmed CCU values (`round(x, 2)`).
+// roundToTwoDecimals rounds v half away from zero to two decimal
+// places. It is the quantisation [valuesClose] compares on; the
+// authority for that window, and its limits, are documented there.
 func roundToTwoDecimals(v float64) float64 {
 	if v >= 0 {
 		return math.Floor(v*100+0.5) / 100

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
 // recordingAuditRecorder captures the entries a domain writes so a test
@@ -39,7 +39,7 @@ func TestPutParamsetRecordsTheCallingSurface(t *testing.T) {
 	rec := &recordingAuditRecorder{}
 	p := buildParamsetBoost10Fixture(t).SetAuditRecorder(rec)
 
-	ctx := reqctx.WithOperation(t.Context(), "mcp:paramset-write")
+	ctx := hmreqctx.WithOperation(t.Context(), "mcp:paramset-write")
 	if err := p.PutParamset(ctx, "DEV021", hmenum.ParamsetKeyValues,
 		map[string]any{"SET_POINT_TEMPERATURE": 21.0}); err != nil {
 		t.Fatalf("PutParamset: %v", err)

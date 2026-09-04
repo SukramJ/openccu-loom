@@ -551,3 +551,58 @@ func TestRegisterConstructorParallelLookup(t *testing.T) {
 		t.Fatalf("Constructor() lookups observed = %d, want 16", hits)
 	}
 }
+
+// TestGroupStateFieldMaterializesAsCDPState pins the producer half of the
+// group-STATE marking. The status-transmitter data point a custom entity
+// spans off its primary channel is visible like CDP_VISIBLE everywhere except
+// Matter, which drops it as a redundant status channel — so it carries the
+// distinct CDP_STATE usage. Only the Matter side asserted that until now, and
+// a Matter-side assertion cannot tell a marking that never happened from one
+// that happened under the wrong usage.
+func TestGroupStateFieldMaterializesAsCDPState(t *testing.T) {
+	d := device.New(device.Config{
+		InterfaceID:  "HmIP-RF",
+		Interface:    hmenum.InterfaceHmIPRF,
+		Address:      "GRPST1",
+		Model:        "HmIP-PS",
+		ProductGroup: hmenum.ProductGroupHmIP,
+	})
+	for i := range 5 {
+		d.AddChannel("GRPST1:"+itoaSmall(i), i, "T", hmenum.ParamsetKeyValues)
+	}
+	// The status transmitter sits one channel below the switch's own virtual
+	// receiver, which is what the profile's -1 offset states.
+	stateDP := putBoolDP(d.Channels()[2], hmenum.ParameterState)
+
+	registry := NewRegistry()
+	profile := Profile{
+		Name:       "GroupStateProbe",
+		DeviceType: "HmIP-PS",
+		Category:   hmenum.DataPointCategorySwitch,
+		Channels:   []ChannelRoleAssignment{{Channel: 0, Role: ChannelRolePrimary}},
+		Config: &ProfileConfig{
+			ProfileType: "GroupStateProbe",
+			ChannelGroup: ChannelGroupConfig{
+				PrimaryChannel:    3,
+				PrimaryChannelSet: true,
+				ChannelFields: map[int]map[hmenum.Field]FieldValue{
+					-1: {hmenum.FieldGroupState: Visible(hmenum.ParameterState)},
+				},
+			},
+		},
+	}
+	if err := registry.Register(profile); err != nil {
+		t.Fatal(err)
+	}
+	ctor, _ := fakeCtor("GroupStateProbe")
+	if err := registry.RegisterConstructor("GroupStateProbe", ctor); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateCustomDataPoints(d, registry); err != nil {
+		t.Fatalf("CreateCustomDataPoints: %v", err)
+	}
+
+	if got := stateDP.Usage(); got != hmenum.DataPointUsageCDPState {
+		t.Errorf("group-STATE data point usage = %q, want %q", got, hmenum.DataPointUsageCDPState)
+	}
+}

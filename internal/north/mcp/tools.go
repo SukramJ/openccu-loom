@@ -17,8 +17,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	paramcoerce "github.com/SukramJ/openccu-loom/internal/parameter"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -742,7 +742,7 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		// program trigger below stamps itself: without it an assistant's
 		// write and an operator's write are indistinguishable afterwards,
 		// and "who changed this" is the first question asked about one.
-		ctx = reqctx.WithOperation(ctx, "mcp:paramset-write")
+		ctx = hmreqctx.WithOperation(ctx, "mcp:paramset-write")
 		if err := d.Paramsets.PutParamset(ctx, address, key, in.Values); err != nil {
 			return nil, writeParamsetOut{}, fmt.Errorf("write paramset: %w", err)
 		}
@@ -790,7 +790,7 @@ func registerWriteLinkParamset(s *mcpsdk.Server, d Deps) {
 				)
 			}
 		}
-		ctx = reqctx.WithOperation(ctx, "mcp:link-paramset-write")
+		ctx = hmreqctx.WithOperation(ctx, "mcp:link-paramset-write")
 		if err := d.Paramsets.PutLinkParamset(ctx, receiver, sender, in.Values); err != nil {
 			return nil, writeLinkParamsetOut{}, fmt.Errorf("write link paramset: %w", err)
 		}
@@ -885,7 +885,7 @@ func registerTriggerProgram(s *mcpsdk.Server, d Deps) {
 		}
 		// Stamp the surface so the program-execute audit/log subscriber
 		// can attribute the run to the MCP server.
-		ctx = reqctx.WithOperation(ctx, "mcp:program-trigger")
+		ctx = hmreqctx.WithOperation(ctx, "mcp:program-trigger")
 		if err := prog.Execute(ctx); err != nil {
 			return nil, triggerProgramOut{}, fmt.Errorf("execute program: %w", err)
 		}

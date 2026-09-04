@@ -138,7 +138,7 @@ func TestRepeatedSnapshotPassesSubscribeTheSameObjectsOnlyOnce(t *testing.T) {
 
 	wp := h.device(t).Channel("0001ABCD:1").WeekProfile()
 	before := h.weekProfileStatePublishes()
-	if err := wp.SyncProfilePointer(3); err != nil {
+	if err := wp.SyncProfilePointerFor(hmenum.ParameterActiveProfile, 3); err != nil {
 		t.Fatalf("sync profile pointer: %v", err)
 	}
 	if got := h.weekProfileStatePublishes() - before; got != 1 {
@@ -180,7 +180,7 @@ func TestReingestSubscribesTheReplacementObjectsAndReleasesTheOld(t *testing.T) 
 	}
 
 	before := h.weekProfileStatePublishes()
-	if err := oldProfile.SyncProfilePointer(4); err != nil {
+	if err := oldProfile.SyncProfilePointerFor(hmenum.ParameterActiveProfile, 4); err != nil {
 		t.Fatalf("sync replaced profile: %v", err)
 	}
 	if got := h.weekProfileStatePublishes() - before; got != 0 {
@@ -188,7 +188,7 @@ func TestReingestSubscribesTheReplacementObjectsAndReleasesTheOld(t *testing.T) 
 	}
 
 	before = h.weekProfileStatePublishes()
-	if err := newProfile.SyncProfilePointer(5); err != nil {
+	if err := newProfile.SyncProfilePointerFor(hmenum.ParameterActiveProfile, 5); err != nil {
 		t.Fatalf("sync replacement profile: %v", err)
 	}
 	if got := h.weekProfileStatePublishes() - before; got != 1 {
@@ -219,7 +219,7 @@ func TestRemovedDeviceReleasesItsLiveSubscriptions(t *testing.T) {
 		t.Fatalf("removed device left %d live subscriptions installed", got)
 	}
 	before := h.weekProfileStatePublishes()
-	if err := wp.SyncProfilePointer(2); err != nil {
+	if err := wp.SyncProfilePointerFor(hmenum.ParameterActiveProfile, 2); err != nil {
 		t.Fatalf("sync profile pointer: %v", err)
 	}
 	if got := h.weekProfileStatePublishes() - before; got != 0 {

@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // UISchemaAdapter assembles a channel's rendering schema from the
@@ -598,7 +599,7 @@ func (a *UISchemaAdapter) lookupChannel(address string, channelNo int) (*device.
 		if !ok {
 			continue
 		}
-		chAddr := fmt.Sprintf("%s:%d", address, channelNo)
+		chAddr := hmtypes.ChannelAddress(address, channelNo)
 		ch := dev.Channel(chAddr)
 		return dev, ch
 	}

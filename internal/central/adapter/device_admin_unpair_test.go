@@ -228,7 +228,7 @@ func (*fakeOperations) GetSuppressedServiceMessages(context.Context, string, str
 }
 
 func (*fakeOperations) HasProgramIDs(context.Context, string) (bool, error)     { return false, nil }
-func (*fakeOperations) DownloadFirmware(context.Context, string) error          { return nil }
+func (*fakeOperations) DownloadFirmware(context.Context) error                  { return nil }
 func (*fakeOperations) GetMetadata(_ context.Context, _, _ string) (any, error) { return nil, nil }
 func (*fakeOperations) SetMetadata(_ context.Context, _, _ string, _ any) error { return nil }
 

@@ -31,10 +31,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
-	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -546,7 +546,7 @@ func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditi
 	}
 	// Stamp the surface so the program-execute audit/log subscriber can
 	// attribute the run to the WebSocket API.
-	ctx = reqctx.WithOperation(ctx, "ws:program-execute")
+	ctx = hmreqctx.WithOperation(ctx, "ws:program-execute")
 	if checkConditions {
 		return p.ExecuteWithConditionCheck(ctx)
 	}

@@ -36,9 +36,20 @@ var errStorageNotConfigured = fmt.Errorf("backup: no storage configured: %w", hm
 
 // --- Backup adapter ---
 
-// backupRunTimeout bounds the detached create-and-download goroutine. It
-// sits above the backend's own 300 s poll budget so the backend reports a
-// clean timeout before this hard ceiling cancels the context.
+// backupRunTimeout bounds the detached create-and-download goroutine.
+//
+// It is the only bound on the run, not a ceiling above a backend budget. The
+// production caller passes maxWaitTime 0 (WireBackupAndDownload), and
+// [backends.CcuBackend.CreateBackupAndDownload] applies a timeout only for a
+// positive maxWaitTime — its own doc states that leaving the bound to the
+// caller is what every production caller wants. In the default configuration
+// the HTTP client is untimed as well, so a backup that outruns this constant
+// surfaces as a context cancellation, not as a clean backend timeout.
+//
+// 6 minutes is a client-side choice sized to cover an archive build on a
+// loaded CCU. No firmware source states how long that takes, so the number is
+// unverified; what would settle it is a measurement against a real CCU under
+// load, not another constant.
 const backupRunTimeout = 6 * time.Minute
 
 // BackupAdapter creates CCU backups via the reference create-and-download
@@ -323,7 +334,7 @@ func ccuArchiveName(u *central.Unit, at time.Time) string {
 	if host == "" || version == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s-%s-%s.sbk", host, version, at.Format("2006-01-02-1504"))
+	return fmt.Sprintf("%s-%s-%s%s", host, version, at.Format("2006-01-02-1504"), sbk.Extension)
 }
 
 // backupNameSegment sanitises one segment of a display filename. It is not
@@ -350,8 +361,12 @@ func backupNameSegment(s string) string {
 }
 
 // backupTimestampLayout is the fixed-width UTC timestamp appended to every
-// backup id. Its rendered length (incl. the leading separator, see
-// backupID) is backupIDSuffixLen.
+// backup id this adapter MINTS (see backupID). Its rendered length (incl.
+// the leading separator) is backupIDSuffixLen.
+//
+// Operator-uploaded ids are minted elsewhere, by
+// FilesystemBackupStorage.SaveUploaded, with a wider millisecond layout;
+// they are deliberately NOT decomposable by backupIDSuffixLen.
 const backupTimestampLayout = "20060102-150405"
 
 // backupIDSuffixLen is the length of the "-<timestamp>" suffix backupID

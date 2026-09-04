@@ -23,8 +23,8 @@ func TestNewCacheIsEmpty(t *testing.T) {
 	if c.GetAddressID("VCU1") != 0 {
 		t.Errorf("zero-state GetAddressID must return 0")
 	}
-	if c.GetInterface("VCU1") != hmenum.InterfaceBidCosRF {
-		t.Errorf("zero-state GetInterface must default to BidCos-RF")
+	if iface, ok := c.GetInterface("VCU1"); ok {
+		t.Errorf("zero-state GetInterface must report ok == false, got (%v, true)", iface)
 	}
 }
 
@@ -44,7 +44,11 @@ func TestAddInterface(t *testing.T) {
 	t.Parallel()
 	c := New()
 	c.AddInterface("VCU1234567:1", hmenum.InterfaceHmIPRF)
-	if got := c.GetInterface("VCU1234567:1"); got != hmenum.InterfaceHmIPRF {
+	got, ok := c.GetInterface("VCU1234567:1")
+	if !ok {
+		t.Fatal("GetInterface must report ok == true after AddInterface")
+	}
+	if got != hmenum.InterfaceHmIPRF {
 		t.Errorf("GetInterface = %v, want HmIP-RF", got)
 	}
 }

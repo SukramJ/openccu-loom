@@ -27,9 +27,9 @@ import (
 
 // repetitionsLabelDeviceList is the REPETITIONS VALUE_LIST both captured
 // devices that carry the parameter advertise — HmIP-MP3P (channels 2, 6, 7,
-// 8) and HmIP-WRCD (channel 3). Sixteen entries: the grammar stops at
-// REPETITIONS_014 on real hardware, four short of the count the label
-// formatter can express.
+// 8) and HmIP-WRCD (channel 3). Sixteen entries, the numbered run stopping at
+// REPETITIONS_014 — the list the firmware builds for the VALUES paramset, and
+// the ceiling [custom.MaxRepetitions] now carries.
 var repetitionsLabelDeviceList = []string{
 	"NO_REPETITION",
 	"REPETITIONS_001", "REPETITIONS_002", "REPETITIONS_003", "REPETITIONS_004",
@@ -68,10 +68,9 @@ func TestRepetitionsLabelIsOneRuleAcrossCustomProfiles(t *testing.T) {
 	ctx := context.Background()
 
 	// Counts the label grammar can express and both captured devices
-	// advertise. Counts 15..18 are expressible but absent from every
-	// captured VALUE_LIST; folding the device list into the label rule is
-	// a separate change, so this test does not pin what happens there
-	// beyond the two profiles agreeing.
+	// advertise. The two now coincide: [custom.MaxRepetitions] is the
+	// device list's own ceiling, so counts above 14 are rejected by both
+	// profiles rather than formatted into a label no device offers.
 	deviceExpressible := func(n int) bool { return n == -1 || (n >= 0 && n <= 14) }
 
 	for n := -3; n <= 20; n++ {

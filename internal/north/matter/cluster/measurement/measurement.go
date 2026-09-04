@@ -398,6 +398,11 @@ func (s *TemperatureServer) MatterAttributes() []uint32 {
 // temperature-measurement.element.ts` + chip
 // `src/app/clusters/temperature-measurement-server/
 // TemperatureMeasurementCluster.cpp:27-28`.
+//
+// Exported as [CelsiusToInt16] because the climate device profile encodes the
+// same attribute for its own thermostat clusters and carried a byte-identical
+// copy; two encoders for one wire format can round a boundary differently
+// without anything failing.
 func celsiusToInt16(c float64) int16 {
 	v := math.Round(c * 100)
 	if v > 32766 { // 32767 is the Matter NULL sentinel — must not be emitted as a real value
@@ -1807,3 +1812,8 @@ func (e energyOf) OnMatterValueChanged(cb func()) func() {
 	}
 	return func() {}
 }
+
+// CelsiusToInt16 encodes a Celsius reading as Matter's centi-degree int16,
+// clamped to the range the spec allows: 32767 is the NULL sentinel and must
+// never be emitted as a value, and -27315 is absolute zero.
+func CelsiusToInt16(c float64) int16 { return celsiusToInt16(c) }

@@ -20,13 +20,6 @@ var unIgnoreLinePattern = regexp.MustCompile(
 	`^(?P<parameter>[^:@]+):(?P<paramset_key>[^@]+)@(?P<model>[^:]+):(?P<channel_no>.*)$`,
 )
 
-// unIgnoreWildcard is the sentinel string that represents "all models" or
-// "all channels" in the complex un-ignore grammar. It is used both as the
-// model field value and as the channel_no field value to express a
-// fully-open wildcard entry. The concrete value ("all") matches
-// UN_IGNORE_WILDCARD defined by the upstream Python reference implementation.
-const unIgnoreWildcard = "all"
-
 // UnIgnoreEntry is one parsed line of an `un_ignore` file.
 // The grammar has two forms:
 //   - Simple: a bare parameter name; matches any model/channel for the VALUES paramset.
@@ -42,7 +35,7 @@ type UnIgnoreEntry struct {
 	// in matchesUnIgnoreLocked.
 	IsSimple bool
 	// Model restricts the entry to a device model (lower-cased, as parsed).
-	// The special value unIgnoreWildcard ("all") means any model.
+	// The special value UnIgnoreWildcard ("all") means any model.
 	// Empty only for simple entries.
 	Model string
 	// ChannelNo restricts the entry to a specific channel number when non-nil.
@@ -61,10 +54,21 @@ type UnIgnoreEntry struct {
 	// Central scopes the entry to one CCU (central.Unit.Name). Empty means
 	// the entry is global and matches every central — the default for
 	// entries built by [ParseUnIgnore], which has no central context of its
-	// own. A caller that persists un-ignore rules per central (multi-CCU is
-	// first class, ADR 0002) stamps this field before calling
-	// [ParameterDecider.LoadUnIgnore] so the entry cannot decide visibility
-	// for a central it was never registered against.
+	// own.
+	//
+	// No production caller sets this field today. The daemon persists
+	// un-ignore patterns per central (one SQLite row set per central, one
+	// REST PUT per central) but the composition root then newline-joins
+	// every central's patterns into one stream and parses it here, so every
+	// live entry carries Central=="" and the scoping below never fires: an
+	// un-ignore requested for one CCU applies to the whole fleet. That
+	// behaviour is deliberate on the composition-root side
+	// (cmd/openccu-loom/visibility_adapter.go documents the decider as
+	// fleet-wide) and it contradicts the per-central shape of the operator
+	// surface; which of the two is right is an open decision, not something
+	// this field settles. Until it is settled, treat the scoping as an
+	// unused seam rather than as a live guarantee — the only writers of this
+	// field are tests.
 	Central string
 }
 
@@ -158,7 +162,7 @@ func ParseUnIgnoreLine(line string) ParsedUnIgnoreLine {
 
 	// Simple-wildcard collapse: model=="all" && channel_no=="all" && paramset==VALUES
 	// → simple entry (matches any model/channel for VALUES).
-	if model == unIgnoreWildcard && channelNoIsWildcard && channelNoStr == unIgnoreWildcard &&
+	if model == UnIgnoreWildcard && channelNoIsWildcard && channelNoStr == UnIgnoreWildcard &&
 		paramsetKey == hmenum.ParamsetKeyValues {
 		result.Entry = &UnIgnoreEntry{
 			Parameter: hmenum.Parameter(parameter),
@@ -175,7 +179,7 @@ func ParseUnIgnoreLine(line string) ParsedUnIgnoreLine {
 			result.Err = "channel must be numeric or empty for MASTER paramset in '" + trimmed + "'"
 			return result
 		}
-		if model == unIgnoreWildcard {
+		if model == UnIgnoreWildcard {
 			result.Err = "model must be specified for MASTER paramset in '" + trimmed + "'"
 			return result
 		}

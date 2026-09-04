@@ -16,11 +16,14 @@ import (
 // Kind enumerates the three CCU event flavours.
 type Kind string
 
-// Kind values mirror DeviceTriggerEventType.
+// Kind values are [hmenum.DeviceTriggerEventType], converted rather
+// than re-spelled: the dispatcher hands a Kind straight across the seam
+// as a bare cast, so a second literal here that drifted would produce a
+// trigger type nothing downstream recognises.
 const (
-	KindKeypress    Kind = "homematic.keypress"
-	KindImpulse     Kind = "homematic.impulse"
-	KindDeviceError Kind = "homematic.device_error"
+	KindKeypress    Kind = Kind(hmenum.DeviceTriggerEventTypeKeypress)
+	KindImpulse     Kind = Kind(hmenum.DeviceTriggerEventTypeImpulse)
+	KindDeviceError Kind = Kind(hmenum.DeviceTriggerEventTypeDeviceError)
 )
 
 // Event is one dispatched notification.

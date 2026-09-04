@@ -104,11 +104,20 @@ func NewRedactingHandlerWithKeys(inner slog.Handler, patterns []string) *Redacti
 // graphs outside the slog pipeline (e.g. the OTLP span exporter) use this
 // to apply the same redaction rule at their wire boundary.
 func IsSensitiveKey(key string) bool {
+	return matchesAnyPattern(key, defaultSensitiveKeys)
+}
+
+// matchesAnyPattern is the one sensitive-key predicate: an empty key is
+// never sensitive, otherwise the lowercased key must contain one of the
+// patterns (which the constructor already lowercased). Both entry points
+// call it, so the package-level function and a handler built on the
+// defaults cannot drift apart.
+func matchesAnyPattern(key string, patterns []string) bool {
 	if key == "" {
 		return false
 	}
 	lc := strings.ToLower(key)
-	for _, p := range defaultSensitiveKeys {
+	for _, p := range patterns {
 		if strings.Contains(lc, p) {
 			return true
 		}
@@ -157,21 +166,13 @@ func (h *RedactingHandler) WithGroup(name string) slog.Handler {
 	return &RedactingHandler{inner: h.inner.WithGroup(name), patterns: h.patterns}
 }
 
-// IsSensitive reports whether key matches any configured pattern.
-// Exported so that callers building their own slog.Attr graphs can
-// pre-redact before invoking a sibling sink that bypasses this
-// handler.
+// IsSensitive reports whether key matches any pattern this handler was
+// built with. Same predicate as [IsSensitiveKey], over the handler's own
+// list rather than the built-in one. The only caller inside the package is
+// redactAttr; it stays exported for callers that build their own slog.Attr
+// graphs and need this handler's configured list rather than the defaults.
 func (h *RedactingHandler) IsSensitive(key string) bool {
-	if key == "" {
-		return false
-	}
-	lc := strings.ToLower(key)
-	for _, p := range h.patterns {
-		if strings.Contains(lc, p) {
-			return true
-		}
-	}
-	return false
+	return matchesAnyPattern(key, h.patterns)
 }
 
 func (h *RedactingHandler) redactAttr(a slog.Attr) slog.Attr {

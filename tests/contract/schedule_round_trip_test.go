@@ -24,19 +24,12 @@ import (
 // slot, hits Save, and the put_schedule then fails validation on a
 // field neither the user nor the SPA touched.
 //
-// The validators in internal/model/schedule/simple.go::ValidateFor
-// reject:
-//
-//	SWITCH → level_2, ramp_time
-//	LIGHT  → level_2
-//	COVER  → ramp_time, duration
-//	VALVE  → level_2, ramp_time
-//	LOCK   → level_2, ramp_time, duration
-//
-// The simpleScheduleUnsupportedFields table in
-// internal/central/adapter/schedules.go mirrors this catalogue and
-// the strip pass in parseSimpleScheduleWithDomain enforces it.
-// This contract test pins that invariant.
+// Which field each category rejects is stated once, by
+// schedule.UnsupportedFieldsFor (internal/model/schedule/simple.go); the
+// write-side validator and the adapter's strip pass both read it. This
+// comment used to restate the whole catalogue, which made three places to
+// keep in step instead of one — and a restatement in a contract test is
+// the worst of the three, because it reads as the authority.
 func TestSimpleScheduleRoundTripContract(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

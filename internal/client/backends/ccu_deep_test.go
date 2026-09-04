@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 
@@ -164,7 +163,7 @@ func TestCcuBackendGetLinksDecodesArray(t *testing.T) {
 		t.Fatalf("Flags=%d, want 3", ld.Flags)
 	}
 
-	// Verify getLinks is called with flags=0 (full detail).
+	// Verify getLinks is called with the firmware's default flag word (0).
 	method, args, ok := loadArgs(x)
 	if !ok || method != "getLinks" {
 		t.Fatalf("method=%s", method)
@@ -564,114 +563,18 @@ func TestCcuBackendOperationsCompliance(t *testing.T) {
 // DownloadFirmware
 // ---------------------------------------------------------------------------
 
-// TestCcuBackendDownloadFirmware verifies that DownloadFirmware posts the
-// correct form fields to the CCU's maintenance CGI when a base URL and
-// session-ID provider are wired.
-func TestCcuBackendDownloadFirmware(t *testing.T) {
+// TestCcuBackendDownloadFirmwareIgnoresTheHTTPTransport pins that the
+// operation does not depend on SetHTTPTransport. It replaces four tests
+// that asserted the form fields, the scheme check and the HTTP handling of
+// a POST to cp_maintenance.cgi with `action=download_firmware`, an action
+// that CGI does not define. They passed against a test server that answered
+// anything with 200, which is how the defect survived. The wire call itself
+// is covered in download_firmware_test.go.
+func TestCcuBackendDownloadFirmwareIgnoresTheHTTPTransport(t *testing.T) {
 	t.Parallel()
-	const wantSID = "session-xyz"
-	const wantURL = "http://firmware.example.com/update.tar.gz"
-
-	var gotSID, gotAction, gotURL string
-	var gotMethod string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod = r.Method
-		if err := r.ParseForm(); err != nil {
-			t.Errorf("ParseForm: %v", err)
-		}
-		gotSID = r.FormValue("sid")
-		gotAction = r.FormValue("action")
-		gotURL = r.FormValue("url")
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	b := NewCcuBackend(&fakeCaller{}, nil, nil)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return wantSID })
-
-	if err := b.DownloadFirmware(context.Background(), wantURL); err != nil {
-		t.Fatalf("DownloadFirmware: %v", err)
-	}
-	if gotMethod != http.MethodPost {
-		t.Errorf("method=%s, want POST", gotMethod)
-	}
-	if gotSID != wantSID {
-		t.Errorf("sid=%q, want %q", gotSID, wantSID)
-	}
-	if gotAction != "download_firmware" {
-		t.Errorf("action=%q, want download_firmware", gotAction)
-	}
-	if gotURL != wantURL {
-		t.Errorf("url=%q, want %q", gotURL, wantURL)
-	}
-}
-
-// TestCcuBackendDownloadFirmwareRequiresHTTPS verifies that non-http/https
-// schemes are rejected before any network call is made.
-func TestCcuBackendDownloadFirmwareRequiresHTTPS(t *testing.T) {
-	t.Parallel()
-	b := NewCcuBackend(&fakeCaller{}, nil, nil)
-	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
-
-	err := b.DownloadFirmware(context.Background(), "ftp://badscheme.example.com/fw.tar")
-	if err == nil {
-		t.Fatal("expected error for ftp:// scheme, got nil")
-	}
-	if !errors.Is(err, ErrUnsupported) {
-		t.Errorf("error=%v, want to wrap ErrUnsupported", err)
-	}
-}
-
-// TestCcuBackendDownloadFirmwareNoTransport verifies that DownloadFirmware
-// returns ErrUnsupported when SetDownloadFirmwareTransport has not been called.
-func TestCcuBackendDownloadFirmwareNoTransport(t *testing.T) {
-	t.Parallel()
-	b := NewCcuBackend(&fakeCaller{}, nil, nil)
-	err := b.DownloadFirmware(context.Background(), "http://example.com/fw.tar")
-	if !errors.Is(err, ErrUnsupported) {
-		t.Errorf("without transport, want ErrUnsupported, got %v", err)
-	}
-}
-
-// TestCcuBackendDownloadFirmwareRejectsOversizedResponse verifies that a
-// response body larger than maxDownloadResponseSize is rejected with an
-// error rather than being read to completion. Not parallel: it temporarily
-// lowers the package-level limit that other tests rely on at its
-// production default.
-func TestCcuBackendDownloadFirmwareRejectsOversizedResponse(t *testing.T) {
-	original := maxDownloadResponseSize
-	maxDownloadResponseSize = 4
-	defer func() { maxDownloadResponseSize = original }()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("this response body is over the test limit"))
-	}))
-	defer srv.Close()
-
-	b := NewCcuBackend(&fakeCaller{}, nil, nil)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "s" })
-
-	err := b.DownloadFirmware(context.Background(), "https://example.com/fw.tar")
-	if err == nil {
-		t.Fatal("expected error for oversized response body, got nil")
-	}
-}
-
-// TestCcuBackendDownloadFirmwareCCUError verifies that a non-200 HTTP response
-// from the CCU is surfaced as an error.
-func TestCcuBackendDownloadFirmwareCCUError(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	b := NewCcuBackend(&fakeCaller{}, nil, nil)
-	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "s" })
-
-	err := b.DownloadFirmware(context.Background(), "https://example.com/fw.tar")
-	if err == nil {
-		t.Fatal("expected error for HTTP 500, got nil")
+	b := &CcuBackend{}
+	b.SetHTTPTransport("https://ccu.example", http.DefaultClient, func() string { return "sid" })
+	if err := b.DownloadFirmware(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("DownloadFirmware error = %v, want ErrUnsupported without a JSON-RPC caller", err)
 	}
 }

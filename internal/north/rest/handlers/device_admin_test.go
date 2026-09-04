@@ -885,6 +885,26 @@ func TestPatchChannel_InvalidChannelNo_Returns400(t *testing.T) {
 	}
 }
 
+// TestPatchChannel_NegativeChannelNo_Returns400 pins that a negative
+// path ordinal is rejected with the same 400 as a non-numeric one. The
+// channel address downstream is built as addr + ":" + no, so "-1" would
+// otherwise reach the CCU rename as "DEV001:-1".
+func TestPatchChannel_NegativeChannelNo_Returns400(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "-1"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastNewName != "" {
+		t.Fatalf("rename reached the domain with channel %d", admin.lastChannelNo)
+	}
+}
+
 func TestPatchChannel_Unsupported_Returns422(t *testing.T) {
 	t.Parallel()
 	admin := &stubDeviceAdmin{renameChannelErr: backends.ErrUnsupported}

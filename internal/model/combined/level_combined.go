@@ -4,7 +4,6 @@
 package combined
 
 import (
-	"encoding/json"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -29,10 +28,13 @@ type LevelComposite struct {
 	SlatsLevel custom.Position
 }
 
-// LevelCombined combines LEVEL and LEVEL_2 (slats) into one
-// LEVEL_COMBINED write that the CCU accepts as a single atomic
-// command. Reads remain split — the two underlying data points each
-// emit their own event.
+// LevelCombined is the read-side aggregate of a shade's LEVEL and
+// LEVEL_2 (slats): it subscribes to both generic data points and
+// surfaces the pair as one composite on the event bus. It carries no
+// write path. The atomic LEVEL_COMBINED / COMBINED_PARAMETER write is
+// Blind.SetCombined in internal/model/custom/cover, which also owns the
+// command lock, the per-axis inversion, the stop-if-moving guard and
+// the staging of the unconfirmed values.
 //
 // LevelCombined embeds [datapoint.BaseDataPointFields] (V4 fix in
 // PR-32) so the canonical [datapoint.BaseDataPointFields.UniqueID]
@@ -46,11 +48,9 @@ type LevelCombined struct {
 	datapoint.BaseDataPointFields
 
 	Address string
-	Writer  Writer
 
-	LevelParameter         hmenum.Parameter
-	SlatsParameter         hmenum.Parameter
-	CombinedWriteParameter hmenum.Parameter
+	LevelParameter hmenum.Parameter
+	SlatsParameter hmenum.Parameter
 
 	mu         sync.RWMutex
 	level      custom.Position
@@ -69,10 +69,9 @@ type LevelCombined struct {
 // level data point through NewLevelCombinedWithCentral.
 //
 // levelParam / slatsParam are the per-channel reading parameters
-// (LEVEL and LEVEL_2). combinedParam is the write-only paramset entry
-// the CCU exposes for atomic moves (LEVEL_COMBINED).
-func NewLevelCombined(address string, w Writer, levelParam, slatsParam, combinedParam hmenum.Parameter) *LevelCombined {
-	return NewLevelCombinedWithCentral("", address, w, levelParam, slatsParam, combinedParam)
+// (LEVEL and LEVEL_2) the aggregate subscribes to.
+func NewLevelCombined(address string, levelParam, slatsParam hmenum.Parameter) *LevelCombined {
+	return NewLevelCombinedWithCentral("", address, levelParam, slatsParam)
 }
 
 // NewLevelCombinedWithCentral is the multi-CCU-safe constructor. The
@@ -86,16 +85,13 @@ func NewLevelCombined(address string, w Writer, levelParam, slatsParam, combined
 // explicitly call SetForcedUsage with a visible usage.
 func NewLevelCombinedWithCentral(
 	centralName, address string,
-	w Writer,
-	levelParam, slatsParam, combinedParam hmenum.Parameter,
+	levelParam, slatsParam hmenum.Parameter,
 ) *LevelCombined {
 	lc := &LevelCombined{
-		BaseDataPointFields:    datapoint.NewBaseDataPointFields(centralName, address, levelCombinedKeyName),
-		Address:                address,
-		Writer:                 w,
-		LevelParameter:         levelParam,
-		SlatsParameter:         slatsParam,
-		CombinedWriteParameter: combinedParam,
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, address, levelCombinedKeyName),
+		Address:             address,
+		LevelParameter:      levelParam,
+		SlatsParameter:      slatsParam,
 	}
 	lc.SetForcedUsage(hmenum.DataPointUsageNoCreate)
 	return lc
@@ -167,13 +163,13 @@ func (l *LevelCombined) Subscribe(ch *device.Channel) func() {
 // OnAnyUpdate satisfies the adapter.CombinedDataPoint interface. The typed
 // LevelComposite value is JSON-encoded to a string so BridgeCombinedDataPoint
 // can wrap it in a ParamValue and publish it on the event bus.
+//
+// Encoding goes through [EncodeLevelCompositeJSON], the same renderer the
+// combined state topic uses, so one value never reaches two planes spelled
+// two ways.
 func (l *LevelCombined) OnAnyUpdate(fn func(old, next any)) func() {
 	return l.OnUpdate(func(_, next LevelComposite) {
-		data, _ := json.Marshal(map[string]float64{
-			"level": next.Level.Level(),
-			"slats": next.SlatsLevel.Level(),
-		})
-		fn(nil, string(data))
+		fn(nil, EncodeLevelCompositeJSON(next))
 	})
 }
 

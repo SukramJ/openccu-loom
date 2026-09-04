@@ -306,7 +306,7 @@ func buildColorTempLightDP(t *testing.T, addr string, w *dispatchWriter) *light.
 func buildFixedColorLightDP(t *testing.T, addr string, w *dispatchWriter) *light.FixedColorLight {
 	t.Helper()
 	return buildFixedColorLightDPWithColors(t, addr, w,
-		[]string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"})
+		[]string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"})
 }
 
 func buildFixedColorLightDPWithColors(

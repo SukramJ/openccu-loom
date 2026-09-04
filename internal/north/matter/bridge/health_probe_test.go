@@ -34,6 +34,13 @@ func (r *recordingTracker) Record(_ string, s health.Sample) {
 	r.samples = append(r.samples, s)
 }
 
+// RecordUnhealthy records like Record; the fake keeps no status, so the
+// distinction the tracker draws is not observable here.
+func (r *recordingTracker) RecordUnhealthy(name string, s health.Sample) {
+	s.Healthy = false
+	r.Record(name, s)
+}
+
 func (r *recordingTracker) snapshot() []health.Sample {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -80,16 +87,20 @@ func TestStartHealthProbe_UnboundReportsUnhealthy(t *testing.T) {
 	t.Cleanup(stop)
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if len(tracker.snapshot()) >= 2 {
+		if len(tracker.snapshot()) >= 1 {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	got := tracker.snapshot()
-	if len(got) < 2 {
-		t.Fatalf("expected ≥2 samples, got %d", len(got))
+	// One report per probe: an unbound listener is a condition the probe
+	// states, so the tracker takes it at once. It used to be recorded twice,
+	// the second time with an invented "(escalated)" note, purely to clear the
+	// flap-damping that Record applies to sampled observations.
+	if len(got) < 1 {
+		t.Fatalf("expected at least one sample, got %d", len(got))
 	}
-	for i, s := range got[:2] {
+	for i, s := range got {
 		if s.Healthy {
 			t.Fatalf("sample %d expected Healthy=false, got %+v", i, s)
 		}

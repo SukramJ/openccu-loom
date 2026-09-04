@@ -182,7 +182,7 @@ func addFrostProtectionChannel(t *testing.T, dev *device.Device, number int, nam
 	if name != "" {
 		ch.SetName(name)
 	}
-	dp := resolveDataPoint(generic.Spec{
+	dp := resolveDataPointWithUnIgnore(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
 			ChannelAddress: addr,
@@ -193,7 +193,7 @@ func addFrostProtectionChannel(t *testing.T, dev *device.Device, number int, nam
 			Type:       hmenum.ParameterTypeBool,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
 		},
-	})
+	}, false)
 	if dp == nil {
 		t.Fatal("the resolver produced no data point for a read-only BOOL — the fixture no longer matches the wire")
 	}

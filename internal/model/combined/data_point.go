@@ -66,8 +66,8 @@ func (h *HSColor) IsStatusValid() bool {
 // Multiplier returns 1.0.
 func (h *HSColor) Multiplier() float64 { return 1.0 }
 
-// ParamsetKey returns "COMBINED".
-func (h *HSColor) ParamsetKey() string { return "COMBINED" }
+// ParamsetKey returns the synthetic COMBINED compartment key.
+func (h *HSColor) ParamsetKey() string { return string(hmenum.ParamsetKeyCombined) }
 
 // TranslationKey returns "hs_color".
 func (h *HSColor) TranslationKey() string { return "hs_color" }
@@ -128,9 +128,20 @@ func (t *Timer) Default() any {
 	return t.defaultSeconds
 }
 
-// Max returns the upper-bound seconds threshold.
+// Max returns the largest duration, in seconds, this timer can put on the
+// wire as a finite value: [timerValueMaxPerUnit] counts at the minutes unit.
+//
+// It is not 16343 s. 16343 is DURATION_VALUE's per-unit INTEGER maximum, and
+// publishing it as a seconds bound capped the data point at 4 h 32 min. Nor is
+// it the integer maximum reinterpreted at the hours unit: the CCU coerces
+// DURATION_UNIT=H with a value of 31 or more to its infinite marker
+// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#correctInfiniteDuration,
+// which runs on every VALUES write), so the hours unit carries nothing longer
+// than 30 h and every duration this encoder would promote to hours is past
+// that coercion. The minutes unit is therefore where the largest finite
+// duration lives.
 func (t *Timer) Max() (float64, bool) {
-	return float64(timerUpperBoundSeconds), true
+	return float64(timerValueMaxPerUnit) * 60, true
 }
 
 // Min returns (0, false) — no meaningful minimum for a timer.
@@ -171,8 +182,8 @@ func (t *Timer) IsStatusValid() bool {
 // Multiplier returns 1.0.
 func (t *Timer) Multiplier() float64 { return 1.0 }
 
-// ParamsetKey returns "COMBINED".
-func (t *Timer) ParamsetKey() string { return "COMBINED" }
+// ParamsetKey returns the synthetic COMBINED compartment key.
+func (t *Timer) ParamsetKey() string { return string(hmenum.ParamsetKeyCombined) }
 
 // TranslationKey returns "timer".
 func (t *Timer) TranslationKey() string { return "timer" }
@@ -209,8 +220,8 @@ func (t *Timer) IsWritable() bool { return true }
 
 // --- LevelCombined P2 surface ---
 
-// ParamsetKey returns "COMBINED".
-func (l *LevelCombined) ParamsetKey() string { return "COMBINED" }
+// ParamsetKey returns the synthetic COMBINED compartment key.
+func (l *LevelCombined) ParamsetKey() string { return string(hmenum.ParamsetKeyCombined) }
 
 // TranslationKey returns "level_combined".
 func (l *LevelCombined) TranslationKey() string { return "level_combined" }

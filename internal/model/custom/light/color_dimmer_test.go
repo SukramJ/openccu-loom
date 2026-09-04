@@ -202,8 +202,8 @@ func TestAdvertisedEffectsAreTheActuatorsOwnVocabulary(t *testing.T) {
 
 	el, _ := newRGBWWMEffectLight(t)
 	want := []string{
-		"Off", "Slow color change", "Medium color change", "Fast color change",
-		"Campemit", "Waterfall", "TV simulation",
+		"Off", "Slow cycle", "Normal cycle", "Fast cycle",
+		"Bonfire", "Waterfall", "TV simulation",
 	}
 	if got := el.Effects(); !slices.Equal(got, want) {
 		t.Errorf("Effects() = %v, want %v", got, want)
@@ -275,7 +275,12 @@ func TestObservedColorIsReportedBack(t *testing.T) {
 		wantSat float64
 	}{
 		{0, 0, 100},
+		// COLOR=100 reads as 180 under either span, so it cannot tell
+		// the two apart; the three cases below can. The CCU divides by
+		// the 199-wide hue circle, never by the white point.
 		{100, 180, 100},
+		{150, 271, 100},
+		{colorIndexSpan, 360, 100},
 		{colorIndexWhite, 0, 0},
 	} {
 		el.colorIndex.OnEvent(tc.raw)

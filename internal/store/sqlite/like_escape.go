@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 SukramJ.
+
+package sqlite
+
+import "strings"
+
+// escapeLikePrefix escapes LIKE wildcards in a caller-supplied prefix so an
+// address containing `%` or `_` matches literally. Every statement in this
+// package that binds a prefix into a LIKE declares `ESCAPE '\'` and must bind
+// through this helper — the escape clause alone does nothing, it only names
+// the escape character the pattern is expected to use.
+//
+// The rule is not "device addresses cannot contain wildcards". Nothing
+// validates the address before it reaches these statements: the cache-clear
+// scope checks only that the field is non-empty
+// (internal/central/cachereset Scope.Validate) and the energy handler passes
+// the `device` query parameter through unchecked, so the pattern is built
+// from untrusted text on both the destructive and the read path. Escaping
+// here is what makes a prefix delete or a device filter mean one device.
+func escapeLikePrefix(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+// channelLikePrefix is the LIKE prefix that matches every channel row of
+// deviceAddress. Each statement in this package binds deviceAddress verbatim
+// into its own `channel_address = ?` arm and this prefix into the LIKE arm,
+// so the two together mean "the device row and all its channels".
+//
+// The trailing colon is trimmed first because a caller-supplied address is
+// unvalidated (internal/central/cachereset Scope.Validate checks only that
+// the field is non-empty): without the trim, "ABC123:" would build the
+// prefix "ABC123::", which matches nothing at all. Three of the call sites
+// trimmed and six did not before this was single-sourced.
+func channelLikePrefix(deviceAddress string) string {
+	return escapeLikePrefix(strings.TrimRight(deviceAddress, ":")) + ":"
+}

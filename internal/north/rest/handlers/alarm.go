@@ -77,11 +77,6 @@ const (
 // Countdown kinds echoed on GET /alarm/state. The values are wire-stable
 // and match the engine's exit/entry timer kinds; the trigger-time timer
 // is never surfaced as a countdown.
-const (
-	alarmCountdownExit  = "exit_delay"
-	alarmCountdownEntry = "entry_delay"
-)
-
 // alarmStateResponse is the envelope of GET /alarm/state.
 type alarmStateResponse struct {
 	Zones []hmapi.AlarmZoneStatus `json:"zones"`
@@ -491,7 +486,10 @@ func alarmZoneStatus(p AlarmPanel, snap engine.ZoneSnapshot) hmapi.AlarmZoneStat
 // missing it degrades to the remaining value rather than a misleading zero.
 func alarmCountdown(snap engine.ZoneSnapshot) *hmapi.AlarmCountdown {
 	kind := snap.TimerKind
-	if kind != alarmCountdownExit && kind != alarmCountdownEntry {
+	// The engine owns which kinds are a user-facing countdown; this handler
+	// used to restate the two tokens, and the WS and MCP planes restated
+	// neither, so the same DTO carried kinds its contract does not admit.
+	if !engine.IsCountdownTimerKind(kind) {
 		return nil
 	}
 	remaining := durationSeconds(snap.TimerRemaining)

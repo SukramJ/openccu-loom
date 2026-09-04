@@ -241,7 +241,7 @@ func (t *testBackendOps) GetSuppressedServiceMessages(_ context.Context, _, _ st
 }
 
 func (t *testBackendOps) HasProgramIDs(_ context.Context, _ string) (bool, error) { return false, nil }
-func (t *testBackendOps) DownloadFirmware(_ context.Context, _ string) error      { return nil }
+func (t *testBackendOps) DownloadFirmware(_ context.Context) error                { return nil }
 func (t *testBackendOps) GetMetadata(_ context.Context, _, _ string) (any, error) { return nil, nil }
 func (t *testBackendOps) SetMetadata(_ context.Context, _, _ string, _ any) error { return nil }
 

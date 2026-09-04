@@ -31,8 +31,9 @@ func TestRegisterSystemMethodsListMethods(t *testing.T) {
 	}
 }
 
-// TestRegisterSystemMethodsMethodHelp verifies that system.methodHelp
-// returns an empty string (we intentionally don't populate help text).
+// TestRegisterSystemMethodsMethodHelp pins the shape we answer, not a CCU
+// requirement: the firmware never calls methodHelp on a registered callback,
+// so the empty string is a completeness answer and nothing reads it.
 func TestRegisterSystemMethodsMethodHelp(t *testing.T) {
 	t.Parallel()
 
@@ -51,8 +52,9 @@ func TestRegisterSystemMethodsMethodHelp(t *testing.T) {
 	}
 }
 
-// TestRegisterSystemMethodsMethodSignature verifies that
-// system.methodSignature returns ["undef"].
+// TestRegisterSystemMethodsMethodSignature pins the shape we answer, not a
+// CCU requirement: methodSignature occurs nowhere in the firmware sources and
+// libXmlRpc does not implement it, so ["undef"] is a completeness answer.
 func TestRegisterSystemMethodsMethodSignature(t *testing.T) {
 	t.Parallel()
 

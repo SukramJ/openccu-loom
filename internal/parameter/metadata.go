@@ -263,6 +263,37 @@ var sensorMetadataByDeviceAndParam = []sensorDeviceParamRule{
 // Sensor: unit → Metadata fallback
 // ---------------------------------------------------------------------------
 
+// sensorMetadataByUnit is keyed on CANONICALISED unit spellings — the output
+// of internal/model/generic.CleanupUnit, not the `UNIT` a paramset descriptor
+// declares. The lookup below is exact-match with no folding, so a caller that
+// passes the raw descriptor unit misses every entry whose firmware spelling
+// differs, and misses it silently: the tier returns a zero Metadata{}, which
+// is indistinguishable from "no rule for this unit".
+//
+// The gap is not hypothetical, and the firmware states which side it is on.
+// Counting `unit="…"` attributes in code over all 148 device-type XMLs under
+// ../OpenCCU-Base/src/devicetypes/ (read as latin-1, since several are not
+// valid UTF-8 and a byte-oriented grep skips them): the raw spelling `100%`
+// is declared 542 times in 38 files, against 36 declarations of the canonical
+// `%` in 18 files. The HmIP side has the same shape — counting `.Unit=` lines
+// in ../OpenCCU-Base/opt/HmIP/legacy-parameter-definition.config gives `100%`
+// 27 times and `% rF` 8, against `%` 12. CleanupUnit maps all three to `%`;
+// this table only ever sees the `%`.
+//
+// Both caller shapes exist today. internal/model/generic (DataPoint.Quantity
+// and DataPoint.ValueBehavior) cleans first and hits the table. The MQTT/HA
+// discovery builder does not: internal/north/mqtt/discovery_metadata.go
+// (resolveSensorDeviceClass / resolveSensorStateClass) is fed Event.descUnit(),
+// the unnormalised wire value, while the same builder cleans the unit it
+// stamps into `unit_of_measurement`. A parameter that falls through to this
+// tier there is published with a `%` unit and no `state_class`, so Home
+// Assistant keeps no long-term statistics for it.
+//
+// The fix does not belong in this file: internal/model/generic imports this
+// package, so calling CleanupUnit from here would close an import cycle, and
+// re-declaring its replacement table here would be a second copy of the rule
+// it exists to hold. Either the raw call sites clean before they call, or the
+// canonicaliser moves below both packages.
 var sensorMetadataByUnit = map[string]Metadata{
 	"%":    {ValueBehavior: hmenum.ValueBehaviorInstantaneous},
 	"bar":  {Quantity: hmenum.QuantityPressure, ValueBehavior: hmenum.ValueBehaviorInstantaneous},
@@ -466,8 +497,13 @@ func MetadataByDeviceAndParam(deviceModel, parameter string) Metadata {
 	return Metadata{}
 }
 
-// MetadataByUnit returns the Metadata for the given unit string (exact
-// match). Returns zero Metadata{} if no entry is found.
+// MetadataByUnit returns the Metadata for the given unit string. The match is
+// exact, and unit must already be CANONICALISED — the output of
+// internal/model/generic.CleanupUnit, not the `UNIT` a paramset descriptor
+// declares. Passing a raw firmware spelling such as `100%` or `% rF` returns
+// zero Metadata{}, which the caller cannot tell apart from "no rule for this
+// unit". See [sensorMetadataByUnit] for what that costs on the discovery
+// plane and why the normalisation cannot live in this package.
 func MetadataByUnit(unit string) Metadata {
 	return sensorMetadataByUnit[unit]
 }
@@ -477,7 +513,10 @@ func MetadataByUnit(unit string) Metadata {
 //  2. MetadataByParam (parameter name)
 //  3. MetadataByUnit (unit fallback)
 //
-// Returns zero Metadata{} if nothing matches.
+// Returns zero Metadata{} if nothing matches. Tier 3 inherits
+// [MetadataByUnit]'s precondition: unit has to be the canonicalised spelling,
+// so a caller holding a raw descriptor unit must clean it before calling,
+// otherwise the third tier silently never fires.
 func MetadataFor(deviceModel, parameter, unit string) Metadata {
 	if md := MetadataByDeviceAndParam(deviceModel, parameter); md != (Metadata{}) {
 		return md

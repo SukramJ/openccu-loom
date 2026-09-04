@@ -185,12 +185,6 @@ func (s *AuditStore) Query(ctx context.Context, q audit.Query) ([]audit.Entry, e
 	return scanAuditRows(rows)
 }
 
-// escapeLikePrefix escapes LIKE wildcards in a user-supplied prefix so an
-// address containing `%` or `_` matches literally (paired with ESCAPE '\').
-func escapeLikePrefix(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
-}
-
 // scanAuditRows decodes the standard audit column projection into entries.
 func scanAuditRows(rows *sql.Rows) ([]audit.Entry, error) {
 	var out []audit.Entry

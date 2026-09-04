@@ -48,10 +48,12 @@ var (
 // electricalParameterSlot names the group slot a CCU parameter feeds, or
 // returns false when the parameter is not an electrical measurement.
 //
-// Kept in lock-step with the Power/Energy arms of
-// matterMeasurementForAnalogParameter: a parameter classified electrical there
-// but missing here would be collected into the group and then silently dropped.
-// TestElectricalGroupCoversEveryElectricalParameter pins the two together.
+// Kept in lock-step with the MatterMeasurementPower / MatterMeasurementEnergy
+// arms of [matterMeasurementForParameter]: a parameter classified electrical
+// there but missing here is collected into the group by the assembler and then
+// silently dropped by [NewElectricalGroup].
+// TestW2GenElectricalGroupCoversEveryElectricalParameter pins the two
+// together, reading both member sets out of the source.
 func electricalParameterSlot(p hmenum.Parameter) (slot string, ok bool) {
 	switch p {
 	case hmenum.ParameterPower:

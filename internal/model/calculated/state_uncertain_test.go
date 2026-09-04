@@ -273,7 +273,7 @@ func TestAllSensorsImplementStateUncertain(t *testing.T) {
 		NewEnthalpySensor(),
 		NewApparentTemperatureSensor(),
 		NewOperatingVoltageLevelSensor(),
-		NewWindowOpenSensor(),
+		newWindowOpenSensorForTest(t),
 	}
 	for _, s := range sensors {
 		// Before any value → no sources registered → uncertain.

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -167,11 +168,11 @@ func TestDevicePlaneTopicsRoundTrip(t *testing.T) {
 		Body:      map[string]any{"name": "Farbe", "value_template": "{{ value_json.hue }}"},
 	}))
 	collectDeviceDeclaredItem(t, declared, d.BuildCombinedDiscovery(central, CombinedEvent{
-		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "door_mode",
+		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: cover.GarageDoorModeKind,
 		Component: "select",
 		Body: map[string]any{
 			"name":          "Tormodus",
-			"command_topic": topics.CombinedCommand(central, iface, addr, 3, "door_mode"),
+			"command_topic": topics.CombinedCommand(central, iface, addr, 3, cover.GarageDoorModeKind),
 			"options":       []string{"CLOSED", "VENTILATION_POSITION", "OPEN"},
 		},
 	}))
@@ -266,7 +267,7 @@ func runDevicePlane(t *testing.T, base, central, iface, addr string) *observedPl
 	if err := bridge.PublishCombinedState(ctx, central, iface, addr, 3, "hs_color", `{"hue":120}`); err != nil {
 		t.Fatalf("publish combined sensor state: %v", err)
 	}
-	if err := bridge.PublishCombinedState(ctx, central, iface, addr, 3, "door_mode", "VENTILATION_POSITION"); err != nil {
+	if err := bridge.PublishCombinedState(ctx, central, iface, addr, 3, cover.GarageDoorModeKind, "VENTILATION_POSITION"); err != nil {
 		t.Fatalf("publish combined door-mode state: %v", err)
 	}
 

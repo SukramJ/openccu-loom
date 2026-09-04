@@ -394,11 +394,9 @@ func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, 
 // - For "receiver" role, return channels that can **emit** a link
 // (sender-type channels).
 //
-// The full role classification uses the `link_peer_source_categories` /
-// `link_peer_target_categories` sets that are derived from the
-// receiver-profile catalogue. We shortcut with a simpler check for
-// 0.1.0: presence of a LINK paramset peer list on the channel. Refine
-// later when we port the category data.
+// Role classification is a token intersection over the channel's raw CCU
+// LINK_SOURCE_ROLES / LINK_TARGET_ROLES — see [channelMatchesRole], which
+// cites the CCU WebUI's own check_role_match.
 func (d *LinksDomain) LinkableChannels(
 	_ context.Context,
 	interfaceID, sourceChannelAddress, role, locale string,

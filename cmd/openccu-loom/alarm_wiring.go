@@ -86,9 +86,20 @@ func alarmCentralHook(svc *alarm.Service) perCentralHook {
 
 // masterPanelName resolves the aggregate panel's localized display
 // name once at wiring time so every surface renders the same string.
+//
+// A missing catalogue row is treated as no name at all, because
+// [i18n.Catalogs.T] answers a miss with the key itself. Returning that
+// would publish the raw key "discovery.alarm_system" on REST and WS while
+// MQTT published "Alarm system" — the publisher already tests for the
+// echo (AlarmMQTTPublisher.localized), and this is the same test on the
+// other side. An empty result falls through to the core's own fallback.
 func masterPanelName(catalogs *i18n.Catalogs, locale string) string {
 	if catalogs == nil {
 		return ""
 	}
-	return catalogs.T(locale, "discovery.alarm_system")
+	name := catalogs.T(locale, "discovery.alarm_system")
+	if name == "discovery.alarm_system" {
+		return ""
+	}
+	return name
 }

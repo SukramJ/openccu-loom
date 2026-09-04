@@ -141,6 +141,21 @@ func BuildCustomDataPointName(channel *Channel, postfix, postfixTranslation stri
 	}
 }
 
+// CustomDPDisplayName is the entity name a north-bound adapter should
+// publish for this channel's custom data point: the model's own
+// [BuildCustomDataPointName] with no parameter postfix, composed and
+// stripped of the device prefix the adapter re-adds itself.
+//
+// It exists so an adapter asks rather than re-derives. The MQTT
+// discovery builder carried its own copy of this rule and tested one
+// condition fewer: it emitted the `ch<N>` marker for every channel of a
+// multi-primary device, including one the operator had named on the CCU,
+// while REST and the SPA showed that name. The operator's own label is
+// the whole point of naming a channel.
+func (c *Channel) CustomDPDisplayName() string {
+	return BuildCustomDataPointName(c, "", "").Name()
+}
+
 // ParameterTranslator resolves a locale-aware parameter label. The
 // (label, found) result distinguishes "no entry" from an explicit-empty
 // translation — the "primary parameter" marker in the embedded

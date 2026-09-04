@@ -246,7 +246,7 @@ func (*paramsetFakeOps) GetSuppressedServiceMessages(context.Context, string, st
 	return nil, nil
 }
 func (*paramsetFakeOps) HasProgramIDs(context.Context, string) (bool, error) { return false, nil }
-func (*paramsetFakeOps) DownloadFirmware(context.Context, string) error      { return nil }
+func (*paramsetFakeOps) DownloadFirmware(context.Context) error              { return nil }
 
 var _ backends.Operations = (*paramsetFakeOps)(nil)
 

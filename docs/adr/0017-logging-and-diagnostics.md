@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-05-22
 - **Related**:
-  `pkg/hmlog/`, `internal/reqctx/`, `internal/diagnostics/`,
+  `pkg/hmlog/`, `pkg/hmreqctx/`, `internal/diagnostics/`,
   `internal/north/rest/handlers/diagnostics*.go`,
   `assets/ui/src/routes/Diagnostics.svelte`,
   `SPECIFICATION.md` §Observability.
@@ -211,3 +211,22 @@ public surface for callers that want the boolean variant.
 - `assets/ui/src/routes/Diagnostics.svelte` (Health-score, logging
   tab, capture tab, dump button)
 - W3C Trace Context level 1: https://www.w3.org/TR/trace-context/
+
+## Amendment (2026-09-03) — the request-context package moved to `pkg/`
+
+`internal/reqctx` is `pkg/hmreqctx`. Nothing about the decision changed;
+the package's own name stayed `reqctx` in prose and became `hmreqctx` in
+code, following the `pkg/hm*` convention every sibling there follows.
+
+The move was forced by this ADR's own layering. `pkg/hmlog` installs the
+request-context handler and reads the span in its operation logger, so it
+imported `internal/reqctx` — and Go refuses an `internal/` path to an
+importer outside the module. An external program that embedded
+openccu-loom as a library and imported `pkg/hmlog` therefore could not
+compile, while `go build ./...` stayed green, because the internal rule
+never applies to importers inside the module and every importer here is
+inside it.
+
+`TestPkgDoesNotImportInternal` (tests/contract) is what notices now. It
+carries no exception list on purpose: one entry for `hmlog` would have
+made it blind to the single case it exists for.

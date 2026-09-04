@@ -1,9 +1,9 @@
 !# openccu-loom — get_serial
-!# Output: {"serial":"<10-char serial or 'unknown'>"}
+!# Output: {"serial":"<board serial verbatim, or 'unknown'>"}
 !#
-!# Tries three filesystem locations in order; uses whichever yields a
-!# non-empty value. Output is compressed to the trailing 10 chars so
-!# callers treat it as an opaque identifier.
+!# Tries three filesystem locations in order and emits whichever yields a
+!# non-empty value, untouched. The reduction to the daemon's canonical
+!# form happens in the Go caller (rega.Runner.GetSerial), not here.
 
 string sSerial = "";
 string sErr = "";

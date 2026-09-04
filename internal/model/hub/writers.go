@@ -40,8 +40,25 @@ type SysvarWriter interface {
 }
 
 // InstallModeWriter is the contract for toggling CCU install mode.
-// duration is clamped by the CCU (typically 60 s min, 3600 s max); the
-// writer does not clamp itself.
+//
+// Neither the writer nor the model clamps duration, because there is no
+// single pair of bounds to clamp to — the ceiling belongs to the CCU and
+// differs per transport:
+//
+//   - BidCos-RF: rfd truncates anything above INSTALL_MODE_MAX_TIME = 600 s
+//     (../OpenCCU-Base/src/rfd/RFManager.h:562, applied in both
+//     RFManager::SetInstallMode overloads at RFManager.cpp:582-583 and
+//     :601-602). There is no lower bound; a duration of 0 does not become a
+//     default, it takes the else branch and turns install mode OFF.
+//   - HmIP-RF: HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.
+//     AccessPointUtil#setInclusionMode uses the value verbatim as the
+//     inclusion timer — no bound anywhere on that path.
+//   - BidCos-Wired: hs485d implements no setInstallMode at all.
+//   - CUxD, VirtualDevices, HmIP-Wired: unverified; no source read.
+//
+// So a request of 3600 s really opens a one-hour window on HmIP-RF and is
+// silently ten minutes on BidCos-RF. A surface that reports the requested
+// duration back to the operator is reporting BidCos-RF wrong above 600 s.
 type InstallModeWriter interface {
 	SetInstallMode(ctx context.Context, interfaceID string, enabled bool, duration time.Duration) error
 }

@@ -3,7 +3,12 @@
 
 package hmenum
 
-// Default port constants. Values mirror SPECIFICATION §7.2.
+// Default port constants.
+//
+// The callback ports are also named in SPECIFICATION.md §5 (the
+// south-bound transport table, `:8120` and `:8129`); the CCU-side ports
+// below are not stated there at all. The citation this comment used to
+// carry pointed at §7.2, which is the risk register.
 const (
 	// DefaultJSONRPCPort is the HTTP port for CCU JSON-RPC (/api/homematic.cgi).
 	DefaultJSONRPCPort = 80

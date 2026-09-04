@@ -144,9 +144,9 @@ func FuzzReadResponse(f *testing.F) {
 	f.Add([]byte{'B', 'i', 'n', 0x01, 0xFF, 0xFF, 0xFF, 0xFF})       // declared size over limit
 	f.Add([]byte{'B', 'i', 'n', 0x01, 0x00, 0x00, 0x00, 0x04, 0xDE}) // declared 4 bytes, only 1 present
 
-	// Deeply-nested arrays. Past maxDecodeDepth this must error, not
+	// Deeply-nested arrays. Past xmlrpc.MaxDecodeDepth this must error, not
 	// recurse into a stack-overflow crash that kills the worker.
-	f.Add(nestedArrayResponse(maxDecodeDepth + 50))
+	f.Add(nestedArrayResponse(xmlrpc.MaxDecodeDepth + 50))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		defer func() {
@@ -184,7 +184,7 @@ func nestedArrayResponse(levels int) []byte {
 // recurse until the goroutine stack is exhausted (a non-recoverable fatal
 // error that takes the whole process down).
 func TestReadResponseRejectsDeepNesting(t *testing.T) {
-	frame := nestedArrayResponse(maxDecodeDepth + 50)
+	frame := nestedArrayResponse(xmlrpc.MaxDecodeDepth + 50)
 	_, err := ReadResponse(bytes.NewReader(frame))
 	if err == nil {
 		t.Fatal("expected error for over-deep nesting, got nil")

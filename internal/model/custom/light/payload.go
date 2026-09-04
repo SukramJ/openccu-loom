@@ -95,7 +95,12 @@ func (l *Light) State() payload.StatePayload {
 		state.State = "OFF"
 	}
 	if b, ok := l.Brightness(); ok {
-		v := int(b.Level()*255 + 0.5)
+		// The 0–255 conversion belongs to the value object — see
+		// [custom.Brightness.Byte]. A second rounding rule here would
+		// publish a byte no level maps to, and the echo of that byte is
+		// compared against the commanded byte in [Light.IsStateChange],
+		// so every disagreeing level would re-arm a redundant CCU write.
+		v := int(b.Byte())
 		state.Brightness = &v
 	}
 	return state

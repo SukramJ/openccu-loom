@@ -40,6 +40,15 @@ const (
 // from the south-bound stack. The transport (XML-RPC for radio/wired, BIN-RPC
 // for CUxD) is already bound to the InterfaceClient, so the export stays
 // transport-agnostic.
+//
+// The raw CCU method names ("getDeviceDescription",
+// "getParamsetDescription") therefore appear in this model-side package
+// rather than behind a typed client accessor. That is not an oversight to be
+// cleaned up: every typed accessor for these two calls decodes into a
+// map[string]any (backends/ccu_extended.go GetDeviceDescription,
+// backends/ccu.go GetParamsetDescription), and a Go map has no order, so
+// routing the export through them would destroy the byte-exact member order
+// the archive is guarded on.
 type OrderedRPC interface {
 	CallOrdered(ctx context.Context, method string, params []any, priority hmenum.CommandPriority) (any, error)
 }

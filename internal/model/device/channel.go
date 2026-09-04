@@ -232,6 +232,34 @@ type Channel struct {
 // Device returns the parent device.
 func (c *Channel) Device() *Device { return c.device }
 
+// Sibling returns the channel numbered no on the same device.
+//
+// The receiver wins when its own Number matches, which is what makes
+// this usable from a profile pass that resolves a field's absolute
+// channel number without first knowing whether that number is the
+// channel it is already standing on. A nil receiver, or one that was
+// never attached to a device, yields nil rather than panicking: profile
+// materialisation runs over channels the schema names, not only over
+// channels the device turned out to carry.
+func (c *Channel) Sibling(no int) *Channel {
+	if c == nil {
+		return nil
+	}
+	if c.Number == no {
+		return c
+	}
+	d := c.device
+	if d == nil {
+		return nil
+	}
+	for _, s := range d.Channels() {
+		if s.Number == no {
+			return s
+		}
+	}
+	return nil
+}
+
 // Remove tears down the channel's live resources in the same order as the
 // Python Channel.remove() method (model/device.py):
 //
@@ -541,6 +569,29 @@ func (c *Channel) ParameterFloatRange(name string) (lo, hi float64, ok bool) {
 	return loV, hiV, true
 }
 
+// MasterParameterIntRange returns the descriptor's MIN / MAX bounds for the
+// named MASTER-paramset parameter, parsed as int. The third return value is
+// true when both bounds were present and parseable.
+//
+// Used for the schedule fields whose accepted range the CCU looks up per
+// channel rather than holding as a constant — ASTRO_OFFSET above all.
+func (c *Channel) MasterParameterIntRange(name string) (lo, hi int, ok bool) {
+	if c == nil {
+		return 0, 0, false
+	}
+	dp := c.MasterParameter(hmenum.Parameter(name))
+	if dp == nil {
+		return 0, 0, false
+	}
+	desc := dp.ParameterData()
+	loV, loOK := parseRawFloat(desc.Min)
+	hiV, hiOK := parseRawFloat(desc.Max)
+	if !loOK || !hiOK {
+		return 0, 0, false
+	}
+	return int(loV), int(hiV), true
+}
+
 // dataPointMultiplierReader is an internal adapter the Multiplier
 // helper uses to fish a per-DP scaling factor out of a DataPoint
 // without forcing every consumer to re-import generic. Every
@@ -806,6 +857,16 @@ func (c *Channel) IgnoreMultipleChannelsForName() bool {
 //
 // Returns false when the channel has no parent device, no
 // custom-DP, or its custom-DP does not expose HAComponent().
+//
+// Two planes read it, not one: the MQTT discovery name builder, and
+// [BuildCustomDataPointName] (namedata.go), whose production caller is
+// the REST custom-data-points handler. A change here moves entity names
+// on both.
+//
+// The `target == ""` branch below is unreachable today — every profile
+// registered in internal/model/custom returns a non-empty component —
+// and a contract guard keeps it that way. A profile that returned ""
+// would silently collect a ch<N> suffix rather than be reported.
 func (c *Channel) HasSinglePrimaryCustomDP() bool {
 	if c == nil || c.device == nil {
 		return false
@@ -963,11 +1024,13 @@ func (c *Channel) GroupMaster() *Channel {
 	if c.device == nil {
 		return nil
 	}
-	deviceAddr := c.Address
-	if i := indexOfColon(deviceAddr); i >= 0 {
-		deviceAddr = deviceAddr[:i]
-	}
-	masterAddr := deviceAddr + ":" + itoa(groupNo)
+	// The device/channel split lives in hmtypes, which owns the address
+	// grammar. The ":" + number half stays spelled out here rather than
+	// going through hmtypes.ChannelAddress: that helper returns the bare
+	// device address for a negative channel number, and AssignGroupNumber
+	// rejects only 0, so a negative group number would resolve to the
+	// device-root pseudo-channel instead of failing the lookup.
+	masterAddr := hmtypes.DeviceAddress(c.Address) + ":" + itoa(groupNo)
 	return c.device.Channel(masterAddr)
 }
 
@@ -1029,17 +1092,6 @@ func (c *Channel) NotifyLinkPeerChanged() {
 			h()
 		}
 	}
-}
-
-// indexOfColon is a tiny inlined `strings.Index(s, ":")` so we don't
-// pull strings into this file.
-func indexOfColon(s string) int {
-	for i := range len(s) {
-		if s[i] == ':' {
-			return i
-		}
-	}
-	return -1
 }
 
 // itoa is a tiny inlined `strconv.Itoa` for non-negative ints; the
@@ -1335,25 +1387,6 @@ func (c *Channel) GetGenericDataPointByStatePath(path string) ParameterDataPoint
 	return nil
 }
 
-// UniqueID returns a stable identifier for this channel in the form
-// "<device_address>_<channel_number>".
-//
-// return generate_channel_unique_id(self.address, self.no)
-//
-// Used by north-bound adapters (MQTT Discovery, REST) that need a per-channel
-// identity token separate from the raw address string.
-func (c *Channel) UniqueID() string {
-	if c == nil {
-		return ""
-	}
-	// Extract device address (everything before the last ":N" suffix).
-	addr := c.Address
-	if i := indexOfColon(addr); i >= 0 {
-		addr = addr[:i]
-	}
-	return addr + "_" + itoa(c.Number)
-}
-
 // ParamsetParameter looks up a data point in the given paramset.
 func (c *Channel) ParamsetParameter(key hmenum.ParamsetKey, p hmenum.Parameter) ParameterDataPoint {
 	switch key { //nolint:exhaustive // only VALUES + MASTER are stored on channels today
@@ -1363,16 +1396,6 @@ func (c *Channel) ParamsetParameter(key hmenum.ParamsetKey, p hmenum.Parameter) 
 		return c.MasterParameter(p)
 	}
 	return nil
-}
-
-// ─── FullName ─────────────────────────────────────────────────────────
-
-// FullName returns the device-prefixed full name for this channel. Equivalent
-// to the DataPointFullName with an empty parameter.
-//
-// full_name: Final = DelegatedProperty[str](path="_name_data.full_name")
-func (c *Channel) FullName() string {
-	return c.DataPointFullName("")
 }
 
 // ─── NameData ─────────────────────────────────────────────────────────

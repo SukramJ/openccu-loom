@@ -774,11 +774,22 @@ def _gen_fixed_color_light_set_color() -> None:
 
 
 def _gen_fixed_color_light_set_color_behaviour() -> None:
-    """FixedColorLight SetColorBehaviour: aiohomematic sends COLOR_BEHAVIOUR as integer. Equivalent to Loom."""
+    """FixedColorLight SetColorBehaviour: both stacks send the label, not an index.
+
+    COLOR_BEHAVIOUR is an ENUM whose MIN is a string on every device that carries it
+    (HmIP-BSL: MIN 'OFF', VALUE_LIST OFF, ON, BLINKING_*, FLASH_*, BILLOW_*, OLD_VALUE,
+    DO_NOT_CARE), and both stacks key their wire form on that: aiohomematic via
+    DpSelect's string branch for HmIP enums, openccu-loom via Select.EnumWireValue.
+
+    This docstring used to claim aiohomematic sends an integer and that the two were
+    equivalent. Neither half held: the asserted indices 0/2/3 belong to no device's list,
+    and the Go fixture beside the comparison declared a six-entry list invented so that
+    those indices would fall out.
+    """
     cases = [
-        ("DO_NOT_CARE", 0),
-        ("OLD_VALUE", 2),
-        ("ON", 3),
+        ("DO_NOT_CARE", "DO_NOT_CARE"),
+        ("OLD_VALUE", "OLD_VALUE"),
+        ("ON", "ON"),
     ]
     inputs = []
     for label, value in cases:

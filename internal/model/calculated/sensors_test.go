@@ -110,7 +110,7 @@ func TestOperatingVoltageLevelSensor(t *testing.T) {
 }
 
 func TestDerivedBinarySensor(t *testing.T) {
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 	s.OnLabel("CLOSED")
 	v, ok := s.Value()
 	if !ok || v {
@@ -129,7 +129,7 @@ func TestDerivedBinarySensor(t *testing.T) {
 }
 
 func TestDerivedBinarySensorUnknownLabelHoldsValue(t *testing.T) {
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 	s.OnLabel("OPEN")
 	s.OnLabel("UNKNOWN_STATE")
 	v, ok := s.Value()
@@ -429,7 +429,7 @@ func TestApparentTemperatureSensorConcurrentInputsDoNotRace(t *testing.T) {
 // assembly reads IsRefreshed.
 func TestDerivedBinarySensorConcurrentLabelsDoNotRace(t *testing.T) {
 	t.Parallel()
-	s := NewWindowOpenSensor()
+	s := newWindowOpenSensorForTest(t)
 
 	const iterations = 300
 	var wg sync.WaitGroup

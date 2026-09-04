@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ScopeKind selects the breadth of a clear.
@@ -144,17 +145,21 @@ type Topology interface {
 // `HmIP` or `BidCos` makes the bare name satisfy a plain prefix test — and
 // returning it unchanged reproduces exactly the zero-row clear this function
 // exists to prevent.
+//
+// Only the normalization branches live here; the join itself is delegated to
+// [hmtypes.NewWireInterfaceID], the single place the `<central>-<interface>`
+// rule is written.
 func StoreInterfaceID(centralName, iface string) string {
 	if centralName == "" {
 		return iface
 	}
 	if _, bare := hmenum.InterfacesSupportingRPCCallback[hmenum.Interface(iface)]; bare {
-		return centralName + "-" + iface
+		return hmtypes.NewWireInterfaceID(centralName, hmenum.Interface(iface)).String()
 	}
 	if strings.HasPrefix(iface, centralName+"-") {
 		return iface
 	}
-	return centralName + "-" + iface
+	return hmtypes.NewWireInterfaceID(centralName, hmenum.Interface(iface)).String()
 }
 
 // Reiniter re-initializes a central's south-bound (teardown -> clear model ->

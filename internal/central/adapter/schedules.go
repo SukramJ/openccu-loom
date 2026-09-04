@@ -526,6 +526,22 @@ func hasColorScheduleParams(raw map[string]any) bool {
 // one — what the CCU's weekly-program editor reads rather than computes. A
 // device that yields none returns nil, and the encoder then withholds the
 // field instead of guessing a position; see [weekprofile.TargetChannelBits].
+// astroOffsetLimitsFor resolves the channel's declared ASTRO_OFFSET range,
+// the way the CCU's editor reads it out of the paramset description.
+func (s *SchedulesDomain) astroOffsetLimitsFor(deviceAddress string, scheduleChannelNo int) weekprofile.AstroOffsetLimits {
+	if s.registry == nil {
+		return weekprofile.AstroOffsetLimits{}
+	}
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
+		if !ok {
+			continue
+		}
+		return astroOffsetLimits(dev.Channel(fmt.Sprintf("%s:%d", deviceAddress, scheduleChannelNo)))
+	}
+	return weekprofile.AstroOffsetLimits{}
+}
+
 func (s *SchedulesDomain) targetChannelBitsFor(deviceAddress string, scheduleChannelNo int) weekprofile.TargetChannelBits {
 	if s.registry == nil {
 		return nil
@@ -681,11 +697,6 @@ func lockActionRawFor(action string) (level float64, durBase, durFactor int, ok 
 	return schedule.EncodeLockAction(schedule.LockAction(action))
 }
 
-const (
-	lockPermissionDurationBase   = 7  // HOUR_1
-	lockPermissionDurationFactor = 31 // -> sentinel "always"
-)
-
 // detectLockAction reverses the wire encoding to its canonical label.
 // Falls back to "lock_autorelock_start" (the zero-value encoding) when nothing matches.
 func detectLockAction(level float64, durBase, durFactor int) string {
@@ -711,31 +722,28 @@ func detectLockAction(level float64, durBase, durFactor int) string {
 //
 //	level_2 / ramp_time / duration
 //
-// Keep this table in sync with internal/model/schedule/simple.go::ValidateFor.
-var simpleScheduleUnsupportedFields = map[string]map[string]struct{}{
-	"switch": {"level_2": {}, "ramp_time": {}},
-	"light":  {"level_2": {}},
-	"cover":  {"ramp_time": {}, "duration": {}},
-	"valve":  {"level_2": {}, "ramp_time": {}},
-	"lock":   {"level_2": {}, "ramp_time": {}, "duration": {}},
-}
-
-// stripUnsupportedFields nulls fields the domain validator rejects so
-// the parsed entry survives a Parse → Validate → Build round-trip.
+// The catalogue itself lives in [schedule.UnsupportedFieldsFor], which the
+// domain validator enforces — restating it here is what let a read emit a
+// field the write then rejected.
+//
+// stripUnsupportedFields nulls fields the domain validator rejects so the
+// parsed entry survives a Parse → Validate → Build round-trip. The domain
+// strings the adapter carries are the [hmenum.DataPointCategory] values, so
+// a category the catalogue does not constrain drops nothing.
 func stripUnsupportedFields(entries []hmapi.SimpleScheduleEntry, domain string) {
-	unsupported, ok := simpleScheduleUnsupportedFields[domain]
-	if !ok {
+	dropLevel2, dropRampTime, dropDuration := schedule.UnsupportedFieldsFor(hmenum.DataPointCategory(domain))
+	if !dropLevel2 && !dropRampTime && !dropDuration {
 		return
 	}
 	for i := range entries {
 		e := &entries[i]
-		if _, drop := unsupported["level_2"]; drop {
+		if dropLevel2 {
 			e.Level2 = nil
 		}
-		if _, drop := unsupported["ramp_time"]; drop {
+		if dropRampTime {
 			e.RampTime = ""
 		}
-		if _, drop := unsupported["duration"]; drop {
+		if dropDuration {
 			e.Duration = ""
 		}
 	}
@@ -772,13 +780,25 @@ func parseSimpleScheduleWithDomain(raw map[string]any, domain string, bits weekp
 // lookupSlotDuration reads DURATION_BASE/FACTOR for the named slot
 // directly from the raw paramset. Called by the lock branch after
 // stripUnsupportedFields cleared the Duration string on the entry.
-// Slot keys follow the `<NN>_WP_<FIELD>` grammar; the slot
-// number is zero-padded to two digits in the wire shape.
+//
+// The keys are parsed through [weekprofile.SimpleGroupField] rather than
+// rebuilt from a format string, so this reader and the parser cannot
+// disagree about the grammar. The CCU pads the slot number to two digits
+// only below ten, which a formatted prefix would silently assume away.
 func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationFactor int) {
-	prefix := fmt.Sprintf("%02d_WP_", slotNo)
-	dBase, _ := coerceInt(raw[prefix+"DURATION_BASE"])
-	dFactor, _ := coerceInt(raw[prefix+"DURATION_FACTOR"])
-	return dBase, dFactor
+	for key, value := range raw {
+		no, field, ok := weekprofile.SimpleGroupField(key)
+		if !ok || no != slotNo {
+			continue
+		}
+		switch field {
+		case "DURATION_BASE":
+			durationBase, _ = coerceInt(value)
+		case "DURATION_FACTOR":
+			durationFactor, _ = coerceInt(value)
+		}
+	}
+	return durationBase, durationFactor
 }
 
 // parseSimpleSchedule decodes the `<NN>_WP_<FIELD>` MASTER paramset into
@@ -889,7 +909,8 @@ func simpleScheduleToDomain(entries []hmapi.SimpleScheduleEntry) (*schedule.Simp
 // SPA users edit the friendly fields, the wire ends up consistent
 // With.
 func serializeSimpleScheduleWithDomain(
-	entries []hmapi.SimpleScheduleEntry, domain string, deactivateUpTo int, bits weekprofile.TargetChannelBits,
+	entries []hmapi.SimpleScheduleEntry, domain string, deactivateUpTo int,
+	bits weekprofile.TargetChannelBits, astro weekprofile.AstroOffsetLimits,
 ) (map[string]any, error) {
 	if domain == "lock" {
 		// Apply the lock encoding *before* serialising so the
@@ -900,14 +921,14 @@ func serializeSimpleScheduleWithDomain(
 		}
 		entries = mapped
 	}
-	return serializeSimpleSchedule(entries, deactivateUpTo, bits)
+	return serializeSimpleSchedule(entries, deactivateUpTo, bits, astro)
 }
 
 // applyLockEncoding rewrites a lock slot's level / duration / target_channels
 // from the high-level lock_mode + (lock_action | permission) fields.
 func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 	switch e.LockMode {
-	case "door_lock":
+	case string(schedule.LockModeDoorLock):
 		level, durBase, durFactor, ok := lockActionRawFor(e.LockAction)
 		if !ok {
 			return e
@@ -919,14 +940,14 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 		if len(e.TargetChannels) == 0 {
 			e.TargetChannels = []string{"1_1"}
 		}
-	case "user_permission":
+	case string(schedule.LockModeUserPermission):
 		switch e.Permission {
-		case "granted":
+		case string(schedule.LockPermissionAllowed):
 			e.Level = 1.0
-		case "not_granted":
+		case string(schedule.LockPermissionDenied):
 			e.Level = 0.0
 		}
-		e.Duration = weekprofile.FormatTimeBaseFactor(lockPermissionDurationBase, lockPermissionDurationFactor)
+		e.Duration = weekprofile.FormatTimeBaseFactor(schedule.PermanentDurationBase, schedule.PermanentDurationFactor)
 		// Permission slots target channels >= 2_x.
 		if len(e.TargetChannels) == 0 {
 			e.TargetChannels = []string{"2_1"}
@@ -943,12 +964,15 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 // mapped onto [schedule.Simple] and encoded by
 // [weekprofile.BuildSimpleRawParamset], which is the daemon's only
 // encoder for this format.
-func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo int, bits weekprofile.TargetChannelBits) (map[string]any, error) {
+func serializeSimpleSchedule(
+	entries []hmapi.SimpleScheduleEntry, deactivateUpTo int,
+	bits weekprofile.TargetChannelBits, astro weekprofile.AstroOffsetLimits,
+) (map[string]any, error) {
 	s, err := simpleScheduleToDomain(entries)
 	if err != nil {
 		return nil, fmt.Errorf("schedules: %w", err)
 	}
-	raw, err := weekprofile.BuildSimpleRawParamset(s, deactivateUpTo, bits)
+	raw, err := weekprofile.BuildSimpleRawParamset(s, deactivateUpTo, bits, astro)
 	if err != nil {
 		return nil, fmt.Errorf("schedules: %w", err)
 	}
@@ -959,13 +983,7 @@ func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo
 // MASTER paramset description, or 0 when the description is unavailable
 // or names none.
 func highestScheduleGroup(descKeys map[string]struct{}) int {
-	highest := 0
-	for key := range descKeys {
-		if no, ok := weekprofile.SimpleGroupNo(key); ok && no > highest {
-			highest = no
-		}
-	}
-	return highest
+	return weekprofile.HighestSimpleGroup(descKeys)
 }
 
 // isCCUScheduleFalsePositive reports whether err is the documented
@@ -1015,7 +1033,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	switch sched.Kind {
 	case "simple":
 		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain, highestScheduleGroup(descKeys),
-			s.targetChannelBitsFor(deviceAddress, channelNo))
+			s.targetChannelBitsFor(deviceAddress, channelNo), s.astroOffsetLimitsFor(deviceAddress, channelNo))
 		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
 			// Filter out schedule fields the device does not advertise in its
 			// MASTER paramset description. Devices like HmIP-DLD expose only a
@@ -1090,7 +1108,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 func (s *SchedulesDomain) SetActiveProfile(
 	ctx context.Context, deviceAddress string, channelNo int, profile string,
 ) error {
-	if !isValidProfileID(profile) {
+	if !schedule.IsValidProfileKey(profile) {
 		return fmt.Errorf("%w: %q is not a valid profile key (P1..P6)", ErrInvalidProfileID, profile)
 	}
 	// Per-device cap check: P4 on a 3-profile device is rejected.
@@ -1139,7 +1157,7 @@ func (s *SchedulesDomain) readActiveProfile(
 		return "", 0, false
 	}
 	idx, ok := coerceInt(raw)
-	if !ok || idx < 1 || idx > 6 {
+	if !ok || !weekprofile.ValidProfileIndex(idx) {
 		return "", 0, false
 	}
 	return fmt.Sprintf("P%d", idx), idx - 1, true
@@ -1176,10 +1194,7 @@ func (s *SchedulesDomain) resolve(
 // BidCos thermostats (HM-CC-RT-DN); every other channel gets the usual
 // "<device>:<channel>" form.
 func scheduleChannelAddress(deviceAddress string, channelNo int) string {
-	if channelNo == device.ChannelNumberDevice {
-		return deviceAddress
-	}
-	return fmt.Sprintf("%s:%d", deviceAddress, channelNo)
+	return hmtypes.ChannelAddress(deviceAddress, channelNo)
 }
 
 // --- Parsing ------------------------------------------------------
@@ -1308,10 +1323,11 @@ func parseClimateSchedule(ctx context.Context, raw map[string]any) (*hmapi.Clima
 // base-temperature + explicit-periods form (the "simple" schedule
 // shape). The base temperature is the temperature holding the most
 // minutes of the day, decided by
-// [schedule.IdentifyBaseTemperatureFromSegments] so that this read path
-// and the week-profile read path cannot report different bases for the
-// same paramset; every stretch that is not the base becomes an explicit
-// period.
+// [schedule.IdentifyBaseTemperatureFromSegments]. The winner rule is
+// shared; the flattening that produces the segments is not, and each path
+// normalises its own wire shape — the two agree only as far as they drop
+// the same cells, which TestClimateBaseTemperatureAgreesAcrossReadPaths
+// measures. Every stretch that is not the base becomes an explicit period.
 func simplifyWeekday(slots map[int]*slotVals) hmapi.ClimateWeekday {
 	// Slot numbers in ascending order.
 	nums := make([]int, 0, len(slots))
@@ -1387,7 +1403,7 @@ func serializeClimateSchedule(sched *hmapi.ClimateSchedule) (map[string]any, err
 	// allocation size. The map grows on demand.
 	out := make(map[string]any)
 	for profileID, profile := range sched.Profiles {
-		if !isValidProfileID(profileID) {
+		if !schedule.IsValidProfileKey(profileID) {
 			return nil, fmt.Errorf("schedules: invalid profile id %q", profileID)
 		}
 		for weekday, wd := range profile.Weekdays {
@@ -1549,11 +1565,11 @@ func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 		stretches = append(stretches, stretch{end: pEnd, temp: p.Temperature})
 		cursor = pEnd
 	}
-	if cursor < 1440 {
-		stretches = append(stretches, stretch{end: 1440, temp: wd.BaseTemperature})
+	if cursor < schedule.ClimateEndOfDayMinutes {
+		stretches = append(stretches, stretch{end: schedule.ClimateEndOfDayMinutes, temp: wd.BaseTemperature})
 	}
 	if len(stretches) == 0 {
-		stretches = append(stretches, stretch{end: 1440, temp: wd.BaseTemperature})
+		stretches = append(stretches, stretch{end: schedule.ClimateEndOfDayMinutes, temp: wd.BaseTemperature})
 	}
 	if len(stretches) > schedule.MaxClimateSlots {
 		return nil, fmt.Errorf("too many periods: yielded %d slots, max %d",
@@ -1565,21 +1581,13 @@ func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 		if i < len(stretches) {
 			out[i] = rawSlot{endMin: stretches[i].end, temp: stretches[i].temp}
 		} else {
-			out[i] = rawSlot{endMin: 1440, temp: wd.BaseTemperature}
+			out[i] = rawSlot{endMin: schedule.ClimateEndOfDayMinutes, temp: wd.BaseTemperature}
 		}
 	}
 	return out, nil
 }
 
 // --- helpers ------------------------------------------------------
-
-func isValidProfileID(s string) bool {
-	if len(s) != 2 || s[0] != 'P' {
-		return false
-	}
-	n := int(s[1] - '0')
-	return n >= 1 && n <= 6
-}
 
 func isValidWeekdayName(s string) bool {
 	return slices.Contains(scheduleWeekdays, s)

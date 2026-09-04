@@ -43,7 +43,7 @@ func buildFixedColorLightRig(t *testing.T) (*FixedColorLight, *generic.Select, *
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-			ValueList:  []string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"},
+			ValueList:  []string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"},
 		},
 	})
 	ch.Put(colorDP)
@@ -73,8 +73,10 @@ func TestFixedColorLightSubscribeReplaysColor(t *testing.T) {
 	t.Parallel()
 	fc, colorDP, chanColorDP := buildFixedColorLightRig(t)
 
-	// Pre-observe values before Subscribe.
-	colorDP.OnEvent(int32(FixedColorBlue)) // index 4
+	// Pre-observe values before Subscribe. The wire value is the device's own
+	// slot for BLUE — index 1 in the CCU's VALUE_LIST — not the [FixedColor]
+	// ordinal, which denotes RED at that position.
+	colorDP.OnEvent(1)
 	chanColorDP.OnEvent("BLUE")
 
 	// Subscribe — should replay COLOR and CHANNEL_COLOR.

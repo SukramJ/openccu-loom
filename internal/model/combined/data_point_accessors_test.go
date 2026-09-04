@@ -35,7 +35,7 @@ func TestHSColorP2Methods(t *testing.T) {
 	if h.Multiplier() != 1.0 {
 		t.Errorf("Multiplier()=%v, want 1.0", h.Multiplier())
 	}
-	if got := h.ParamsetKey(); got != "COMBINED" {
+	if got := h.ParamsetKey(); got != string(hmenum.ParamsetKeyCombined) {
 		t.Errorf("ParamsetKey()=%q, want COMBINED", got)
 	}
 	if got := h.TranslationKey(); got != "hs_color" {
@@ -93,9 +93,12 @@ func TestTimerP2Methods(t *testing.T) {
 	if timer.Default() != nil {
 		t.Error("Default() must be nil")
 	}
+	// The seconds ceiling, not the per-unit INTEGER maximum — see
+	// TestHmSchTimerMaxIsAReachableSecondsCeiling, which derives it from the
+	// encoder instead of restating it here.
 	maxVal, ok := timer.Max()
-	if !ok || maxVal != float64(timerUpperBoundSeconds) {
-		t.Errorf("Max()=(%v,%v), want (%v,true)", maxVal, ok, timerUpperBoundSeconds)
+	if !ok || maxVal != float64(timerValueMaxPerUnit)*60 {
+		t.Errorf("Max()=(%v,%v), want (%v,true)", maxVal, ok, float64(timerValueMaxPerUnit)*60)
 	}
 	if _, ok := timer.Min(); ok {
 		t.Error("Min() must return (0, false)")
@@ -115,7 +118,7 @@ func TestTimerP2Methods(t *testing.T) {
 	if timer.Multiplier() != 1.0 {
 		t.Errorf("Multiplier()=%v, want 1.0", timer.Multiplier())
 	}
-	if got := timer.ParamsetKey(); got != "COMBINED" {
+	if got := timer.ParamsetKey(); got != string(hmenum.ParamsetKeyCombined) {
 		t.Errorf("ParamsetKey()=%q, want COMBINED", got)
 	}
 	if got := timer.TranslationKey(); got != "timer" {
@@ -159,11 +162,9 @@ func TestTimerHasUnitFalseWhenNoUnitParam(t *testing.T) {
 // DataPointNamePostfix, HasDataPoints, IsStatusValid, ModifiedAt,
 // RefreshedAt.
 func TestLevelCombinedP2Methods(t *testing.T) {
-	lc := NewLevelCombined("addr", nil,
-		hmenum.ParameterLevel, hmenum.ParameterLevel2,
-		hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("addr", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 
-	if got := lc.ParamsetKey(); got != "COMBINED" {
+	if got := lc.ParamsetKey(); got != string(hmenum.ParamsetKeyCombined) {
 		t.Errorf("ParamsetKey()=%q, want COMBINED", got)
 	}
 	if got := lc.TranslationKey(); got != "level_combined" {
@@ -216,8 +217,7 @@ func TestCombinedDPIsReadableIsWritable(t *testing.T) {
 		t.Error("Timer.IsWritable() must be true")
 	}
 
-	lc := NewLevelCombined("addr", nil,
-		hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("addr", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if lc.IsReadable() {
 		t.Error("LevelCombined.IsReadable() must be false")
 	}

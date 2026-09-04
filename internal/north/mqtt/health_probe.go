@@ -33,6 +33,10 @@ type ConnectionStatus interface {
 // HealthRecorder is the slim tracker contract the probe touches.
 type HealthRecorder interface {
 	Record(name string, sample health.Sample)
+	// RecordUnhealthy states an unhealthy condition rather than sampling one,
+	// so it takes effect without the flap-damping Record applies. See
+	// [health.Tracker.RecordUnhealthy].
+	RecordUnhealthy(name string, sample health.Sample)
 }
 
 // StartHealthProbe spawns a goroutine that polls the MQTT client on a
@@ -90,6 +94,8 @@ func probeOnce(client ConnectionStatus, tracker HealthRecorder) {
 	if !last.IsZero() {
 		note = fmt.Sprintf("disconnected (last_ok=%s)", last.UTC().Format(time.RFC3339))
 	}
-	tracker.Record(HealthComponentName, health.Sample{Healthy: false, Note: note})
-	tracker.Record(HealthComponentName, health.Sample{Healthy: false, Note: "disconnected (escalated)"})
+	// Reported, not sampled: the client tells us it is disconnected. This used
+	// to record twice with an invented "(escalated)" note to clear the
+	// tracker's flap-damping.
+	tracker.RecordUnhealthy(HealthComponentName, health.Sample{Note: note})
 }

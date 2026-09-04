@@ -548,7 +548,11 @@ func (c *CacheCoordinator) evictDevice(deviceAddress string) {
 	c.mu.Lock()
 	for k := range c.entries {
 		addr := k.ChannelAddress
-		// ChannelAddress is "DEVICE:N" or just "DEVICE".
+		// ChannelAddress is "DEVICE:N" or just "DEVICE". The prefix match
+		// below is what [hmtypes.DeviceAddress] computes for every address
+		// a CCU produces; it is spelled out here rather than delegated
+		// because the two diverge on an address with more than one colon,
+		// and no source says which half such an address would name.
 		match := addr == deviceAddress
 		if !match && len(addr) > len(deviceAddress) {
 			match = addr[:len(deviceAddress)] == deviceAddress && addr[len(deviceAddress)] == ':'

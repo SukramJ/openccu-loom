@@ -355,12 +355,15 @@ func TestParamsetRegistryAddPatchesHMCCVG1(t *testing.T) {
 	if !ok {
 		t.Fatal("paramset not found")
 	}
+	// The fallback is the group's own declared range (5.0 / 30.0), not the
+	// member device's 4.5 / 30.5 — a virtual heating group is deliberately
+	// narrower than the thermostats it drives.
 	pd := got["SET_TEMPERATURE"]
-	if string(pd.Min) != "4.5" {
-		t.Fatalf("MIN=%s want 4.5", pd.Min)
+	if string(pd.Min) != "5.0" {
+		t.Fatalf("MIN=%s want 5.0", pd.Min)
 	}
-	if string(pd.Max) != "30.5" {
-		t.Fatalf("MAX=%s want 30.5", pd.Max)
+	if string(pd.Max) != "30.0" {
+		t.Fatalf("MAX=%s want 30.0", pd.Max)
 	}
 }
 

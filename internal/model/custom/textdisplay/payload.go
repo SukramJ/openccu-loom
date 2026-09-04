@@ -43,8 +43,9 @@ func (t *TextDisplay) Config() payload.ConfigPayload {
 	}
 }
 
-// State returns the live text display state. The HmIP-SDV*
-// family is write-only: no state is readable back from the device.
+// State returns the live text display state. The display's
+// DISPLAY_DATA_* parameters are write-only (OPERATIONS 2), so no state is
+// readable back from the device.
 // Per-device availability rides on its own MQTT topic
 // (eventbridge.markAvailability), not on the state JSON.
 //
@@ -117,7 +118,10 @@ func (t *TextDisplay) HADiscoveryPayload(ctx payload.HADiscoveryContext) (compon
 		"command_template": haWriteCommandTemplate,
 		// mode=text signals HA free-form text input (not a number).
 		"mode": "text",
-		// Max characters per row matches [MaxRowLength] (24).
+		// Max characters per row is [MaxRowLength], the HmIP-WRCD's own
+		// declared DISPLAY_DATA_STRING limit. HA enforces it on the input
+		// field, so a number above the device's limit invites the operator
+		// to type characters that cannot arrive.
 		"min": 0,
 		"max": MaxRowLength,
 		// State from aggregated topic — text field with fallback default.

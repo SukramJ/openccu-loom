@@ -45,7 +45,7 @@ func (w *stubWriter) find(p hmenum.Parameter) (any, bool) {
 
 func TestLevelCombinedIsCombined(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombined("x:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("x:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if !lc.IsCombined() {
 		t.Fatal("LevelCombined.IsCombined() must return true")
 	}
@@ -71,7 +71,7 @@ func TestTimerIsCombined(t *testing.T) {
 
 func TestLevelCombinedDataPointKey(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombinedWithCentral("ccu1", "DEV:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombinedWithCentral("ccu1", "DEV:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	key := lc.DataPointKey()
 	if key.ChannelAddress != "DEV:1" {
 		t.Errorf("ChannelAddress = %q, want DEV:1", key.ChannelAddress)
@@ -95,9 +95,13 @@ func TestHSColorDataPointKey(t *testing.T) {
 
 // --- OnAnyUpdate (JSON encoding) ---
 
+// TestLevelCombinedOnAnyUpdateJSON pins that the body the event bus
+// carries is the body the combined state topic carries: both go through
+// EncodeLevelCompositeJSON, so no literal appears on either side of the
+// comparison.
 func TestLevelCombinedOnAnyUpdateJSON(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombined("x:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("x:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	var got string
 	unsub := lc.OnAnyUpdate(func(_, next any) {
 		got, _ = next.(string)
@@ -108,11 +112,21 @@ func TestLevelCombinedOnAnyUpdateJSON(t *testing.T) {
 	if got == "" {
 		t.Fatal("OnAnyUpdate did not fire")
 	}
-	if !strings.Contains(got, `"level"`) || !strings.Contains(got, `"slats"`) {
-		t.Errorf("unexpected JSON payload: %s", got)
+	composite, ok := lc.Value()
+	if !ok {
+		t.Fatal("Value() not observed after both inputs")
+	}
+	if want := EncodeLevelCompositeJSON(composite); got != want {
+		t.Errorf("OnAnyUpdate body = %s, projection renders %s", got, want)
 	}
 }
 
+// TestHSColorOnAnyUpdateJSON pins the same equality for HS. The
+// saturation is deliberately small enough to land in the window where
+// fmt's %g and encoding/json disagree on exponent notation (below 1e-4
+// on the 0..100 scale this data point exposes) — a second encoder would
+// otherwise agree with the projection on every ordinary value and the
+// comparison would prove nothing.
 func TestHSColorOnAnyUpdateJSON(t *testing.T) {
 	t.Parallel()
 	hs := NewHSColor("x:1", &stubWriter{}, hmenum.ParameterHue, hmenum.ParameterSaturation)
@@ -122,12 +136,16 @@ func TestHSColorOnAnyUpdateJSON(t *testing.T) {
 	})
 	defer unsub()
 	hs.OnHue(120)
-	hs.OnSaturation(0.5)
+	hs.OnSaturation(1e-7)
 	if got == "" {
 		t.Fatal("OnAnyUpdate did not fire")
 	}
-	if !strings.Contains(got, `"hue"`) || !strings.Contains(got, `"saturation"`) {
-		t.Errorf("unexpected JSON payload: %s", got)
+	pair, ok := hs.Value()
+	if !ok {
+		t.Fatal("Value() not observed after both inputs")
+	}
+	if want := EncodeHSJSON(pair); got != want {
+		t.Errorf("OnAnyUpdate body = %s, projection renders %s", got, want)
 	}
 }
 
@@ -183,7 +201,9 @@ func TestTimerRecalcUnitThresholds(t *testing.T) {
 	}{
 		{30, 30, hmenum.TimerUnitSeconds},
 		{16343, 16343, hmenum.TimerUnitSeconds},
-		{16344, 16344.0 / 60, hmenum.TimerUnitMinutes},
+		// DURATION_VALUE is an INTEGER count: the promoted value truncates
+		// toward zero rather than carrying 272.4 onto the wire.
+		{16344, 272, hmenum.TimerUnitMinutes},
 		{3600 * 1000, 1000, hmenum.TimerUnitHours}, // huge → hours
 	}
 	for _, c := range cases {
@@ -203,7 +223,7 @@ func TestTimerSetDurationSendsUnitAndValue(t *testing.T) {
 	if v, _ := w.find(hmenum.ParameterOnTimeUnit); v.(int32) != int32(hmenum.TimerUnitSeconds) {
 		t.Errorf("unit=%v", v)
 	}
-	if v, _ := w.find(hmenum.ParameterOnTimeValue); v.(float64) != 30 {
+	if v, _ := w.find(hmenum.ParameterOnTimeValue); v.(int32) != 30 {
 		t.Errorf("value=%v", v)
 	}
 	// Round-trip via ingestion.
@@ -225,7 +245,7 @@ func TestTimerOnComponentsAggregates(t *testing.T) {
 // --- LevelCombined ---
 
 func TestLevelCombinedValueRequiresBothInputs(t *testing.T) {
-	l := NewLevelCombined("x", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	l := NewLevelCombined("x", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	l.OnLevel(0.5)
 	if _, ok := l.Value(); ok {
 		t.Fatal("should not be observed yet")
@@ -243,7 +263,7 @@ func TestLevelCombinedValueRequiresBothInputs(t *testing.T) {
 // IsRefreshed / StateUncertain on combined DPs
 
 func TestLevelCombinedIsRefreshedRequiresBothInputs(t *testing.T) {
-	l := NewLevelCombined("x", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	l := NewLevelCombined("x", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if l.IsRefreshed() {
 		t.Fatal("IsRefreshed must be false before any input")
 	}
@@ -258,7 +278,7 @@ func TestLevelCombinedIsRefreshedRequiresBothInputs(t *testing.T) {
 }
 
 func TestLevelCombinedStateUncertainAlwaysFalse(t *testing.T) {
-	l := NewLevelCombined("x", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	l := NewLevelCombined("x", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	if l.StateUncertain() {
 		t.Fatal("StateUncertain must always be false for LevelCombined")
 	}
@@ -457,7 +477,7 @@ func TestRecalcUnitHours(t *testing.T) {
 
 // TestLevelCombinedOnUpdate verifies OnUpdate fires and unsubscribes.
 func TestLevelCombinedOnUpdate(t *testing.T) {
-	lc := NewLevelCombined("addr:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("addr:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	var count int
 	unsub := lc.OnUpdate(func(_, _ LevelComposite) { count++ })
 
@@ -550,7 +570,7 @@ func TestTimerSignature(t *testing.T) {
 
 func TestLevelCombinedSignature(t *testing.T) {
 	t.Parallel()
-	lc := NewLevelCombined("VCU:1", nil, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	lc := NewLevelCombined("VCU:1", hmenum.ParameterLevel, hmenum.ParameterLevel2)
 	got := lc.Signature()
 	const want = "cover//LEVEL_COMBINED"
 	if got != want {

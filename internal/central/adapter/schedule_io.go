@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // schedule_io.go — coordinator-layer calls for climate week profiles,
@@ -120,13 +121,11 @@ func rawJSONInt(raw json.RawMessage) (int, bool) {
 }
 
 // isProfileIDWithinCap reports whether profileID ("P1".."PN") is valid
-// for a device whose profile cap is maxProfiles.
+// for a device whose profile cap is maxProfiles. The key grammar is
+// [schedule.ProfileKeyIndex]'s; only the upper bound is the device's.
 func isProfileIDWithinCap(profileID string, maxProfiles int) bool {
-	if len(profileID) != 2 || profileID[0] != 'P' {
-		return false
-	}
-	n := int(profileID[1] - '0')
-	return n >= 1 && n <= maxProfiles
+	n, ok := schedule.ProfileKeyIndex(profileID)
+	return ok && n >= 1 && n <= maxProfiles
 }
 
 // scheduleCacheEntry stores the most recently fetched climate schedule
@@ -196,7 +195,7 @@ func (s *SchedulesDomain) GetSchedule(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	channelAddr := fmt.Sprintf("%s:%d", deviceAddress, channelNo)
+	channelAddr := hmtypes.ChannelAddress(deviceAddress, channelNo)
 	if !force {
 		if cached, ok := s.climateCache().get(channelAddr); ok {
 			return cached, nil
@@ -272,6 +271,13 @@ func (s *SchedulesDomain) SetSchedule(
 		return err
 	}
 	for profileID := range sched.Profiles {
+		// Grammar first, cap second: a malformed key is not a device-cap
+		// problem, and reporting it as one sends the operator looking at the
+		// wrong device.
+		if !schedule.IsValidProfileKey(profileID) {
+			return fmt.Errorf("%w: profile %q is not a profile key (P1..P6)",
+				ErrInvalidProfileID, profileID)
+		}
 		if !isProfileIDWithinCap(profileID, maxProfiles) {
 			return fmt.Errorf("%w: profile %q exceeds device cap P1..P%d for %s",
 				ErrInvalidProfileID, profileID, maxProfiles, deviceAddress)
@@ -413,7 +419,7 @@ func (s *SchedulesDomain) SetProfile(
 	if prof == nil {
 		return errors.New("schedules.SetProfile: nil profile")
 	}
-	if !isValidProfileID(profileKey) {
+	if !schedule.IsValidProfileKey(profileKey) {
 		return fmt.Errorf("%w: %q is not a valid profile key (P1..P6)", ErrInvalidProfileID, profileKey)
 	}
 	// Per-device cap validation.
@@ -488,10 +494,10 @@ func (s *SchedulesDomain) CopyProfileTo(
 		return err
 	}
 	// Basic syntax check (P1..P6) before the more expensive device lookup.
-	if !isValidProfileID(srcProfile) {
+	if !schedule.IsValidProfileKey(srcProfile) {
 		return fmt.Errorf("%w: source %q is not a valid profile key (P1..P6)", ErrInvalidProfileID, srcProfile)
 	}
-	if !isValidProfileID(dstProfile) {
+	if !schedule.IsValidProfileKey(dstProfile) {
 		return fmt.Errorf("%w: target %q is not a valid profile key (P1..P6)", ErrInvalidProfileID, dstProfile)
 	}
 	// Per-device cap validation: probe the source device's profile count.

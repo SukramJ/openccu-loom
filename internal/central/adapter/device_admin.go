@@ -41,8 +41,16 @@ var ErrNoDeviceBackend = errors.New("device-admin: no backend for device")
 // Returns the backend so callers can issue XML-RPC operations
 // against the device's interface.
 func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, error) {
+	backend, _, err := a.resolveWithDevice(deviceAddress)
+	return backend, err
+}
+
+// resolveWithDevice is [DeviceAdminDomain.resolve] plus the model device the
+// backend was resolved for, so an operation can consult the interface's own
+// capability set before it puts a call on the wire.
+func (a *DeviceAdminDomain) resolveWithDevice(deviceAddress string) (backends.Operations, *device.Device, error) {
 	if a.registry == nil || a.writer == nil {
-		return nil, ErrNoDeviceBackend
+		return nil, nil, ErrNoDeviceBackend
 	}
 	for _, u := range a.registry.List() {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
@@ -51,11 +59,11 @@ func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, 
 		}
 		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
+			return nil, nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
-		return backend, nil
+		return backend, dev, nil
 	}
-	return nil, fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddress)
+	return nil, nil, fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddress)
 }
 
 // UnpairDevice asks the CCU to unpair the device. Maps to the CCU's
@@ -234,8 +242,10 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 	}
 	if notInInbox {
 		// At least one central reported the device gone and none accepted it:
-		// the inbox entry is stale. Surface the 404-mapped sentinel rather than
-		// the generic no-backend error (502).
+		// the inbox entry is stale. That is a different answer from "no
+		// backend could be reached", so it gets its own sentinel — the two
+		// are told apart by the REST layer, which owns the status mapping
+		// (internal/north/rest/handlers/device_admin.go).
 		return fmt.Errorf("%w: device %s", interfaces.ErrInboxDeviceNotFound, address)
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -312,10 +322,18 @@ func applyInitialConfig(
 // UpdateFirmware triggers an OTA update on the CCU. Maps to
 // `Interface.updateFirmware` (XML-RPC). The CCU runs the transfer
 // asynchronously; this call returns once the request was accepted.
+//
+// Interfaces outside [hmenum.InterfacesSupportingFirmwareUpdates] answer
+// [backends.ErrUnsupported] before a wire call is made, as every sibling admin
+// op does — a VirtualDevices device otherwise reached the CCU's XML-RPC
+// updateFirmware for an aggregated group with no radio behind it.
 func (a *DeviceAdminDomain) UpdateFirmware(ctx context.Context, address string) error {
-	backend, err := a.resolve(address)
+	backend, dev, err := a.resolveWithDevice(address)
 	if err != nil {
 		return err
+	}
+	if !dev.Interface.SupportsFirmwareUpdates() {
+		return fmt.Errorf("update firmware: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 	}
 	return backend.UpdateFirmware(ctx, address)
 }
@@ -376,15 +394,35 @@ func (a *DeviceAdminDomain) InterfaceDutyCycle(address string) (int, bool) {
 }
 
 // SetInstallMode opens a per-device pairing window via the backend's
-// XML-RPC `setInstallMode(true, durationSecs, mode=1, address)` call.
-// `mode=1` is the CCU's "normal" install mode (mode=2 means "ready
-// for re-pairing"); 0.1.0 only exposes the normal mode.
+// XML-RPC `setInstallMode` call, with the flavour taken from
+// [installModeNormal] so this path and the broadcast path in
+// install_mode.go cannot drift apart as written.
+//
+// The flavour does not reach the wire here. With an address the backend
+// sends three arguments and the third is a string, which rfd reads as a
+// whitelist serial and answers with INSTALL_DEVICE_WHITELIST; an integer
+// third argument is accepted only in 0..2 and cannot name that mode at
+// all (rfd XmlRpcMethods.cpp, the setInstallMode method's execute). So
+// the constant keeps the two call sites aligned in the source, and
+// TestBothInstallModePathsSendTheSameFlavour pins that alignment at the
+// argument — not at the wire, where only the broadcast path carries it.
+//
+// Interfaces outside [hmenum.InterfacesSupportingInstallMode] answer
+// [backends.ErrUnsupported] before a wire call is made — the same gate
+// [WireInstallModeDPs] applies when it decides which interfaces get an
+// install-mode data point at all. hmenum documents the set as a property of
+// the backend setInstallMode call itself, so the per-device path is in scope
+// for it: VirtualDevices aggregates groups and has no radio, and CUxD's
+// backend answers ErrUnsupported after a pointless round trip.
 func (a *DeviceAdminDomain) SetInstallMode(ctx context.Context, address string, durationSecs int) error {
-	backend, err := a.resolve(address)
+	backend, dev, err := a.resolveWithDevice(address)
 	if err != nil {
 		return err
 	}
-	return backend.SetInstallMode(ctx, true, durationSecs, 1, address)
+	if !dev.Interface.SupportsInstallMode() {
+		return fmt.Errorf("set install mode: interface %s: %w", dev.Interface, backends.ErrUnsupported)
+	}
+	return backend.SetInstallMode(ctx, true, durationSecs, installModeNormal, address)
 }
 
 // SetRooms replaces the device's room assignments via the central's

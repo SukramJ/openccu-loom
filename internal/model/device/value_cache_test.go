@@ -854,18 +854,16 @@ func TestLoadValueValuesParamsetSiblingGuard(t *testing.T) {
 	}
 }
 
-// TestLoadValueValuesParamsetSkippedForVirtualDevices pins the #3228 fix: a
-// VirtualDevice (heating group) has no physical device behind it, so a VALUES
-// fallback can only return the CCU-internal default (e.g. 0 for a not-yet-measured
-// ACTUAL_TEMPERATURE right after a CCU restart). The fallback must be skipped so
-// the data point stays unobserved until a real value arrives via event — instead
-// of being written with a spurious 0.
-// TestLoadValueValuesParamsetSkippedForUnqueryableInterfaces pins that the
-// per-parameter VALUES fallback is skipped for interfaces whose GetParamset can
-// only return a CCU-internal placeholder rather than a device-fresh reading:
-// VirtualDevices (aggregated, no physical device) and BidCos-RF (passive/battery
-// devices that cannot be actively queried). The data point must stay unobserved
-// until a real value arrives via event (#3228, #3260).
+// TestLoadValueValuesParamsetSkippedForUnqueryableInterfaces pins the #3228 /
+// #3260 fix: the per-parameter VALUES fallback is skipped for VirtualDevices
+// and BidCos-RF, so the data point stays unobserved until a real value arrives
+// via event instead of being written with a spurious reading.
+//
+// A VirtualDevice (heating group) has no physical device behind it, so its
+// VALUES are CCU aggregates (e.g. 0 for a not-yet-measured ACTUAL_TEMPERATURE
+// right after a restart). The BidCos-RF half is a broader skip than the CCU's
+// own read condition — see the rationale on runLoadValuesParamset for what rfd
+// actually does and for the flag that would let this be narrowed.
 func TestLoadValueValuesParamsetSkippedForUnqueryableInterfaces(t *testing.T) {
 	t.Parallel()
 

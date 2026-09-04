@@ -94,8 +94,14 @@ func (s *Siren) registerSirenServices() {
 			return s.TurnOff(ctx, priority)
 		}
 		cfg := OnConfig{}
-		if d, err := payload.ParamFloat64(params, "duration"); err == nil {
-			dur := time.Duration(d * float64(time.Second))
+		// One reader for both planes — see [ParseOnDuration]. It used to
+		// disagree with the invoke plane on the unit of a bare number, and
+		// to drop a value it could not parse.
+		dur, ok, err := ParseOnDuration(params)
+		if err != nil {
+			return err
+		}
+		if ok {
 			cfg.Duration = dur
 		}
 		// `tone` is what Home Assistant's MQTT siren sends back for the

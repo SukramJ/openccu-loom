@@ -9,7 +9,7 @@
           "method": "SetValue",
           "address": "FC0001:1",
           "parameter": "COLOR_BEHAVIOUR",
-          "value": 0
+          "value": "DO_NOT_CARE"
         }
       ]
     },
@@ -20,7 +20,7 @@
           "method": "SetValue",
           "address": "FC0001:1",
           "parameter": "COLOR_BEHAVIOUR",
-          "value": 2
+          "value": "OLD_VALUE"
         }
       ]
     },
@@ -31,7 +31,7 @@
           "method": "SetValue",
           "address": "FC0001:1",
           "parameter": "COLOR_BEHAVIOUR",
-          "value": 3
+          "value": "ON"
         }
       ]
     }

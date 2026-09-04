@@ -222,17 +222,21 @@ func (p Parameter) IsClickEvent() bool {
 // unchanged repeat into a no-op: dropping the second identical PRESS_LOCK
 // would swallow a real "disarm again" intent. Consumers (the alarm intent
 // router) rely on every edge surfacing on the bus.
-var edgeTriggerParameters = map[Parameter]struct{}{
-	ParameterPress:            {},
-	ParameterPressCont:        {},
-	ParameterPressLock:        {},
-	ParameterPressLong:        {},
-	ParameterPressLongRelease: {},
-	ParameterPressLongStart:   {},
-	ParameterPressShort:       {},
-	ParameterPressUnlock:      {},
-	ParameterCodeID:           {},
-	ParameterCodeState:        {},
+//
+// It is derived from [ClickEvents] rather than re-listed: every button
+// press is an edge, so a press parameter added to the click set alone
+// would get a data point while the coordinator's dedup still swallowed
+// its repeats. The two additions are identity tokens, not presses.
+var edgeTriggerParameters = buildEdgeTriggerParameters()
+
+func buildEdgeTriggerParameters() map[Parameter]struct{} {
+	m := make(map[Parameter]struct{}, len(ClickEvents)+2)
+	for p := range ClickEvents {
+		m[p] = struct{}{}
+	}
+	m[ParameterCodeID] = struct{}{}
+	m[ParameterCodeState] = struct{}{}
+	return m
 }
 
 // secretBearingParameters are the parameters whose VALUE is a credential
@@ -298,9 +302,21 @@ func (p Parameter) IsDeviceLevel() bool {
 }
 
 // statusParameterSuffix is the convention the CCU uses to pair a writable
-// parameter with its read-back STATUS counterpart. Custom data points use
-// this to count optimistic-update confirmations even when the CCU mirrors the
-// value back on the status channel.
+// parameter with its read-back STATUS counterpart.
+//
+// What reads it: the wire side. [Parameter.IsStatusPair] and
+// [Parameter.BasePair] recover the base name from an incoming
+// "<X>_STATUS" event so the value is routed to the base data point's
+// *status* (its quality/validity), deliberately never to its value —
+// which is the opposite of what an earlier comment here claimed. No
+// code counts optimistic-update confirmations from a status event.
+//
+// [Parameter.StatusPair] spells the same grammar in the forward
+// direction and is the accessor a device constructor should use; the
+// construction side currently rebuilds the name from its own "_STATUS"
+// literal instead (internal/model/generic DetectStatusParameter), so
+// the two halves of one pairing run off two spellings of one rule. The
+// contract suite pins them equal until that literal is retired.
 const statusParameterSuffix = "_STATUS"
 
 // StatusPair returns the wire name of the STATUS counterpart parameter
@@ -343,14 +359,36 @@ func hasStatusSuffix(s string) bool {
 	return len(s) > len(suf) && s[len(s)-len(suf):] == suf
 }
 
-// OptionalParameters is the set of wire-level parameter names that the CCU
-// may legitimately omit or send as an empty value even for numeric types.
+// OptionalParameters is the set of wire-level parameter names a data
+// point may legitimately never carry a value for.
 //
-// Consumers use [Parameter.IsOptional] to decide whether a missing empty wire
-// value should be silently dropped (true) or treated as a decode error
-// (false). The canonical example is LEVEL_2 for blinds without slats: the CCU
-// sends an empty string which must be accepted as "no slat position" rather
-// than rejected as malformed data.
+// Consumers use [Parameter.IsOptional] to decide whether an unobserved
+// data point still counts as valid. That is the only thing the flag
+// does today; the older "the CCU sends an empty string for LEVEL_2"
+// rationale described a wire surface the firmware does not have —
+// getValue on a non-readable parameter faults outright
+// (../OpenCCU-Base/src/rfd/RFChannel.cpp:141-144) and getParamset skips
+// non-readable parameters rather than emitting a placeholder
+// (../OpenCCU-Base/src/libhsscomm/HSSParamset.cpp:162-176). There is no
+// path that yields an empty string for a numeric type.
+//
+// Part of the set is derivable and part is not, so it stays curated.
+// OPERATIONS (bit 0 = READ,
+// ../OpenCCU-Base/src/libhsscomm/HSSParameter.h:53-59) already answers
+// it for the unit selectors: across the captured descriptor corpus
+// DURATION_UNIT, EFFECT, RAMP_TIME_UNIT and RAMP_TIME_TO_OFF_UNIT
+// declare WRITE only in every occurrence, and ON_TIME and RAMP_TIME in
+// all but two each. It does not answer it for the rest — LEVEL_2,
+// COLOR, COLOR_TEMPERATURE, HUE, SATURATION, INHIBIT and
+// PARTY_TEMPERATURE declare READ everywhere they occur, so for those
+// this list is carrying knowledge the descriptor does not hold.
+// INSTALL_TEST is mixed (124 READ declarations against 35 without).
+// ON_TIME_UNIT occurs in no captured descriptor at all: unverified
+// whether any shipping firmware still declares it.
+//
+// SPECIAL is not an alternative source for any of this. It is a
+// special-VALUE map, and no captured device type declares a SPECIAL id
+// named OPTIONAL.
 var OptionalParameters = map[Parameter]struct{}{
 	// Cover / blinds — slat control
 	ParameterLevel2: {},
@@ -385,8 +423,12 @@ func (p Parameter) IsOptional() bool {
 	return ok
 }
 
-// ignoreOnInitialLoadExact is the exact-match set for parameters that should
-// not be fetched on initial device load.
+// ignoreOnInitialLoadExact is the exact-match set for parameters whose
+// value carries no information worth a boot-time read: diagnostics that
+// the next event delivers anyway.
+//
+// It is NOT a radio-cost list, whatever [Parameter.IgnoreOnInitialLoad]
+// used to claim. See that comment for the measurement.
 var ignoreOnInitialLoadExact = map[Parameter]struct{}{
 	ParameterDutyCycle:        {},
 	ParameterDutycycle:        {},
@@ -396,9 +438,35 @@ var ignoreOnInitialLoadExact = map[Parameter]struct{}{
 }
 
 // IgnoreOnInitialLoad reports whether fetching this parameter during the
-// initial device load should be skipped. Polling these parameters on startup
-// wakes battery-powered devices unnecessarily and may exceed duty-cycle
-// limits.
+// initial device load should be skipped.
+//
+// The rationale it used to carry — "wakes battery-powered devices and may
+// exceed duty-cycle limits" — is false for every member of its own set,
+// and saying so here matters more than the members do, because the
+// sentence is what a future reader would extend the set from. On BidCos
+// a getValue only builds a radio frame when the parameter's <physical>
+// declares a <get request=…> child; without one, GetData short-circuits
+// to the local store (../OpenCCU-Base/src/rfd/RFPhysicalDataInterfaceCommand.cpp:151-155).
+// Across the 142 shipped rftypes + hs485types device descriptions not
+// one occurrence of DUTYCYCLE, LOWBAT, RSSI_*, ERROR_* or *_ERROR
+// carries a <get> — while 255 <physical> elements elsewhere in the same
+// corpus do, so the discriminating case exists and simply is not these.
+// And even a get-capable parameter on a sleeping device is queued for
+// the next wakeup rather than transmitted (:168-172), so a getValue
+// cannot wake a BidCos device at all.
+//
+// What the set is good for is the weaker claim above: these values are
+// diagnostics, delivered by event soon enough that reading them at boot
+// buys nothing.
+//
+// The parameters a getValue genuinely does put on air are on the other
+// transport and are absent here: the HmIP legacy handler serves every
+// key from its server-side device model except INSTALL_TEST and
+// CURRENT_ILLUMINATION, which ask the device and block for the answer
+// (HMIPServer de.eq3.cbcs.legacy.bidcos.rpc.internal.DeviceUtil#askValue).
+// Whether they belong in this set is unverified: no production code
+// reads this predicate today, so there is no boot path whose behaviour
+// would settle it. Wiring one is what would.
 //
 // Matches when: 1. the parameter is an exact member of
 // ignoreOnInitialLoadExact. 2. the parameter name starts with `"ERROR_"` or

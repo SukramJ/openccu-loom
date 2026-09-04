@@ -100,7 +100,7 @@ func TestInferInterfaceEmptyKey(t *testing.T) {
 
 func TestLookupDeviceObjectNilRegistry(t *testing.T) {
 	t.Parallel()
-	if got := lookupDeviceObject(nil, "DEV001"); got != nil {
+	if got := lookupDeviceObject(nil, "ccu-01", "DEV001"); got != nil {
 		t.Errorf("lookupDeviceObject nil registry = %v, want nil", got)
 	}
 }
@@ -108,7 +108,7 @@ func TestLookupDeviceObjectNilRegistry(t *testing.T) {
 func TestLookupDeviceObjectNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	if got := lookupDeviceObject(reg, "NOSUCH"); got != nil {
+	if got := lookupDeviceObject(reg, "ccu-01", "NOSUCH"); got != nil {
 		t.Errorf("lookupDeviceObject not found = %v, want nil", got)
 	}
 }
@@ -119,7 +119,7 @@ func TestLookupDeviceObjectNotFound(t *testing.T) {
 
 func TestLookupDeviceNilRegistry(t *testing.T) {
 	t.Parallel()
-	m, n := lookupDevice(nil, "DEV001")
+	m, n := lookupDevice(nil, "ccu-01", "DEV001")
 	if m != "" || n != "" {
 		t.Errorf("lookupDevice nil registry = (%q, %q), want empty", m, n)
 	}
@@ -128,7 +128,7 @@ func TestLookupDeviceNilRegistry(t *testing.T) {
 func TestLookupDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	m, n := lookupDevice(reg, "NOSUCH")
+	m, n := lookupDevice(reg, "ccu-01", "NOSUCH")
 	if m != "" || n != "" {
 		t.Errorf("lookupDevice not found = (%q, %q), want empty", m, n)
 	}
@@ -140,7 +140,7 @@ func TestLookupDeviceNotFound(t *testing.T) {
 
 func TestLookupChannelEventBridgeNilRegistry(t *testing.T) {
 	t.Parallel()
-	if got := lookupChannel(nil, "DEV001", 1); got != nil {
+	if got := lookupChannel(nil, "ccu-01", "DEV001", 1); got != nil {
 		t.Errorf("lookupChannel nil registry = %v, want nil", got)
 	}
 }
@@ -148,7 +148,7 @@ func TestLookupChannelEventBridgeNilRegistry(t *testing.T) {
 func TestLookupChannelEventBridgeNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	if got := lookupChannel(reg, "NOSUCH", 1); got != nil {
+	if got := lookupChannel(reg, "ccu-01", "NOSUCH", 1); got != nil {
 		t.Errorf("lookupChannel not found = %v, want nil", got)
 	}
 }

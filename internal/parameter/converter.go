@@ -42,6 +42,22 @@ func IsConvertable(p hmenum.Parameter) bool {
 //
 // Slices and maps are handled recursively so that paramset payloads
 // ([]any, map[string]any) round-trip correctly.
+//
+// The six-decimal round is not a rule of the transports this daemon writes
+// through — those serialise the float64 they are handed — but of the CCU's
+// own encoders, and it is exact for two of the three: rfd's XML-RPC and
+// ReGa/tclrpc both render a double with "%f", i.e. six decimals
+// (../OpenCCU-Base/src/libXmlRpc/src/XmlRpcValue.cpp:65 with :591-594 and
+// :659-664, and ../OpenCCU-Base/src/tclrpc/tclrpc.cpp:222). Rounding here
+// pre-empts a difference the CCU would introduce anyway on those two
+// surfaces. It is NOT exact for HmIP legacy XML-RPC, whose serialiser
+// preserves the full binary64 value (see the transport survey on
+// [FloatTolerance]), so this is a lossy step for an HmIP float that declares
+// more than six decimals — the boundary runs at the interface, not at the
+// parameter.
+//
+// Measured against the tree, no non-test .go file calls this function: the
+// outgoing value of a write is serialised by the transport, not here.
 func ToHomematicValue(value any) any {
 	if value == nil {
 		return nil
@@ -231,13 +247,32 @@ func parseReadInt(s string) any {
 	return nil
 }
 
-// isBoolTrueString mirrors the reference to_bool (support/__init__.py:129):
-// the lower-cased string is true only when it is one of y, yes, t, true, on,
-// or 1; every other string (including the empty string) is false, without an
-// error. This is the READ-path cast for CCU-reported values and is
-// intentionally more permissive than the strict write-coerce asBool in
-// coerce.go, which rejects an unrecognised token rather than silently
-// treating it as false.
+// isBoolTrueString is the READ-path cast for a CCU-reported boolean carried
+// as a string: the trimmed, lower-cased value is true only when it is one of
+// y, yes, t, true, on or 1; every other string (including the empty string)
+// is false, without an error. It is intentionally more permissive than the
+// strict write-coerce asBool in coerce.go, which rejects an unrecognised
+// token rather than silently treating it as false.
+//
+// The six-token set is wider than any CCU decoder and rests on the Python
+// port (to_bool, support/__init__.py:129); it is unverified against the
+// firmware. What the firmware does carry is the two textual boolean readers,
+// and both are narrower: `<boolean>` accepts only the decimal 0 or 1 and
+// rejects everything else (../OpenCCU-Base/src/libXmlRpc/src/XmlRpcValue.cpp:425-437,
+// `strtol` followed by `ivalue != 0 && ivalue != 1`), and the text form
+// accepts exactly `true` / `false`, length-checked and case-sensitive
+// (:470-488). Neither ever emits `y`, `t` or `on`, so the extra tokens cost
+// nothing and are kept for the JSON-RPC / ReGa string path.
+//
+// The TrimSpace is not decoration: the firmware's own `<boolean>` reader
+// parses the digit with `strtol` (:429), which skips leading whitespace, so
+// trimming before the token match is at most as strict as the CCU.
+//
+// pkg/hmtypes.ToBool carries the same six tokens on the published pkg/
+// surface for external consumers; it has no caller inside the daemon and
+// does NOT trim, so ` true ` is true here and false there. The two token
+// sets are pinned against each other by TestW2ParBoolTruthSetsAgree in
+// tests/contract/; widening one alone fails that guard.
 func isBoolTrueString(s string) bool {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "y", "yes", "t", "true", "on", "1":

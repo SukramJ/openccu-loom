@@ -34,8 +34,8 @@ func TestHTTPBackupRestorerHappyPath(t *testing.T) {
 		if got := r.URL.Query().Get("sid"); got != "@SESS-1@" {
 			t.Errorf("sid = %q, want @SESS-1@", got)
 		}
-		if got := r.URL.Query().Get("action"); got != "restore_backup" {
-			t.Errorf("action query = %q, want restore_backup", got)
+		if got := r.URL.Query().Get("action"); got != "backup_upload" {
+			t.Errorf("action query = %q, want backup_upload", got)
 		}
 
 		// Parse the multipart body.
@@ -46,7 +46,7 @@ func TestHTTPBackupRestorerHappyPath(t *testing.T) {
 		}
 
 		// Check file field.
-		f, fh, err := r.FormFile("file")
+		f, fh, err := r.FormFile("backup_file")
 		if err != nil {
 			t.Errorf("FormFile: %v", err)
 			http.Error(w, "no file", http.StatusBadRequest)
@@ -64,8 +64,8 @@ func TestHTTPBackupRestorerHappyPath(t *testing.T) {
 		}
 
 		// Check action form field.
-		if got := r.FormValue("action"); got != "restore_backup" {
-			t.Errorf("action form field = %q, want restore_backup", got)
+		if got := r.FormValue("action"); got != "backup_upload" {
+			t.Errorf("action form field = %q, want backup_upload", got)
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -111,7 +111,7 @@ func TestHTTPBackupRestorerAppendsSbkSuffix(t *testing.T) {
 					http.Error(w, "bad multipart", http.StatusBadRequest)
 					return
 				}
-				_, fh, err := r.FormFile("file")
+				_, fh, err := r.FormFile("backup_file")
 				if err != nil {
 					t.Errorf("FormFile: %v", err)
 					http.Error(w, "no file", http.StatusBadRequest)

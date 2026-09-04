@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // --- Hub ClearPrograms / ClearSysvars ---
@@ -91,7 +92,7 @@ func TestSysvarParamValueAllTypes(t *testing.T) {
 		{"logic/float-0", hmenum.HubValueTypeLogic, float64(0), false},
 		{"logic/string-true", hmenum.HubValueTypeLogic, "true", false},
 		{"logic/string-false", hmenum.HubValueTypeLogic, "FALSE", false},
-		{"logic/string-bad", hmenum.HubValueTypeLogic, "maybe", true},
+		{"logic/string-bad", hmenum.HubValueTypeLogic, "maybe", false},
 		{"logic/bad-type", hmenum.HubValueTypeLogic, 42, true},
 		{"float/float64", hmenum.HubValueTypeFloat, float64(3.14), false},
 		{"float/int", hmenum.HubValueTypeFloat, 42, false},
@@ -100,7 +101,7 @@ func TestSysvarParamValueAllTypes(t *testing.T) {
 		{"integer/float64", hmenum.HubValueTypeInteger, float64(7), false},
 		{"integer/int", hmenum.HubValueTypeInteger, 3, false},
 		{"integer/string", hmenum.HubValueTypeInteger, "42", false},
-		{"integer/bad", hmenum.HubValueTypeInteger, "abc", true},
+		{"integer/bad", hmenum.HubValueTypeInteger, "abc", false},
 		{"string/str", hmenum.HubValueTypeString, "hello", false},
 		{"string/bool", hmenum.HubValueTypeString, true, false},
 		{"string/bad", hmenum.HubValueTypeString, []int{1}, true},
@@ -124,6 +125,62 @@ func TestSysvarParamValueAllTypes(t *testing.T) {
 			}
 			if !c.wantErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestServiceRouteAndDirectSetAgreeOnStrings is the guard behind moving
+// string coercion out of [sysvarParamValue].
+//
+// The service route (set_value with a JSON string) and a direct
+// [Sysvar.Set] must reach the same verdict: the same wire value, or the
+// same rejection. They did not. The service route's boolean table was
+// case-sensitive and knew neither "yes" nor "t", so it refused values the
+// write path accepts; its numeric tables used fmt.Sscanf, which reads
+// "12abc" as 12 and bounds nothing, so it accepted values the write path
+// refuses.
+//
+// The tokens below are the ones that used to disagree, plus one that
+// always did agree as the control.
+func TestServiceRouteAndDirectSetAgreeOnStrings(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		name      string
+		valueType hmenum.HubValueType
+		raw       string
+	}{
+		{"logic accepts a token only the wire path knew", hmenum.HubValueTypeLogic, "yes"},
+		{"logic accepts mixed case", hmenum.HubValueTypeLogic, "tRuE"},
+		{"logic refuses a non-token", hmenum.HubValueTypeLogic, "maybe"},
+		{"float refuses a trailing-garbage number", hmenum.HubValueTypeFloat, "12abc"},
+		{"integer refuses a trailing-garbage number", hmenum.HubValueTypeInteger, "7xyz"},
+		{"integer accepts a plain number", hmenum.HubValueTypeInteger, "42"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+
+			viaService := &capturingSysvarWriter{}
+			svc := NewSysvar("c1", "v", "", c.valueType, viaService)
+			pv, convErr := sysvarParamValue(c.valueType, any(c.raw))
+			var svcErr error
+			if convErr != nil {
+				svcErr = convErr
+			} else {
+				svcErr = svc.Set(ctx, pv)
+			}
+
+			viaDirect := &capturingSysvarWriter{}
+			direct := NewSysvar("c1", "v", "", c.valueType, viaDirect)
+			directErr := direct.Set(ctx, hmtypes.StringValue(c.raw))
+
+			if (svcErr == nil) != (directErr == nil) {
+				t.Fatalf("service route err=%v but direct Set err=%v — the two routes disagree", svcErr, directErr)
+			}
+			if svcErr == nil && viaService.value != viaDirect.value {
+				t.Errorf("service route wrote %#v, direct Set wrote %#v", viaService.value, viaDirect.value)
 			}
 		})
 	}

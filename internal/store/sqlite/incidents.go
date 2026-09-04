@@ -168,48 +168,6 @@ FROM incidents WHERE central_name = ?`
 	return out, rows.Err()
 }
 
-// GetDiagnostics returns a summary of incidents for central.
-func (s *IncidentStore) GetDiagnostics(ctx context.Context, centralName string, maxPerType, maxAgeDays int) (map[string]any, error) {
-	all, err := s.GetAllIncidents(ctx, centralName)
-	if err != nil {
-		return nil, err
-	}
-	byType := make(map[string]int)
-	bySev := make(map[string]int)
-	var recent []map[string]any
-	for i := range all {
-		byType[string(all[i].Type)]++
-		bySev[string(all[i].Severity)]++
-	}
-	// GetAllIncidents orders by last_seen DESC, so the newest incidents are at
-	// the head — taking the tail would report the ten *oldest* under a key that
-	// promises the most recent ones.
-	const recentLimit = 10
-	head := all
-	if len(head) > recentLimit {
-		head = head[:recentLimit]
-	}
-	for i := range head {
-		recent = append(recent, map[string]any{
-			"id":           head[i].ID,
-			"type":         string(head[i].Type),
-			"severity":     string(head[i].Severity),
-			"interface_id": head[i].InterfaceID,
-			"message":      head[i].Message,
-			"last_seen":    head[i].LastSeen.Format(time.RFC3339),
-			"count":        head[i].Count,
-		})
-	}
-	return map[string]any{
-		"total_incidents":       len(all),
-		"max_per_type":          maxPerType,
-		"max_age_days":          maxAgeDays,
-		"incidents_by_type":     byType,
-		"incidents_by_severity": bySev,
-		"recent_incidents":      recent,
-	}, nil
-}
-
 // GetIncidentsByType returns all incidents of incidentType for central.
 func (s *IncidentStore) GetIncidentsByType(ctx context.Context, centralName string, incidentType hmenum.IncidentType) ([]Incident, error) {
 	const q = `

@@ -124,25 +124,33 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 // applyPragmas sets the SPECIFICATION §13.2 recommended pragma set.
 // In-memory databases skip WAL because SQLite rejects the combination.
 func applyPragmas(ctx context.Context, db *sql.DB) error {
-	pragmas := []string{
-		"PRAGMA foreign_keys = ON",
-		"PRAGMA synchronous = NORMAL",
-		"PRAGMA busy_timeout = 5000",
-		"PRAGMA cache_size = -20000",
-		"PRAGMA temp_store = MEMORY",
-	}
 	// Journal mode: WAL for file-backed, MEMORY for in-memory.
+	journal := "WAL"
 	if isMemoryDSN(ctx, db) {
-		pragmas = append(pragmas, "PRAGMA journal_mode = MEMORY")
-	} else {
-		pragmas = append(pragmas, "PRAGMA journal_mode = WAL")
+		journal = "MEMORY"
 	}
-	for _, p := range pragmas {
+	for _, p := range pragmaStatements(journal) {
 		if _, err := db.ExecContext(ctx, p); err != nil {
 			return fmt.Errorf("sqlite: %s: %w", p, err)
 		}
 	}
 	return nil
+}
+
+// pragmaStatements returns the priming statements applyPragmas executes, with
+// the given journal mode. Split out from applyPragmas so the busy_timeout
+// statement it emits can be asserted against [busyTimeout] without opening a
+// database: the pragma and the health probe's deadline must state one value,
+// and a comment saying so is a hypothesis, not a check.
+func pragmaStatements(journalMode string) []string {
+	return []string{
+		"PRAGMA foreign_keys = ON",
+		"PRAGMA synchronous = NORMAL",
+		fmt.Sprintf("PRAGMA busy_timeout = %d", busyTimeout.Milliseconds()),
+		"PRAGMA cache_size = -20000",
+		"PRAGMA temp_store = MEMORY",
+		"PRAGMA journal_mode = " + journalMode,
+	}
 }
 
 // isMemoryDSN returns true when the underlying connection looks like an
@@ -185,6 +193,11 @@ func SchemaVersion(ctx context.Context, db *sql.DB) (int64, error) {
 // that is not one, which turns `mode=ro` into a read-write open — and a
 // read-write open of a path that does not exist creates an empty database
 // instead of reporting the missing file.
+//
+// The busy_timeout below is deliberately a literal and not [busyTimeout]: this
+// is a one-shot read-only open of an archived file outside the daemon's pool,
+// so its lock tolerance is an independent knob that happens to carry the same
+// number today. Changing the pool's value must not silently change this one.
 func SchemaVersionOfFile(ctx context.Context, path string) (int64, error) {
 	db, err := sql.Open(DriverName, "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
 	if err != nil {

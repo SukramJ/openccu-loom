@@ -128,11 +128,11 @@ func readFrame(r io.Reader) (msgType uint8, payload []byte, err error) {
 }
 
 // readValue reads one type-tagged value. depth tracks array/struct
-// nesting; it errors past [maxDecodeDepth] so a crafted deeply-nested
+// nesting; it errors past [xmlrpc.MaxDecodeDepth] so a crafted deeply-nested
 // message cannot drive unbounded recursion into a stack-overflow crash.
 func readValue(r *bytesReader, depth int) (xmlrpc.Value, error) {
-	if depth > maxDecodeDepth {
-		return nil, fmt.Errorf("binrpc: nesting exceeds max depth %d", maxDecodeDepth)
+	if depth > xmlrpc.MaxDecodeDepth {
+		return nil, fmt.Errorf("binrpc: nesting exceeds max depth %d", xmlrpc.MaxDecodeDepth)
 	}
 	var tag uint32
 	if err := binary.Read(r, binary.BigEndian, &tag); err != nil {

@@ -14,12 +14,24 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // newHookIC constructs a minimal InterfaceClient wired with hook as
 // the SessionRecorderHook. The underlying Caller always succeeds.
 func newHookIC(t *testing.T, hook func(rpcType, method string, params, response any)) *client.InterfaceClient {
+	t.Helper()
+	return newHookICForKind(t, hook, backends.KindCCU)
+}
+
+// newHookICForKind is newHookIC with an explicit backend flavour, so the
+// transport label the hook receives can be observed per kind.
+func newHookICForKind(
+	t *testing.T,
+	hook func(rpcType, method string, params, response any),
+	kind backends.Kind,
+) *client.InterfaceClient {
 	t.Helper()
 	nop := client.CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) {
 		return nil, nil
@@ -28,6 +40,7 @@ func newHookIC(t *testing.T, hook func(rpcType, method string, params, response 
 		CentralName:         "test",
 		Interface:           hmenum.InterfaceHmIPRF,
 		Caller:              nop,
+		BackendKind:         kind,
 		SessionRecorderHook: hook,
 	})
 	if err != nil {
@@ -138,31 +151,47 @@ func TestSessionRecorderHookNotCalledWhenNil(t *testing.T) {
 	}
 }
 
-// TestSessionRecorderHookRPCTypeIsXMLRPC verifies that the rpcType
-// argument passed to the hook is "xml-rpc" for both SetValue and
-// PutParamset (XML-RPC is the primary transport for these calls).
-func TestSessionRecorderHookRPCTypeIsXMLRPC(t *testing.T) {
+// TestSessionRecorderHookLabelsTheTransport verifies that the rpcType
+// argument names the transport the client actually speaks: CUxD is driven
+// over BIN-RPC, every other backend flavour over XML-RPC. A hard-coded
+// label would report a CUxD trace as XML-RPC.
+func TestSessionRecorderHookLabelsTheTransport(t *testing.T) {
 	t.Parallel()
 
-	var seenTypes []string
-	hook := func(rpcType, method string, params, response any) {
-		seenTypes = append(seenTypes, rpcType)
+	tests := []struct {
+		name string
+		kind backends.Kind
+		want string
+	}{
+		{name: "ccu", kind: backends.KindCCU, want: "xml-rpc"},
+		{name: "cuxd", kind: backends.KindCUxD, want: "bin-rpc"},
 	}
 
-	ic := newHookIC(t, hook)
-	b := &orchBackend{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	_ = ic.SetValue(context.Background(), b, "A:1", hmenum.ParameterLevel, 1.0,
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false)
-	_ = ic.PutParamset(context.Background(), b, "A:1", "MASTER",
-		map[string]any{}, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false)
+			var seenTypes []string
+			hook := func(rpcType, _ string, _, _ any) {
+				seenTypes = append(seenTypes, rpcType)
+			}
 
-	if len(seenTypes) != 2 {
-		t.Fatalf("hook called %d times, want 2", len(seenTypes))
-	}
-	for i, rt := range seenTypes {
-		if rt != "xml-rpc" {
-			t.Errorf("seenTypes[%d]=%q want xml-rpc", i, rt)
-		}
+			ic := newHookICForKind(t, hook, tc.kind)
+			b := &orchBackend{}
+
+			_ = ic.SetValue(context.Background(), b, "A:1", hmenum.ParameterLevel, 1.0,
+				hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false)
+			_ = ic.PutParamset(context.Background(), b, "A:1", "MASTER",
+				map[string]any{}, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false)
+
+			if len(seenTypes) != 2 {
+				t.Fatalf("hook called %d times, want 2", len(seenTypes))
+			}
+			for i, rt := range seenTypes {
+				if rt != tc.want {
+					t.Errorf("seenTypes[%d]=%q want %q for %v", i, rt, tc.want, tc.kind)
+				}
+			}
+		})
 	}
 }

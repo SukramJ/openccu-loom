@@ -12,9 +12,10 @@ import (
 // HA entity categories a combined projection can place itself in.
 // Declared here rather than imported from the MQTT adapter so the
 // dependency keeps pointing model → payload, never model → adapter.
-// The values are Home Assistant's own vocabulary and must match
-// EntityCategoryConfig / EntityCategoryDiagnostic in
-// internal/north/mqtt/entity_descriptions.go.
+// The values are Home Assistant's own vocabulary; the MQTT adapter's
+// EntityCategoryConfig / EntityCategoryDiagnostic are constant
+// aliases of these two, so there is one declaration, not a pair that
+// has to be kept in step by hand.
 const (
 	CombinedEntityCategoryConfig     = "config"
 	CombinedEntityCategoryDiagnostic = "diagnostic"

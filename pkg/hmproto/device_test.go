@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // TestDeviceDescriptionFirmwareUpdateState locks the wire key for the HmIP
@@ -264,6 +265,8 @@ func TestDeviceDescriptionChannelNo(t *testing.T) {
 		{"ABC:", -1},       // colon at end, no digit
 		{"ABC:x", -1},      // non-digit suffix
 		{"", -1},           // empty
+		{"ABC:B:3", -1},    // two colons — the suffix after the first is not a number
+		{"ABC:+1", 1},      // strconv.Atoi accepts a leading sign
 	}
 	for _, tc := range cases {
 		t.Run(tc.addr, func(t *testing.T) {
@@ -271,6 +274,32 @@ func TestDeviceDescriptionChannelNo(t *testing.T) {
 			d := hmproto.DeviceDescription{Address: tc.addr}
 			if got := d.ChannelNo(); got != tc.want {
 				t.Errorf("ChannelNo()=%d want %d (addr=%q)", got, tc.want, tc.addr)
+			}
+		})
+	}
+}
+
+// TestDeviceDescriptionChannelNoAgreesWithHmtypes drives the exported
+// method and requires its answer to be hmtypes.ChannelNo's, with -1 for
+// the not-ok case. A second parser here would disagree on exactly the
+// shapes the two grammars treat differently — an address with more than
+// one colon, and a signed suffix — so those carry the assertion.
+func TestDeviceDescriptionChannelNoAgreesWithHmtypes(t *testing.T) {
+	t.Parallel()
+	addrs := []string{
+		"VCU1234567:0", "VCU1234567:3", "VCU1234567:12", "VCU1234567",
+		"ABC:", "ABC:x", "", "ABC:B:3", "ABC:+1", "ABC:-1", ":4",
+	}
+	for _, addr := range addrs {
+		t.Run(addr, func(t *testing.T) {
+			t.Parallel()
+			want := -1
+			if n, ok := hmtypes.ChannelNo(addr); ok {
+				want = n
+			}
+			d := hmproto.DeviceDescription{Address: addr}
+			if got := d.ChannelNo(); got != want {
+				t.Errorf("ChannelNo()=%d want %d (hmtypes.ChannelNo(%q))", got, want, addr)
 			}
 		})
 	}

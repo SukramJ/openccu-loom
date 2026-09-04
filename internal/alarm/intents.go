@@ -239,6 +239,24 @@ func (r *intentRouter) handleKeypadPress(ctx context.Context, centralName string
 	r.mu.Unlock()
 
 	now := r.svc.clk.Now()
+	// codeID == pairIdx is an UNVERIFIED assumption about the keypad's own
+	// behaviour: that the device raises the press on the channel pair whose
+	// index equals the CODE_ID of the PIN just accepted. No CCU source
+	// settles it — the CCU only relays the two events, and nothing in its
+	// tree binds a CODE_ID to a channel. What the CCU does show is that both
+	// numbers live in one "User N" namespace, N in 1..8: it labels channel
+	// pair (chNumber+1)/2 "Access Control N" (see [wkpPairIndex]) and renders
+	// CODE_STATE=1 as "<user>: <CODE_ID>"
+	// (../OpenCCU-Base/www/rega/esp/controls/maintenanceWKP.fn) — consistent
+	// with the predicate, not proof of it. Settling it needs a live trace
+	// (notes/reference/alarm-assumptions.md Q4, "still needs live
+	// verification"). If it is wrong, no press ever correlates and every
+	// keypad arm/disarm lands in journalKeypadUnmatched, which records both
+	// numbers so a trace can tell that case from an ordinary miss.
+	//
+	// The 1..8 bound is the device's declared CODE_ID MIN/MAX, matching
+	// USER_AUTHORIZATION_01..08 on channel :0; the keypad is known to report
+	// out-of-range sentinels on idle, which this rejects.
 	correlated := c != nil && known && codeID >= 1 && codeID <= 8 &&
 		codeID == pairIdx && now.Sub(at) <= wkpCorrelationWindow
 	if !correlated {
@@ -254,16 +272,16 @@ func (r *intentRouter) handleKeypadPress(ctx context.Context, centralName string
 
 	if lock {
 		if !row.Perms.Arm {
-			r.journalPermissionDenied(ctx, row, "keypad", "arm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceKeypad, "arm")
 			return
 		}
-		r.dispatchArm(ctx, row, row.Binding.ArmMode, "keypad")
+		r.dispatchArm(ctx, row, row.Binding.ArmMode, engine.CodeSourceKeypad)
 	} else {
 		if !row.Perms.Disarm {
-			r.journalPermissionDenied(ctx, row, "keypad", "disarm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceKeypad, "disarm")
 			return
 		}
-		r.dispatchDisarm(ctx, row, "keypad")
+		r.dispatchDisarm(ctx, row, engine.CodeSourceKeypad)
 	}
 }
 
@@ -313,28 +331,28 @@ func (r *intentRouter) dispatchRemoteAction(ctx context.Context, row *CodeRow) {
 	switch {
 	case strings.HasPrefix(action, remoteActionArmPrefix):
 		if !row.Perms.Arm {
-			r.journalPermissionDenied(ctx, row, "remote", "arm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceRemote, "arm")
 			return
 		}
-		r.dispatchArm(ctx, row, strings.TrimPrefix(action, "arm:"), "remote")
+		r.dispatchArm(ctx, row, strings.TrimPrefix(action, remoteActionArmPrefix), engine.CodeSourceRemote)
 	case action == remoteActionDisarm:
 		if !row.Perms.Disarm {
-			r.journalPermissionDenied(ctx, row, "remote", "disarm")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceRemote, "disarm")
 			return
 		}
-		r.dispatchDisarm(ctx, row, "remote")
+		r.dispatchDisarm(ctx, row, engine.CodeSourceRemote)
 	case action == remoteActionSilence:
 		if !row.Perms.Silence {
-			r.journalPermissionDenied(ctx, row, "remote", "silence")
+			r.journalPermissionDenied(ctx, row, engine.CodeSourceRemote, "silence")
 			return
 		}
-		if err := r.svc.engine.Silence(ctx, row.Binding.ZoneID, row.Name, "remote"); err != nil {
-			r.journalActionFault(ctx, row, "remote", "silence", err)
+		if err := r.svc.engine.Silence(ctx, row.Binding.ZoneID, row.Name, engine.CodeSourceRemote); err != nil {
+			r.journalActionFault(ctx, row, engine.CodeSourceRemote, "silence", err)
 		}
 	case action == remoteActionPanic:
 		r.dispatchPanic(ctx, row)
 	default:
-		r.journalActionFault(ctx, row, "remote", action, errUnknownAction)
+		r.journalActionFault(ctx, row, engine.CodeSourceRemote, action, errUnknownAction)
 	}
 }
 
@@ -377,11 +395,11 @@ func (r *intentRouter) dispatchDisarm(ctx context.Context, row *CodeRow, source 
 func (r *intentRouter) dispatchPanic(ctx context.Context, row *CodeRow) {
 	zoneID := row.Binding.ZoneID
 	if zoneID == "" {
-		r.journalActionFault(ctx, row, "remote", "panic", errBindingIncomplete)
+		r.journalActionFault(ctx, row, engine.CodeSourceRemote, "panic", errBindingIncomplete)
 		return
 	}
-	if err := r.svc.engine.PanicTrigger(ctx, zoneID, false, row.Name, "remote"); err != nil {
-		r.journalActionFault(ctx, row, "remote", "panic", err)
+	if err := r.svc.engine.PanicTrigger(ctx, zoneID, false, row.Name, engine.CodeSourceRemote); err != nil {
+		r.journalActionFault(ctx, row, engine.CodeSourceRemote, "panic", err)
 	}
 }
 
@@ -411,7 +429,7 @@ func (r *intentRouter) journalKeypadUnmatched(ctx context.Context, centralName, 
 	r.append(ctx, engine.JournalEntry{
 		Class:  hmenum.AlarmJournalClassFault,
 		Event:  "keypad_press_unmatched",
-		Source: "keypad",
+		Source: engine.CodeSourceKeypad,
 		Details: map[string]any{
 			"central":    centralName,
 			"device":     dev,
@@ -464,6 +482,29 @@ func (r *intentRouter) append(ctx context.Context, entry engine.JournalEntry) {
 // wkpPairIndex maps a WKP ACCESS_TRANSCEIVER channel (1..16) to its
 // 1-based user-slot pair index. Channels alternate lock (odd) / unlock
 // (even), so pair n is channels (2n-1, 2n).
+//
+// The layout is the CCU's, not ours. ReGa labels a WKP channel with
+// `integer tmpChn = (chNumber + 1) / 2` — the same expression, on the
+// same 1-based index, guarded on exactly HmIP-WKP, while the sibling
+// HmIP-FWI is labelled with a plain chNumber
+// (../OpenCCU-Base/www/rega/pages/tabs/control/function.fn:159-169). The
+// config dialog states the other half from the other direction: a WKP
+// channel that carries no NUMERIC_PIN_CODE — the even, unlock member —
+// is told it uses the PIN of channel `[expr $chn / 2]`
+// (../OpenCCU-Base/www/config/easymodes/etc/hmipChannelConfigDialogs.tcl:7028).
+// The device declares the rest: :1..:16 are ACCESS_TRANSCEIVER, VALUES
+// carry PRESS_LOCK on every odd channel and PRESS_UNLOCK on every even
+// one, and MASTER NUMERIC_PIN_CODE exists only on the odd ones
+// (HmIP-WKP's own device description and paramset descriptions; the
+// project's descriptor corpus carries both verbatim).
+//
+// The 1..16 bound is that declared channel span written as a constant
+// rather than read from the device: [intentRouter.onEvent] routes on the
+// parameter, not on the model, so any device firing PRESS_LOCK /
+// PRESS_UNLOCK reaches here. In the descriptor corpus only HmIP-WKP
+// declares those two parameters at all, which is what keeps the WKP
+// formula off HmIP-FWI — containment by circumstance, not by
+// construction.
 func wkpPairIndex(channelAddress string) (int, bool) {
 	i := strings.LastIndexByte(channelAddress, ':')
 	if i < 0 {

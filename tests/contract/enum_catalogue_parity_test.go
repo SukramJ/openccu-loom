@@ -115,6 +115,54 @@ func extractEnumConstantsFromSource(t *testing.T, srcPath, targetType string) ma
 	return out
 }
 
+// extractUntypedStringConstsWithPrefix collects untyped string constants
+// whose Go name starts with prefix, as {go_name → wire_value}.
+//
+// It exists because a wire vocabulary does not always carry a named Go
+// type. The Home Assistant alarm-panel state tokens are plain untyped
+// strings on purpose — StateToken, ZoneStateFromToken and the REST DTO
+// all traffic in `string`, so giving them a named type to satisfy
+// [extractEnumConstantsFromSource] would ripple through three packages
+// for no behavioural gain. Selecting by name prefix reads the same
+// declaration without that.
+func extractUntypedStringConstsWithPrefix(t *testing.T, srcPath, prefix string) map[string]string {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, srcPath, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", srcPath, err)
+	}
+
+	out := make(map[string]string)
+	for _, decl := range f.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok || genDecl.Tok.String() != "const" {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			// An explicit type disqualifies the spec: those belong to
+			// the type-based extractor, and taking them here would let
+			// one constant answer to two different vocabularies.
+			if !ok || vs.Type != nil {
+				continue
+			}
+			if len(vs.Names) != 1 || len(vs.Values) != 1 {
+				continue
+			}
+			if !strings.HasPrefix(vs.Names[0].Name, prefix) {
+				continue
+			}
+			lit, ok := vs.Values[0].(*ast.BasicLit)
+			if !ok || lit.Kind.String() != "STRING" {
+				continue
+			}
+			out[vs.Names[0].Name] = strings.Trim(lit.Value, `"`)
+		}
+	}
+	return out
+}
+
 // catalogueMapForEnum converts the values slice for a named enum block into a
 // {go_name → wire_value} map, or fails the test when the enum is absent.
 func catalogueMapForEnum(t *testing.T, catalogue enumCatalogueFile, enumName string) map[string]string {

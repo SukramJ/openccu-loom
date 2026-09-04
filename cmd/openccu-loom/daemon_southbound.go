@@ -301,13 +301,20 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// whole-model teardown is excluded inside the evictor: the cache-clear
 	// re-init removes every device without the operator asking for any of them
 	// to go (see hmevent.DeviceRemovedEvent.ModelTeardown).
-	channelFlagsEvictor := adapter.WireChannelFlagsEviction(reg, d.channelFlagsStore, d.channelFlagsOverlay, logger)    //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
+	channelFlagsEvictor := adapter.WireChannelFlagsEviction(reg, d.channelFlagsStore, d.channelFlagsOverlay, logger) //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
+	// And the measurement history plus the operator's recording overrides.
+	// Both stores had carried a DeleteDevice documented as running on unpair
+	// and neither was ever called, so an unpaired device's series and its
+	// recording decisions outlived it — and a replacement at the same address
+	// inherited both.
+	measurementEvictor := adapter.WireMeasurementEviction(reg, d.historyStore, d.recordingStore, logger)                //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
 	stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
 	teardowns = append(
 		teardowns,
 		evictor.Stop,
 		masterEvictor.Stop,
 		channelFlagsEvictor.Stop,
+		measurementEvictor.Stop,
 		stopHistoryRecorder,
 	)
 	// Surface the values-cache counters as health gauges so the

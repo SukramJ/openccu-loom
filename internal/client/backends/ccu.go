@@ -35,13 +35,15 @@ type CcuBackend struct {
 	// [CcuBackend.SetScriptRunner] after construction.
 	rega ScriptRunner
 	// baseURL is the CCU's HTTP root (e.g. "http://192.168.1.10"), used
-	// for direct HTTP POST calls that bypass the JSON-RPC surface (e.g.
-	// DownloadFirmware). Empty disables those calls.
+	// for the HTTP calls that bypass the JSON-RPC surface: the backup
+	// download (cp_security.cgi) and the group editor (jpages). Empty
+	// disables those calls.
 	baseURL string
-	// httpClient is shared for direct HTTP POSTs; if nil a default is used.
+	// httpClient is shared for those direct HTTP calls; if nil a default
+	// is used.
 	httpClient *http.Client
-	// sessionIDFn is a callback that returns the active JSON-RPC session ID.
-	// Required for DownloadFirmware; nil disables that method.
+	// sessionIDFn is a callback that returns the active JSON-RPC session ID,
+	// which both HTTP paths above authenticate with. Nil disables them.
 	sessionIDFn func() string
 	// sessionRenewFn forces a fresh JSON-RPC login and returns the new
 	// session ID. The backup download uses it to guarantee a valid session
@@ -64,6 +66,9 @@ type CcuBackend struct {
 	// correct install-mode wire call: HmIP-RF uses Interface.setInstallModeHMIP
 	// while all other interfaces use Interface.setInstallMode.
 	ifaceType hmenum.Interface
+
+	// ccuTZ is the CCU's IANA zone, wired by [CcuBackend.SetCCUTimezone].
+	ccuTZ string
 }
 
 // NewCcuBackend constructs a backend. `ann` announces the callback
@@ -85,11 +90,16 @@ func NewCcuBackendForInterface(iface hmenum.Interface, xml, json Caller, ann Ann
 	return &CcuBackend{xml: xml, json: json, ann: ann, ifaceType: iface}
 }
 
-// SetDownloadFirmwareTransport wires the CCU base URL, an optional HTTP
-// client, and a session-ID provider into the backend so that
-// [CcuBackend.DownloadFirmware] can reach the maintenance CGI. Call this once
-// after construction; it is not required for any other backend operation.
-func (b *CcuBackend) SetDownloadFirmwareTransport(baseURL string, hc *http.Client, sessionIDFn func() string) {
+// SetHTTPTransport wires the CCU base URL, an optional HTTP client and a
+// session-ID provider into the backend, for the two operations that reach
+// the CCU over plain HTTP rather than JSON-RPC: the backup download
+// ([CcuBackend.CreateBackupAndDownload], cp_security.cgi) and the group
+// editor (the jpages endpoints). Call this once after construction.
+//
+// The name says HTTP rather than firmware because firmware is the one
+// thing it does not serve: [CcuBackend.DownloadFirmware] goes through
+// JSON-RPC and needs nothing from here.
+func (b *CcuBackend) SetHTTPTransport(baseURL string, hc *http.Client, sessionIDFn func() string) {
 	b.baseURL = baseURL
 	b.httpClient = hc
 	b.sessionIDFn = sessionIDFn
@@ -111,6 +121,30 @@ func (b *CcuBackend) SetScriptRunner(r ScriptRunner) {
 	b.rega = r
 }
 
+// SetCCUTimezone wires the CCU's IANA zone (BackendInfo.Timezone). The
+// com-test timestamps the ReGa scripts return are offset-free CCU-local wall
+// clock — the firmware renders LastTestCompletedTime() through
+// TimeStamp.fn::TimeStampToString3, which slices fixed character offsets and
+// applies no conversion — so they cannot be turned into an instant without
+// knowing which zone they were written in. Empty falls back to time.Local,
+// which is right only when the daemon and the CCU share a zone.
+func (b *CcuBackend) SetCCUTimezone(name string) {
+	b.ccuTZ = name
+}
+
+// ccuLocation resolves the wired CCU zone, falling back to the daemon's local
+// zone when none is wired or the name does not resolve.
+func (b *CcuBackend) ccuLocation() *time.Location {
+	if b.ccuTZ == "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(b.ccuTZ)
+	if err != nil {
+		return time.Local
+	}
+	return loc
+}
+
 // Kind implements Operations.
 func (b *CcuBackend) Kind() Kind { return KindCCU }
 
@@ -121,19 +155,18 @@ func (b *CcuBackend) Capabilities() Capabilities {
 	if probed := b.probedCaps.Load(); probed != nil {
 		caps = *probed
 	}
-	// Backup and HasSystemUpdate both route through the ReGa script runner,
-	// which production wires AFTER Initialize() runs (see ccu_wiring.go). If
-	// these were frozen at probe time they would be stuck false, so derive
-	// them from the current runner at call time instead.
+	// Backup routes through the ReGa script runner, which production wires
+	// AFTER Initialize() runs (see ccu_wiring.go). If it were frozen at
+	// probe time it would be stuck false, so derive it from the current
+	// runner at call time instead.
 	caps.Backup = b.rega != nil
-	caps.HasSystemUpdate = b.rega != nil
 	return caps
 }
 
-// Initialize implements [Initializer]. Backup and system-update capability
-// are NOT set here: they depend on the ReGa script runner, which is wired
-// after Initialize, so [CcuBackend.Capabilities] derives them live from the
-// current runner instead.
+// Initialize implements [Initializer]. The Backup capability is NOT set
+// here: it depends on the ReGa script runner, which is wired after
+// Initialize, so [CcuBackend.Capabilities] derives it live from the current
+// runner instead.
 func (b *CcuBackend) Initialize(_ context.Context) error {
 	caps := CapabilityFor(KindCCU)
 	b.probedCaps.Store(&caps)
@@ -269,65 +302,37 @@ func (b *CcuBackend) ReplaceDevice(ctx context.Context, oldDeviceAddress, newDev
 
 // GetLinks implements Operations. CCU returns the link descriptors
 // for the given channel regardless of direction (sender + receiver).
-// Flags bit 0 toggles whether link metadata (names + descriptions)
-// is included — we always request the full detail (flags = 0).
+//
+// The second argument is the firmware's GetLinks flag word. The bits are
+// GL_FLAG_GROUP=0x01, GL_FLAG_SENDER_PARAMSET=0x02,
+// GL_FLAG_RECEIVER_PARAMSET=0x04, GL_FLAG_SENDER_DESCRIPTION=0x08,
+// GL_FLAG_RECEIVER_DESCRIPTION=0x10, GL_FLAG_CHECK_PEER=0x4000
+// (OpenCCU-Base src/libhsscomm/LogicalInstance.h:33-38), so 0 — the
+// documented default (src/rfd/XmlRpcMethods.cpp:377) — is the LEAST detail,
+// not the fullest: it asks for neither link paramset nor channel
+// description. It is still the right request here, because the five fields
+// decoded below (SENDER, RECEIVER, NAME, DESCRIPTION, FLAGS) arrive whatever
+// the flag word is: RFChannel fills NAME and DESCRIPTION outside every flags
+// test (src/rfd/RFChannel.cpp:640-641), and RFManager ORs GL_FLAG_CHECK_PEER
+// into the caller's word for any non-empty address (src/rfd/RFManager.cpp:627),
+// which is what makes the returned FLAGS validity bits meaningful.
+//
+// Bit 0 is therefore not a metadata switch. GL_FLAG_GROUP folds the links of
+// a key pair's partner channel into the same result. Raising it here would
+// not add rows: the device-scoped entry point clears it again
+// (src/rfd/RFDevice.cpp:1240), and the per-channel caller in the adapter
+// already queries every channel of the device and dedupes on
+// sender->receiver, so the partner's links are collected by the partner's
+// own query.
 func (b *CcuBackend) GetLinks(ctx context.Context, channelAddress string) ([]hmproto.LinkDescription, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getLinks", channelAddress, 0)
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinks: unexpected type %T", raw)
-	}
-	out := make([]hmproto.LinkDescription, 0, len(list))
-	for _, entry := range list {
-		m, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		ld := hmproto.LinkDescription{
-			Sender:      asString(m["SENDER"]),
-			Receiver:    asString(m["RECEIVER"]),
-			Name:        asString(m["NAME"]),
-			Description: asString(m["DESCRIPTION"]),
-		}
-		if f, ok := m["FLAGS"].(int); ok {
-			ld.Flags = f
-		}
-		if ld.Sender == "" || ld.Receiver == "" {
-			continue
-		}
-		out = append(out, ld)
-	}
-	return out, nil
+	return getLinksViaCaller(ctx, b.xml, "ccu", channelAddress)
 }
 
 // GetLinkPeers implements Operations. Returns the bare peer-address
 // list; cheaper than GetLinks when only the peer enumeration is
 // needed (e.g. to iterate LINK paramsets for a channel).
 func (b *CcuBackend) GetLinkPeers(ctx context.Context, channelAddress string) ([]string, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getLinkPeers", channelAddress)
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinkPeers: unexpected type %T", raw)
-	}
-	out := make([]string, 0, len(list))
-	for _, entry := range list {
-		if s, ok := entry.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	return out, nil
+	return getLinkPeersViaCaller(ctx, b.xml, "ccu", channelAddress)
 }
 
 // AddLink implements Operations.
@@ -353,55 +358,17 @@ func (b *CcuBackend) RemoveLink(ctx context.Context, senderAddress, receiverAddr
 // identical across peers. Only per-peer *values* (handled by GetLinkParamset
 // / PutLinkParamset) key on the peer address.
 func (b *CcuBackend) GetLinkParamsetDescription(ctx context.Context, channelAddress, _ string) (map[string]hmproto.ParameterData, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamsetDescription", channelAddress, "LINK")
-	if err != nil {
-		return nil, err
-	}
-	outer, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinkParamsetDescription: unexpected type %T", raw)
-	}
-	out := make(map[string]hmproto.ParameterData, len(outer))
-	for param, inner := range outer {
-		m, ok := inner.(map[string]any)
-		if !ok {
-			continue
-		}
-		pd, err := toParameterData(m)
-		if err != nil {
-			return nil, fmt.Errorf("ccu.GetLinkParamsetDescription[%s]: %w", param, err)
-		}
-		out[param] = pd
-	}
-	return out, nil
+	return getLinkParamsetDescriptionViaCaller(ctx, b.xml, "ccu", channelAddress)
 }
 
 // GetLinkParamset implements Operations.
 func (b *CcuBackend) GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamset", channelAddress, peerAddress)
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetLinkParamset: unexpected type %T", raw)
-	}
-	return m, nil
+	return getLinkParamsetViaCaller(ctx, b.xml, "ccu", channelAddress, peerAddress)
 }
 
 // PutLinkParamset implements Operations.
 func (b *CcuBackend) PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error {
-	if b.xml == nil {
-		return ErrNotWired
-	}
-	_, err := b.xml.Call(ctx, "putParamset", channelAddress, peerAddress, values)
-	return err
+	return putLinkParamsetViaCaller(ctx, b.xml, channelAddress, peerAddress, values)
 }
 
 // ActivateLinkParamset implements Operations. Maps to the CCU XML-RPC
@@ -523,7 +490,16 @@ func (b *CcuBackend) GetSystemUpdateInfo(ctx context.Context) (map[string]any, e
 }
 
 // GetInboxDevices implements Operations via the get_inbox_devices ReGa
-// script. The pairing inbox is a central-wide ReGa query; the reference
+// script.
+//
+// The `name` field is returned percent-encoded Latin-1, undecoded, like the
+// human-readable fields of [CcuBackend.GetServiceMessages] and for the same
+// reason: the canonical ReGa decoder is not reachable from this package, and
+// a plain url.QueryUnescape is not a substitute — it turns an umlaut into an
+// invalid UTF-8 byte that every north-bound encoder then replaces with
+// U+FFFD. Callers decode before display; the live inbox path does
+// (adapter.loadInbox via decodeRegaField). Every other field is written raw
+// by the script and must not be unescaped at all. The pairing inbox is a central-wide ReGa query; the reference
 // stack reads it the same way (there is no JSON-RPC inbox method on the
 // CCU). When iface is non-empty the result is filtered to that interface.
 // Without a ScriptRunner the inbox is unavailable.
@@ -631,12 +607,20 @@ func (b *CcuBackend) CreateSystemVariableBool(ctx context.Context, name string, 
 	return m, nil
 }
 
-// CreateSystemVariableEnum implements Operations via JSON-RPC.
+// CreateSystemVariableEnum implements Operations via JSON-RPC. This is the
+// only implementation of the call.
+//
+// Wire: SysVar.createEnum takes {name, valList, internal, chnID} — the key is
+// `valList`, declared as `ARGUMENTS {_session_id_ name valList internal chnID}`
+// in OpenCCU-Base www/api/methods.conf:890-894 and read by the ReGa script at
+// www/api/methods/sysvar/createenum.tcl:26 (`sv.ValueList( valList )`). The
+// separator is a semicolon, documented as the value format at
+// createenum.tcl:7, and it is a wire contract in both directions: the read
+// side splits the returned list on the same character.
 func (b *CcuBackend) CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error) {
 	if b.json == nil {
 		return nil, ErrUnsupported
 	}
-	// Join as semicolon-separated CCU wire format.
 	var joined strings.Builder
 	for i, v := range valueList {
 		if i > 0 {
