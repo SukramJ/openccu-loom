@@ -35,6 +35,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -228,8 +229,15 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 			pkgPath == "github.com/SukramJ/openccu-loom/cmd/hmcli" {
 			if fn := p.Func("main"); fn != nil {
 				entryFuncs = append(entryFuncs, fn)
-				name := strings.TrimPrefix(pkgPath, "github.com/SukramJ/openccu-loom/")
-				entryPointNames = append(entryPointNames, name+"/main.go")
+				name := strings.TrimPrefix(pkgPath, "github.com/SukramJ/openccu-loom/") + "/main.go"
+				// go/packages loads a package again for every test binary
+				// that links it, so the same command shows up as several
+				// *ssa.Package values with one PkgPath. Listing its main
+				// once keeps entry_points a set of programs rather than a
+				// count of compilations.
+				if !slices.Contains(entryPointNames, name) {
+					entryPointNames = append(entryPointNames, name)
+				}
 			}
 			if fn := p.Func("init"); fn != nil {
 				entryFuncs = append(entryFuncs, fn)
@@ -322,10 +330,31 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 	logger.Info("whitelist geladen", "entries", len(whitelisted))
 
 	// --- 6. Alle exported Identifiers sammeln und klassifizieren ---
-	var unreachableItems []UnreachableEntry
-	var whitelistedItems []WhitelistEntry
+	//
+	// One exported identifier can be enumerated several times: go/packages
+	// loads a package again for each test binary that links it, and each
+	// load produces its own *ssa.Package whose members are distinct objects
+	// with the same PkgPath and name. Two consequences, and the second is
+	// the one that mattered:
+	//
+	//   - the counts multiplied, so the ratchet could grow while the set of
+	//     dead identifiers shrank;
+	//   - RTA answers per object, so one variant could call a symbol
+	//     reachable while another did not, and whichever copy landed in the
+	//     array decided the verdict.
+	//
+	// So the classification is folded per (package, identifier): whitelisted
+	// wins, then reachable in ANY variant, then unreachable. Reachable from
+	// somewhere is reachable.
+	type identClass struct {
+		reachable   bool
+		whitelisted *WhitelistEntry
+		unreachable *UnreachableEntry
+	}
+	classes := make(map[whitelistKey]*identClass)
+	var order []whitelistKey
+	disagreements := 0
 	totalExported := 0
-	reachableCount := 0
 
 	for _, p := range ssaPkgs {
 		if p == nil {
@@ -347,9 +376,16 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 			if !ast.IsExported(name) {
 				continue
 			}
-			totalExported++
 
 			relPkg := strings.TrimPrefix(pkgPath, "github.com/SukramJ/openccu-loom/")
+			key := whitelistKey{pkg: relPkg, name: name}
+			cls := classes[key]
+			if cls == nil {
+				cls = &identClass{}
+				classes[key] = cls
+				order = append(order, key)
+				totalExported++
+			}
 
 			// Position bestimmen (für Auto-Whitelist-Checks benötigt)
 			pos := prog.Fset.Position(member.Pos())
@@ -360,50 +396,80 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 			// observe the alias itself as reachable. Listing them is noise.
 			if t, isType := member.(*ssa.Type); isType {
 				if tn, isName := t.Object().(*types.TypeName); isName && tn.IsAlias() {
-					whitelistedItems = append(whitelistedItems, WhitelistEntry{
-						Package:    relPkg,
-						Identifier: name,
-						Reason:     string(autoWhitelistTypeAlias),
-						File:       relFile,
-						Line:       pos.Line,
-					})
+					if cls.whitelisted == nil {
+						cls.whitelisted = &WhitelistEntry{
+							Package:    relPkg,
+							Identifier: name,
+							Reason:     string(autoWhitelistTypeAlias),
+							File:       relFile,
+							Line:       pos.Line,
+						}
+					}
 					continue
 				}
 			}
 
 			// Auto-Whitelist Verfeinerung 2+5: Test-Files und weitere Patterns
 			if reason, ok := checkAutoWhitelist(relFile, name); ok {
-				whitelistedItems = append(whitelistedItems, WhitelistEntry{
-					Package:    relPkg,
-					Identifier: name,
-					Reason:     string(reason),
-					File:       relFile,
-					Line:       pos.Line,
-				})
+				if cls.whitelisted == nil {
+					cls.whitelisted = &WhitelistEntry{
+						Package:    relPkg,
+						Identifier: name,
+						Reason:     string(reason),
+						File:       relFile,
+						Line:       pos.Line,
+					}
+				}
 				continue
 			}
 
-			key := whitelistKey{pkg: relPkg, name: name}
-
 			// Explizite Whitelist prüfen
 			if entry, ok := whitelisted[key]; ok {
-				whitelistedItems = append(whitelistedItems, entry)
+				if cls.whitelisted == nil {
+					e := entry
+					cls.whitelisted = &e
+				}
 				continue
 			}
 
 			// Erreichbarkeit prüfen (Verfeinerung 1: Type via Methoden)
 			if isReachable(member, reachableFuncs, p) {
-				reachableCount++
+				if cls.unreachable != nil {
+					disagreements++
+				}
+				cls.reachable = true
 				continue
 			}
 
-			unreachableItems = append(unreachableItems, UnreachableEntry{
-				Package:    relPkg,
-				Identifier: name,
-				File:       relFile,
-				Line:       pos.Line,
-				Kind:       memberKind(member),
-			})
+			if cls.reachable {
+				disagreements++
+				continue
+			}
+			if cls.unreachable == nil {
+				cls.unreachable = &UnreachableEntry{
+					Package:    relPkg,
+					Identifier: name,
+					File:       relFile,
+					Line:       pos.Line,
+					Kind:       memberKind(member),
+				}
+			}
+		}
+	}
+
+	// Fold: whitelisted wins, then reachable in any variant, then dead.
+	var unreachableItems []UnreachableEntry
+	var whitelistedItems []WhitelistEntry
+	reachableCount := 0
+	for _, key := range order {
+		cls := classes[key]
+		switch {
+		case cls.whitelisted != nil:
+			whitelistedItems = append(whitelistedItems, *cls.whitelisted)
+		case cls.reachable:
+			reachableCount++
+		case cls.unreachable != nil:
+			unreachableItems = append(unreachableItems, *cls.unreachable)
 		}
 	}
 
@@ -506,6 +572,14 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 	fmt.Printf("  reachable:      %d\n", reachableCount)
 	fmt.Printf("  whitelisted:    %d\n", len(whitelistedItems))
 	fmt.Printf("  unreachable:    %d\n", len(unreachableItems))
+	if disagreements > 0 {
+		// Printed rather than logged: the logger defaults to Warn, and this
+		// is a fact about the quality of the run. Each of these is an
+		// identifier one SSA variant called reachable and another did not.
+		// Before the fold they were listed as dead AND counted as reachable
+		// in the same run.
+		fmt.Printf("  (%d identifiers were reachable in one package variant and not in another; resolved as reachable)\n", disagreements)
+	}
 
 	if len(byPackage) > 0 {
 		fmt.Println("\nTop-10 Pakete nach Dead-Code-Count:")

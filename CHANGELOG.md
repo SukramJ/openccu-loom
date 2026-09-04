@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The dead-code analyzer reported 443 live identifiers as dead, and counted
+  each identifier once per compilation rather than once.** `go/packages` loads
+  a package again for every test binary that links it, and each load produces
+  its own SSA package whose members are distinct objects carrying the same
+  path and name. The analyzer walked all of them.
+
+  Two consequences. The counts multiplied, so the ratchet could rise while the
+  set of dead identifiers fell — which is exactly how it last moved. And RTA
+  answers per object, so one variant could call a symbol reachable while
+  another did not: 443 identifiers were listed as dead *and* counted as
+  reachable in the same run. Among them `addonupdate.Updater`, a field of the
+  composition root, and `addonupdate.PeriodicChecker`, constructed in
+  `addon_update_wiring.go`.
+
+  The classification is folded per identifier now — whitelisted, then
+  reachable in any variant, then dead — and the run prints how many variants
+  disagreed, so the next occurrence is visible instead of absorbed. The
+  ceiling drops from 3033 to 1385, which is the count it was always meant to
+  be: a newly dead export moves it by exactly one. Measured both ways — the
+  same probe export moved the old counter by two.
+
 ### Changed
 
 - **BREAKING (API 11.0.0): `POST /system/firmware/download` now downloads the
