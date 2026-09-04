@@ -118,14 +118,33 @@ const children: any[] = root.children ?? [];
 const byName = new Map<string, any>();
 for (const c of children) if (c.name && !byName.has(c.name)) byName.set(c.name, c);
 
-// Merge inherited children: base first, then own overrides keyed by (tag, id|name).
+// Merge inherited children: base first, then own overrides, keyed by
+// (tag, id|name, discriminator) — see keyOf below.
 function resolvedChildren(node: any, seen: Set<string> = new Set()): any[] {
     let base: any[] = [];
     if (node.type && byName.has(node.type) && !seen.has(node.type)) {
         seen.add(node.type);
         base = resolvedChildren(byName.get(node.type), seen);
     }
-    const keyOf = (ch: any) => `${ch.tag}:${typeof ch.id === "number" ? ch.id : ch.name}`;
+    // Two elements are the same member only when matter.js's own model treats
+    // them as one. Model.key is the effective id plus a per-tag discriminator
+    // (../matter.js/packages/model/src/models/Model.ts:195), and exactly two
+    // tags define one: a command's direction — request and response commands
+    // share an id, and a command that omits `direction` is discriminated by
+    // the "...Response" naming convention (models/CommandModel.ts:64) — and a
+    // requirement's element type, so a cluster required on both the server and
+    // the client side stays two entries (models/RequirementModel.ts:24).
+    // Keying on (tag, id) alone collapses each such pair onto one survivor,
+    // silently dropping members: Groups (0x0004) keeps six of its ten commands.
+    const discriminatorOf = (ch: any): string => {
+        if (ch.tag === "command") {
+            if (ch.direction !== undefined) return String(ch.direction);
+            return typeof ch.name === "string" && ch.name.endsWith("Response") ? "response" : "request";
+        }
+        if (ch.tag === "requirement" && ch.element !== undefined) return String(ch.element);
+        return "";
+    };
+    const keyOf = (ch: any) => `${ch.tag}:${typeof ch.id === "number" ? ch.id : ch.name}:${discriminatorOf(ch)}`;
     const merged = new Map<string, any>();
     for (const ch of base) merged.set(keyOf(ch), ch);
     for (const ch of (node.children ?? [])) merged.set(keyOf(ch), ch); // own wins
