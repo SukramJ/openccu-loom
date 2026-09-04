@@ -112,7 +112,7 @@ func (w *countingWriter) recorded() []any {
 func invokeGoToLift(t *testing.T, c *Cover, pct uint16) {
 	t.Helper()
 	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, pct, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, pct); err != nil {
 		t.Fatalf("GoToLiftPercentage(%d): %v", pct, err)
 	}
 }
@@ -244,7 +244,7 @@ func TestGoToDebounce_StopMotionCancelsPendingWrite(t *testing.T) {
 	srv := c.MatterClusterServers()[0]
 
 	invokeGoToLift(t, c, 3000) // pending
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
 		t.Fatalf("StopMotion: %v", err)
 	}
 	flushGoToWrites(&c.matterGoTo)
@@ -289,10 +289,10 @@ func TestGoToDebounce_BlindAxesDebounceIndependently(t *testing.T) {
 	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 		t.Fatalf("GoToLiftPercentage: %v", err)
 	}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
 		t.Fatalf("GoToTiltPercentage: %v", err)
 	}
 	flushGoToWrites(&b.matterGoTo)

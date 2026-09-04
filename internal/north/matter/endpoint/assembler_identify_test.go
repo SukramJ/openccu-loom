@@ -12,9 +12,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // onOffStubServer is a minimal read-only cluster server. A bridged
@@ -27,15 +26,15 @@ func (onOffStubServer) MatterClusterID() uint32       { return 0x0006 }
 func (onOffStubServer) MatterRead(uint32) (any, bool) { return uint8(0), true }
 func (onOffStubServer) MatterReportable() []uint32    { return nil }
 
-func (onOffStubServer) MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error {
+func (onOffStubServer) MatterWrite(context.Context, uint32, any) error {
 	return nil
 }
 
-func (onOffStubServer) MatterInvoke(context.Context, uint32, any, hmenum.CommandPriority) (any, error) {
+func (onOffStubServer) MatterInvoke(context.Context, uint32, any) (any, error) {
 	return nil, nil
 }
 
-// identifiableSource is a [interfaces.MatterEndpointSource] that mounts
+// identifiableSource is a [mattercontract.EndpointSource] that mounts
 // one cluster server, so the assembled endpoint carries the full bridged
 // surface including Identify.
 type identifiableSource struct {
@@ -45,8 +44,8 @@ type identifiableSource struct {
 
 func (s *identifiableSource) DataPointKey() hmtypes.DataPointKey { return s.key }
 func (s *identifiableSource) MatterDeviceType() uint16           { return s.deviceType }
-func (s *identifiableSource) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{onOffStubServer{}}
+func (s *identifiableSource) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{onOffStubServer{}}
 }
 
 // buildIdentifiableDevice returns a device whose single channel hosts an

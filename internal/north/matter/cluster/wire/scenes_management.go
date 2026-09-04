@@ -9,8 +9,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ScenesManagement is a minimal stub for the Matter ScenesManagement
@@ -39,14 +38,14 @@ var errScenesStub = errors.New("matter: ScenesManagement is a read-only stub (HM
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer          = ScenesManagement{}
-	_ interfaces.MatterClusterAttributeLister = ScenesManagement{}
+	_ mattercontract.ClusterServer          = ScenesManagement{}
+	_ mattercontract.ClusterAttributeLister = ScenesManagement{}
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (ScenesManagement) MatterClusterID() uint32 { return scenesManagementClusterID }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (ScenesManagement) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case scenesManagementAttrSceneTableSize:
@@ -64,7 +63,7 @@ func (ScenesManagement) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite rejects every write.
-func (ScenesManagement) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (ScenesManagement) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: attrID 0x%04X", errScenesStub, attrID)
 }
 
@@ -76,7 +75,7 @@ func (ScenesManagement) MatterWrite(_ context.Context, attrID uint32, _ any, _ h
 // matter.js `packages/node/src/behaviors/scenes-management/` + chip
 // `src/app/clusters/scenes-server/ScenesServer.cpp` both require a valid
 // status-code response for unsupported commands.
-func (ScenesManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (ScenesManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w: no commands supported (HM has no scene management), cmdID 0x%02X", errScenesStub, cmdID)
 }
 

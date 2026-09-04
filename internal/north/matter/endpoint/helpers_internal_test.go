@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // minimalStore is the smallest valid [Store] for tests that only need
@@ -100,26 +100,26 @@ func TestMeasurementDeviceType(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		class interfaces.MatterMeasurementClass
+		class mattercontract.MeasurementClass
 		want  uint16
 	}{
-		{interfaces.MatterMeasurementTemperature, 0x0302},
-		{interfaces.MatterMeasurementHumidity, 0x0307},
-		{interfaces.MatterMeasurementIlluminance, 0x0106},
-		{interfaces.MatterMeasurementPressure, 0x0305},
-		{interfaces.MatterMeasurementCO2, 0x002C},
-		{interfaces.MatterMeasurementPM25, 0x002C},
-		{interfaces.MatterMeasurementPM10, 0x002C},
-		{interfaces.MatterMeasurementOccupancy, 0x0107},
-		{interfaces.MatterMeasurementContact, 0x0015},
+		{mattercontract.MeasurementTemperature, 0x0302},
+		{mattercontract.MeasurementHumidity, 0x0307},
+		{mattercontract.MeasurementIlluminance, 0x0106},
+		{mattercontract.MeasurementPressure, 0x0305},
+		{mattercontract.MeasurementCO2, 0x002C},
+		{mattercontract.MeasurementPM25, 0x002C},
+		{mattercontract.MeasurementPM10, 0x002C},
+		{mattercontract.MeasurementOccupancy, 0x0107},
+		{mattercontract.MeasurementContact, 0x0015},
 		// Leak rides on ContactSensor (0x0015), not WaterLeakDetector
-		// (0x0043) — see interfaces.MatterMeasurementClassDeviceType.
-		{interfaces.MatterMeasurementLeak, 0x0015},
-		{interfaces.MatterMeasurementMomentarySwitch, 0x000F},
-		{interfaces.MatterMeasurementBattery, 0x0000},
-		{interfaces.MatterMeasurementPower, 0x0000},
-		{interfaces.MatterMeasurementEnergy, 0x0000},
-		{interfaces.MatterMeasurementNone, 0x0000},
+		// (0x0043) — see mattercontract.MeasurementClassDeviceType.
+		{mattercontract.MeasurementLeak, 0x0015},
+		{mattercontract.MeasurementMomentarySwitch, 0x000F},
+		{mattercontract.MeasurementBattery, 0x0000},
+		{mattercontract.MeasurementPower, 0x0000},
+		{mattercontract.MeasurementEnergy, 0x0000},
+		{mattercontract.MeasurementNone, 0x0000},
 	}
 
 	for _, tc := range cases {

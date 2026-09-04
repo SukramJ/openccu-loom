@@ -14,8 +14,6 @@ import (
 	"time"
 
 	"github.com/grandcat/zeroconf"
-
-	"github.com/SukramJ/openccu-loom/internal/netutil"
 )
 
 // Zeroconf is an [Advertiser] backed by github.com/grandcat/zeroconf.
@@ -71,6 +69,13 @@ type Zeroconf struct {
 	// the interleaving that decides whether a re-announce can resurrect
 	// a record. Nil in production; set before any concurrent use.
 	afterSnapshot func()
+	// InterfaceFilter decides which host interfaces are kept out of the
+	// advertised A/AAAA records: it reports true for an interface name
+	// whose addresses must NOT be published. [NewZeroconf] installs
+	// [isVirtualInterfaceName]; a nil value falls back to the same
+	// predicate. Replace it before the first Publish to change the
+	// policy — it is read on every Publish, under the advertiser lock.
+	InterfaceFilter func(name string) bool
 }
 
 // NewZeroconf returns a multicast advertiser backed by zeroconf. The
@@ -82,6 +87,8 @@ func NewZeroconf() *Zeroconf {
 		items:     make(map[string]Service),
 		subFQDNs:  make(map[string][]string),
 		published: make(map[string]string),
+
+		InterfaceFilter: isVirtualInterfaceName,
 	}
 }
 
@@ -116,7 +123,8 @@ type hostIface struct {
 
 // primaryHostIPs returns the curated host-IP list the Matter mDNS
 // records should publish (see filterPrimaryHostIPs for the policy).
-func primaryHostIPs() []string {
+// exclude may be nil; see filterPrimaryHostIPs.
+func primaryHostIPs(exclude func(string) bool) []string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil
@@ -141,7 +149,7 @@ func primaryHostIPs() []string {
 		}
 		infos = append(infos, info)
 	}
-	return filterPrimaryHostIPs(infos)
+	return filterPrimaryHostIPs(infos, exclude)
 }
 
 // parseHostIPs turns the advertised address strings back into net.IP so a
@@ -169,8 +177,9 @@ func parseHostIPs(ips []string) []net.IP {
 // duplicates, tunnels), which made pairing silently time out. Container
 // bridges (docker0, hassio, br-<hex>, veth*, …) pass the flag checks —
 // they are UP and multicast-capable — but their addresses are unroutable
-// from LAN peers, so they are dropped by [netutil.IsVirtualInterfaceName],
-// the same filter the client-discovery advertiser applies.
+// from LAN peers, so they are dropped by exclude — nil means
+// [isVirtualInterfaceName], which holds the same policy the daemon's
+// client-discovery advertiser applies.
 //
 // Collecting from all valid NICs (multi-homed hosts have multiple
 // physical or VLAN interfaces) ensures the bridge is reachable from
@@ -179,14 +188,17 @@ func parseHostIPs(ips []string) []net.IP {
 // Returns string form (RegisterProxy expects strings). IPv4 addresses
 // are listed before IPv6 so commissioners that prefer IPv4 don't pay
 // the cost of an IPv6 timeout first.
-func filterPrimaryHostIPs(ifaces []hostIface) []string {
+func filterPrimaryHostIPs(ifaces []hostIface, exclude func(string) bool) []string {
+	if exclude == nil {
+		exclude = isVirtualInterfaceName
+	}
 	seen := make(map[string]struct{})
 	var v4s, v6s []string
 	for _, ifi := range ifaces {
 		if !ifi.up || !ifi.multicast || ifi.loopback || ifi.pointToPoint {
 			continue
 		}
-		if netutil.IsVirtualInterfaceName(ifi.name) {
+		if exclude(ifi.name) {
 			continue
 		}
 		for _, ip := range ifi.ips {
@@ -275,9 +287,9 @@ func (z *Zeroconf) publishLocked(svc Service) error {
 			host = "openccu-loom-matter"
 		}
 	}
-	ips := primaryHostIPs()
+	ips := primaryHostIPs(z.InterfaceFilter)
 	// Stamp the effective address set onto the copy we keep: the A/AAAA
-	// records carry primaryHostIPs(), never whatever the caller left in
+	// records carry the filtered host IPs, never whatever the caller left in
 	// Service.Addresses, and [Zeroconf.Active] is what the operator-facing
 	// mDNS diagnostics inspect. Without the write-back a perfectly healthy
 	// bridge reports "the record announces no IP address", and the

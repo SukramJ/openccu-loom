@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestHSColorMoveToHueAndSaturationGatedWhileOff mirrors matter.js
@@ -32,7 +31,7 @@ func TestHSColorMoveToHueAndSaturationGatedWhileOff(t *testing.T) {
 
 	// No ExecuteIfOff option: silent no-op, no error, no write.
 	req := wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
-	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("gated MoveToHueAndSaturation returned error: %v", err)
 	}
 	if hue, _, ok := l.Color(); ok && hue != 0 {
@@ -41,7 +40,7 @@ func TestHSColorMoveToHueAndSaturationGatedWhileOff(t *testing.T) {
 
 	// ExecuteIfOff effective (mask bit 0 set AND override bit 0 set): executes.
 	req.OptionsMask, req.OptionsOverride = 0x01, 0x01
-	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("ExecuteIfOff MoveToHueAndSaturation returned error: %v", err)
 	}
 	hue, sat, ok := l.Color()
@@ -66,7 +65,7 @@ func TestHSColorMoveToHueAndSaturationExecutesWhileOn(t *testing.T) {
 		}
 	}
 	req := wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
-	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, req); err != nil {
 		t.Fatalf("MoveToHueAndSaturation while on returned error: %v", err)
 	}
 	if hue, _, ok := l.Color(); !ok || hue != matterHueToHM(127) {
@@ -90,7 +89,7 @@ func TestCTColorMoveToColorTemperatureGatedWhileOff(t *testing.T) {
 	}
 
 	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 370}
-	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, req); err != nil {
 		t.Fatalf("gated MoveToColorTemperature returned error: %v", err)
 	}
 	if _, ok := l.Kelvin(); ok {
@@ -98,7 +97,7 @@ func TestCTColorMoveToColorTemperatureGatedWhileOff(t *testing.T) {
 	}
 
 	req.OptionsMask, req.OptionsOverride = 0x01, 0x01
-	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, req); err != nil {
 		t.Fatalf("ExecuteIfOff MoveToColorTemperature returned error: %v", err)
 	}
 	if k, ok := l.Kelvin(); !ok || k != miredsToKelvin(370) {
@@ -122,7 +121,7 @@ func TestRGBWColorMoveToHueGatedWhileOff(t *testing.T) {
 	}
 
 	req := wire.MoveToHueRequest{Hue: 127}
-	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHue, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHue, req); err != nil {
 		t.Fatalf("gated MoveToHue returned error: %v", err)
 	}
 	if hue, _, ok := l.CurrentHsColor(); ok && hue != 0 {
@@ -130,7 +129,7 @@ func TestRGBWColorMoveToHueGatedWhileOff(t *testing.T) {
 	}
 
 	req.OptionsMask, req.OptionsOverride = 0x01, 0x01
-	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHue, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHue, req); err != nil {
 		t.Fatalf("ExecuteIfOff MoveToHue returned error: %v", err)
 	}
 	if hue, _, ok := l.CurrentHsColor(); !ok || hue != matterHueToHM(127) {

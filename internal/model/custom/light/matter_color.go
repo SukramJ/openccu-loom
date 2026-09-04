@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -419,11 +418,11 @@ func (s ctColorServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s ctColorServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s ctColorServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 }
 
-func (s ctColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s ctColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	switch cmdID {
 	case matterCmdColorMoveToColorTemperature:
 		mireds, err := extractColorTempMireds(fields)
@@ -437,7 +436,7 @@ func (s ctColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 			// and ExecuteIfOff is not effective.
 			return nil, nil
 		}
-		if err := s.l.SetKelvin(ctx, miredsToKelvin(mireds), priority); err != nil {
+		if err := s.l.SetKelvin(ctx, miredsToKelvin(mireds), matterDispatchPriority); err != nil {
 			return nil, err
 		}
 		s.l.dataVersion.Bump()
@@ -534,11 +533,11 @@ func (s hsColorServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s hsColorServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s hsColorServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 }
 
-func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	on, _ := s.l.IsOn()
 	var err error
 	switch cmdID {
@@ -554,7 +553,7 @@ func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 			return nil, nil
 		}
 		_, sat, _ := s.l.Color()
-		err = s.l.SetColor(ctx, matterHueToHM(hue), sat, priority)
+		err = s.l.SetColor(ctx, matterHueToHM(hue), sat, matterDispatchPriority)
 	case matterCmdColorMoveToSaturation:
 		sat, e := extractSaturationOnly(fields)
 		if e != nil {
@@ -565,7 +564,7 @@ func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 			return nil, nil
 		}
 		hue, _, _ := s.l.Color()
-		err = s.l.SetColor(ctx, hue, matterSaturationToHM(sat), priority)
+		err = s.l.SetColor(ctx, hue, matterSaturationToHM(sat), matterDispatchPriority)
 	case matterCmdColorMoveToHueAndSaturation:
 		hue, sat, e := extractHueAndSaturation(fields)
 		if e != nil {
@@ -575,7 +574,7 @@ func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		if !colorOptionsAllowExecution(on, mask, override) {
 			return nil, nil
 		}
-		err = s.l.SetColor(ctx, matterHueToHM(hue), matterSaturationToHM(sat), priority)
+		err = s.l.SetColor(ctx, matterHueToHM(hue), matterSaturationToHM(sat), matterDispatchPriority)
 	case wire.ColorCtrlCmdMoveHue, wire.ColorCtrlCmdStepHue,
 		wire.ColorCtrlCmdMoveSaturation, wire.ColorCtrlCmdStepSaturation,
 		wire.ColorCtrlCmdStopMoveStep:
@@ -720,11 +719,11 @@ func (s rgbwColorServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s rgbwColorServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s rgbwColorServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 }
 
-func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	on, _ := s.l.IsOn()
 	var err error
 	switch cmdID {
@@ -740,7 +739,7 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 			return nil, nil
 		}
 		_, sat, _ := s.l.Color()
-		err = s.l.SetColor(ctx, matterHueToHM(hue), sat, priority)
+		err = s.l.SetColor(ctx, matterHueToHM(hue), sat, matterDispatchPriority)
 	case matterCmdColorMoveToSaturation:
 		sat, e := extractSaturationOnly(fields)
 		if e != nil {
@@ -751,7 +750,7 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 			return nil, nil
 		}
 		hue, _, _ := s.l.Color()
-		err = s.l.SetColor(ctx, hue, matterSaturationToHM(sat), priority)
+		err = s.l.SetColor(ctx, hue, matterSaturationToHM(sat), matterDispatchPriority)
 	case matterCmdColorMoveToHueAndSaturation:
 		hue, sat, e := extractHueAndSaturation(fields)
 		if e != nil {
@@ -761,7 +760,7 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 		if !colorOptionsAllowExecution(on, mask, override) {
 			return nil, nil
 		}
-		err = s.l.SetColor(ctx, matterHueToHM(hue), matterSaturationToHM(sat), priority)
+		err = s.l.SetColor(ctx, matterHueToHM(hue), matterSaturationToHM(sat), matterDispatchPriority)
 	case matterCmdColorMoveToColorTemperature:
 		mireds, e := extractColorTempMireds(fields)
 		if e != nil {
@@ -771,7 +770,7 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 		if !colorOptionsAllowExecution(on, mask, override) {
 			return nil, nil
 		}
-		err = s.l.SetKelvin(ctx, miredsToKelvin(mireds), priority)
+		err = s.l.SetKelvin(ctx, miredsToKelvin(mireds), matterDispatchPriority)
 	case wire.ColorCtrlCmdMoveHue, wire.ColorCtrlCmdStepHue,
 		wire.ColorCtrlCmdMoveSaturation, wire.ColorCtrlCmdStepSaturation,
 		wire.ColorCtrlCmdMoveColorTemperature, wire.ColorCtrlCmdStepColorTemperature,

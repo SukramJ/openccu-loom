@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestLevelStepUpWireFieldsRaisesBrightness drives Step (0x02) with the
@@ -28,7 +27,7 @@ func TestLevelStepUpWireFieldsRaisesBrightness(t *testing.T) {
 
 	srv := levelServer(t, l)
 	fields := map[uint8]any{0: uint64(wire.LevelStepModeUp), 1: uint64(20)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields); err != nil {
 		t.Fatalf("Step up wire-shape err: %v", err)
 	}
 	if w.last < 0.56 || w.last > 0.60 {
@@ -46,7 +45,7 @@ func TestLevelStepWithOnOffDownWireFieldsLowersBrightness(t *testing.T) {
 
 	srv := levelServer(t, l)
 	fields := map[uint8]any{0: uint64(wire.LevelStepModeDown), 1: uint64(20)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x06, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x06, fields); err != nil {
 		t.Fatalf("StepWithOnOff down wire-shape err: %v", err)
 	}
 	if w.last < 0.40 || w.last > 0.44 {

@@ -11,7 +11,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ---- attribute ID constants ----
@@ -214,7 +213,7 @@ func TestAdmComm_Write_ReturnsErrorForEveryAttr(t *testing.T) {
 	} {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
-			err := ac.MatterWrite(context.Background(), attrID, uint8(0), hmenum.CommandPriorityHigh)
+			err := ac.MatterWrite(context.Background(), attrID, uint8(0))
 			if err == nil {
 				t.Errorf("MatterWrite(0x%04X) returned nil error; attribute is read-only", attrID)
 			}
@@ -232,7 +231,7 @@ func TestAdmComm_Invoke_OpenWindow_NoController_ReturnsBusy(t *testing.T) {
 		Iterations:                  1000,
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 97),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if !errors.Is(err, wire.ErrAdmCommBusy) {
 		t.Errorf("MatterInvoke(OpenWindow, no controller): want ErrAdmCommBusy, got %v", err)
 	}
@@ -254,7 +253,7 @@ func TestAdmComm_Invoke_OpenWindow_WithController_ForwardsParams(t *testing.T) {
 	}
 	// OpenCommissioningWindow requires a CASE session (fabricIndex > 0).
 	caseCtx := im.WithFabricFilter(context.Background(), true, 1)
-	_, err := ac.MatterInvoke(caseCtx, admCommCmdOpenWindow, params, hmenum.CommandPriorityHigh)
+	_, err := ac.MatterInvoke(caseCtx, admCommCmdOpenWindow, params)
 	if err != nil {
 		t.Errorf("MatterInvoke(OpenWindow) with controller: unexpected error: %v", err)
 	}
@@ -284,7 +283,7 @@ func TestAdmComm_Invoke_OpenWindow_WithController_PropagatesError(t *testing.T) 
 		Iterations:                  1000,
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 97),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if !errors.Is(err, sentinelErr) {
 		t.Errorf("MatterInvoke(OpenWindow) error = %v, want sentinel %v", err, sentinelErr)
 	}
@@ -293,7 +292,7 @@ func TestAdmComm_Invoke_OpenWindow_WithController_PropagatesError(t *testing.T) 
 func TestAdmComm_Invoke_OpenBasicWindow_ReturnsUnsupported(t *testing.T) {
 	t.Parallel()
 	ac := newAdmComm()
-	_, err := ac.MatterInvoke(context.Background(), admCommCmdOpenBasicWindow, nil, hmenum.CommandPriorityHigh)
+	_, err := ac.MatterInvoke(context.Background(), admCommCmdOpenBasicWindow, nil)
 	if err == nil {
 		t.Error("MatterInvoke(OpenBasicCommissioningWindow) returned nil error; feature not in FeatureMap")
 	}
@@ -302,7 +301,7 @@ func TestAdmComm_Invoke_OpenBasicWindow_ReturnsUnsupported(t *testing.T) {
 func TestAdmComm_Invoke_RevokeCommissioning_NoController_ReturnsBusy(t *testing.T) {
 	t.Parallel()
 	ac := newAdmComm()
-	_, err := ac.MatterInvoke(context.Background(), admCommCmdRevoke, nil, hmenum.CommandPriorityHigh)
+	_, err := ac.MatterInvoke(context.Background(), admCommCmdRevoke, nil)
 	if !errors.Is(err, wire.ErrAdmCommBusy) {
 		t.Errorf("MatterInvoke(RevokeCommissioning, no controller): want ErrAdmCommBusy, got %v", err)
 	}
@@ -319,7 +318,7 @@ func TestAdmComm_Invoke_RevokeCommissioning_WithController_ForwardsCall(t *testi
 	// (Matter §11.19.8.3 Step 1) and then surfaces ErrAdmCommWindowNotOpen
 	// (Step 2). The Forwards-Call invariant is the call
 	// count — the WindowNotOpen error is the Step-2 spec path.
-	_, err := ac.MatterInvoke(context.Background(), admCommCmdRevoke, nil, hmenum.CommandPriorityHigh)
+	_, err := ac.MatterInvoke(context.Background(), admCommCmdRevoke, nil)
 	if err != nil && !errors.Is(err, wire.ErrAdmCommWindowNotOpen) {
 		t.Errorf("MatterInvoke(RevokeCommissioning) with controller: unexpected error: %v", err)
 	}
@@ -331,7 +330,7 @@ func TestAdmComm_Invoke_RevokeCommissioning_WithController_ForwardsCall(t *testi
 func TestAdmComm_Invoke_UnknownCommand_ReturnsUnsupported(t *testing.T) {
 	t.Parallel()
 	ac := newAdmComm()
-	_, err := ac.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh)
+	_, err := ac.MatterInvoke(context.Background(), 0xFF, nil)
 	if err == nil {
 		t.Error("MatterInvoke(unknown cmdID) returned nil error, want unsupported-command error")
 	}
@@ -354,7 +353,7 @@ func TestAdmComm_Invoke_OpenWindow_StampsAdminFabricIndexFromContext(t *testing.
 		Iterations:                  1000,
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 97),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("MatterInvoke(OpenWindow): %v", err)
 	}
@@ -389,7 +388,7 @@ func TestAdmComm_Invoke_OpenWindow_ResolvesAdminVendorIDFromFabricStore(t *testi
 		Iterations:                  1000,
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 97),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("MatterInvoke(OpenWindow): %v", err)
 	}
@@ -428,7 +427,7 @@ func TestAdmComm_Invoke_OpenWindow_PASEReturnsErrBusy(t *testing.T) {
 		Iterations:                  1000,
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 97),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if !errors.Is(err, wire.ErrAdmCommBusy) {
 		t.Errorf("MatterInvoke(OpenWindow, PASE): want ErrAdmCommBusy, got %v", err)
 	}
@@ -459,7 +458,7 @@ func TestAdmComm_Invoke_OpenWindow_CallerProvidedVendorIDWins(t *testing.T) {
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 97),
 		AdminVendorID:               0xABCD,
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("MatterInvoke(OpenWindow): %v", err)
 	}
@@ -486,7 +485,7 @@ func TestAdmComm_PakeParameterError_ClusterStatus(t *testing.T) {
 		Iterations:                  1000,
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 97),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err == nil {
 		t.Fatal("expected error from PAKE controller, got nil")
 	}
@@ -536,7 +535,7 @@ func TestAdmComm_FabricCounter_SetsIsUncommissioned(t *testing.T) {
 	}
 	// OpenCommissioningWindow requires a CASE session (fabricIndex > 0).
 	caseCtx := im.WithFabricFilter(context.Background(), true, 1)
-	_, err := ac.MatterInvoke(caseCtx, 0x00, params, hmenum.CommandPriorityHigh)
+	_, err := ac.MatterInvoke(caseCtx, 0x00, params)
 	if err != nil {
 		t.Fatalf("MatterInvoke OpenCommissioningWindow: %v", err)
 	}
@@ -565,7 +564,7 @@ func TestAdmComm_FabricCounter_CommissionedBridgeUses900sLimit(t *testing.T) {
 	}
 	// OpenCommissioningWindow requires a CASE session (fabricIndex > 0).
 	caseCtx := im.WithFabricFilter(context.Background(), true, 1)
-	_, err := ac.MatterInvoke(caseCtx, 0x00, params, hmenum.CommandPriorityHigh)
+	_, err := ac.MatterInvoke(caseCtx, 0x00, params)
 	if err != nil {
 		t.Fatalf("MatterInvoke OpenCommissioningWindow: %v", err)
 	}
@@ -665,7 +664,7 @@ func TestAdmComm_Invoke_OpenWindow_MalformedPAKEBeatsBusy(t *testing.T) {
 		Iterations:                  1000,
 		Salt:                        make([]byte, 16),
 		PAKEPasscodeVerifier:        make([]byte, 10), // wrong length
-	}, hmenum.CommandPriorityHigh)
+	})
 	if !errors.Is(err, wire.ErrAdmCommPakeParameter) {
 		t.Fatalf("MatterInvoke(OpenWindow, malformed+busy): want ErrAdmCommPakeParameter, got %v", err)
 	}

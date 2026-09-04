@@ -15,7 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Errors surfaced by the unsolicited-IM send path. They are logged
@@ -245,9 +245,9 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 		slog.Int("events", len(events)))
 }
 
-// EmitEvent is the bridge-side [interfaces.MatterEventEmitter]
+// EmitEvent is the bridge-side [mattercontract.EventEmitter]
 // implementation. Cluster servers (or model-side cluster servers
-// that implement [interfaces.MatterEventReceiver]) call this when
+// that implement [mattercontract.EventReceiver]) call this when
 // the underlying DP fires an event that should surface to
 // subscribers. Non-blocking — fan-out into per-subscription queues
 // happens in the manager; the engine tick later drains them.
@@ -263,7 +263,7 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 // (assigned by the topology assembler). `cluster` is the cluster
 // ID (e.g. 0x003B Switch). `event` is the event ID per the cluster
 // spec (e.g. 0x00 InitialPress).
-func (b *Bridge) EmitEvent(endpoint uint16, cluster, event uint32, data any, priority interfaces.MatterEventPriority) {
+func (b *Bridge) EmitEvent(endpoint uint16, cluster, event uint32, data any, priority mattercontract.EventPriority) {
 	// Append to the persistent log first (always, even with no active
 	// subscriptions) so retrospective Read-Event requests see the event.
 	// The log allocates its own monotonic number internally; we read it
@@ -294,9 +294,9 @@ func (b *Bridge) EmitEvent(endpoint uint16, cluster, event uint32, data any, pri
 }
 
 // MatterEmitEvent is an alias of [Bridge.EmitEvent] satisfying
-// [interfaces.MatterEventEmitter] — the cluster-side hook signature
+// [mattercontract.EventEmitter] — the cluster-side hook signature
 // the bridge passes to model-side receivers via SetMatterEventEmitter.
-func (b *Bridge) MatterEmitEvent(endpoint uint16, cluster, event uint32, data any, priority interfaces.MatterEventPriority) {
+func (b *Bridge) MatterEmitEvent(endpoint uint16, cluster, event uint32, data any, priority mattercontract.EventPriority) {
 	b.EmitEvent(endpoint, cluster, event, data, priority)
 }
 
@@ -844,7 +844,7 @@ func (b *Bridge) subscriptionManagerLocked() *subscription.Manager {
 }
 
 // wireMeasurementListenersLocked binds every bridged endpoint whose
-// Measurement source implements [interfaces.MatterChangeNotifier] to
+// Measurement source implements [mattercontract.ChangeNotifier] to
 // the subscription manager's OnAttributeChanged hook. On a value push
 // from the CCU the notifier fires, the bridge marks every
 // (endpoint, cluster, attribute) path advertised by the cluster
@@ -900,13 +900,13 @@ func (b *Bridge) wireMeasurementListenersLocked() {
 		// surface (e.g. a HmIP-PSM Switch also has POWER / ENERGY
 		// sub-sensors attached) and the bridge prefers the richer
 		// notifier when both are present.
-		var notifier interfaces.MatterChangeNotifier
+		var notifier mattercontract.ChangeNotifier
 		var ok bool
 		if ep.Source != nil {
-			notifier, ok = ep.Source.(interfaces.MatterChangeNotifier)
+			notifier, ok = ep.Source.(mattercontract.ChangeNotifier)
 		}
 		if !ok && ep.Measurement != nil {
-			notifier, ok = ep.Measurement.(interfaces.MatterChangeNotifier)
+			notifier, ok = ep.Measurement.(mattercontract.ChangeNotifier)
 		}
 		if !ok {
 			continue
@@ -945,14 +945,14 @@ func (b *Bridge) wireMeasurementListenersLocked() {
 		// cluster's reportable paths — otherwise a POWER / ENERGY_COUNTER
 		// push never reaches a controller as a proactive report.
 		primaryCluster := uint32(0)
-		if srv, isSrv := notifier.(interfaces.MatterClusterServer); isSrv {
+		if srv, isSrv := notifier.(mattercontract.ClusterServer); isSrv {
 			primaryCluster = srv.MatterClusterID()
 		}
 		for _, srv := range endpointpkg.ClusterServers(ep) {
 			if srv == nil || srv.MatterClusterID() == primaryCluster {
 				continue
 			}
-			subNotifier, isNotifier := srv.(interfaces.MatterChangeNotifier)
+			subNotifier, isNotifier := srv.(mattercontract.ChangeNotifier)
 			if !isNotifier {
 				continue
 			}
@@ -980,7 +980,7 @@ func (b *Bridge) wireMeasurementListenersLocked() {
 // controller's DataVersionFilter misses on the next read — mirrors matter.js
 // Datasource.ts:949), then marks every path dirty on the Subscribe manager. The
 // unsubscribe is tracked so a reassemble tears every listener down.
-func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpointpkg.Endpoint, notifier interfaces.MatterChangeNotifier, pathSet []im.ConcreteAttributePath) {
+func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpointpkg.Endpoint, notifier mattercontract.ChangeNotifier, pathSet []im.ConcreteAttributePath) {
 	epID := ep.ID
 	unsub := notifier.OnMatterValueChanged(func() {
 		if b.logger != nil {
@@ -1007,7 +1007,7 @@ func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpoint
 
 // filterPathsByNotifierCluster narrows reportable paths to only those
 // whose cluster is owned by the notifier. A source typically also
-// implements [interfaces.MatterClusterServer] (e.g. *switchdev.Switch
+// implements [mattercontract.ClusterServer] (e.g. *switchdev.Switch
 // is both the endpoint source and the OnOff cluster server), in which
 // case its `MatterClusterID()` identifies the cluster whose attributes
 // it can actually change. Paths on other clusters of the same
@@ -1016,7 +1016,7 @@ func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpoint
 // source's cluster only.
 //
 // When the notifier does not also implement
-// [interfaces.MatterClusterServer] — the measurement-source path,
+// [mattercontract.ClusterServer] — the measurement-source path,
 // where the source is a sensor-DP and the cluster server is materialised
 // separately — we fall back to the full path set. Every reportable
 // cluster on such an endpoint is derived from that one source (an
@@ -1026,8 +1026,8 @@ func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpoint
 // ones. A future per-cluster-attribute refinement can tighten this
 // further if Apple turns out to dislike the static-attr noise on sensor
 // endpoints too.
-func filterPathsByNotifierCluster(notifier interfaces.MatterChangeNotifier, paths []im.ConcreteAttributePath) []im.ConcreteAttributePath {
-	srv, ok := notifier.(interfaces.MatterClusterServer)
+func filterPathsByNotifierCluster(notifier mattercontract.ChangeNotifier, paths []im.ConcreteAttributePath) []im.ConcreteAttributePath {
+	srv, ok := notifier.(mattercontract.ClusterServer)
 	if !ok {
 		return append([]im.ConcreteAttributePath(nil), paths...)
 	}

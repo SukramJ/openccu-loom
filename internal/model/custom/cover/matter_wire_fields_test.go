@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestGoToLiftPercentageWireFields drives GoToLiftPercentage with the
@@ -25,7 +24,7 @@ func TestGoToLiftPercentageWireFields(t *testing.T) {
 	srv := c.MatterClusterServers()[0]
 
 	fields := map[uint8]any{0: uint64(7500)} // Matter 7500 = "75 % closed"
-	if _, err := srv.MatterInvoke(context.Background(), 0x05, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x05, fields); err != nil {
 		t.Fatalf("GoToLiftPercentage wire-shape err: %v", err)
 	}
 	flushGoToWrites(&c.matterGoTo)

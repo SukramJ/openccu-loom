@@ -10,5 +10,11 @@
 // consumed by at least two of {central, client, north-bound adapters}.
 // Anything usable by a single consumer stays in that consumer.
 //
+// The Matter port contracts are the one group that has left again:
+// they live in [github.com/SukramJ/openccu-loom/pkg/mattercontract] so the
+// bridge can depend on them without inheriting this package's REST
+// contracts and their pkg/hmapi types. `matter.go` here is nothing but
+// aliases onto that package.
+//
 // See SPECIFICATION.md §3.2 and CLAUDE.md §Critical Rules for the rule.
 package interfaces

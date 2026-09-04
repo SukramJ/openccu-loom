@@ -9,7 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // buildCustomDPDevice returns a device whose single channel hosts a
@@ -50,10 +50,10 @@ func findBridgedByAddress(top *endpoint.Topology, addr string) *endpoint.Endpoin
 func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
 	// Deterministic version seeds (distinct per fresh tracker) so the
 	// assertions are crisp. Not parallel — mutates a package var.
-	restore := hmtypes.InitialDataVersion
+	restore := mattercontract.InitialDataVersion
 	var seed uint32
-	hmtypes.InitialDataVersion = func() uint32 { seed += 100; return seed }
-	t.Cleanup(func() { hmtypes.InitialDataVersion = restore })
+	mattercontract.InitialDataVersion = func() uint32 { seed += 100; return seed }
+	t.Cleanup(func() { mattercontract.InitialDataVersion = restore })
 
 	ctx := context.Background()
 	const central = "ccu1"

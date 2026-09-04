@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestICD_ClusterID(t *testing.T) {
@@ -104,7 +103,7 @@ func TestICD_WriteReturnsError(t *testing.T) {
 	t.Parallel()
 	icd := core.NewICDManagement()
 	for _, attrID := range []uint32{0x0000, 0x0001, 0x0002} {
-		err := icd.MatterWrite(context.Background(), attrID, nil, hmenum.CommandPriorityHigh)
+		err := icd.MatterWrite(context.Background(), attrID, nil)
 		if err == nil {
 			t.Errorf("MatterWrite(0x%04X) expected error, got nil", attrID)
 		}
@@ -115,7 +114,7 @@ func TestICD_InvokeReturnsError(t *testing.T) {
 	t.Parallel()
 	icd := core.NewICDManagement()
 	for _, cmdID := range []uint32{0x00, 0x01, 0x02, 0xFF} {
-		_, err := icd.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := icd.MatterInvoke(context.Background(), cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}

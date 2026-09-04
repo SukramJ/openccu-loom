@@ -13,8 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 func validBridgedConfig() core.BridgedConfig {
@@ -133,7 +132,7 @@ func TestBridgedBasicInfo_ReadAllAttributes(t *testing.T) {
 func TestBridgedBasicInfo_WriteNodeLabelValid(t *testing.T) {
 	t.Parallel()
 	b := newValidBridged(t)
-	err := b.MatterWrite(context.Background(), 0x0005, "new-label", hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0005, "new-label")
 	if err != nil {
 		t.Fatalf("MatterWrite NodeLabel: %v", err)
 	}
@@ -146,7 +145,7 @@ func TestBridgedBasicInfo_WriteNodeLabelValid(t *testing.T) {
 func TestBridgedBasicInfo_WriteNodeLabelTooLong(t *testing.T) {
 	t.Parallel()
 	b := newValidBridged(t)
-	err := b.MatterWrite(context.Background(), 0x0005, strings.Repeat("z", 33), hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0005, strings.Repeat("z", 33))
 	if err == nil {
 		t.Fatal("expected error for NodeLabel > 32 bytes, got nil")
 	}
@@ -155,7 +154,7 @@ func TestBridgedBasicInfo_WriteNodeLabelTooLong(t *testing.T) {
 func TestBridgedBasicInfo_WriteNodeLabelWrongType(t *testing.T) {
 	t.Parallel()
 	b := newValidBridged(t)
-	err := b.MatterWrite(context.Background(), 0x0005, 42, hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0005, 42)
 	if err == nil {
 		t.Fatal("expected error for wrong type, got nil")
 	}
@@ -166,7 +165,7 @@ func TestBridgedBasicInfo_WriteReadOnlyAttrReturnsError(t *testing.T) {
 	b := newValidBridged(t)
 	ctx := context.Background()
 	for _, attrID := range []uint32{0x0001, 0x0002, 0x0011, 0x0012} {
-		err := b.MatterWrite(ctx, attrID, "x", hmenum.CommandPriorityHigh)
+		err := b.MatterWrite(ctx, attrID, "x")
 		if err == nil {
 			t.Errorf("MatterWrite(0x%04X) expected error, got nil", attrID)
 		}
@@ -253,7 +252,7 @@ type recordedEvent struct {
 	priority any
 }
 
-// fakeEmitter implements [interfaces.MatterEventEmitter] by appending
+// fakeEmitter implements [mattercontract.EventEmitter] by appending
 // every call into a slice. Mirrors the GenericSwitch test pattern at
 // `cluster/wire/genericswitch_test.go`.
 type fakeEmitter struct {
@@ -261,7 +260,7 @@ type fakeEmitter struct {
 	events []recordedEvent
 }
 
-func (f *fakeEmitter) MatterEmitEvent(endpoint uint16, clusterID, event uint32, data any, priority interfaces.MatterEventPriority) {
+func (f *fakeEmitter) MatterEmitEvent(endpoint uint16, clusterID, event uint32, data any, priority mattercontract.EventPriority) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events = append(f.events, recordedEvent{endpoint: endpoint, cluster: clusterID, event: event, data: data, priority: priority})
@@ -305,7 +304,7 @@ func TestBridgedBasicInfo_SetReachableEmitsReachableChanged(t *testing.T) {
 	if ev.event != 0x0003 {
 		t.Errorf("event = 0x%04X, want 0x0003 (ReachableChanged)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (matter.js bridged-device-basic-information.element.ts:55)", ev.priority)
 	}
 	payload, ok := ev.data.(core.ReachableChangedEvent)
@@ -365,7 +364,7 @@ func TestBridgedBasicInfo_InvokeReturnsError(t *testing.T) {
 	b := newValidBridged(t)
 	ctx := context.Background()
 	for _, cmdID := range []uint32{0x00, 0xFF} {
-		_, err := b.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := b.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -378,7 +377,7 @@ func TestBridgedBasicInfo_InvokeReturnsError(t *testing.T) {
 func TestBridgedBasicInfo_MatterEvents(t *testing.T) {
 	t.Parallel()
 	b := newValidBridged(t)
-	var lister interfaces.MatterClusterEventLister = b
+	var lister mattercontract.ClusterEventLister = b
 	events := lister.MatterEvents()
 	if len(events) != 1 {
 		t.Fatalf("MatterEvents() len = %d, want 1", len(events))

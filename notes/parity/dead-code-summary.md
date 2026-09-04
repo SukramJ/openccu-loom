@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 94e9a731
-HEAD: 94e9a731
+Generated: ec457756
+HEAD: ec457756
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 23939 |
-| Reachable | 2862 |
-| Whitelisted | 19692 |
+| Total Exported | 23992 |
+| Reachable | 2886 |
+| Whitelisted | 19721 |
 | **Unreachable** | **1385** |
 
 ## Top-20 Packages by Dead Code
@@ -175,4 +175,5 @@ HEAD: 94e9a731
 | pkg/hmapi | 0 | 81 | 8 |
 | pkg/hmevent | 0 | 4 | 0 |
 | pkg/hmui | 0 | 1 | 0 |
-| pkg/interfaces | 0 | 40 | 3 |
+| pkg/interfaces | 0 | 20 | 3 |
+| pkg/mattercontract | 0 | 20 | 0 |

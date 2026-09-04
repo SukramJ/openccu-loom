@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestParityMatterJS_SirenDataVersionBumpsOnWrite verifies that a
@@ -21,7 +20,7 @@ func TestParityMatterJS_SirenDataVersionBumpsOnWrite(t *testing.T) {
 	before := r.siren.MatterDataVersion()
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
-	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOnOff, true, hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOnOff, true); err != nil {
 		t.Fatalf("MatterWrite(OnOff): %v", err)
 	}
 	if after := r.siren.MatterDataVersion(); after <= before {
@@ -37,7 +36,7 @@ func TestParityMatterJS_SirenDataVersionBumpsOnInvokeOff(t *testing.T) {
 	before := r.siren.MatterDataVersion()
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdOff, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdOff, nil); err != nil {
 		t.Fatalf("MatterInvoke(Off): %v", err)
 	}
 	if after := r.siren.MatterDataVersion(); after <= before {
@@ -53,7 +52,7 @@ func TestParityMatterJS_SirenDataVersionBumpsOnInvokeOn(t *testing.T) {
 	before := r.siren.MatterDataVersion()
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdOn, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdOn, nil); err != nil {
 		t.Fatalf("MatterInvoke(On): %v", err)
 	}
 	if after := r.siren.MatterDataVersion(); after <= before {
@@ -71,7 +70,7 @@ func TestParityMatterJS_SirenDataVersionMonotonicallyRises(t *testing.T) {
 	cmds := []uint32{matterCmdOn, matterCmdOff, matterCmdOn}
 	for i, cmd := range cmds {
 		prev := r.siren.MatterDataVersion()
-		if _, err := srv.MatterInvoke(context.Background(), cmd, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), cmd, nil); err != nil {
 			t.Fatalf("cmd %d: %v", i, err)
 		}
 		if next := r.siren.MatterDataVersion(); next <= prev {
@@ -107,7 +106,7 @@ func TestParityMatterJS_SirenDataVersionStableOnUnknownAttrWrite(t *testing.T) {
 	before := r.siren.MatterDataVersion()
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
-	_ = srv.MatterWrite(context.Background(), 0x9999, true, hmenum.CommandPriorityHigh)
+	_ = srv.MatterWrite(context.Background(), 0x9999, true)
 
 	if after := r.siren.MatterDataVersion(); after != before {
 		t.Fatalf("failed write bumped DataVersion: before=%d after=%d", before, after)
@@ -130,7 +129,7 @@ func TestParityMatterJS_SirenDataVersionStableOnUnknownCommand(t *testing.T) {
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
 	const undefinedCmdID = 0x7F // no OnOff command carries this id
-	_, _ = srv.MatterInvoke(context.Background(), undefinedCmdID, nil, hmenum.CommandPriorityHigh)
+	_, _ = srv.MatterInvoke(context.Background(), undefinedCmdID, nil)
 
 	if after := r.siren.MatterDataVersion(); after != before {
 		t.Fatalf("failed invoke bumped DataVersion: before=%d after=%d", before, after)

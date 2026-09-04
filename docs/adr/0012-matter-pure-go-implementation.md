@@ -470,7 +470,7 @@ discipline ADR 0011 introduced for `payload.HAEntity` /
 | **Spake2+ (PASE)** | Port from `connectedhomeip/src/crypto/CHIPCryptoPALmbedTLS.cpp`. Use `crypto/elliptic` P-256 + `crypto/sha256` + HKDF (`golang.org/x/crypto/hkdf`). ~500 LOC. **Highest implementation risk.** Mitigation: chip-tool conformance vectors as golden tests. |
 | **Sigma (CASE)** | Standard ECDH on P-256 (stdlib) + HKDF + AES-CCM. Lower risk than Spake2+ once that's done. |
 | **DAC/PAI/PAA chain validation** | `crypto/x509` covers 95 %. Matter-specific OIDs (vendor ID, product ID, certification declaration) decoded with `encoding/asn1`. |
-| **mDNS / DNS-SD** | `github.com/grandcat/zeroconf` (Apache-2.0, pure Go) for discovery, with our own service-record assembly for advertising the bridge — the library's advertise side has known quirks on multi-interface hosts and is worth replacing. |
+| **mDNS / DNS-SD** | `github.com/grandcat/zeroconf` (MIT, pure Go) for discovery, with our own service-record assembly for advertising the bridge — the library's advertise side has known quirks on multi-interface hosts and is worth replacing. |
 
 ### Forward-compat verification (replaces the SPEC §6.3 promise with measurement)
 

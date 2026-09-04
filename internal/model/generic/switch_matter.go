@@ -16,6 +16,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached these calls defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
+
 // Compile-time assertions: Generic Switch is the OnOff-aktor surface
 // for HM channels that have no [model/custom/switch.Switch] wrapper —
 // e.g. a no-frills HmIP-PSM with just a STATE writable. The endpoint
@@ -203,7 +215,7 @@ func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 //   - StartUpOnOff (0x4003): nullable enum8 stored in-process.
 //
 // matter.js on-off.element.ts:31-36 marks all three access "RW VO"/"RW VM".
-func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
+func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	switch attrID {
 	case matterGenericSwitchAttrOnOff:
 		// OnOff carries quality "N S"; a scene controller may write nil to
@@ -217,7 +229,7 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 		if !ok {
 			return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterGenericSwitchValueType, value)
 		}
-		return s.Set(ctx, on, priority)
+		return s.Set(ctx, on, matterDispatchPriority)
 	case matterGenericSwitchAttrOnTime:
 		v, ok := matterGenericWriteUint16(value)
 		if !ok {
@@ -254,35 +266,35 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 // OnWithTimedOff 0x42). With no dimming-effect, scene or on-timer engine
 // behind the bridge the LT commands collapse to plain On/Off — the
 // device-type conformance requires only that they be accepted.
-func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
+func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any) (any, error) {
 	var err error
 	switch cmdID {
 	case matterGenericSwitchCmdOff:
-		err = s.Set(ctx, false, priority)
+		err = s.Set(ctx, false, matterDispatchPriority)
 	case matterGenericSwitchCmdOn:
-		err = s.turnOnAndRecallGlobalScene(ctx, priority)
+		err = s.turnOnAndRecallGlobalScene(ctx)
 	case matterGenericSwitchCmdToggle:
 		cur, observed := s.Value()
 		if !observed || !cur {
-			err = s.turnOnAndRecallGlobalScene(ctx, priority)
+			err = s.turnOnAndRecallGlobalScene(ctx)
 		} else {
-			err = s.Set(ctx, false, priority)
+			err = s.Set(ctx, false, matterDispatchPriority)
 		}
 	case matterGenericSwitchCmdOffWithEffect:
 		// No dimming-effect engine, so the effect identifier/variant are
 		// ignored. matter.js OnOffServer.ts:158-169 also clears
 		// GlobalSceneControl here — a plain Off never touches it.
-		if err = s.Set(ctx, false, priority); err == nil {
+		if err = s.Set(ctx, false, matterDispatchPriority); err == nil {
 			s.matterLT.globalSceneControl.Store(false)
 		}
 	case matterGenericSwitchCmdOnWithRecallGlobalScene:
 		// No scene engine, so the recall collapses to a plain On.
-		err = s.turnOnAndRecallGlobalScene(ctx, priority)
+		err = s.turnOnAndRecallGlobalScene(ctx)
 	case matterGenericSwitchCmdOnWithTimedOff:
 		// No on-timer, so the timed-off semantics are dropped.
 		// matter.js OnOffServer.ts:224 ends onWithTimedOff() with on(),
 		// which also sets GlobalSceneControl.
-		err = s.turnOnAndRecallGlobalScene(ctx, priority)
+		err = s.turnOnAndRecallGlobalScene(ctx)
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterGenericSwitchCommand, cmdID)
 	}
@@ -292,8 +304,8 @@ func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority
 // turnOnAndRecallGlobalScene switches on and sets GlobalSceneControl, the
 // side effect matter.js applies to every On-flavoured command
 // (OnOffServer.ts:97-104).
-func (s *Switch) turnOnAndRecallGlobalScene(ctx context.Context, priority hmenum.CommandPriority) error {
-	if err := s.TurnOn(ctx, priority); err != nil {
+func (s *Switch) turnOnAndRecallGlobalScene(ctx context.Context) error {
+	if err := s.TurnOn(ctx, matterDispatchPriority); err != nil {
 		return err
 	}
 	s.matterLT.globalSceneControl.Store(true)

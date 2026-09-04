@@ -101,7 +101,7 @@ func TestAttributeValueReader_GroupKeyMap_DecodesAndClusterAccepts(t *testing.T)
 		t.Fatalf("NewGroupKeyManagement: %v", err)
 	}
 	ctx := im.WithFabricFilter(context.Background(), true, fabric)
-	if err := g.MatterWrite(ctx, 0x0000, av.Value, 0); err != nil {
+	if err := g.MatterWrite(ctx, 0x0000, av.Value); err != nil {
 		t.Fatalf("GroupKeyManagement.MatterWrite rejected the wire-decoded value: %v", err)
 	}
 }
@@ -156,7 +156,7 @@ func TestAttributeValueReader_Extension_DecodesAndClusterAccepts(t *testing.T) {
 		t.Fatalf("NewAccessControl: %v", err)
 	}
 	ctx := im.WithFabricFilter(context.Background(), true, fabric)
-	if err := a.MatterWrite(ctx, 0x0001, av.Value, 0); err != nil {
+	if err := a.MatterWrite(ctx, 0x0001, av.Value); err != nil {
 		t.Fatalf("AccessControl.MatterWrite(Extension) rejected the wire-decoded value: %v", err)
 	}
 }

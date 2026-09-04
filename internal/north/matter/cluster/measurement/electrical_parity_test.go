@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // TestParity_ElectricalEnergyMeasurement_DataVersion_NonZero checks that
@@ -19,8 +19,8 @@ import (
 // per-cluster random init (Crypto.getRandomUint32, skip-zero).
 func TestParity_ElectricalEnergyMeasurement_DataVersion_NonZero(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: interfaces.MatterMeasurementEnergy, val: 100, obs: true}
-	var s interfaces.MatterClusterServer = measurement.NewElectricalEnergyServer(src)
+	src := fakeFloat{class: mattercontract.MeasurementEnergy, val: 100, obs: true}
+	var s mattercontract.ClusterServer = measurement.NewElectricalEnergyServer(src)
 	dv, ok := s.(interface{ MatterDataVersion() uint32 })
 	if !ok {
 		t.Fatal("ElectricalEnergyServer does not implement MatterDataVersion")
@@ -37,8 +37,8 @@ func TestParity_ElectricalEnergyMeasurement_DataVersion_NonZero(t *testing.T) {
 // per-cluster random init.
 func TestParity_ElectricalPowerMeasurement_DataVersion_NonZero(t *testing.T) {
 	t.Parallel()
-	src := fakeFloat{class: interfaces.MatterMeasurementPower, val: 1500, obs: true}
-	var s interfaces.MatterClusterServer = measurement.NewElectricalPowerServer(src)
+	src := fakeFloat{class: mattercontract.MeasurementPower, val: 1500, obs: true}
+	var s mattercontract.ClusterServer = measurement.NewElectricalPowerServer(src)
 	dv, ok := s.(interface{ MatterDataVersion() uint32 })
 	if !ok {
 		t.Fatal("ElectricalPowerServer does not implement MatterDataVersion")

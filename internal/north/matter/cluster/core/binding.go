@@ -10,8 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Binding implements the Matter Binding cluster (0x001E) per Matter
@@ -61,11 +60,11 @@ func NewBinding() *Binding {
 // Compile-time assertions: Binding satisfies MatterClusterServer and
 // the attribute-lister capability.
 var (
-	_ interfaces.MatterClusterServer          = (*Binding)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*Binding)(nil)
+	_ mattercontract.ClusterServer          = (*Binding)(nil)
+	_ mattercontract.ClusterAttributeLister = (*Binding)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (b *Binding) MatterClusterID() uint32 { return bindingClusterID }
 
 // MatterRead returns the bindings list under a copy.
@@ -88,7 +87,7 @@ func (b *Binding) MatterRead(attrID uint32) (any, bool) {
 // a `[]TargetStruct`. Per spec the write is fabric-scoped — entries
 // for fabrics other than the writer's are preserved by the dispatcher
 // before this call (openccu-loom relies on the IM layer to enforce that).
-func (b *Binding) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (b *Binding) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != bindingAttrBinding {
 		return fmt.Errorf("matter: Binding has no writable attribute 0x%04X", attrID)
 	}
@@ -103,7 +102,7 @@ func (b *Binding) MatterWrite(_ context.Context, attrID uint32, value any, _ hme
 }
 
 // MatterInvoke always rejects — Binding has no commands.
-func (b *Binding) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (b *Binding) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: Binding has no commands (got 0x%02X)", cmdID)
 }
 

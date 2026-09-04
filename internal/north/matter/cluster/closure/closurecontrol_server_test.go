@@ -118,7 +118,7 @@ func TestClosureControlMoveToForwardsAndRecordsTheTarget(t *testing.T) {
 			s := closure.NewControlServer(h.config())
 
 			_, err := s.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-				clusterwire.MoveToRequest{Position: targetPtr(tc.target)}, hmenum.CommandPriorityHigh)
+				clusterwire.MoveToRequest{Position: targetPtr(tc.target)})
 			if err != nil {
 				t.Fatalf("MoveTo: %v", err)
 			}
@@ -145,8 +145,7 @@ func TestClosureControlMoveToRejectsAPositionOutsideTheFeatureSet(t *testing.T) 
 	s := closure.NewControlServer(h.config())
 
 	_, err := s.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-		clusterwire.MoveToRequest{Position: targetPtr(clusterwire.ClosureTargetPositionMoveToPedestrianPosition)},
-		hmenum.CommandPriorityHigh)
+		clusterwire.MoveToRequest{Position: targetPtr(clusterwire.ClosureTargetPositionMoveToPedestrianPosition)})
 	if err == nil {
 		t.Fatal("MoveTo to an unadvertised position must be refused")
 	}
@@ -170,8 +169,7 @@ func TestClosureControlMoveToKeepsTheTargetUnchangedWhenTheDeviceRefuses(t *test
 	s := closure.NewControlServer(h.config())
 
 	_, err := s.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-		clusterwire.MoveToRequest{Position: targetPtr(clusterwire.ClosureTargetPositionMoveToFullyOpen)},
-		hmenum.CommandPriorityHigh)
+		clusterwire.MoveToRequest{Position: targetPtr(clusterwire.ClosureTargetPositionMoveToFullyOpen)})
 	if err == nil {
 		t.Fatal("MoveTo must report the device's refusal")
 	}
@@ -189,7 +187,7 @@ func TestClosureControlMoveToWithoutAPositionIsRefused(t *testing.T) {
 	s := closure.NewControlServer(h.config())
 
 	_, err := s.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-		clusterwire.MoveToRequest{}, hmenum.CommandPriorityHigh)
+		clusterwire.MoveToRequest{})
 	if err == nil {
 		t.Fatal("MoveTo carrying no supported field must be refused")
 	}
@@ -207,8 +205,7 @@ func TestClosureControlStopClearsTheTarget(t *testing.T) {
 	s := closure.NewControlServer(h.config())
 
 	if _, err := s.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-		clusterwire.MoveToRequest{Position: targetPtr(clusterwire.ClosureTargetPositionMoveToFullyOpen)},
-		hmenum.CommandPriorityHigh); err != nil {
+		clusterwire.MoveToRequest{Position: targetPtr(clusterwire.ClosureTargetPositionMoveToFullyOpen)}); err != nil {
 		t.Fatalf("MoveTo: %v", err)
 	}
 	if got := readOverallTarget(t, s); got.Position == nil {
@@ -216,7 +213,7 @@ func TestClosureControlStopClearsTheTarget(t *testing.T) {
 	}
 
 	if _, err := s.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdStop,
-		nil, hmenum.CommandPriorityHigh); err != nil {
+		nil); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	if h.stopped != 1 {
@@ -235,7 +232,7 @@ func TestClosureControlCalibrateIsUnsupported(t *testing.T) {
 	s := closure.NewControlServer(closure.Config{})
 
 	_, err := s.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdCalibrate,
-		nil, hmenum.CommandPriorityHigh)
+		nil)
 	if err == nil {
 		t.Fatal("Calibrate must be refused without the Calibration feature")
 	}
@@ -362,7 +359,7 @@ func TestClosureControlNoAttributeIsWritable(t *testing.T) {
 	t.Parallel()
 	s := closure.NewControlServer(closure.Config{})
 	for _, id := range s.MatterAttributes() {
-		if err := s.MatterWrite(context.Background(), id, uint8(0), hmenum.CommandPriorityHigh); err == nil {
+		if err := s.MatterWrite(context.Background(), id, uint8(0)); err == nil {
 			t.Errorf("attribute 0x%04X accepted a write; every ClosureControl attribute is R V", id)
 		}
 	}

@@ -8,25 +8,24 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // --- fakes ---
 
 type fakeSource struct {
-	servers []interfaces.MatterClusterServer
+	servers []mattercontract.ClusterServer
 }
 
 func (f fakeSource) MatterDeviceType() uint16 { return 0x010A }
-func (f fakeSource) MatterClusterServers() []interfaces.MatterClusterServer {
+func (f fakeSource) MatterClusterServers() []mattercontract.ClusterServer {
 	return f.servers
 }
 
 type fakeBoolMeasurement struct{}
 
-func (fakeBoolMeasurement) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementOccupancy
+func (fakeBoolMeasurement) MatterMeasurementClass() mattercontract.MeasurementClass {
+	return mattercontract.MeasurementOccupancy
 }
 func (fakeBoolMeasurement) MatterBoolValue() (value, observed bool) { return true, true }
 
@@ -37,11 +36,11 @@ func (s fakeServer) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (s fakeServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s fakeServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errors.New("read-only")
 }
 
-func (s fakeServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s fakeServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, errors.New("no commands")
 }
 func (s fakeServer) MatterReportable() []uint32 { return nil }
@@ -49,7 +48,7 @@ func (s fakeServer) MatterReportable() []uint32 { return nil }
 // --- tests ---
 
 // fakeMomentarySwitchSource implements both
-// [interfaces.MatterMeasurementSource] (with MomentarySwitch) and
+// [mattercontract.MeasurementSource] (with MomentarySwitch) and
 // the wire.GenericSwitchSource shape, mirroring how a HM Button
 // surfaces in the live model. The struct lives in the test file so
 // it can pretend to be a Button without pulling the model package.
@@ -57,8 +56,8 @@ type fakeMomentarySwitchSource struct {
 	supportsLong bool
 }
 
-func (f fakeMomentarySwitchSource) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementMomentarySwitch
+func (f fakeMomentarySwitchSource) MatterMeasurementClass() mattercontract.MeasurementClass {
+	return mattercontract.MeasurementMomentarySwitch
 }
 func (f fakeMomentarySwitchSource) MatterSwitchPositions() uint8        { return 2 }
 func (f fakeMomentarySwitchSource) MatterSwitchSupportsLongPress() bool { return f.supportsLong }
@@ -95,7 +94,7 @@ func TestClusterServersRootReturnsNil(t *testing.T) {
 	t.Parallel()
 	ep := &Endpoint{
 		ID:     0,
-		Source: fakeSource{servers: []interfaces.MatterClusterServer{fakeServer{id: 0x1234}}},
+		Source: fakeSource{servers: []mattercontract.ClusterServer{fakeServer{id: 0x1234}}},
 	}
 	if got := ClusterServers(ep); got != nil {
 		t.Errorf("ClusterServers(root) = %v, want nil", got)
@@ -108,7 +107,7 @@ func TestClusterServersFromSource(t *testing.T) {
 	sentinel := fakeServer{id: 0x1234}
 	ep := &Endpoint{
 		ID:     2,
-		Source: fakeSource{servers: []interfaces.MatterClusterServer{sentinel}},
+		Source: fakeSource{servers: []mattercontract.ClusterServer{sentinel}},
 	}
 
 	first := ClusterServers(ep)

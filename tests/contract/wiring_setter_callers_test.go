@@ -360,7 +360,7 @@ func receiverTypeName(fn *types.Func) string {
 // The second half is not a nicety. This codebase wires collaborators
 // through interfaces as a matter of course — the Matter bridge hands
 // itself to every cluster with `recv.SetMatterEventEmitter(b)` over an
-// [interfaces.MatterEventReceiver] — and a walk that only resolved the
+// [mattercontract.EventReceiver] — and a walk that only resolved the
 // call to the interface method would report all fourteen concrete
 // implementations as unwired. That is not a stricter guard, it is a
 // wrong one: fourteen false alarms teach a reader to skim the list, and

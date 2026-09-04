@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // genericParamDP is a minimal ParameterDataPoint implementation that also
@@ -34,14 +34,14 @@ func (g *genericParamDP) RawValue() (any, bool)                    { return 0.0,
 func (g *genericParamDP) ModifiedAt() time.Time                    { return time.Time{} }
 func (g *genericParamDP) OnAnyUpdate(_ func(old, next any)) func() { return func() {} }
 func (g *genericParamDP) MatterDeviceType() uint16                 { return g.devType }
-func (g *genericParamDP) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: g.cluster}}
+func (g *genericParamDP) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{&fakeClusterServer{clusterID: g.cluster}}
 }
 
 // ---- minimal AttachableDataPoint fakes ----
 
 // dpWithKey implements device.AttachableDataPoint and
-// interfaces.MatterEndpointSource so it shows up as Mappable.
+// mattercontract.EndpointSource so it shows up as Mappable.
 type mappableDP struct {
 	key     hmtypes.DataPointKey
 	devType uint16
@@ -50,8 +50,8 @@ type mappableDP struct {
 
 func (d *mappableDP) DataPointKey() hmtypes.DataPointKey { return d.key }
 func (d *mappableDP) MatterDeviceType() uint16           { return d.devType }
-func (d *mappableDP) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: d.cluster}}
+func (d *mappableDP) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{&fakeClusterServer{clusterID: d.cluster}}
 }
 
 // opaqueDP implements only device.AttachableDataPoint — no Matter
@@ -204,8 +204,8 @@ type namedDP struct {
 func (n *namedDP) DataPointKey() hmtypes.DataPointKey { return hmtypes.DataPointKey{} }
 func (n *namedDP) Name() string                       { return n.name }
 func (n *namedDP) MatterDeviceType() uint16           { return n.devType }
-func (n *namedDP) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: n.cluster}}
+func (n *namedDP) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{&fakeClusterServer{clusterID: n.cluster}}
 }
 
 // unknownDP has no DataPointKey.Parameter and no Name().
@@ -217,8 +217,8 @@ type unknownDP struct {
 
 func (u *unknownDP) DataPointKey() hmtypes.DataPointKey { return hmtypes.DataPointKey{} }
 func (u *unknownDP) MatterDeviceType() uint16           { return u.devType }
-func (u *unknownDP) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: u.cluster}}
+func (u *unknownDP) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{&fakeClusterServer{clusterID: u.cluster}}
 }
 
 // TestCollectCandidates_NameDPKey verifies the Name() dpKey fallback path.
@@ -302,7 +302,7 @@ func TestCollectCandidates_NilClusterServer(t *testing.T) {
 	// fakeEndpointSourceWithNilCluster returns clusters where the first is nil.
 	src := &fakeEndpointSource{
 		deviceType: 0x0100,
-		clusters: []interfaces.MatterClusterServer{
+		clusters: []mattercontract.ClusterServer{
 			nil,                                   // nil server — must be skipped
 			&fakeClusterServer{clusterID: 0x0006}, // valid server
 		},

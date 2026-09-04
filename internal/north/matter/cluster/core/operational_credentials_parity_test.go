@@ -17,7 +17,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	mstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -350,7 +349,7 @@ func TestParityFabricManager_OpcredsRemoveFabricHookFires(t *testing.T) {
 	}
 
 	// Remove via the cluster command.
-	resp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: idx}, hmenum.CommandPriorityHigh)
+	resp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: idx})
 	if err != nil {
 		t.Fatalf("MatterInvoke RemoveFabric: %v", err)
 	}
@@ -373,7 +372,7 @@ func TestParityFabricManager_OpcredsRemoveFabricMissReturnsInvalidFabricIndex(t 
 	ctx := context.Background()
 	oc, _ := opcredsWithFakeStore(t)
 
-	resp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: 99}, hmenum.CommandPriorityHigh)
+	resp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: 99})
 	if err != nil {
 		t.Fatalf("MatterInvoke RemoveFabric: %v", err)
 	}
@@ -409,7 +408,7 @@ func TestParityOpcreds_FailSafeRequiredForAddNOC(t *testing.T) {
 		t.Fatalf("NewOperationalCredentials: %v", err)
 	}
 
-	_, invokeErr := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{IPKValue: make([]byte, 16)}, hmenum.CommandPriorityHigh)
+	_, invokeErr := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{IPKValue: make([]byte, 16)})
 	if invokeErr == nil {
 		t.Fatal("AddNOC without armed FailSafe: expected error, got nil")
 	}
@@ -452,14 +451,14 @@ func TestParityOpcreds_CSRForUpdateNOCRejectedByAddNOC(t *testing.T) {
 	_, csrErr := oc.MatterInvoke(csrCtx, 0x04, core.CSRRequest{
 		CSRNonce:       make([]byte, 32),
 		IsForUpdateNOC: true,
-	}, hmenum.CommandPriorityHigh)
+	})
 	if csrErr != nil {
 		t.Fatalf("CSRRequest (IsForUpdateNOC=true): %v", csrErr)
 	}
 	// Now call AddNOC from the same session — must be rejected with an
 	// IM-level ConstraintError (not an in-band NOCResponse).
 	addNOCCtx := core.WithInvokeSessionID(caseCtx, 100)
-	_, err = oc.MatterInvoke(addNOCCtx, 0x06, core.AddNOCRequest{IPKValue: make([]byte, 16)}, hmenum.CommandPriorityHigh)
+	_, err = oc.MatterInvoke(addNOCCtx, 0x06, core.AddNOCRequest{IPKValue: make([]byte, 16)})
 	if err == nil {
 		t.Fatal("AddNOC with UpdateNOC-targeted CSR: expected IM error, got nil")
 	}

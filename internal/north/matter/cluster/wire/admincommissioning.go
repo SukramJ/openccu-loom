@@ -9,8 +9,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // AdministratorCommissioning implements Matter cluster 0x003C per
@@ -215,7 +214,7 @@ func (a *AdministratorCommissioning) MatterClusterID() uint32 {
 	return matterClusterAdminCommissioning
 }
 
-// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// MinInvokePrivilege implements [mattercontract.ClusterCommandInvokePrivilege].
 // OpenCommissioningWindow, OpenBasicCommissioningWindow, and
 // RevokeCommissioning all require Administer (5) per Matter §11.19
 // (access "A T"). Mirrors matter.js
@@ -275,13 +274,13 @@ func (a *AdministratorCommissioning) MatterRead(attrID uint32) (any, bool) {
 
 // MatterWrite rejects every attribute write — every Matter §11.19.5
 // attribute is read-only.
-func (a *AdministratorCommissioning) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (a *AdministratorCommissioning) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: AdministratorCommissioning attribute 0x%04X is read-only", attrID)
 }
 
 // MatterInvoke routes the OpenCommissioningWindow / RevokeCommissioning
 // commands.
-func (a *AdministratorCommissioning) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (a *AdministratorCommissioning) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	a.mu.RLock()
 	c := a.controller
 	vr := a.vendorResolver
@@ -536,7 +535,7 @@ const (
 	pakeVerifierBytes        = 97     // spec §3.10.5 — fixed length
 )
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [mattercontract.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke.
 // Mirrors matter.js packages/model/src/standard/elements/
 // administrator-commissioning.element.ts accepted commands.
@@ -550,7 +549,7 @@ func (a *AdministratorCommissioning) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [mattercontract.ClusterCommandLister].
 // AdministratorCommissioning has no generated response commands — all outcomes
 // are communicated via Matter StatusResponse.
 // Mirrors matter.js packages/model/src/standard/elements/
@@ -563,8 +562,8 @@ func (a *AdministratorCommissioning) MatterGeneratedCommands() []uint32 {
 // bridge's cluster-server contract, the attribute-lister capability,
 // and the command-lister capability.
 var (
-	_ interfaces.MatterClusterServer                 = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeLister        = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterCommandLister          = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterCommandInvokePrivilege = (*AdministratorCommissioning)(nil)
+	_ mattercontract.ClusterServer                 = (*AdministratorCommissioning)(nil)
+	_ mattercontract.ClusterAttributeLister        = (*AdministratorCommissioning)(nil)
+	_ mattercontract.ClusterCommandLister          = (*AdministratorCommissioning)(nil)
+	_ mattercontract.ClusterCommandInvokePrivilege = (*AdministratorCommissioning)(nil)
 )

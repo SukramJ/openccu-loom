@@ -5,7 +5,7 @@
 // for light device types (OnOffLight, DimmableLight, ColorTemperatureLight,
 // ExtendedColorLight). The servers in this package are thin, stateless
 // wrappers whose state is owned by the caller; they implement
-// [interfaces.MatterClusterServer] and the optional lister interfaces so the
+// [mattercontract.ClusterServer] and the optional lister interfaces so the
 // endpoint assembler in internal/north/matter/endpoint can attach them without
 // knowing the device-specific model types.
 //
@@ -133,9 +133,21 @@ func (s *ColorControlServer) MatterRead(attrID uint32) (any, bool) {
 
 // MatterWrite rejects all attribute writes; ColorControl attributes are
 // read-only — commands are the intended mutation path.
-func (s *ColorControlServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *ColorControlServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("colorcontrol: attribute 0x%04X is not writable", attrID)
 }
+
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached this call defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // MatterInvoke handles ColorControl commands. MoveToColorTemperature
 // (0x0A) crops the target to [MinMireds, MaxMireds] and updates the
@@ -146,7 +158,7 @@ func (s *ColorControlServer) MatterWrite(_ context.Context, attrID uint32, _ any
 // reported state unchanged. The CT-move and CT-step commands (0x4B, 0x4C)
 // and StopMoveStep (0x47) are accepted as no-ops — HM devices have no
 // continuous-rate CT sweep.
-func (s *ColorControlServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s *ColorControlServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	switch cmdID {
 	case wire.ColorCtrlCmdMoveToColorTemperature:
 		// The bridge's command-fields reader decodes the payload into the
@@ -174,7 +186,7 @@ func (s *ColorControlServer) MatterInvoke(ctx context.Context, cmdID uint32, fie
 		// rejected write never leaves CurrentColorTemperatureMireds claiming
 		// a value the CCU did not accept.
 		if s.writer != nil {
-			if err := s.writer.SetColorTemperatureMireds(ctx, target, priority); err != nil {
+			if err := s.writer.SetColorTemperatureMireds(ctx, target, matterDispatchPriority); err != nil {
 				return nil, fmt.Errorf("colorcontrol: MoveToColorTemperature write-through: %w", err)
 			}
 		}

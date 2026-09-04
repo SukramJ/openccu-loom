@@ -618,11 +618,11 @@ func TestSirenMatterWriteOnOff(t *testing.T) {
 	onOffSrv := servers[0]
 
 	// MatterWrite on=true → TurnOn
-	if err := onOffSrv.MatterWrite(context.Background(), matterAttrOnOffOnOff, true, hmenum.CommandPriorityHigh); err != nil {
+	if err := onOffSrv.MatterWrite(context.Background(), matterAttrOnOffOnOff, true); err != nil {
 		t.Fatalf("MatterWrite on=true: %v", err)
 	}
 	// MatterWrite on=false → TurnOff
-	if err := onOffSrv.MatterWrite(context.Background(), matterAttrOnOffOnOff, false, hmenum.CommandPriorityHigh); err != nil {
+	if err := onOffSrv.MatterWrite(context.Background(), matterAttrOnOffOnOff, false); err != nil {
 		t.Fatalf("MatterWrite on=false: %v", err)
 	}
 }
@@ -633,7 +633,7 @@ func TestSirenMatterWriteUnknownAttrReturnsError(t *testing.T) {
 	r := newRig(t, "x", &stubWriter{}, custom.SirenCapabilities{})
 	servers := r.siren.MatterClusterServers()
 	onOffSrv := servers[0]
-	if err := onOffSrv.MatterWrite(context.Background(), 0x9999, true, hmenum.CommandPriorityHigh); err == nil {
+	if err := onOffSrv.MatterWrite(context.Background(), 0x9999, true); err == nil {
 		t.Error("MatterWrite with unknown attr must return error")
 	}
 }
@@ -644,7 +644,7 @@ func TestSirenMatterWriteWrongTypeReturnsError(t *testing.T) {
 	r := newRig(t, "x", &stubWriter{}, custom.SirenCapabilities{})
 	servers := r.siren.MatterClusterServers()
 	onOffSrv := servers[0]
-	if err := onOffSrv.MatterWrite(context.Background(), matterAttrOnOffOnOff, "not-a-bool", hmenum.CommandPriorityHigh); err == nil {
+	if err := onOffSrv.MatterWrite(context.Background(), matterAttrOnOffOnOff, "not-a-bool"); err == nil {
 		t.Error("MatterWrite with non-bool value must return error")
 	}
 }
@@ -655,7 +655,7 @@ func TestSirenMatterInvokeUnknownCmdReturnsError(t *testing.T) {
 	r := newRig(t, "x", &stubWriter{}, custom.SirenCapabilities{})
 	servers := r.siren.MatterClusterServers()
 	onOffSrv := servers[0]
-	_, err := onOffSrv.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh)
+	_, err := onOffSrv.MatterInvoke(context.Background(), 0xFF, nil)
 	if err == nil {
 		t.Error("MatterInvoke with unknown cmd must return error")
 	}
@@ -971,7 +971,7 @@ func TestSmokeSirenMatterWriteAlwaysErrors(t *testing.T) {
 	s, _, _ := newSmokeSirenRig(t)
 	servers := s.MatterClusterServers()
 	srv := servers[0]
-	if err := srv.MatterWrite(context.Background(), matterAttrSmokeExpressedState, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrSmokeExpressedState, nil); err == nil {
 		t.Error("SmokeCO MatterWrite must always return error")
 	}
 }
@@ -982,7 +982,7 @@ func TestSmokeSirenMatterInvokeAlwaysErrors(t *testing.T) {
 	s, _, _ := newSmokeSirenRig(t)
 	servers := s.MatterClusterServers()
 	srv := servers[0]
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("SmokeCO MatterInvoke must always return error")
 	}

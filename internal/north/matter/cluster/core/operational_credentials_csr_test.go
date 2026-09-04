@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // newOpcredsWithDAC builds an OperationalCredentials cluster wired with a
@@ -77,7 +76,6 @@ func TestCSRRequest_AttestationChallengeBound(t *testing.T) {
 		context.Background(),
 		0x04, // opcredsCmdCSRRequest
 		core.CSRRequest{CSRNonce: csrNonce},
-		hmenum.CommandPriorityHigh,
 	)
 	if err != nil {
 		t.Fatalf("CSRRequest MatterInvoke: %v", err)
@@ -139,7 +137,6 @@ func TestCSRRequest_AttestationChallenge_NilDACKey(t *testing.T) {
 		context.Background(),
 		0x04,
 		core.CSRRequest{CSRNonce: csrNonce},
-		hmenum.CommandPriorityHigh,
 	)
 	if err != nil {
 		t.Fatalf("CSRRequest (nil DAC): %v", err)
@@ -181,7 +178,6 @@ func TestCSRRequest_SetAttestationChallenge_DefensiveCopy(t *testing.T) {
 		context.Background(),
 		0x04,
 		core.CSRRequest{CSRNonce: csrNonce},
-		hmenum.CommandPriorityHigh,
 	)
 	if err != nil {
 		t.Fatalf("CSRRequest: %v", err)

@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ─── payload.go: InfoPayload / ConfigPayload / StatePayload ─────────────────
@@ -406,22 +405,22 @@ func TestCTColorServerWriteAndInvoke(t *testing.T) {
 	s := ctColorServer{l: ctl}
 
 	// Write always returns unknown-attr error.
-	if err := s.MatterWrite(context.Background(), matterAttrColorColorTemperatureMireds, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), matterAttrColorColorTemperatureMireds, nil); err == nil {
 		t.Error("ctColorServer.MatterWrite must always return error")
 	}
 
 	// Invoke with MoveToColorTemperature bare uint16.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(300), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(300)); err != nil {
 		t.Errorf("MatterInvoke(CT): %v", err)
 	}
 
 	// Invoke with map.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, map[string]any{"colorTempMireds": uint16(250)}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, map[string]any{"colorTempMireds": uint16(250)}); err != nil {
 		t.Errorf("MatterInvoke(CT/map): %v", err)
 	}
 
 	// Unknown command.
-	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("Unknown cmd must return error")
 	}
 }
@@ -519,7 +518,7 @@ func TestHSColorServerWriteAndInvoke(t *testing.T) {
 	s := hsColorServer{l: cl}
 
 	// Write always returns error.
-	if err := s.MatterWrite(context.Background(), matterAttrColorCurrentHue, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), matterAttrColorCurrentHue, nil); err == nil {
 		t.Error("hsColorServer.MatterWrite must always return error")
 	}
 
@@ -528,32 +527,32 @@ func TestHSColorServerWriteAndInvoke(t *testing.T) {
 	sat.OnEvent(0.0)
 
 	// MoveToHue wire struct.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, wire.MoveToHueRequest{Hue: 127}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, wire.MoveToHueRequest{Hue: 127}); err != nil {
 		t.Errorf("MatterInvoke(MoveToHue/wire): %v", err)
 	}
 
 	// MoveToHue wire struct variant.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, wire.MoveToHueRequest{Hue: 64}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, wire.MoveToHueRequest{Hue: 64}); err != nil {
 		t.Errorf("MatterInvoke(MoveToHue/wire2): %v", err)
 	}
 
 	// MoveToSaturation wire struct.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, wire.MoveToSaturationRequest{Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, wire.MoveToSaturationRequest{Saturation: 200}); err != nil {
 		t.Errorf("MatterInvoke(MoveToSat/wire): %v", err)
 	}
 
 	// MoveToSaturation wire struct variant.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, wire.MoveToSaturationRequest{Saturation: 100}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, wire.MoveToSaturationRequest{Saturation: 100}); err != nil {
 		t.Errorf("MatterInvoke(MoveToSat/wire2): %v", err)
 	}
 
 	// MoveToHueAndSaturation wire struct.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 60, Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 60, Saturation: 200}); err != nil {
 		t.Errorf("MatterInvoke(MoveToHueSat): %v", err)
 	}
 
 	// Unknown command.
-	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("Unknown cmd must return error")
 	}
 }
@@ -658,22 +657,22 @@ func TestRGBWColorServerWriteAndInvoke(t *testing.T) {
 	s := rgbwColorServer{l: r}
 
 	// Write always returns error.
-	if err := s.MatterWrite(context.Background(), matterAttrColorCurrentHue, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), matterAttrColorCurrentHue, nil); err == nil {
 		t.Error("rgbwColorServer.MatterWrite must always return error")
 	}
 
 	// MoveToHueAndSaturation wire struct.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 60, Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 60, Saturation: 200}); err != nil {
 		t.Errorf("MatterInvoke(MoveToHueSat): %v", err)
 	}
 
 	// MoveToColorTemperature bare uint16.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(300), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(300)); err != nil {
 		t.Errorf("MatterInvoke(CT): %v", err)
 	}
 
 	// Unknown command.
-	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("Unknown cmd must return error")
 	}
 }

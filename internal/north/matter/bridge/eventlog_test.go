@@ -13,7 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ---- TestBridge_EmitEvent_AppendsToLog -----------------------------------
@@ -40,9 +40,9 @@ func TestBridge_EmitEvent_AppendsToLog(t *testing.T) {
 	}
 
 	// No subscription manager wired — EmitEvent should still persist.
-	b.EmitEvent(0, 0x0028, 0x00, "startup-payload", interfaces.MatterEventPriorityCritical)
-	b.EmitEvent(0, 0x0033, 0x03, "bootreason-payload", interfaces.MatterEventPriorityCritical)
-	b.EmitEvent(1, 0x0039, 0x02, "reachable-payload", interfaces.MatterEventPriorityCritical)
+	b.EmitEvent(0, 0x0028, 0x00, "startup-payload", mattercontract.EventPriorityCritical)
+	b.EmitEvent(0, 0x0033, 0x03, "bootreason-payload", mattercontract.EventPriorityCritical)
+	b.EmitEvent(1, 0x0039, 0x02, "reachable-payload", mattercontract.EventPriorityCritical)
 
 	records := b.EventLog().Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
 	if len(records) != 3 {
@@ -100,7 +100,7 @@ func TestBridge_EmitEvent_EventLogNumberConsistency(t *testing.T) {
 	}
 
 	for i := range 5 {
-		b.EmitEvent(0, 0x0028, uint32(i), nil, interfaces.MatterEventPriorityCritical) //nolint:gosec // G115: i is range 0..4, fits uint32
+		b.EmitEvent(0, 0x0028, uint32(i), nil, mattercontract.EventPriorityCritical) //nolint:gosec // G115: i is range 0..4, fits uint32
 	}
 
 	records := b.EventLog().Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
@@ -131,9 +131,9 @@ func TestBridge_ReadEvent_ReturnsBufferedEvents(t *testing.T) {
 	b := newStartedBridge(t)
 
 	// Emit three events before the ReadRequest arrives.
-	b.EmitEvent(0, 0x0028, 0x00, nil, interfaces.MatterEventPriorityCritical) // StartUp
-	b.EmitEvent(0, 0x0033, 0x03, nil, interfaces.MatterEventPriorityCritical) // BootReason
-	b.EmitEvent(1, 0x0039, 0x02, nil, interfaces.MatterEventPriorityCritical) // ReachableChanged
+	b.EmitEvent(0, 0x0028, 0x00, nil, mattercontract.EventPriorityCritical) // StartUp
+	b.EmitEvent(0, 0x0033, 0x03, nil, mattercontract.EventPriorityCritical) // BootReason
+	b.EmitEvent(1, 0x0039, 0x02, nil, mattercontract.EventPriorityCritical) // ReachableChanged
 
 	// Encode a ReadRequest with a wildcard EventPath (no attribute requests).
 	// The TLV shape per Matter §10.6.4:

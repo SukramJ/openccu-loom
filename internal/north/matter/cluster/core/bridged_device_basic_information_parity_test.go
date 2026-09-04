@@ -27,7 +27,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // TestParityMatterJS_BridgedServer_ClusterID pins 0x0039.
@@ -158,7 +158,7 @@ func TestParityMatterJS_BridgedServer_ReachableChangedEventFired(t *testing.T) {
 	if ev.event != 0x0003 {
 		t.Errorf("event = 0x%04X, want 0x0003 (ReachableChanged)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (bridged-device-basic-information.element.ts:55)", ev.priority)
 	}
 	if ev.endpoint != 3 {
@@ -276,7 +276,7 @@ func TestParityMatterJS_BridgedServer_NodeLabelWritePreservedAcrossRead(t *testi
 		t.Skip("initial label already matches test value — adjust validBridgedConfig to differ")
 	}
 
-	if err := b.MatterWrite(context.Background(), 0x0005, newLabel, 0); err != nil {
+	if err := b.MatterWrite(context.Background(), 0x0005, newLabel); err != nil {
 		t.Fatalf("MatterWrite NodeLabel: %v", err)
 	}
 	v1, ok := b.MatterRead(0x0005)
@@ -357,7 +357,7 @@ func TestParityMatterJS_BridgedServer_NodeLabelPersistenceAcrossMultipleWrites(t
 
 	writes := []string{"First Label", "Second Label", "Final Label"}
 	for _, label := range writes {
-		if err := b.MatterWrite(nil, 0x0005, label, 0); err != nil { //nolint:staticcheck // SA1012: test exercises the nil-Context tolerance contract
+		if err := b.MatterWrite(nil, 0x0005, label); err != nil { //nolint:staticcheck // SA1012: test exercises the nil-Context tolerance contract
 			t.Fatalf("MatterWrite %q: %v", label, err)
 		}
 		v, ok := b.MatterRead(0x0005)

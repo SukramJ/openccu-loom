@@ -12,8 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	mstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // fakeACLStore is a minimal ACLStoreFacade for AccessControl tests.
@@ -67,7 +66,7 @@ func newAccessControl(t *testing.T) *core.AccessControl {
 
 // writeACL is a convenience wrapper for MatterWrite(ctx, 0x0000, entries).
 func writeACL(ac *core.AccessControl, entries []core.AccessControlEntryStruct) error {
-	return ac.MatterWrite(context.Background(), 0x0000, entries, hmenum.CommandPriorityHigh)
+	return ac.MatterWrite(context.Background(), 0x0000, entries)
 }
 
 // newAccessControlWithStore builds an AccessControl backed by the
@@ -622,7 +621,7 @@ func TestAccessControl_ACLWriteEmitsEntryChanged(t *testing.T) {
 			if ev.event != 0x0000 {
 				t.Errorf("event = 0x%04X, want 0x0000 (AccessControlEntryChanged)", ev.event)
 			}
-			if ev.priority != interfaces.MatterEventPriorityInfo {
+			if ev.priority != mattercontract.EventPriorityInfo {
 				t.Errorf("priority = %v, want Info (matter.js access-control.element.ts:62)", ev.priority)
 			}
 			if ev.endpoint != 0 {
@@ -763,7 +762,7 @@ func TestAccessControl_ACLWrite_FabricFromContext(t *testing.T) {
 	}
 
 	ctx := im.WithFabricFilter(context.Background(), false, sessionFabric)
-	if err := ac.MatterWrite(ctx, 0x0000, entries, hmenum.CommandPriorityHigh); err != nil {
+	if err := ac.MatterWrite(ctx, 0x0000, entries); err != nil {
 		t.Fatalf("MatterWrite: unexpected error: %v", err)
 	}
 
@@ -802,7 +801,7 @@ func TestAccessControl_ACLWrite_CtxFabricBeatsCurrentFabric(t *testing.T) {
 		{Privilege: 5, AuthMode: 2, Subjects: []uint64{0xCAFE}, FabricIndex: 0},
 	}
 	ctx := im.WithFabricFilter(context.Background(), false, 4) // current CASE session
-	if err := ac.MatterWrite(ctx, 0x0000, entries, hmenum.CommandPriorityHigh); err != nil {
+	if err := ac.MatterWrite(ctx, 0x0000, entries); err != nil {
 		t.Fatalf("MatterWrite: unexpected error: %v", err)
 	}
 
@@ -989,7 +988,7 @@ func TestAccessControl_MatterWrite_WrongType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAccessControl: %v", err)
 	}
-	err = ac.MatterWrite(context.Background(), 0x0000, "not a slice", hmenum.CommandPriorityHigh)
+	err = ac.MatterWrite(context.Background(), 0x0000, "not a slice")
 	if err == nil {
 		t.Fatal("MatterWrite(ACL, wrong type): expected error, got nil")
 	}
@@ -1056,7 +1055,7 @@ func TestAccessControl_MatterWrite_UnknownAttr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAccessControl: %v", err)
 	}
-	err = ac.MatterWrite(context.Background(), 0xDEAD, "any", hmenum.CommandPriorityHigh)
+	err = ac.MatterWrite(context.Background(), 0xDEAD, "any")
 	if err == nil {
 		t.Fatal("MatterWrite(unknown attr): expected error, got nil")
 	}

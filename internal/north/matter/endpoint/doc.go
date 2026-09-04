@@ -21,20 +21,20 @@
 //
 // Source surface (see ADR 0012 §"Source surface"):
 //
-//   - Custom DPs implementing [interfaces.MatterEndpointSource] →
+//   - Custom DPs implementing [mattercontract.EndpointSource] →
 //     one endpoint per channel hosting a Matter-mappable Custom DP.
 //   - Calculated / Combined DPs implementing
-//     [interfaces.MatterEndpointSource] → one endpoint per DP.
-//   - Calculated DPs implementing [interfaces.MatterMeasurementSource]
+//     [mattercontract.EndpointSource] → one endpoint per DP.
+//   - Calculated DPs implementing [mattercontract.MeasurementSource]
 //     (and not MatterEndpointSource) → one standalone sensor
 //     endpoint per measurement, gated by the IncludeMeasurements
 //     config flag.
-//   - Generic DPs implementing [interfaces.MatterEndpointSource] →
+//   - Generic DPs implementing [mattercontract.EndpointSource] →
 //     one endpoint per DP, but only on channels without a Custom-DP
 //     wrapper (the wrapper owns the channel's Matter projection
 //     otherwise, so this avoids double-publishing). Today only
 //     [generic.Switch] on STATE → OnOffPlugInUnit qualifies.
-//   - Generic DPs implementing [interfaces.MatterMeasurementSource] →
+//   - Generic DPs implementing [mattercontract.MeasurementSource] →
 //     one standalone sensor endpoint per row (Button / Action
 //     PRESS_*, BinarySensor, Sensor[float64]). The allowlist filter
 //     gates each row.

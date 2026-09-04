@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ---- helpers ----
@@ -185,7 +184,7 @@ func TestGencomm_ReadUnknownAttr(t *testing.T) {
 func TestGencomm_WriteBreadcrumbValid(t *testing.T) {
 	t.Parallel()
 	gc := defaultGencomm(t)
-	if err := gc.MatterWrite(context.Background(), 0x0000, uint64(42), hmenum.CommandPriorityHigh); err != nil {
+	if err := gc.MatterWrite(context.Background(), 0x0000, uint64(42)); err != nil {
 		t.Fatalf("MatterWrite Breadcrumb: %v", err)
 	}
 	v, ok := gc.MatterRead(0x0000)
@@ -200,7 +199,7 @@ func TestGencomm_WriteBreadcrumbValid(t *testing.T) {
 func TestGencomm_WriteBreadcrumbWrongType(t *testing.T) {
 	t.Parallel()
 	gc := defaultGencomm(t)
-	err := gc.MatterWrite(context.Background(), 0x0000, "not-a-uint64", hmenum.CommandPriorityHigh)
+	err := gc.MatterWrite(context.Background(), 0x0000, "not-a-uint64")
 	if err == nil {
 		t.Fatal("expected error for wrong type, got nil")
 	}
@@ -210,7 +209,7 @@ func TestGencomm_WriteReadOnlyAttr(t *testing.T) {
 	t.Parallel()
 	gc := defaultGencomm(t)
 	// RegulatoryConfig (0x0002) is read-only via MatterWrite.
-	err := gc.MatterWrite(context.Background(), 0x0002, uint8(1), hmenum.CommandPriorityHigh)
+	err := gc.MatterWrite(context.Background(), 0x0002, uint8(1))
 	if err == nil {
 		t.Fatal("expected error for write to read-only attr, got nil")
 	}
@@ -222,8 +221,7 @@ func TestGencomm_ArmFailSafe_Disarm(t *testing.T) {
 	t.Parallel()
 	gc := defaultGencomm(t)
 	resp, err := gc.MatterInvoke(context.Background(), 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe disarm: %v", err)
 	}
@@ -243,8 +241,7 @@ func TestGencomm_ArmFailSafe_Arms(t *testing.T) {
 		FailSafeMaxSeconds: 600,
 	})
 	resp, err := gc.MatterInvoke(context.Background(), 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe arm: %v", err)
 	}
@@ -264,8 +261,7 @@ func TestGencomm_ArmFailSafe_ExceedsMax_IsValueOutsideRange(t *testing.T) {
 		FailSafeMaxSeconds: 120,
 	})
 	resp, err := gc.MatterInvoke(context.Background(), 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 999, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 999, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe over-max: unexpected error: %v", err)
 	}
@@ -282,8 +278,7 @@ func TestGencomm_ArmFailSafe_SetsBreadcrumb(t *testing.T) {
 		FailSafeMaxSeconds: 600,
 	})
 	_, err := gc.MatterInvoke(context.Background(), 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 77},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 77})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
@@ -310,8 +305,7 @@ func TestGencomm_ArmFailSafe_OnExpired_Hook(t *testing.T) {
 	// failSafeFabricIndex and the expiry hook fires with the right fabric.
 	ctx := im.WithFabricFilter(context.Background(), false, fabricIndex)
 	resp, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
@@ -352,15 +346,13 @@ func TestGencomm_ArmFailSafe_DisarmFiresRevertHook(t *testing.T) {
 	// Arm with a long window so it cannot time out before we disarm.
 	ctx := im.WithFabricFilter(context.Background(), false, fabricIndex)
 	if _, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 600, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 600, Breadcrumb: 0}); err != nil {
 		t.Fatalf("ArmFailSafe arm: %v", err)
 	}
 
 	// Explicit disarm must fire the revert hook with the armed fabric.
 	resp, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe disarm: %v", err)
 	}
@@ -394,8 +386,7 @@ func TestGencomm_ArmFailSafe_DisarmUnarmedDoesNotFireHook(t *testing.T) {
 		},
 	})
 	if _, err := gc.MatterInvoke(context.Background(), 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0}); err != nil {
 		t.Fatalf("ArmFailSafe disarm: %v", err)
 	}
 	select {
@@ -429,8 +420,7 @@ func TestGencomm_SetOnFailSafeExpired_OverridesConstructorHook(t *testing.T) {
 
 	ctx := im.WithFabricFilter(context.Background(), false, fabricIndex)
 	if _, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1}); err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
 
@@ -465,8 +455,7 @@ func TestGencomm_SetOnFailSafeExpired_NilAtConstruction(t *testing.T) {
 
 	ctx := im.WithFabricFilter(context.Background(), false, fabricIndex)
 	if _, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1}); err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
 
@@ -490,8 +479,7 @@ func TestGencomm_ArmFailSafe_ReArm_ExtendsWindow(t *testing.T) {
 
 	// First arm.
 	_, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60})
 	if err != nil {
 		t.Fatalf("first ArmFailSafe: %v", err)
 	}
@@ -501,8 +489,7 @@ func TestGencomm_ArmFailSafe_ReArm_ExtendsWindow(t *testing.T) {
 
 	// Re-arm with a longer window.
 	resp, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 120},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 120})
 	if err != nil {
 		t.Fatalf("re-arm ArmFailSafe: %v", err)
 	}
@@ -530,8 +517,7 @@ func TestGencomm_ArmFailSafe_FabricFromContext_HookArg(t *testing.T) {
 	// FabricIndex is conveyed through the context (as in production).
 	ctx := im.WithFabricFilter(context.Background(), false, fabricIndex)
 	_, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
@@ -554,8 +540,7 @@ func TestGencomm_FailSafeArmed_ReturnsFalseAfterWindowExpired(t *testing.T) {
 	})
 	// Arm with a 1-second window.
 	_, err := gc.MatterInvoke(context.Background(), 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
@@ -590,8 +575,7 @@ func TestGencomm_CommissioningComplete_AcceptsAfterSetCurrentFabricReArm(t *test
 	// Step 1: ArmFailSafe over Hub#1's CASE session (fabric 1).
 	hub1 := im.WithFabricFilter(context.Background(), false, uint8(1))
 	if _, err := gc.MatterInvoke(hub1, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0}); err != nil {
 		t.Fatalf("ArmFailSafe(hub1): %v", err)
 	}
 
@@ -603,7 +587,7 @@ func TestGencomm_CommissioningComplete_AcceptsAfterSetCurrentFabricReArm(t *test
 	// Step 3: Hub#2 (system commissioner) opens its own CASE session
 	// on fabric 2 and calls CommissioningComplete. Bridge MUST accept.
 	hub2 := im.WithFabricFilter(context.Background(), false, uint8(2))
-	resp, err := gc.MatterInvoke(hub2, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gc.MatterInvoke(hub2, 0x04, nil)
 	if err != nil {
 		t.Fatalf("CommissioningComplete(hub2): %v", err)
 	}
@@ -631,15 +615,14 @@ func TestGencomm_CommissioningComplete_RejectsWithoutReArm(t *testing.T) {
 
 	hub1 := im.WithFabricFilter(context.Background(), false, uint8(1))
 	if _, err := gc.MatterInvoke(hub1, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0}); err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
 
 	// No SetCurrentFabric(2) — simulates the pre-Bug-F state where
 	// AddNOC failed to re-arm the failsafe.
 	hub2 := im.WithFabricFilter(context.Background(), false, uint8(2))
-	resp, err := gc.MatterInvoke(hub2, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gc.MatterInvoke(hub2, 0x04, nil)
 	if err != nil {
 		t.Fatalf("CommissioningComplete: %v", err)
 	}
@@ -665,8 +648,7 @@ func TestGencomm_SetRegulatoryConfig_ValidIndoor(t *testing.T) {
 			NewRegulatoryConfig: core.RegulatoryIndoor,
 			CountryCode:         "DE",
 			Breadcrumb:          1,
-		},
-		hmenum.CommandPriorityHigh)
+		})
 	if err != nil {
 		t.Fatalf("SetRegulatoryConfig: %v", err)
 	}
@@ -690,8 +672,7 @@ func TestGencomm_SetRegulatoryConfig_EmptyCountryCodeAccepted(t *testing.T) {
 		core.SetRegulatoryConfigRequest{
 			NewRegulatoryConfig: core.RegulatoryIndoor,
 			CountryCode:         "",
-		},
-		hmenum.CommandPriorityHigh)
+		})
 	if err != nil {
 		t.Fatalf("SetRegulatoryConfig empty CC: %v", err)
 	}
@@ -710,8 +691,7 @@ func TestGencomm_SetRegulatoryConfig_ThreeCharCountryCode_ValueOutsideRange(t *t
 		core.SetRegulatoryConfigRequest{
 			NewRegulatoryConfig: core.RegulatoryIndoor,
 			CountryCode:         "DEU",
-		},
-		hmenum.CommandPriorityHigh)
+		})
 	if err != nil {
 		t.Fatalf("SetRegulatoryConfig 3-char CC: unexpected error: %v", err)
 	}
@@ -730,8 +710,7 @@ func TestGencomm_SetRegulatoryConfig_ValueAboveMax_OutsideRange(t *testing.T) {
 		core.SetRegulatoryConfigRequest{
 			NewRegulatoryConfig: 3, // > RegulatoryIndoorOutdoor (2)
 			CountryCode:         "DE",
-		},
-		hmenum.CommandPriorityHigh)
+		})
 	if err != nil {
 		t.Fatalf("SetRegulatoryConfig invalid value: unexpected error: %v", err)
 	}
@@ -748,7 +727,7 @@ func TestGencomm_CommissioningComplete_NoFailSafe(t *testing.T) {
 	// fabric=1 simulates a CASE session; the PASE-reject (fabric=0) fires
 	// first otherwise, masking the NoFailSafe check we want to exercise.
 	ctx := im.WithFabricFilter(context.Background(), false, 1)
-	resp, err := gc.MatterInvoke(ctx, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gc.MatterInvoke(ctx, 0x04, nil)
 	if err != nil {
 		t.Fatalf("CommissioningComplete (no fail-safe): %v", err)
 	}
@@ -769,13 +748,12 @@ func TestGencomm_CommissioningComplete_AfterArmFailSafe(t *testing.T) {
 
 	// Arm first.
 	_, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
 
-	resp, err := gc.MatterInvoke(ctx, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gc.MatterInvoke(ctx, 0x04, nil)
 	if err != nil {
 		t.Fatalf("CommissioningComplete: %v", err)
 	}
@@ -797,15 +775,14 @@ func TestGencomm_CommissioningComplete_PASESession_Rejected(t *testing.T) {
 	// Arm under fabric=1 (CASE) to get a valid fail-safe window.
 	armCtx := im.WithFabricFilter(context.Background(), false, 1)
 	_, err := gc.MatterInvoke(armCtx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
 
 	// CommissioningComplete over a PASE session (fabric=0) must be rejected.
 	paseCtx := im.WithFabricFilter(context.Background(), false, 0)
-	resp, err := gc.MatterInvoke(paseCtx, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gc.MatterInvoke(paseCtx, 0x04, nil)
 	if err != nil {
 		t.Fatalf("CommissioningComplete (PASE): %v", err)
 	}
@@ -828,15 +805,14 @@ func TestGencomm_CommissioningComplete_FabricMismatch_Rejected(t *testing.T) {
 	// Arm under fabric=3.
 	armCtx := im.WithFabricFilter(context.Background(), false, 3)
 	_, err := gc.MatterInvoke(armCtx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
 
 	// CommissioningComplete from a different fabric (5) must be rejected.
 	mismatchCtx := im.WithFabricFilter(context.Background(), false, 5)
-	resp, err := gc.MatterInvoke(mismatchCtx, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gc.MatterInvoke(mismatchCtx, 0x04, nil)
 	if err != nil {
 		t.Fatalf("CommissioningComplete (fabric mismatch): %v", err)
 	}
@@ -858,8 +834,7 @@ func TestGencomm_CommissioningComplete_BreadcrumbReset(t *testing.T) {
 
 	// Arm with a non-zero Breadcrumb.
 	_, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 42},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 42})
 	if err != nil {
 		t.Fatalf("ArmFailSafe: %v", err)
 	}
@@ -869,7 +844,7 @@ func TestGencomm_CommissioningComplete_BreadcrumbReset(t *testing.T) {
 	}
 
 	// CommissioningComplete must reset Breadcrumb to 0.
-	resp, err := gc.MatterInvoke(ctx, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gc.MatterInvoke(ctx, 0x04, nil)
 	if err != nil {
 		t.Fatalf("CommissioningComplete: %v", err)
 	}
@@ -887,7 +862,7 @@ func TestGencomm_CommissioningComplete_BreadcrumbReset(t *testing.T) {
 func TestGencomm_Invoke_UnknownCmd(t *testing.T) {
 	t.Parallel()
 	gc := defaultGencomm(t)
-	_, err := gc.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh)
+	_, err := gc.MatterInvoke(context.Background(), 0xFF, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown command, got nil")
 	}
@@ -924,13 +899,12 @@ func TestGencomm_Concurrent_Race(t *testing.T) {
 			switch i % 3 {
 			case 0:
 				_, _ = gc.MatterInvoke(ctx, 0x00,
-					core.ArmFailSafeRequest{ExpiryLengthSeconds: 60},
-					hmenum.CommandPriorityHigh)
+					core.ArmFailSafeRequest{ExpiryLengthSeconds: 60})
 			case 1:
 				_, _ = gc.MatterRead(0x0000)
 				_, _ = gc.MatterRead(0x0002)
 			case 2:
-				_ = gc.MatterWrite(ctx, 0x0000, uint64(99), hmenum.CommandPriorityHigh)
+				_ = gc.MatterWrite(ctx, 0x0000, uint64(99))
 			}
 		}(i)
 	}

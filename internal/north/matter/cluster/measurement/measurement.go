@@ -12,7 +12,7 @@
 //
 // Materialisation: the bridge calls [Materialize] for an
 // [endpoint.Endpoint] whose Measurement field is non-nil and gets
-// back a slice of [interfaces.MatterClusterServer] ready to attach
+// back a slice of [mattercontract.ClusterServer] ready to attach
 // to the dispatch table.
 package measurement
 
@@ -23,13 +23,12 @@ import (
 	"math"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Cluster IDs handled by this package per Matter Application Cluster
 // Specification 1.5.1. Listed here for cross-reference; cluster
-// servers expose them via [interfaces.MatterClusterServer.MatterClusterID].
+// servers expose them via [mattercontract.ClusterServer.MatterClusterID].
 const (
 	ClusterTemperatureMeasurement uint32 = 0x0402
 	ClusterHumidityMeasurement    uint32 = 0x0405
@@ -298,14 +297,14 @@ var errNoCommands = errors.New("measurement: cluster has no commands")
 
 // --- TemperatureMeasurement (0x0402) -----------------------------------
 
-// TemperatureServer projects a [interfaces.MatterFloatMeasurementSource]
+// TemperatureServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter TemperatureMeasurement. The model unit is °C; the wire
 // unit is int16 in 0.01 °C per Matter §2.3.5.1. Saturates at int16
 // boundaries; absent observations surface as `(nil, true)` paired
 // with the spec NULL sentinel (0x8000).
 //
 // TemperatureServer embeds [cluster.DataVersionTracker] and implements
-// [interfaces.MatterClusterDataVersion] so the IM dispatcher stamps a
+// [mattercontract.ClusterDataVersion] so the IM dispatcher stamps a
 // per-cluster monotonic DataVersion on every AttributeDataIB. Apple
 // Home's MTRDevice cache persists cluster state only when the
 // DataVersion is non-uniform across clusters — a constant 1 (the
@@ -314,15 +313,15 @@ var errNoCommands = errors.New("measurement: cluster has no commands")
 // [cluster.DataVersionTracker] for the full rationale.
 type TemperatureServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterFloatMeasurementSource
+	src mattercontract.FloatMeasurementSource
 }
 
 // NewTemperatureServer wraps src.
-func NewTemperatureServer(src interfaces.MatterFloatMeasurementSource) *TemperatureServer {
+func NewTemperatureServer(src mattercontract.FloatMeasurementSource) *TemperatureServer {
 	return &TemperatureServer{src: src}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 // Returns the current per-cluster monotonic counter so the IM
 // dispatcher stamps non-uniform DataVersions on AttributeDataIBs.
 // Mirrors matter.js InteractionServer.ts DataVersion per-cluster init
@@ -368,12 +367,12 @@ func (s *TemperatureServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Temperature Measurement cluster is read-only at the wire layer.
-func (s *TemperatureServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *TemperatureServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Temperature Measurement cluster has no commands.
-func (s *TemperatureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *TemperatureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -416,29 +415,29 @@ func celsiusToInt16(c float64) int16 {
 
 // --- RelativeHumidityMeasurement (0x0405) ------------------------------
 
-// HumidityServer projects a [interfaces.MatterFloatMeasurementSource]
+// HumidityServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter RelativeHumidityMeasurement. Model unit: percent (0-100);
 // wire unit: uint16 in 0.01 % per Matter §2.6.5.1. Clamped to
 // [0, 10000] to keep the value valid even when the source DP reports
 // a slightly out-of-range humidity.
 //
 // HumidityServer embeds [cluster.DataVersionTracker] and implements
-// [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
+// [mattercontract.ClusterDataVersion]. See TemperatureServer for the
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type HumidityServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterFloatMeasurementSource
+	src mattercontract.FloatMeasurementSource
 }
 
 // Compile-time assertion: HumidityServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*HumidityServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*HumidityServer)(nil)
 
 // NewHumidityServer constructs a HumidityServer backed by src.
-func NewHumidityServer(src interfaces.MatterFloatMeasurementSource) *HumidityServer {
+func NewHumidityServer(src mattercontract.FloatMeasurementSource) *HumidityServer {
 	return &HumidityServer{src: src}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *HumidityServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Relative Humidity Measurement cluster ID (0x0405).
@@ -469,12 +468,12 @@ func (s *HumidityServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Relative Humidity Measurement cluster is read-only at the wire layer.
-func (s *HumidityServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *HumidityServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Relative Humidity Measurement cluster has no commands.
-func (s *HumidityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *HumidityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -502,7 +501,7 @@ func humidityToUint16(p float64) uint16 {
 
 // --- IlluminanceMeasurement (0x0400) -----------------------------------
 
-// IlluminanceServer projects a [interfaces.MatterFloatMeasurementSource]
+// IlluminanceServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter IlluminanceMeasurement. Model unit: lux. Wire unit:
 // uint16 = round(10000 * log10(lux) + 1), bounded to [1, 0xFFFE]
 // per Matter §2.2.5.1. Sub-lux readings clamp to 1 (the spec's
@@ -510,22 +509,22 @@ func humidityToUint16(p float64) uint16 {
 // 1 too. 0 is reserved as "below detection threshold"; 0xFFFF as null.
 //
 // IlluminanceServer embeds [cluster.DataVersionTracker] and implements
-// [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
+// [mattercontract.ClusterDataVersion]. See TemperatureServer for the
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type IlluminanceServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterFloatMeasurementSource
+	src mattercontract.FloatMeasurementSource
 }
 
 // Compile-time assertion: IlluminanceServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*IlluminanceServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*IlluminanceServer)(nil)
 
 // NewIlluminanceServer constructs an IlluminanceServer backed by src.
-func NewIlluminanceServer(src interfaces.MatterFloatMeasurementSource) *IlluminanceServer {
+func NewIlluminanceServer(src mattercontract.FloatMeasurementSource) *IlluminanceServer {
 	return &IlluminanceServer{src: src}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *IlluminanceServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Illuminance Measurement cluster ID (0x0400).
@@ -556,12 +555,12 @@ func (s *IlluminanceServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Illuminance Measurement cluster is read-only at the wire layer.
-func (s *IlluminanceServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *IlluminanceServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Illuminance Measurement cluster has no commands.
-func (s *IlluminanceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *IlluminanceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -592,7 +591,7 @@ func luxToMatter(lux float64) uint16 {
 
 // --- PressureMeasurement (0x0403) --------------------------------------
 
-// PressureServer projects a [interfaces.MatterFloatMeasurementSource]
+// PressureServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter PressureMeasurement. Model unit: hPa (= mbar = 100 Pa).
 // Wire unit: int16 deci-kPa — Matter §2.4.5.1 defines
 // `MeasuredValue = 10 x Pressure [kPa]`, so one wire unit is 0.1 kPa =
@@ -605,22 +604,22 @@ func luxToMatter(lux float64) uint16 {
 // units, well within int16 range.
 //
 // PressureServer embeds [cluster.DataVersionTracker] and implements
-// [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
+// [mattercontract.ClusterDataVersion]. See TemperatureServer for the
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type PressureServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterFloatMeasurementSource
+	src mattercontract.FloatMeasurementSource
 }
 
 // Compile-time assertion: PressureServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*PressureServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*PressureServer)(nil)
 
 // NewPressureServer constructs a PressureServer backed by src.
-func NewPressureServer(src interfaces.MatterFloatMeasurementSource) *PressureServer {
+func NewPressureServer(src mattercontract.FloatMeasurementSource) *PressureServer {
 	return &PressureServer{src: src}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *PressureServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Pressure Measurement cluster ID (0x0403).
@@ -661,12 +660,12 @@ func (s *PressureServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Pressure Measurement cluster is read-only at the wire layer.
-func (s *PressureServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *PressureServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Pressure Measurement cluster has no commands.
-func (s *PressureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *PressureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -694,7 +693,7 @@ func hPaToMatter(hpa float64) int16 {
 
 // --- BooleanState (0x0045) ---------------------------------------------
 
-// BooleanStateServer projects a [interfaces.MatterBoolMeasurementSource]
+// BooleanStateServer projects a [mattercontract.BoolMeasurementSource]
 // onto Matter BooleanState. Used for ContactSensor and generic alarm
 // endpoints (leak-class sensors also materialise as ContactSensor —
 // see `pkg/interfaces/matter.go::MatterMeasurementClassDeviceType`).
@@ -702,22 +701,22 @@ func hPaToMatter(hpa float64) int16 {
 // `internal/model/generic/matter.go::matterMeasurementForBinaryParameter`).
 //
 // BooleanStateServer embeds [cluster.DataVersionTracker] and implements
-// [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
+// [mattercontract.ClusterDataVersion]. See TemperatureServer for the
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type BooleanStateServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterBoolMeasurementSource
+	src mattercontract.BoolMeasurementSource
 }
 
 // Compile-time assertion: BooleanStateServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*BooleanStateServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*BooleanStateServer)(nil)
 
 // NewBooleanStateServer constructs a BooleanStateServer backed by src.
-func NewBooleanStateServer(src interfaces.MatterBoolMeasurementSource) *BooleanStateServer {
+func NewBooleanStateServer(src mattercontract.BoolMeasurementSource) *BooleanStateServer {
 	return &BooleanStateServer{src: src}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *BooleanStateServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Boolean State cluster ID (0x0045).
@@ -749,12 +748,12 @@ func (s *BooleanStateServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Boolean State cluster is read-only at the wire layer.
-func (s *BooleanStateServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *BooleanStateServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Boolean State cluster has no commands.
-func (s *BooleanStateServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *BooleanStateServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -771,28 +770,28 @@ func (s *BooleanStateServer) MatterAttributes() []uint32 {
 
 // --- OccupancySensing (0x0406) -----------------------------------------
 
-// OccupancySensingServer projects a [interfaces.MatterBoolMeasurementSource]
+// OccupancySensingServer projects a [mattercontract.BoolMeasurementSource]
 // onto Matter OccupancySensing. The Occupancy attribute is a bitmap8
 // where bit 0 = occupied; OccupancySensorType is fixed to 0 (PIR)
 // because every HM motion sensor uses PIR.
 //
 // OccupancySensingServer embeds [cluster.DataVersionTracker] and
-// implements [interfaces.MatterClusterDataVersion]. See TemperatureServer
+// implements [mattercontract.ClusterDataVersion]. See TemperatureServer
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type OccupancySensingServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterBoolMeasurementSource
+	src mattercontract.BoolMeasurementSource
 }
 
 // Compile-time assertion: OccupancySensingServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*OccupancySensingServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*OccupancySensingServer)(nil)
 
 // NewOccupancySensingServer constructs an OccupancySensingServer backed by src.
-func NewOccupancySensingServer(src interfaces.MatterBoolMeasurementSource) *OccupancySensingServer {
+func NewOccupancySensingServer(src mattercontract.BoolMeasurementSource) *OccupancySensingServer {
 	return &OccupancySensingServer{src: src}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *OccupancySensingServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Occupancy Sensing cluster ID (0x0406).
@@ -829,12 +828,12 @@ func (s *OccupancySensingServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Occupancy Sensing cluster is read-only at the wire layer.
-func (s *OccupancySensingServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *OccupancySensingServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Occupancy Sensing cluster has no commands.
-func (s *OccupancySensingServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *OccupancySensingServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -889,58 +888,58 @@ func (s *OccupancySensingServer) MatterAttributes() []uint32 {
 // a Bool LOWBAT signal — the resulting cluster server must be
 // attached to the host endpoint by the caller (typical: a
 // custom-DP's MatterClusterServers() rolls it up).
-func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []interfaces.MatterClusterServer {
+func FromMeasurementClass(class mattercontract.MeasurementClass, src any) []mattercontract.ClusterServer {
 	switch class {
-	case interfaces.MatterMeasurementTemperature:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewTemperatureServer(f)}
+	case mattercontract.MeasurementTemperature:
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewTemperatureServer(f)}
 		}
-	case interfaces.MatterMeasurementHumidity:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewHumidityServer(f)}
+	case mattercontract.MeasurementHumidity:
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewHumidityServer(f)}
 		}
-	case interfaces.MatterMeasurementIlluminance:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewIlluminanceServer(f)}
+	case mattercontract.MeasurementIlluminance:
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewIlluminanceServer(f)}
 		}
-	case interfaces.MatterMeasurementPressure:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewPressureServer(f)}
+	case mattercontract.MeasurementPressure:
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewPressureServer(f)}
 		}
-	case interfaces.MatterMeasurementCO2:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewAirQualityServer(class, f), NewCO2ConcentrationServer(f)}
+	case mattercontract.MeasurementCO2:
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewAirQualityServer(class, f), NewCO2ConcentrationServer(f)}
 		}
-	case interfaces.MatterMeasurementPM25:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewAirQualityServer(class, f), NewPM25ConcentrationServer(f)}
+	case mattercontract.MeasurementPM25:
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewAirQualityServer(class, f), NewPM25ConcentrationServer(f)}
 		}
-	case interfaces.MatterMeasurementPM10:
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewAirQualityServer(class, f), NewPM10ConcentrationServer(f)}
+	case mattercontract.MeasurementPM10:
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewAirQualityServer(class, f), NewPM10ConcentrationServer(f)}
 		}
-	case interfaces.MatterMeasurementContact, interfaces.MatterMeasurementLeak:
-		if b, ok := src.(interfaces.MatterBoolMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewBooleanStateServer(b)}
+	case mattercontract.MeasurementContact, mattercontract.MeasurementLeak:
+		if b, ok := src.(mattercontract.BoolMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewBooleanStateServer(b)}
 		}
-	case interfaces.MatterMeasurementOccupancy:
-		if b, ok := src.(interfaces.MatterBoolMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewOccupancySensingServer(b)}
+	case mattercontract.MeasurementOccupancy:
+		if b, ok := src.(mattercontract.BoolMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewOccupancySensingServer(b)}
 		}
-	case interfaces.MatterMeasurementBattery:
+	case mattercontract.MeasurementBattery:
 		// Two source shapes project onto PowerSource: a LOWBAT bool
 		// (BatChargeLevel) or a derived battery-percentage float (e.g.
 		// OperatingVoltageLevelSensor — BatPercentRemaining). Checked in
 		// this order because both interfaces are structurally possible
 		// on a source that also implements other measurement surfaces;
 		// a bool source is the more specific / more common HM signal.
-		if b, ok := src.(interfaces.MatterBoolMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewPowerSourceServer(b)}
+		if b, ok := src.(mattercontract.BoolMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewPowerSourceServer(b)}
 		}
-		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewPowerSourceServerFromFloat(f)}
+		if f, ok := src.(mattercontract.FloatMeasurementSource); ok {
+			return []mattercontract.ClusterServer{NewPowerSourceServerFromFloat(f)}
 		}
-	case interfaces.MatterMeasurementElectrical:
+	case mattercontract.MeasurementElectrical:
 		// The ElectricalSensor endpoint's full surface. PowerTopology is
 		// mandatory for the device type, so it ships whether or not the
 		// device has anything topological to say; ElectricalEnergyMeasurement
@@ -951,7 +950,7 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 		if !ok {
 			return nil
 		}
-		servers := []interfaces.MatterClusterServer{
+		servers := []mattercontract.ClusterServer{
 			NewElectricalPowerServerFromReadings(r),
 			NewPowerTopologyServer(),
 		}
@@ -959,13 +958,13 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 			servers = append(servers, NewElectricalEnergyServer(energyOf{r}))
 		}
 		return servers
-	case interfaces.MatterMeasurementPower, interfaces.MatterMeasurementEnergy:
+	case mattercontract.MeasurementPower, mattercontract.MeasurementEnergy:
 		// Per-parameter classes never build an endpoint of their own: the
 		// assembler folds them into one [generic.ElectricalGroup] and
 		// dispatches that as MatterMeasurementElectrical above. Reaching here
 		// means a caller bypassed the consolidation.
 		return nil
-	case interfaces.MatterMeasurementNone, interfaces.MatterMeasurementMomentarySwitch:
+	case mattercontract.MeasurementNone, mattercontract.MeasurementMomentarySwitch:
 		// None has no cluster projection by design; MomentarySwitch
 		// projects via the GenericSwitch event path in
 		// cluster/wire/genericswitch.go, not via a measurement cluster.
@@ -975,7 +974,7 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 
 // --- ElectricalPowerMeasurement (0x0090) ------------------------------
 
-// ElectricalPowerServer projects a [interfaces.MatterFloatMeasurementSource]
+// ElectricalPowerServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter ElectricalPowerMeasurement. The model unit is Watts;
 // the wire unit is int64 in milliWatts per Matter §2.13.6 (e.g.
 // 1500.0 W → 1500000 wire units).
@@ -986,23 +985,23 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 // as null, which is what a single-parameter source can honestly report.
 //
 // ElectricalPowerServer embeds [cluster.DataVersionTracker] and
-// implements [interfaces.MatterClusterDataVersion]. See TemperatureServer
+// implements [mattercontract.ClusterDataVersion]. See TemperatureServer
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type ElectricalPowerServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterFloatMeasurementSource
+	src mattercontract.FloatMeasurementSource
 	// readings is nil for a single-parameter source; when set it answers
 	// Voltage / ActiveCurrent / Frequency as well.
-	readings interfaces.MatterElectricalReadings
+	readings mattercontract.ElectricalReadings
 }
 
 // Compile-time assertion: ElectricalPowerServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*ElectricalPowerServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*ElectricalPowerServer)(nil)
 
 // NewElectricalPowerServer wraps src. Voltage / ActiveCurrent / Frequency
 // read as null — use [NewElectricalPowerServerFromReadings] for a source that
 // carries them.
-func NewElectricalPowerServer(src interfaces.MatterFloatMeasurementSource) *ElectricalPowerServer {
+func NewElectricalPowerServer(src mattercontract.FloatMeasurementSource) *ElectricalPowerServer {
 	return &ElectricalPowerServer{src: src}
 }
 
@@ -1017,24 +1016,24 @@ func NewElectricalPowerServerFromReadings(r ElectricalReadingsSource) *Electrica
 // multi-attribute surface plus the single-value surface every measurement
 // source carries (which reports the group's headline reading, active power).
 type ElectricalReadingsSource interface {
-	interfaces.MatterElectricalReadings
-	interfaces.MatterFloatMeasurementSource
+	mattercontract.ElectricalReadings
+	mattercontract.FloatMeasurementSource
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *ElectricalPowerServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Electrical Power Measurement cluster ID (0x0090).
 func (s *ElectricalPowerServer) MatterClusterID() uint32 { return ClusterElectricalPower }
 
-// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] by
+// OnMatterValueChanged implements [mattercontract.ChangeNotifier] by
 // forwarding the wrapped source's notifier. On a metering switch the POWER
 // sensor lives on a sibling meter channel and is attached cross-channel, so
 // without this the endpoint's OnOff notifier (which filters to its own cluster)
 // would never mark ActivePower dirty and the controller would only ever see the
 // value on a read. Returns a no-op unsubscribe when the source cannot notify.
 func (s *ElectricalPowerServer) OnMatterValueChanged(cb func()) func() {
-	if n, ok := s.src.(interfaces.MatterChangeNotifier); ok && n != nil {
+	if n, ok := s.src.(mattercontract.ChangeNotifier); ok && n != nil {
 		return n.OnMatterValueChanged(cb)
 	}
 	return func() {}
@@ -1092,12 +1091,12 @@ func (s *ElectricalPowerServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Electrical Power Measurement cluster is read-only at the wire layer.
-func (s *ElectricalPowerServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *ElectricalPowerServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Electrical Power Measurement cluster has no commands.
-func (s *ElectricalPowerServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *ElectricalPowerServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1159,38 +1158,38 @@ func wattsToMilliWatts(w float64) int64 {
 
 // --- ElectricalEnergyMeasurement (0x0091) -----------------------------
 
-// ElectricalEnergyServer projects a [interfaces.MatterFloatMeasurementSource]
+// ElectricalEnergyServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter ElectricalEnergyMeasurement. Model unit: Wh; wire unit:
 // int64 in milliwatt-hours per Matter §2.14.6.
 //
 // ElectricalEnergyServer embeds [cluster.DataVersionTracker] and
-// implements [interfaces.MatterClusterDataVersion]. See TemperatureServer
+// implements [mattercontract.ClusterDataVersion]. See TemperatureServer
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type ElectricalEnergyServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterFloatMeasurementSource
+	src mattercontract.FloatMeasurementSource
 }
 
 // Compile-time assertion: ElectricalEnergyServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*ElectricalEnergyServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*ElectricalEnergyServer)(nil)
 
 // NewElectricalEnergyServer wraps src.
-func NewElectricalEnergyServer(src interfaces.MatterFloatMeasurementSource) *ElectricalEnergyServer {
+func NewElectricalEnergyServer(src mattercontract.FloatMeasurementSource) *ElectricalEnergyServer {
 	return &ElectricalEnergyServer{src: src}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *ElectricalEnergyServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Electrical Energy Measurement cluster ID (0x0091).
 func (s *ElectricalEnergyServer) MatterClusterID() uint32 { return ClusterElectricalEnergy }
 
-// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] by
+// OnMatterValueChanged implements [mattercontract.ChangeNotifier] by
 // forwarding the wrapped source's notifier, so an ENERGY_COUNTER push on the
 // sibling meter channel drives a proactive CumulativeEnergyImported report. See
 // [ElectricalPowerServer.OnMatterValueChanged] for the cross-channel rationale.
 func (s *ElectricalEnergyServer) OnMatterValueChanged(cb func()) func() {
-	if n, ok := s.src.(interfaces.MatterChangeNotifier); ok && n != nil {
+	if n, ok := s.src.(mattercontract.ChangeNotifier); ok && n != nil {
 		return n.OnMatterValueChanged(cb)
 	}
 	return func() {}
@@ -1234,12 +1233,12 @@ func (s *ElectricalEnergyServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Electrical Energy Measurement cluster is read-only at the wire layer.
-func (s *ElectricalEnergyServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *ElectricalEnergyServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Electrical Energy Measurement cluster has no commands.
-func (s *ElectricalEnergyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *ElectricalEnergyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1269,7 +1268,7 @@ func whToMilliWattHours(wh float64) int64 {
 
 // --- AirQuality (0x005B) ----------------------------------------------
 
-// AirQualityServer projects a [interfaces.MatterFloatMeasurementSource]
+// AirQualityServer projects a [mattercontract.FloatMeasurementSource]
 // carrying a pollutant concentration onto the Matter AirQuality cluster.
 //
 // The AirQualitySensor device type (0x002C) mandates this cluster
@@ -1289,7 +1288,7 @@ func whToMilliWattHours(wh float64) int64 {
 // conformance-mandatory Unknown / Good / Poor.
 //
 // The server deliberately does not implement
-// [interfaces.MatterChangeNotifier]: it shares its endpoint with the
+// [mattercontract.ChangeNotifier]: it shares its endpoint with the
 // concentration cluster it derives from, and that source already drives
 // the endpoint's notifier across the endpoint's full reportable-path
 // set. A second listener on the same source would only mark the same
@@ -1297,10 +1296,10 @@ func whToMilliWattHours(wh float64) int64 {
 // a host endpoint whose notifier is a different source entirely.
 //
 // AirQualityServer embeds [cluster.DataVersionTracker] and implements
-// [interfaces.MatterClusterDataVersion], following TemperatureServer.
+// [mattercontract.ClusterDataVersion], following TemperatureServer.
 type AirQualityServer struct {
 	cluster.DataVersionTracker
-	src interfaces.MatterFloatMeasurementSource
+	src mattercontract.FloatMeasurementSource
 	// goodBelow is the upper bound (inclusive) of the Good level in the
 	// source's own unit; graded is false for a class with no guideline,
 	// in which case the server reports Unknown.
@@ -1309,11 +1308,11 @@ type AirQualityServer struct {
 }
 
 // Compile-time assertion: AirQualityServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*AirQualityServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*AirQualityServer)(nil)
 
 // NewAirQualityServer constructs an AirQualityServer that grades src's
 // readings against the guideline value for class.
-func NewAirQualityServer(class interfaces.MatterMeasurementClass, src interfaces.MatterFloatMeasurementSource) *AirQualityServer {
+func NewAirQualityServer(class mattercontract.MeasurementClass, src mattercontract.FloatMeasurementSource) *AirQualityServer {
 	goodBelow, graded := airQualityGoodBelow(class)
 	return &AirQualityServer{src: src, goodBelow: goodBelow, graded: graded}
 }
@@ -1328,20 +1327,20 @@ func NewAirQualityServer(class interfaces.MatterMeasurementClass, src interfaces
 // for the 24-hour mean (15 and 45 µg/m³) — the model classifies exactly
 // the 24-hour-average parameters onto these classes, so the averaging
 // windows line up.
-func airQualityGoodBelow(class interfaces.MatterMeasurementClass) (float64, bool) {
+func airQualityGoodBelow(class mattercontract.MeasurementClass) (float64, bool) {
 	switch class {
-	case interfaces.MatterMeasurementCO2:
+	case mattercontract.MeasurementCO2:
 		return 1000, true
-	case interfaces.MatterMeasurementPM25:
+	case mattercontract.MeasurementPM25:
 		return 15, true
-	case interfaces.MatterMeasurementPM10:
+	case mattercontract.MeasurementPM10:
 		return 45, true
 	default:
 		return 0, false
 	}
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *AirQualityServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Air Quality cluster ID (0x005B).
@@ -1376,12 +1375,12 @@ func (s *AirQualityServer) level() uint8 {
 }
 
 // MatterWrite returns errReadOnly — AirQuality carries a single "R V" attribute.
-func (s *AirQualityServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *AirQualityServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Air Quality cluster has no commands.
-func (s *AirQualityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *AirQualityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1406,17 +1405,17 @@ func (s *AirQualityServer) MatterAttributes() []uint32 { return []uint32{attrAir
 // for PM2.5 / PM10), so no scaling is required.
 //
 // concentrationServer embeds [cluster.DataVersionTracker] and
-// implements [interfaces.MatterClusterDataVersion] so the three named
+// implements [mattercontract.ClusterDataVersion] so the three named
 // wrapper types (CO2, PM2.5, PM10) inherit the tracker. See
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type concentrationServer struct {
 	cluster.DataVersionTracker
-	src       interfaces.MatterFloatMeasurementSource
+	src       mattercontract.FloatMeasurementSource
 	clusterID uint32
 	unit      uint8 // MeasurementUnit enum (PPM = 0, µg/m³ = 4)
 }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *concentrationServer) MatterDataVersion() uint32 { return s.Current() }
 
 func (s *concentrationServer) MatterClusterID() uint32 { return s.clusterID }
@@ -1449,11 +1448,11 @@ func (s *concentrationServer) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-func (s *concentrationServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *concentrationServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
-func (s *concentrationServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *concentrationServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1473,53 +1472,53 @@ func (s *concentrationServer) MatterAttributes() []uint32 {
 	}
 }
 
-// CO2ConcentrationServer projects a [interfaces.MatterFloatMeasurementSource]
+// CO2ConcentrationServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter CarbonDioxideConcentrationMeasurement (0x040D). Model
 // unit: ppm; wire unit: float32 ppm.
 // Inherits [cluster.DataVersionTracker] via concentrationServer.
 type CO2ConcentrationServer struct{ concentrationServer }
 
 // Compile-time assertion: CO2ConcentrationServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*CO2ConcentrationServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*CO2ConcentrationServer)(nil)
 
 // NewCO2ConcentrationServer constructs a CO2ConcentrationServer backed by src.
-func NewCO2ConcentrationServer(src interfaces.MatterFloatMeasurementSource) *CO2ConcentrationServer {
+func NewCO2ConcentrationServer(src mattercontract.FloatMeasurementSource) *CO2ConcentrationServer {
 	return &CO2ConcentrationServer{concentrationServer{src: src, clusterID: ClusterCO2Concentration, unit: concUnitPPM}}
 }
 
-// PM25ConcentrationServer projects a [interfaces.MatterFloatMeasurementSource]
+// PM25ConcentrationServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter PM2_5ConcentrationMeasurement (0x042A). Model unit:
 // µg/m³; wire unit: float32 µg/m³.
 // Inherits [cluster.DataVersionTracker] via concentrationServer.
 type PM25ConcentrationServer struct{ concentrationServer }
 
 // Compile-time assertion: PM25ConcentrationServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*PM25ConcentrationServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*PM25ConcentrationServer)(nil)
 
 // NewPM25ConcentrationServer constructs a PM25ConcentrationServer backed by src.
-func NewPM25ConcentrationServer(src interfaces.MatterFloatMeasurementSource) *PM25ConcentrationServer {
+func NewPM25ConcentrationServer(src mattercontract.FloatMeasurementSource) *PM25ConcentrationServer {
 	return &PM25ConcentrationServer{concentrationServer{src: src, clusterID: ClusterPM25Concentration, unit: concUnitMicroGramPerCubicMeter}}
 }
 
-// PM10ConcentrationServer projects a [interfaces.MatterFloatMeasurementSource]
+// PM10ConcentrationServer projects a [mattercontract.FloatMeasurementSource]
 // onto Matter PM10ConcentrationMeasurement (0x042D). Model unit:
 // µg/m³; wire unit: float32 µg/m³.
 // Inherits [cluster.DataVersionTracker] via concentrationServer.
 type PM10ConcentrationServer struct{ concentrationServer }
 
 // Compile-time assertion: PM10ConcentrationServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*PM10ConcentrationServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*PM10ConcentrationServer)(nil)
 
 // NewPM10ConcentrationServer constructs a PM10ConcentrationServer backed by src.
-func NewPM10ConcentrationServer(src interfaces.MatterFloatMeasurementSource) *PM10ConcentrationServer {
+func NewPM10ConcentrationServer(src mattercontract.FloatMeasurementSource) *PM10ConcentrationServer {
 	return &PM10ConcentrationServer{concentrationServer{src: src, clusterID: ClusterPM10Concentration, unit: concUnitMicroGramPerCubicMeter}}
 }
 
 // --- PowerSource (0x002F) — battery-only flavour ----------------------
 
-// PowerSourceServer projects either a [interfaces.MatterBoolMeasurementSource]
+// PowerSourceServer projects either a [mattercontract.BoolMeasurementSource]
 // (typically the LOWBAT binary parameter) or a
-// [interfaces.MatterFloatMeasurementSource] (a derived battery-percentage
+// [mattercontract.FloatMeasurementSource] (a derived battery-percentage
 // sensor, e.g. OperatingVoltageLevelSensor) onto a battery-flavoured
 // Matter PowerSource cluster. A server instance wraps exactly one of
 // the two — see [NewPowerSourceServer] and
@@ -1542,12 +1541,12 @@ func NewPM10ConcentrationServer(src interfaces.MatterFloatMeasurementSource) *PM
 // reporting null forever, matching the optional conformance.
 //
 // PowerSourceServer embeds [cluster.DataVersionTracker] and implements
-// [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
+// [mattercontract.ClusterDataVersion]. See TemperatureServer for the
 // DataVersion tracking follows the same pattern as TemperatureServer.
 type PowerSourceServer struct {
 	cluster.DataVersionTracker
-	src      interfaces.MatterBoolMeasurementSource
-	floatSrc interfaces.MatterFloatMeasurementSource
+	src      mattercontract.BoolMeasurementSource
+	floatSrc mattercontract.FloatMeasurementSource
 	// endpoint is the Matter endpoint this power source feeds, stamped
 	// post-construction by the endpoint assembler via [SetEndpoint] so
 	// EndpointList (0x001F) can name it. Zero means "unspecified", which
@@ -1556,12 +1555,12 @@ type PowerSourceServer struct {
 }
 
 // Compile-time assertion: PowerSourceServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*PowerSourceServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*PowerSourceServer)(nil)
 
 // NewPowerSourceServer wraps a boolean LOWBAT-style source. Serves
 // BatChargeLevel; BatPercentRemaining is not advertised (optional
 // conformance [BAT] — a bool source has no percentage to report).
-func NewPowerSourceServer(src interfaces.MatterBoolMeasurementSource) *PowerSourceServer {
+func NewPowerSourceServer(src mattercontract.BoolMeasurementSource) *PowerSourceServer {
 	return &PowerSourceServer{src: src}
 }
 
@@ -1570,7 +1569,7 @@ func NewPowerSourceServer(src interfaces.MatterBoolMeasurementSource) *PowerSour
 // from it; BatChargeLevel still reports OK — there is no boolean
 // LOWBAT signal to derive Warning from, mirroring MatterRead's
 // no-observation fallback for the bool path.
-func NewPowerSourceServerFromFloat(src interfaces.MatterFloatMeasurementSource) *PowerSourceServer {
+func NewPowerSourceServerFromFloat(src mattercontract.FloatMeasurementSource) *PowerSourceServer {
 	return &PowerSourceServer{floatSrc: src}
 }
 
@@ -1579,7 +1578,7 @@ func NewPowerSourceServerFromFloat(src interfaces.MatterFloatMeasurementSource) 
 // construction, mirroring the BasicInformation / GeneralDiagnostics pattern.
 func (s *PowerSourceServer) SetEndpoint(endpoint uint16) { s.endpoint = endpoint }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *PowerSourceServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter Power Source cluster ID (0x002F).
@@ -1656,12 +1655,12 @@ func (s *PowerSourceServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Power Source cluster is read-only at the wire layer.
-func (s *PowerSourceServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *PowerSourceServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Power Source cluster has no commands.
-func (s *PowerSourceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *PowerSourceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1748,12 +1747,12 @@ type PowerTopologyServer struct {
 }
 
 // Compile-time assertion: PowerTopologyServer satisfies MatterClusterDataVersion.
-var _ interfaces.MatterClusterDataVersion = (*PowerTopologyServer)(nil)
+var _ mattercontract.ClusterDataVersion = (*PowerTopologyServer)(nil)
 
 // NewPowerTopologyServer returns the NODE-topology server.
 func NewPowerTopologyServer() *PowerTopologyServer { return &PowerTopologyServer{} }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 func (s *PowerTopologyServer) MatterDataVersion() uint32 { return s.Current() }
 
 // MatterClusterID returns the Matter PowerTopology cluster ID (0x009C).
@@ -1772,12 +1771,12 @@ func (s *PowerTopologyServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — PowerTopology is read-only at the wire layer.
-func (s *PowerTopologyServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *PowerTopologyServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — PowerTopology has no commands.
-func (s *PowerTopologyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *PowerTopologyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1792,7 +1791,7 @@ func (s *PowerTopologyServer) MatterAttributes() []uint32 { return []uint32{} }
 // ElectricalEnergyServer reads, so the energy cluster sees the counter rather
 // than the group's headline active-power reading.
 type energyOf struct {
-	r interfaces.MatterElectricalReadings
+	r mattercontract.ElectricalReadings
 }
 
 // MatterFloatValue returns the group's energy counter.
@@ -1800,14 +1799,14 @@ func (e energyOf) MatterFloatValue() (float64, bool) { return e.r.Energy() }
 
 // MatterMeasurementClass reports the group's class; the adapter changes which
 // reading is surfaced, not what the source is.
-func (e energyOf) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementElectrical
+func (e energyOf) MatterMeasurementClass() mattercontract.MeasurementClass {
+	return mattercontract.MeasurementElectrical
 }
 
 // OnMatterValueChanged forwards the group's notifier so the energy cluster is
 // marked dirty when any member updates.
 func (e energyOf) OnMatterValueChanged(cb func()) func() {
-	if n, ok := e.r.(interfaces.MatterChangeNotifier); ok && n != nil {
+	if n, ok := e.r.(mattercontract.ChangeNotifier); ok && n != nil {
 		return n.OnMatterValueChanged(cb)
 	}
 	return func() {}

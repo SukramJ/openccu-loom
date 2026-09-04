@@ -11,13 +11,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Config tunes the assembler. The zero value is *not* valid — at
@@ -31,7 +30,7 @@ type Config struct {
 	// NodeLabel is the user-visible bridge label.
 	NodeLabel string
 	// IncludeMeasurements toggles whether DPs that implement
-	// [interfaces.MatterMeasurementSource] (but not MatterEndpointSource)
+	// [mattercontract.MeasurementSource] (but not MatterEndpointSource)
 	// produce standalone sensor endpoints. Off by default.
 	IncludeMeasurements bool
 	// ExposeSecondaryChannels, when true, materialises a Matter endpoint
@@ -50,9 +49,11 @@ type Config struct {
 	// render the same per-parameter display name. Nil is tolerated —
 	// the suffix then falls back to the title-cased parameter.
 	Labels device.ParameterTranslator
-	// Locale selects the language of the NodeLabel channel-number fallback
-	// ("Channel N" / "Kanal N"). Empty falls back to the catalogue default.
-	Locale string
+	// ChannelLabel is the localized word for a channel ("Channel", "Kanal")
+	// used as the NodeLabel channel-number fallback ("Channel N"). Empty
+	// falls back to the English "Channel": translation belongs to the host,
+	// which resolves the catalogue and supplies the finished word.
+	ChannelLabel string
 }
 
 // Validate returns nil when the config is internally consistent.
@@ -106,9 +107,6 @@ type Assembler struct {
 	exposures ExposureChecker
 	cfg       Config
 	logger    *slog.Logger
-	// translations resolves the localized NodeLabel channel-number fallback in
-	// cfg.Locale. Auto-loaded in [New] (immutable embedded data); nil-tolerant.
-	translations *i18n.Catalogs
 	// states owns the per-endpoint state that must outlive a single
 	// dispatch (DataVersion trackers, the Identify cluster server),
 	// keyed by the stable [store.EndpointKey]. It lives across every
@@ -139,20 +137,17 @@ func New(s Store, cfg Config, logger *slog.Logger) (*Assembler, error) {
 		logger:    logger,
 		states:    newEndpointStateRegistry(),
 	}
-	if cat, err := i18n.NewCatalogs(); err == nil {
-		a.translations = cat
-	}
 	return a, nil
 }
 
 // channelLabel returns the localized word for a channel ("Channel" / "Kanal"),
-// used as the NodeLabel channel-number fallback. Falls back to "Channel" when
-// no catalogues are wired.
+// used as the NodeLabel channel-number fallback. Falls back to the English
+// word when the caller supplied none.
 func (a *Assembler) channelLabel() string {
-	if a.translations == nil {
+	if a.cfg.ChannelLabel == "" {
 		return "Channel"
 	}
-	return a.translations.T(a.cfg.Locale, "channel.title")
+	return a.cfg.ChannelLabel
 }
 
 // SetExposureChecker wires the allowlist checker. Pass nil to revert
@@ -299,14 +294,14 @@ func attachPowerSource(dev *device.Device, eps []*Endpoint) {
 	if dev == nil || len(eps) == 0 {
 		return
 	}
-	var battery interfaces.MatterMeasurementSource
+	var battery mattercontract.MeasurementSource
 	for _, ch := range dev.Channels() {
 		if ch == nil {
 			continue
 		}
 		for _, gdp := range ch.DataPoints() {
-			meas, ok := gdp.(interfaces.MatterMeasurementSource)
-			if !ok || meas.MatterMeasurementClass() != interfaces.MatterMeasurementBattery {
+			meas, ok := gdp.(mattercontract.MeasurementSource)
+			if !ok || meas.MatterMeasurementClass() != mattercontract.MeasurementBattery {
 				continue
 			}
 			battery = meas
@@ -375,7 +370,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 
 	// Custom DP (max one per channel).
 	if cdp := ch.CustomDataPoint(); cdp != nil {
-		if src, ok := cdp.(interfaces.MatterEndpointSource); ok {
+		if src, ok := cdp.(mattercontract.EndpointSource); ok {
 			ok, err := allow(store.DPKindCustom, dpKey(cdp))
 			if err != nil {
 				return nil, err
@@ -394,7 +389,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 	// Calculated DPs.
 	for _, calc := range ch.CalculatedDataPoints() {
 		key := dpKey(calc)
-		if src, ok := calc.(interfaces.MatterEndpointSource); ok {
+		if src, ok := calc.(mattercontract.EndpointSource); ok {
 			allowed, err := allow(store.DPKindCalculated, key)
 			if err != nil {
 				return nil, err
@@ -413,8 +408,8 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		if !a.cfg.IncludeMeasurements {
 			continue
 		}
-		meas, ok := calc.(interfaces.MatterMeasurementSource)
-		if !ok || meas.MatterMeasurementClass() == interfaces.MatterMeasurementNone {
+		meas, ok := calc.(mattercontract.MeasurementSource)
+		if !ok || meas.MatterMeasurementClass() == mattercontract.MeasurementNone {
 			continue
 		}
 		// The allowlist row is keyed by the kind the candidate
@@ -440,7 +435,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 
 	// Combined DPs.
 	for _, comb := range ch.CombinedDataPoints() {
-		src, ok := comb.(interfaces.MatterEndpointSource)
+		src, ok := comb.(mattercontract.EndpointSource)
 		if !ok {
 			continue
 		}
@@ -500,7 +495,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		// projection (the wrapper itself wires the same DP under the
 		// hood).
 		if !channelHasCustom {
-			if src, ok := gdp.(interfaces.MatterEndpointSource); ok {
+			if src, ok := gdp.(mattercontract.EndpointSource); ok {
 				if servers := src.MatterClusterServers(); len(servers) > 0 {
 					allowed, err := allow(store.DPKindGeneric, key)
 					if err != nil {
@@ -520,8 +515,8 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			}
 		}
 		// Path 2: Generic-DP measurement source.
-		meas, ok := gdp.(interfaces.MatterMeasurementSource)
-		if !ok || meas.MatterMeasurementClass() == interfaces.MatterMeasurementNone {
+		meas, ok := gdp.(mattercontract.MeasurementSource)
+		if !ok || meas.MatterMeasurementClass() == mattercontract.MeasurementNone {
 			continue
 		}
 		allowed, err := allow(store.DPKindGeneric, key)
@@ -531,7 +526,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		if !allowed {
 			continue
 		}
-		if meas.MatterMeasurementClass() == interfaces.MatterMeasurementMomentarySwitch {
+		if meas.MatterMeasurementClass() == mattercontract.MeasurementMomentarySwitch {
 			// Defer press DPs to the per-channel consolidation below.
 			// The allowlist stays per-parameter: only allowed members
 			// join the group, so an operator can e.g. expose the short
@@ -539,7 +534,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			pressMembers = append(pressMembers, gdp)
 			continue
 		}
-		if meas.MatterMeasurementClass() == interfaces.MatterMeasurementBattery {
+		if meas.MatterMeasurementClass() == mattercontract.MeasurementBattery {
 			// PowerSource is mounted on one of the device's endpoints by
 			// attachPowerSource, never as an endpoint of its own — it has no
 			// device type, and an endpoint without one advertises
@@ -547,7 +542,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			continue
 		}
 		switch meas.MatterMeasurementClass() {
-		case interfaces.MatterMeasurementPower, interfaces.MatterMeasurementEnergy:
+		case mattercontract.MeasurementPower, mattercontract.MeasurementEnergy:
 			// Defer to the per-channel consolidation below. The allowlist
 			// stays per-parameter, so an operator can expose consumption
 			// while keeping voltage private.
@@ -634,7 +629,7 @@ func (a *Assembler) makeElectricalGroupEndpoint(
 		DPKind:        store.DPKindGeneric,
 		DPKey:         ElectricalGroupDPKey,
 	}
-	deviceType := measurementDeviceType(interfaces.MatterMeasurementElectrical)
+	deviceType := measurementDeviceType(mattercontract.MeasurementElectrical)
 	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
 	if err != nil {
 		return nil, err
@@ -700,7 +695,7 @@ func (a *Assembler) makeButtonGroupEndpoint(
 		DPKind:        store.DPKindGeneric,
 		DPKey:         ButtonGroupDPKey,
 	}
-	deviceType := measurementDeviceType(interfaces.MatterMeasurementMomentarySwitch)
+	deviceType := measurementDeviceType(mattercontract.MeasurementMomentarySwitch)
 	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
 	if err != nil {
 		return nil, err
@@ -779,7 +774,7 @@ func (a *Assembler) makeEndpoint(
 	ch *device.Channel,
 	kind store.DPKind,
 	key string,
-	src interfaces.MatterEndpointSource,
+	src mattercontract.EndpointSource,
 ) (*Endpoint, error) {
 	sourceKey := store.EndpointKey{
 		CentralName:   centralName,
@@ -823,7 +818,7 @@ func (a *Assembler) makeMeasurementEndpoint(
 	ch *device.Channel,
 	kind store.DPKind,
 	key string,
-	meas interfaces.MatterMeasurementSource,
+	meas mattercontract.MeasurementSource,
 ) (*Endpoint, error) {
 	sourceKey := store.EndpointKey{
 		CentralName:   centralName,

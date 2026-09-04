@@ -18,7 +18,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	mstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func newOpcreds(t *testing.T) *core.OperationalCredentials {
@@ -177,7 +176,7 @@ func TestOpcreds_AttestationRequest_BadNonce(t *testing.T) {
 	oc := newOpcreds(t)
 	_, err := oc.MatterInvoke(context.Background(), 0x00, core.AttestationRequest{
 		AttestationNonce: make([]byte, 16), // wrong length
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err == nil {
 		t.Fatal("expected error for bad nonce length, got nil")
 	}
@@ -188,7 +187,7 @@ func TestOpcreds_AttestationRequest_ValidNonce(t *testing.T) {
 	oc := newOpcreds(t)
 	resp, err := oc.MatterInvoke(context.Background(), 0x00, core.AttestationRequest{
 		AttestationNonce: make([]byte, 32),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AttestationRequest: %v", err)
 	}
@@ -200,7 +199,7 @@ func TestOpcreds_AttestationRequest_ValidNonce(t *testing.T) {
 func TestOpcreds_CertChainRequest_DAC(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
-	_, err := oc.MatterInvoke(context.Background(), 0x02, core.CertificateChainRequest{CertificateType: core.CertChainTypeDAC}, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(context.Background(), 0x02, core.CertificateChainRequest{CertificateType: core.CertChainTypeDAC})
 	if err != nil {
 		t.Fatalf("CertificateChainRequest DAC: %v", err)
 	}
@@ -209,7 +208,7 @@ func TestOpcreds_CertChainRequest_DAC(t *testing.T) {
 func TestOpcreds_CertChainRequest_PAI(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
-	_, err := oc.MatterInvoke(context.Background(), 0x02, core.CertificateChainRequest{CertificateType: core.CertChainTypePAI}, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(context.Background(), 0x02, core.CertificateChainRequest{CertificateType: core.CertChainTypePAI})
 	if err != nil {
 		t.Fatalf("CertificateChainRequest PAI: %v", err)
 	}
@@ -218,7 +217,7 @@ func TestOpcreds_CertChainRequest_PAI(t *testing.T) {
 func TestOpcreds_CertChainRequest_InvalidType(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
-	_, err := oc.MatterInvoke(context.Background(), 0x02, core.CertificateChainRequest{CertificateType: 99}, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(context.Background(), 0x02, core.CertificateChainRequest{CertificateType: 99})
 	if err == nil {
 		t.Fatal("expected error for invalid cert chain type, got nil")
 	}
@@ -229,7 +228,7 @@ func TestOpcreds_CSRRequest_BadNonce(t *testing.T) {
 	oc := newOpcreds(t)
 	_, err := oc.MatterInvoke(context.Background(), 0x04, core.CSRRequest{
 		CSRNonce: make([]byte, 16), // wrong length
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err == nil {
 		t.Fatal("expected error for bad CSRNonce, got nil")
 	}
@@ -240,7 +239,7 @@ func TestOpcreds_CSRRequest_SetsPendingKey(t *testing.T) {
 	oc := newOpcreds(t)
 	_, err := oc.MatterInvoke(context.Background(), 0x04, core.CSRRequest{
 		CSRNonce: make([]byte, 32),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("CSRRequest: %v", err)
 	}
@@ -248,7 +247,7 @@ func TestOpcreds_CSRRequest_SetsPendingKey(t *testing.T) {
 	// (the CSR was issued), but without trusted root → NOCStatusInvalidNOC.
 	resp, err := oc.MatterInvoke(context.Background(), 0x06, core.AddNOCRequest{
 		IPKValue: make([]byte, 16),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC after CSR: %v", err)
 	}
@@ -284,17 +283,17 @@ func TestOpcreds_AddNOC_InvalidAdminVendorID(t *testing.T) {
 			rootRaw, nocRaw, _ := buildTestNOCAndRoot(t)
 			ctx := context.Background()
 			// Prime trust root + CSR so the VID guard is the check that fires.
-			if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}, 0); err != nil {
+			if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}); err != nil {
 				t.Fatalf("AddTrustedRoot: %v", err)
 			}
-			if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, 0); err != nil {
+			if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}); err != nil {
 				t.Fatalf("CSRRequest: %v", err)
 			}
 			resp, err := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
 				NOCValue:      nocRaw,
 				IPKValue:      make([]byte, 16),
 				AdminVendorID: vid,
-			}, hmenum.CommandPriorityHigh)
+			})
 			if err != nil {
 				t.Fatalf("AddNOC: %v", err)
 			}
@@ -312,7 +311,7 @@ func TestOpcreds_AddNOC_WithoutCSR(t *testing.T) {
 	oc := newOpcreds(t)
 	resp, err := oc.MatterInvoke(context.Background(), 0x06, core.AddNOCRequest{
 		IPKValue: make([]byte, 16),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC without CSR: %v", err)
 	}
@@ -327,12 +326,12 @@ func TestOpcreds_AddNOC_WithoutTrustedRoot(t *testing.T) {
 	oc := newOpcreds(t)
 
 	// Issue CSR first.
-	_, _ = oc.MatterInvoke(context.Background(), 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, hmenum.CommandPriorityHigh)
+	_, _ = oc.MatterInvoke(context.Background(), 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)})
 
 	// No trusted root → NOCStatusInvalidNOC.
 	resp, err := oc.MatterInvoke(context.Background(), 0x06, core.AddNOCRequest{
 		IPKValue: make([]byte, 16),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC without trusted root: %v", err)
 	}
@@ -350,7 +349,7 @@ func TestOpcreds_AddNOC_BadIPK(t *testing.T) {
 	// any CSR check.
 	resp, err := oc.MatterInvoke(context.Background(), 0x06, core.AddNOCRequest{
 		IPKValue: make([]byte, 8), // not 16
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC bad IPK: %v", err)
 	}
@@ -365,7 +364,7 @@ func TestOpcreds_AddTrustedRoot_MalformedCert(t *testing.T) {
 	oc := newOpcreds(t)
 	_, err := oc.MatterInvoke(context.Background(), 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: []byte{0xDE, 0xAD},
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err == nil {
 		t.Fatal("expected error for malformed root cert, got nil")
 	}
@@ -374,7 +373,7 @@ func TestOpcreds_AddTrustedRoot_MalformedCert(t *testing.T) {
 func TestOpcreds_RemoveFabric_NotExisting(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
-	resp, err := oc.MatterInvoke(context.Background(), 0x0A, core.RemoveFabricRequest{FabricIndex: 99}, hmenum.CommandPriorityHigh)
+	resp, err := oc.MatterInvoke(context.Background(), 0x0A, core.RemoveFabricRequest{FabricIndex: 99})
 	if err != nil {
 		t.Fatalf("RemoveFabric non-existing: %v", err)
 	}
@@ -387,7 +386,7 @@ func TestOpcreds_RemoveFabric_NotExisting(t *testing.T) {
 func TestOpcreds_Write_ReadOnly(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
-	err := oc.MatterWrite(context.Background(), 0x0002, uint8(10), hmenum.CommandPriorityHigh)
+	err := oc.MatterWrite(context.Background(), 0x0002, uint8(10))
 	if err == nil {
 		t.Fatal("expected error for write to read-only attr, got nil")
 	}
@@ -396,7 +395,7 @@ func TestOpcreds_Write_ReadOnly(t *testing.T) {
 func TestOpcreds_Invoke_UnknownCmd(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
-	_, err := oc.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(context.Background(), 0xFF, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown command, got nil")
 	}
@@ -430,7 +429,7 @@ func TestOpcreds_AddTrustedRoot_Accepts(t *testing.T) {
 
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, hmenum.CommandPriorityHigh); err != nil {
+	}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 }
@@ -451,7 +450,7 @@ func TestOpcreds_AddNOC_NeedsCSRThenRoot(t *testing.T) {
 	resp, err := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
 		NOCValue: nocRaw,
 		IPKValue: make([]byte, 16),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC (pre-CSR): %v", err)
 	}
@@ -460,7 +459,7 @@ func TestOpcreds_AddNOC_NeedsCSRThenRoot(t *testing.T) {
 	}
 
 	// CSRRequest succeeds.
-	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}); err != nil {
 		t.Fatalf("CSRRequest: %v", err)
 	}
 
@@ -468,7 +467,7 @@ func TestOpcreds_AddNOC_NeedsCSRThenRoot(t *testing.T) {
 	resp, err = oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
 		NOCValue: nocRaw,
 		IPKValue: make([]byte, 16),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC (no root): %v", err)
 	}
@@ -523,7 +522,7 @@ func TestAddNOC_InstallsIPKInGroupKeyManagement(t *testing.T) {
 	// Step 1: AddTrustedRootCertificate.
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 
@@ -541,7 +540,7 @@ func TestAddNOC_InstallsIPKInGroupKeyManagement(t *testing.T) {
 		IPKValue:         ipk,
 		CaseAdminSubject: 0xABCD,
 		AdminVendorID:    0x1234,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC: %v", err)
 	}
@@ -585,7 +584,7 @@ func TestAddNOC_RejectsMismatchedCSRSession(t *testing.T) {
 	// AddTrustedRootCertificate.
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 
@@ -593,7 +592,7 @@ func TestAddNOC_RejectsMismatchedCSRSession(t *testing.T) {
 	csrCtx := core.WithInvokeSessionID(ctx, 42)
 	if _, err := oc.MatterInvoke(csrCtx, 0x04, core.CSRRequest{
 		CSRNonce: make([]byte, 32),
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("CSRRequest (session 42): %v", err)
 	}
 
@@ -604,7 +603,7 @@ func TestAddNOC_RejectsMismatchedCSRSession(t *testing.T) {
 		IPKValue:         make([]byte, 16),
 		CaseAdminSubject: 0xABCD,
 		AdminVendorID:    0x1234,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC (mismatched session): %v", err)
 	}
@@ -622,7 +621,7 @@ func TestAddNOC_RejectsMismatchedCSRSession(t *testing.T) {
 		IPKValue:         make([]byte, 16),
 		CaseAdminSubject: 0xABCD,
 		AdminVendorID:    0x1234,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC (same session): %v", err)
 	}
@@ -663,7 +662,7 @@ func TestRemoveFabric_FiresCleanupCallbacks(t *testing.T) {
 	_, _, installedFabric := commissionTestFabric(ctx, t, oc)
 
 	// Now remove the fabric.
-	rmResp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: installedFabric}, 0)
+	rmResp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: installedFabric})
 	if err != nil {
 		t.Fatalf("RemoveFabric: %v", err)
 	}
@@ -708,14 +707,14 @@ func TestAddTrustedRoot_DuplicateRootInSameFailSafe(t *testing.T) {
 	// First call succeeds.
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("first AddTrustedRootCertificate: %v", err)
 	}
 
 	// Second call in the same window must fail (duplicate-root guard).
 	_, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0)
+	})
 	if err == nil {
 		t.Fatal("second AddTrustedRootCertificate should fail (duplicate-root guard), got nil")
 	}
@@ -744,7 +743,7 @@ func TestAddTrustedRoot_AfterNOCCommandRejected(t *testing.T) {
 	rootRaw2, _, _ := buildTestNOCAndRoot(t)
 	_, err = oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw2,
-	}, 0)
+	})
 	if err == nil {
 		t.Fatal("AddTrustedRootCertificate after AddNOC should fail (nocWasInvoked guard), got nil")
 	}
@@ -776,7 +775,7 @@ func TestTrustedRootCertificates_IncludesPendingRoot(t *testing.T) {
 	// After AddTrustedRootCertificate but before AddNOC: pending root must appear.
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 	v, ok = oc.MatterRead(0x0004)
@@ -888,7 +887,7 @@ func TestUpdateNOC_FiresOnFabricUpdatedHook(t *testing.T) {
 
 	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{
 		NOCValue: nocRaw2,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("UpdateNOC: %v", err)
 	}
@@ -1120,7 +1119,7 @@ func TestOpcreds_SetVidVerificationStatementReturnsInvalidCommand(t *testing.T) 
 	ctx := context.Background()
 	oc, _ := opcredsWithFakeStore(t)
 
-	_, err := oc.MatterInvoke(ctx, 0x0C, core.SetVidVerificationStatementRequest{}, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(ctx, 0x0C, core.SetVidVerificationStatementRequest{})
 	if err == nil {
 		t.Fatal("SetVidVerificationStatement: expected error, got nil")
 	}
@@ -1144,7 +1143,7 @@ func TestOpcreds_SignVidVerificationRequestReturnsInvalidCommand(t *testing.T) {
 	_, err := oc.MatterInvoke(ctx, 0x0D, core.SignVidVerificationRequest{
 		FabricIndex:     1,
 		ClientChallenge: make([]byte, 32),
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err == nil {
 		t.Fatal("SignVidVerificationRequest: expected error, got nil")
 	}
@@ -1253,7 +1252,7 @@ func TestOpcreds_SetIsFailSafeArmedNoOp(t *testing.T) {
 func TestOpcreds_UpdateFabricLabelInvalidArgType(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
-	_, err := oc.MatterInvoke(context.Background(), 0x09, "wrong-type", hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(context.Background(), 0x09, "wrong-type")
 	if err == nil {
 		t.Fatal("expected error for invalid UpdateFabricLabelRequest type, got nil")
 	}
@@ -1265,7 +1264,7 @@ func TestOpcreds_UpdateFabricLabelLabelTooLong(t *testing.T) {
 	t.Parallel()
 	oc := newOpcreds(t)
 	req := core.UpdateFabricLabelRequest{Label: string(bytes.Repeat([]byte("x"), 33))}
-	_, err := oc.MatterInvoke(context.Background(), 0x09, req, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(context.Background(), 0x09, req)
 	if err == nil {
 		t.Fatal("UpdateFabricLabel long label: expected IM error, got nil")
 	}
@@ -1307,7 +1306,7 @@ func TestOpcreds_MalformedArgsReturnInvalidCommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			oc := newOpcreds(t)
-			_, err := oc.MatterInvoke(context.Background(), tc.cmd, tc.fields, hmenum.CommandPriorityHigh)
+			_, err := oc.MatterInvoke(context.Background(), tc.cmd, tc.fields)
 			if err == nil {
 				t.Fatalf("%s: expected error, got nil", tc.name)
 			}
@@ -1338,11 +1337,11 @@ func TestOpcreds_CSRForAddNOCRejectedByUpdateNOC(t *testing.T) {
 	if _, err := oc.MatterInvoke(caseCtx, 0x04, core.CSRRequest{
 		CSRNonce:       make([]byte, 32),
 		IsForUpdateNOC: false,
-	}, hmenum.CommandPriorityHigh); err != nil {
+	}); err != nil {
 		t.Fatalf("CSRRequest (IsForUpdateNOC=false): %v", err)
 	}
 	// UpdateNOC must reject it with ConstraintError.
-	_, err := oc.MatterInvoke(caseCtx, 0x07, core.UpdateNOCRequest{NOCValue: make([]byte, 8)}, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(caseCtx, 0x07, core.UpdateNOCRequest{NOCValue: make([]byte, 8)})
 	if err == nil {
 		t.Fatal("UpdateNOC with AddNOC-targeted CSR: expected IM error, got nil")
 	}
@@ -1369,7 +1368,7 @@ func TestOpcreds_CSRRequestRequiresArmedFailSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOperationalCredentials: %v", err)
 	}
-	_, invokeErr := oc.MatterInvoke(context.Background(), 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, hmenum.CommandPriorityHigh)
+	_, invokeErr := oc.MatterInvoke(context.Background(), 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)})
 	if invokeErr == nil {
 		t.Fatal("CSRRequest without armed FailSafe: expected error, got nil")
 	}
@@ -1395,7 +1394,7 @@ func TestOpcreds_CSRRequestAfterNOCRejected(t *testing.T) {
 	// flag for this FailSafe window.
 	commissionTestFabric(ctx, t, oc)
 	// A CSRRequest now — without a fresh FailSafe window — must be rejected.
-	_, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, hmenum.CommandPriorityHigh)
+	_, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)})
 	if err == nil {
 		t.Fatal("CSRRequest after AddNOC: expected ConstraintError, got nil")
 	}

@@ -13,8 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // GroupKeyManagement implements the Matter GroupKeyManagement cluster
@@ -37,7 +36,7 @@ type GroupKeyManagement struct {
 	// §10.6.5. Bumped at construction (non-zero sentinel) and after every
 	// successful GroupKeyMap / GroupKeySet mutation so DataVersionFilter
 	// evaluation works correctly. Satisfies
-	// [interfaces.MatterClusterDataVersion]. Mirrors matter.js behavior
+	// [mattercontract.ClusterDataVersion]. Mirrors matter.js behavior
 	// layer auto-tracking and chip's ember dirty-marking in
 	// src/app/clusters/group-key-mgmt-server/.
 	dataVersion cluster.DataVersionTracker
@@ -147,14 +146,14 @@ func NewGroupKeyManagement(s GroupStoreFacade, cfg GroupKeyMgmtConfig) (*GroupKe
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer                  = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterCommandLister           = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterDataVersion             = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterCommandInvokePrivilege  = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterAttributeWritePrivilege = (*GroupKeyManagement)(nil)
+	_ mattercontract.ClusterServer                  = (*GroupKeyManagement)(nil)
+	_ mattercontract.ClusterCommandLister           = (*GroupKeyManagement)(nil)
+	_ mattercontract.ClusterDataVersion             = (*GroupKeyManagement)(nil)
+	_ mattercontract.ClusterCommandInvokePrivilege  = (*GroupKeyManagement)(nil)
+	_ mattercontract.ClusterAttributeWritePrivilege = (*GroupKeyManagement)(nil)
 )
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 // Returns the per-cluster monotonic counter seeded at construction and
 // bumped on every GroupKeyMap / GroupKeySet mutation. Mirrors matter.js
 // behavior layer auto-tracking and chip's ember dirty-marking in
@@ -163,10 +162,10 @@ func (g *GroupKeyManagement) MatterDataVersion() uint32 {
 	return g.dataVersion.Current()
 }
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (g *GroupKeyManagement) MatterClusterID() uint32 { return groupKeyMgmtClusterID }
 
-// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// MinInvokePrivilege implements [mattercontract.ClusterCommandInvokePrivilege].
 // Every GroupKeyManagement command requires Administer (5) per Matter
 // §11.2.10 (access "F A"). Mirrors matter.js
 // packages/model/src/standard/elements/group-key-management.element.ts:48,54,65,71.
@@ -179,7 +178,7 @@ func (g *GroupKeyManagement) MinInvokePrivilege(cmdID uint32) uint8 {
 	}
 }
 
-// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// MinWritePrivilege implements [mattercontract.ClusterAttributeWritePrivilege].
 // GroupKeyMap (0x0000) requires Manage (4) per Matter §11.2.10 (access
 // "RW F VM"). Mirrors matter.js packages/model/src/standard/elements/
 // group-key-management.element.ts:28.
@@ -219,7 +218,7 @@ type GroupKeySetStruct struct {
 	EpochStartTime2        uint64
 }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (g *GroupKeyManagement) MatterRead(attrID uint32) (any, bool) {
 	return g.matterReadWithCtx(context.Background(), attrID)
 }
@@ -320,7 +319,7 @@ func (g *GroupKeyManagement) matterReadWithCtx(ctx context.Context, attrID uint3
 // MatterWrite handles GroupKeyMap as a writable attribute (Matter
 // §11.2.10.4.1). The IM layer pre-filters the list to the requesting
 // fabric.
-func (g *GroupKeyManagement) MatterWrite(ctx context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (g *GroupKeyManagement) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	if attrID != groupKeyMgmtAttrGroupKeyMap {
 		return fmt.Errorf("matter: GroupKeyManagement attribute 0x%04X is read-only", attrID)
 	}
@@ -404,8 +403,8 @@ type KeySetReadAllIndicesResponse struct {
 	GroupKeySetIDs []uint16
 }
 
-// MatterInvoke implements [interfaces.MatterClusterServer].
-func (g *GroupKeyManagement) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+// MatterInvoke implements [mattercontract.ClusterServer].
+func (g *GroupKeyManagement) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	// Resolve fabric from IM dispatcher context: SetCurrentFabric has no
 	// production caller, so every KeySetWrite / KeySetRead / KeySetRemove /
 	// KeySetReadAllIndices command arriving on a post-AddNOC CASE session
@@ -441,7 +440,7 @@ func (g *GroupKeyManagement) MatterReportable() []uint32 {
 	return []uint32{groupKeyMgmtAttrGroupKeyMap, groupKeyMgmtAttrGroupTable}
 }
 
-// MatterAttributes implements [interfaces.MatterClusterAttributeLister]
+// MatterAttributes implements [mattercontract.ClusterAttributeLister]
 // so wildcard subscribe enumerates the full cluster surface.
 //
 // Global attributes 0xFFF8–0xFFFB included so Apple's initial subscribe
@@ -462,7 +461,7 @@ func (g *GroupKeyManagement) MatterAttributes() []uint32 {
 	}
 }
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [mattercontract.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke.
 // Mirrors matter.js packages/model/src/standard/elements/
 // group-key-management.element.ts accepted commands.
@@ -475,7 +474,7 @@ func (g *GroupKeyManagement) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [mattercontract.ClusterCommandLister].
 // Lists the response command IDs this server may emit.
 // Mirrors matter.js packages/model/src/standard/elements/
 // group-key-management.element.ts generated commands.

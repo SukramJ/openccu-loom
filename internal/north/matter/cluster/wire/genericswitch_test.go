@@ -9,8 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ---- fakeGenericSwitchSource ----
@@ -30,14 +29,14 @@ type emittedEvent struct {
 	cluster  uint32
 	event    uint32
 	data     any
-	priority interfaces.MatterEventPriority
+	priority mattercontract.EventPriority
 }
 
 type fakeEventEmitter struct {
 	calls []emittedEvent
 }
 
-func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, cluster, event uint32, data any, priority interfaces.MatterEventPriority) {
+func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, cluster, event uint32, data any, priority mattercontract.EventPriority) {
 	f.calls = append(f.calls, emittedEvent{
 		endpoint: endpoint,
 		cluster:  cluster,
@@ -210,7 +209,7 @@ func TestGenericSwitch_Read_UnknownAttr_ReturnsFalse(t *testing.T) {
 func TestGenericSwitch_Write_ReturnsError(t *testing.T) {
 	t.Parallel()
 	gs := newSwitch(1, 2, false)
-	err := gs.MatterWrite(context.Background(), switchAttrCurrentPos, uint8(1), hmenum.CommandPriorityHigh)
+	err := gs.MatterWrite(context.Background(), switchAttrCurrentPos, uint8(1))
 	if err == nil {
 		t.Error("MatterWrite returned nil error for read-only cluster")
 	}
@@ -219,7 +218,7 @@ func TestGenericSwitch_Write_ReturnsError(t *testing.T) {
 func TestGenericSwitch_Invoke_ReturnsError(t *testing.T) {
 	t.Parallel()
 	gs := newSwitch(1, 2, false)
-	_, err := gs.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := gs.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke returned nil error for cluster with no commands")
 	}
@@ -267,7 +266,7 @@ func TestGenericSwitch_FireInitialPress_WithEmitter_CorrectEvent(t *testing.T) {
 	if ev.event != switchEventInitialPress {
 		t.Errorf("event = 0x%02X, want 0x%02X (InitialPress)", ev.event, switchEventInitialPress)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (matter.js switch.element.ts:48)", ev.priority)
 	}
 }
@@ -288,7 +287,7 @@ func TestGenericSwitch_FireShortRelease_WithEmitter_InfoPriority(t *testing.T) {
 	if ev.event != switchEventShortRelease {
 		t.Errorf("event = 0x%02X, want 0x%02X (ShortRelease)", ev.event, switchEventShortRelease)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info", ev.priority)
 	}
 }
@@ -322,7 +321,7 @@ func TestGenericSwitch_FireLongPress_WithLongPressSupport_EmitsInfo(t *testing.T
 	if ev.event != switchEventLongPress {
 		t.Errorf("event = 0x%02X, want 0x%02X (LongPress)", ev.event, switchEventLongPress)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (matter.js switch.element.ts:52)", ev.priority)
 	}
 }
@@ -356,7 +355,7 @@ func TestGenericSwitch_FireLongRelease_WithLongPressSupport_EmitsInfoPriority(t 
 	if ev.event != switchEventLongRelease {
 		t.Errorf("event = 0x%02X, want 0x%02X (LongRelease)", ev.event, switchEventLongRelease)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info", ev.priority)
 	}
 }

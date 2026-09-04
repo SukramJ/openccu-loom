@@ -12,8 +12,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Global attribute IDs from cluster/globals.go.
@@ -247,7 +246,7 @@ func TestPressureServer_MatterRead_VeryLowPressure(t *testing.T) {
 
 func TestBooleanStateServer_MatterRead_FeatureMap(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewBooleanStateServer(fakeBool{class: interfaces.MatterMeasurementContact, val: true, obs: true})
+	s := measurement.NewBooleanStateServer(fakeBool{class: mattercontract.MeasurementContact, val: true, obs: true})
 	v, ok := s.MatterRead(attrGlobalFeatureMap)
 	if !ok || v == nil {
 		t.Fatalf("FeatureMap: got (%v, %v)", v, ok)
@@ -256,7 +255,7 @@ func TestBooleanStateServer_MatterRead_FeatureMap(t *testing.T) {
 
 func TestBooleanStateServer_MatterRead_ClusterRevision(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewBooleanStateServer(fakeBool{class: interfaces.MatterMeasurementContact, val: true, obs: true})
+	s := measurement.NewBooleanStateServer(fakeBool{class: mattercontract.MeasurementContact, val: true, obs: true})
 	v, ok := s.MatterRead(attrGlobalClusterRevision)
 	if !ok || v == nil {
 		t.Fatalf("ClusterRevision: got (%v, %v)", v, ok)
@@ -265,7 +264,7 @@ func TestBooleanStateServer_MatterRead_ClusterRevision(t *testing.T) {
 
 func TestBooleanStateServer_MatterRead_Unknown(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewBooleanStateServer(fakeBool{class: interfaces.MatterMeasurementContact, val: true, obs: true})
+	s := measurement.NewBooleanStateServer(fakeBool{class: mattercontract.MeasurementContact, val: true, obs: true})
 	_, ok := s.MatterRead(0x9999)
 	if ok {
 		t.Fatal("unknown attr: want ok=false")
@@ -276,7 +275,7 @@ func TestBooleanStateServer_MatterRead_Unknown(t *testing.T) {
 
 func TestOccupancySensingServer_MatterRead_Unobserved(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: false, obs: false})
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: false, obs: false})
 	v, ok := s.MatterRead(0x0000) // attrOccupancy
 	if !ok || v != nil {
 		t.Fatalf("unobserved: want (nil, true), got (%v, %v)", v, ok)
@@ -285,7 +284,7 @@ func TestOccupancySensingServer_MatterRead_Unobserved(t *testing.T) {
 
 func TestOccupancySensingServer_MatterRead_OccupancySensorType(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
 	v, ok := s.MatterRead(0x0001) // attrOccupancySensorType
 	if !ok || v == nil {
 		t.Fatalf("OccupancySensorType: got (%v, %v)", v, ok)
@@ -294,7 +293,7 @@ func TestOccupancySensingServer_MatterRead_OccupancySensorType(t *testing.T) {
 
 func TestOccupancySensingServer_MatterRead_OccupancySensorBmp(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
 	v, ok := s.MatterRead(0x0002) // attrOccupancySensorBmp
 	if !ok || v == nil {
 		t.Fatalf("OccupancySensorBmp: got (%v, %v)", v, ok)
@@ -303,7 +302,7 @@ func TestOccupancySensingServer_MatterRead_OccupancySensorBmp(t *testing.T) {
 
 func TestOccupancySensingServer_MatterRead_ClusterRevision(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
 	v, ok := s.MatterRead(attrGlobalClusterRevision)
 	if !ok || v == nil {
 		t.Fatalf("ClusterRevision: got (%v, %v)", v, ok)
@@ -312,16 +311,16 @@ func TestOccupancySensingServer_MatterRead_ClusterRevision(t *testing.T) {
 
 func TestOccupancySensingServer_MatterWrite_ReadOnly(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
+	if err := s.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
 
 func TestOccupancySensingServer_MatterInvoke_Rejected(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}
@@ -329,7 +328,7 @@ func TestOccupancySensingServer_MatterInvoke_Rejected(t *testing.T) {
 
 func TestOccupancySensingServer_MatterReportable_NonEmpty(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
 	if len(s.MatterReportable()) == 0 {
 		t.Error("MatterReportable: want non-empty")
 	}
@@ -337,7 +336,7 @@ func TestOccupancySensingServer_MatterReportable_NonEmpty(t *testing.T) {
 
 func TestOccupancySensingServer_MatterAttributes_NonEmpty(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
 	if len(s.MatterAttributes()) == 0 {
 		t.Error("MatterAttributes: want non-empty")
 	}
@@ -368,7 +367,7 @@ func TestPM25ConcentrationServer_MatterAttributes_NonEmpty(t *testing.T) {
 // the returned value is false (default safe state) with ok=true.
 func TestPowerSourceServer_MatterRead_BatReplacementNeeded_Unobserved(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPowerSourceServer(fakeBool{class: interfaces.MatterMeasurementBattery, val: false, obs: false})
+	s := measurement.NewPowerSourceServer(fakeBool{class: mattercontract.MeasurementBattery, val: false, obs: false})
 	v, ok := s.MatterRead(0x000F) // attrPwrBatReplacementNeeded
 	if !ok {
 		t.Fatal("BatReplacementNeeded unobserved: want ok=true")
@@ -392,7 +391,7 @@ func TestPowerSourceServer_MatterRead_BatReplacementNeeded_Unobserved(t *testing
 // from the FeatureMap.
 func TestOccupancySensingServer_MatterRead_FeatureMap(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
+	s := measurement.NewOccupancySensingServer(fakeBool{class: mattercontract.MeasurementOccupancy, val: true, obs: true})
 	v, ok := s.MatterRead(attrGlobalFeatureMap)
 	if !ok || v == nil {
 		t.Fatalf("OccupancySensing FeatureMap: got (%v, %v)", v, ok)

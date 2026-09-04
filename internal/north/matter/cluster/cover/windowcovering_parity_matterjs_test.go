@@ -13,7 +13,6 @@ import (
 	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // matterClusterEntry is a minimal schema entry used by the parity tests.
@@ -201,7 +200,7 @@ func TestWindowCoveringServer_UpOrOpen(t *testing.T) {
 	t.Parallel()
 
 	srv := cover.NewWindowCoveringServer(cover.Config{InitialPositionPercent100ths: 10000})
-	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdUpOrOpen, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdUpOrOpen, nil)
 	if err != nil {
 		t.Fatalf("UpOrOpen: %v", err)
 	}
@@ -217,7 +216,7 @@ func TestWindowCoveringServer_DownOrClose(t *testing.T) {
 	t.Parallel()
 
 	srv := cover.NewWindowCoveringServer(cover.Config{InitialPositionPercent100ths: 0})
-	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdDownOrClose, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdDownOrClose, nil)
 	if err != nil {
 		t.Fatalf("DownOrClose: %v", err)
 	}
@@ -234,7 +233,7 @@ func TestWindowCoveringServer_StopMotion(t *testing.T) {
 	t.Parallel()
 
 	srv := cover.NewWindowCoveringServer(cover.Config{})
-	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdStopMotion, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdStopMotion, nil)
 	if err != nil {
 		t.Fatalf("StopMotion: %v", err)
 	}
@@ -252,7 +251,7 @@ func TestWindowCoveringServer_GoToLiftPercentage(t *testing.T) {
 
 	srv := cover.NewWindowCoveringServer(cover.Config{})
 	const target uint16 = 3500
-	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdGoToLiftPercentage, target, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdGoToLiftPercentage, target)
 	if err != nil {
 		t.Fatalf("GoToLiftPercentage: %v", err)
 	}
@@ -276,7 +275,7 @@ func TestWindowCoveringServer_GoToLiftPercentageMapPayload(t *testing.T) {
 	srv := cover.NewWindowCoveringServer(cover.Config{})
 	const target uint16 = 2000
 	fields := map[string]any{"percent": target}
-	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdGoToLiftPercentage, fields, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdGoToLiftPercentage, fields)
 	if err != nil {
 		t.Fatalf("GoToLiftPercentage(map): %v", err)
 	}
@@ -293,7 +292,7 @@ func TestWindowCoveringServer_UnknownCommandReturnsError(t *testing.T) {
 	t.Parallel()
 
 	srv := cover.NewWindowCoveringServer(cover.Config{})
-	_, err := srv.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0xFF, nil)
 	if err == nil {
 		t.Error("expected error for unknown command, got nil")
 	}
@@ -306,7 +305,7 @@ func TestWindowCoveringServer_WriteReturnsError(t *testing.T) {
 
 	srv := cover.NewWindowCoveringServer(cover.Config{})
 	// Type (0x0000) is read-only; writes must be rejected.
-	err := srv.MatterWrite(context.Background(), clusterwire.WindowCoveringAttrType, uint8(0), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), clusterwire.WindowCoveringAttrType, uint8(0))
 	if err == nil {
 		t.Error("expected error from MatterWrite on read-only attribute Type, got nil")
 	}
@@ -320,7 +319,7 @@ func TestWindowCoveringServer_WriteModeAccepted(t *testing.T) {
 	t.Parallel()
 
 	srv := cover.NewWindowCoveringServer(cover.Config{})
-	if err := srv.MatterWrite(context.Background(), clusterwire.WindowCoveringAttrMode, uint8(3), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), clusterwire.WindowCoveringAttrMode, uint8(3)); err != nil {
 		t.Fatalf("MatterWrite(Mode, 3): unexpected error: %v", err)
 	}
 	v, ok := srv.MatterRead(clusterwire.WindowCoveringAttrMode)
@@ -338,7 +337,7 @@ func TestWindowCoveringServer_WriteModeConstraint(t *testing.T) {
 	t.Parallel()
 
 	srv := cover.NewWindowCoveringServer(cover.Config{})
-	err := srv.MatterWrite(context.Background(), clusterwire.WindowCoveringAttrMode, uint8(16), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), clusterwire.WindowCoveringAttrMode, uint8(16))
 	if err == nil {
 		t.Fatal("MatterWrite(Mode, 16) expected ConstraintError, got nil")
 	}
@@ -359,7 +358,7 @@ func TestWindowCoveringServer_GoToLiftPercent_ConstraintMax10000(t *testing.T) {
 	t.Parallel()
 
 	srv := cover.NewWindowCoveringServer(cover.Config{})
-	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdGoToLiftPercentage, uint16(10001), hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), clusterwire.WindowCoveringCmdGoToLiftPercentage, uint16(10001))
 	if err == nil {
 		t.Fatal("GoToLiftPercentage(10001) expected ConstraintError, got nil")
 	}

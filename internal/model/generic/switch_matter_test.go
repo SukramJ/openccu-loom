@@ -145,13 +145,13 @@ func TestSwitchMatter_LTAttributesAnswer(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	if err := s.MatterWrite(ctx, matterGenericSwitchAttrOnTime, uint16(42), hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(ctx, matterGenericSwitchAttrOnTime, uint16(42)); err != nil {
 		t.Fatalf("write OnTime: %v", err)
 	}
 	if v, _ := s.MatterRead(matterGenericSwitchAttrOnTime); v != uint16(42) {
 		t.Errorf("OnTime after write: got %v, want 42", v)
 	}
-	if err := s.MatterWrite(ctx, matterGenericSwitchAttrStartUpOnOff, uint8(1), hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(ctx, matterGenericSwitchAttrStartUpOnOff, uint8(1)); err != nil {
 		t.Fatalf("write StartUpOnOff: %v", err)
 	}
 	if v, _ := s.MatterRead(matterGenericSwitchAttrStartUpOnOff); v != uint8(1) {
@@ -169,19 +169,19 @@ func TestSwitchMatter_LTCommandsAreAccepted(t *testing.T) {
 	s.Writer = &stubWriter{}
 	ctx := t.Context()
 
-	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOffWithEffect, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOffWithEffect, nil); err != nil {
 		t.Fatalf("OffWithEffect: %v", err)
 	}
 	if v, _ := s.MatterRead(matterGenericSwitchAttrGlobalSceneControl); v != false {
 		t.Errorf("OffWithEffect must clear GlobalSceneControl, got %v", v)
 	}
-	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOnWithRecallGlobalScene, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOnWithRecallGlobalScene, nil); err != nil {
 		t.Fatalf("OnWithRecallGlobalScene: %v", err)
 	}
 	if v, _ := s.MatterRead(matterGenericSwitchAttrGlobalSceneControl); v != true {
 		t.Errorf("OnWithRecallGlobalScene must set GlobalSceneControl, got %v", v)
 	}
-	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOnWithTimedOff, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOnWithTimedOff, nil); err != nil {
 		t.Fatalf("OnWithTimedOff: %v", err)
 	}
 }
@@ -210,7 +210,7 @@ func TestSwitchMatter_MatterWrite_WrongAttr(t *testing.T) {
 		hmenum.OperationsRead|hmenum.OperationsWrite))
 	w := &stubWriter{}
 	s.Writer = w
-	if err := s.MatterWrite(context.Background(), 0xBEEF, true, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0xBEEF, true); err == nil {
 		t.Fatal("wrong attr ID: expected error")
 	}
 }
@@ -221,7 +221,7 @@ func TestSwitchMatter_MatterWrite_WrongType(t *testing.T) {
 		hmenum.OperationsRead|hmenum.OperationsWrite))
 	w := &stubWriter{}
 	s.Writer = w
-	if err := s.MatterWrite(context.Background(), matterGenericSwitchAttrOnOff, "not-bool", hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), matterGenericSwitchAttrOnOff, "not-bool"); err == nil {
 		t.Fatal("non-bool value: expected error")
 	}
 }
@@ -232,7 +232,7 @@ func TestSwitchMatter_MatterWrite_HappyPath(t *testing.T) {
 		hmenum.OperationsRead|hmenum.OperationsWrite))
 	w := &stubWriter{}
 	s.Writer = w
-	if err := s.MatterWrite(context.Background(), matterGenericSwitchAttrOnOff, false, hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(context.Background(), matterGenericSwitchAttrOnOff, false); err != nil {
 		t.Fatalf("MatterWrite false: %v", err)
 	}
 }
@@ -243,7 +243,7 @@ func TestSwitchMatter_MatterInvoke_Off(t *testing.T) {
 		hmenum.OperationsRead|hmenum.OperationsWrite))
 	w := &stubWriter{}
 	s.Writer = w
-	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdOff, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdOff, nil); err != nil {
 		t.Fatalf("Invoke Off: %v", err)
 	}
 }
@@ -254,7 +254,7 @@ func TestSwitchMatter_MatterInvoke_On(t *testing.T) {
 		hmenum.OperationsRead|hmenum.OperationsWrite))
 	w := &stubWriter{}
 	s.Writer = w
-	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdOn, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdOn, nil); err != nil {
 		t.Fatalf("Invoke On: %v", err)
 	}
 }
@@ -266,7 +266,7 @@ func TestSwitchMatter_MatterInvoke_Toggle_Unobserved(t *testing.T) {
 	w := &stubWriter{}
 	s.Writer = w
 	// Unobserved → toggle turns on.
-	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdToggle, nil); err != nil {
 		t.Fatalf("Invoke Toggle (unobserved): %v", err)
 	}
 }
@@ -278,7 +278,7 @@ func TestSwitchMatter_MatterInvoke_Toggle_OnToOff(t *testing.T) {
 	w := &stubWriter{}
 	s.Writer = w
 	s.OnEvent(true)
-	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterGenericSwitchCmdToggle, nil); err != nil {
 		t.Fatalf("Invoke Toggle (on→off): %v", err)
 	}
 }
@@ -289,7 +289,7 @@ func TestSwitchMatter_MatterInvoke_UnknownCmd(t *testing.T) {
 		hmenum.OperationsRead|hmenum.OperationsWrite))
 	w := &stubWriter{}
 	s.Writer = w
-	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Fatal("unknown command: expected error")
 	}
 }
@@ -350,7 +350,7 @@ func TestSwitchMatter_LTWritesAcceptDecodedUint64(t *testing.T) {
 			t.Parallel()
 			s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
 				hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
-			if err := s.MatterWrite(ctx, tc.attr, tc.write, hmenum.CommandPriorityHigh); err != nil {
+			if err := s.MatterWrite(ctx, tc.attr, tc.write); err != nil {
 				t.Fatalf("write %s: %v", tc.name, err)
 			}
 			if v, _ := s.MatterRead(tc.attr); v != tc.want {
@@ -390,7 +390,7 @@ func TestSwitchMatter_AcceptedCommandsMatchInvoke(t *testing.T) {
 	}
 	// Each advertised command must actually dispatch.
 	for _, cmd := range got {
-		if _, err := s.MatterInvoke(t.Context(), cmd, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := s.MatterInvoke(t.Context(), cmd, nil); err != nil {
 			t.Errorf("advertised command 0x%02X is rejected: %v", cmd, err)
 		}
 	}

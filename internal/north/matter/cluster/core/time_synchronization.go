@@ -10,8 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // TimeSynchronization implements the minimum required surface of the
@@ -49,14 +48,14 @@ const (
 func NewTimeSynchronization() *TimeSynchronization { return &TimeSynchronization{} }
 
 var (
-	_ interfaces.MatterClusterServer          = (*TimeSynchronization)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*TimeSynchronization)(nil)
+	_ mattercontract.ClusterServer          = (*TimeSynchronization)(nil)
+	_ mattercontract.ClusterAttributeLister = (*TimeSynchronization)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (t *TimeSynchronization) MatterClusterID() uint32 { return timeSyncClusterID }
 
-// MatterRead implements [interfaces.MatterClusterServer]. UTCTime is
+// MatterRead implements [mattercontract.ClusterServer]. UTCTime is
 // reported as Matter's epoch_us (microseconds since 2000-01-01 UTC,
 // per §A.2). Granularity is fixed at MILLISECONDS_GRANULARITY since
 // the bridge syncs from the host clock (typically NTP-disciplined).
@@ -81,10 +80,10 @@ func (t *TimeSynchronization) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-// MatterWrite implements [interfaces.MatterClusterServer]. Every
+// MatterWrite implements [mattercontract.ClusterServer]. Every
 // attribute is read-only on the bridge — clients that try to set
 // TimeSource etc. get UnsupportedWrite.
-func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: TimeSynchronization attribute 0x%04X is read-only", attrID)
 }
 
@@ -93,7 +92,7 @@ func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ an
 // command id 0x00.
 const timeSyncCmdSetUTCTime uint32 = 0x00
 
-// MatterInvoke implements [interfaces.MatterClusterServer].
+// MatterInvoke implements [mattercontract.ClusterServer].
 // SetUTCTime (0x00) is a mandatory command per Matter §11.16.9.1 when the
 // UTC feature bit is advertised. The bridge does not adjust the host clock,
 // so the command is accepted and returns Success without acting —
@@ -102,7 +101,7 @@ const timeSyncCmdSetUTCTime uint32 = 0x00
 // commissioning error.
 // All other commands require feature flags the bridge does not advertise;
 // the IM dispatcher rejects them at the path level.
-func (t *TimeSynchronization) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (t *TimeSynchronization) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	if cmdID == timeSyncCmdSetUTCTime {
 		// Accept the command and return Success. The bridge's clock is
 		// managed by the host OS; no adjustment is applied here.

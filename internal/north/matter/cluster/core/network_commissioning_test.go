@@ -12,7 +12,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ---- helpers ----
@@ -208,7 +207,7 @@ func TestNetcomm_ReadUnknownAttr(t *testing.T) {
 func TestNetcomm_WriteInterfaceEnabled_False(t *testing.T) {
 	t.Parallel()
 	nc := defaultNetcomm()
-	if err := nc.MatterWrite(context.Background(), 0x0004, false, hmenum.CommandPriorityHigh); err != nil {
+	if err := nc.MatterWrite(context.Background(), 0x0004, false); err != nil {
 		t.Fatalf("MatterWrite InterfaceEnabled=false: %v", err)
 	}
 	v, ok := nc.MatterRead(0x0004)
@@ -223,7 +222,7 @@ func TestNetcomm_WriteInterfaceEnabled_False(t *testing.T) {
 func TestNetcomm_WriteInterfaceEnabled_WrongType(t *testing.T) {
 	t.Parallel()
 	nc := defaultNetcomm()
-	err := nc.MatterWrite(context.Background(), 0x0004, "yes", hmenum.CommandPriorityHigh)
+	err := nc.MatterWrite(context.Background(), 0x0004, "yes")
 	if err == nil {
 		t.Fatal("expected error for wrong type, got nil")
 	}
@@ -233,7 +232,7 @@ func TestNetcomm_WriteReadOnlyAttr(t *testing.T) {
 	t.Parallel()
 	nc := defaultNetcomm()
 	// MaxNetworks (0x0000) is read-only.
-	err := nc.MatterWrite(context.Background(), 0x0000, uint8(2), hmenum.CommandPriorityHigh)
+	err := nc.MatterWrite(context.Background(), 0x0000, uint8(2))
 	if err == nil {
 		t.Fatal("expected error for write to read-only attr, got nil")
 	}
@@ -246,7 +245,7 @@ func TestNetcomm_Invoke_AllRejected(t *testing.T) {
 	nc := defaultNetcomm()
 	ctx := context.Background()
 	for _, cmdID := range []uint32{0x00, 0x02, 0x03, 0x04, 0x06, 0x08} {
-		_, err := nc.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := nc.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -305,7 +304,7 @@ func TestNetcomm_Concurrent_Race(t *testing.T) {
 				_, _ = nc.MatterRead(0x0001)
 				_, _ = nc.MatterRead(0x0004)
 			case 1:
-				_ = nc.MatterWrite(ctx, 0x0004, i%2 == 0, hmenum.CommandPriorityHigh)
+				_ = nc.MatterWrite(ctx, 0x0004, i%2 == 0)
 			case 2:
 				_, _ = nc.MatterRead(cluster.AttrGlobalFeatureMap)
 			}
