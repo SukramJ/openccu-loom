@@ -13,7 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // TestIdentify_MatterAcceptedCommands_IncludesTriggerEffect verifies that
@@ -26,7 +26,7 @@ func TestIdentify_MatterAcceptedCommands_IncludesTriggerEffect(t *testing.T) {
 	id := core.NewIdentify()
 
 	// Ensure Identify satisfies MatterClusterCommandLister at compile time.
-	var _ interfaces.MatterClusterCommandLister = id
+	var _ matterport.ClusterCommandLister = id
 
 	cmds := id.MatterAcceptedCommands()
 	if len(cmds) == 0 {

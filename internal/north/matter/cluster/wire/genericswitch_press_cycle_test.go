@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // The press-cycle parity case lives in the external test package: it
@@ -25,7 +25,7 @@ type pressCycleRecorder struct {
 	events []uint32
 }
 
-func (r *pressCycleRecorder) MatterEmitEvent(_ uint16, _, event uint32, _ any, _ interfaces.MatterEventPriority) {
+func (r *pressCycleRecorder) MatterEmitEvent(_ uint16, _, event uint32, _ any, _ matterport.EventPriority) {
 	r.events = append(r.events, event)
 }
 

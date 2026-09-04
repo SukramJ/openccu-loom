@@ -10,7 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // ScenesManagement is a minimal stub for the Matter ScenesManagement
@@ -39,14 +39,14 @@ var errScenesStub = errors.New("matter: ScenesManagement is a read-only stub (HM
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer          = ScenesManagement{}
-	_ interfaces.MatterClusterAttributeLister = ScenesManagement{}
+	_ matterport.ClusterServer          = ScenesManagement{}
+	_ matterport.ClusterAttributeLister = ScenesManagement{}
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (ScenesManagement) MatterClusterID() uint32 { return scenesManagementClusterID }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [matterport.ClusterServer].
 func (ScenesManagement) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case scenesManagementAttrSceneTableSize:

@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // NetworkCommissioning implements the Matter NetworkCommissioning
@@ -35,7 +35,7 @@ type NetworkCommissioning struct {
 	// dataVersion tracks the per-cluster monotonic counter per Matter
 	// §10.6.5. Bumped at construction so the initial version is a non-zero
 	// sentinel (prevents DataVersionFilter=0 false-positive cache hits).
-	// Satisfies [interfaces.MatterClusterDataVersion]. Mirrors matter.js
+	// Satisfies [matterport.ClusterDataVersion]. Mirrors matter.js
 	// NetworkCommissioning behavior layer auto-tracking and chip
 	// src/app/clusters/network-commissioning/NetworkCommissioningCluster.cpp
 	// ember dirty-marking mechanism.
@@ -129,14 +129,14 @@ func NewNetworkCommissioning(cfg NetworkCommissioningConfig) *NetworkCommissioni
 // MatterClusterServer, the attribute-lister capability, and
 // MatterClusterDataVersion.
 var (
-	_ interfaces.MatterClusterServer                  = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeLister         = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterDataVersion             = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeReadPrivilege  = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeWritePrivilege = (*NetworkCommissioning)(nil)
+	_ matterport.ClusterServer                  = (*NetworkCommissioning)(nil)
+	_ matterport.ClusterAttributeLister         = (*NetworkCommissioning)(nil)
+	_ matterport.ClusterDataVersion             = (*NetworkCommissioning)(nil)
+	_ matterport.ClusterAttributeReadPrivilege  = (*NetworkCommissioning)(nil)
+	_ matterport.ClusterAttributeWritePrivilege = (*NetworkCommissioning)(nil)
 )
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [matterport.ClusterDataVersion].
 // Returns the per-cluster monotonic counter seeded at construction.
 // Mirrors matter.js NetworkCommissioning behavior layer DataVersion
 // tracking and chip's ember dirty-marking mechanism
@@ -145,10 +145,10 @@ func (n *NetworkCommissioning) MatterDataVersion() uint32 {
 	return n.dataVersion.Current()
 }
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (n *NetworkCommissioning) MatterClusterID() uint32 { return netcommClusterID }
 
-// MinReadPrivilege implements [interfaces.MatterClusterAttributeReadPrivilege].
+// MinReadPrivilege implements [matterport.ClusterAttributeReadPrivilege].
 // MaxNetworks / Networks / LastNetworkingStatus / LastNetworkId /
 // LastConnectErrorValue are all read-access "R A" (Administer) per Matter
 // §11.9 — a merely-View subject must not read them, nor have them streamed
@@ -169,7 +169,7 @@ func (n *NetworkCommissioning) MinReadPrivilege(attrID uint32) uint8 {
 	}
 }
 
-// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// MinWritePrivilege implements [matterport.ClusterAttributeWritePrivilege].
 // InterfaceEnabled (0x0004) requires Administer (5) per Matter §11.9
 // (access "RW VA"). Mirrors matter.js
 // packages/model/src/standard/elements/network-commissioning.element.ts:47.
@@ -182,7 +182,7 @@ func (n *NetworkCommissioning) MinWritePrivilege(attrID uint32) uint8 {
 	}
 }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [matterport.ClusterServer].
 func (n *NetworkCommissioning) MatterRead(attrID uint32) (any, bool) {
 	n.mu.RLock()
 	defer n.mu.RUnlock()

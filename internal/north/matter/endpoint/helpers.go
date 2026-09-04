@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // isNotFound matches the [store.ErrEndpointNotFound] sentinel via
@@ -105,14 +105,14 @@ func truncateUTF8(s string, maxBytes int) string {
 }
 
 // measurementDeviceType is a thin alias for
-// [interfaces.MatterMeasurementClassDeviceType], the canonical
+// [matterport.MeasurementClassDeviceType], the canonical
 // MatterMeasurementClass → DeviceType mapping. Kept here for
 // backward compatibility with the existing test surface; new code
 // should call the interfaces helper directly so the model layer
 // remains the single source of truth (ADR 0012 "rich model, dumb
 // bridge").
-func measurementDeviceType(class interfaces.MatterMeasurementClass) uint16 {
-	return interfaces.MatterMeasurementClassDeviceType(class)
+func measurementDeviceType(class matterport.MeasurementClass) uint16 {
+	return matterport.MeasurementClassDeviceType(class)
 }
 
 // deviceTypeRevision returns the Matter Application Cluster Library

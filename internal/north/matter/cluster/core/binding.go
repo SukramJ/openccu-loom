@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // Binding implements the Matter Binding cluster (0x001E) per Matter
@@ -61,11 +61,11 @@ func NewBinding() *Binding {
 // Compile-time assertions: Binding satisfies MatterClusterServer and
 // the attribute-lister capability.
 var (
-	_ interfaces.MatterClusterServer          = (*Binding)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*Binding)(nil)
+	_ matterport.ClusterServer          = (*Binding)(nil)
+	_ matterport.ClusterAttributeLister = (*Binding)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (b *Binding) MatterClusterID() uint32 { return bindingClusterID }
 
 // MatterRead returns the bindings list under a copy.

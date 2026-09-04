@@ -9,7 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // recordingServer records every attribute ID passed to MatterWrite so a
@@ -37,19 +37,19 @@ func (s *recordingServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hme
 }
 
 var (
-	_ interfaces.MatterClusterServer          = (*recordingServer)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*recordingServer)(nil)
+	_ matterport.ClusterServer          = (*recordingServer)(nil)
+	_ matterport.ClusterAttributeLister = (*recordingServer)(nil)
 )
 
 // recordingSource is a MatterEndpointSource backed by one recordingServer.
 type recordingSource struct{ srv *recordingServer }
 
 func (s recordingSource) MatterDeviceType() uint16 { return 0x010A }
-func (s recordingSource) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{s.srv}
+func (s recordingSource) MatterClusterServers() []matterport.ClusterServer {
+	return []matterport.ClusterServer{s.srv}
 }
 
-var _ interfaces.MatterEndpointSource = recordingSource{}
+var _ matterport.EndpointSource = recordingSource{}
 
 func recordedWrite(calls []uint32, attr uint32) bool {
 	for _, a := range calls {

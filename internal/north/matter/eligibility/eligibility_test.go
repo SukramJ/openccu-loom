@@ -10,14 +10,14 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // ---------------------------------------------------------------------------
 // Minimal fakes — no real model packages imported.
 // ---------------------------------------------------------------------------
 
-// fakeClusterServer implements interfaces.MatterClusterServer.
+// fakeClusterServer implements matterport.ClusterServer.
 type fakeClusterServer struct {
 	clusterID uint32
 }
@@ -36,23 +36,23 @@ func (f *fakeClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ h
 }
 func (f *fakeClusterServer) MatterReportable() []uint32 { return nil }
 
-// fakeEndpointSource implements interfaces.MatterEndpointSource.
+// fakeEndpointSource implements matterport.EndpointSource.
 type fakeEndpointSource struct {
 	deviceType uint16
-	clusters   []interfaces.MatterClusterServer
+	clusters   []matterport.ClusterServer
 }
 
 func (f *fakeEndpointSource) MatterDeviceType() uint16 { return f.deviceType }
-func (f *fakeEndpointSource) MatterClusterServers() []interfaces.MatterClusterServer {
+func (f *fakeEndpointSource) MatterClusterServers() []matterport.ClusterServer {
 	return f.clusters
 }
 
-// fakeMeasurementSource implements interfaces.MatterMeasurementSource.
+// fakeMeasurementSource implements matterport.MeasurementSource.
 type fakeMeasurementSource struct {
-	class interfaces.MatterMeasurementClass
+	class matterport.MeasurementClass
 }
 
-func (f *fakeMeasurementSource) MatterMeasurementClass() interfaces.MatterMeasurementClass {
+func (f *fakeMeasurementSource) MatterMeasurementClass() matterport.MeasurementClass {
 	return f.class
 }
 
@@ -60,10 +60,10 @@ func (f *fakeMeasurementSource) MatterMeasurementClass() interfaces.MatterMeasur
 // MatterEligibilitySource. The latter overrides Classify's decision.
 type fakeEligibilitySource struct {
 	fakeEndpointSource
-	verdict interfaces.MatterEligibilityVerdict
+	verdict matterport.EligibilityVerdict
 }
 
-func (f *fakeEligibilitySource) MatterEligibility() interfaces.MatterEligibilityVerdict {
+func (f *fakeEligibilitySource) MatterEligibility() matterport.EligibilityVerdict {
 	return f.verdict
 }
 
@@ -78,7 +78,7 @@ func TestClassify_EndpointSource_Returns_Mappable(t *testing.T) {
 	t.Parallel()
 	src := &fakeEndpointSource{
 		deviceType: 0x010A,
-		clusters:   []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: 0x0006}},
+		clusters:   []matterport.ClusterServer{&fakeClusterServer{clusterID: 0x0006}},
 	}
 	got := eligibility.Classify(src)
 	if got.State != eligibility.StateMappable {
@@ -94,7 +94,7 @@ func TestClassify_EndpointSource_Returns_Mappable(t *testing.T) {
 
 func TestClassify_MeasurementSource_NonNone_Returns_Mappable(t *testing.T) {
 	t.Parallel()
-	src := &fakeMeasurementSource{class: interfaces.MatterMeasurementTemperature}
+	src := &fakeMeasurementSource{class: matterport.MeasurementTemperature}
 	got := eligibility.Classify(src)
 	if got.State != eligibility.StateMappable {
 		t.Errorf("expected Mappable, got %v (reason: %q)", got.State, got.Reason)
@@ -119,7 +119,7 @@ func TestClassify_EndpointSource_ZeroDeviceType_Returns_Unmappable(t *testing.T)
 	t.Parallel()
 	src := &fakeEndpointSource{
 		deviceType: 0,
-		clusters:   []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: 0x0006}},
+		clusters:   []matterport.ClusterServer{&fakeClusterServer{clusterID: 0x0006}},
 	}
 	got := eligibility.Classify(src)
 	if got.State != eligibility.StateUnmappable {
@@ -141,7 +141,7 @@ func TestClassify_EndpointSource_NoClusters_Returns_Unmappable(t *testing.T) {
 
 func TestClassify_MeasurementSource_None_Returns_Unmappable(t *testing.T) {
 	t.Parallel()
-	src := &fakeMeasurementSource{class: interfaces.MatterMeasurementNone}
+	src := &fakeMeasurementSource{class: matterport.MeasurementNone}
 	got := eligibility.Classify(src)
 	if got.State != eligibility.StateUnmappable {
 		t.Errorf("expected Unmappable for None class, got %v", got.State)
@@ -171,9 +171,9 @@ func TestClassify_EligibilitySourceOverride_Partial(t *testing.T) {
 	src := &fakeEligibilitySource{
 		fakeEndpointSource: fakeEndpointSource{
 			deviceType: 0x0302,
-			clusters:   []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: 0x0402}},
+			clusters:   []matterport.ClusterServer{&fakeClusterServer{clusterID: 0x0402}},
 		},
-		verdict: interfaces.MatterEligibilityVerdict{
+		verdict: matterport.EligibilityVerdict{
 			State:  eligibility.StatePartial,
 			Reason: "siren tones not mappable",
 		},
@@ -197,7 +197,7 @@ func TestDeriveMatterEligibility_CustomDP_Returns_ClusterIDs(t *testing.T) {
 	srv2 := &fakeClusterServer{clusterID: 0x0008}
 	src := &fakeEndpointSource{
 		deviceType: 0x0100,
-		clusters:   []interfaces.MatterClusterServer{srv1, srv2},
+		clusters:   []matterport.ClusterServer{srv1, srv2},
 	}
 	got := eligibility.DeriveMatterEligibility(src)
 	if got.State != eligibility.StateMappable {
@@ -213,13 +213,13 @@ func TestDeriveMatterEligibility_CustomDP_Returns_ClusterIDs(t *testing.T) {
 
 func TestDeriveMatterEligibility_MeasurementSource_UsesClassDeviceTypeAndClusterID(t *testing.T) {
 	t.Parallel()
-	src := &fakeMeasurementSource{class: interfaces.MatterMeasurementHumidity}
+	src := &fakeMeasurementSource{class: matterport.MeasurementHumidity}
 	got := eligibility.DeriveMatterEligibility(src)
 	if got.State != eligibility.StateMappable {
 		t.Errorf("expected Mappable, got %v", got.State)
 	}
-	wantDT := interfaces.MatterMeasurementClassDeviceType(interfaces.MatterMeasurementHumidity)
-	wantCl := interfaces.MatterMeasurementClassClusterID(interfaces.MatterMeasurementHumidity)
+	wantDT := matterport.MeasurementClassDeviceType(matterport.MeasurementHumidity)
+	wantCl := matterport.MeasurementClassClusterID(matterport.MeasurementHumidity)
 	if got.DeviceType != wantDT {
 		t.Errorf("device type: got %d, want %d", got.DeviceType, wantDT)
 	}

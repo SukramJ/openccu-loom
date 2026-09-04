@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // Descriptor implements the Matter Descriptor cluster (0x001D) per
@@ -77,9 +77,9 @@ func NewDescriptor(deviceTypes []DeviceTypeStruct, serverList, clientList []uint
 }
 
 // Compile-time assertion: Descriptor satisfies MatterClusterServer.
-var _ interfaces.MatterClusterServer = (*Descriptor)(nil)
+var _ matterport.ClusterServer = (*Descriptor)(nil)
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (d *Descriptor) MatterClusterID() uint32 { return descriptorClusterID }
 
 // MatterRead returns the static lists. PartsList is mutable when the
@@ -173,7 +173,7 @@ func (d *Descriptor) MatterReportable() []uint32 {
 	return []uint32{descriptorAttrPartsList}
 }
 
-// MatterAttributes implements [interfaces.MatterClusterAttributeLister]
+// MatterAttributes implements [matterport.ClusterAttributeLister]
 // so wildcard subscribe / read enumerates the full Descriptor surface.
 // Apple Home reads DeviceTypeList + ServerList + PartsList on every
 // endpoint to build the HAP topology — missing entries trigger

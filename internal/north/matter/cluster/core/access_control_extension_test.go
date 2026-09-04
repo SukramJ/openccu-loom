@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // encodeExtensionTLV returns a minimal well-formed TLV List — the shape
@@ -223,7 +223,7 @@ func TestAccessControl_ExtensionWriteEmitsExtensionChanged(t *testing.T) {
 		if ev.event != 0x0001 {
 			t.Errorf("event %d: event = 0x%04X, want 0x0001 (AccessControlExtensionChanged)", i, ev.event)
 		}
-		if ev.priority != interfaces.MatterEventPriorityInfo {
+		if ev.priority != matterport.EventPriorityInfo {
 			t.Errorf("event %d: priority = %v, want Info", i, ev.priority)
 		}
 		payload, ok := ev.data.(core.AccessControlExtensionChangedEvent)

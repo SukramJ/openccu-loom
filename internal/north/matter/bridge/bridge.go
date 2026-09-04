@@ -36,7 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // Errors.
@@ -105,7 +105,7 @@ type Config struct {
 
 	// IncludeMeasurements passes [endpoint.Config.IncludeMeasurements]
 	// through to the assembler so standalone sensor endpoints (Temperature,
-	// Humidity, …) are created from [interfaces.MatterMeasurementSource]
+	// Humidity, …) are created from [matterport.MeasurementSource]
 	// DPs. Off by default; operators turn it on with
 	// `north.matter.include_measurements`.
 	//
@@ -180,14 +180,14 @@ type Bridge struct {
 	// endpoint 0 (BasicInformation, GeneralCommissioning, …). Held on
 	// the bridge so [Bridge.Reassemble] can re-stamp them onto each
 	// freshly assembled root endpoint without the daemon re-attaching.
-	rootClusters []interfaces.MatterClusterServer
+	rootClusters []matterport.ClusterServer
 	// aggregatorClusters carry the cluster servers attached to the
 	// Aggregator endpoint (EP 1) — Descriptor (mandatory) + optional
 	// Identify. Apple-bridge topology fix: EP 1 hosts the
 	// Aggregator device type and its Descriptor.PartsList enumerates
 	// the bridged children. Mirrors matter.js's
 	// `examples/device-bridge-onoff/src/BridgedDevicesNode.ts`.
-	aggregatorClusters []interfaces.MatterClusterServer
+	aggregatorClusters []matterport.ClusterServer
 	sessions           SessionLookup
 	paseHandler        PaseHandler
 	paseProvider       PaseHandlerProvider // optional; wins over paseHandler when set
@@ -208,7 +208,7 @@ type Bridge struct {
 	subManager *subscription.Manager // optional; when set Subscribe is fully wired
 
 	// measurementUnsubscribers holds the unsubscribe closures returned
-	// by [interfaces.MatterChangeNotifier.OnMatterValueChanged] for
+	// by [matterport.ChangeNotifier.OnMatterValueChanged] for
 	// every bridged endpoint whose source pushes value changes. Called
 	// and cleared at the start of each reassemble + when a fresh
 	// subscription manager is attached, then re-populated by
@@ -653,8 +653,8 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	// aggregator set from after the paired
 	// [Bridge.AttachAggregatorClusters].
 	b.mu.RLock()
-	rootClusters := append([]interfaces.MatterClusterServer(nil), b.rootClusters...)
-	aggregatorClusters := append([]interfaces.MatterClusterServer(nil), b.aggregatorClusters...)
+	rootClusters := append([]matterport.ClusterServer(nil), b.rootClusters...)
+	aggregatorClusters := append([]matterport.ClusterServer(nil), b.aggregatorClusters...)
 	b.mu.RUnlock()
 	if root := topology.FindByID(0); root != nil && len(rootClusters) > 0 {
 		root.PublishClusterServers(rootClusters)
@@ -707,7 +707,7 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 		// ClusterServers resolves all three cases: the published set on
 		// the root / aggregator, the materialised set everywhere else.
 		for _, srv := range endpoint.ClusterServers(ep) {
-			recv, ok := srv.(interfaces.MatterEventReceiver)
+			recv, ok := srv.(matterport.EventReceiver)
 			if !ok {
 				continue
 			}
@@ -984,8 +984,8 @@ func (b *Bridge) CommissioningWindow() *CommissioningWindow {
 // chip-tool that has already established a session and started
 // reading must see the cluster set without waiting for a topology
 // re-roll.
-func (b *Bridge) AttachRootClusters(servers []interfaces.MatterClusterServer) {
-	cp := append([]interfaces.MatterClusterServer(nil), servers...)
+func (b *Bridge) AttachRootClusters(servers []matterport.ClusterServer) {
+	cp := append([]matterport.ClusterServer(nil), servers...)
 	b.mu.Lock()
 	b.rootClusters = cp
 	if b.topology != nil {
@@ -1034,8 +1034,8 @@ func (b *Bridge) AttachRootPartsListProvider(provider func() []uint16) bool {
 // Pass nil to clear. Calling this after [Bridge.Start] swaps in the
 // new servers on the next [Bridge.Reassemble] and on the live topology
 // immediately.
-func (b *Bridge) AttachAggregatorClusters(servers []interfaces.MatterClusterServer) {
-	cp := append([]interfaces.MatterClusterServer(nil), servers...)
+func (b *Bridge) AttachAggregatorClusters(servers []matterport.ClusterServer) {
+	cp := append([]matterport.ClusterServer(nil), servers...)
 	b.mu.Lock()
 	b.aggregatorClusters = cp
 	if b.topology != nil {

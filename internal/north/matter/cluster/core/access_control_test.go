@@ -13,7 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	mstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // fakeACLStore is a minimal ACLStoreFacade for AccessControl tests.
@@ -622,7 +622,7 @@ func TestAccessControl_ACLWriteEmitsEntryChanged(t *testing.T) {
 			if ev.event != 0x0000 {
 				t.Errorf("event = 0x%04X, want 0x0000 (AccessControlEntryChanged)", ev.event)
 			}
-			if ev.priority != interfaces.MatterEventPriorityInfo {
+			if ev.priority != matterport.EventPriorityInfo {
 				t.Errorf("priority = %v, want Info (matter.js access-control.element.ts:62)", ev.priority)
 			}
 			if ev.endpoint != 0 {

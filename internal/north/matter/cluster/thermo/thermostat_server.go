@@ -16,7 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // Thermostat cluster ID and revision per Matter §4.3.
@@ -185,7 +185,7 @@ func (s *ThermostatServer) SetLocalTemperature(t *int16) {
 	s.mu.Unlock()
 }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [matterport.ClusterServer].
 // Feature-gated attributes return (nil, false) when their required feature
 // is absent — the IM dispatcher handles the UnsupportedAttribute response.
 func (s *ThermostatServer) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
@@ -576,8 +576,8 @@ func (thermoInvalidCommandErr) MatterStatusCode() im.StatusCode { return im.Stat
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer          = (*ThermostatServer)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*ThermostatServer)(nil)
-	_ im.StatusCodeError                      = thermoConstraintErr{}
-	_ im.StatusCodeError                      = thermoInvalidCommandErr{}
+	_ matterport.ClusterServer          = (*ThermostatServer)(nil)
+	_ matterport.ClusterAttributeLister = (*ThermostatServer)(nil)
+	_ im.StatusCodeError                = thermoConstraintErr{}
+	_ im.StatusCodeError                = thermoInvalidCommandErr{}
 )

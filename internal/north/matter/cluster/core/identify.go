@@ -13,7 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // Identify implements the Matter Identify cluster (0x0003) per Matter
@@ -57,7 +57,7 @@ type Identify struct {
 	// dataVersion tracks the per-cluster monotonic counter per Matter
 	// §10.6.5. Bumped after every successful IdentifyTime write (via
 	// MatterWrite or MatterInvoke) so DataVersionFilter evaluation works.
-	// Satisfies [interfaces.MatterClusterDataVersion].
+	// Satisfies [matterport.ClusterDataVersion].
 	dataVersion cluster.DataVersionTracker
 
 	// Countdown-Timer state. Spec §1.2.5.1: "The IdentifyTime
@@ -125,21 +125,21 @@ func (i *Identify) Close() {
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer        = (*Identify)(nil)
-	_ interfaces.MatterClusterDataVersion   = (*Identify)(nil)
-	_ interfaces.MatterClusterCommandLister = (*Identify)(nil)
+	_ matterport.ClusterServer        = (*Identify)(nil)
+	_ matterport.ClusterDataVersion   = (*Identify)(nil)
+	_ matterport.ClusterCommandLister = (*Identify)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (i *Identify) MatterClusterID() uint32 { return identifyClusterID }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [matterport.ClusterDataVersion].
 // Returns the current per-cluster monotonic counter bumped after every
 // successful IdentifyTime write or Identify command dispatch.
 // Mirrors matter.js IdentifyServer.ts DataVersion tracking.
 func (i *Identify) MatterDataVersion() uint32 { return i.dataVersion.Current() }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [matterport.ClusterServer].
 func (i *Identify) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case identifyAttrTime:
@@ -209,13 +209,13 @@ func (i *Identify) MatterReportable() []uint32 {
 }
 
 // MatterAttributes implements
-// [interfaces.MatterClusterAttributeLister] so wildcard subscribe /
+// [matterport.ClusterAttributeLister] so wildcard subscribe /
 // read enumerates the full Identify surface.
 func (i *Identify) MatterAttributes() []uint32 {
 	return []uint32{identifyAttrTime, identifyAttrType}
 }
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [matterport.ClusterCommandLister].
 // Returns the command IDs handled by MatterInvoke so the dispatcher
 // populates AcceptedCommandList (0xFFF9) correctly. TriggerEffect (0x40)
 // is optional per spec but accepted as a visual no-op; including it here

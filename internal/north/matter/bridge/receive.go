@@ -17,7 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // Errors surfaced by the receive pipeline. They are not returned to
@@ -518,7 +518,7 @@ func (b *Bridge) NotifyDeviceReachable(centralName, deviceAddress string, reacha
 			core.BridgedDeviceBasicInformationClusterID,
 			core.EventReachableChanged,
 			core.ReachableChangedEvent{ReachableNewValue: reachable},
-			interfaces.MatterEventPriorityInfo)
+			matterport.EventPriorityInfo)
 		// Advance the endpoint-hosted BDBI DataVersion — the reachability
 		// flip is a cluster state change, so DataVersionFilters must miss
 		// afterwards (matter.js Datasource.ts:949).

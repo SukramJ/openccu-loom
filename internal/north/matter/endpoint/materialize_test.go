@@ -9,24 +9,24 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // --- fakes ---
 
 type fakeSource struct {
-	servers []interfaces.MatterClusterServer
+	servers []matterport.ClusterServer
 }
 
 func (f fakeSource) MatterDeviceType() uint16 { return 0x010A }
-func (f fakeSource) MatterClusterServers() []interfaces.MatterClusterServer {
+func (f fakeSource) MatterClusterServers() []matterport.ClusterServer {
 	return f.servers
 }
 
 type fakeBoolMeasurement struct{}
 
-func (fakeBoolMeasurement) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementOccupancy
+func (fakeBoolMeasurement) MatterMeasurementClass() matterport.MeasurementClass {
+	return matterport.MeasurementOccupancy
 }
 func (fakeBoolMeasurement) MatterBoolValue() (value, observed bool) { return true, true }
 
@@ -49,7 +49,7 @@ func (s fakeServer) MatterReportable() []uint32 { return nil }
 // --- tests ---
 
 // fakeMomentarySwitchSource implements both
-// [interfaces.MatterMeasurementSource] (with MomentarySwitch) and
+// [matterport.MeasurementSource] (with MomentarySwitch) and
 // the wire.GenericSwitchSource shape, mirroring how a HM Button
 // surfaces in the live model. The struct lives in the test file so
 // it can pretend to be a Button without pulling the model package.
@@ -57,8 +57,8 @@ type fakeMomentarySwitchSource struct {
 	supportsLong bool
 }
 
-func (f fakeMomentarySwitchSource) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementMomentarySwitch
+func (f fakeMomentarySwitchSource) MatterMeasurementClass() matterport.MeasurementClass {
+	return matterport.MeasurementMomentarySwitch
 }
 func (f fakeMomentarySwitchSource) MatterSwitchPositions() uint8        { return 2 }
 func (f fakeMomentarySwitchSource) MatterSwitchSupportsLongPress() bool { return f.supportsLong }
@@ -95,7 +95,7 @@ func TestClusterServersRootReturnsNil(t *testing.T) {
 	t.Parallel()
 	ep := &Endpoint{
 		ID:     0,
-		Source: fakeSource{servers: []interfaces.MatterClusterServer{fakeServer{id: 0x1234}}},
+		Source: fakeSource{servers: []matterport.ClusterServer{fakeServer{id: 0x1234}}},
 	}
 	if got := ClusterServers(ep); got != nil {
 		t.Errorf("ClusterServers(root) = %v, want nil", got)
@@ -108,7 +108,7 @@ func TestClusterServersFromSource(t *testing.T) {
 	sentinel := fakeServer{id: 0x1234}
 	ep := &Endpoint{
 		ID:     2,
-		Source: fakeSource{servers: []interfaces.MatterClusterServer{sentinel}},
+		Source: fakeSource{servers: []matterport.ClusterServer{sentinel}},
 	}
 
 	first := ClusterServers(ep)

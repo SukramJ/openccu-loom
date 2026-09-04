@@ -15,7 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // scenarioTopology bundles a snapshotter + the notifier sources it
@@ -40,14 +40,14 @@ type scenarioFakeNotifier struct {
 }
 
 var (
-	_ interfaces.MatterMeasurementSource      = (*scenarioFakeNotifier)(nil)
-	_ interfaces.MatterFloatMeasurementSource = (*scenarioFakeNotifier)(nil)
-	_ interfaces.MatterChangeNotifier         = (*scenarioFakeNotifier)(nil)
+	_ matterport.MeasurementSource      = (*scenarioFakeNotifier)(nil)
+	_ matterport.FloatMeasurementSource = (*scenarioFakeNotifier)(nil)
+	_ matterport.ChangeNotifier         = (*scenarioFakeNotifier)(nil)
 )
 
 func (n *scenarioFakeNotifier) DataPointKey() hmtypes.DataPointKey { return n.key }
-func (n *scenarioFakeNotifier) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementTemperature
+func (n *scenarioFakeNotifier) MatterMeasurementClass() matterport.MeasurementClass {
+	return matterport.MeasurementTemperature
 }
 
 func (n *scenarioFakeNotifier) MatterFloatValue() (float64, bool) {
@@ -144,15 +144,15 @@ type scenarioFakeFabricReader struct {
 }
 
 var (
-	_ interfaces.MatterEndpointSource = (*scenarioFakeFabricReader)(nil)
-	_ interfaces.MatterClusterServer  = (*scenarioFakeFabricReader)(nil)
-	_ interfaces.FabricScopedReader   = (*scenarioFakeFabricReader)(nil)
+	_ matterport.EndpointSource     = (*scenarioFakeFabricReader)(nil)
+	_ matterport.ClusterServer      = (*scenarioFakeFabricReader)(nil)
+	_ matterport.FabricScopedReader = (*scenarioFakeFabricReader)(nil)
 )
 
 func (n *scenarioFakeFabricReader) DataPointKey() hmtypes.DataPointKey { return n.key }
 func (*scenarioFakeFabricReader) MatterDeviceType() uint16             { return 0x010A }
-func (n *scenarioFakeFabricReader) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{n}
+func (n *scenarioFakeFabricReader) MatterClusterServers() []matterport.ClusterServer {
+	return []matterport.ClusterServer{n}
 }
 func (*scenarioFakeFabricReader) MatterClusterID() uint32 { return 0x0006 }
 func (*scenarioFakeFabricReader) MatterRead(attrID uint32) (any, bool) {
@@ -252,10 +252,10 @@ type scenarioFakeOnOffEndpointSource struct {
 }
 
 var (
-	_ interfaces.MatterEndpointSource     = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ interfaces.MatterClusterServer      = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ interfaces.MatterChangeNotifier     = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ interfaces.MatterClusterDataVersion = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ matterport.EndpointSource     = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ matterport.ClusterServer      = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ matterport.ChangeNotifier     = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ matterport.ClusterDataVersion = (*scenarioFakeOnOffEndpointSource)(nil)
 )
 
 func (n *scenarioFakeOnOffEndpointSource) DataPointKey() hmtypes.DataPointKey { return n.key }
@@ -264,8 +264,8 @@ func (n *scenarioFakeOnOffEndpointSource) DataPointKey() hmtypes.DataPointKey { 
 // packages/node/src/devices/on-off-plug-in-unit.ts.
 func (*scenarioFakeOnOffEndpointSource) MatterDeviceType() uint16 { return 0x010A }
 
-func (n *scenarioFakeOnOffEndpointSource) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{n, &scenarioFakeLevelControlServer{owner: n}}
+func (n *scenarioFakeOnOffEndpointSource) MatterClusterServers() []matterport.ClusterServer {
+	return []matterport.ClusterServer{n, &scenarioFakeLevelControlServer{owner: n}}
 }
 
 // scenarioFakeLevelControlServer is a sibling cluster server on the
@@ -279,7 +279,7 @@ type scenarioFakeLevelControlServer struct {
 	owner *scenarioFakeOnOffEndpointSource
 }
 
-var _ interfaces.MatterClusterServer = (*scenarioFakeLevelControlServer)(nil)
+var _ matterport.ClusterServer = (*scenarioFakeLevelControlServer)(nil)
 
 func (*scenarioFakeLevelControlServer) MatterClusterID() uint32 { return 0x0008 }
 func (l *scenarioFakeLevelControlServer) MatterRead(attrID uint32) (any, bool) {

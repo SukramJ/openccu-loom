@@ -15,7 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // NetworkInterfaceStruct mirrors Matter §11.12.4.1 (NetworkInterface
@@ -89,7 +89,7 @@ type GeneralDiagnostics struct {
 	// via [SetPersistedCounters]. Runtime attributes (UpTime,
 	// TotalOperationalHours) change continuously but DataVersion is not bumped
 	// per-second — controllers that cache UpTime do not need sub-second
-	// invalidation. Satisfies [interfaces.MatterClusterDataVersion].
+	// invalidation. Satisfies [matterport.ClusterDataVersion].
 	// Mirrors chip's ember dirty-marking in
 	// src/app/clusters/general-diagnostics-server/.
 	dataVersion cluster.DataVersionTracker
@@ -98,7 +98,7 @@ type GeneralDiagnostics struct {
 	// via [SetMatterEventEmitter] + [SetEndpoint] so [EmitBootReason]
 	// can fire the §11.12.8.1 BootReason event.
 	endpoint uint16
-	emitter  interfaces.MatterEventEmitter
+	emitter  matterport.EventEmitter
 }
 
 // BootReason values per Matter §11.12.5.4.
@@ -201,16 +201,16 @@ type BootReasonEvent struct {
 // event-receiver (emitter wiring) capability, the command-lister capability,
 // and MatterClusterDataVersion.
 var (
-	_ interfaces.MatterClusterServer                 = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterAttributeLister        = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterEventLister            = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterEventReceiver                 = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterCommandLister          = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterDataVersion            = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterCommandInvokePrivilege = (*GeneralDiagnostics)(nil)
+	_ matterport.ClusterServer                 = (*GeneralDiagnostics)(nil)
+	_ matterport.ClusterAttributeLister        = (*GeneralDiagnostics)(nil)
+	_ matterport.ClusterEventLister            = (*GeneralDiagnostics)(nil)
+	_ matterport.EventReceiver                 = (*GeneralDiagnostics)(nil)
+	_ matterport.ClusterCommandLister          = (*GeneralDiagnostics)(nil)
+	_ matterport.ClusterDataVersion            = (*GeneralDiagnostics)(nil)
+	_ matterport.ClusterCommandInvokePrivilege = (*GeneralDiagnostics)(nil)
 )
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [matterport.ClusterDataVersion].
 // Returns the per-cluster monotonic counter seeded at construction.
 // Mirrors chip's ember dirty-marking in
 // src/app/clusters/general-diagnostics-server/ and matter.js behavior
@@ -219,10 +219,10 @@ func (g *GeneralDiagnostics) MatterDataVersion() uint32 {
 	return g.dataVersion.Current()
 }
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (g *GeneralDiagnostics) MatterClusterID() uint32 { return gendiagClusterID }
 
-// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// MinInvokePrivilege implements [matterport.ClusterCommandInvokePrivilege].
 // TestEventTrigger requires Manage (4) per Matter §11.12 (access "M").
 // Mirrors matter.js packages/model/src/standard/elements/
 // general-diagnostics.element.ts:90.
@@ -235,7 +235,7 @@ func (g *GeneralDiagnostics) MinInvokePrivilege(cmdID uint32) uint8 {
 	}
 }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [matterport.ClusterServer].
 func (g *GeneralDiagnostics) MatterRead(attrID uint32) (any, bool) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -363,7 +363,7 @@ type TimeSnapshotResponse struct {
 	PosixTimeMs *uint64
 }
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [matterport.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke.
 // Mirrors matter.js packages/model/src/standard/elements/
 // general-diagnostics.element.ts accepted commands.
@@ -378,7 +378,7 @@ func (g *GeneralDiagnostics) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [matterport.ClusterCommandLister].
 // Lists the response command IDs this server may emit.
 // Mirrors matter.js packages/model/src/standard/elements/
 // general-diagnostics.element.ts generated commands.
@@ -414,19 +414,19 @@ func (g *GeneralDiagnostics) MatterAttributes() []uint32 {
 	}
 }
 
-// MatterEvents implements [interfaces.MatterClusterEventLister] so the
+// MatterEvents implements [matterport.ClusterEventLister] so the
 // dispatcher synthesises the global EventList (0xFFFA) attribute
 // correctly for this cluster.
 func (g *GeneralDiagnostics) MatterEvents() []uint32 {
 	return []uint32{gendiagEventBootReason}
 }
 
-// SetMatterEventEmitter implements [interfaces.MatterEventReceiver].
+// SetMatterEventEmitter implements [matterport.EventReceiver].
 // Called by the bridge during topology assembly so [EmitBootReason]
 // can fire the §11.12.8.1 BootReason event without the cluster holding
 // a direct reference to the bridge. Idempotent — re-wiring during
 // topology rebuild replaces the emitter cleanly.
-func (g *GeneralDiagnostics) SetMatterEventEmitter(emitter interfaces.MatterEventEmitter) {
+func (g *GeneralDiagnostics) SetMatterEventEmitter(emitter matterport.EventEmitter) {
 	g.mu.Lock()
 	g.emitter = emitter
 	g.mu.Unlock()
@@ -444,7 +444,7 @@ func (g *GeneralDiagnostics) SetEndpoint(endpoint uint16) {
 }
 
 // EmitBootReason fires the Matter §11.12.8.1 BootReason event (id
-// 0x0000, priority Critical) via the wired [interfaces.MatterEventEmitter].
+// 0x0000, priority Critical) via the wired [matterport.EventEmitter].
 // No-op when the emitter has not been wired yet — the daemon calls this
 // once at startup after topology assembly. Mirrors matter.js
 // packages/node/src/behaviors/general-diagnostics/
@@ -465,7 +465,7 @@ func (g *GeneralDiagnostics) EmitBootReason() {
 		slog.Any("endpoint", endpoint), slog.Any("boot_reason", bootReason))
 	emitter.MatterEmitEvent(endpoint, gendiagClusterID, gendiagEventBootReason,
 		BootReasonEvent{BootReason: bootReason},
-		interfaces.MatterEventPriorityCritical)
+		matterport.EventPriorityCritical)
 }
 
 // enumerateNetworkInterfaces walks net.Interfaces() and projects every

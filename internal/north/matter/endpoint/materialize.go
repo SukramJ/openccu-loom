@@ -14,7 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // matterDeviceTypeBridgedNode is the Matter Device Type ID for the
@@ -30,7 +30,7 @@ const matterDeviceTypeBridgedNode uint32 = 0x0013
 // endpoint. Three paths feed the result:
 //
 //  1. Custom-DP-backed endpoints (ep.Source != nil) ask the source
-//     directly via [interfaces.MatterEndpointSource.MatterClusterServers].
+//     directly via [matterport.EndpointSource.MatterClusterServers].
 //  2. MomentarySwitch sources (ep.Measurement is a
 //     [wire.GenericSwitchSource]) get a [wire.GenericSwitch] cluster
 //     server constructed at materialise time so the cluster knows the
@@ -49,7 +49,7 @@ const matterDeviceTypeBridgedNode uint32 = 0x0013
 //
 // Result is a fresh slice on every call; callers may mutate or
 // append without affecting subsequent invocations.
-func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
+func ClusterServers(ep *Endpoint) []matterport.ClusterServer { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
 	if ep == nil {
 		return nil
 	}
@@ -60,18 +60,18 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 	// Source / measurement-driven cluster servers come first so the
 	// dispatcher's wildcard read enumerates them in the same order
 	// across calls.
-	var inner []interfaces.MatterClusterServer
+	var inner []matterport.ClusterServer
 	switch {
 	case ep.Source != nil:
-		inner = append([]interfaces.MatterClusterServer(nil), ep.Source.MatterClusterServers()...)
+		inner = append([]matterport.ClusterServer(nil), ep.Source.MatterClusterServers()...)
 	case ep.Measurement != nil:
 		class := ep.Measurement.MatterMeasurementClass()
 		// MomentarySwitch is event-driven and needs the endpoint ID
 		// at construction time so [wire.GenericSwitch.FireInitialPress]
 		// can address the right Matter address.
-		if class == interfaces.MatterMeasurementMomentarySwitch {
+		if class == matterport.MeasurementMomentarySwitch {
 			if src, ok := ep.Measurement.(wire.GenericSwitchSource); ok {
-				inner = []interfaces.MatterClusterServer{wire.NewGenericSwitch(ep.ID, src)}
+				inner = []matterport.ClusterServer{wire.NewGenericSwitch(ep.ID, src)}
 			}
 		} else {
 			inner = measurement.FromMeasurementClass(class, ep.Measurement)
@@ -89,7 +89,7 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 	// picked it. Appended after the endpoint's own clusters so the primary
 	// function stays first in the ServerList.
 	if ep.PowerSource != nil {
-		for _, s := range measurement.FromMeasurementClass(interfaces.MatterMeasurementBattery, ep.PowerSource) {
+		for _, s := range measurement.FromMeasurementClass(matterport.MeasurementBattery, ep.PowerSource) {
 			if ps, ok := s.(*measurement.PowerSourceServer); ok {
 				ps.SetEndpoint(ep.ID)
 			}
@@ -222,7 +222,7 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 		// NodeLabel / UniqueID validation fail safely — return inner
 		// only; Apple will still see the cluster surface but reject
 		// the topology, which is the same outcome as before this fix.
-		return append([]interfaces.MatterClusterServer(nil), inner...)
+		return append([]matterport.ClusterServer(nil), inner...)
 	}
 	// Stamp the endpoint id so SetReachable can address the §9.13.6
 	// ReachableChanged event to the right (endpoint, cluster, event)
@@ -291,7 +291,7 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 	// would read 0 forever while a stray countdown goroutine ticked on.
 	identify := ep.identifyServer()
 
-	clusters := make([]interfaces.MatterClusterServer, 0, len(inner)+1)
+	clusters := make([]matterport.ClusterServer, 0, len(inner)+1)
 	clusters = append(clusters, identify)
 	clusters = append(clusters, inner...)
 
@@ -306,7 +306,7 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 		return append(clusters, bridged)
 	}
 
-	out := make([]interfaces.MatterClusterServer, 0, len(clusters)+2)
+	out := make([]matterport.ClusterServer, 0, len(clusters)+2)
 	out = append(out, clusters...)
 	out = append(out, descriptor, bridged)
 

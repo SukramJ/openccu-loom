@@ -10,7 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // AdministratorCommissioning implements Matter cluster 0x003C per
@@ -215,7 +215,7 @@ func (a *AdministratorCommissioning) MatterClusterID() uint32 {
 	return matterClusterAdminCommissioning
 }
 
-// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// MinInvokePrivilege implements [matterport.ClusterCommandInvokePrivilege].
 // OpenCommissioningWindow, OpenBasicCommissioningWindow, and
 // RevokeCommissioning all require Administer (5) per Matter §11.19
 // (access "A T"). Mirrors matter.js
@@ -536,7 +536,7 @@ const (
 	pakeVerifierBytes        = 97     // spec §3.10.5 — fixed length
 )
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [matterport.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke.
 // Mirrors matter.js packages/model/src/standard/elements/
 // administrator-commissioning.element.ts accepted commands.
@@ -550,7 +550,7 @@ func (a *AdministratorCommissioning) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [matterport.ClusterCommandLister].
 // AdministratorCommissioning has no generated response commands — all outcomes
 // are communicated via Matter StatusResponse.
 // Mirrors matter.js packages/model/src/standard/elements/
@@ -563,8 +563,8 @@ func (a *AdministratorCommissioning) MatterGeneratedCommands() []uint32 {
 // bridge's cluster-server contract, the attribute-lister capability,
 // and the command-lister capability.
 var (
-	_ interfaces.MatterClusterServer                 = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeLister        = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterCommandLister          = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterCommandInvokePrivilege = (*AdministratorCommissioning)(nil)
+	_ matterport.ClusterServer                 = (*AdministratorCommissioning)(nil)
+	_ matterport.ClusterAttributeLister        = (*AdministratorCommissioning)(nil)
+	_ matterport.ClusterCommandLister          = (*AdministratorCommissioning)(nil)
+	_ matterport.ClusterCommandInvokePrivilege = (*AdministratorCommissioning)(nil)
 )

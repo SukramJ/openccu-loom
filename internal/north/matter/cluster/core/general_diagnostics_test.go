@@ -13,7 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 func TestGenDiag_ClusterID(t *testing.T) {
@@ -276,7 +276,7 @@ func TestGenDiag_EmitBootReason_FiresEvent(t *testing.T) {
 	if ev.event != 0x0003 {
 		t.Errorf("event = 0x%04X, want 0x0003 (BootReason)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityCritical {
+	if ev.priority != matterport.EventPriorityCritical {
 		t.Errorf("priority = %v, want Critical", ev.priority)
 	}
 	payload, ok := ev.data.(core.BootReasonEvent)

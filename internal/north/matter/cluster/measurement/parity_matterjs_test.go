@@ -11,7 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // matter.js's MatterDefinition tree is the de-facto reference Matter
@@ -147,16 +147,16 @@ func TestParityMatterJS_PowerSourceMandatoryAttributes(t *testing.T) {
 type stubBoolSrc bool
 
 func (s stubBoolSrc) MatterBoolValue() (value, observed bool) { return bool(s), true }
-func (stubBoolSrc) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementBattery
+func (stubBoolSrc) MatterMeasurementClass() matterport.MeasurementClass {
+	return matterport.MeasurementBattery
 }
 
 // stubFloatSrc is a minimal MatterFloatMeasurementSource for tests.
 type stubFloatSrc float64
 
 func (s stubFloatSrc) MatterFloatValue() (value float64, observed bool) { return float64(s), true }
-func (stubFloatSrc) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementPower
+func (stubFloatSrc) MatterMeasurementClass() matterport.MeasurementClass {
+	return matterport.MeasurementPower
 }
 
 // featureBitsByCluster pins the FeatureMap bit index of every feature
@@ -222,8 +222,8 @@ func TestParityMatterJS_FeatureGatedAttributesMatchFeatureMap(t *testing.T) {
 	// A cluster server that also advertises its attribute set — the pair
 	// the dispatcher reads when it answers a wildcard read.
 	type listingServer interface {
-		interfaces.MatterClusterServer
-		interfaces.MatterClusterAttributeLister
+		matterport.ClusterServer
+		matterport.ClusterAttributeLister
 	}
 	cases := []struct {
 		name string

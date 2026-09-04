@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // DiagnosticLogs implements the Matter DiagnosticLogs cluster (0x0032)
@@ -118,15 +118,15 @@ func (d *DiagnosticLogs) SetBootEpoch(t time.Time) {
 // Compile-time assertions: DiagnosticLogs satisfies MatterClusterServer,
 // the attribute-lister capability, and the command-lister capability.
 var (
-	_ interfaces.MatterClusterServer          = (*DiagnosticLogs)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*DiagnosticLogs)(nil)
-	_ interfaces.MatterClusterCommandLister   = (*DiagnosticLogs)(nil)
+	_ matterport.ClusterServer          = (*DiagnosticLogs)(nil)
+	_ matterport.ClusterAttributeLister = (*DiagnosticLogs)(nil)
+	_ matterport.ClusterCommandLister   = (*DiagnosticLogs)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (d *DiagnosticLogs) MatterClusterID() uint32 { return diaglogsClusterID }
 
-// MatterRead implements [interfaces.MatterClusterServer]. The cluster
+// MatterRead implements [matterport.ClusterServer]. The cluster
 // has no readable attributes other than the global ones.
 func (d *DiagnosticLogs) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
@@ -213,7 +213,7 @@ func decodeRetrieveLogsIntent(fields any) uint8 {
 	return IntentEndUserSupport
 }
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [matterport.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke.
 // Mirrors matter.js packages/model/src/standard/elements/
 // diagnostic-logs.element.ts accepted commands.
@@ -223,7 +223,7 @@ func (d *DiagnosticLogs) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [matterport.ClusterCommandLister].
 // Lists the response command IDs this server may emit.
 // Mirrors matter.js packages/model/src/standard/elements/
 // diagnostic-logs.element.ts generated commands.

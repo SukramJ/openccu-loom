@@ -4,12 +4,12 @@
 // Package eligibility walks the model and produces the candidate list
 // the operator-facing allowlist UI consumes. It does *not* classify
 // sources itself — every DP exposes its verdict via
-// [interfaces.MatterEligibilitySource]. This package delegates and
+// [matterport.EligibilitySource]. This package delegates and
 // composes; the model is the single source of truth.
 //
 // Default verdict for sources that don't override
-// [interfaces.MatterEligibilitySource]: derived structurally from
-// [interfaces.MatterEndpointSource] / [interfaces.MatterMeasurementSource]
+// [matterport.EligibilitySource]: derived structurally from
+// [matterport.EndpointSource] / [matterport.MeasurementSource]
 // via [DeriveMatterEligibility]. Custom DPs with caveats (Siren tones,
 // Effect light effect dispatch, FixedColorLight palette quantisation)
 // implement the interface explicitly to surface
@@ -24,22 +24,22 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
-// Verdict is a re-export of [interfaces.MatterEligibilityVerdict] for
+// Verdict is a re-export of [matterport.EligibilityVerdict] for
 // callers that only depend on this package.
-type Verdict = interfaces.MatterEligibilityVerdict
+type Verdict = matterport.EligibilityVerdict
 
-// State is a re-export of [interfaces.MatterEligibilityState].
-type State = interfaces.MatterEligibilityState
+// State is a re-export of [matterport.EligibilityState].
+type State = matterport.EligibilityState
 
 // Re-exports of the state constants so callers don't need both
 // imports.
 const (
-	StateUnmappable = interfaces.MatterEligibilityUnmappable
-	StateMappable   = interfaces.MatterEligibilityMappable
-	StatePartial    = interfaces.MatterEligibilityPartial
+	StateUnmappable = matterport.EligibilityUnmappable
+	StateMappable   = matterport.EligibilityMappable
+	StatePartial    = matterport.EligibilityPartial
 )
 
 // Candidate identifies one row in the allowlist UI list. The
@@ -61,13 +61,13 @@ type Candidate struct {
 }
 
 // Classify returns the verdict for one source. It honours
-// [interfaces.MatterEligibilitySource] when present, otherwise falls
+// [matterport.EligibilitySource] when present, otherwise falls
 // back to [DeriveMatterEligibility] for the structural default.
 func Classify(src any) Verdict {
 	if src == nil {
 		return Verdict{State: StateUnmappable, Reason: "nil source"}
 	}
-	if eligible, ok := src.(interfaces.MatterEligibilitySource); ok {
+	if eligible, ok := src.(matterport.EligibilitySource); ok {
 		return eligible.MatterEligibility()
 	}
 	return DeriveMatterEligibility(src)
@@ -83,11 +83,11 @@ func Classify(src any) Verdict {
 //
 // Custom DPs with caveats (Siren tones, Effect dispatch,
 // FixedColorLight palette quantisation) implement
-// [interfaces.MatterEligibilitySource] directly and override the
+// [matterport.EligibilitySource] directly and override the
 // derivation; they typically call DeriveMatterEligibility for the
 // base verdict and then patch in `State = Partial` plus a reason.
 func DeriveMatterEligibility(src any) Verdict {
-	if ep, ok := src.(interfaces.MatterEndpointSource); ok {
+	if ep, ok := src.(matterport.EndpointSource); ok {
 		dt := ep.MatterDeviceType()
 		clusters := clusterIDs(ep.MatterClusterServers())
 		if dt == 0 || len(clusters) == 0 {
@@ -102,13 +102,13 @@ func DeriveMatterEligibility(src any) Verdict {
 			Clusters:   clusters,
 		}
 	}
-	if ms, ok := src.(interfaces.MatterMeasurementSource); ok {
+	if ms, ok := src.(matterport.MeasurementSource); ok {
 		class := ms.MatterMeasurementClass()
-		if class == interfaces.MatterMeasurementNone {
+		if class == matterport.MeasurementNone {
 			return Verdict{State: StateUnmappable, Reason: "measurement class is None"}
 		}
-		dt := interfaces.MatterMeasurementClassDeviceType(class)
-		cl := interfaces.MatterMeasurementClassClusterID(class)
+		dt := matterport.MeasurementClassDeviceType(class)
+		cl := matterport.MeasurementClassClusterID(class)
 		if cl == 0 {
 			return Verdict{State: StateUnmappable, Reason: "measurement class has no cluster equivalent"}
 		}
@@ -321,7 +321,7 @@ func dpKey(src any) string {
 	return fmt.Sprintf("unknown(%T)", src)
 }
 
-func clusterIDs(servers []interfaces.MatterClusterServer) []uint32 {
+func clusterIDs(servers []matterport.ClusterServer) []uint32 {
 	out := make([]uint32, 0, len(servers))
 	for _, s := range servers {
 		if s == nil {

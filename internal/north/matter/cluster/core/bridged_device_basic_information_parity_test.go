@@ -27,7 +27,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // TestParityMatterJS_BridgedServer_ClusterID pins 0x0039.
@@ -158,7 +158,7 @@ func TestParityMatterJS_BridgedServer_ReachableChangedEventFired(t *testing.T) {
 	if ev.event != 0x0003 {
 		t.Errorf("event = 0x%04X, want 0x0003 (ReachableChanged)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != matterport.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info (bridged-device-basic-information.element.ts:55)", ev.priority)
 	}
 	if ev.endpoint != 3 {

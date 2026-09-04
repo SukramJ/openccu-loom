@@ -11,7 +11,7 @@ import (
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // Snapshot is one central's contribution to a topology assembly.
@@ -94,16 +94,16 @@ type Endpoint struct {
 	// Source is the rich-model implementation of the cluster
 	// surface. nil for the root endpoint and for measurement-only
 	// sub-endpoints (which use Measurement instead).
-	Source interfaces.MatterEndpointSource
+	Source matterport.EndpointSource
 	// Measurement is set on standalone sensor endpoints assembled
 	// from MatterMeasurementSource implementers. nil otherwise.
-	Measurement interfaces.MatterMeasurementSource
+	Measurement matterport.MeasurementSource
 	// PowerSource carries the device's battery reading on exactly one of
 	// the device's endpoints, so the PowerSource cluster (0x002F) is served
 	// where BridgedNode (0x0013) specifies it rather than on an endpoint of
 	// its own with no device type. nil on every other endpoint, and on
 	// mains-powered devices. Set by [attachPowerSource].
-	PowerSource interfaces.MatterMeasurementSource
+	PowerSource matterport.MeasurementSource
 	// SourceKey is the persisted endpoint identity. Empty for the
 	// root endpoint.
 	SourceKey store.EndpointKey
@@ -157,7 +157,7 @@ type Endpoint struct {
 	// `packages/node/src/endpoint/properties/Behaviors.ts`); in Go the
 	// hand-off between the attaching goroutine and the dispatch
 	// goroutines has to be made explicit.
-	attachedClusters atomic.Pointer[[]interfaces.MatterClusterServer]
+	attachedClusters atomic.Pointer[[]matterport.ClusterServer]
 
 	// state holds everything a BRIDGED endpoint must keep BETWEEN
 	// dispatches: the per-cluster DataVersion trackers and the stateful
@@ -198,8 +198,8 @@ type Endpoint struct {
 //
 // Only the root (ID 0) and the Aggregator (ID 1) carry an attached set;
 // see [Endpoint.attachedClusters].
-func (e *Endpoint) PublishClusterServers(servers []interfaces.MatterClusterServer) {
-	published := append([]interfaces.MatterClusterServer(nil), servers...)
+func (e *Endpoint) PublishClusterServers(servers []matterport.ClusterServer) {
+	published := append([]matterport.ClusterServer(nil), servers...)
 	e.attachedClusters.Store(&published)
 }
 
@@ -208,12 +208,12 @@ func (e *Endpoint) PublishClusterServers(servers []interfaces.MatterClusterServe
 // The result is a fresh slice on every call — the published set itself is
 // never handed out, so no caller can mutate what a concurrent dispatch is
 // walking.
-func (e *Endpoint) AttachedClusterServers() []interfaces.MatterClusterServer {
+func (e *Endpoint) AttachedClusterServers() []matterport.ClusterServer {
 	published := e.attachedClusters.Load()
 	if published == nil {
 		return nil
 	}
-	return append([]interfaces.MatterClusterServer(nil), *published...)
+	return append([]matterport.ClusterServer(nil), *published...)
 }
 
 // endpointState returns (lazily creating) the state bound to this

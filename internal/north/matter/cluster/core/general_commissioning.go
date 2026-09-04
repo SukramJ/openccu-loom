@@ -14,7 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // GeneralCommissioning implements the Matter GeneralCommissioning
@@ -64,7 +64,7 @@ type GeneralCommissioning struct {
 	// §10.6.5. Bumped after every successful ArmFailSafe, SetRegulatoryConfig,
 	// and CommissioningComplete so DataVersionFilter evaluation correctly
 	// detects that the cluster changed.
-	// Satisfies [interfaces.MatterClusterDataVersion].
+	// Satisfies [matterport.ClusterDataVersion].
 	// chip's general-commissioning-server uses ember dirty-marking for every
 	// attribute write; matter.js behavior layer auto-tracks DataVersion for
 	// state mutations. openccu-loom mirrors this with an explicit
@@ -278,14 +278,14 @@ func (g *GeneralCommissioning) SetIsCommissioningWindowOpen(fn func() bool) {
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer                  = (*GeneralCommissioning)(nil)
-	_ interfaces.MatterClusterCommandLister           = (*GeneralCommissioning)(nil)
-	_ interfaces.MatterClusterDataVersion             = (*GeneralCommissioning)(nil)
-	_ interfaces.MatterClusterCommandInvokePrivilege  = (*GeneralCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeWritePrivilege = (*GeneralCommissioning)(nil)
+	_ matterport.ClusterServer                  = (*GeneralCommissioning)(nil)
+	_ matterport.ClusterCommandLister           = (*GeneralCommissioning)(nil)
+	_ matterport.ClusterDataVersion             = (*GeneralCommissioning)(nil)
+	_ matterport.ClusterCommandInvokePrivilege  = (*GeneralCommissioning)(nil)
+	_ matterport.ClusterAttributeWritePrivilege = (*GeneralCommissioning)(nil)
 )
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [matterport.ClusterDataVersion].
 // Mirrors chip src/app/clusters/general-commissioning-server/
 // general-commissioning-server.cpp MarkAttributeDirty(Attribute::Breadcrumb)
 // and matter.js packages/node/src/behaviors/general-commissioning/
@@ -293,10 +293,10 @@ var (
 // mutations that bump the cluster-level DataVersion automatically.
 func (g *GeneralCommissioning) MatterDataVersion() uint32 { return g.dataVersion.Current() }
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [matterport.ClusterServer].
 func (g *GeneralCommissioning) MatterClusterID() uint32 { return gencommClusterID }
 
-// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// MinInvokePrivilege implements [matterport.ClusterCommandInvokePrivilege].
 // ArmFailSafe, SetRegulatoryConfig, and CommissioningComplete require
 // Administer (5) per Matter §11.10 (access "A"). Mirrors matter.js
 // packages/model/src/standard/elements/general-commissioning.element.ts:63,78,92.
@@ -309,7 +309,7 @@ func (g *GeneralCommissioning) MinInvokePrivilege(cmdID uint32) uint8 {
 	}
 }
 
-// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// MinWritePrivilege implements [matterport.ClusterAttributeWritePrivilege].
 // Breadcrumb (0x0000) requires Administer (5) per Matter §11.10 (access
 // "RW VA"). Mirrors matter.js packages/model/src/standard/elements/
 // general-commissioning.element.ts:26.
@@ -328,7 +328,7 @@ type BasicCommissioningInfoStruct struct {
 	MaxCumulativeFailsafeSeconds uint16
 }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [matterport.ClusterServer].
 func (g *GeneralCommissioning) MatterRead(attrID uint32) (any, bool) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -401,7 +401,7 @@ type CommissioningCompleteResponse struct {
 	DebugText string
 }
 
-// MatterInvoke implements [interfaces.MatterClusterServer].
+// MatterInvoke implements [matterport.ClusterServer].
 func (g *GeneralCommissioning) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
 	cmdName := gencommCmdName(cmdID)
 	slog.Default().Info("matter.gencomm.cmd",
@@ -450,7 +450,7 @@ func (g *GeneralCommissioning) MatterReportable() []uint32 {
 	return []uint32{gencommAttrBreadcrumb, gencommAttrRegulatoryConfig}
 }
 
-// MatterAttributes implements [interfaces.MatterClusterAttributeLister]
+// MatterAttributes implements [matterport.ClusterAttributeLister]
 // so wildcard subscribe enumerates the full cluster surface.
 func (g *GeneralCommissioning) MatterAttributes() []uint32 {
 	return []uint32{
@@ -462,7 +462,7 @@ func (g *GeneralCommissioning) MatterAttributes() []uint32 {
 	}
 }
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [matterport.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke.
 // Mirrors matter.js packages/model/src/standard/elements/
 // general-commissioning.element.ts accepted commands.
@@ -477,7 +477,7 @@ func (g *GeneralCommissioning) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [matterport.ClusterCommandLister].
 // Lists the response command IDs this server may emit.
 // Mirrors matter.js packages/model/src/standard/elements/
 // general-commissioning.element.ts generated commands.

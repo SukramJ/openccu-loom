@@ -17,7 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
 // DoorLock cluster revision 10 per matter.js HEAD (@matter/model 0.16.11).
@@ -100,7 +100,7 @@ type DoorLockConfig struct {
 	DataVersion *cluster.DataVersionTracker
 }
 
-// DoorLockServer implements [interfaces.MatterClusterServer] for the
+// DoorLockServer implements [matterport.ClusterServer] for the
 // DoorLock cluster (0x0101). It wraps a [StateSource] from the model
 // layer and projects the mandatory attribute surface Apple Home and other
 // controllers expect on any Lock (0x000A) device type endpoint.
@@ -117,18 +117,18 @@ type DoorLockServer struct {
 	src      StateSource
 
 	mu       sync.Mutex
-	emitter  interfaces.MatterEventEmitter
+	emitter  matterport.EventEmitter
 	endpoint uint16
 }
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer          = (*DoorLockServer)(nil)
-	_ interfaces.MatterClusterDataVersion     = (*DoorLockServer)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*DoorLockServer)(nil)
-	_ interfaces.MatterClusterCommandLister   = (*DoorLockServer)(nil)
-	_ interfaces.MatterClusterEventLister     = (*DoorLockServer)(nil)
-	_ interfaces.MatterEventReceiver          = (*DoorLockServer)(nil)
+	_ matterport.ClusterServer          = (*DoorLockServer)(nil)
+	_ matterport.ClusterDataVersion     = (*DoorLockServer)(nil)
+	_ matterport.ClusterAttributeLister = (*DoorLockServer)(nil)
+	_ matterport.ClusterCommandLister   = (*DoorLockServer)(nil)
+	_ matterport.ClusterEventLister     = (*DoorLockServer)(nil)
+	_ matterport.EventReceiver          = (*DoorLockServer)(nil)
 )
 
 // NewDoorLockServer constructs a DoorLockServer with LockType=DeadBolt.
@@ -148,10 +148,10 @@ func (s *DoorLockServer) tracker() *cluster.DataVersionTracker {
 // MatterClusterID returns 0x0101 (DoorLock).
 func (*DoorLockServer) MatterClusterID() uint32 { return wire.DoorLockClusterID }
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [matterport.ClusterDataVersion].
 func (s *DoorLockServer) MatterDataVersion() uint32 { return s.tracker().Current() }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [matterport.ClusterServer].
 func (s *DoorLockServer) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case wire.DoorLockAttrLockState:
@@ -187,14 +187,14 @@ func (s *DoorLockServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-// MatterWrite implements [interfaces.MatterClusterServer]. DoorLock has
+// MatterWrite implements [matterport.ClusterServer]. DoorLock has
 // no writable attributes in this projection; all state changes go through
 // commands.
 func (*DoorLockServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
 	return fmt.Errorf("%w: 0x%04X", errUnknownAttribute, attrID)
 }
 
-// MatterInvoke implements [interfaces.MatterClusterServer]. Dispatches
+// MatterInvoke implements [matterport.ClusterServer]. Dispatches
 // LockDoor / UnlockDoor / UnboltDoor to the underlying source and fires
 // the LockOperation event on success.
 func (s *DoorLockServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
@@ -251,14 +251,14 @@ func (s *DoorLockServer) emitLockOperation(ctx context.Context, cmdID uint32) {
 	}
 	emitter.MatterEmitEvent(endpoint, wire.DoorLockClusterID,
 		wire.DoorLockEventLockOperation, ev,
-		interfaces.MatterEventPriorityCritical)
+		matterport.EventPriorityCritical)
 }
 
-// SetMatterEventEmitter implements [interfaces.MatterEventReceiver].
+// SetMatterEventEmitter implements [matterport.EventReceiver].
 // Called by the bridge during topology assembly so [MatterInvoke] can
 // fire the LockOperation event without holding a bridge reference.
 // Idempotent — re-wiring during topology rebuild replaces the emitter.
-func (s *DoorLockServer) SetMatterEventEmitter(emitter interfaces.MatterEventEmitter) {
+func (s *DoorLockServer) SetMatterEventEmitter(emitter matterport.EventEmitter) {
 	s.mu.Lock()
 	s.emitter = emitter
 	s.mu.Unlock()
@@ -279,7 +279,7 @@ func (*DoorLockServer) MatterReportable() []uint32 {
 	return []uint32{wire.DoorLockAttrLockState}
 }
 
-// MatterAttributes implements [interfaces.MatterClusterAttributeLister].
+// MatterAttributes implements [matterport.ClusterAttributeLister].
 func (*DoorLockServer) MatterAttributes() []uint32 {
 	return []uint32{
 		wire.DoorLockAttrLockState,
@@ -290,7 +290,7 @@ func (*DoorLockServer) MatterAttributes() []uint32 {
 	}
 }
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [matterport.ClusterCommandLister].
 func (*DoorLockServer) MatterAcceptedCommands() []uint32 {
 	return []uint32{
 		wire.DoorLockCmdLockDoor,
@@ -299,12 +299,12 @@ func (*DoorLockServer) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [matterport.ClusterCommandLister].
 // DoorLock commands produce status-only InvokeResponses; no generated command
 // IDs are advertised.
 func (*DoorLockServer) MatterGeneratedCommands() []uint32 { return nil }
 
-// MatterEvents implements [interfaces.MatterClusterEventLister]. The
+// MatterEvents implements [matterport.ClusterEventLister]. The
 // three conformance-M DoorLock events are advertised (matter.js
 // door-lock-cluster.element.ts:172/181/198); DoorStateChange (DPS) and
 // LockUserChange (USR) are feature-gated and absent. The server emits
