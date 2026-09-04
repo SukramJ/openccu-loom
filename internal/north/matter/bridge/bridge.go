@@ -721,7 +721,7 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 			// updates fan out as Matter events. The unsubscribe is
 			// retained so the next reassemble tears the hook down.
 			if !ep.IsRoot() {
-				if emitter, ok := srv.(generic.MatterSwitchEventEmitter); ok {
+				if emitter, ok := srv.(matterport.SwitchEventEmitter); ok {
 					if subscriber, ok := ep.Measurement.(matterSwitchSubscribable); ok {
 						switchUnsubs = append(switchUnsubs, subscriber.WireMatterSwitchHandler(emitter))
 					}
@@ -851,22 +851,30 @@ type matterEndpointReceiver interface {
 // matterSwitchSubscribable is the model-side surface of a press
 // source (the per-channel [generic.ButtonGroup], or a lone Button /
 // Action DP) that translates its CCU press updates into Matter §1.13
-// switch events. The signature deliberately names the model-side
-// [generic.MatterSwitchEventEmitter] interface: Go interface
-// satisfaction requires identical parameter types, so a bridge-local
-// emitter interface in this position can never be satisfied by the
-// model types' method set — the assertion in the reassemble wiring
-// would then silently never match and no press event would reach a
-// commissioner. The returned unsubscribe closure is retained in
+// switch events.
+//
+// The parameter names [matterport.SwitchEventEmitter] — the shared
+// port contract, which the model's own method signature names too (as
+// an alias). That sharing is the whole point: Go interface
+// satisfaction requires identical parameter types, so re-declaring an
+// emitter interface here, however faithful a copy, could never be
+// satisfied by the model types' method set. The assertion in the
+// reassemble wiring would then silently never match and no press
+// event would reach a commissioner — no compile error, no runtime
+// error, just a bridge that never reports a button. The behavioural
+// guard against that is
+// tests/contract/wiring_pins/matter_switch_press_wiring_test.go.
+//
+// The returned unsubscribe closure is retained in
 // [Bridge.switchUnsubscribers] and drained on the next reassemble.
 type matterSwitchSubscribable interface {
-	WireMatterSwitchHandler(generic.MatterSwitchEventEmitter) func()
+	WireMatterSwitchHandler(matterport.SwitchEventEmitter) func()
 }
 
 // Compile-time guard: the consolidated button group — the shape the
 // endpoint assembler mounts as ep.Measurement on every GenericSwitch
-// endpoint — must satisfy the reassemble wiring assertion. Fails the
-// build if the two interfaces drift apart again.
+// endpoint — must satisfy the reassemble wiring assertion. Catches a
+// drift at build time that the behavioural pin catches at test time.
 var _ matterSwitchSubscribable = (*generic.ButtonGroup)(nil)
 
 // SetOnFabricAdded wires the post-AddNOC hook. The bridge does not

@@ -12,8 +12,10 @@
 // [github.com/SukramJ/openccu-loom/pkg/interfaces]: those drag in
 // pkg/hmapi, which the bridge has no business seeing. The Matter-side
 // symbols therefore carry no Matter prefix here — the package name
-// already says it — and pkg/interfaces re-exports every one of them as
-// a compatibility alias so existing call sites keep compiling.
+// already says it — and pkg/interfaces re-exports every symbol that
+// had call sites there as a compatibility alias, so those keep
+// compiling. Symbols introduced here afterwards get no alias; new code
+// names the matterport symbol directly.
 //
 // The one remaining dependency on the host application is
 // [github.com/SukramJ/openccu-loom/pkg/hmenum], for the
