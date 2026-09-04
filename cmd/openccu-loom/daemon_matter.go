@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	discoverymdns "github.com/SukramJ/openccu-loom/internal/north/discovery/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bootid"
@@ -221,6 +222,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	snap := matterSnapshotter(reg, readiness)
 
 	advertiser, closeAdvertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; the subtype responder runs for the advertiser's lifetime and is released through closeAdvertiser
+	// The Matter subtree resolves no translation catalogues of its own, so
+	// the channel word is translated here and handed down finished. A
+	// catalogue that fails to load answers a lookup with the key itself,
+	// which would surface as "channel.title" in a NodeLabel, so fall back
+	// to the English word the assembler used before.
+	channelLabel := "Channel"
+	if catalogs, cErr := i18n.NewCatalogs(); cErr == nil {
+		if w := catalogs.T(cfg.Locale, "channel.title"); w != "" && w != "channel.title" {
+			channelLabel = w
+		}
+	}
 	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
 		Listen:                  mc.Listen,
 		PreferIPv4:              mc.PreferIPv4,
@@ -231,7 +243,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
 		IncludeMeasurements:     mc.IncludeMeasurements,
 		Labels:                  labels,
-		Locale:                  cfg.Locale,
+		ChannelLabel:            channelLabel,
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
@@ -279,7 +291,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// Diagnostics surface shows every long-running subsystem on one
 	// row each. Best-effort: a nil tracker disables the probe.
 	if healthTracker != nil {
-		_ = matterbridge.StartHealthProbe(ctx, bridge, healthTracker, matterbridge.DefaultProbeInterval)
+		_ = matterbridge.StartHealthProbe(ctx, bridge, matterHealthRecorder{healthTracker}, matterbridge.DefaultProbeInterval)
 		// Controller round-trip: how long a paired Apple/Google hub takes to
 		// ACK a reliable message this bridge sent. It separates a controller
 		// that has gone unreachable from one that is merely slow — both look
@@ -4149,3 +4161,18 @@ func (r matterCompatibilityReporter) MatterCompatibility() handlers.MatterCompat
 // enough to cover a pairing attempt and the minute around it, small
 // enough that it never competes with the durable records.
 const matterDiagEventCapacity = 200
+
+// matterHealthRecorder adapts the daemon's health tracker to the slim
+// sample type the Matter bridge probe speaks. The probe reports only a
+// verdict and a stable English note; the tracker's richer sample (catalogue
+// key, timestamp, staleness exemption) is filled in here, on the host side,
+// so the Matter subtree needs no dependency on the tracker package.
+type matterHealthRecorder struct{ t *health.Tracker }
+
+func (r matterHealthRecorder) Record(name string, s matterbridge.HealthSample) {
+	r.t.Record(name, health.Sample{Healthy: s.Healthy, Note: s.Note})
+}
+
+func (r matterHealthRecorder) RecordUnhealthy(name string, s matterbridge.HealthSample) {
+	r.t.RecordUnhealthy(name, health.Sample{Healthy: s.Healthy, Note: s.Note})
+}

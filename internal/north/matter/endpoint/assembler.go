@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
@@ -50,9 +49,11 @@ type Config struct {
 	// render the same per-parameter display name. Nil is tolerated —
 	// the suffix then falls back to the title-cased parameter.
 	Labels device.ParameterTranslator
-	// Locale selects the language of the NodeLabel channel-number fallback
-	// ("Channel N" / "Kanal N"). Empty falls back to the catalogue default.
-	Locale string
+	// ChannelLabel is the localized word for a channel ("Channel", "Kanal")
+	// used as the NodeLabel channel-number fallback ("Channel N"). Empty
+	// falls back to the English "Channel": translation belongs to the host,
+	// which resolves the catalogue and supplies the finished word.
+	ChannelLabel string
 }
 
 // Validate returns nil when the config is internally consistent.
@@ -106,9 +107,6 @@ type Assembler struct {
 	exposures ExposureChecker
 	cfg       Config
 	logger    *slog.Logger
-	// translations resolves the localized NodeLabel channel-number fallback in
-	// cfg.Locale. Auto-loaded in [New] (immutable embedded data); nil-tolerant.
-	translations *i18n.Catalogs
 	// states owns the per-endpoint state that must outlive a single
 	// dispatch (DataVersion trackers, the Identify cluster server),
 	// keyed by the stable [store.EndpointKey]. It lives across every
@@ -139,20 +137,17 @@ func New(s Store, cfg Config, logger *slog.Logger) (*Assembler, error) {
 		logger:    logger,
 		states:    newEndpointStateRegistry(),
 	}
-	if cat, err := i18n.NewCatalogs(); err == nil {
-		a.translations = cat
-	}
 	return a, nil
 }
 
 // channelLabel returns the localized word for a channel ("Channel" / "Kanal"),
-// used as the NodeLabel channel-number fallback. Falls back to "Channel" when
-// no catalogues are wired.
+// used as the NodeLabel channel-number fallback. Falls back to the English
+// word when the caller supplied none.
 func (a *Assembler) channelLabel() string {
-	if a.translations == nil {
+	if a.cfg.ChannelLabel == "" {
 		return "Channel"
 	}
-	return a.translations.T(a.cfg.Locale, "channel.title")
+	return a.cfg.ChannelLabel
 }
 
 // SetExposureChecker wires the allowlist checker. Pass nil to revert

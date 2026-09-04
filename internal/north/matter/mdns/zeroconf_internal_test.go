@@ -26,7 +26,7 @@ import (
 // configuration varies.
 func TestPrimaryHostIPs_ReturnsNonNilSlice(t *testing.T) {
 	t.Parallel()
-	ips := primaryHostIPs()
+	ips := primaryHostIPs(nil)
 	// Must not panic. Result may be nil on a loopback-only environment.
 	for _, ip := range ips {
 		if ip == "" {
@@ -38,8 +38,8 @@ func TestPrimaryHostIPs_ReturnsNonNilSlice(t *testing.T) {
 // ---- filterPrimaryHostIPs ----
 
 // TestFilterPrimaryHostIPs verifies the advertise policy documented on
-// filterPrimaryHostIPs: container/virtualisation bridges are dropped by
-// name, down/non-multicast/loopback/point-to-point interfaces are dropped
+// filterPrimaryHostIPs with the default (nil) filter: container/
+// virtualisation bridges are dropped by name, down/non-multicast/loopback/point-to-point interfaces are dropped
 // by flag, IPv4 sorts before IPv6, duplicates are deduplicated, and
 // link-local addresses (both families) are excluded while global IPv6
 // survives.
@@ -122,7 +122,7 @@ func TestFilterPrimaryHostIPs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := filterPrimaryHostIPs(tc.ifaces)
+			got := filterPrimaryHostIPs(tc.ifaces, nil)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("filterPrimaryHostIPs() = %v, want %v", got, tc.want)
 			}
@@ -433,7 +433,7 @@ func TestZeroconfInternal_NewSubtypeResponder_Logger_NonNil(t *testing.T) {
 // only run once an address is present.
 func TestZeroconfInternal_Publish_RecordsAdvertisedAddresses(t *testing.T) {
 	t.Parallel()
-	want := primaryHostIPs()
+	want := primaryHostIPs(nil)
 	if len(want) == 0 {
 		t.Skip("host advertises no routable address; nothing to assert")
 	}

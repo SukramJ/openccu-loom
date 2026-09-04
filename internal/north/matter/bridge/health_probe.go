@@ -7,8 +7,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/health"
 )
 
 // HealthComponentName is the tracker component the Matter bridge
@@ -32,14 +30,27 @@ type Status interface {
 	LocalAddr() string
 }
 
-// HealthRecorder is the slim tracker contract the probe touches.
-// [health.Tracker] satisfies it.
+// HealthSample is everything this probe has to say about the bridge: a
+// verdict and the stable, un-localized machine string that explains it.
+// It is deliberately narrower than the daemon's tracker sample — the
+// probe never sets a catalogue key, a timestamp or the staleness
+// exemption — so the Matter subtree needs no dependency on the tracker
+// package. The host converts on the way in.
+type HealthSample struct {
+	Healthy bool
+	// Note is the stable, English machine string. The tracker's scoring
+	// treats it as a sentinel, so it must stay stable and un-localized.
+	Note string
+}
+
+// HealthRecorder is the slim tracker contract the probe touches. The
+// daemon's health tracker satisfies it through a host-side adapter that
+// translates [HealthSample] into the tracker's own sample type.
 type HealthRecorder interface {
-	Record(name string, sample health.Sample)
+	Record(name string, sample HealthSample)
 	// RecordUnhealthy states an unhealthy condition rather than sampling one,
-	// so it takes effect without the flap-damping Record applies. See
-	// [health.Tracker.RecordUnhealthy].
-	RecordUnhealthy(name string, sample health.Sample)
+	// so it takes effect without the flap-damping Record applies.
+	RecordUnhealthy(name string, sample HealthSample)
 }
 
 // StartHealthProbe spawns a goroutine that polls the Matter bridge on
@@ -87,7 +98,7 @@ func StartHealthProbe(
 func probeOnce(status Status, tracker HealthRecorder) {
 	addr := status.LocalAddr()
 	if addr != "" {
-		tracker.Record(HealthComponentName, health.Sample{
+		tracker.Record(HealthComponentName, HealthSample{
 			Healthy: true,
 			Note:    fmt.Sprintf("listening (addr=%s)", addr),
 		})
@@ -98,7 +109,7 @@ func probeOnce(status Status, tracker HealthRecorder) {
 	// A listener that is not bound is a condition, not a sample, so it is
 	// reported rather than probed — this used to record twice with an
 	// invented "(escalated)" note to get past the tracker's flap-damping.
-	tracker.RecordUnhealthy(HealthComponentName, health.Sample{
+	tracker.RecordUnhealthy(HealthComponentName, HealthSample{
 		Note: "bridge listener not bound",
 	})
 }
