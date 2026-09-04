@@ -1,7 +1,7 @@
 # Extracting the Matter Implementation into a Reusable Go Module
 
 **Working document — `notes/plans/matter-library-extraction.md`**
-Status: **the fourteen decisions in §7 were taken on 2026-09-04**; the milestones below are the agreed shape, not a menu. The extraction itself is not started.
+Status: the fourteen decisions in §7 were taken on 2026-09-04. **Phase 0 is implemented and green** (branch `feature/matter-phase0`, ten commits; `make test` and repo-wide `make lint` both clean) — §4.0 records what each milestone actually did and where it diverged. Phases 1 onward are not started.
 Every claim about the current code carries a `path:line` or verbatim command output. Claims that were adversarially re-checked are stated plainly; everything else is marked **UNVERIFIED** in those words, and §8 collects them so nothing hides in prose.
 
 **The three goals this roadmap is measured against** (stated 2026-09-04; §0.6 records how far the plan meets them):
@@ -83,7 +83,7 @@ Measured 2026-09-04 against the three goals stated above. Two were already met b
 
 | Goal | Verdict | Where |
 |---|---|---|
-| **1. Status quo preserved in loom** | **Met for Phases 0–2; was open for P3.2, now closed** | Non-goal 8 already bound Phases 0–2. P3.2 moved 5,796 LOC of production cluster servers on purely structural criteria — a `grep` going empty cannot observe behaviour. **D16** makes a recorded wire comparison the gate and cuts the milestone into P3.2a/b/c, after measurement showed the library servers are stand-ins that return Success without forwarding (R14). |
+| **1. Status quo preserved in loom** | **Met; Phase 0 shipped behaviour-preserving** (see §4.0) — was open for P3.2, now closed | Non-goal 8 already bound Phases 0–2. P3.2 moved 5,796 LOC of production cluster servers on purely structural criteria — a `grep` going empty cannot observe behaviour. **D16** makes a recorded wire comparison the gate and cuts the milestone into P3.2a/b/c, after measurement showed the library servers are stand-ins that return Success without forwarding (R14). |
 | **2. Usable unchanged in other projects** | **Met** | P1.6 *is* this goal as a command: `go list -deps ./internal/north/matter/... \| grep openccu-loom \| grep -v internal/north/matter` → empty. Today it returns 18 host packages for `endpoint`, 17 for `eligibility`. It is the go/no-go for Phase 2. |
 | **3a. `go-matter-bridge` functionally equal to hamb** | **Met** | Phase 3 covers all eleven open domains without a gap: P3.4 (`select`, `input_select`, `alarm_control_panel`), P3.5 (`fan`), P3.6 (`valve`), P3.7 (`media_player`), P3.8 (`vacuum`), P3.3 (`binary_sensor`, `sensor`), P3.2 (`humidifier`, via the host-agnostic LevelControl server), P3.9 / P3.10 (fidelity fill). §3.1 carries the per-domain matrix. |
 | **3b. That bridge carries no Homematic domain knowledge** | **Was violated by D4; closed by D15** | Most of the plan points the right way: naming stays host-side (non-goal 10), `eligibility.go` moves host-side (D5), `hmenum.CommandPriority` is dropped (D3), `DataPointUsage` becomes a `VisibilityFilter` (C8). **The exception was `store.EndpointKey`** — `{CentralName, DeviceAddress, ChannelNo, DPKind, DPKey}` across six `Store` methods and two tables, which D4 let travel "byte-for-byte, Homematic-flavoured shape and all". **D15** turns endpoint identity into a port instead. |
@@ -360,18 +360,55 @@ Effort per §1. The **Decision** column names the §7 decision that fixed each m
 
 ### Phase 0 — Extraction prep, in loom, in place (nothing moves)
 
-**Phase 0 is unblocked.** All fourteen §7 decisions were taken on 2026-09-04. The three that gated this phase resolved as: **D1 (a)** the library owns the cluster servers, **D3** the priority parameter is dropped, **D2** the library takes a flat `EndpointSpec`.
+**Phase 0 is DONE.** Implemented on branch `feature/matter-phase0` (ten commits), with `make test` and repo-wide `make lint` green. Every acceptance criterion below was re-measured after the fact, not taken on report. The three §7 decisions that gated it resolved as **D1 (a)**, **D3** drop the parameter, **D2** flat `EndpointSpec`.
+
+**The port package is `pkg/mattercontract`.** The plan said only "a second neutral `pkg/` package"; the name was decided during implementation. `matterport` was tried first and rejected: "port" already carries three meanings in this repo — the portability sense (the subtree *is* a semantic port of matter.js, per `CLAUDE.md`), the hexagonal sense, and the network sense (`rpc_callback.port`, `bin_port`) — and the first is the nearest reading, so the name pointed at the very tree it exists to separate from. `contract` is the word the sources already use for these interfaces (nine occurrences of "the contract" under `internal/north/matter/` alone). It becomes plain `contract` when the library gets its own module.
+
+**The headline result:** `go list -deps ./pkg/mattercontract | grep openccu-loom` prints exactly one line — the package itself. The port package depends on nothing else in this repo.
 
 | # | Milestone | Acceptance criterion | Effort | Decision | Depends on |
 |---|---|---|---|---|---|
-| **P0.1** | Split the Matter ports out of `pkg/interfaces` into a second neutral `pkg/` package, leaving type aliases behind | `go list -deps ./internal/north/matter/cluster/core \| grep hmapi` → empty; all 51 `MatterClusterID` implementations compile unchanged; `make contract` green | M | D1 ✓ (a) — library owns the servers, so `wire`/`im` stay private | — |
-| **P0.2** | Remove `hmenum.CommandPriority` from `MatterWrite`/`MatterInvoke` | `grep -rn 'hmenum' pkg/<newport>/*.go` → no match; both dispatcher call sites (`dispatcher.go:319,595`) compile; the 104 non-test implementations compile; host mapping is an **explicit switch**, not an ordinal cast | L | D3 ✓ — parameter dropped | P0.1 |
-| **P0.3** | Invert the `DataVersionTracker` alias — **one atomic commit** | `grep -rln '"…/pkg/hmtypes"' internal/north/matter/cluster/ \| grep -v _test` → empty; the nine model embedders untouched | S | — | P0.1 |
-| **P0.4** | `netutil` → `InterfaceFilter` on the advertiser config (+ a shared-behaviour test against loom's client-discovery advertiser); `health.Sample` → library-local struct; `i18n` → `ChannelLabel string` on `endpoint.Config` | `go list -deps ./internal/north/matter/mdns` and `…/bridge` list no `internal/netutil`, `internal/health`, `internal/i18n` | S | — | — |
-| **P0.5** | Move `MatterSwitchEventEmitter` into the shared port package; drop the `*generic.ButtonGroup` pin | A **behavioural** wiring pin under `tests/contract/wiring_pins/` asserts a press event reaches a commissioner through the production constructor — not a compile-time `var _`. Bite proof: revert the emitter's package and observe red | S | D1 ✓ (a) | P0.1 |
-| **P0.6** | Convert the three relative-path tests to `go:embed` **before** any move | `bridge/scenario_test.go:16`, `im/wire_fixtures_parity_test.go:47` (also strip the absolute developer path at `:57-58,349-350`), `parity/snapshot_identity_test.go:37-39` — pattern already in use at `tlv/parity_matterjs_test.go:31`; `go test ./internal/north/matter/{bridge,im,parity}/...` green from any cwd | M | — | — |
-| **P0.7** | Fix the snapshot extractor's `${tag}:${id}` collapse | Regenerated snapshot carries 10 Command children for Groups (matching `../matter.js/…/groups.element.ts` lines 34,43,51,62,70,74,83,89,96,105); a new guard asserts `schema.DeviceTypeAllowsServerCluster(0x0016, 0x0038)` | S | — | — |
-| **P0.8** | Fix loom's own notices before anything moves: add `filippo.io/nistec` (`go.mod:37`, used by `secure/spake2/spake2.go:21`), correct `docs/adr/0012:473`'s zeroconf licence to MIT (`THIRD-PARTY-NOTICES.md:176` already says MIT), name the embedded `internal/north/matter/parity/schema.json` in the matter.js entry, and **reproduce `../matter.js/NOTICE` verbatim** (D6) — 38 lines ending *"This NOTICE must be included on all copies of matter.js"*, replacing the hedge at `THIRD-PARTY-NOTICES.md:120-123` that names the wrong file | `grep -n nistec THIRD-PARTY-NOTICES.md` → a match (today: no match); `grep -n 'parity/schema.json' THIRD-PARTY-NOTICES.md` → a match; `ls licenses/NOTICE-matter.js.txt` → exists (today `ls licenses/` shows only `Apache-2.0.txt` and `MIT.txt`) | S | D6 ✓ | — |
+| ✅ **P0.1** | Split the Matter ports out of `pkg/interfaces` into a second neutral `pkg/` package, leaving type aliases behind | `go list -deps ./internal/north/matter/cluster/core \| grep hmapi` → empty; all 51 `MatterClusterID` implementations compile unchanged; `make contract` green | M | D1 ✓ (a) — library owns the servers, so `wire`/`im` stay private | — |
+| ✅ **P0.2** | Remove `hmenum.CommandPriority` from `MatterWrite`/`MatterInvoke` | `grep -rn 'hmenum' pkg/<newport>/*.go` → no match; both dispatcher call sites (`dispatcher.go:319,595`) compile; the 104 non-test implementations compile; host mapping is an **explicit switch**, not an ordinal cast | L | D3 ✓ — parameter dropped | P0.1 |
+| ✅ **P0.3** | Invert the `DataVersionTracker` alias — **one atomic commit** | `grep -rln '"…/pkg/hmtypes"' internal/north/matter/cluster/ \| grep -v _test` → empty; the nine model embedders untouched | S | — | P0.1 |
+| ✅ **P0.4** | `netutil` → `InterfaceFilter` on the advertiser config (+ a shared-behaviour test against loom's client-discovery advertiser); `health.Sample` → library-local struct; `i18n` → `ChannelLabel string` on `endpoint.Config` | `go list -deps ./internal/north/matter/mdns` and `…/bridge` list no `internal/netutil`, `internal/health`, `internal/i18n` | S | — | — |
+| ✅ **P0.5** | Move `MatterSwitchEventEmitter` into the shared port package; drop the `*generic.ButtonGroup` pin | A **behavioural** wiring pin under `tests/contract/wiring_pins/` asserts a press event reaches a commissioner through the production constructor — not a compile-time `var _`. Bite proof: revert the emitter's package and observe red | S | D1 ✓ (a) | P0.1 |
+| ✅ **P0.6** | Convert the three relative-path tests to `go:embed` **before** any move | `bridge/scenario_test.go:16`, `im/wire_fixtures_parity_test.go:47` (also strip the absolute developer path at `:57-58,349-350`), `parity/snapshot_identity_test.go:37-39` — pattern already in use at `tlv/parity_matterjs_test.go:31`; `go test ./internal/north/matter/{bridge,im,parity}/...` green from any cwd | M | — | — |
+| ✅ **P0.7** | Fix the snapshot extractor's `${tag}:${id}` collapse | Regenerated snapshot carries 10 Command children for Groups (matching `../matter.js/…/groups.element.ts` lines 34,43,51,62,70,74,83,89,96,105); a new guard asserts `schema.DeviceTypeAllowsServerCluster(0x0016, 0x0038)` | S | — | — |
+| ✅ **P0.8** | Fix loom's own notices before anything moves: add `filippo.io/nistec` (`go.mod:37`, used by `secure/spake2/spake2.go:21`), correct `docs/adr/0012:473`'s zeroconf licence to MIT (`THIRD-PARTY-NOTICES.md:176` already says MIT), name the embedded `internal/north/matter/parity/schema.json` in the matter.js entry, and **reproduce `../matter.js/NOTICE` verbatim** (D6) — 38 lines ending *"This NOTICE must be included on all copies of matter.js"*, replacing the hedge at `THIRD-PARTY-NOTICES.md:120-123` that names the wrong file | `grep -n nistec THIRD-PARTY-NOTICES.md` → a match (today: no match); `grep -n 'parity/schema.json' THIRD-PARTY-NOTICES.md` → a match; `ls licenses/NOTICE-matter.js.txt` → exists (today `ls licenses/` shows only `Apache-2.0.txt` and `MIT.txt`) | S | D6 ✓ | — |
+
+#### 4.0 What Phase 0 actually did
+
+Implemented 2026-09-04 on `feature/matter-phase0`. Each criterion below was re-run after the work, in the main conversation, rather than accepted from a report.
+
+| # | Criterion, re-measured | Result |
+|---|---|---|
+| P0.1 | `go list -deps ./internal/north/matter/cluster/core \| grep hmapi` | 0 hits |
+| P0.2 | `pkg/mattercontract` free of `hmenum`; its repo dependencies | 0 hits; exactly itself |
+| P0.3 | `internal/north/matter/cluster/` free of `pkg/hmtypes` (non-test) | 0 files |
+| P0.4 | subtree closure free of `internal/{netutil,health,i18n}` | 0 hits |
+| P0.5 | behavioural pin: a press reaches the Matter event log | green, bites |
+| P0.6 | no absolute developer paths under `internal/north/matter/` | 0 files |
+| P0.7 | extractor discriminates same-id elements (Groups 6 → 10) | fixed |
+| P0.8 | `nistec` listed; `licenses/` carries the NOTICE and the BSD text | both present |
+
+**Divergences from the plan, and why.**
+
+* **P0.1 needed the call sites after all.** The plan asked both for compatibility aliases *and* for `hmapi` to leave `cluster/core`'s closure. Those exclude each other: while a file says `interfaces.Matter*` it imports `pkg/interfaces`, which pulls `hmapi` through `rest_ports.go`. Resolved by switching the **65 subtree files** to `mattercontract` while the ~70 files outside it keep the aliases untouched. Three subtree packages — `bridge`, `endpoint`, `eligibility` — still reach `pkg/interfaces`, but only through `internal/model/{generic,device}`: that is the model-walking coupling of C11/C12, and hiding it behind a port move would have been the wrong kind of green.
+* **P0.2 was measured by AST, not by grep.** A line-wise count of signatures says 19 forwarders; the real number is **22**, because three have multi-line signatures. Full count: 132 declarations, 108 ignoring the parameter, 22 forwarding, 2 unnamed.
+* **P0.4 stopped at the composition root, as it should.** Severing `health.Sample` broke exactly one call site in `cmd/openccu-loom/`, and the translating adapter was written there by the caller rather than by the agent that found it.
+* **P0.6 embedded one of three fixtures, not all three.** `bridge/scenario_test.go` keeps reading the corpus from `notes/`, because `tests/contract/matter_scenario_gate_test.go:32` gates coverage on that directory and a `testdata` copy would let a new scenario satisfy the gate without ever replaying. `parity/snapshot_identity_test.go` likewise: embedding both copies would reduce it to comparing a file with itself. Both now locate the repo root from `runtime.Caller` instead of counting dot-dots, which is what package-move independence actually requires.
+* **P0.7 deliberately did not regenerate the snapshot.** The extractor fix is committed; the snapshot stays pinned. Regenerating against the local checkout would have folded an upstream version bump into a bug fix. Doing it, and against which commit, belongs with R5.
+
+**Three findings the work turned up, none of them refactoring.**
+
+1. **The extractor was losing 35 elements.** 16 commands across 4 clusters (Groups, ScenesManagement, DoorLock, CommodityTariff) and 19 device-type requirements across 14 device types. Groups declared 10 commands and the snapshot carried 6. Any conformance check built on that snapshot was blind to the difference — which is precisely the hazard §5's rule about guessed inputs describes.
+2. **The zero-value trap was already sprung.** `CommandPriorityCritical` is the zero value, and `timedOnOffState` carried a `priority` field filled by a bare `var` declaration, documented as holding "the urgency the controller requested". It held whatever the dispatcher hard-coded. Field, declaration and comment are gone; every forwarder now names `CommandPriorityHigh` through a `const`, which cannot be left unset.
+3. **`custom/switch`'s `MatterWrite` OnOff branch is unreachable.** `OnOff.OnOff` is read-only in the Matter schema, so `endpoint/dispatcher.go:252` answers `UnsupportedWrite` before any cluster server runs. Pre-existing, untouched, and recorded in §8.
+
+**Also repaired in passing:** the event-priority parity guard read priorities by trimming a hard-coded qualifier off the source text, so the package rename made all fourteen events read as unprioritised while the test stayed green. It now accepts either spelling and fails loudly on a third. Fourteen files carried `[interfaces.MatterX]` godoc links while no longer importing `pkg/interfaces`; those were repointed, but only where the link genuinely resolved to nothing.
+
+---
 
 ### Phase 1 — Split the model-walking layer (0 new domains, unlocks a second host)
 
@@ -548,6 +585,7 @@ Stated as **UNVERIFIED** in those words, with what is missing named.
 * **Whether the 1100-byte chunking budget** (`bridge/reply.go:293`) is correct for a TCP or large-payload transport, since neither exists. **UNVERIFIED.**
 * **Whether a published library can carry the scenario-corpus regeneration path** (43 files under `notes/parity/matter/scenarios/`, sidecars regenerated by a Node script requiring an npm-installed `../matter.js`), or must ship frozen fixtures. **UNVERIFIED.**
 * **Whether the CSA trademark clause has ever been considered in this repo** — no document addresses it. **UNVERIFIED.**
+* **`custom/switch`'s `MatterWrite` OnOff branch is dead code.** Found while pinning the delivered command priority: `OnOff.OnOff` is read-only in the Matter schema, so `internal/north/matter/endpoint/dispatcher.go:252` returns `UnsupportedWrite` before any cluster server is reached. The branch therefore cannot execute through the real dispatcher. Pre-existing and untouched by Phase 0; **UNVERIFIED** whether any other path reaches it, and whether the branch should be deleted or the gate widened.
 * **Housekeeping found in passing, not a roadmap item:** `internal/north/matter/secure/operational/manager_test.go:1194` cites `[interfaces.OperationalSessionLookup]`; that symbol does not exist in `pkg/interfaces` — the type is `bridge.OperationalSessionLookup` (`internal/north/matter/bridge/handlers.go:723`). Candidate for the next comment-claims sweep.
 
 ---
