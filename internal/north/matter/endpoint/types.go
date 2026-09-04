@@ -10,7 +10,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -232,7 +231,7 @@ func (e *Endpoint) endpointState() *endpointState {
 // [endpointStateRegistry] keyed by [Endpoint.SourceKey], so the version
 // survives reassembly; a bare endpoint gets a private state. Safe for
 // concurrent use.
-func (e *Endpoint) clusterTracker(clusterID uint32) *hmtypes.DataVersionTracker {
+func (e *Endpoint) clusterTracker(clusterID uint32) *matterport.DataVersionTracker {
 	return e.endpointState().tracker(clusterID)
 }
 
@@ -257,21 +256,21 @@ func (e *Endpoint) identifyServer() *mattercore.Identify {
 // reference it concurrently, hence the internal mutex.
 type endpointState struct {
 	mu       sync.Mutex
-	trackers map[uint32]*hmtypes.DataVersionTracker
+	trackers map[uint32]*matterport.DataVersionTracker
 	identify *mattercore.Identify
 }
 
 func newEndpointState() *endpointState {
-	return &endpointState{trackers: make(map[uint32]*hmtypes.DataVersionTracker)}
+	return &endpointState{trackers: make(map[uint32]*matterport.DataVersionTracker)}
 }
 
 // tracker returns (lazily creating) the tracker for clusterID.
-func (s *endpointState) tracker(clusterID uint32) *hmtypes.DataVersionTracker {
+func (s *endpointState) tracker(clusterID uint32) *matterport.DataVersionTracker {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := s.trackers[clusterID]
 	if t == nil {
-		t = &hmtypes.DataVersionTracker{}
+		t = &matterport.DataVersionTracker{}
 		s.trackers[clusterID] = t
 	}
 	return t
@@ -358,7 +357,7 @@ func (r *endpointStateRegistry) retain(keep map[store.EndpointKey]struct{}) {
 
 // ClusterDataVersion returns the stable per-(endpoint, cluster)
 // DataVersion for a bridged endpoint. First access installs the
-// random non-zero initial value (see [hmtypes.DataVersionTracker]).
+// random non-zero initial value (see [matterport.DataVersionTracker]).
 func (e *Endpoint) ClusterDataVersion(clusterID uint32) uint32 {
 	return e.clusterTracker(clusterID).Current()
 }

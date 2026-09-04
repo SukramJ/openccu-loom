@@ -105,7 +105,7 @@ func TestHandleSubscribeRequest_MatchingPath_EstablishesAndReplies(t *testing.T)
 // what survives DataVersionFilter filtering.
 //
 // Constructed hermetically: mounts the real cluster/core.AccessControl
-// server (which embeds hmtypes.DataVersionTracker, matching production
+// server (which embeds matterport.DataVersionTracker, matching production
 // wiring) via newACLTestBridge, reads its actual current DataVersion
 // through readAuthorizedResults, then subscribes with a
 // DataVersionFilter that names that exact version — reproducing
@@ -124,7 +124,7 @@ func TestHandleSubscribeRequest_DataVersionFilterFullSuppression_StillEstablishe
 		t.Fatalf("precondition: want exactly 1 successful read of AccessControl.ACL, got %+v", results)
 	}
 	dv := results[0].DataVersion
-	// hmtypes.DataVersionTracker seeds a uniformly-random non-zero
+	// matterport.DataVersionTracker seeds a uniformly-random non-zero
 	// uint32 (see pkg/hmtypes/dataversion.go); the DataVersionFilter
 	// suppression guard in buildInitialReport only fires for
 	// DataVersion > 1 (the sentinel floor for clusters without
