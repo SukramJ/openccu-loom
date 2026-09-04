@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestScenesManagementInvokeContainsNoCommands verifies that MatterInvoke
@@ -28,7 +27,7 @@ import (
 func TestScenesManagementInvokeContainsNoCommands(t *testing.T) {
 	t.Parallel()
 	s := wire.ScenesManagement{}
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Fatal("MatterInvoke returned nil error, want rejection")
 	}
@@ -43,7 +42,7 @@ func TestScenesManagementInvokeRejectsAllCommandIDs(t *testing.T) {
 	t.Parallel()
 	s := wire.ScenesManagement{}
 	for _, cmdID := range []uint32{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x40, 0xFF} {
-		_, err := s.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := s.MatterInvoke(context.Background(), cmdID, nil)
 		if err == nil {
 			t.Errorf("cmdID 0x%02X: MatterInvoke returned nil, want error", cmdID)
 		}
@@ -67,7 +66,7 @@ func TestScenesManagementReadSceneTableSizeIsZero(t *testing.T) {
 func TestScenesManagementWriteReturnsError(t *testing.T) {
 	t.Parallel()
 	s := wire.ScenesManagement{}
-	err := s.MatterWrite(context.Background(), 0x0001, uint16(0), hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x0001, uint16(0))
 	if err == nil {
 		t.Error("MatterWrite returned nil, want error")
 	}

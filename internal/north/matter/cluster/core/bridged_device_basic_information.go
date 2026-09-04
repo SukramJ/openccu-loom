@@ -12,7 +12,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -382,7 +381,7 @@ func (b *BridgedDeviceBasicInformation) MatterRead(attrID uint32) (any, bool) { 
 
 // MatterWrite accepts NodeLabel only; Reachable updates flow through
 // [BridgedDeviceBasicInformation.SetReachable] from the bridge core.
-func (b *BridgedDeviceBasicInformation) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (b *BridgedDeviceBasicInformation) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != bridgedBasicInfoAttrNodeLabel {
 		return fmt.Errorf("%w: 0x%04X", errBridgedBasicInfoUnknown, attrID)
 	}
@@ -404,7 +403,7 @@ func (b *BridgedDeviceBasicInformation) MatterWrite(_ context.Context, attrID ui
 
 // MatterInvoke always rejects — BridgedDeviceBasicInformation has no
 // commands.
-func (b *BridgedDeviceBasicInformation) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (b *BridgedDeviceBasicInformation) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: BridgedDeviceBasicInformation has no commands (got 0x%02X)", cmdID)
 }
 

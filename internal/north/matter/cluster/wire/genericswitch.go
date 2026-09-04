@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -190,12 +189,12 @@ func (s *GenericSwitch) MatterRead(attrID uint32) (any, bool) {
 
 // MatterWrite rejects all attribute writes — every Switch attribute is
 // read-only per spec.
-func (s *GenericSwitch) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *GenericSwitch) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: GenericSwitch attribute 0x%04X is read-only", attrID)
 }
 
 // MatterInvoke rejects all commands — Switch cluster has no commands.
-func (s *GenericSwitch) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *GenericSwitch) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: GenericSwitch has no command 0x%02X", cmdID)
 }
 

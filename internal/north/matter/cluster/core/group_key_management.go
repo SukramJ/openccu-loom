@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -320,7 +319,7 @@ func (g *GroupKeyManagement) matterReadWithCtx(ctx context.Context, attrID uint3
 // MatterWrite handles GroupKeyMap as a writable attribute (Matter
 // §11.2.10.4.1). The IM layer pre-filters the list to the requesting
 // fabric.
-func (g *GroupKeyManagement) MatterWrite(ctx context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (g *GroupKeyManagement) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	if attrID != groupKeyMgmtAttrGroupKeyMap {
 		return fmt.Errorf("matter: GroupKeyManagement attribute 0x%04X is read-only", attrID)
 	}
@@ -405,7 +404,7 @@ type KeySetReadAllIndicesResponse struct {
 }
 
 // MatterInvoke implements [matterport.ClusterServer].
-func (g *GroupKeyManagement) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (g *GroupKeyManagement) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	// Resolve fabric from IM dispatcher context: SetCurrentFabric has no
 	// production caller, so every KeySetWrite / KeySetRead / KeySetRemove /
 	// KeySetReadAllIndices command arriving on a post-AddNOC CASE session

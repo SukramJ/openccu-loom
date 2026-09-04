@@ -11,7 +11,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -139,7 +138,7 @@ func (d *DiagnosticLogs) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite always rejects — DiagnosticLogs has no writable attributes.
-func (d *DiagnosticLogs) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (d *DiagnosticLogs) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: DiagnosticLogs is read-only (got attr 0x%04X)", attrID)
 }
 
@@ -149,7 +148,7 @@ func (d *DiagnosticLogs) MatterWrite(_ context.Context, attrID uint32, _ any, _ 
 // payload. Provider errors map to LogStatusBusy with empty content
 // per §11.11.6.1 (the spec frames Busy as "transient failure to
 // access logs", which fits any provider exception).
-func (d *DiagnosticLogs) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (d *DiagnosticLogs) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	if cmdID != diaglogsCmdRetrieveLogsRequest {
 		return nil, im.UnsupportedCommandf("matter: DiagnosticLogs command 0x%02X not supported", cmdID)
 	}

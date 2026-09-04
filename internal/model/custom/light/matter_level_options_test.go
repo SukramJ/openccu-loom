@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // noWriteSentinel is a value stubWriter.last never naturally takes (every
@@ -31,7 +30,7 @@ func TestLevelInvokeMoveToLevelWhileOffIsNoOp(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 100}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel while off: unexpected error %v", err)
 	}
 	if w.last != noWriteSentinel {
@@ -49,7 +48,7 @@ func TestLevelInvokeMoveToLevelWhileOffExecuteIfOffExecutes(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 100, OptionsMask: 1, OptionsOverride: 1}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel with ExecuteIfOff: unexpected error %v", err)
 	}
 	// 100/254 ≈ 0.3937
@@ -78,7 +77,7 @@ func TestLevelInvokeMoveToLevelWhileOffPartialOptionsIsNoOp(t *testing.T) {
 			srv := levelServer(t, l)
 
 			req := wire.MoveToLevelRequest{Level: 100, OptionsMask: tc.optionsMask, OptionsOverride: tc.optionsOverride}
-			if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req, hmenum.CommandPriorityHigh); err != nil {
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
 				t.Fatalf("MoveToLevel partial options: unexpected error %v", err)
 			}
 			if w.last != noWriteSentinel {
@@ -100,7 +99,7 @@ func TestLevelInvokeMoveToLevelCropsBelowMin(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 0}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel(0): unexpected error %v", err)
 	}
 	// Cropped to MinLevel=1 → 1/254 ≈ 0.0039; the light stays on (not 0).
@@ -118,7 +117,7 @@ func TestLevelInvokeMoveToLevelCropsAboveMax(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 255}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel(255): unexpected error %v", err)
 	}
 	if w.last != 1.0 {
@@ -138,7 +137,7 @@ func TestLevelInvokeMoveToLevelWithOnOffWhileOffExecutes(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 100}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, req); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff while off: unexpected error %v", err)
 	}
 	// 100/254 ≈ 0.3937 — not gated, so it executes despite the light being off.
@@ -161,7 +160,7 @@ func TestLevelInvokeMoveToLevelWithOnOffMinLevelTurnsOff(t *testing.T) {
 			srv := levelServer(t, l)
 
 			req := wire.MoveToLevelRequest{Level: level}
-			if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, req, hmenum.CommandPriorityHigh); err != nil {
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, req); err != nil {
 				t.Fatalf("MoveToLevelWithOnOff(%d): unexpected error %v", level, err)
 			}
 			if w.last != 0.0 {
@@ -186,7 +185,7 @@ func TestLevelInvokeStepDownFloorsAtMinLevelNotOff(t *testing.T) {
 	srv := levelServer(t, l)
 
 	fields := map[uint8]any{0: uint64(wire.LevelStepModeDown), 1: uint64(200)}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields); err != nil {
 		t.Fatalf("Step down: unexpected error %v", err)
 	}
 	// 1/254 ≈ 0.0039 — floors at MinLevel, light stays on.
@@ -205,7 +204,7 @@ func TestLevelInvokeStepWithOnOffDownAtMinLevelTurnsOff(t *testing.T) {
 	srv := levelServer(t, l)
 
 	fields := map[uint8]any{0: uint64(wire.LevelStepModeDown), 1: uint64(200)}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStepWithOnOff, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdStepWithOnOff, fields); err != nil {
 		t.Fatalf("StepWithOnOff down: unexpected error %v", err)
 	}
 	if w.last != 0.0 {
@@ -226,7 +225,7 @@ func TestLevelInvokeStepWhileOffGate(t *testing.T) {
 		srv := levelServer(t, l)
 
 		fields := map[uint8]any{0: uint64(wire.LevelStepModeUp), 1: uint64(20)}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields); err != nil {
 			t.Fatalf("Step while off: unexpected error %v", err)
 		}
 		if w.last != noWriteSentinel {
@@ -240,7 +239,7 @@ func TestLevelInvokeStepWhileOffGate(t *testing.T) {
 		srv := levelServer(t, l)
 
 		fields := map[uint8]any{0: uint64(1), 1: uint64(20), 3: uint64(1), 4: uint64(1)}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields); err != nil {
 			t.Fatalf("Step while off with ExecuteIfOff: unexpected error %v", err)
 		}
 		if w.last == noWriteSentinel {
@@ -263,7 +262,7 @@ func TestLevelInvokeMoveZeroRateRejected(t *testing.T) {
 			srv := levelServer(t, l)
 
 			fields := map[uint8]any{1: uint64(0)}
-			_, err := srv.MatterInvoke(context.Background(), cmdID, fields, hmenum.CommandPriorityHigh)
+			_, err := srv.MatterInvoke(context.Background(), cmdID, fields)
 			if err == nil || !strings.Contains(err.Error(), "invalid command argument") {
 				t.Fatalf("Move cmd 0x%02X with rate=0: err = %v, want an \"invalid command argument\" error", cmdID, err)
 			}
@@ -278,7 +277,7 @@ func TestLevelInvokeMoveAbsentOrNullRateIsNoOp(t *testing.T) {
 	t.Run("absent fields", func(t *testing.T) {
 		l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 		srv := levelServer(t, l)
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdMove, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdMove, nil); err != nil {
 			t.Fatalf("Move(nil fields): unexpected error %v", err)
 		}
 	})
@@ -287,7 +286,7 @@ func TestLevelInvokeMoveAbsentOrNullRateIsNoOp(t *testing.T) {
 		l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 		srv := levelServer(t, l)
 		fields := map[uint8]any{1: nil}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdMove, fields, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdMove, fields); err != nil {
 			t.Fatalf("Move(rate=null): unexpected error %v", err)
 		}
 	})
@@ -304,7 +303,7 @@ func TestGatedMoveToLevelDoesNotBumpDataVersion(t *testing.T) {
 
 	srv := levelServer(t, l)
 	req := wire.MoveToLevelRequest{Level: 100}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel while off: unexpected error %v", err)
 	}
 	if after := l.MatterDataVersion(); after != before {

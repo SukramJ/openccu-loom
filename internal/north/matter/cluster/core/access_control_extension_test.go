@@ -111,7 +111,7 @@ func TestAccessControl_Extension_WriteAndReadBack(t *testing.T) {
 	entries := []core.AccessControlExtensionEntry{
 		{Data: data, FabricIndex: 1},
 	}
-	if err := ac.MatterWrite(ctx, 0x0001, entries, 0); err != nil {
+	if err := ac.MatterWrite(ctx, 0x0001, entries); err != nil {
 		t.Fatalf("MatterWrite Extension: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestAccessControl_Extension_Write_InvalidTLV(t *testing.T) {
 	entries := []core.AccessControlExtensionEntry{
 		{Data: []byte{0x01, 0x02, 0x03}},
 	}
-	if err := ac.MatterWrite(context.Background(), 0x0001, entries, 0); err == nil {
+	if err := ac.MatterWrite(context.Background(), 0x0001, entries); err == nil {
 		t.Fatal("MatterWrite Extension with non-TLV Data: want error, got nil")
 	}
 }
@@ -164,7 +164,7 @@ func TestAccessControl_Extension_Write_MoreThanOneEntryPerFabric(t *testing.T) {
 		{Data: data},
 		{Data: data},
 	}
-	if err := ac.MatterWrite(context.Background(), 0x0001, entries, 0); err == nil {
+	if err := ac.MatterWrite(context.Background(), 0x0001, entries); err == nil {
 		t.Fatal("MatterWrite Extension with 2 entries: want error, got nil")
 	}
 }
@@ -192,15 +192,15 @@ func TestAccessControl_ExtensionWriteEmitsExtensionChanged(t *testing.T) {
 	data := encodeExtensionTLV(t)
 
 	// First write: 0 -> 1 entry => Added.
-	if err := ac.MatterWrite(context.Background(), 0x0001, []core.AccessControlExtensionEntry{{Data: data}}, 0); err != nil {
+	if err := ac.MatterWrite(context.Background(), 0x0001, []core.AccessControlExtensionEntry{{Data: data}}); err != nil {
 		t.Fatalf("first MatterWrite: unexpected error: %v", err)
 	}
 	// Second write: 1 -> 1 entry => Changed.
-	if err := ac.MatterWrite(context.Background(), 0x0001, []core.AccessControlExtensionEntry{{Data: data}}, 0); err != nil {
+	if err := ac.MatterWrite(context.Background(), 0x0001, []core.AccessControlExtensionEntry{{Data: data}}); err != nil {
 		t.Fatalf("second MatterWrite: unexpected error: %v", err)
 	}
 	// Third write: 1 -> 0 entries => Removed.
-	if err := ac.MatterWrite(context.Background(), 0x0001, []core.AccessControlExtensionEntry{}, 0); err != nil {
+	if err := ac.MatterWrite(context.Background(), 0x0001, []core.AccessControlExtensionEntry{}); err != nil {
 		t.Fatalf("third MatterWrite: unexpected error: %v", err)
 	}
 
@@ -248,7 +248,7 @@ func TestAccessControl_Extension_Write_TooLarge(t *testing.T) {
 	entries := []core.AccessControlExtensionEntry{
 		{Data: bigData},
 	}
-	if err := ac.MatterWrite(context.Background(), 0x0001, entries, 0); err == nil {
+	if err := ac.MatterWrite(context.Background(), 0x0001, entries); err == nil {
 		t.Fatal("MatterWrite Extension with 129-byte Data: want error, got nil")
 	}
 }
@@ -262,7 +262,7 @@ func TestAccessControl_RemoveFabricExtension_PurgesEntry(t *testing.T) {
 	ac := newAccessControl(t)
 	ctx := im.WithFabricFilter(context.Background(), true, 1)
 	data := encodeExtensionTLV(t)
-	if err := ac.MatterWrite(ctx, 0x0001, []core.AccessControlExtensionEntry{{Data: data}}, 0); err != nil {
+	if err := ac.MatterWrite(ctx, 0x0001, []core.AccessControlExtensionEntry{{Data: data}}); err != nil {
 		t.Fatalf("MatterWrite Extension: %v", err)
 	}
 	before := ac.MatterDataVersion()
@@ -297,7 +297,7 @@ func TestAccessControl_RemoveFabricExtension_ReusedFabricIndexDoesNotInheritStal
 
 	ac := newAccessControl(t)
 	ctxA := im.WithFabricFilter(context.Background(), true, 1)
-	if err := ac.MatterWrite(ctxA, 0x0001, []core.AccessControlExtensionEntry{{Data: encodeExtensionTLV(t)}}, 0); err != nil {
+	if err := ac.MatterWrite(ctxA, 0x0001, []core.AccessControlExtensionEntry{{Data: encodeExtensionTLV(t)}}); err != nil {
 		t.Fatalf("controller A MatterWrite Extension: %v", err)
 	}
 

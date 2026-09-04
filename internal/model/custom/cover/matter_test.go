@@ -12,7 +12,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	mattercluster "github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestMatterDeviceTypeIsWindowCovering covers the two lift projections —
@@ -137,7 +136,7 @@ func TestUpOrOpenCommand(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("UpOrOpen err: %v", err)
 	}
 	if w.last.(float64) != 1.0 {
@@ -150,7 +149,7 @@ func TestDownOrCloseCommand(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("DownOrClose err: %v", err)
 	}
 	if w.last.(float64) != 0.0 {
@@ -164,7 +163,7 @@ func TestStopMotionCommand(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
 	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x02, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x02, nil); err != nil {
 		t.Fatalf("StopMotion err: %v", err)
 	}
 	if w.last != true {
@@ -180,7 +179,7 @@ func TestGoToLiftPercentageInversion(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x05, uint16(7500), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x05, uint16(7500)); err != nil {
 		t.Fatalf("GoToLift err: %v", err)
 	}
 	flushGoToWrites(&c.matterGoTo)
@@ -196,7 +195,7 @@ func TestBlindGoToTiltPercentage(t *testing.T) {
 	w := &putWriter{}
 	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	srv := b.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x08, uint16(2500), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x08, uint16(2500)); err != nil {
 		t.Fatalf("GoToTilt err: %v", err)
 	}
 	flushGoToWrites(&b.matterGoTo)
@@ -321,7 +320,7 @@ func TestGarageMoveToDispatchesDoorCommand(t *testing.T) {
 			srv := g.MatterClusterServers()[0]
 			target := tc.target
 			if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-				clusterwire.MoveToRequest{Position: &target}, hmenum.CommandPriorityHigh); err != nil {
+				clusterwire.MoveToRequest{Position: &target}); err != nil {
 				t.Fatalf("MoveTo: %v", err)
 			}
 			if w.last != tc.want {
@@ -364,7 +363,7 @@ func TestOperationalStatusReflectsDirection(t *testing.T) {
 func TestUnknownCommandRejected(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	_, err := srv.MatterInvoke(context.Background(), 0x06, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x06, nil)
 	if !errors.Is(err, errMatterUnknownCommand) {
 		t.Fatalf("err=%v, want errMatterUnknownCommand", err)
 	}
@@ -374,7 +373,7 @@ func TestUnknownCommandRejected(t *testing.T) {
 func TestGoToLiftWrongType(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	_, err := srv.MatterInvoke(context.Background(), 0x05, "5000", hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x05, "5000")
 	if !errors.Is(err, errMatterValueType) {
 		t.Fatalf("err=%v, want errMatterValueType", err)
 	}
@@ -513,7 +512,6 @@ func TestGoToLiftPercentageClampsToPercent100thsMax(t *testing.T) {
 		context.Background(),
 		matterCmdGoToLiftPercentage,
 		map[uint8]any{0: uint64(20000)},
-		hmenum.CommandPriorityHigh,
 	); err != nil {
 		t.Fatalf("GoToLiftPercentage(20000): %v", err)
 	}

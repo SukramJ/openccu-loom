@@ -26,7 +26,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	mstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -229,7 +228,7 @@ func TestParityMatterJS_AccessControl_PASEForbiddenInACL(t *testing.T) {
 		Subjects:    []uint64{1},
 		FabricIndex: 1,
 	}}
-	if err := ac.MatterWrite(context.Background(), 0x0000, paseEntry, hmenum.CommandPriorityHigh); err == nil {
+	if err := ac.MatterWrite(context.Background(), 0x0000, paseEntry); err == nil {
 		t.Error("MatterWrite with PASE AuthMode: expected error, got nil — PASE is forbidden per matter.js")
 	}
 }
@@ -251,7 +250,7 @@ func TestParityMatterJS_AccessControl_Administer_GroupAuthMode_Forbidden(t *test
 		Subjects:    []uint64{1},
 		FabricIndex: 1,
 	}}
-	if err := ac.MatterWrite(context.Background(), 0x0000, badEntry, hmenum.CommandPriorityHigh); err == nil {
+	if err := ac.MatterWrite(context.Background(), 0x0000, badEntry); err == nil {
 		t.Error("MatterWrite Administer+Group: expected error, got nil — matter.js forbids this combination")
 	}
 }
@@ -311,7 +310,7 @@ func TestParityMatterJS_AccessControl_InvokeAlwaysErrors(t *testing.T) {
 	t.Parallel()
 	ac := newAccessControl(t)
 	for _, cmdID := range []uint32{0x00, 0x01, 0xFF} {
-		if _, err := ac.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh); err == nil {
+		if _, err := ac.MatterInvoke(context.Background(), cmdID, nil); err == nil {
 			t.Errorf("MatterInvoke(0x%02X): expected error, got nil — AccessControl has no commands", cmdID)
 		}
 	}

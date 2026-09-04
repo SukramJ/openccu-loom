@@ -6,8 +6,6 @@ package switchdev
 import (
 	"context"
 	"testing"
-
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestParityMatterJS_SwitchDataVersionBumpsOnWrite verifies that a
@@ -19,7 +17,7 @@ func TestParityMatterJS_SwitchDataVersionBumpsOnWrite(t *testing.T) {
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
 	before := s.MatterDataVersion()
 
-	if err := s.MatterWrite(context.Background(), matterAttrOnOff, true, hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(context.Background(), matterAttrOnOff, true); err != nil {
 		t.Fatalf("MatterWrite: %v", err)
 	}
 	if after := s.MatterDataVersion(); after <= before {
@@ -34,7 +32,7 @@ func TestParityMatterJS_SwitchDataVersionBumpsOnInvokeOff(t *testing.T) {
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
 	before := s.MatterDataVersion()
 
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOff, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdOff, nil); err != nil {
 		t.Fatalf("MatterInvoke(Off): %v", err)
 	}
 	if after := s.MatterDataVersion(); after <= before {
@@ -49,7 +47,7 @@ func TestParityMatterJS_SwitchDataVersionBumpsOnInvokeOn(t *testing.T) {
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
 	before := s.MatterDataVersion()
 
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOn, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdOn, nil); err != nil {
 		t.Fatalf("MatterInvoke(On): %v", err)
 	}
 	if after := s.MatterDataVersion(); after <= before {
@@ -65,7 +63,7 @@ func TestParityMatterJS_SwitchDataVersionMonotonicallyRises(t *testing.T) {
 
 	for i, on := range []bool{true, false, true} {
 		prev := s.MatterDataVersion()
-		if err := s.MatterWrite(context.Background(), matterAttrOnOff, on, hmenum.CommandPriorityHigh); err != nil {
+		if err := s.MatterWrite(context.Background(), matterAttrOnOff, on); err != nil {
 			t.Fatalf("write %d: %v", i, err)
 		}
 		if next := s.MatterDataVersion(); next <= prev {
@@ -98,7 +96,7 @@ func TestParityMatterJS_SwitchDataVersionStableOnUnknownAttrWrite(t *testing.T) 
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
 	before := s.MatterDataVersion()
 
-	_ = s.MatterWrite(context.Background(), 0x4001, true, hmenum.CommandPriorityHigh)
+	_ = s.MatterWrite(context.Background(), 0x4001, true)
 
 	if after := s.MatterDataVersion(); after != before {
 		t.Fatalf("failed write bumped DataVersion: before=%d after=%d", before, after)
@@ -112,7 +110,7 @@ func TestParityMatterJS_SwitchDataVersionStableOnNilWrite(t *testing.T) {
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
 	before := s.MatterDataVersion()
 
-	if err := s.MatterWrite(context.Background(), matterAttrOnOff, nil, hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(context.Background(), matterAttrOnOff, nil); err != nil {
 		t.Fatalf("nil write returned unexpected error: %v", err)
 	}
 	if after := s.MatterDataVersion(); after != before {
@@ -128,7 +126,7 @@ func TestParityMatterJS_SwitchDataVersionStableOnUnknownCommand(t *testing.T) {
 	before := s.MatterDataVersion()
 
 	// 0x43 is above the highest defined OnOff command (OnWithTimedOff 0x42).
-	_, _ = s.MatterInvoke(context.Background(), 0x43, nil, hmenum.CommandPriorityHigh)
+	_, _ = s.MatterInvoke(context.Background(), 0x43, nil)
 
 	if after := s.MatterDataVersion(); after != before {
 		t.Fatalf("failed invoke bumped DataVersion: before=%d after=%d", before, after)

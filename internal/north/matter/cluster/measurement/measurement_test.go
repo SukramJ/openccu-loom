@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -152,7 +151,7 @@ func TestTemperatureServerUnknownAttrReturnsFalse(t *testing.T) {
 func TestTemperatureServerWriteIsReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewTemperatureServer(fakeFloat{val: 21.5, obs: true})
-	err := s.MatterWrite(context.Background(), 0x0000, int16(100), hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x0000, int16(100))
 	if err == nil {
 		t.Error("MatterWrite returned nil, want read-only error")
 	}
@@ -162,7 +161,7 @@ func TestTemperatureServerWriteIsReadOnly(t *testing.T) {
 func TestTemperatureServerInvokeRejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewTemperatureServer(fakeFloat{val: 21.5, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke returned nil error, want rejection")
 	}
@@ -839,10 +838,10 @@ func TestAirQualityServerIsReadOnly(t *testing.T) {
 		matterport.MeasurementCO2,
 		fakeFloat{class: matterport.MeasurementCO2, val: 425, obs: true},
 	)
-	if err := s.MatterWrite(context.Background(), 0x0000, uint8(1), hmenum.CommandPriorityCritical); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, uint8(1)); err == nil {
 		t.Error("MatterWrite: want error, got nil")
 	}
-	if _, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityCritical); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x00, nil); err == nil {
 		t.Error("MatterInvoke: want error, got nil")
 	}
 	if got := s.MatterReportable(); !slices.Contains(got, 0x0000) {
@@ -930,7 +929,7 @@ func TestCO2ConcentrationServerUnknownAttr(t *testing.T) {
 func TestCO2ConcentrationServerWriteRejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewCO2ConcentrationServer(fakeFloat{val: 425.0, obs: true})
-	err := s.MatterWrite(context.Background(), 0x0000, float32(500.0), hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x0000, float32(500.0))
 	if err == nil {
 		t.Error("MatterWrite returned nil, want read-only error")
 	}
@@ -940,7 +939,7 @@ func TestCO2ConcentrationServerWriteRejected(t *testing.T) {
 func TestCO2ConcentrationServerInvokeRejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewCO2ConcentrationServer(fakeFloat{val: 425.0, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke returned nil error, want rejection")
 	}
@@ -1189,7 +1188,7 @@ func TestPowerSourceServerUnknownAttr(t *testing.T) {
 func TestPowerSourceServerWriteRejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
-	err := s.MatterWrite(context.Background(), 0x0000, uint8(0), hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x0000, uint8(0))
 	if err == nil {
 		t.Error("MatterWrite returned nil, want read-only error")
 	}
@@ -1199,7 +1198,7 @@ func TestPowerSourceServerWriteRejected(t *testing.T) {
 func TestPowerSourceServerInvokeRejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPowerSourceServer(fakeBool{class: matterport.MeasurementBattery, val: false, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke returned nil error, want rejection")
 	}
@@ -1518,7 +1517,7 @@ func TestElectricalPowerServerNullAttributes(t *testing.T) {
 func TestElectricalPowerServerWriteRejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewElectricalPowerServer(fakeFloat{val: 1500.0, obs: true})
-	err := s.MatterWrite(context.Background(), 0x0008, int64(0), hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x0008, int64(0))
 	if err == nil {
 		t.Error("MatterWrite returned nil, want read-only error")
 	}
@@ -1873,7 +1872,7 @@ func TestElectricalEnergyServer_DataVersion_StartsNonZero(t *testing.T) {
 func TestHumidityServer_MatterWrite_ReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewHumidityServer(fakeFloat{val: 50, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
@@ -1881,7 +1880,7 @@ func TestHumidityServer_MatterWrite_ReadOnly(t *testing.T) {
 func TestHumidityServer_MatterInvoke_Rejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewHumidityServer(fakeFloat{val: 50, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}
@@ -1927,7 +1926,7 @@ func TestHumidityServer_MatterRead_UnknownAttr(t *testing.T) {
 func TestIlluminanceServer_MatterWrite_ReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewIlluminanceServer(fakeFloat{val: 500, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
@@ -1935,7 +1934,7 @@ func TestIlluminanceServer_MatterWrite_ReadOnly(t *testing.T) {
 func TestIlluminanceServer_MatterInvoke_Rejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewIlluminanceServer(fakeFloat{val: 500, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}
@@ -1981,7 +1980,7 @@ func TestIlluminanceServer_MatterRead_UnknownAttr(t *testing.T) {
 func TestPressureServer_MatterWrite_ReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPressureServer(fakeFloat{val: 1013.25, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
@@ -1989,7 +1988,7 @@ func TestPressureServer_MatterWrite_ReadOnly(t *testing.T) {
 func TestPressureServer_MatterInvoke_Rejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPressureServer(fakeFloat{val: 1013.25, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}
@@ -2017,7 +2016,7 @@ func TestPressureServer_MatterAttributes_NonEmpty(t *testing.T) {
 func TestBooleanStateServer_MatterWrite_ReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewBooleanStateServer(fakeBool{val: true, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
@@ -2025,7 +2024,7 @@ func TestBooleanStateServer_MatterWrite_ReadOnly(t *testing.T) {
 func TestBooleanStateServer_MatterInvoke_Rejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewBooleanStateServer(fakeBool{val: true, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}
@@ -2058,7 +2057,7 @@ func TestBooleanStateServer_MatterAttributes_NonEmpty(t *testing.T) {
 func TestElectricalPowerServer_MatterWrite_ReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewElectricalPowerServer(fakeFloat{val: 1500, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
@@ -2066,7 +2065,7 @@ func TestElectricalPowerServer_MatterWrite_ReadOnly(t *testing.T) {
 func TestElectricalPowerServer_MatterInvoke_Rejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewElectricalPowerServer(fakeFloat{val: 1500, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}
@@ -2093,7 +2092,7 @@ func TestElectricalPowerServer_MatterAttributes_NonEmpty(t *testing.T) {
 func TestElectricalEnergyServer_MatterWrite_ReadOnly(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewElectricalEnergyServer(fakeFloat{val: 100, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
@@ -2101,7 +2100,7 @@ func TestElectricalEnergyServer_MatterWrite_ReadOnly(t *testing.T) {
 func TestElectricalEnergyServer_MatterInvoke_Rejected(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewElectricalEnergyServer(fakeFloat{val: 100, obs: true})
-	_, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}

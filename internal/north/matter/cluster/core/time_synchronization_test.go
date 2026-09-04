@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestTimeSync_ClusterID(t *testing.T) {
@@ -83,7 +82,7 @@ func TestTimeSync_WriteReturnsError(t *testing.T) {
 	t.Parallel()
 	ts := core.NewTimeSynchronization()
 	for _, attrID := range []uint32{0x0000, 0x0001, 0xFFFD} {
-		err := ts.MatterWrite(context.Background(), attrID, nil, hmenum.CommandPriorityHigh)
+		err := ts.MatterWrite(context.Background(), attrID, nil)
 		if err == nil {
 			t.Errorf("MatterWrite(0x%04X) expected error, got nil", attrID)
 		}
@@ -95,7 +94,7 @@ func TestTimeSync_InvokeSetUTCTimeAccepted(t *testing.T) {
 	ts := core.NewTimeSynchronization()
 	// SetUTCTime (0x00) is accepted and returns nil (Success) — the bridge
 	// does not adjust the host clock but must not return UnsupportedCommand.
-	_, err := ts.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := ts.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		t.Errorf("MatterInvoke(SetUTCTime/0x00) expected nil, got %v", err)
 	}
@@ -105,7 +104,7 @@ func TestTimeSync_InvokeUnknownCmdReturnsError(t *testing.T) {
 	t.Parallel()
 	ts := core.NewTimeSynchronization()
 	for _, cmdID := range []uint32{0x01, 0xFF} {
-		_, err := ts.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := ts.MatterInvoke(context.Background(), cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}

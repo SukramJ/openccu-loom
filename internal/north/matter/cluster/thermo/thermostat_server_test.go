@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func newHeatCool() *thermo.ThermostatServer {
@@ -162,7 +161,6 @@ func invokeSetpointRaiseLower(t *testing.T, srv *thermo.ThermostatServer, mode u
 		context.Background(),
 		0x00,
 		map[string]any{"mode": mode, "amount": amount},
-		hmenum.CommandPriorityHigh,
 	)
 	if err != nil {
 		t.Fatalf("SetpointRaiseLower(mode=%d, amount=%d): %v", mode, amount, err)
@@ -310,7 +308,7 @@ func TestSetpointRaiseLower_Both_CoolingLimited(t *testing.T) {
 func TestThermostatServer_Write_OccupiedHeatingSetpoint(t *testing.T) {
 	t.Parallel()
 	srv := newHeatOnly()
-	if err := srv.MatterWrite(context.Background(), 0x0012, int16(2200), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), 0x0012, int16(2200)); err != nil {
 		t.Fatalf("MatterWrite OccupiedHeatingSetpoint: %v", err)
 	}
 	raw, ok := srv.MatterRead(0x0012)
@@ -339,12 +337,12 @@ func TestMatterWriteAcceptsDecoderWidths(t *testing.T) {
 
 	// SystemMode (enum8) arrives as uint64 from the decoder.
 	srv := newHeatCool()
-	if err := srv.MatterWrite(ctx, attrSystemMode, uint64(4), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(ctx, attrSystemMode, uint64(4)); err != nil {
 		t.Fatalf("SystemMode write with uint64(4) must succeed, got: %v", err)
 	}
 
 	// Heating setpoint (int16) arrives as int64 from the decoder.
-	if err := srv.MatterWrite(ctx, attrOccupiedHeatingSetpoint, int64(2100), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(ctx, attrOccupiedHeatingSetpoint, int64(2100)); err != nil {
 		t.Fatalf("OccupiedHeatingSetpoint write with int64(2100) must succeed, got: %v", err)
 	}
 }

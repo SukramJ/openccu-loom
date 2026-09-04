@@ -14,7 +14,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -296,7 +295,7 @@ func (g *GeneralDiagnostics) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite always rejects — GeneralDiagnostics is read-only.
-func (g *GeneralDiagnostics) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (g *GeneralDiagnostics) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: GeneralDiagnostics is read-only (got attr 0x%04X)", attrID)
 }
 
@@ -310,7 +309,7 @@ func (g *GeneralDiagnostics) MatterWrite(_ context.Context, attrID uint32, _ any
 // enable-key validation with ConstraintError (see the handler); the bridge
 // configures no test-event enable key. PayloadTestRequest (0x03, DMTEST) is
 // not implemented.
-func (g *GeneralDiagnostics) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (g *GeneralDiagnostics) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	switch cmdID {
 	case gendiagCmdTimeSnapshot:
 		systemMs := uint64(time.Since(g.startTime).Milliseconds()) //nolint:gosec // G115: wall-clock millis are non-negative for any valid host time; see #20

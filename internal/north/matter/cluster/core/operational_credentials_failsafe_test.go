@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestOpcreds_OnFailSafeExpiry_ClearsPendingTrustRoot verifies that
@@ -34,7 +33,6 @@ func TestOpcreds_OnFailSafeExpiry_ClearsPendingTrustRoot(t *testing.T) {
 		context.Background(),
 		0x0B, // AddTrustedRootCertificate
 		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh,
 	)
 	if err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
@@ -84,16 +82,14 @@ func TestOpcreds_OnFailSafeExpiry_ClearsAllPendingFields(t *testing.T) {
 		csrNonce[i] = byte(i + 1)
 	}
 	_, err := oc.MatterInvoke(ctx, 0x04, // CSRRequest
-		core.CSRRequest{CSRNonce: csrNonce, IsForUpdateNOC: false},
-		hmenum.CommandPriorityHigh)
+		core.CSRRequest{CSRNonce: csrNonce, IsForUpdateNOC: false})
 	if err != nil {
 		t.Fatalf("CSRRequest: %v", err)
 	}
 
 	// AddTrustedRootCertificate populates pendingTrustRoot + pendingTrustRootDER.
 	_, err = oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh)
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw})
 	if err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
@@ -101,8 +97,7 @@ func TestOpcreds_OnFailSafeExpiry_ClearsAllPendingFields(t *testing.T) {
 	// Sanity: CSR was issued, so a second AddTrustedRootCertificate should
 	// hit the duplicate-root guard (pendingTrustRoot != nil).
 	_, err = oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh)
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw})
 	if err == nil {
 		t.Fatal("expected constraint error on duplicate AddTrustedRootCertificate, got nil")
 	}
@@ -122,8 +117,7 @@ func TestOpcreds_OnFailSafeExpiry_ClearsAllPendingFields(t *testing.T) {
 	// After expiry a fresh AddTrustedRootCertificate must succeed (pending
 	// state cleared — no duplicate-root guard hit).
 	_, err = oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh)
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw})
 	if err != nil {
 		t.Fatalf("AddTrustedRootCertificate after expiry: %v", err)
 	}
@@ -166,16 +160,14 @@ func TestOpcreds_OnFailSafeExpiry_WiredViaGeneralCommissioning(t *testing.T) {
 
 	// Arm with a 1-second window.
 	_, armErr := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 1})
 	if armErr != nil {
 		t.Fatalf("ArmFailSafe: %v", armErr)
 	}
 
 	// Install a trusted root while the window is armed.
 	_, err = oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh)
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw})
 	if err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
@@ -219,13 +211,11 @@ func TestOpcreds_OnFailSafeExpiry_AllowsNocCycleAfterExpiry(t *testing.T) {
 
 	// First cycle: CSR + root → partial commissioning.
 	if _, err := oc.MatterInvoke(ctx, 0x04,
-		core.CSRRequest{CSRNonce: csrNonce},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.CSRRequest{CSRNonce: csrNonce}); err != nil {
 		t.Fatalf("cycle1 CSRRequest: %v", err)
 	}
 	if _, err := oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}); err != nil {
 		t.Fatalf("cycle1 AddTrustedRootCertificate: %v", err)
 	}
 
@@ -234,13 +224,11 @@ func TestOpcreds_OnFailSafeExpiry_AllowsNocCycleAfterExpiry(t *testing.T) {
 
 	// Second cycle: must succeed without duplicate-root or missing-CSR errors.
 	if _, err := oc.MatterInvoke(ctx, 0x04,
-		core.CSRRequest{CSRNonce: csrNonce},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.CSRRequest{CSRNonce: csrNonce}); err != nil {
 		t.Fatalf("cycle2 CSRRequest: %v", err)
 	}
 	if _, err := oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}); err != nil {
 		t.Fatalf("cycle2 AddTrustedRootCertificate after expiry: %v", err)
 	}
 }

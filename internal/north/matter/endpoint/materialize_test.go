@@ -8,7 +8,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -37,11 +36,11 @@ func (s fakeServer) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (s fakeServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s fakeServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errors.New("read-only")
 }
 
-func (s fakeServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s fakeServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, errors.New("no commands")
 }
 func (s fakeServer) MatterReportable() []uint32 { return nil }

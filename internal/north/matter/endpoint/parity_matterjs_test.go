@@ -42,11 +42,11 @@ func (s stubParityClusterServer) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (s stubParityClusterServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s stubParityClusterServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errors.New("stub: read-only")
 }
 
-func (s stubParityClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s stubParityClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, errors.New("stub: no commands")
 }
 func (s stubParityClusterServer) MatterReportable() []uint32 { return nil }

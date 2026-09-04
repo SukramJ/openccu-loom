@@ -276,7 +276,7 @@ func TestParityMatterJS_BridgedServer_NodeLabelWritePreservedAcrossRead(t *testi
 		t.Skip("initial label already matches test value — adjust validBridgedConfig to differ")
 	}
 
-	if err := b.MatterWrite(context.Background(), 0x0005, newLabel, 0); err != nil {
+	if err := b.MatterWrite(context.Background(), 0x0005, newLabel); err != nil {
 		t.Fatalf("MatterWrite NodeLabel: %v", err)
 	}
 	v1, ok := b.MatterRead(0x0005)
@@ -357,7 +357,7 @@ func TestParityMatterJS_BridgedServer_NodeLabelPersistenceAcrossMultipleWrites(t
 
 	writes := []string{"First Label", "Second Label", "Final Label"}
 	for _, label := range writes {
-		if err := b.MatterWrite(nil, 0x0005, label, 0); err != nil { //nolint:staticcheck // SA1012: test exercises the nil-Context tolerance contract
+		if err := b.MatterWrite(nil, 0x0005, label); err != nil { //nolint:staticcheck // SA1012: test exercises the nil-Context tolerance contract
 			t.Fatalf("MatterWrite %q: %v", label, err)
 		}
 		v, ok := b.MatterRead(0x0005)

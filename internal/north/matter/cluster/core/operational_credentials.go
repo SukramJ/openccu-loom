@@ -26,7 +26,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/mattercert"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -833,7 +832,7 @@ func (o *OperationalCredentials) MatterReadFiltered(ctx context.Context, attrID 
 }
 
 // MatterWrite always rejects — every state change goes through commands.
-func (o *OperationalCredentials) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (o *OperationalCredentials) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: OperationalCredentials is read-only via attributes (got 0x%04X)", attrID)
 }
 
@@ -933,7 +932,7 @@ type SignVidVerificationResponse struct {
 }
 
 // MatterInvoke implements [matterport.ClusterServer].
-func (o *OperationalCredentials) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (o *OperationalCredentials) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	cmdName := opcredsCmdName(cmdID)
 	slog.Default().Info("matter.opcreds.cmd",
 		slog.String("cmd", cmdName),

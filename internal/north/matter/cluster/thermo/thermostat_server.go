@@ -15,7 +15,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -290,7 +289,7 @@ func (s *ThermostatServer) MatterRead(attrID uint32) (any, bool) { //nolint:gocy
 }
 
 // MatterWrite handles writable attributes (setpoints, SystemMode).
-func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch attrID {
@@ -364,7 +363,7 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 }
 
 // MatterInvoke handles SetpointRaiseLower and weekly-schedule commands.
-func (s *ThermostatServer) MatterInvoke(_ context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (s *ThermostatServer) MatterInvoke(_ context.Context, cmdID uint32, fields any) (any, error) {
 	switch cmdID {
 	case 0x00: // SetpointRaiseLower
 		return nil, s.handleSetpointRaiseLower(fields)

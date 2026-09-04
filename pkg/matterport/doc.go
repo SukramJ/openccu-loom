@@ -17,10 +17,11 @@
 // compiling. Symbols introduced here afterwards get no alias; new code
 // names the matterport symbol directly.
 //
-// The one remaining dependency on the host application is
-// [github.com/SukramJ/openccu-loom/pkg/hmenum], for the
-// CommandPriority that MatterWrite and MatterInvoke forward to the
-// southbound command queue. Everything else is stdlib.
+// The package depends on nothing else in this repository — its
+// imports are stdlib only. That is the property worth preserving: a
+// port contract that names a host type drags the host's release
+// cadence and its transitive dependencies along with it, and the
+// bridge is the one surface where that coupling is expensive.
 //
 // See ADR 0012 for the rich-model / dumb-bridge split these contracts
 // implement, and SPECIFICATION.md §6.2 / §6.3 for the endpoint surface.

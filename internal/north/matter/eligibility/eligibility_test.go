@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -27,11 +26,11 @@ func (f *fakeClusterServer) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (f *fakeClusterServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (f *fakeClusterServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (f *fakeClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (f *fakeClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 func (f *fakeClusterServer) MatterReportable() []uint32 { return nil }

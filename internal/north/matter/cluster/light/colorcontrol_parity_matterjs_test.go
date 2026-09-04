@@ -11,7 +11,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/light"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 type matterSchemaCC struct {
@@ -235,7 +234,7 @@ func TestParityMatterJS_ColorControl_MoveToColorTemperatureCropsToRange(t *testi
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			srv2 := light.NewColorControlServer(cfg)
-			if _, err := srv2.MatterInvoke(ctx, wire.ColorCtrlCmdMoveToColorTemperature, wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: tc.target}, hmenum.CommandPriorityHigh); err != nil {
+			if _, err := srv2.MatterInvoke(ctx, wire.ColorCtrlCmdMoveToColorTemperature, wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: tc.target}); err != nil {
 				t.Fatalf("MoveToColorTemperature(%d): %v", tc.target, err)
 			}
 			v, ok := srv2.MatterRead(wire.ColorCtrlAttrColorTemperatureMireds)
@@ -262,7 +261,7 @@ func TestParityMatterJS_ColorControl_MoveToColorTemperatureTagMapPayload(t *test
 
 	// Tag 0 = ColorTemperatureMireds as uint64 (generic-tag-map encoding).
 	fields := map[uint8]any{0: uint64(250)}
-	if _, err := srv.MatterInvoke(ctx, wire.ColorCtrlCmdMoveToColorTemperature, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(ctx, wire.ColorCtrlCmdMoveToColorTemperature, fields); err != nil {
 		t.Fatalf("MoveToColorTemperature(tag map): %v", err)
 	}
 	v, ok := srv.MatterRead(wire.ColorCtrlAttrColorTemperatureMireds)

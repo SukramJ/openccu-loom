@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestThermostatSetpointRaiseLowerWireFieldsRaises drives
@@ -32,7 +31,7 @@ func TestThermostatSetpointRaiseLowerWireFieldsRaises(t *testing.T) {
 	r.setpoint.OnEvent(20.0)
 	srv := findCluster(t, r.climate, 0x0201)
 	fields := map[uint8]any{0: uint64(0), 1: int64(15)} // mode=Both, +1.5 °C
-	_, err := srv.MatterInvoke(context.Background(), matterCmdSetpointRaiseLower, fields, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), matterCmdSetpointRaiseLower, fields)
 	if err != nil {
 		t.Fatalf("SetpointRaiseLower wire-shape err: %v", err)
 	}
@@ -52,7 +51,7 @@ func TestThermostatSetpointRaiseLowerWireFieldsLowers(t *testing.T) {
 	r.setpoint.OnEvent(20.0)
 	srv := findCluster(t, r.climate, 0x0201)
 	fields := map[uint8]any{0: uint64(0), 1: int64(-15)} // mode=Both, -1.5 °C
-	_, err := srv.MatterInvoke(context.Background(), matterCmdSetpointRaiseLower, fields, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), matterCmdSetpointRaiseLower, fields)
 	if err != nil {
 		t.Fatalf("SetpointRaiseLower wire-shape err: %v", err)
 	}
@@ -74,7 +73,7 @@ func TestThermostatOccupiedHeatingSetpointWriteAcceptsWireInt(t *testing.T) {
 		MaxTemperature: 30.5,
 	})
 	srv := findCluster(t, r.climate, 0x0201)
-	if err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, int64(2100), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, int64(2100)); err != nil {
 		t.Fatalf("OccupiedHeatingSetpoint write (int64 wire value) err: %v", err)
 	}
 	if got := w.last(); got.value.(float64) != 21.0 {
@@ -96,7 +95,7 @@ func TestThermostatSystemModeWriteAcceptsWireUint(t *testing.T) {
 		MaxTemperature: 30.5,
 	})
 	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, uint64(matterSysModeHeat), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, uint64(matterSysModeHeat))
 	if errors.Is(err, errMatterValueType) {
 		t.Fatalf("SystemMode write rejected the wire uint64 as a value-type error: %v", err)
 	}

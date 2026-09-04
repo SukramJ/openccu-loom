@@ -12,7 +12,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
@@ -27,11 +26,11 @@ func (onOffStubServer) MatterClusterID() uint32       { return 0x0006 }
 func (onOffStubServer) MatterRead(uint32) (any, bool) { return uint8(0), true }
 func (onOffStubServer) MatterReportable() []uint32    { return nil }
 
-func (onOffStubServer) MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error {
+func (onOffStubServer) MatterWrite(context.Context, uint32, any) error {
 	return nil
 }
 
-func (onOffStubServer) MatterInvoke(context.Context, uint32, any, hmenum.CommandPriority) (any, error) {
+func (onOffStubServer) MatterInvoke(context.Context, uint32, any) (any, error) {
 	return nil, nil
 }
 

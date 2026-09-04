@@ -1396,19 +1396,19 @@ func TestLightOnOffServerWrite(t *testing.T) {
 	s := lightOnOffServer{l: l}
 
 	// Write true → TurnOn.
-	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, true, hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, true); err != nil {
 		t.Errorf("MatterWrite(true): %v", err)
 	}
 	// Write false → TurnOff.
-	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, false, hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, false); err != nil {
 		t.Errorf("MatterWrite(false): %v", err)
 	}
 	// Unknown attribute.
-	if err := s.MatterWrite(context.Background(), 0xFFFF, true, hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0xFFFF, true); err == nil {
 		t.Error("MatterWrite(unknown attr) must return error")
 	}
 	// Wrong type.
-	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, "bad", hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, "bad"); err == nil {
 		t.Error("MatterWrite(wrong type) must return error")
 	}
 }
@@ -1420,25 +1420,25 @@ func TestLightOnOffServerInvoke(t *testing.T) {
 	s := lightOnOffServer{l: l}
 
 	// Off command.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOff, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdOff, nil); err != nil {
 		t.Errorf("MatterInvoke(Off): %v", err)
 	}
 	// On command.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOn, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdOn, nil); err != nil {
 		t.Errorf("MatterInvoke(On): %v", err)
 	}
 	// Toggle when off → TurnOn.
 	level.OnEvent(0)
-	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil); err != nil {
 		t.Errorf("MatterInvoke(Toggle/off): %v", err)
 	}
 	// Toggle when on → TurnOff.
 	level.OnEvent(0.5)
-	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil); err != nil {
 		t.Errorf("MatterInvoke(Toggle/on): %v", err)
 	}
 	// Unknown command.
-	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("MatterInvoke(unknown cmd) must return error")
 	}
 }
@@ -1514,28 +1514,28 @@ func TestLightLevelServerWriteAndInvoke(t *testing.T) {
 	s := lightLevelServer{l: l}
 
 	// Write uint8.
-	if err := s.MatterWrite(context.Background(), matterAttrLevelCurrent, uint8(127), hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(context.Background(), matterAttrLevelCurrent, uint8(127)); err != nil {
 		t.Errorf("MatterWrite(CurrentLevel): %v", err)
 	}
 	// Wrong attr.
-	if err := s.MatterWrite(context.Background(), 0xFFFF, uint8(127), hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0xFFFF, uint8(127)); err == nil {
 		t.Error("MatterWrite(unknown attr) must return error")
 	}
 	// Wrong type.
-	if err := s.MatterWrite(context.Background(), matterAttrLevelCurrent, "bad", hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), matterAttrLevelCurrent, "bad"); err == nil {
 		t.Error("MatterWrite(wrong type) must return error")
 	}
 
 	// Invoke MoveToLevel bare uint8.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdMoveToLevel, uint8(100), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdMoveToLevel, uint8(100)); err != nil {
 		t.Errorf("MatterInvoke(MoveToLevel/uint8): %v", err)
 	}
 	// Invoke MoveToLevel map.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, map[string]any{"level": uint8(50)}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, map[string]any{"level": uint8(50)}); err != nil {
 		t.Errorf("MatterInvoke(MoveToLevelWithOnOff/map): %v", err)
 	}
 	// Invoke unknown command.
-	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("MatterInvoke(unknown cmd) must return error")
 	}
 }

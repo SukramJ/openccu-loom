@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -27,12 +26,12 @@ func (s *recordingServer) MatterRead(_ uint32) (any, bool) { return nil, false }
 func (s *recordingServer) MatterReportable() []uint32      { return s.attrs }
 func (s *recordingServer) MatterAttributes() []uint32      { return s.attrs }
 
-func (s *recordingServer) MatterWrite(_ context.Context, attr uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *recordingServer) MatterWrite(_ context.Context, attr uint32, _ any) error {
 	s.writeCalls = append(s.writeCalls, attr)
 	return nil
 }
 
-func (s *recordingServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *recordingServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 

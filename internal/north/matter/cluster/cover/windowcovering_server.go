@@ -16,7 +16,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ClusterRevision is the WindowCovering cluster revision this server
@@ -126,7 +125,7 @@ var _ im.StatusCodeError = windowCoveringConstraintErr{}
 // MatterWrite accepts Mode (0x0017) writes; all other attributes are
 // controlled via commands. Mode is RW with constraint max 15 per
 // matter.js window-covering-cluster.element.ts:79.
-func (s *WindowCoveringServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (s *WindowCoveringServer) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != wire.WindowCoveringAttrMode {
 		return fmt.Errorf("windowcovering: attribute 0x%04X is not writable", attrID)
 	}
@@ -149,7 +148,7 @@ func (s *WindowCoveringServer) MatterWrite(_ context.Context, attrID uint32, val
 // Success without forwarding to a CCU backend. Callers that need live-CCU
 // control use the rich-model projections in
 // internal/model/custom/cover/matter.go instead.
-func (s *WindowCoveringServer) MatterInvoke(_ context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (s *WindowCoveringServer) MatterInvoke(_ context.Context, cmdID uint32, fields any) (any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

@@ -7,8 +7,8 @@ import "github.com/SukramJ/openccu-loom/pkg/matterport"
 
 // The Matter port contracts live in
 // [github.com/SukramJ/openccu-loom/pkg/matterport], which depends on
-// nothing in this repository but pkg/hmenum. They are re-exported here
-// as aliases so the call sites that reach for them through this package
+// nothing else in this repository at all. They are re-exported here as
+// aliases so the call sites that reach for them through this package
 // keep compiling; new code should name the matterport symbol directly.
 
 // MatterEndpointSource is a compatibility alias for [matterport.EndpointSource].

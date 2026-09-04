@@ -97,11 +97,11 @@ func (c *smokeStubCluster) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (c *smokeStubCluster) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (c *smokeStubCluster) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errors.New("read-only stub")
 }
 
-func (c *smokeStubCluster) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (c *smokeStubCluster) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, errors.New("no commands on stub")
 }
 func (c *smokeStubCluster) MatterReportable() []uint32 { return nil }

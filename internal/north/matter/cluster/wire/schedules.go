@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -150,13 +149,13 @@ func (s *SchedulesServer) MatterRead(attrID uint32) (any, bool) {
 
 // MatterWrite implements [matterport.ClusterServer]. All writes are
 // rejected: the Schedules cluster is read-only in the v1.1 bridge.
-func (s *SchedulesServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *SchedulesServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: attribute 0x%04X", ErrSchedulesReadOnly, attrID)
 }
 
 // MatterInvoke implements [matterport.ClusterServer]. All invocations
 // are rejected: the Schedules cluster exposes no commands in the v1.1 bridge.
-func (s *SchedulesServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *SchedulesServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w: command 0x%02X", ErrSchedulesReadOnly, cmdID)
 }
 

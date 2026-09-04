@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -67,7 +66,7 @@ func (Groups) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite rejects every write — Groups is a read-only stub.
-func (Groups) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (Groups) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: attrID 0x%04X", errGroupsReadOnly, attrID)
 }
 
@@ -79,7 +78,7 @@ func (Groups) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.Comm
 // matter.js packages/node/src/behaviors/groups/GroupsServer.ts + chip
 // src/app/clusters/groups-server/groups-server.cpp both require a valid
 // status-code response for unsupported commands on a stub cluster.
-func (Groups) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (Groups) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w: no commands supported (HM has no group management), cmdID 0x%02X", errGroupsReadOnly, cmdID)
 }
 

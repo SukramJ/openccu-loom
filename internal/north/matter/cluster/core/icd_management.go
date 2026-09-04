@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -77,14 +76,14 @@ func (i *ICDManagement) MatterRead(attrID uint32) (any, bool) {
 
 // MatterWrite implements [matterport.ClusterServer]. Attributes
 // are read-only on the bridge.
-func (i *ICDManagement) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (i *ICDManagement) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: ICDManagement attribute 0x%04X is read-only", attrID)
 }
 
 // MatterInvoke implements [matterport.ClusterServer]. ICD
 // commands (RegisterClient / UnregisterClient / StayActiveRequest)
 // all require feature flags we don't advertise.
-func (i *ICDManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (i *ICDManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: ICDManagement command 0x%02X not supported", cmdID)
 }
 

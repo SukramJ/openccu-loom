@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // These tests lock in the fail-safe ownership + CASE-while-window-open
@@ -29,8 +28,7 @@ func TestGencomm_ArmFailSafe_CASEArmWhileWindowOpen_Busy(t *testing.T) {
 
 	ctx := im.WithFabricFilter(context.Background(), false, 2)
 	resp, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (CASE, window open): unexpected error: %v", err)
 	}
@@ -53,8 +51,7 @@ func TestGencomm_ArmFailSafe_PASEArmWhileWindowOpen_OK(t *testing.T) {
 
 	ctx := im.WithFabricFilter(context.Background(), false, 0)
 	resp, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (PASE, window open): unexpected error: %v", err)
 	}
@@ -77,8 +74,7 @@ func TestGencomm_ArmFailSafe_CASEArmWindowClosed_OK(t *testing.T) {
 
 	ctx := im.WithFabricFilter(context.Background(), false, 2)
 	resp, err := gc.MatterInvoke(ctx, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (CASE, window closed): unexpected error: %v", err)
 	}
@@ -100,8 +96,7 @@ func TestGencomm_ArmFailSafe_ReArmDifferentFabric_Busy(t *testing.T) {
 
 	owner := im.WithFabricFilter(context.Background(), false, 1)
 	resp, err := gc.MatterInvoke(owner, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (owner arm): unexpected error: %v", err)
 	}
@@ -111,8 +106,7 @@ func TestGencomm_ArmFailSafe_ReArmDifferentFabric_Busy(t *testing.T) {
 
 	intruder := im.WithFabricFilter(context.Background(), false, 2)
 	resp, err = gc.MatterInvoke(intruder, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (intruder re-arm): unexpected error: %v", err)
 	}
@@ -133,8 +127,7 @@ func TestGencomm_ArmFailSafe_ReArmSameFabric_OK(t *testing.T) {
 
 	owner := im.WithFabricFilter(context.Background(), false, 1)
 	resp, err := gc.MatterInvoke(owner, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 60, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (first arm): unexpected error: %v", err)
 	}
@@ -143,8 +136,7 @@ func TestGencomm_ArmFailSafe_ReArmSameFabric_OK(t *testing.T) {
 	}
 
 	resp, err = gc.MatterInvoke(owner, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 120, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 120, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (same-fabric re-arm): unexpected error: %v", err)
 	}
@@ -181,8 +173,7 @@ func TestGencomm_ArmFailSafe_DisarmDifferentFabric_Busy_And_StaysArmed(t *testin
 
 	owner := im.WithFabricFilter(context.Background(), false, ownerFabric)
 	resp, err := gc.MatterInvoke(owner, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 600, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 600, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (owner arm): unexpected error: %v", err)
 	}
@@ -193,8 +184,7 @@ func TestGencomm_ArmFailSafe_DisarmDifferentFabric_Busy_And_StaysArmed(t *testin
 	// Intruder disarm: rejected, fail-safe stays armed, hook does NOT fire.
 	intruder := im.WithFabricFilter(context.Background(), false, intruderFabric)
 	resp, err = gc.MatterInvoke(intruder, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (intruder disarm): unexpected error: %v", err)
 	}
@@ -213,8 +203,7 @@ func TestGencomm_ArmFailSafe_DisarmDifferentFabric_Busy_And_StaysArmed(t *testin
 
 	// Owner disarm: accepted, hook fires with the owning fabric.
 	resp, err = gc.MatterInvoke(owner, 0x00,
-		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0},
-		hmenum.CommandPriorityHigh)
+		core.ArmFailSafeRequest{ExpiryLengthSeconds: 0, Breadcrumb: 0})
 	if err != nil {
 		t.Fatalf("ArmFailSafe (owner disarm): unexpected error: %v", err)
 	}

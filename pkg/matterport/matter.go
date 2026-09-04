@@ -6,8 +6,6 @@ package matterport
 import (
 	"context"
 	"fmt"
-
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // EndpointSource is implemented by Custom DPs that materialise
@@ -54,15 +52,19 @@ type ClusterServer interface {
 	MatterRead(attrID uint32) (value any, ok bool)
 
 	// MatterWrite applies an attribute write. The bridge has already
-	// decoded the TLV; `value` carries the cluster-native type. The
-	// priority is forwarded to the southbound command queue.
-	MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error
+	// decoded the TLV; `value` carries the cluster-native type.
+	//
+	// The southbound urgency is not a parameter: every write reaching
+	// a cluster server comes from a controller acting on a user's
+	// behalf, so implementations queue it at one fixed priority rather
+	// than negotiating one per call.
+	MatterWrite(ctx context.Context, attrID uint32, value any) error
 
 	// MatterInvoke dispatches a cluster command. `fields` is the
 	// cluster-native struct (or nil for parameterless commands) for
 	// the request payload; `response` is the cluster-native struct
 	// for the response, or nil for status-only commands.
-	MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (response any, err error)
+	MatterInvoke(ctx context.Context, cmdID uint32, fields any) (response any, err error)
 
 	// MatterReportable lists attribute IDs that emit Matter reports
 	// when the underlying DP fires OnEvent. Empty slice = none.
@@ -227,8 +229,8 @@ type ClusterCommandInvokePrivilege interface {
 // MeasurementClass classifies Generic.Sensor / BinarySensor and
 // Calculated DP instances by Matter cluster without name-matching at
 // publish time. The model layer computes this once at materialisation
-// from the same [hmenum.Parameter] classifier that already drives MQTT
-// payload routing; the bridge consumes it.
+// from the same parameter classifier that already drives MQTT payload
+// routing; the bridge consumes it.
 type MeasurementClass int
 
 // MeasurementClass values. Each constant corresponds to the

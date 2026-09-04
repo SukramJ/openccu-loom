@@ -50,7 +50,7 @@ func TestOnWithTimedOffArmsAndExpiryTurnsOff(t *testing.T) {
 
 	srv := onOffServer(t, l)
 	fields := map[uint8]any{0: uint64(0), 1: uint64(3), 2: uint64(2)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields); err != nil {
 		t.Fatalf("OnWithTimedOff arm error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 3 {
@@ -92,7 +92,7 @@ func TestOnWithTimedOffAcceptOnlyWhenOnWhileOffIsNoOp(t *testing.T) {
 
 	srv := onOffServer(t, l)
 	fields := map[uint8]any{0: uint64(1), 1: uint64(5), 2: uint64(5)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields); err != nil {
 		t.Fatalf("OnWithTimedOff while off error: %v", err)
 	}
 	if w.last != -1 {
@@ -114,7 +114,7 @@ func TestOnWithTimedOffAcceptOnlyWhenOnWhileOnExecutes(t *testing.T) {
 
 	srv := onOffServer(t, l)
 	fields := map[uint8]any{0: uint64(1), 1: uint64(6), 2: uint64(9)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields); err != nil {
 		t.Fatalf("OnWithTimedOff while on error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 6 {
@@ -143,11 +143,11 @@ func TestOnWithTimedOffDelayedOffGuard(t *testing.T) {
 	srv := onOffServer(t, l)
 
 	arm := map[uint8]any{0: uint64(0), 1: uint64(5), 2: uint64(10)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, arm, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, arm); err != nil {
 		t.Fatalf("arm error: %v", err)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("Off error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 0 {
@@ -165,7 +165,7 @@ func TestOnWithTimedOffDelayedOffGuard(t *testing.T) {
 
 	// AcceptOnlyWhenOn while off inside the guard → no-op.
 	gated := map[uint8]any{0: uint64(1), 1: uint64(0), 2: uint64(3)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, gated, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, gated); err != nil {
 		t.Fatalf("gated OnWithTimedOff error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4002); !ok || v.(uint16) != 10 {
@@ -174,7 +174,7 @@ func TestOnWithTimedOffDelayedOffGuard(t *testing.T) {
 
 	// Ungated OnWithTimedOff while off only lowers OffWaitTime.
 	lower := map[uint8]any{0: uint64(0), 1: uint64(0), 2: uint64(4)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, lower, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, lower); err != nil {
 		t.Fatalf("lowering OnWithTimedOff error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4002); !ok || v.(uint16) != 4 {
@@ -211,10 +211,10 @@ func TestOnCancelsDelayedOffGuard(t *testing.T) {
 	srv := onOffServer(t, l)
 
 	arm := map[uint8]any{0: uint64(0), 1: uint64(5), 2: uint64(8)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, arm, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, arm); err != nil {
 		t.Fatalf("arm error: %v", err)
 	}
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("Off error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 0 {
@@ -224,7 +224,7 @@ func TestOnCancelsDelayedOffGuard(t *testing.T) {
 		t.Fatalf("precondition: OffWaitTime after Off = (%v, %v), want (8, true)", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("On error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4002); !ok || v.(uint16) != 0 {
@@ -243,7 +243,7 @@ func TestOnWithTimedOffOnTimeTakesMaxOfRequestAndCurrent(t *testing.T) {
 	srv := onOffServer(t, l)
 
 	first := map[uint8]any{0: uint64(0), 1: uint64(10), 2: uint64(0)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, first, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, first); err != nil {
 		t.Fatalf("first arm error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 10 {
@@ -251,7 +251,7 @@ func TestOnWithTimedOffOnTimeTakesMaxOfRequestAndCurrent(t *testing.T) {
 	}
 
 	lower := map[uint8]any{0: uint64(0), 1: uint64(4), 2: uint64(0)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, lower, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, lower); err != nil {
 		t.Fatalf("lower re-arm error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 10 {
@@ -259,7 +259,7 @@ func TestOnWithTimedOffOnTimeTakesMaxOfRequestAndCurrent(t *testing.T) {
 	}
 
 	higher := map[uint8]any{0: uint64(0), 1: uint64(20), 2: uint64(0)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, higher, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, higher); err != nil {
 		t.Fatalf("higher re-arm error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 20 {
@@ -281,10 +281,10 @@ func TestOnTimeAttributeWriteStopsCountdownAtHoldOrZero(t *testing.T) {
 		l.OnLevel(0.5)
 		srv := onOffServer(t, l)
 		arm := map[uint8]any{0: uint64(0), 1: uint64(5), 2: uint64(0)}
-		if _, err := srv.MatterInvoke(context.Background(), 0x42, arm, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), 0x42, arm); err != nil {
 			t.Fatalf("arm error: %v", err)
 		}
-		if err := srv.MatterWrite(context.Background(), 0x4001, uint64(0xFFFF), hmenum.CommandPriorityHigh); err != nil {
+		if err := srv.MatterWrite(context.Background(), 0x4001, uint64(0xFFFF)); err != nil {
 			t.Fatalf("OnTime hold write error: %v", err)
 		}
 		l.matterTimedAdvance(context.Background())
@@ -300,10 +300,10 @@ func TestOnTimeAttributeWriteStopsCountdownAtHoldOrZero(t *testing.T) {
 		l.OnLevel(0.5)
 		srv := onOffServer(t, l)
 		arm := map[uint8]any{0: uint64(0), 1: uint64(5), 2: uint64(0)}
-		if _, err := srv.MatterInvoke(context.Background(), 0x42, arm, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), 0x42, arm); err != nil {
 			t.Fatalf("arm error: %v", err)
 		}
-		if err := srv.MatterWrite(context.Background(), 0x4001, uint64(0), hmenum.CommandPriorityHigh); err != nil {
+		if err := srv.MatterWrite(context.Background(), 0x4001, uint64(0)); err != nil {
 			t.Fatalf("OnTime zero write error: %v", err)
 		}
 		w.last = -1 // sentinel: any further write would overwrite this
@@ -320,7 +320,7 @@ func TestOnTimeAttributeWriteStopsCountdownAtHoldOrZero(t *testing.T) {
 		w := &stubWriter{}
 		l := timedRig(t, w)
 		srv := onOffServer(t, l)
-		if err := srv.MatterWrite(context.Background(), 0x4001, uint64(5), hmenum.CommandPriorityHigh); err != nil {
+		if err := srv.MatterWrite(context.Background(), 0x4001, uint64(5)); err != nil {
 			t.Fatalf("OnTime write error: %v", err)
 		}
 		l.matterTimedAdvance(context.Background())
@@ -339,28 +339,28 @@ func TestOnOffTimedAttributeWriteReadRoundTrip(t *testing.T) {
 	l := timedRig(t, &stubWriter{})
 	srv := onOffServer(t, l)
 
-	if err := srv.MatterWrite(context.Background(), 0x4002, uint64(7), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), 0x4002, uint64(7)); err != nil {
 		t.Fatalf("OffWaitTime write error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4002); !ok || v.(uint16) != 7 {
 		t.Fatalf("OffWaitTime read = (%v, %v), want (7, true)", v, ok)
 	}
 
-	if err := srv.MatterWrite(context.Background(), 0x4003, uint64(1), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), 0x4003, uint64(1)); err != nil {
 		t.Fatalf("StartUpOnOff write(1) error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4003); !ok || v.(uint8) != 1 {
 		t.Fatalf("StartUpOnOff read = (%v, %v), want (1, true)", v, ok)
 	}
 
-	if err := srv.MatterWrite(context.Background(), 0x4003, nil, hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), 0x4003, nil); err != nil {
 		t.Fatalf("StartUpOnOff write(null) error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4003); !ok || v != nil {
 		t.Fatalf("StartUpOnOff read after null write = (%v, %v), want (nil, true)", v, ok)
 	}
 
-	err := srv.MatterWrite(context.Background(), 0x4003, uint64(3), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), 0x4003, uint64(3))
 	if err == nil || !strings.Contains(err.Error(), "constraint") {
 		t.Fatalf("StartUpOnOff write(3) error = %v, want a constraint error", err)
 	}
@@ -388,12 +388,12 @@ func TestOnWithTimedOffConstraintErrorsOnCommandFields(t *testing.T) {
 	l := timedRig(t, &stubWriter{})
 	srv := onOffServer(t, l)
 
-	_, err := srv.MatterInvoke(context.Background(), 0x42, map[uint8]any{0: uint64(2)}, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x42, map[uint8]any{0: uint64(2)})
 	if err == nil || !strings.Contains(err.Error(), "constraint") {
 		t.Fatalf("OnOffControl=2 error = %v, want a constraint error", err)
 	}
 
-	_, err = srv.MatterInvoke(context.Background(), 0x42, map[uint8]any{1: uint64(0xFFFF)}, hmenum.CommandPriorityHigh)
+	_, err = srv.MatterInvoke(context.Background(), 0x42, map[uint8]any{1: uint64(0xFFFF)})
 	if err == nil || !strings.Contains(err.Error(), "constraint") {
 		t.Fatalf("OnTime=0xFFFF error = %v, want a constraint error", err)
 	}
@@ -411,7 +411,7 @@ func TestOnWithTimedOffTurnOnFailureRollsBackArm(t *testing.T) {
 
 	srv := onOffServer(t, l)
 	fields := map[uint8]any{0: uint64(0), 1: uint64(5), 2: uint64(0)}
-	_, err := srv.MatterInvoke(context.Background(), 0x42, fields, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x42, fields)
 	if err == nil {
 		t.Fatal("expected the write failure to propagate")
 	}
@@ -456,7 +456,7 @@ func TestChannelTeardownStopsTheTimedOnOffLoop(t *testing.T) {
 	// OnTime = 600 tenths (60 s), far beyond the test's own lifetime.
 	srv := onOffServer(t, l)
 	fields := map[uint8]any{0: uint64(0), 1: uint64(600), 2: uint64(0)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields); err != nil {
 		t.Fatalf("OnWithTimedOff arm error: %v", err)
 	}
 	l.timed.mu.Lock()

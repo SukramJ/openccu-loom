@@ -11,7 +11,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -259,7 +258,7 @@ func TestParityMatterJS_WindowCoveringCommandLists(t *testing.T) {
 			}
 
 			for _, id := range clusterCommands {
-				_, err := srv.MatterInvoke(context.Background(), id, uint16(5000), hmenum.CommandPriorityHigh)
+				_, err := srv.MatterInvoke(context.Background(), id, uint16(5000))
 				handled := !errors.Is(err, errMatterUnknownCommand)
 				if handled != advertised[id] {
 					t.Errorf("command 0x%02X: MatterInvoke handles=%v, advertised=%v", id, handled, advertised[id])

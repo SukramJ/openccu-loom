@@ -24,7 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -596,11 +595,11 @@ func (n *noopCluster) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (n *noopCluster) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (n *noopCluster) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (n *noopCluster) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (n *noopCluster) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 func (n *noopCluster) MatterReportable() []uint32 { return nil }

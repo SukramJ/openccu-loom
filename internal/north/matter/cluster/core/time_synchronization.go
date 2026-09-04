@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -84,7 +83,7 @@ func (t *TimeSynchronization) MatterRead(attrID uint32) (any, bool) {
 // MatterWrite implements [matterport.ClusterServer]. Every
 // attribute is read-only on the bridge — clients that try to set
 // TimeSource etc. get UnsupportedWrite.
-func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: TimeSynchronization attribute 0x%04X is read-only", attrID)
 }
 
@@ -102,7 +101,7 @@ const timeSyncCmdSetUTCTime uint32 = 0x00
 // commissioning error.
 // All other commands require feature flags the bridge does not advertise;
 // the IM dispatcher rejects them at the path level.
-func (t *TimeSynchronization) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (t *TimeSynchronization) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	if cmdID == timeSyncCmdSetUTCTime {
 		// Accept the command and return Success. The bridge's clock is
 		// managed by the host OS; no adjustment is applied here.

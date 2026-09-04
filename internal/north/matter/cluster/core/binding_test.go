@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestBinding_ClusterID(t *testing.T) {
@@ -54,7 +53,7 @@ func TestBinding_WriteSetsList(t *testing.T) {
 		{Node: 1, Endpoint: 2, Cluster: 0x0006, FabricIndex: 1},
 		{Node: 3, Group: 4, FabricIndex: 1},
 	}
-	if err := b.MatterWrite(ctx, 0x0000, targets, hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterWrite(ctx, 0x0000, targets); err != nil {
 		t.Fatalf("MatterWrite: %v", err)
 	}
 	v, ok := b.MatterRead(0x0000)
@@ -73,7 +72,7 @@ func TestBinding_WriteSetsList(t *testing.T) {
 func TestBinding_WriteWrongType(t *testing.T) {
 	t.Parallel()
 	b := core.NewBinding()
-	err := b.MatterWrite(context.Background(), 0x0000, "not-a-slice", hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0000, "not-a-slice")
 	if err == nil {
 		t.Fatal("expected error for wrong type, got nil")
 	}
@@ -82,7 +81,7 @@ func TestBinding_WriteWrongType(t *testing.T) {
 func TestBinding_WriteUnknownAttribute(t *testing.T) {
 	t.Parallel()
 	b := core.NewBinding()
-	err := b.MatterWrite(context.Background(), 0xBEEF, []core.TargetStruct{}, hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0xBEEF, []core.TargetStruct{})
 	if err == nil {
 		t.Fatal("expected error for unknown attribute, got nil")
 	}
@@ -93,7 +92,7 @@ func TestBinding_ReadReturnsDefensiveCopy(t *testing.T) {
 	b := core.NewBinding()
 	ctx := context.Background()
 	targets := []core.TargetStruct{{Node: 99, FabricIndex: 1}}
-	if err := b.MatterWrite(ctx, 0x0000, targets, hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterWrite(ctx, 0x0000, targets); err != nil {
 		t.Fatalf("MatterWrite: %v", err)
 	}
 	v1, _ := b.MatterRead(0x0000)
@@ -111,7 +110,7 @@ func TestBinding_InvokeReturnsError(t *testing.T) {
 	b := core.NewBinding()
 	ctx := context.Background()
 	for _, cmdID := range []uint32{0x00, 0x01} {
-		_, err := b.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := b.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -131,7 +130,7 @@ func TestBinding_ConcurrentReadWrite(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			targets := []core.TargetStruct{{Node: uint64(i), FabricIndex: 1}} //nolint:gosec // G115: i is a small goroutine index bounded by test parallelism count
-			_ = b.MatterWrite(ctx, 0x0000, targets, hmenum.CommandPriorityHigh)
+			_ = b.MatterWrite(ctx, 0x0000, targets)
 		}(i)
 		go func() {
 			defer wg.Done()

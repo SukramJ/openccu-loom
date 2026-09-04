@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
@@ -48,11 +47,11 @@ func (s *fakeServerFull) MatterRead(_ uint32) (any, bool) {
 	return s.readVal, s.readOK
 }
 
-func (s *fakeServerFull) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *fakeServerFull) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return s.writeErr
 }
 
-func (s *fakeServerFull) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *fakeServerFull) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return s.invokeResp, s.invokeErr
 }
 func (s *fakeServerFull) MatterReportable() []uint32 { return s.reportable }
@@ -94,11 +93,11 @@ func (s *globalAttrServer) MatterRead(attr uint32) (any, bool) {
 	return nil, false
 }
 
-func (s *globalAttrServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *globalAttrServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errors.New("read-only")
 }
 
-func (s *globalAttrServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *globalAttrServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, errors.New("no commands")
 }
 func (s *globalAttrServer) MatterReportable() []uint32 { return nil }
@@ -1026,11 +1025,11 @@ func (s *dvServer) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (s *dvServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *dvServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (s *dvServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *dvServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 func (s *dvServer) MatterReportable() []uint32 { return nil }
@@ -1090,11 +1089,11 @@ func (s *fabricScopedServer) MatterRead(_ uint32) (any, bool) {
 	return s.readVal, s.readOK
 }
 
-func (s *fabricScopedServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *fabricScopedServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (s *fabricScopedServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *fabricScopedServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 func (s *fabricScopedServer) MatterReportable() []uint32 { return nil }

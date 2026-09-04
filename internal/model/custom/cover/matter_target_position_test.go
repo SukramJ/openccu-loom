@@ -217,7 +217,7 @@ func TestCoverTargetPosition_GoToLiftPercentage_TracksIndependentlyOfCurrent(t *
 		t.Fatalf("baseline TargetPositionLift = (%v, %v), want (6000, true) — must mirror current", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 		t.Fatalf("GoToLiftPercentage(3000): %v", err)
 	}
 	target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
@@ -258,14 +258,14 @@ func TestCoverTargetPosition_UpOrOpenAndDownOrClose_SetExtremes(t *testing.T) {
 	c.OnLevel(0.4)
 	srv := c.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil); err != nil {
 		t.Fatalf("UpOrOpen: %v", err)
 	}
 	if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 0 {
 		t.Fatalf("TargetPositionLift after UpOrOpen = (%v, %v), want (0, true)", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil); err != nil {
 		t.Fatalf("DownOrClose: %v", err)
 	}
 	if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 10000 {
@@ -289,10 +289,10 @@ func TestCoverTargetPosition_StopMotionClearsTarget(t *testing.T) {
 		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
 		c.OnLevel(0.4)
 		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLift: %v", err)
 		}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
 			t.Fatalf("StopMotion: %v", err)
 		}
 		if w.last != true {
@@ -311,11 +311,11 @@ func TestCoverTargetPosition_StopMotionClearsTarget(t *testing.T) {
 		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{}) // SupportsStop defaults false
 		c.OnLevel(0.4)
 		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLift: %v", err)
 		}
 		wireAfterGoToLift := w.last
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
 			t.Fatalf("StopMotion: %v", err)
 		}
 		// Cover.Stop is a no-op without SupportsStop — no new wire write.
@@ -344,7 +344,7 @@ func TestCoverTargetPosition_DeferredWriteFailureKeepsCommandedTarget(t *testing
 	c.OnLevel(0.4)
 	srv := c.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 		t.Fatalf("MatterInvoke err=%v, want acceptance before the deferred write", err)
 	}
 	flushGoToWrites(&c.matterGoTo) // deferred write fails and is logged
@@ -373,7 +373,7 @@ func TestBlindTargetPosition_GoToLiftAndTilt_TrackAxesIndependently(t *testing.T
 	b.level2.OnEvent(0.6) // Matter tilt 4000.
 	srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 		t.Fatalf("GoToLiftPercentage: %v", err)
 	}
 	if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
@@ -387,7 +387,7 @@ func TestBlindTargetPosition_GoToLiftAndTilt_TrackAxesIndependently(t *testing.T
 		t.Fatalf("TargetPositionTilt = (%v, %v), want (4000, true) — still mirroring current", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
 		t.Fatalf("GoToTiltPercentage: %v", err)
 	}
 	if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 2500 {
@@ -412,7 +412,7 @@ func TestBlindTargetPosition_UpOrOpenAndDownOrClose_SetBothAxes(t *testing.T) {
 	b.level2.OnEvent(0.6)
 	srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil); err != nil {
 		t.Fatalf("UpOrOpen: %v", err)
 	}
 	lift, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
@@ -421,7 +421,7 @@ func TestBlindTargetPosition_UpOrOpenAndDownOrClose_SetBothAxes(t *testing.T) {
 		t.Fatalf("after UpOrOpen: lift=%v tilt=%v, want both 0", lift, tilt)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil); err != nil {
 		t.Fatalf("DownOrClose: %v", err)
 	}
 	lift, _ = srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
@@ -441,13 +441,13 @@ func TestBlindTargetPosition_StopMotionClearsBothAxes(t *testing.T) {
 	b.level2.OnEvent(0.6)
 	srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 		t.Fatalf("GoToLiftPercentage: %v", err)
 	}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
 		t.Fatalf("GoToTiltPercentage: %v", err)
 	}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
 		t.Fatalf("StopMotion: %v", err)
 	}
 
@@ -540,7 +540,7 @@ func TestCoverInferredTarget_ExternalMovementOverridesStaleTarget(t *testing.T) 
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil); err != nil {
 			t.Fatalf("DownOrClose: %v", err)
 		}
 		c.OnLevel(0.5) // CCU echo: cover halfway, Matter 5000.
@@ -555,7 +555,7 @@ func TestCoverInferredTarget_ExternalMovementOverridesStaleTarget(t *testing.T) 
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil); err != nil {
 			t.Fatalf("UpOrOpen: %v", err)
 		}
 		c.OnLevel(0.5)
@@ -578,7 +578,7 @@ func TestCoverInferredTarget_CommandedTargetAheadPreserved(t *testing.T) {
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
 		}
 		c.OnLevel(0.2) // CCU echo: Matter 8000 — commanded 3000 is ahead when opening.
@@ -593,7 +593,7 @@ func TestCoverInferredTarget_CommandedTargetAheadPreserved(t *testing.T) {
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(8000), hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(8000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
 		}
 		c.OnLevel(0.8) // CCU echo: Matter 2000 — commanded 8000 is ahead when closing.
@@ -633,7 +633,7 @@ func TestCoverInferredTarget_MotionStopSnapsTargetToCurrent(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
 		t.Fatalf("GoToLiftPercentage: %v", err)
 	}
 	c.OnLevel(0.2) // CCU echo: Matter 8000.
@@ -712,7 +712,7 @@ func TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop(t *testing.T) {
 	b.level2.OnEvent(0.6) // Matter tilt 4000.
 	srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
 		t.Fatalf("GoToTiltPercentage: %v", err)
 	}
 	b.OnDirection(DirectionDown) // external lift movement

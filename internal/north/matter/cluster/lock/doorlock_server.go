@@ -190,17 +190,29 @@ func (s *DoorLockServer) MatterRead(attrID uint32) (any, bool) {
 // MatterWrite implements [matterport.ClusterServer]. DoorLock has
 // no writable attributes in this projection; all state changes go through
 // commands.
-func (*DoorLockServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (*DoorLockServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: 0x%04X", errUnknownAttribute, attrID)
 }
+
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached this call defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // MatterInvoke implements [matterport.ClusterServer]. Dispatches
 // LockDoor / UnlockDoor / UnboltDoor to the underlying source and fires
 // the LockOperation event on success.
-func (s *DoorLockServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
+func (s *DoorLockServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any) (any, error) {
 	switch cmdID {
 	case wire.DoorLockCmdLockDoor, wire.DoorLockCmdUnlockDoor, wire.DoorLockCmdUnboltDoor:
-		if err := s.src.LockInvoke(ctx, cmdID, priority); err != nil {
+		if err := s.src.LockInvoke(ctx, cmdID, matterDispatchPriority); err != nil {
 			return nil, err
 		}
 		s.tracker().Bump()

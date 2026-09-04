@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // All tests use fakeFloat from measurement_test.go (same package, visible
@@ -193,7 +192,7 @@ func TestParityMatterJS_TempServer_MaxMeasuredValue(t *testing.T) {
 func TestParityMatterJS_TempServer_WriteAlwaysErrors(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewTemperatureServer(fakeFloat{val: 20.0, obs: true})
-	if err := s.MatterWrite(context.Background(), 0x0000, int16(2000), hmenum.CommandPriorityHigh); err == nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, int16(2000)); err == nil {
 		t.Error("MatterWrite on read-only cluster: expected error, got nil")
 	}
 }
@@ -206,7 +205,7 @@ func TestParityMatterJS_TempServer_WriteAlwaysErrors(t *testing.T) {
 func TestParityMatterJS_TempServer_InvokeAlwaysErrors(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewTemperatureServer(fakeFloat{val: 20.0, obs: true})
-	if _, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x00, nil); err == nil {
 		t.Error("MatterInvoke on cluster with no commands: expected error, got nil")
 	}
 }

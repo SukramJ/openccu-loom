@@ -11,7 +11,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -158,12 +157,12 @@ func (d *Descriptor) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite always rejects — Descriptor has no writable attributes.
-func (d *Descriptor) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (d *Descriptor) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: 0x%04X", errDescriptorReadOnly, attrID)
 }
 
 // MatterInvoke always rejects — Descriptor has no commands.
-func (d *Descriptor) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (d *Descriptor) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: Descriptor has no commands (got 0x%02X)", cmdID)
 }
 

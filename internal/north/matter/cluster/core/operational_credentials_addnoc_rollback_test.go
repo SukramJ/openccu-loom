@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	mstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // replaceACLFailStore wraps fakeStore and injects a failure on ReplaceACL.
@@ -76,8 +75,7 @@ func TestAddNOC_ReplaceACLFailure_CleansUpGroupKeys(t *testing.T) {
 
 	// Step 1: AddTrustedRootCertificate — sets pendingTrustRoot.
 	if _, err := oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 
@@ -100,8 +98,7 @@ func TestAddNOC_ReplaceACLFailure_CleansUpGroupKeys(t *testing.T) {
 			IPKValue:         ipk,
 			CaseAdminSubject: 0x0001_0203_0405_0607,
 			AdminVendorID:    0x1234,
-		},
-		hmenum.CommandPriorityHigh)
+		})
 	if err != nil {
 		t.Fatalf("AddNOC: unexpected IM error: %v", err)
 	}
@@ -168,8 +165,7 @@ func TestAddNOC_UpsertIdentityFailure_RevertsViaCanonicalHelper(t *testing.T) {
 	rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
 
 	if _, err := oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 
@@ -186,8 +182,7 @@ func TestAddNOC_UpsertIdentityFailure_RevertsViaCanonicalHelper(t *testing.T) {
 			IPKValue:         ipk,
 			CaseAdminSubject: 0x0001_0203_0405_0607,
 			AdminVendorID:    0x1234,
-		},
-		hmenum.CommandPriorityHigh)
+		})
 	if err != nil {
 		t.Fatalf("AddNOC: unexpected IM error: %v", err)
 	}
@@ -250,8 +245,7 @@ func TestAddNOC_InvalidCaseAdminSubject_PersistsNothing(t *testing.T) {
 			}
 			rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
 			if _, err := oc.MatterInvoke(ctx, 0x0B,
-				core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-				hmenum.CommandPriorityHigh); err != nil {
+				core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}); err != nil {
 				t.Fatalf("AddTrustedRootCertificate: %v", err)
 			}
 			pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
@@ -263,8 +257,7 @@ func TestAddNOC_InvalidCaseAdminSubject_PersistsNothing(t *testing.T) {
 					IPKValue:         make([]byte, 16),
 					CaseAdminSubject: subject,
 					AdminVendorID:    0x1234,
-				},
-				hmenum.CommandPriorityHigh)
+				})
 			if err != nil {
 				t.Fatalf("AddNOC: unexpected IM error: %v", err)
 			}
@@ -319,8 +312,7 @@ func TestAddNOC_VersionedCASEAuthTagSubjectIsAccepted(t *testing.T) {
 	}
 	rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
 	if _, err := oc.MatterInvoke(ctx, 0x0B,
-		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
-		hmenum.CommandPriorityHigh); err != nil {
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 	pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
@@ -331,7 +323,7 @@ func TestAddNOC_VersionedCASEAuthTagSubjectIsAccepted(t *testing.T) {
 		IPKValue:         make([]byte, 16),
 		CaseAdminSubject: catSubject,
 		AdminVendorID:    0x1234,
-	}, hmenum.CommandPriorityHigh)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC: unexpected IM error: %v", err)
 	}
@@ -367,7 +359,7 @@ func TestAddNOC_VersionedCASEAuthTagSubjectIsAccepted(t *testing.T) {
 			FabricIndex: e.FabricIndex,
 		})
 	}
-	if err := ac.MatterWrite(ctx, 0x0000, wire, hmenum.CommandPriorityHigh); err != nil {
+	if err := ac.MatterWrite(ctx, 0x0000, wire); err != nil {
 		t.Fatalf("ACL write-back of the AddNOC default entry: %v", err)
 	}
 }

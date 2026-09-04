@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -421,7 +420,7 @@ func (a *AccessControl) MatterReadFiltered(ctx context.Context, attrID uint32) (
 // Apple times out after 10 s and tears the fabric down via
 // RemoveFabric. Extension (0x0001) is not implemented — matter.js does
 // the same and Apple does not write it.
-func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
+func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value any) error { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	if attrID == accessControlAttrACL {
 		entries, ok := value.([]AccessControlEntryStruct)
 		if !ok {
@@ -742,7 +741,7 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 }
 
 // MatterInvoke — no commands; AccessControl in 1.5.1 is attribute-only.
-func (a *AccessControl) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (a *AccessControl) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: AccessControl has no command 0x%X", cmdID)
 }
 

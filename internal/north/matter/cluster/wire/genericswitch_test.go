@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -210,7 +209,7 @@ func TestGenericSwitch_Read_UnknownAttr_ReturnsFalse(t *testing.T) {
 func TestGenericSwitch_Write_ReturnsError(t *testing.T) {
 	t.Parallel()
 	gs := newSwitch(1, 2, false)
-	err := gs.MatterWrite(context.Background(), switchAttrCurrentPos, uint8(1), hmenum.CommandPriorityHigh)
+	err := gs.MatterWrite(context.Background(), switchAttrCurrentPos, uint8(1))
 	if err == nil {
 		t.Error("MatterWrite returned nil error for read-only cluster")
 	}
@@ -219,7 +218,7 @@ func TestGenericSwitch_Write_ReturnsError(t *testing.T) {
 func TestGenericSwitch_Invoke_ReturnsError(t *testing.T) {
 	t.Parallel()
 	gs := newSwitch(1, 2, false)
-	_, err := gs.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := gs.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke returned nil error for cluster with no commands")
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -316,7 +315,7 @@ func (d *TopologyDispatcher) Invoke(ctx context.Context, path im.ConcreteCommand
 		if srv.MatterClusterID() != path.Cluster {
 			continue
 		}
-		resp, err := srv.MatterInvoke(ctx, path.Command, fields, hmenum.CommandPriorityHigh)
+		resp, err := srv.MatterInvoke(ctx, path.Command, fields)
 		if err != nil {
 			status, cs, hasCS := classifyError(err, invokeErrorStatus)
 			return im.InvokeResult{Path: path, Response: resp, Status: status, ClusterStatus: cs, HasClusterStatus: hasCS}
@@ -592,7 +591,7 @@ func writeOne(ctx context.Context, srv matterport.ClusterServer, path im.Concret
 	if value.IsNull {
 		v = nil
 	}
-	if err := srv.MatterWrite(ctx, path.Attribute, v, hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(ctx, path.Attribute, v); err != nil {
 		status, cs, hasCS := classifyError(err, writeErrorStatus)
 		return im.WriteResult{Path: path, Status: status, ClusterStatus: cs, HasClusterStatus: hasCS}
 	}

@@ -127,7 +127,7 @@ func TestColorTempServerKelvinReadAndWrite(t *testing.T) {
 		}
 	}
 	// Issue MoveToColorTemperature(370 mireds ≈ 2700 K).
-	if _, err := cc.MatterInvoke(context.Background(), 0x0A, uint16(370), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := cc.MatterInvoke(context.Background(), 0x0A, uint16(370)); err != nil {
 		t.Fatalf("MoveToColorTemperature err: %v", err)
 	}
 	// Verify Kelvin reached the wire.
@@ -180,7 +180,7 @@ func TestColorLightHueSatRoundTrip(t *testing.T) {
 		}
 	}
 	// Matter 127 hue ≈ 180°, 254 saturation = 1.0.
-	if _, err := hs.MatterInvoke(context.Background(), 0x06, wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := hs.MatterInvoke(context.Background(), 0x06, wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}); err != nil {
 		t.Fatalf("MoveToHueAndSaturation err: %v", err)
 	}
 	if ch.Parameter(hmenum.ParameterHue) == nil {
@@ -204,7 +204,7 @@ func TestColorLightHueSatMissingFieldsRejected(t *testing.T) {
 		}
 	}
 	fields := map[string]any{"hue": uint8(64)} // missing saturation
-	_, err := hs.MatterInvoke(context.Background(), 0x06, fields, hmenum.CommandPriorityHigh)
+	_, err := hs.MatterInvoke(context.Background(), 0x06, fields)
 	if !errors.Is(err, errMatterValueType) {
 		t.Fatalf("err = %v, want errMatterValueType for missing saturation", err)
 	}
@@ -278,7 +278,7 @@ func TestRGBWLightInvokeMoveToCTRequiresTunableMode(t *testing.T) {
 			rgbw = v
 		}
 	}
-	if _, err := rgbw.MatterInvoke(context.Background(), 0x0A, uint16(370), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := rgbw.MatterInvoke(context.Background(), 0x0A, uint16(370)); err != nil {
 		t.Fatalf("MoveToColorTemperature err: %v", err)
 	}
 	if ch.Parameter(hmenum.ParameterColorTemperature) == nil {

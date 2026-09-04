@@ -17,6 +17,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached these calls defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
+
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
 // Shared across all cluster servers that project this Light (OnOff,
 // LevelControl, ColorControl). Bumped on every successful write /
@@ -271,7 +283,7 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s lightOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
+func (s lightOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	switch attrID {
 	case matterAttrOnOffOnOff:
 		on, ok := value.(bool)
@@ -280,9 +292,9 @@ func (s lightOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value 
 		}
 		var err error
 		if on {
-			err = s.l.TurnOn(ctx, priority)
+			err = s.l.TurnOn(ctx, matterDispatchPriority)
 		} else {
-			err = s.l.TurnOff(ctx, priority)
+			err = s.l.TurnOff(ctx, matterDispatchPriority)
 		}
 		if err != nil {
 			return err
@@ -341,28 +353,28 @@ func (s lightOnOffServer) MinWritePrivilege(attrID uint32) uint8 {
 	return 3 // Operate
 }
 
-func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	var err error
 	switch cmdID {
 	case matterCmdOff:
-		err = s.l.TurnOff(ctx, priority)
+		err = s.l.TurnOff(ctx, matterDispatchPriority)
 		if err == nil {
 			s.l.matterTimedHandleOff()
 		}
 	case matterCmdOn:
-		err = s.l.TurnOn(ctx, priority)
+		err = s.l.TurnOn(ctx, matterDispatchPriority)
 		if err == nil {
 			s.l.matterTimedHandleOn()
 		}
 	case matterCmdToggle:
 		on, observed := s.l.IsOn()
 		if !observed || !on {
-			err = s.l.TurnOn(ctx, priority)
+			err = s.l.TurnOn(ctx, matterDispatchPriority)
 			if err == nil {
 				s.l.matterTimedHandleOn()
 			}
 		} else {
-			err = s.l.TurnOff(ctx, priority)
+			err = s.l.TurnOff(ctx, matterDispatchPriority)
 			if err == nil {
 				s.l.matterTimedHandleOff()
 			}
@@ -374,7 +386,7 @@ func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 		// the effect as best-effort. on-off.element.ts:41. matter.js
 		// OnOffServer.ts:158-169 also clears GlobalSceneControl here —
 		// a plain Off never touches it.
-		err = s.l.TurnOff(ctx, priority)
+		err = s.l.TurnOff(ctx, matterDispatchPriority)
 		if err == nil {
 			s.l.matterTimedHandleOff()
 			s.l.matterClearGlobalSceneControl()
@@ -382,7 +394,7 @@ func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 	case matterCmdOnWithRecallGlobalScene:
 		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
 		// recall collapses to a plain On. on-off.element.ts:46.
-		err = s.l.TurnOn(ctx, priority)
+		err = s.l.TurnOn(ctx, matterDispatchPriority)
 		if err == nil {
 			s.l.matterTimedHandleOn()
 		}
@@ -394,7 +406,7 @@ func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 		if ferr != nil {
 			return nil, ferr
 		}
-		err = s.l.matterOnWithTimedOff(ctx, control, onTime, offWaitTime, priority)
+		err = s.l.matterOnWithTimedOff(ctx, control, onTime, offWaitTime)
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -519,7 +531,7 @@ func (s lightLevelServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s lightLevelServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
+func (s lightLevelServer) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	if attrID != matterAttrLevelCurrent {
 		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 	}
@@ -527,14 +539,14 @@ func (s lightLevelServer) MatterWrite(ctx context.Context, attrID uint32, value 
 	if !ok {
 		return fmt.Errorf("%w: CurrentLevel write expected uint8, got %T", errMatterValueType, value)
 	}
-	if err := s.l.SetLevel(ctx, matterLevelToHM(b), priority); err != nil {
+	if err := s.l.SetLevel(ctx, matterLevelToHM(b), matterDispatchPriority); err != nil {
 		return err
 	}
 	s.l.dataVersion.Bump()
 	return nil
 }
 
-func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	switch cmdID {
 	case matterCmdMoveToLevel, matterCmdMoveToLevelWithOnOff:
 		req, err := extractMoveToLevel(fields)
@@ -567,13 +579,13 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 			// atomic put_paramset, so the bridge delegates the whole
 			// transition to the device. Devices without RAMP_TIME
 			// (Capabilities.Transition unset) keep the instant path.
-			if err := s.setLevelRamped(ctx, target, ramp, priority); err != nil {
+			if err := s.setLevelRamped(ctx, target, ramp, matterDispatchPriority); err != nil {
 				return nil, err
 			}
 			s.l.dataVersion.Bump()
 			return nil, nil
 		}
-		if err := s.l.SetLevel(ctx, target, priority); err != nil {
+		if err := s.l.SetLevel(ctx, target, matterDispatchPriority); err != nil {
 			return nil, err
 		}
 		s.l.dataVersion.Bump()
@@ -644,7 +656,7 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 			// spec win here. Single-LEVEL-knob projection: LEVEL=0.
 			target = 0
 		}
-		if err := s.l.SetLevel(ctx, target, priority); err != nil {
+		if err := s.l.SetLevel(ctx, target, matterDispatchPriority); err != nil {
 			return nil, err
 		}
 		s.l.dataVersion.Bump()

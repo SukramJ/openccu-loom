@@ -12,7 +12,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -158,7 +157,7 @@ func (i *Identify) MatterRead(attrID uint32) (any, bool) {
 // §1.2.5.1. Spec wording: "The IdentifyTime attribute SHALL be in
 // units of seconds, and SHALL be writable." — clients drive Identify
 // either via the command or by setting the attribute directly.
-func (i *Identify) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (i *Identify) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != identifyAttrTime {
 		return fmt.Errorf("matter: Identify attribute 0x%04X is read-only", attrID)
 	}
@@ -175,7 +174,7 @@ func (i *Identify) MatterWrite(_ context.Context, attrID uint32, value any, _ hm
 }
 
 // MatterInvoke dispatches Identify and TriggerEffect commands.
-func (i *Identify) MatterInvoke(_ context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (i *Identify) MatterInvoke(_ context.Context, cmdID uint32, fields any) (any, error) {
 	switch cmdID {
 	case identifyCmdIdentify:
 		// Identify command argument is a struct {IdentifyTime: uint16}

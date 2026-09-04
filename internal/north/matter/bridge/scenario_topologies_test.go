@@ -170,11 +170,11 @@ func (n *scenarioFakeFabricReader) MatterReadFiltered(ctx context.Context, attrI
 	return fabric, true
 }
 
-func (*scenarioFakeFabricReader) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (*scenarioFakeFabricReader) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (*scenarioFakeFabricReader) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (*scenarioFakeFabricReader) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 func (*scenarioFakeFabricReader) MatterReportable() []uint32 { return []uint32{0x0000} }
@@ -300,11 +300,11 @@ func (l *scenarioFakeLevelControlServer) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-func (*scenarioFakeLevelControlServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (*scenarioFakeLevelControlServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (*scenarioFakeLevelControlServer) MatterInvoke(_ context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (*scenarioFakeLevelControlServer) MatterInvoke(_ context.Context, cmdID uint32, fields any) (any, error) {
 	if cmdID != 0x00 && cmdID != 0x04 {
 		return nil, fmt.Errorf("unknown LevelControl cmd 0x%02X", cmdID)
 	}
@@ -338,7 +338,7 @@ func (n *scenarioFakeOnOffEndpointSource) MatterRead(attrID uint32) (any, bool) 
 // *custom.Switch translates the write into a CCU SetValue; the fake
 // just mutates the boolean and bumps DataVersion so subsequent
 // reads / reports observe the new state.
-func (n *scenarioFakeOnOffEndpointSource) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (n *scenarioFakeOnOffEndpointSource) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != 0x0000 {
 		return nil
 	}
@@ -353,7 +353,7 @@ func (n *scenarioFakeOnOffEndpointSource) MatterWrite(_ context.Context, attrID 
 	return nil
 }
 
-func (*scenarioFakeOnOffEndpointSource) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (*scenarioFakeOnOffEndpointSource) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 

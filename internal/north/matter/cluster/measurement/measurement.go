@@ -23,7 +23,6 @@ import (
 	"math"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -368,12 +367,12 @@ func (s *TemperatureServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Temperature Measurement cluster is read-only at the wire layer.
-func (s *TemperatureServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *TemperatureServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Temperature Measurement cluster has no commands.
-func (s *TemperatureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *TemperatureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -469,12 +468,12 @@ func (s *HumidityServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Relative Humidity Measurement cluster is read-only at the wire layer.
-func (s *HumidityServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *HumidityServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Relative Humidity Measurement cluster has no commands.
-func (s *HumidityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *HumidityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -556,12 +555,12 @@ func (s *IlluminanceServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Illuminance Measurement cluster is read-only at the wire layer.
-func (s *IlluminanceServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *IlluminanceServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Illuminance Measurement cluster has no commands.
-func (s *IlluminanceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *IlluminanceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -661,12 +660,12 @@ func (s *PressureServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Pressure Measurement cluster is read-only at the wire layer.
-func (s *PressureServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *PressureServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Pressure Measurement cluster has no commands.
-func (s *PressureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *PressureServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -749,12 +748,12 @@ func (s *BooleanStateServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Boolean State cluster is read-only at the wire layer.
-func (s *BooleanStateServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *BooleanStateServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Boolean State cluster has no commands.
-func (s *BooleanStateServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *BooleanStateServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -829,12 +828,12 @@ func (s *OccupancySensingServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Occupancy Sensing cluster is read-only at the wire layer.
-func (s *OccupancySensingServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *OccupancySensingServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Occupancy Sensing cluster has no commands.
-func (s *OccupancySensingServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *OccupancySensingServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1092,12 +1091,12 @@ func (s *ElectricalPowerServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Electrical Power Measurement cluster is read-only at the wire layer.
-func (s *ElectricalPowerServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *ElectricalPowerServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Electrical Power Measurement cluster has no commands.
-func (s *ElectricalPowerServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *ElectricalPowerServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1234,12 +1233,12 @@ func (s *ElectricalEnergyServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Electrical Energy Measurement cluster is read-only at the wire layer.
-func (s *ElectricalEnergyServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *ElectricalEnergyServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Electrical Energy Measurement cluster has no commands.
-func (s *ElectricalEnergyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *ElectricalEnergyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1376,12 +1375,12 @@ func (s *AirQualityServer) level() uint8 {
 }
 
 // MatterWrite returns errReadOnly — AirQuality carries a single "R V" attribute.
-func (s *AirQualityServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *AirQualityServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Air Quality cluster has no commands.
-func (s *AirQualityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *AirQualityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1449,11 +1448,11 @@ func (s *concentrationServer) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-func (s *concentrationServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *concentrationServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
-func (s *concentrationServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *concentrationServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1656,12 +1655,12 @@ func (s *PowerSourceServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — the Matter Power Source cluster is read-only at the wire layer.
-func (s *PowerSourceServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *PowerSourceServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — the Matter Power Source cluster has no commands.
-func (s *PowerSourceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *PowerSourceServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 
@@ -1772,12 +1771,12 @@ func (s *PowerTopologyServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite returns errReadOnly — PowerTopology is read-only at the wire layer.
-func (s *PowerTopologyServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *PowerTopologyServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return errReadOnly
 }
 
 // MatterInvoke returns errNoCommands — PowerTopology has no commands.
-func (s *PowerTopologyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *PowerTopologyServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
 }
 

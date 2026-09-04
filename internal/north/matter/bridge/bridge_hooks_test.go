@@ -17,7 +17,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -180,11 +179,11 @@ func (f *fakeMatterClusterServer) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (f *fakeMatterClusterServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (f *fakeMatterClusterServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (f *fakeMatterClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (f *fakeMatterClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 

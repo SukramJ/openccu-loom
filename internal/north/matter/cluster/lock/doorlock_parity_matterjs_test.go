@@ -198,7 +198,7 @@ func TestParityMatterJS_DoorLockCommandDispatch(t *testing.T) {
 			srv := doorlockcluster.NewDoorLockServer(doorlockcluster.DoorLockConfig{Source: src})
 			dvBefore := srv.MatterDataVersion()
 
-			_, err := srv.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+			_, err := srv.MatterInvoke(context.Background(), cmdID, nil)
 			if err != nil {
 				t.Fatalf("MatterInvoke(0x%02X) error: %v", cmdID, err)
 			}

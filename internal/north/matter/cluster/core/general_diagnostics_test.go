@@ -12,7 +12,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/matterport"
 )
 
@@ -146,7 +145,7 @@ func TestGenDiag_WriteReturnsError(t *testing.T) {
 	t.Parallel()
 	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
 	ctx := context.Background()
-	err := g.MatterWrite(ctx, 0x0001, uint16(0), hmenum.CommandPriorityHigh)
+	err := g.MatterWrite(ctx, 0x0001, uint16(0))
 	if err == nil {
 		t.Fatal("expected error for write, got nil")
 	}
@@ -160,7 +159,7 @@ func TestGenDiag_InvokeReturnsError(t *testing.T) {
 	// TimeSnapshot is implemented (Matter 1.5) — see
 	// TestGenDiag_TimeSnapshot.
 	for _, cmdID := range []uint32{0x00, 0xFF} {
-		_, err := g.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := g.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -184,7 +183,7 @@ type genDiagStatusCoder interface {
 func TestGenDiag_TestEventTrigger_ReturnsConstraintError(t *testing.T) {
 	t.Parallel()
 	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
-	_, err := g.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := g.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Fatal("TestEventTrigger: expected error, got nil")
 	}
@@ -215,7 +214,7 @@ func TestGenDiag_MatterAcceptedCommands_IncludesTestEventTrigger(t *testing.T) {
 func TestGenDiag_TimeSnapshot(t *testing.T) {
 	t.Parallel()
 	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
-	resp, err := g.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh)
+	resp, err := g.MatterInvoke(context.Background(), 0x01, nil)
 	if err != nil {
 		t.Fatalf("TimeSnapshot: %v", err)
 	}

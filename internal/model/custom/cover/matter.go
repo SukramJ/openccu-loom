@@ -14,6 +14,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached these calls defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
+
 // Compile-time assertions: Cover, Blind, and Garage participate in the
 // Matter source surface (ADR 0012). Each projects onto a Matter
 // WindowCovering (0x0102) cluster with type-specific FeatureMap and
@@ -497,7 +509,7 @@ func (s coverWCServer) MatterRead(attrID uint32) (any, bool) {
 // (0x0017) is the only writable attribute — window-covering-cluster.
 // element.ts:76-79 declares it "RW VM" with constraint "max 15". See
 // [validateWindowCoveringMode] for the accept-but-inert rationale.
-func (s coverWCServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (s coverWCServer) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != matterAttrMode {
 		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 	}
@@ -509,7 +521,7 @@ func (s coverWCServer) MatterWrite(_ context.Context, attrID uint32, value any, 
 // (Manage) per window-covering-cluster.element.ts:76-79.
 func (s coverWCServer) MinWritePrivilege(_ uint32) uint8 { return 4 }
 
-func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
@@ -517,14 +529,14 @@ func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		// full-open command lands — drop it before the immediate write.
 		s.c.matterGoTo.cancel(goToAxisLift)
 		// Target lift = fully open (0). WindowCoveringServer.ts:522.
-		err = s.c.Open(ctx, priority)
+		err = s.c.Open(ctx, matterDispatchPriority)
 		if err == nil {
 			s.c.matterTarget.setLift(0)
 		}
 	case matterCmdDownOrClose:
 		s.c.matterGoTo.cancel(goToAxisLift)
 		// Target lift = fully closed (10000). WindowCoveringServer.ts:546.
-		err = s.c.Close(ctx, priority)
+		err = s.c.Close(ctx, matterDispatchPriority)
 		if err == nil {
 			s.c.matterTarget.setLift(matterCoverPctMax)
 		}
@@ -535,7 +547,7 @@ func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		s.c.matterGoTo.cancelAll()
 		// Snap the target back to the current position.
 		// WindowCoveringServer.ts:490 handleStopMovement.
-		err = s.c.Stop(ctx, priority)
+		err = s.c.Stop(ctx, matterDispatchPriority)
 		if err == nil {
 			s.c.matterTarget.clear()
 		}
@@ -550,7 +562,7 @@ func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		dispatchGoToPercentage(ctx, &s.c.matterGoTo, goToAxisLift, s.c.Address(), pct,
 			s.c.Position, s.c.matterTarget.setLift,
 			func(ctx context.Context, hmLevel float64) error {
-				return s.c.SetPosition(ctx, hmLevel, priority)
+				return s.c.SetPosition(ctx, hmLevel, matterDispatchPriority)
 			})
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
@@ -687,7 +699,7 @@ func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 // MatterWrite implements [interfaces.MatterClusterServer]. See
 // [coverWCServer.MatterWrite] — the Mode attribute has the same
 // accept-valid-writes contract on every WindowCovering variant.
-func (s blindWCServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (s blindWCServer) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != matterAttrMode {
 		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 	}
@@ -699,7 +711,7 @@ func (s blindWCServer) MatterWrite(_ context.Context, attrID uint32, value any, 
 // (Manage) per window-covering-cluster.element.ts:76-79.
 func (s blindWCServer) MinWritePrivilege(_ uint32) uint8 { return 4 }
 
-func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
@@ -708,7 +720,7 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		s.b.matterGoTo.cancelAll()
 		// Both position-aware axes target fully open (0).
 		// WindowCoveringServer.ts:522-525.
-		err = s.b.Open(ctx, priority)
+		err = s.b.Open(ctx, matterDispatchPriority)
 		if err == nil {
 			s.b.matterTarget.setLift(0)
 			s.b.matterTarget.setTilt(0)
@@ -717,7 +729,7 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		s.b.matterGoTo.cancelAll()
 		// Both position-aware axes target fully closed (10000).
 		// WindowCoveringServer.ts:546-549.
-		err = s.b.Close(ctx, priority)
+		err = s.b.Close(ctx, matterDispatchPriority)
 		if err == nil {
 			s.b.matterTarget.setLift(matterCoverPctMax)
 			s.b.matterTarget.setTilt(matterCoverPctMax)
@@ -727,7 +739,7 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		s.b.matterGoTo.cancelAll()
 		// Snap both targets back to the current positions.
 		// WindowCoveringServer.ts:490-493 handleStopMovement.
-		err = s.b.Stop(ctx, priority)
+		err = s.b.Stop(ctx, matterDispatchPriority)
 		if err == nil {
 			s.b.matterTarget.clear()
 		}
@@ -742,7 +754,7 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		dispatchGoToPercentage(ctx, &s.b.matterGoTo, goToAxisLift, s.b.Address(), pct,
 			s.b.Position, s.b.matterTarget.setLift,
 			func(ctx context.Context, hmLevel float64) error {
-				return s.b.SetPosition(ctx, hmLevel, priority)
+				return s.b.SetPosition(ctx, hmLevel, matterDispatchPriority)
 			})
 	case matterCmdGoToTiltPercentage:
 		pct, e := extractGoToPercentage(fields)
@@ -753,7 +765,7 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		dispatchGoToPercentage(ctx, &s.b.matterGoTo, goToAxisTilt, s.b.Address(), pct,
 			s.b.TiltPosition, s.b.matterTarget.setTilt,
 			func(ctx context.Context, hmLevel float64) error {
-				return s.b.SetTilt(ctx, hmLevel, priority)
+				return s.b.SetTilt(ctx, hmLevel, matterDispatchPriority)
 			})
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)

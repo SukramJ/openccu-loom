@@ -1140,7 +1140,7 @@ func TestClimateThermostatUIServerReadUnknownAttr(t *testing.T) {
 func TestClimateThermostatUIServerMatterWrite(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0204)
-	err := srv.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), 0x0000, nil)
 	if err == nil {
 		t.Error("MatterWrite on UI cluster should return error")
 	}
@@ -1245,7 +1245,7 @@ func TestClimateThermostatServerMatterWriteSetpoint(t *testing.T) {
 	srv := findCluster(t, r.climate, 0x0201)
 
 	// Write 2200 → 22.00°C via OccupiedHeatSetpoint.
-	err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, int16(2200), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, int16(2200))
 	if err != nil {
 		t.Fatalf("MatterWrite setpoint: %v", err)
 	}
@@ -1254,7 +1254,7 @@ func TestClimateThermostatServerMatterWriteSetpoint(t *testing.T) {
 func TestClimateThermostatServerMatterWriteSetpointBadType(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, "not-int16", hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, "not-int16")
 	if err == nil {
 		t.Error("MatterWrite with bad type should return error")
 	}
@@ -1272,7 +1272,7 @@ func TestClimateThermostatServerMatterWriteSystemMode(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto, hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto)
 	if err == nil {
 		t.Fatal("MatterWrite SystemMode=Auto on a heating-only device should be rejected")
 	}
@@ -1288,7 +1288,7 @@ func TestClimateThermostatServerMatterWriteSystemMode(t *testing.T) {
 func TestClimateThermostatServerMatterWriteSystemModeBadType(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, "not-uint8", hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, "not-uint8")
 	if err == nil {
 		t.Error("MatterWrite SystemMode with bad type should return error")
 	}
@@ -1297,7 +1297,7 @@ func TestClimateThermostatServerMatterWriteSystemModeBadType(t *testing.T) {
 func TestClimateThermostatServerMatterWriteUnknownAttr(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), 0xFFF0, nil, hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), 0xFFF0, nil)
 	if err == nil {
 		t.Error("MatterWrite unknown attr should return error")
 	}
@@ -1307,7 +1307,7 @@ func TestClimateThermostatServerMatterWriteSystemModeUnknownMode(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
 	// Mode 0x7F is not mapped by matterToHmMode.
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, uint8(0x7F), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, uint8(0x7F))
 	if err == nil {
 		t.Error("MatterWrite with unknown SystemMode value should return error")
 	}
@@ -1433,7 +1433,7 @@ func TestClimateThermostatServerMatterInvokeSetpointRaiseLower(t *testing.T) {
 	srv := findCluster(t, r.climate, 0x0201)
 
 	fields := map[string]any{"mode": uint8(0), "amount": int8(10)} // +1.0°C
-	resp, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh)
+	resp, err := srv.MatterInvoke(context.Background(), 0x00, fields)
 	if err != nil {
 		t.Fatalf("SetpointRaiseLower +1°C: %v", err)
 	}
@@ -1443,7 +1443,7 @@ func TestClimateThermostatServerMatterInvokeSetpointRaiseLower(t *testing.T) {
 func TestClimateThermostatServerMatterInvokeUnknownCmd(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	_, err := srv.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0xFF, nil)
 	if err == nil {
 		t.Error("MatterInvoke with unknown cmd should return error")
 	}
@@ -1454,7 +1454,7 @@ func TestClimateThermostatServerMatterInvokeNoSetpoint(t *testing.T) {
 	// No setpoint observation — invoke should fail.
 	srv := findCluster(t, r.climate, 0x0201)
 	fields := map[string]any{"mode": uint8(0), "amount": int8(10)}
-	_, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x00, fields)
 	if err == nil {
 		t.Error("SetpointRaiseLower without baseline setpoint should return error")
 	}
@@ -1888,7 +1888,7 @@ func TestClimateThermostatUIServerReadFeatureMap(t *testing.T) {
 func TestClimateThermostatUIServerMatterInvoke(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0204)
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke on UI cluster should always return error")
 	}

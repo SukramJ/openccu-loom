@@ -11,7 +11,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func newGKM(t *testing.T) *core.GroupKeyManagement {
@@ -140,7 +139,7 @@ func TestGKM_SetCurrentFabric(t *testing.T) {
 	gkm := newGKM(t)
 	gkm.SetCurrentFabric(3)
 	// Invoke should now proceed (fabric != 0).
-	_, err := gkm.MatterInvoke(context.Background(), 0x04 /*KeySetReadAllIndices*/, nil, hmenum.CommandPriorityHigh)
+	_, err := gkm.MatterInvoke(context.Background(), 0x04 /*KeySetReadAllIndices*/, nil)
 	if err != nil {
 		t.Fatalf("KeySetReadAllIndices after SetCurrentFabric: %v", err)
 	}
@@ -150,7 +149,7 @@ func TestGKM_InvokeWithoutFabric_Fails(t *testing.T) {
 	t.Parallel()
 	gkm := newGKM(t)
 	// fabric == 0 (initial) → error.
-	_, err := gkm.MatterInvoke(context.Background(), 0x04, nil, hmenum.CommandPriorityHigh)
+	_, err := gkm.MatterInvoke(context.Background(), 0x04, nil)
 	if err == nil {
 		t.Fatal("expected error for invoke without active fabric, got nil")
 	}
@@ -170,12 +169,12 @@ func TestGKM_KeySetWriteAndRead_RoundTrip(t *testing.T) {
 			EpochStartTime0:        100,
 		},
 	}
-	_, err := gkm.MatterInvoke(ctx, 0x00 /*KeySetWrite*/, req, hmenum.CommandPriorityHigh)
+	_, err := gkm.MatterInvoke(ctx, 0x00 /*KeySetWrite*/, req)
 	if err != nil {
 		t.Fatalf("KeySetWrite: %v", err)
 	}
 
-	resp, err := gkm.MatterInvoke(ctx, 0x01 /*KeySetRead*/, core.KeySetReadRequest{GroupKeySetID: 42}, hmenum.CommandPriorityHigh)
+	resp, err := gkm.MatterInvoke(ctx, 0x01 /*KeySetRead*/, core.KeySetReadRequest{GroupKeySetID: 42})
 	if err != nil {
 		t.Fatalf("KeySetRead: %v", err)
 	}
@@ -203,7 +202,7 @@ func TestGKM_KeySetRead_Miss(t *testing.T) {
 	t.Parallel()
 	gkm := newGKM(t)
 	gkm.SetCurrentFabric(1)
-	_, err := gkm.MatterInvoke(context.Background(), 0x01, core.KeySetReadRequest{GroupKeySetID: 9999}, hmenum.CommandPriorityHigh)
+	_, err := gkm.MatterInvoke(context.Background(), 0x01, core.KeySetReadRequest{GroupKeySetID: 9999})
 	if err == nil {
 		t.Fatal("expected error for KeySetRead miss, got nil")
 	}
@@ -218,16 +217,16 @@ func TestGKM_KeySetRemove(t *testing.T) {
 	// Write first.
 	_, _ = gkm.MatterInvoke(ctx, 0x00, core.KeySetWriteRequest{
 		GroupKeySet: core.GroupKeySetStruct{GroupKeySetID: 7, EpochKey0: make([]byte, 16), EpochStartTime0: 1},
-	}, hmenum.CommandPriorityHigh)
+	})
 
 	// Remove.
-	_, err := gkm.MatterInvoke(ctx, 0x03, core.KeySetRemoveRequest{GroupKeySetID: 7}, hmenum.CommandPriorityHigh)
+	_, err := gkm.MatterInvoke(ctx, 0x03, core.KeySetRemoveRequest{GroupKeySetID: 7})
 	if err != nil {
 		t.Fatalf("KeySetRemove: %v", err)
 	}
 
 	// Read after remove must miss.
-	_, err = gkm.MatterInvoke(ctx, 0x01, core.KeySetReadRequest{GroupKeySetID: 7}, hmenum.CommandPriorityHigh)
+	_, err = gkm.MatterInvoke(ctx, 0x01, core.KeySetReadRequest{GroupKeySetID: 7})
 	if err == nil {
 		t.Fatal("expected error for KeySetRead after remove, got nil")
 	}
@@ -243,7 +242,7 @@ func TestGKM_KeySetRead_NotFoundStatusCode(t *testing.T) {
 	gkm := newGKM(t)
 	gkm.SetCurrentFabric(1)
 
-	_, err := gkm.MatterInvoke(context.Background(), 0x01 /*KeySetRead*/, core.KeySetReadRequest{GroupKeySetID: 9999}, hmenum.CommandPriorityHigh)
+	_, err := gkm.MatterInvoke(context.Background(), 0x01 /*KeySetRead*/, core.KeySetReadRequest{GroupKeySetID: 9999})
 	if err == nil {
 		t.Fatal("KeySetRead of never-written id: expected error, got nil")
 	}
@@ -267,7 +266,7 @@ func TestGKM_KeySetRemove_NotFoundStatusCode(t *testing.T) {
 	gkm := newGKM(t)
 	gkm.SetCurrentFabric(1)
 
-	_, err := gkm.MatterInvoke(context.Background(), 0x03 /*KeySetRemove*/, core.KeySetRemoveRequest{GroupKeySetID: 55}, hmenum.CommandPriorityHigh)
+	_, err := gkm.MatterInvoke(context.Background(), 0x03 /*KeySetRemove*/, core.KeySetRemoveRequest{GroupKeySetID: 55})
 	if err == nil {
 		t.Fatal("KeySetRemove of never-written id: expected error, got nil")
 	}
@@ -290,10 +289,10 @@ func TestGKM_KeySetReadAllIndices(t *testing.T) {
 	for _, id := range []uint16{10, 20, 30} {
 		_, _ = gkm.MatterInvoke(ctx, 0x00, core.KeySetWriteRequest{
 			GroupKeySet: core.GroupKeySetStruct{GroupKeySetID: id, EpochKey0: make([]byte, 16), EpochStartTime0: 1},
-		}, hmenum.CommandPriorityHigh)
+		})
 	}
 
-	resp, err := gkm.MatterInvoke(ctx, 0x04, nil, hmenum.CommandPriorityHigh)
+	resp, err := gkm.MatterInvoke(ctx, 0x04, nil)
 	if err != nil {
 		t.Fatalf("KeySetReadAllIndices: %v", err)
 	}
@@ -313,7 +312,7 @@ func TestGKM_WriteGroupKeyMap(t *testing.T) {
 		{GroupID: 100, GroupKeySetID: 1, FabricIndex: 2},
 		{GroupID: 200, GroupKeySetID: 2, FabricIndex: 2},
 	}
-	if err := gkm.MatterWrite(ctx, 0x0000, mappings, hmenum.CommandPriorityHigh); err != nil {
+	if err := gkm.MatterWrite(ctx, 0x0000, mappings); err != nil {
 		t.Fatalf("MatterWrite GroupKeyMap: %v", err)
 	}
 
@@ -337,7 +336,7 @@ func TestGKM_WriteGroupKeyMap_CrossFabric(t *testing.T) {
 	mappings := []core.GroupKeyMapStruct{
 		{GroupID: 100, GroupKeySetID: 1, FabricIndex: 2}, // cross-fabric
 	}
-	err := gkm.MatterWrite(ctx, 0x0000, mappings, hmenum.CommandPriorityHigh)
+	err := gkm.MatterWrite(ctx, 0x0000, mappings)
 	if err == nil {
 		t.Fatal("expected error for cross-fabric GroupKeyMap write, got nil")
 	}
@@ -346,7 +345,7 @@ func TestGKM_WriteGroupKeyMap_CrossFabric(t *testing.T) {
 func TestGKM_Write_ReadOnly(t *testing.T) {
 	t.Parallel()
 	gkm := newGKM(t)
-	err := gkm.MatterWrite(context.Background(), 0x0001 /*GroupTable — read-only*/, nil, hmenum.CommandPriorityHigh)
+	err := gkm.MatterWrite(context.Background(), 0x0001 /*GroupTable — read-only*/, nil)
 	if err == nil {
 		t.Fatal("expected error for write to read-only attr, got nil")
 	}
@@ -538,7 +537,6 @@ func TestGKM_KeySetWriteValidation(t *testing.T) {
 				context.Background(),
 				0x00, // KeySetWrite
 				core.KeySetWriteRequest{GroupKeySet: tc.gks},
-				hmenum.CommandPriorityHigh,
 			)
 			if tc.wantError {
 				if err == nil {
@@ -608,14 +606,14 @@ func TestGKM_KeySetWriteBudget_CapReached(t *testing.T) {
 
 	// Writes up to the cap (three distinct new ids) must all succeed.
 	for _, id := range []uint16{1, 2, 3} {
-		if _, err := gkm.MatterInvoke(ctx, 0x00 /*KeySetWrite*/, keySetWriteFields(id), hmenum.CommandPriorityHigh); err != nil {
+		if _, err := gkm.MatterInvoke(ctx, 0x00 /*KeySetWrite*/, keySetWriteFields(id)); err != nil {
 			t.Fatalf("KeySetWrite id=%d: unexpected error: %v", id, err)
 		}
 	}
 
 	// The next ADD (a new, fourth id) must be rejected: len(existing) ==
 	// cap already.
-	_, err = gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(4), hmenum.CommandPriorityHigh)
+	_, err = gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(4))
 	mustBeResourceExhausted(t, err)
 }
 
@@ -636,19 +634,19 @@ func TestGKM_KeySetWriteBudget_UpdateAtCapSucceeds(t *testing.T) {
 	ctx := context.Background()
 
 	for _, id := range []uint16{1, 2, 3} {
-		if _, err := gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(id), hmenum.CommandPriorityHigh); err != nil {
+		if _, err := gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(id)); err != nil {
 			t.Fatalf("KeySetWrite id=%d: unexpected error: %v", id, err)
 		}
 	}
 
 	// Re-writing an existing id (an UPDATE, not an ADD) at the cap must
 	// still succeed.
-	if _, err := gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(2), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(2)); err != nil {
 		t.Fatalf("KeySetWrite update of existing id=2 at cap: unexpected error: %v", err)
 	}
 
 	// A genuinely new id at the cap must still be rejected.
-	_, err = gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(9), hmenum.CommandPriorityHigh)
+	_, err = gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(9))
 	mustBeResourceExhausted(t, err)
 }
 
@@ -670,16 +668,16 @@ func TestGKM_KeySetWriteBudget_CrossFabricIsolation(t *testing.T) {
 
 	// Fill fabric A to its cap.
 	for _, id := range []uint16{1, 2, 3} {
-		if _, err := gkm.MatterInvoke(ctxA, 0x00, keySetWriteFields(id), hmenum.CommandPriorityHigh); err != nil {
+		if _, err := gkm.MatterInvoke(ctxA, 0x00, keySetWriteFields(id)); err != nil {
 			t.Fatalf("fabric A KeySetWrite id=%d: unexpected error: %v", id, err)
 		}
 	}
 	// Fabric A is now exhausted.
-	_, err = gkm.MatterInvoke(ctxA, 0x00, keySetWriteFields(4), hmenum.CommandPriorityHigh)
+	_, err = gkm.MatterInvoke(ctxA, 0x00, keySetWriteFields(4))
 	mustBeResourceExhausted(t, err)
 
 	// Fabric B, still empty, must accept its own writes.
-	if _, err := gkm.MatterInvoke(ctxB, 0x00, keySetWriteFields(1), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := gkm.MatterInvoke(ctxB, 0x00, keySetWriteFields(1)); err != nil {
 		t.Fatalf("fabric B KeySetWrite id=1: unexpected error, cross-fabric budget leaked: %v", err)
 	}
 }
@@ -726,13 +724,13 @@ func TestGKM_MatterReadFiltered_GroupKeyMap_FabricScoped(t *testing.T) {
 		},
 	}
 	ctx2 := im.WithFabricFilter(context.Background(), true, 2)
-	if _, err := gkm.MatterInvoke(ctx2, 0x00 /* KeySetWrite */, ksBuf, hmenum.CommandPriorityLow); err != nil {
+	if _, err := gkm.MatterInvoke(ctx2, 0x00 /* KeySetWrite */, ksBuf); err != nil {
 		t.Fatalf("KeySetWrite fabric 2: %v", err)
 	}
 	// Write GroupKeyMap for fabric 2 using MatterWrite.
 	if err := gkm.MatterWrite(ctx2, 0x0000, []core.GroupKeyMapStruct{
 		{GroupID: 10, GroupKeySetID: 1, FabricIndex: 2},
-	}, hmenum.CommandPriorityLow); err != nil {
+	}); err != nil {
 		t.Fatalf("MatterWrite GroupKeyMap fabric 2: %v", err)
 	}
 
@@ -746,12 +744,12 @@ func TestGKM_MatterReadFiltered_GroupKeyMap_FabricScoped(t *testing.T) {
 		},
 	}
 	ctx3 := im.WithFabricFilter(context.Background(), true, 3)
-	if _, err := gkm.MatterInvoke(ctx3, 0x00, ksBuf3, hmenum.CommandPriorityLow); err != nil {
+	if _, err := gkm.MatterInvoke(ctx3, 0x00, ksBuf3); err != nil {
 		t.Fatalf("KeySetWrite fabric 3: %v", err)
 	}
 	if err := gkm.MatterWrite(ctx3, 0x0000, []core.GroupKeyMapStruct{
 		{GroupID: 20, GroupKeySetID: 2, FabricIndex: 3},
-	}, hmenum.CommandPriorityLow); err != nil {
+	}); err != nil {
 		t.Fatalf("MatterWrite GroupKeyMap fabric 3: %v", err)
 	}
 
@@ -863,13 +861,13 @@ func TestGKM_WriteGroupKeyMapRemovesDroppedBindings(t *testing.T) {
 		{GroupID: 100, GroupKeySetID: 1, FabricIndex: 2},
 		{GroupID: 200, GroupKeySetID: 2, FabricIndex: 2},
 	}
-	if err := gkm.MatterWrite(ctx, 0x0000, initial, hmenum.CommandPriorityHigh); err != nil {
+	if err := gkm.MatterWrite(ctx, 0x0000, initial); err != nil {
 		t.Fatalf("MatterWrite GroupKeyMap (initial): %v", err)
 	}
 
 	// Controller unbinds group 100 by writing a shortened list.
 	shortened := []core.GroupKeyMapStruct{{GroupID: 200, GroupKeySetID: 2, FabricIndex: 2}}
-	if err := gkm.MatterWrite(ctx, 0x0000, shortened, hmenum.CommandPriorityHigh); err != nil {
+	if err := gkm.MatterWrite(ctx, 0x0000, shortened); err != nil {
 		t.Fatalf("MatterWrite GroupKeyMap (shortened): %v", err)
 	}
 
@@ -883,7 +881,7 @@ func TestGKM_WriteGroupKeyMapRemovesDroppedBindings(t *testing.T) {
 	}
 
 	// An empty write clears the whole fabric-scoped list.
-	if err := gkm.MatterWrite(ctx, 0x0000, []core.GroupKeyMapStruct{}, hmenum.CommandPriorityHigh); err != nil {
+	if err := gkm.MatterWrite(ctx, 0x0000, []core.GroupKeyMapStruct{}); err != nil {
 		t.Fatalf("MatterWrite GroupKeyMap (empty): %v", err)
 	}
 	v, _ = gkm.MatterRead(0x0000)
