@@ -8,6 +8,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The reachability analyzer's diagnostics were invisible.** Its logger
+  defaulted to `Warn`, so every progress line — how many packages loaded, how
+  many entry points were found, how large the whitelist is — needed
+  `-verbose` to appear. That is the numbers that tell a reader whether the run
+  measured what they think it did.
+
+  It had already cost something: a diagnostic added at `Info` to report that
+  package variants disagreed on reachability printed nothing, and the silence
+  read as "nothing disagreed" when 443 identifiers had. The level is `Info`
+  now, `-verbose` still adds the per-file detail, and the messages that became
+  visible are English rather than German, as is the rest of the tool's output.
+
+  Output only: regenerating both inventories at the same commit produces
+  byte-identical content.
+
 - **The dead-code analyzer reported 443 live identifiers as dead, and counted
   each identifier once per compilation rather than once.** `go/packages` loads
   a package again for every test binary that links it, and each load produces
