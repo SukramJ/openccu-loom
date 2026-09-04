@@ -6,6 +6,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The matter.js NOTICE now ships with the source.** Its closing line requires
+  it to accompany all copies, and the repo did not carry it. The notices file
+  also hedged that the NOTICE "travels with the matter.js repository" while
+  pointing at the parity snapshot under `notes/` — not
+  `internal/north/matter/parity/schema.json`, the 516 KB copy embedded into
+  every binary, which is the file the obligation actually attaches to.
+- **`filippo.io/nistec` is listed in the third-party notices.** It is a
+  production dependency used by the SPAKE2 implementation and appeared in no
+  notice at all. Its licence is BSD-3-Clause, so it needed its own licence text
+  alongside the Apache and MIT copies.
+
+### Fixed
+
+- **The matter.js schema extractor silently dropped elements that share a tag
+  and id.** Request and response commands do, so the second replaced the first:
+  the Groups cluster carried 6 commands where matter.js declares 10, and 35
+  elements were missing across the schema. Any conformance check resting on the
+  snapshot was blind to the difference. The committed snapshot is unchanged —
+  it stays pinned to its recorded upstream commit, and regenerating it is a
+  separate decision.
+- **ADR 0012 called `github.com/grandcat/zeroconf` Apache-2.0** in its
+  dependency table while the notices file already recorded MIT, which is what
+  the module's own LICENSE says.
+
+
 ## [0.73.0] - 2026-09-04
 
 ### Removed
