@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestParityMatterJS_LightOnOffDataVersionBumpsOnWrite verifies that a
@@ -21,7 +20,7 @@ func TestParityMatterJS_LightOnOffDataVersionBumpsOnWrite(t *testing.T) {
 	before := l.MatterDataVersion()
 
 	srv := onOffServer(t, l)
-	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOnOff, true, hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOnOff, true); err != nil {
 		t.Fatalf("MatterWrite(OnOff): %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -38,7 +37,7 @@ func TestParityMatterJS_LightOnOffDataVersionBumpsOnInvoke(t *testing.T) {
 	before := l.MatterDataVersion()
 
 	srv := onOffServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdOn, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdOn, nil); err != nil {
 		t.Fatalf("MatterInvoke(On): %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -55,7 +54,7 @@ func TestParityMatterJS_LightLevelDataVersionBumpsOnWrite(t *testing.T) {
 	before := l.MatterDataVersion()
 
 	srv := levelServer(t, l)
-	if err := srv.MatterWrite(context.Background(), matterAttrLevelCurrent, uint8(127), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrLevelCurrent, uint8(127)); err != nil {
 		t.Fatalf("MatterWrite(CurrentLevel): %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -76,7 +75,7 @@ func TestParityMatterJS_LightLevelDataVersionBumpsOnInvoke(t *testing.T) {
 	before := l.MatterDataVersion()
 
 	srv := levelServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, uint8(190), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, uint8(190)); err != nil {
 		t.Fatalf("MatterInvoke(MoveToLevel): %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -95,13 +94,13 @@ func TestParityMatterJS_LightDataVersionMonotonicallyRises(t *testing.T) {
 
 	ops := []func() error{
 		func() error {
-			return oo.MatterWrite(context.Background(), matterAttrOnOffOnOff, true, hmenum.CommandPriorityHigh)
+			return oo.MatterWrite(context.Background(), matterAttrOnOffOnOff, true)
 		},
 		func() error {
-			return lv.MatterWrite(context.Background(), matterAttrLevelCurrent, uint8(100), hmenum.CommandPriorityHigh)
+			return lv.MatterWrite(context.Background(), matterAttrLevelCurrent, uint8(100))
 		},
 		func() error {
-			return oo.MatterWrite(context.Background(), matterAttrOnOffOnOff, false, hmenum.CommandPriorityHigh)
+			return oo.MatterWrite(context.Background(), matterAttrOnOffOnOff, false)
 		},
 	}
 	for i, op := range ops {
@@ -143,9 +142,9 @@ func TestParityMatterJS_LightDataVersionStableOnFailedWrite(t *testing.T) {
 	before := l.MatterDataVersion()
 
 	oo := onOffServer(t, l)
-	_ = oo.MatterWrite(context.Background(), 0x4001, true, hmenum.CommandPriorityHigh)
+	_ = oo.MatterWrite(context.Background(), 0x4001, true)
 	lv := levelServer(t, l)
-	_ = lv.MatterWrite(context.Background(), 0x4001, uint8(0), hmenum.CommandPriorityHigh)
+	_ = lv.MatterWrite(context.Background(), 0x4001, uint8(0))
 
 	if after := l.MatterDataVersion(); after != before {
 		t.Fatalf("failed writes bumped DataVersion: before=%d after=%d", before, after)

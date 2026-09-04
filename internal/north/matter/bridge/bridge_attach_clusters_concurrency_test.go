@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // TestAttachClustersConcurrentWithLiveRead exercises the real bring-up
@@ -46,8 +46,8 @@ func TestAttachClustersConcurrentWithLiveRead(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range rounds {
-			b.AttachRootClusters([]interfaces.MatterClusterServer{&noopCluster{id: 0x0028 + uint32(i%2)}})
-			b.AttachAggregatorClusters([]interfaces.MatterClusterServer{&noopCluster{id: 0x001D}})
+			b.AttachRootClusters([]mattercontract.ClusterServer{&noopCluster{id: 0x0028 + uint32(i%2)}})
+			b.AttachAggregatorClusters([]mattercontract.ClusterServer{&noopCluster{id: 0x001D}})
 		}
 	}()
 
@@ -65,8 +65,8 @@ func TestAttachClustersConcurrentWithLiveRead(t *testing.T) {
 	// The publication has to stay VISIBLE to the dispatcher: a fix that
 	// parks the set where no reader loads it would silence the race and
 	// leave endpoint 0 / 1 answering UnsupportedCluster for every read.
-	b.AttachRootClusters([]interfaces.MatterClusterServer{&noopCluster{id: 0x0028}})
-	b.AttachAggregatorClusters([]interfaces.MatterClusterServer{&noopCluster{id: 0x001D}})
+	b.AttachRootClusters([]mattercontract.ClusterServer{&noopCluster{id: 0x0028}})
+	b.AttachAggregatorClusters([]mattercontract.ClusterServer{&noopCluster{id: 0x001D}})
 	for _, tc := range []struct {
 		name    string
 		path    im.ConcreteAttributePath

@@ -68,7 +68,7 @@ func TestCTColorServerNoOpCommandsAcceptedWithoutError(t *testing.T) {
 		wire.ColorCtrlCmdStepColorTemperature,
 		wire.ColorCtrlCmdStopMoveStep,
 	} {
-		resp, err := cc.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		resp, err := cc.MatterInvoke(context.Background(), cmdID, nil)
 		if err != nil {
 			t.Errorf("ctColorServer.MatterInvoke(0x%02X) err = %v, want nil (no-op)", cmdID, err)
 		}
@@ -91,7 +91,7 @@ func TestCTColorServerMoveToColorTemperatureStillDrivesWrite(t *testing.T) {
 			cc = v
 		}
 	}
-	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(370), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(370)); err != nil {
 		t.Fatalf("MoveToColorTemperature err: %v", err)
 	}
 	if ch.Parameter(hmenum.ParameterColorTemperature) == nil {
@@ -150,7 +150,7 @@ func TestHSColorServerNoOpCommandsAcceptedWithoutError(t *testing.T) {
 		wire.ColorCtrlCmdStepSaturation,
 		wire.ColorCtrlCmdStopMoveStep,
 	} {
-		resp, err := hs.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		resp, err := hs.MatterInvoke(context.Background(), cmdID, nil)
 		if err != nil {
 			t.Errorf("hsColorServer.MatterInvoke(0x%02X) err = %v, want nil (no-op)", cmdID, err)
 		}
@@ -219,7 +219,7 @@ func TestRGBWColorServerNoOpCommandsAcceptedWithoutError(t *testing.T) {
 		wire.ColorCtrlCmdStepColorTemperature,
 		wire.ColorCtrlCmdStopMoveStep,
 	} {
-		resp, err := rgbw.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		resp, err := rgbw.MatterInvoke(context.Background(), cmdID, nil)
 		if err != nil {
 			t.Errorf("rgbwColorServer.MatterInvoke(0x%02X) err = %v, want nil (no-op)", cmdID, err)
 		}

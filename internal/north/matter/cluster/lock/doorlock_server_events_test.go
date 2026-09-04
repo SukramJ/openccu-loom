@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // eventTestSource is a StateSource whose LockInvoke outcome is
@@ -39,16 +39,16 @@ type emitCall struct {
 	cluster  uint32
 	event    uint32
 	data     any
-	priority interfaces.MatterEventPriority
+	priority mattercontract.EventPriority
 }
 
-// fakeEventEmitter implements [interfaces.MatterEventEmitter] and
+// fakeEventEmitter implements [mattercontract.EventEmitter] and
 // records every call for assertion.
 type fakeEventEmitter struct {
 	calls []emitCall
 }
 
-func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, clusterID, eventID uint32, data any, priority interfaces.MatterEventPriority) {
+func (f *fakeEventEmitter) MatterEmitEvent(endpoint uint16, clusterID, eventID uint32, data any, priority mattercontract.EventPriority) {
 	f.calls = append(f.calls, emitCall{endpoint: endpoint, cluster: clusterID, event: eventID, data: data, priority: priority})
 }
 
@@ -79,7 +79,7 @@ func TestDoorLockServer_EmitLockOperation_LockDoor(t *testing.T) {
 	ctx := im.WithFabricFilter(context.Background(), false, 2)
 	ctx = im.WithSubject(ctx, 0xAABB, nil)
 
-	if _, err := srv.MatterInvoke(ctx, wire.DoorLockCmdLockDoor, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(ctx, wire.DoorLockCmdLockDoor, nil); err != nil {
 		t.Fatalf("MatterInvoke(LockDoor): %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestDoorLockServer_EmitLockOperation_LockDoor(t *testing.T) {
 	if c.event != wire.DoorLockEventLockOperation {
 		t.Errorf("event = 0x%02X, want 0x%02X", c.event, wire.DoorLockEventLockOperation)
 	}
-	if c.priority != interfaces.MatterEventPriorityCritical {
+	if c.priority != mattercontract.EventPriorityCritical {
 		t.Errorf("priority = %v, want MatterEventPriorityCritical", c.priority)
 	}
 
@@ -148,7 +148,7 @@ func TestDoorLockServer_EmitLockOperation_OperationTypeMapping(t *testing.T) {
 			src := &eventTestSource{observed: true}
 			srv, emitter := newWiredServer(t, src, 1)
 
-			if _, err := srv.MatterInvoke(context.Background(), tc.cmdID, nil, hmenum.CommandPriorityHigh); err != nil {
+			if _, err := srv.MatterInvoke(context.Background(), tc.cmdID, nil); err != nil {
 				t.Fatalf("MatterInvoke(0x%02X): %v", tc.cmdID, err)
 			}
 			if len(emitter.calls) != 1 {
@@ -175,7 +175,7 @@ func TestDoorLockServer_EmitLockOperation_UnstampedContext(t *testing.T) {
 	src := &eventTestSource{observed: true}
 	srv, emitter := newWiredServer(t, src, 3)
 
-	if _, err := srv.MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil); err != nil {
 		t.Fatalf("MatterInvoke: %v", err)
 	}
 	if len(emitter.calls) != 1 {
@@ -202,7 +202,7 @@ func TestDoorLockServer_EmitLockOperation_InvokeErrorSuppressesEvent(t *testing.
 	srv, emitter := newWiredServer(t, src, 4)
 	dvBefore := srv.MatterDataVersion()
 
-	_, err := srv.MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil)
 	if !errors.Is(err, errInvokeFailed) {
 		t.Fatalf("MatterInvoke error = %v, want errInvokeFailed", err)
 	}
@@ -223,7 +223,7 @@ func TestDoorLockServer_EmitLockOperation_NoEmitterWired(t *testing.T) {
 	src := &eventTestSource{observed: true}
 	srv := lock.NewDoorLockServer(lock.DoorLockConfig{Source: src})
 
-	if _, err := srv.MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil); err != nil {
 		t.Fatalf("MatterInvoke without emitter: %v", err)
 	}
 }

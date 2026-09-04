@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestDiagLogs_ClusterID(t *testing.T) {
@@ -63,7 +62,7 @@ func TestDiagLogs_InvokeRetrieveLogsRequest(t *testing.T) {
 	t.Parallel()
 	d := core.NewDiagnosticLogs()
 	ctx := context.Background()
-	resp, err := d.MatterInvoke(ctx, 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(ctx, 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke(RetrieveLogsRequest) error: %v", err)
 	}
@@ -84,7 +83,7 @@ func TestDiagLogs_InvokeUnknownCmdReturnsError(t *testing.T) {
 	d := core.NewDiagnosticLogs()
 	ctx := context.Background()
 	for _, cmdID := range []uint32{0x01, 0x02, 0xFF} {
-		_, err := d.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := d.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -96,7 +95,7 @@ func TestDiagLogs_WriteReturnsError(t *testing.T) {
 	d := core.NewDiagnosticLogs()
 	ctx := context.Background()
 	for _, attrID := range []uint32{0x0000, 0xFFFD, 0xBEEF} {
-		err := d.MatterWrite(ctx, attrID, nil, hmenum.CommandPriorityHigh)
+		err := d.MatterWrite(ctx, attrID, nil)
 		if err == nil {
 			t.Errorf("MatterWrite(0x%04X) expected error, got nil", attrID)
 		}
@@ -117,7 +116,7 @@ func TestDiagLogs_AttachProvider_NilProvider(t *testing.T) {
 	d := core.NewDiagnosticLogs()
 	// Attaching nil must not panic.
 	d.AttachProvider(nil)
-	resp, err := d.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke after nil provider: %v", err)
 	}
@@ -132,7 +131,7 @@ func TestDiagLogs_AttachProvider_SuccessSmallPayload(t *testing.T) {
 	d := core.NewDiagnosticLogs()
 	want := []byte("hello logs")
 	d.AttachProvider(&fakeLogProvider{payload: want})
-	resp, err := d.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke: %v", err)
 	}
@@ -151,7 +150,7 @@ func TestDiagLogs_AttachProvider_ExhaustedLargePayload(t *testing.T) {
 	// Payload larger than MatterDiagnosticLogsInlineCap (1024).
 	big := bytes.Repeat([]byte("X"), core.MatterDiagnosticLogsInlineCap+1)
 	d.AttachProvider(&fakeLogProvider{payload: big})
-	resp, err := d.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke exhausted: %v", err)
 	}
@@ -168,7 +167,7 @@ func TestDiagLogs_AttachProvider_ProviderError(t *testing.T) {
 	t.Parallel()
 	d := core.NewDiagnosticLogs()
 	d.AttachProvider(&fakeLogProvider{err: errors.New("transient I/O failure")})
-	resp, err := d.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		// Provider errors must NOT surface as IM errors per §11.11.6.1.
 		t.Fatalf("MatterInvoke must not return IM error on provider failure: %v", err)
@@ -183,7 +182,7 @@ func TestDiagLogs_AttachProvider_EmptyPayloadIsNoLogs(t *testing.T) {
 	t.Parallel()
 	d := core.NewDiagnosticLogs()
 	d.AttachProvider(&fakeLogProvider{payload: []byte{}})
-	resp, err := d.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke: %v", err)
 	}
@@ -198,7 +197,7 @@ func TestDiagLogs_SetBootEpoch(t *testing.T) {
 	d := core.NewDiagnosticLogs()
 	past := time.Now().Add(-5 * time.Second)
 	d.SetBootEpoch(past)
-	resp, err := d.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke: %v", err)
 	}
@@ -215,7 +214,7 @@ func TestDiagLogs_InvokeIntentDecoding_MapUint8(t *testing.T) {
 	d.AttachProvider(&fakeLogProvider{payload: []byte("x")})
 	// intent field 0 → NetworkDiag=1 encoded as uint8.
 	fields := map[uint8]any{0: uint8(1)}
-	resp, err := d.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, fields)
 	if err != nil {
 		t.Fatalf("MatterInvoke with map intent: %v", err)
 	}
@@ -230,7 +229,7 @@ func TestDiagLogs_InvokeIntentDecoding_MapUint64(t *testing.T) {
 	d.AttachProvider(&fakeLogProvider{payload: []byte("x")})
 	// intent field 0 → CrashLogs=2 encoded as uint64 (raw TLV decoded form).
 	fields := map[uint8]any{0: uint64(2)}
-	resp, err := d.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, fields)
 	if err != nil {
 		t.Fatalf("MatterInvoke with map uint64 intent: %v", err)
 	}
@@ -243,7 +242,7 @@ func TestDiagLogs_InvokeIntentDecoding_UnknownFieldsDefaultToEndUser(t *testing.
 	d.AttachProvider(&fakeLogProvider{payload: []byte("x")})
 	// A non-map type falls through to the default EndUserSupport branch.
 	fields := "unexpected-type"
-	resp, err := d.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh)
+	resp, err := d.MatterInvoke(context.Background(), 0x00, fields)
 	if err != nil {
 		t.Fatalf("MatterInvoke with unknown fields type: %v", err)
 	}

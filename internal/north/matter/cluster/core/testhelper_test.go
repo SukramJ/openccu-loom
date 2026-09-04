@@ -546,7 +546,7 @@ func issueCSRPendingPubKey(ctx context.Context, t *testing.T, oc *core.Operation
 	resp, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{
 		CSRNonce:       make([]byte, 32),
 		IsForUpdateNOC: forUpdate,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("CSRRequest(IsForUpdateNOC=%v): %v", forUpdate, err)
 	}
@@ -577,7 +577,7 @@ func commissionTestFabric(ctx context.Context, t *testing.T, oc *core.Operationa
 
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 
@@ -589,7 +589,7 @@ func commissionTestFabric(ctx context.Context, t *testing.T, oc *core.Operationa
 		IPKValue:         make([]byte, 16),
 		CaseAdminSubject: 0xABCD,
 		AdminVendorID:    0x1234,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC: %v", err)
 	}

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // stubSchedulesSource is a test-double [wire.SchedulesSource] that returns a
@@ -173,7 +172,7 @@ func TestSchedulesEmptySourceReturnsZeros(t *testing.T) {
 func TestSchedulesWriteIsRejected(t *testing.T) {
 	t.Parallel()
 	srv := newSchedulesServer(nil)
-	err := srv.MatterWrite(context.Background(), wire.SchedulesAttrSchedules, nil, hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), wire.SchedulesAttrSchedules, nil)
 	if !errors.Is(err, wire.ErrSchedulesReadOnly) {
 		t.Fatalf("MatterWrite err = %v, want ErrSchedulesReadOnly", err)
 	}
@@ -184,7 +183,7 @@ func TestSchedulesWriteIsRejected(t *testing.T) {
 func TestSchedulesInvokeIsRejected(t *testing.T) {
 	t.Parallel()
 	srv := newSchedulesServer(nil)
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x00, nil)
 	if !errors.Is(err, wire.ErrSchedulesReadOnly) {
 		t.Fatalf("MatterInvoke err = %v, want ErrSchedulesReadOnly", err)
 	}

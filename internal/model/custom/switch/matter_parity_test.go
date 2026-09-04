@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestParityMatterJS_OnOffServer_AcceptsExtensionsTypeCheck verifies that
@@ -39,7 +38,7 @@ func TestParityMatterJS_OnOffServer_AcceptsExtensionsTypeCheck(t *testing.T) {
 	ctx := context.Background()
 
 	for _, cmd := range []uint32{matterCmdOff, matterCmdOn, matterCmdToggle} {
-		_, err := s.MatterInvoke(ctx, cmd, nil, hmenum.CommandPriorityHigh)
+		_, err := s.MatterInvoke(ctx, cmd, nil)
 		if err != nil {
 			t.Errorf("command 0x%02X returned error: %v (want nil — all three commands must be implemented)", cmd, err)
 		}
@@ -59,7 +58,7 @@ func TestParityMatterJS_OnOffServer_ToggleObserverSemanticsOn(t *testing.T) {
 	s := newTestSwitch(t, "VCU0000001:1", "", w)
 
 	// First toggle: off→on (unobserved start is treated as off per spec).
-	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil); err != nil {
 		t.Fatalf("Toggle: %v", err)
 	}
 	// The southbound write carries true.
@@ -90,7 +89,7 @@ func TestParityMatterJS_OnOffServer_ToggleObserverSemanticsOff(t *testing.T) {
 	s.OnState(true)
 
 	// Toggle off.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil); err != nil {
 		t.Fatalf("Toggle: %v", err)
 	}
 	if w.lastVal != false {
@@ -121,7 +120,7 @@ func TestParityMatterJS_OnOffServer_ObservedValuesSequence(t *testing.T) {
 
 	// Simulate two toggles and record what each CCU-confirmed state would be.
 	for i := range 2 {
-		if _, err := s.MatterInvoke(ctx, matterCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := s.MatterInvoke(ctx, matterCmdToggle, nil); err != nil {
 			t.Fatalf("toggle %d: %v", i, err)
 		}
 		val, ok := w.lastVal.(bool)
@@ -194,7 +193,7 @@ func TestParityMatterJS_OnOffServer_WritableLTAttributesAccepted(t *testing.T) {
 	t.Run("OnTime round-trip", func(t *testing.T) {
 		t.Parallel()
 		s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-		if err := s.MatterWrite(ctx, matterAttrOnTime, uint16(300), hmenum.CommandPriorityHigh); err != nil {
+		if err := s.MatterWrite(ctx, matterAttrOnTime, uint16(300)); err != nil {
 			t.Fatalf("MatterWrite(OnTime): %v", err)
 		}
 		v, ok := s.MatterRead(matterAttrOnTime)
@@ -209,7 +208,7 @@ func TestParityMatterJS_OnOffServer_WritableLTAttributesAccepted(t *testing.T) {
 	t.Run("OffWaitTime round-trip", func(t *testing.T) {
 		t.Parallel()
 		s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-		if err := s.MatterWrite(ctx, matterAttrOffWaitTime, uint16(120), hmenum.CommandPriorityHigh); err != nil {
+		if err := s.MatterWrite(ctx, matterAttrOffWaitTime, uint16(120)); err != nil {
 			t.Fatalf("MatterWrite(OffWaitTime): %v", err)
 		}
 		v, ok := s.MatterRead(matterAttrOffWaitTime)
@@ -236,7 +235,7 @@ func TestParityMatterJS_OnOffServer_WritableLTAttributesAccepted(t *testing.T) {
 	t.Run("StartUpOnOff enum write", func(t *testing.T) {
 		t.Parallel()
 		s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-		if err := s.MatterWrite(ctx, matterAttrStartUpOnOff, uint8(1), hmenum.CommandPriorityHigh); err != nil {
+		if err := s.MatterWrite(ctx, matterAttrStartUpOnOff, uint8(1)); err != nil {
 			t.Fatalf("MatterWrite(StartUpOnOff, 1): %v", err)
 		}
 		v, ok := s.MatterRead(matterAttrStartUpOnOff)
@@ -252,8 +251,8 @@ func TestParityMatterJS_OnOffServer_WritableLTAttributesAccepted(t *testing.T) {
 		t.Parallel()
 		s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
 		// Write enum then reset to null.
-		_ = s.MatterWrite(ctx, matterAttrStartUpOnOff, uint8(0), hmenum.CommandPriorityHigh)
-		if err := s.MatterWrite(ctx, matterAttrStartUpOnOff, nil, hmenum.CommandPriorityHigh); err != nil {
+		_ = s.MatterWrite(ctx, matterAttrStartUpOnOff, uint8(0))
+		if err := s.MatterWrite(ctx, matterAttrStartUpOnOff, nil); err != nil {
 			t.Fatalf("MatterWrite(StartUpOnOff, nil): %v", err)
 		}
 		v, _ := s.MatterRead(matterAttrStartUpOnOff)
@@ -364,7 +363,7 @@ func TestParityMatterJS_OnOffServer_TlvBooleanWireEncoding(t *testing.T) {
 		ctx := context.Background()
 
 		// Turn On → read → encode → expect 0x09.
-		if _, err := s.MatterInvoke(ctx, matterCmdOn, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := s.MatterInvoke(ctx, matterCmdOn, nil); err != nil {
 			t.Fatalf("On: %v", err)
 		}
 		s.OnState(true)
@@ -378,7 +377,7 @@ func TestParityMatterJS_OnOffServer_TlvBooleanWireEncoding(t *testing.T) {
 		}
 
 		// Turn Off → read → encode → expect 0x08.
-		if _, err := s.MatterInvoke(ctx, matterCmdOff, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := s.MatterInvoke(ctx, matterCmdOff, nil); err != nil {
 			t.Fatalf("Off: %v", err)
 		}
 		s.OnState(false)

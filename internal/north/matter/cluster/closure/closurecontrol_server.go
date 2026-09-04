@@ -155,7 +155,7 @@ func (s *ControlServer) MatterRead(attrID uint32) (value any, ok bool) {
 // Every attribute in this cluster carries access "R V" (matter.js
 // closure-control.element.ts:37-56); state changes travel through MoveTo
 // and Stop.
-func (s *ControlServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *ControlServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("closurecontrol: attribute 0x%04X is not writable", attrID)
 }
 
@@ -189,13 +189,13 @@ var (
 // Calibration, so it reports UnsupportedCommand rather than succeeding
 // silently.
 func (s *ControlServer) MatterInvoke(
-	ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority,
+	ctx context.Context, cmdID uint32, fields any,
 ) (response any, err error) {
 	switch cmdID {
 	case wire.ClosureControlCmdMoveTo:
-		return nil, s.invokeMoveTo(ctx, fields, priority)
+		return nil, s.invokeMoveTo(ctx, fields, matterDispatchPriority)
 	case wire.ClosureControlCmdStop:
-		return nil, s.invokeStop(ctx, priority)
+		return nil, s.invokeStop(ctx, matterDispatchPriority)
 	case wire.ClosureControlCmdCalibrate:
 		return nil, closureUnsupportedCommandErr{
 			"closurecontrol: Calibrate requires the Calibration feature, which this server does not advertise",
@@ -204,6 +204,18 @@ func (s *ControlServer) MatterInvoke(
 		return nil, fmt.Errorf("closurecontrol: unknown command 0x%02X", cmdID)
 	}
 }
+
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached this call defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // invokeMoveTo applies a MoveTo request.
 func (s *ControlServer) invokeMoveTo(ctx context.Context, fields any, priority hmenum.CommandPriority) error {

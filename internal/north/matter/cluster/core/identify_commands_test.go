@@ -12,8 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // TestIdentify_MatterAcceptedCommands_IncludesTriggerEffect verifies that
@@ -26,7 +25,7 @@ func TestIdentify_MatterAcceptedCommands_IncludesTriggerEffect(t *testing.T) {
 	id := core.NewIdentify()
 
 	// Ensure Identify satisfies MatterClusterCommandLister at compile time.
-	var _ interfaces.MatterClusterCommandLister = id
+	var _ mattercontract.ClusterCommandLister = id
 
 	cmds := id.MatterAcceptedCommands()
 	if len(cmds) == 0 {
@@ -130,7 +129,7 @@ func TestIdentify_ReadIdentifyTypeIsNone(t *testing.T) {
 func TestIdentify_WriteIdentifyTimeUint16(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0000, uint16(5), hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0000, uint16(5))
 	if err != nil {
 		t.Fatalf("MatterWrite IdentifyTime uint16: %v", err)
 	}
@@ -143,7 +142,7 @@ func TestIdentify_WriteIdentifyTimeUint16(t *testing.T) {
 func TestIdentify_WriteIdentifyTimeUint32(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0000, uint32(7), hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0000, uint32(7))
 	if err != nil {
 		t.Fatalf("MatterWrite IdentifyTime uint32: %v", err)
 	}
@@ -156,7 +155,7 @@ func TestIdentify_WriteIdentifyTimeUint32(t *testing.T) {
 func TestIdentify_WriteIdentifyTimeUint64(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0000, uint64(3), hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0000, uint64(3))
 	if err != nil {
 		t.Fatalf("MatterWrite IdentifyTime uint64: %v", err)
 	}
@@ -165,7 +164,7 @@ func TestIdentify_WriteIdentifyTimeUint64(t *testing.T) {
 func TestIdentify_WriteIdentifyTimeInt(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0000, int(9), hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0000, int(9))
 	if err != nil {
 		t.Fatalf("MatterWrite IdentifyTime int: %v", err)
 	}
@@ -174,7 +173,7 @@ func TestIdentify_WriteIdentifyTimeInt(t *testing.T) {
 func TestIdentify_WriteIdentifyTimeInt64(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0000, int64(2), hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0000, int64(2))
 	if err != nil {
 		t.Fatalf("MatterWrite IdentifyTime int64: %v", err)
 	}
@@ -183,7 +182,7 @@ func TestIdentify_WriteIdentifyTimeInt64(t *testing.T) {
 func TestIdentify_WriteIdentifyTimeNilCoercesToZero(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0000, nil)
 	if err != nil {
 		t.Fatalf("MatterWrite IdentifyTime nil: %v", err)
 	}
@@ -196,7 +195,7 @@ func TestIdentify_WriteIdentifyTimeNilCoercesToZero(t *testing.T) {
 func TestIdentify_WriteIdentifyTimeUnsupportedTypeReturnsError(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0000, "bad", hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0000, "bad")
 	if err == nil {
 		t.Fatal("expected error for unsupported IdentifyTime type, got nil")
 	}
@@ -205,7 +204,7 @@ func TestIdentify_WriteIdentifyTimeUnsupportedTypeReturnsError(t *testing.T) {
 func TestIdentify_WriteReadOnlyAttrReturnsError(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	err := id.MatterWrite(context.Background(), 0x0001 /* IdentifyType, read-only */, uint8(0), hmenum.CommandPriorityHigh)
+	err := id.MatterWrite(context.Background(), 0x0001 /* IdentifyType, read-only */, uint8(0))
 	if err == nil {
 		t.Fatal("expected error for read-only attr write, got nil")
 	}
@@ -215,7 +214,7 @@ func TestIdentify_DataVersionBumpsAfterWrite(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
 	v0 := id.MatterDataVersion()
-	if err := id.MatterWrite(context.Background(), 0x0000, uint16(5), hmenum.CommandPriorityHigh); err != nil {
+	if err := id.MatterWrite(context.Background(), 0x0000, uint16(5)); err != nil {
 		t.Fatalf("MatterWrite: %v", err)
 	}
 	v1 := id.MatterDataVersion()
@@ -227,7 +226,7 @@ func TestIdentify_DataVersionBumpsAfterWrite(t *testing.T) {
 func TestIdentify_InvokeIdentifyCommand(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	resp, err := id.MatterInvoke(context.Background(), 0x00, uint16(3), hmenum.CommandPriorityHigh)
+	resp, err := id.MatterInvoke(context.Background(), 0x00, uint16(3))
 	if err != nil {
 		t.Fatalf("MatterInvoke Identify: %v", err)
 	}
@@ -239,7 +238,7 @@ func TestIdentify_InvokeIdentifyCommand(t *testing.T) {
 func TestIdentify_InvokeIdentifyCommandWithNilFields(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
-	_, err := id.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := id.MatterInvoke(context.Background(), 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke Identify(nil): %v", err)
 	}
@@ -249,7 +248,7 @@ func TestIdentify_DataVersionBumpsAfterInvoke(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
 	v0 := id.MatterDataVersion()
-	if _, err := id.MatterInvoke(context.Background(), 0x00, uint16(2), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := id.MatterInvoke(context.Background(), 0x00, uint16(2)); err != nil {
 		t.Fatalf("MatterInvoke: %v", err)
 	}
 	v1 := id.MatterDataVersion()
@@ -262,7 +261,7 @@ func TestIdentify_InvokeTriggerEffect(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
 	// TriggerEffect (0x40) is a no-op for the bridge — must succeed.
-	resp, err := id.MatterInvoke(context.Background(), 0x40, nil, hmenum.CommandPriorityHigh)
+	resp, err := id.MatterInvoke(context.Background(), 0x40, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke TriggerEffect: %v", err)
 	}
@@ -275,7 +274,7 @@ func TestIdentify_InvokeUnknownCmdReturnsError(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
 	for _, cmdID := range []uint32{0x01, 0x02, 0xFF} {
-		_, err := id.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := id.MatterInvoke(context.Background(), cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -320,7 +319,7 @@ func TestIdentify_CloseStopsTheCountdownAndIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	id := core.NewIdentify()
 
-	if _, err := id.MatterInvoke(ctx, 0x00, uint16(600), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := id.MatterInvoke(ctx, 0x00, uint16(600)); err != nil {
 		t.Fatalf("MatterInvoke(Identify): %v", err)
 	}
 	id.Close()
@@ -328,7 +327,7 @@ func TestIdentify_CloseStopsTheCountdownAndIsIdempotent(t *testing.T) {
 
 	// The attribute stays writable (the cluster is not an error surface
 	// after disposal) but the countdown must not restart.
-	if err := id.MatterWrite(ctx, 0x0000, uint16(5), hmenum.CommandPriorityHigh); err != nil {
+	if err := id.MatterWrite(ctx, 0x0000, uint16(5)); err != nil {
 		t.Fatalf("MatterWrite(IdentifyTime) after Close: %v", err)
 	}
 	got, ok := id.MatterRead(0x0000)
@@ -354,15 +353,15 @@ func TestCoreClustersRejectUnknownCommandsWithTypedStatus(t *testing.T) {
 
 	for name, invoke := range map[string]func() error{
 		"Identify": func() error {
-			_, err := core.NewIdentify().MatterInvoke(ctx, 0x7F, nil, hmenum.CommandPriorityHigh)
+			_, err := core.NewIdentify().MatterInvoke(ctx, 0x7F, nil)
 			return err
 		},
 		"AccessControl": func() error {
-			_, err := ac.MatterInvoke(ctx, 0x00, nil, hmenum.CommandPriorityHigh)
+			_, err := ac.MatterInvoke(ctx, 0x00, nil)
 			return err
 		},
 		"Descriptor": func() error {
-			_, err := descriptor.MatterInvoke(ctx, 0x00, nil, hmenum.CommandPriorityHigh)
+			_, err := descriptor.MatterInvoke(ctx, 0x00, nil)
 			return err
 		},
 	} {

@@ -17,8 +17,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ─── SetOnFabricAdded / EmitFabricAdded ──────────────────────────────────────
@@ -180,11 +179,11 @@ func (f *fakeMatterClusterServer) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (f *fakeMatterClusterServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (f *fakeMatterClusterServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (f *fakeMatterClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (f *fakeMatterClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 
@@ -206,7 +205,7 @@ func TestBridge_AttachRootClusters_NoDescriptor_ReturnsFalse(t *testing.T) {
 	t.Parallel()
 	b := newTestBridge(t)
 	c := &fakeMatterClusterServer{id: 0x0006} // OnOff, not Descriptor
-	b.AttachRootClusters([]interfaces.MatterClusterServer{c})
+	b.AttachRootClusters([]mattercontract.ClusterServer{c})
 	if b.AttachRootPartsListProvider(func() []uint16 { return nil }) {
 		t.Error("AttachRootPartsListProvider returned true but no Descriptor cluster is mounted")
 	}
@@ -218,7 +217,7 @@ func TestBridge_AttachRootClusters_WithDescriptor_ReturnsTrue(t *testing.T) {
 	desc := &fakeDescriptor{
 		fakeMatterClusterServer: fakeMatterClusterServer{id: 0x001D},
 	}
-	b.AttachRootClusters([]interfaces.MatterClusterServer{desc})
+	b.AttachRootClusters([]mattercontract.ClusterServer{desc})
 	if !b.AttachRootPartsListProvider(func() []uint16 { return []uint16{2, 3} }) {
 		t.Error("AttachRootPartsListProvider returned false but Descriptor cluster is mounted")
 	}
@@ -231,7 +230,7 @@ func TestBridge_AttachAggregatorClusters_NoDescriptor_ReturnsFalse(t *testing.T)
 	t.Parallel()
 	b := newTestBridge(t)
 	c := &fakeMatterClusterServer{id: 0x0003} // Identify
-	b.AttachAggregatorClusters([]interfaces.MatterClusterServer{c})
+	b.AttachAggregatorClusters([]mattercontract.ClusterServer{c})
 	if b.AttachAggregatorPartsListProvider(func() []uint16 { return nil }) {
 		t.Error("AttachAggregatorPartsListProvider returned true but no Descriptor is mounted")
 	}
@@ -243,7 +242,7 @@ func TestBridge_AttachAggregatorClusters_WithDescriptor_ReturnsTrue(t *testing.T
 	desc := &fakeDescriptor{
 		fakeMatterClusterServer: fakeMatterClusterServer{id: 0x001D},
 	}
-	b.AttachAggregatorClusters([]interfaces.MatterClusterServer{desc})
+	b.AttachAggregatorClusters([]mattercontract.ClusterServer{desc})
 	if !b.AttachAggregatorPartsListProvider(func() []uint16 { return []uint16{2} }) {
 		t.Error("AttachAggregatorPartsListProvider returned false but Descriptor is mounted")
 	}
@@ -258,7 +257,7 @@ func TestBridge_AttachRootClusters_NilClearsServers(t *testing.T) {
 	desc := &fakeDescriptor{
 		fakeMatterClusterServer: fakeMatterClusterServer{id: 0x001D},
 	}
-	b.AttachRootClusters([]interfaces.MatterClusterServer{desc})
+	b.AttachRootClusters([]mattercontract.ClusterServer{desc})
 	b.AttachRootClusters(nil)
 	// After clearing, no Descriptor should be reachable.
 	if b.AttachRootPartsListProvider(func() []uint16 { return nil }) {

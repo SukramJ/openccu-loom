@@ -190,7 +190,7 @@ func TestOnOffLightingGatedCommandsAccepted(t *testing.T) {
 		l.OnLevel(0.5)
 		l.OnLevel(0.0) // current goes to 0; LastLevel retains 0.5
 		srv := onOffServer(t, l)
-		if _, err := srv.MatterInvoke(context.Background(), tc.cmd, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
 			t.Fatalf("MatterInvoke(0x%02X) error: %v", tc.cmd, err)
 		}
 		if w.last != tc.wantVal {
@@ -220,28 +220,28 @@ func TestGlobalSceneControlLifecycle(t *testing.T) {
 		t.Fatalf("initial GlobalSceneControl = (%v, %v), want (true, true)", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("On error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
 		t.Fatalf("GlobalSceneControl after On = (%v, %v), want (true, true)", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil); err != nil {
 		t.Fatalf("OffWithEffect error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
 		t.Fatalf("GlobalSceneControl after OffWithEffect = (%v, %v), want (false, true)", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("plain Off error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
 		t.Fatalf("GlobalSceneControl after plain Off = (%v, %v), want (false, true) — a plain Off must not change it", v, ok)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("second On error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
@@ -265,14 +265,14 @@ func TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue(t *testing.T) {
 	l.OnLevel(0.5)
 	srv := onOffServer(t, l)
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil); err != nil {
 		t.Fatalf("OffWithEffect error: %v", err)
 	}
 	if v, _ := srv.MatterRead(0x4000); v != false {
 		t.Fatalf("precondition: GlobalSceneControl = %v, want false", v)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x41, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x41, nil); err != nil {
 		t.Fatalf("OnWithRecallGlobalScene error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
@@ -294,7 +294,7 @@ func TestGlobalSceneControlOnWithTimedOffGatedNoOpLeavesUnchanged(t *testing.T) 
 	srv := onOffServer(t, l)
 
 	gated := map[uint8]any{0: uint64(1), 1: uint64(5), 2: uint64(5)} // AcceptOnlyWhenOn bit set
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, gated, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, gated); err != nil {
 		t.Fatalf("gated OnWithTimedOff error: %v", err)
 	}
 	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
@@ -364,7 +364,7 @@ func TestOnOffInvokeOnRestoresLastLevel(t *testing.T) {
 	l.OnLevel(0.7)
 	l.OnLevel(0.0) // last_level=0.7, current=0.0
 	srv := onOffServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("MatterInvoke(On) error: %v", err)
 	}
 	if w.last != 0.7 {
@@ -378,7 +378,7 @@ func TestOnOffInvokeOff(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	l.OnLevel(0.5)
 	srv := onOffServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("MatterInvoke(Off) error: %v", err)
 	}
 	if w.last != 0.0 {
@@ -423,7 +423,7 @@ func TestLevelWriteAtSaturation(t *testing.T) {
 	w := &stubWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	if err := srv.MatterWrite(context.Background(), 0x0000, uint8(0xFE), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), 0x0000, uint8(0xFE)); err != nil {
 		t.Fatalf("MatterWrite(0xFE) error: %v", err)
 	}
 	if w.last != 1.0 {
@@ -436,7 +436,7 @@ func TestLevelWriteHalf(t *testing.T) {
 	w := &stubWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	if err := srv.MatterWrite(context.Background(), 0x0000, uint8(127), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), 0x0000, uint8(127)); err != nil {
 		t.Fatalf("MatterWrite(127) error: %v", err)
 	}
 	// 127/254 ≈ 0.5
@@ -449,7 +449,7 @@ func TestLevelWriteHalf(t *testing.T) {
 func TestLevelWriteWrongTypeRejected(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	err := srv.MatterWrite(context.Background(), 0x0000, 127, hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), 0x0000, 127)
 	if !errors.Is(err, errMatterValueType) {
 		t.Fatalf("err = %v, want errMatterValueType", err)
 	}
@@ -469,7 +469,7 @@ func TestLevelInvokeMoveToLevel(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	l.OnLevel(0.5) // light is on
 	srv := levelServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, uint8(190), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, uint8(190)); err != nil {
 		t.Fatalf("MoveToLevel error: %v", err)
 	}
 	// 190/254 ≈ 0.748
@@ -485,7 +485,7 @@ func TestLevelInvokeMoveToLevelWithOnOffMap(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
 	fields := map[string]any{"level": uint8(64)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x04, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x04, fields); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff error: %v", err)
 	}
 	// 64/254 ≈ 0.252
@@ -511,7 +511,7 @@ func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
 			versionBefore := l.MatterDataVersion()
 			tt := uint16(30)
 			fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
-			if _, err := srv.MatterInvoke(context.Background(), cmdID, fields, hmenum.CommandPriorityHigh); err != nil {
+			if _, err := srv.MatterInvoke(context.Background(), cmdID, fields); err != nil {
 				t.Fatalf("cmd 0x%02X with TransitionTime=30 error: %v", cmdID, err)
 			}
 			if len(w.puts) != 1 {
@@ -550,7 +550,7 @@ func TestLevelInvokeMoveToLevelWithOnOffTransitionToMinRampsOff(t *testing.T) {
 	srv := levelServer(t, l)
 	tt := uint16(30)
 	fields := wire.MoveToLevelRequest{Level: 1, TransitionTime: &tt}
-	if _, err := srv.MatterInvoke(context.Background(), 0x04, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x04, fields); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(min, TransitionTime=30) error: %v", err)
 	}
 	if len(w.puts) != 1 {
@@ -579,7 +579,7 @@ func TestLevelInvokeMoveToLevelNilTransitionIsInstant(t *testing.T) {
 	l.OnLevel(0.5)
 	srv := levelServer(t, l)
 	fields := wire.MoveToLevelRequest{Level: 190}
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields); err != nil {
 		t.Fatalf("MoveToLevel(nil TransitionTime) error: %v", err)
 	}
 	if len(w.puts) != 0 {
@@ -603,7 +603,7 @@ func TestLevelInvokeMoveToLevelZeroTransitionIsInstant(t *testing.T) {
 	srv := levelServer(t, l)
 	tt := uint16(0)
 	fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields); err != nil {
 		t.Fatalf("MoveToLevel(TransitionTime=0) error: %v", err)
 	}
 	if len(w.puts) != 0 {
@@ -627,7 +627,7 @@ func TestLevelInvokeMoveToLevelTransitionWithoutRampSupportIsInstant(t *testing.
 	srv := levelServer(t, l)
 	tt := uint16(30)
 	fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields); err != nil {
 		t.Fatalf("MoveToLevel(TransitionTime=30, no ramp support) error: %v", err)
 	}
 	if len(w.puts) != 0 {
@@ -646,7 +646,7 @@ func TestLevelInvokeMoveReturnsSuccess(t *testing.T) {
 		t.Run(fmt.Sprintf("cmd=0x%02X", cmdID), func(t *testing.T) {
 			l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 			srv := levelServer(t, l)
-			_, err := srv.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+			_, err := srv.MatterInvoke(context.Background(), cmdID, nil)
 			if err != nil {
 				t.Fatalf("cmd 0x%02X returned error: %v", cmdID, err)
 			}
@@ -664,7 +664,7 @@ func TestLevelInvokeStepUpAndDown(t *testing.T) {
 	srv := levelServer(t, l)
 	// Step up by 10 — expect ~137/254 ≈ 0.539.
 	fields := map[string]any{"step_mode": uint8(0), "step_size": uint8(10)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields); err != nil {
 		t.Fatalf("Step up error: %v", err)
 	}
 	if w.last < 0.52 || w.last > 0.56 {
@@ -683,7 +683,7 @@ func TestLevelInvokeStepDownFloor(t *testing.T) {
 	srv := levelServer(t, l)
 	// Step down by 200 from a low baseline — must clamp to MinLevel (1).
 	fields := map[string]any{"step_mode": uint8(1), "step_size": uint8(200)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields); err != nil {
 		t.Fatalf("Step down error: %v", err)
 	}
 	// 1/254 ≈ 0.0039
@@ -702,7 +702,7 @@ func TestLevelInvokeStopReturnsSuccess(t *testing.T) {
 			l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 			l.OnLevel(0.6)
 			srv := levelServer(t, l)
-			_, err := srv.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+			_, err := srv.MatterInvoke(context.Background(), cmdID, nil)
 			if err != nil {
 				t.Fatalf("cmd 0x%02X returned error: %v", cmdID, err)
 			}
@@ -719,7 +719,7 @@ func TestLevelInvokeStopReturnsSuccess(t *testing.T) {
 func TestLevelInvokeUnknownCommand(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	_, err := srv.MatterInvoke(context.Background(), 0x09, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x09, nil)
 	if !errors.Is(err, errMatterUnknownCommand) {
 		t.Fatalf("err = %v, want errMatterUnknownCommand", err)
 	}

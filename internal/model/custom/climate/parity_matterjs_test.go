@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -304,7 +303,7 @@ func TestParityMatterJS_ThermostatCommandList(t *testing.T) {
 	}
 	// Advertised must equal implemented: an unhandled command reports
 	// itself through errMatterUnknownCommand.
-	if _, err := server.MatterInvoke(context.Background(), jsCmdSetpointRaiseLower, nil, hmenum.CommandPriorityHigh); errors.Is(err, errMatterUnknownCommand) {
+	if _, err := server.MatterInvoke(context.Background(), jsCmdSetpointRaiseLower, nil); errors.Is(err, errMatterUnknownCommand) {
 		t.Errorf("SetpointRaiseLower is advertised but MatterInvoke rejects it: %v", err)
 	}
 }

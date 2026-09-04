@@ -1,0 +1,655 @@
+[
+  {
+    "label": "report_data_supress_false_empty_attrs",
+    "description": "ReportData with empty attributeReports and suppressResponse=false — the F3 regression fixture",
+    "type": "ReportData",
+    "fixture": {
+      "suppressResponse": false,
+      "attributeReports": [],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15360118280424ff0d18"
+  },
+  {
+    "label": "report_data_keepalive_no_subid",
+    "description": "ReportData keepalive (suppressResponse=true, no subscriptionId, no attributeReports field)",
+    "type": "ReportData",
+    "fixture": {
+      "suppressResponse": true,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15290424ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "matter.js omits attributeReports when undefined; Go always emits an empty array"
+  },
+  {
+    "label": "report_data_keepalive_with_subid",
+    "description": "ReportData keepalive with subscriptionId=5, suppressResponse=true",
+    "type": "ReportData",
+    "fixture": {
+      "subscriptionId": 5,
+      "suppressResponse": true,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15240005290424ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "matter.js omits attributeReports when undefined; Go always emits an empty array"
+  },
+  {
+    "label": "report_data_with_subid_supress_false",
+    "description": "ReportData: subscriptionId=42, suppressResponse=false, empty attributeReports",
+    "type": "ReportData",
+    "fixture": {
+      "subscriptionId": 42,
+      "suppressResponse": false,
+      "attributeReports": [],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524002a360118280424ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go uses PutUint32 for SubscriptionId (always 4-byte); matter.js TlvUInt32 magnitude-encodes small values. Apple Home requires fixed-width."
+  },
+  {
+    "label": "report_data_more_chunked_supress_false",
+    "description": "ReportData: moreChunkedMessages=true (mid-chunk), suppressResponse=false, subscriptionId=42",
+    "type": "ReportData",
+    "fixture": {
+      "subscriptionId": 42,
+      "suppressResponse": false,
+      "attributeReports": [],
+      "moreChunkedMessages": true,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524002a3601182903280424ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go uses PutUint32 for SubscriptionId (always 4-byte); matter.js TlvUInt32 magnitude-encodes small values."
+  },
+  {
+    "label": "report_data_chunked_no_subid",
+    "description": "ReportData: moreChunkedMessages=true, no subscriptionId (read-request chunk)",
+    "type": "ReportData",
+    "fixture": {
+      "suppressResponse": false,
+      "attributeReports": [],
+      "moreChunkedMessages": true,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "153601182903280424ff0d18"
+  },
+  {
+    "label": "report_data_event_only",
+    "description": "ReportData: eventReports array present (non-empty), suppressResponse=false",
+    "type": "ReportData",
+    "fixture": {
+      "subscriptionId": 99,
+      "suppressResponse": false,
+      "eventReports": [],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15240063360218280424ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go uses PutUint32 for SubscriptionId (always 4-byte); matter.js TlvUInt32 magnitude-encodes small values."
+  },
+  {
+    "label": "report_data_final_chunk_supress_true",
+    "description": "ReportData: final chunk, suppressResponse=true (no more chunks)",
+    "type": "ReportData",
+    "fixture": {
+      "subscriptionId": 7,
+      "suppressResponse": true,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15240007290424ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "matter.js omits attributeReports when undefined; Go always emits an empty array"
+  },
+  {
+    "label": "subscribe_req_minimal_keep_true",
+    "description": "SubscribeRequest: keepSubscriptions=true, intervals=0/60, isFabricFiltered=false",
+    "type": "SubscribeRequest",
+    "fixture": {
+      "keepSubscriptions": true,
+      "minIntervalFloorSeconds": 0,
+      "maxIntervalCeilingSeconds": 60,
+      "isFabricFiltered": false,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15290024010024023c280724ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go SubscribeRequest.MarshalTLV always emits empty attributeRequests array and omits interactionModelRevision; matter.js uses TlvOptionalField for both"
+  },
+  {
+    "label": "subscribe_req_minimal_keep_false",
+    "description": "SubscribeRequest: keepSubscriptions=false, intervals=0/30, isFabricFiltered=false",
+    "type": "SubscribeRequest",
+    "fixture": {
+      "keepSubscriptions": false,
+      "minIntervalFloorSeconds": 0,
+      "maxIntervalCeilingSeconds": 30,
+      "isFabricFiltered": false,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15280024010024021e280724ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go SubscribeRequest.MarshalTLV always emits empty attributeRequests array and omits interactionModelRevision; matter.js uses TlvOptionalField for both"
+  },
+  {
+    "label": "subscribe_req_with_attrs_fabric_filtered",
+    "description": "SubscribeRequest: one attribute path, isFabricFiltered=true",
+    "type": "SubscribeRequest",
+    "fixture": {
+      "keepSubscriptions": false,
+      "minIntervalFloorSeconds": 1,
+      "maxIntervalCeilingSeconds": 30,
+      "attributeRequests": [
+        {
+          "endpointId": 1,
+          "clusterId": 6,
+          "attributeId": 0
+        }
+      ],
+      "isFabricFiltered": true,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15280024010124021e3603172402012403062404001818290724ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go SubscribeRequest.MarshalTLV omits interactionModelRevision; matter.js emits it"
+  },
+  {
+    "label": "subscribe_req_with_events",
+    "description": "SubscribeRequest: one event path, no attribute requests",
+    "type": "SubscribeRequest",
+    "fixture": {
+      "keepSubscriptions": true,
+      "minIntervalFloorSeconds": 0,
+      "maxIntervalCeilingSeconds": 60,
+      "eventRequests": [
+        {
+          "endpointId": 1,
+          "clusterId": 6,
+          "eventId": 0
+        }
+      ],
+      "isFabricFiltered": false,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15290024010024023c3604172401012402062403001818280724ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go SubscribeRequest.MarshalTLV always emits empty attributeRequests array and omits interactionModelRevision"
+  },
+  {
+    "label": "subscribe_req_with_dvf",
+    "description": "SubscribeRequest: with one dataVersionFilter (endpoint=1, cluster=6, dataVersion=100)",
+    "type": "SubscribeRequest",
+    "fixture": {
+      "keepSubscriptions": false,
+      "minIntervalFloorSeconds": 0,
+      "maxIntervalCeilingSeconds": 30,
+      "isFabricFiltered": false,
+      "dataVersionFilters": [
+        {
+          "path": {
+            "endpointId": 1,
+            "clusterId": 6
+          },
+          "dataVersion": 100
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15280024010024021e2807360815370024010124020618240164181824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go SubscribeRequest.MarshalTLV always emits empty attributeRequests array and omits interactionModelRevision"
+  },
+  {
+    "label": "subscribe_resp_canonical",
+    "description": "SubscribeResponse: subscriptionId=1, maxInterval=30",
+    "type": "SubscribeResponse",
+    "fixture": {
+      "subscriptionId": 1,
+      "maxInterval": 30,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524000124021e24ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go uses PutUint32/PutUint16 (fixed-width); matter.js TlvUInt32/UInt16 magnitude-encodes. Spec requires fixed-width; chip-tool and Apple reject magnitude-encoded subId/maxInterval."
+  },
+  {
+    "label": "subscribe_resp_large_subid",
+    "description": "SubscribeResponse: subscriptionId=0x12345678 (forces 4-byte encoding), maxInterval=120",
+    "type": "SubscribeResponse",
+    "fixture": {
+      "subscriptionId": 305419896,
+      "maxInterval": 120,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1526007856341224027824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go uses PutUint32/PutUint16 (fixed-width); matter.js TlvUInt32/UInt16 magnitude-encodes."
+  },
+  {
+    "label": "status_resp_success",
+    "description": "StatusResponse: status=SUCCESS(0)",
+    "type": "StatusResponse",
+    "fixture": {
+      "status": 0,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524000024ff0d18"
+  },
+  {
+    "label": "status_resp_unsupported_attribute",
+    "description": "StatusResponse: status=UNSUPPORTED_ATTRIBUTE(0x86)",
+    "type": "StatusResponse",
+    "fixture": {
+      "status": 134,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524008624ff0d18"
+  },
+  {
+    "label": "status_resp_unsupported_cluster",
+    "description": "StatusResponse: status=UNSUPPORTED_CLUSTER(0xC3)",
+    "type": "StatusResponse",
+    "fixture": {
+      "status": 195,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "152400c324ff0d18"
+  },
+  {
+    "label": "status_resp_failure",
+    "description": "StatusResponse: status=FAILURE(0x01)",
+    "type": "StatusResponse",
+    "fixture": {
+      "status": 1,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524000124ff0d18"
+  },
+  {
+    "label": "status_resp_invalid_action",
+    "description": "StatusResponse: status=INVALID_ACTION(0x80)",
+    "type": "StatusResponse",
+    "fixture": {
+      "status": 128,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524008024ff0d18"
+  },
+  {
+    "label": "status_resp_busy",
+    "description": "StatusResponse: status=BUSY(0x9C)",
+    "type": "StatusResponse",
+    "fixture": {
+      "status": 156,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524009c24ff0d18"
+  },
+  {
+    "label": "read_req_minimal",
+    "description": "ReadRequest: no attributeRequests, isFabricFiltered=false",
+    "type": "ReadRequest",
+    "fixture": {
+      "isFabricFiltered": false,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15280324ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go ReadRequest.MarshalTLV always emits empty attributeRequests array and omits interactionModelRevision"
+  },
+  {
+    "label": "read_req_with_attrs",
+    "description": "ReadRequest: one attribute path (ep=1, cluster=6, attr=0), isFabricFiltered=false",
+    "type": "ReadRequest",
+    "fixture": {
+      "attributeRequests": [
+        {
+          "endpointId": 1,
+          "clusterId": 6,
+          "attributeId": 0
+        }
+      ],
+      "isFabricFiltered": false,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "153600172402012403062404001818280324ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go ReadRequest.MarshalTLV omits interactionModelRevision; matter.js emits it"
+  },
+  {
+    "label": "read_req_wildcard",
+    "description": "ReadRequest: wildcard attribute path (no endpointId/clusterId/attributeId), isFabricFiltered=false",
+    "type": "ReadRequest",
+    "fixture": {
+      "attributeRequests": [
+        {}
+      ],
+      "isFabricFiltered": false,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "153600171818280324ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go ReadRequest.MarshalTLV omits interactionModelRevision; matter.js emits it"
+  },
+  {
+    "label": "read_req_fabric_filtered",
+    "description": "ReadRequest: one attribute path, isFabricFiltered=true",
+    "type": "ReadRequest",
+    "fixture": {
+      "attributeRequests": [
+        {
+          "endpointId": 0,
+          "clusterId": 31,
+          "attributeId": 0
+        }
+      ],
+      "isFabricFiltered": true,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1536001724020024031f2404001818290324ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go ReadRequest.MarshalTLV omits interactionModelRevision; matter.js emits it"
+  },
+  {
+    "label": "read_req_with_events",
+    "description": "ReadRequest: event requests for cluster 6 event 0 on ep=1",
+    "type": "ReadRequest",
+    "fixture": {
+      "eventRequests": [
+        {
+          "endpointId": 1,
+          "clusterId": 6,
+          "eventId": 0
+        }
+      ],
+      "isFabricFiltered": false,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "153601172401012402062403001818280324ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "Go ReadRequest.MarshalTLV always emits empty attributeRequests array and omits interactionModelRevision"
+  },
+  {
+    "label": "write_req_not_timed",
+    "description": "WriteRequest: timedRequest=false, one AttributeDataIB (OnOff attr, bool true) — decode-only fixture",
+    "type": "WriteRequest",
+    "fixture": {
+      "timedRequest": false,
+      "writeRequests": [
+        {
+          "path": {
+            "endpointId": 1,
+            "clusterId": 6,
+            "attributeId": 0
+          },
+          "data": [
+            {
+              "typeLength": {
+                "type": 8,
+                "value": true
+              }
+            }
+          ]
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1528013602153701240201240306240400182902181824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "WriteRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "write_req_timed",
+    "description": "WriteRequest: timedRequest=true (timed write transaction) — decode-only fixture",
+    "type": "WriteRequest",
+    "fixture": {
+      "timedRequest": true,
+      "writeRequests": [
+        {
+          "path": {
+            "endpointId": 1,
+            "clusterId": 6,
+            "attributeId": 0
+          },
+          "data": [
+            {
+              "typeLength": {
+                "type": 8,
+                "value": true
+              }
+            }
+          ]
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1529013602153701240201240306240400182902181824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "WriteRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "write_req_suppress_response",
+    "description": "WriteRequest: suppressResponse=true, timedRequest=false — decode-only fixture",
+    "type": "WriteRequest",
+    "fixture": {
+      "suppressResponse": true,
+      "timedRequest": false,
+      "writeRequests": [
+        {
+          "path": {
+            "endpointId": 1,
+            "clusterId": 6,
+            "attributeId": 0
+          },
+          "data": [
+            {
+              "typeLength": {
+                "type": 8,
+                "value": true
+              }
+            }
+          ]
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15290028013602153701240201240306240400182902181824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "WriteRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "write_resp_success_single",
+    "description": "WriteResponse: single attribute status SUCCESS",
+    "type": "WriteResponse",
+    "fixture": {
+      "writeResponses": [
+        {
+          "path": {
+            "endpointId": 1,
+            "clusterId": 6,
+            "attributeId": 0
+          },
+          "status": {
+            "status": 0
+          }
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15360015370024020124030624040018350124000018181824ff0d18"
+  },
+  {
+    "label": "write_resp_empty",
+    "description": "WriteResponse: empty writeResponses array",
+    "type": "WriteResponse",
+    "fixture": {
+      "writeResponses": [],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1536001824ff0d18"
+  },
+  {
+    "label": "write_resp_error_single",
+    "description": "WriteResponse: single attribute status UnsupportedAttribute(0x86)",
+    "type": "WriteResponse",
+    "fixture": {
+      "writeResponses": [
+        {
+          "path": {
+            "endpointId": 1,
+            "clusterId": 6,
+            "attributeId": 99
+          },
+          "status": {
+            "status": 134
+          }
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15360015370024020124030624046318350124008618181824ff0d18"
+  },
+  {
+    "label": "invoke_req_not_timed_not_suppressed",
+    "description": "InvokeRequest: suppressResponse=false, timedRequest=false, one command — decode-only fixture",
+    "type": "InvokeRequest",
+    "fixture": {
+      "suppressResponse": false,
+      "timedRequest": false,
+      "invokeRequests": [
+        {
+          "commandPath": {
+            "endpointId": 1,
+            "clusterId": 6,
+            "commandId": 0
+          },
+          "commandFields": []
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1528002801360215370024000124010624020018181824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "InvokeRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "invoke_req_timed",
+    "description": "InvokeRequest: timedRequest=true (door-lock timed invoke) — decode-only fixture",
+    "type": "InvokeRequest",
+    "fixture": {
+      "suppressResponse": false,
+      "timedRequest": true,
+      "invokeRequests": [
+        {
+          "commandPath": {
+            "endpointId": 1,
+            "clusterId": 257,
+            "commandId": 0
+          },
+          "commandFields": []
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "152800290136021537002400012501010124020018181824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "InvokeRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "invoke_req_suppress_response",
+    "description": "InvokeRequest: suppressResponse=true, timedRequest=false — decode-only fixture",
+    "type": "InvokeRequest",
+    "fixture": {
+      "suppressResponse": true,
+      "timedRequest": false,
+      "invokeRequests": [
+        {
+          "commandPath": {
+            "endpointId": 0,
+            "clusterId": 3,
+            "commandId": 0
+          },
+          "commandFields": []
+        }
+      ],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1529002801360215370024000024010324020018181824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "InvokeRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "invoke_req_empty_requests",
+    "description": "InvokeRequest: no invoke requests — decode-only fixture",
+    "type": "InvokeRequest",
+    "fixture": {
+      "suppressResponse": false,
+      "timedRequest": false,
+      "invokeRequests": [],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "152800280136021824ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "InvokeRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "invoke_resp_empty_success",
+    "description": "InvokeResponseForSend: suppressResponse=false, empty invokeResponses",
+    "type": "InvokeResponse",
+    "fixture": {
+      "suppressResponse": false,
+      "invokeResponses": [],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15280036011824ff0d18"
+  },
+  {
+    "label": "invoke_resp_suppress_true",
+    "description": "InvokeResponseForSend: suppressResponse=true, empty invokeResponses",
+    "type": "InvokeResponse",
+    "fixture": {
+      "suppressResponse": true,
+      "invokeResponses": [],
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "15290036011824ff0d18"
+  },
+  {
+    "label": "timed_req_short",
+    "description": "TimedRequest: timeout=6000ms (typical door-lock timed-request window) — decode-only fixture",
+    "type": "TimedRequest",
+    "fixture": {
+      "timeout": 6000,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "152500701724ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "TimedRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "timed_req_max",
+    "description": "TimedRequest: timeout=65535ms (maximum uint16 value) — decode-only fixture",
+    "type": "TimedRequest",
+    "fixture": {
+      "timeout": 65535,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "152500ffff24ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "TimedRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  },
+  {
+    "label": "timed_req_minimal",
+    "description": "TimedRequest: timeout=1ms — decode-only fixture",
+    "type": "TimedRequest",
+    "fixture": {
+      "timeout": 1,
+      "interactionModelRevision": 13
+    },
+    "bytesHex": "1524000124ff0d18",
+    "byDesignDivergence": true,
+    "byDesignNote": "TimedRequest is decode-only in openccu-loom (bridge receives, never sends); no MarshalTLV to test"
+  }
+]

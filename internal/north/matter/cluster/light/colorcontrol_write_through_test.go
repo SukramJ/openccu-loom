@@ -57,7 +57,7 @@ func TestColorControl_WriteThrough_WriterCalledOnce(t *testing.T) {
 
 	const target uint16 = 300
 	ret, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target}, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target})
 	if err != nil {
 		t.Fatalf("MatterInvoke returned error: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestColorControl_WriteThrough_WriterError(t *testing.T) {
 	}
 
 	_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 300}, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 300})
 
 	if err == nil {
 		t.Fatal("MatterInvoke expected error when writer fails, got nil")
@@ -136,7 +136,7 @@ func TestColorControl_WriteThrough_Clamping(t *testing.T) {
 			srv.SetWriter(w)
 
 			_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-				wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: tc.target}, hmenum.CommandPriorityHigh)
+				wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: tc.target})
 			if err != nil {
 				t.Fatalf("MatterInvoke returned error: %v", err)
 			}
@@ -166,7 +166,7 @@ func TestColorControl_WriteThrough_NoWriter(t *testing.T) {
 
 	const target uint16 = 250
 	ret, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target}, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target})
 	if err != nil {
 		t.Fatalf("MatterInvoke without writer returned error: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestColorControl_WriteThrough_SetWriterNil(t *testing.T) {
 
 	const target uint16 = 200
 	_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target}, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target})
 	if err != nil {
 		t.Fatalf("MatterInvoke after SetWriter(nil) returned error: %v", err)
 	}
@@ -203,30 +203,35 @@ func TestColorControl_WriteThrough_SetWriterNil(t *testing.T) {
 	}
 }
 
-// TestColorControl_WriteThrough_PriorityPropagation verifies that the exact
-// priority value passed to MatterInvoke is forwarded unchanged to the writer.
-func TestColorControl_WriteThrough_PriorityPropagation(t *testing.T) {
+// TestColorControl_WriteThrough_UsesHighPriority pins the southbound
+// urgency of the ColorControl write-through.
+//
+// It replaces an earlier test that fed a priority into MatterInvoke and
+// checked it came back out. That contract is gone: the priority is no
+// longer an argument on the cluster-server interface, so the value the
+// writer sees is now decided here, by matterDispatchPriority, and a
+// test that supplies it can no longer observe a regression.
+//
+// The failure this guards is silent — nothing downstream of the writer
+// branches on the priority, so a wrong value changes only queue
+// ordering under load. And [hmenum.CommandPriorityCritical] is the ZERO
+// value, so the natural regression escalates every colour-temperature
+// write instead of degrading it.
+func TestColorControl_WriteThrough_UsesHighPriority(t *testing.T) {
 	t.Parallel()
-	priorities := []hmenum.CommandPriority{
-		hmenum.CommandPriorityCritical,
-		hmenum.CommandPriorityHigh,
-		hmenum.CommandPriorityLow,
+	srv := light.NewColorControlServer(light.DefaultColorControlServerConfig())
+	w := &fakeColorTemperatureWriter{}
+	srv.SetWriter(w)
+
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 300}); err != nil {
+		t.Fatalf("MatterInvoke: %v", err)
 	}
-	cfg := light.DefaultColorControlServerConfig()
-	for _, prio := range priorities {
-		t.Run("priority", func(t *testing.T) {
-			t.Parallel()
-			srv := light.NewColorControlServer(cfg)
-			w := &fakeColorTemperatureWriter{}
-			srv.SetWriter(w)
-			_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-				wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 300}, prio)
-			if err != nil {
-				t.Fatalf("MatterInvoke: %v", err)
-			}
-			if w.lastPriority != prio {
-				t.Errorf("writer received priority=%v, want %v", w.lastPriority, prio)
-			}
-		})
+	if w.calls == 0 {
+		t.Fatal("writer was never called, so no priority was observed")
+	}
+	if w.lastPriority != hmenum.CommandPriorityHigh {
+		t.Errorf("writer received priority=%v, want %v (Critical is the zero value, so an unset priority lands there)",
+			w.lastPriority, hmenum.CommandPriorityHigh)
 	}
 }

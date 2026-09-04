@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestSirenOnOffFeatureMapAdvertisesLighting confirms the OnOff cluster
@@ -108,7 +107,7 @@ func TestSirenOnOffLightingGatedCommandsRouteToOnOff(t *testing.T) {
 		// unrelated to the OnOff LT command routing this test locks down.
 		r.acousticIdxDP.RecordLabel("FREQUENCY_RISING")
 		srv := findCluster(t, r.siren, matterClusterOnOff)
-		if _, err := srv.MatterInvoke(context.Background(), cmd, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), cmd, nil); err != nil {
 			t.Fatalf("MatterInvoke(0x%02X) error: %v", cmd, err)
 		}
 		if len(w.calls) == 0 {
@@ -124,16 +123,16 @@ func TestSirenOnOffLightingGatedAttributeWritesAccepted(t *testing.T) {
 	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
 	srv := findCluster(t, r.siren, matterClusterOnOff)
 
-	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOnTime, uint16(30), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOnTime, uint16(30)); err != nil {
 		t.Fatalf("MatterWrite(OnTime) = %v, want nil", err)
 	}
-	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOffWaitTime, uint16(30), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOffWaitTime, uint16(30)); err != nil {
 		t.Fatalf("MatterWrite(OffWaitTime) = %v, want nil", err)
 	}
-	if err := srv.MatterWrite(context.Background(), matterAttrOnOffStartUpOnOff, uint8(1), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrOnOffStartUpOnOff, uint8(1)); err != nil {
 		t.Fatalf("MatterWrite(StartUpOnOff, 1) = %v, want nil", err)
 	}
-	if err := srv.MatterWrite(context.Background(), matterAttrOnOffStartUpOnOff, nil, hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrOnOffStartUpOnOff, nil); err != nil {
 		t.Fatalf("MatterWrite(StartUpOnOff, nil) = %v, want nil", err)
 	}
 }

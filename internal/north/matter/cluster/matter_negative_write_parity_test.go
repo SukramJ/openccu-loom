@@ -32,7 +32,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // statusCoder is a local alias for the im.StatusCodeError interface so this
@@ -74,7 +73,7 @@ func newWindowCoveringServer() *cover.WindowCoveringServer {
 type negativeWriteCase struct {
 	name  string
 	build func() interface {
-		MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error
+		MatterWrite(context.Context, uint32, any) error
 	}
 	attrID     uint32
 	value      any
@@ -97,7 +96,7 @@ func TestNegativeWriteParity(t *testing.T) {
 			// #assertSetpointWithinLimits — rejects values above MaxHeatSetpointLimit.
 			name: "Thermostat/OccupiedHeatingSetpoint above maxHeat → ConstraintError",
 			build: func() interface {
-				MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error
+				MatterWrite(context.Context, uint32, any) error
 			} {
 				return newHeatOnlyServer()
 			},
@@ -110,7 +109,7 @@ func TestNegativeWriteParity(t *testing.T) {
 			// #assertSetpointWithinLimits — rejects values below MinHeatSetpointLimit.
 			name: "Thermostat/OccupiedHeatingSetpoint below minHeat → ConstraintError",
 			build: func() interface {
-				MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error
+				MatterWrite(context.Context, uint32, any) error
 			} {
 				return newHeatOnlyServer()
 			},
@@ -123,7 +122,7 @@ func TestNegativeWriteParity(t *testing.T) {
 			// #assertSystemModeChanging — CoolingOnly sequence forbids SystemMode=Heat(4).
 			name: "Thermostat/SystemMode=Heat(4) on CoolingOnly server → ConstraintError",
 			build: func() interface {
-				MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error
+				MatterWrite(context.Context, uint32, any) error
 			} {
 				return newCoolOnlyServer()
 			},
@@ -136,7 +135,7 @@ func TestNegativeWriteParity(t *testing.T) {
 			// liftPercent100thsValue constraint "max 10000".
 			name: "WindowCovering/GoToLiftPercentage liftPercent100ths > 10000 → ConstraintError",
 			build: func() interface {
-				MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error
+				MatterWrite(context.Context, uint32, any) error
 			} {
 				// WindowCovering has no direct MatterWrite path for GoToLiftPercentage;
 				// the constraint is enforced inside MatterInvoke via extractPercent100ths.
@@ -153,7 +152,7 @@ func TestNegativeWriteParity(t *testing.T) {
 			// Mode attribute constraint "max 15".
 			name: "WindowCovering/Mode write > 15 → ConstraintError",
 			build: func() interface {
-				MatterWrite(context.Context, uint32, any, hmenum.CommandPriority) error
+				MatterWrite(context.Context, uint32, any) error
 			} {
 				return newWindowCoveringServer()
 			},
@@ -173,7 +172,7 @@ func TestNegativeWriteParity(t *testing.T) {
 			}
 
 			srv := tc.build()
-			err := srv.MatterWrite(ctx, tc.attrID, tc.value, hmenum.CommandPriorityHigh)
+			err := srv.MatterWrite(ctx, tc.attrID, tc.value)
 			if err == nil {
 				t.Fatalf("MatterWrite: expected error with status %s, got nil", tc.wantStatus)
 			}
@@ -193,7 +192,7 @@ func TestNegativeWriteParity(t *testing.T) {
 type negativeInvokeCase struct {
 	name  string
 	build func() interface {
-		MatterInvoke(context.Context, uint32, any, hmenum.CommandPriority) (any, error)
+		MatterInvoke(context.Context, uint32, any) (any, error)
 	}
 	cmdID      uint32
 	fields     any
@@ -211,7 +210,7 @@ func TestNegativeInvokeParity(t *testing.T) {
 			// setpointRaiseLower — mode=Heat(1) without HEAT feature → InvalidCommand.
 			name: "Thermostat/SetpointRaiseLower mode=Heat without HEAT feature → InvalidCommand",
 			build: func() interface {
-				MatterInvoke(context.Context, uint32, any, hmenum.CommandPriority) (any, error)
+				MatterInvoke(context.Context, uint32, any) (any, error)
 			} {
 				return newCoolOnlyServer()
 			},
@@ -224,7 +223,7 @@ func TestNegativeInvokeParity(t *testing.T) {
 			// GoToLiftPercentage liftPercent100thsValue constraint "max 10000".
 			name: "WindowCovering/GoToLiftPercentage liftPercent100ths > 10000 → ConstraintError",
 			build: func() interface {
-				MatterInvoke(context.Context, uint32, any, hmenum.CommandPriority) (any, error)
+				MatterInvoke(context.Context, uint32, any) (any, error)
 			} {
 				return newWindowCoveringServer()
 			},
@@ -242,7 +241,7 @@ func TestNegativeInvokeParity(t *testing.T) {
 			t.Parallel()
 
 			srv := tc.build()
-			_, err := srv.MatterInvoke(ctx, tc.cmdID, tc.fields, hmenum.CommandPriorityHigh)
+			_, err := srv.MatterInvoke(ctx, tc.cmdID, tc.fields)
 			if err == nil {
 				t.Fatalf("MatterInvoke: expected error with status %s, got nil", tc.wantStatus)
 			}
@@ -269,7 +268,7 @@ func TestPositiveWriteControl(t *testing.T) {
 		t.Parallel()
 		// maxHeat = 3000; write exactly 3000 → must succeed.
 		srv := newHeatOnlyServer()
-		if err := srv.MatterWrite(context.Background(), 0x0012, int16(3000), hmenum.CommandPriorityHigh); err != nil {
+		if err := srv.MatterWrite(context.Background(), 0x0012, int16(3000)); err != nil {
 			t.Fatalf("write at maxHeat boundary: %v", err)
 		}
 		v, ok := srv.MatterRead(0x0012)
@@ -285,7 +284,7 @@ func TestPositiveWriteControl(t *testing.T) {
 		t.Parallel()
 		// Mode constraint max 15; write exactly 15 → must succeed.
 		srv := newWindowCoveringServer()
-		if err := srv.MatterWrite(context.Background(), wire.WindowCoveringAttrMode, uint8(15), hmenum.CommandPriorityHigh); err != nil {
+		if err := srv.MatterWrite(context.Background(), wire.WindowCoveringAttrMode, uint8(15)); err != nil {
 			t.Fatalf("write Mode=15 (boundary): %v", err)
 		}
 		v, ok := srv.MatterRead(wire.WindowCoveringAttrMode)
@@ -311,7 +310,6 @@ func TestPositiveInvokeControl(t *testing.T) {
 			context.Background(),
 			wire.WindowCoveringCmdGoToLiftPercentage,
 			map[string]any{"percent": uint16(10000)},
-			hmenum.CommandPriorityHigh,
 		)
 		if err != nil {
 			t.Fatalf("GoToLiftPercentage(10000) boundary: %v", err)

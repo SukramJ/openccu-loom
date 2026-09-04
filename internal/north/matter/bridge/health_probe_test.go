@@ -8,8 +8,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/health"
 )
 
 type fakeBridgeStatus struct {
@@ -25,10 +23,10 @@ func (f *fakeBridgeStatus) LocalAddr() string {
 
 type recordingTracker struct {
 	mu      sync.Mutex
-	samples []health.Sample
+	samples []HealthSample
 }
 
-func (r *recordingTracker) Record(_ string, s health.Sample) {
+func (r *recordingTracker) Record(_ string, s HealthSample) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.samples = append(r.samples, s)
@@ -36,15 +34,15 @@ func (r *recordingTracker) Record(_ string, s health.Sample) {
 
 // RecordUnhealthy records like Record; the fake keeps no status, so the
 // distinction the tracker draws is not observable here.
-func (r *recordingTracker) RecordUnhealthy(name string, s health.Sample) {
+func (r *recordingTracker) RecordUnhealthy(name string, s HealthSample) {
 	s.Healthy = false
 	r.Record(name, s)
 }
 
-func (r *recordingTracker) snapshot() []health.Sample {
+func (r *recordingTracker) snapshot() []HealthSample {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]health.Sample, len(r.samples))
+	out := make([]HealthSample, len(r.samples))
 	copy(out, r.samples)
 	return out
 }

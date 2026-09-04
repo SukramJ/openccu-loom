@@ -16,8 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 func validBasicInfoConfig() core.Config {
@@ -337,7 +336,7 @@ func TestBasicInfo_UniqueIDDiffersForDifferentSerial(t *testing.T) {
 func TestBasicInfo_WriteNodeLabelValid(t *testing.T) {
 	t.Parallel()
 	b := newValidBasicInfo(t)
-	err := b.MatterWrite(context.Background(), 0x0005, "new-label", hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0005, "new-label")
 	if err != nil {
 		t.Fatalf("MatterWrite NodeLabel valid: %v", err)
 	}
@@ -351,7 +350,7 @@ func TestBasicInfo_WriteNodeLabelTooLong(t *testing.T) {
 	t.Parallel()
 	b := newValidBasicInfo(t)
 	long := strings.Repeat("x", 33)
-	err := b.MatterWrite(context.Background(), 0x0005, long, hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0005, long)
 	if err == nil {
 		t.Fatal("expected error for NodeLabel > 32 bytes, got nil")
 	}
@@ -360,7 +359,7 @@ func TestBasicInfo_WriteNodeLabelTooLong(t *testing.T) {
 func TestBasicInfo_WriteNodeLabelWrongType(t *testing.T) {
 	t.Parallel()
 	b := newValidBasicInfo(t)
-	err := b.MatterWrite(context.Background(), 0x0005, 42, hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0005, 42)
 	if err == nil {
 		t.Fatal("expected error for wrong type, got nil")
 	}
@@ -369,7 +368,7 @@ func TestBasicInfo_WriteNodeLabelWrongType(t *testing.T) {
 func TestBasicInfo_WriteLocationValid(t *testing.T) {
 	t.Parallel()
 	b := newValidBasicInfo(t)
-	err := b.MatterWrite(context.Background(), 0x0006, "DE", hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0006, "DE")
 	if err != nil {
 		t.Fatalf("MatterWrite Location=DE: %v", err)
 	}
@@ -383,7 +382,7 @@ func TestBasicInfo_WriteLocationWrongLength(t *testing.T) {
 	t.Parallel()
 	b := newValidBasicInfo(t)
 	for _, s := range []string{"", "D", "DEU", "DEUU"} {
-		err := b.MatterWrite(context.Background(), 0x0006, s, hmenum.CommandPriorityHigh)
+		err := b.MatterWrite(context.Background(), 0x0006, s)
 		if err == nil {
 			t.Errorf("expected error for Location=%q (len=%d), got nil", s, len(s))
 		}
@@ -393,7 +392,7 @@ func TestBasicInfo_WriteLocationWrongLength(t *testing.T) {
 func TestBasicInfo_WriteLocalConfigDisabledNoOp(t *testing.T) {
 	t.Parallel()
 	b := newValidBasicInfo(t)
-	err := b.MatterWrite(context.Background(), 0x0010, true, hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0010, true)
 	if err != nil {
 		t.Fatalf("MatterWrite LocalConfigDisabled: %v", err)
 	}
@@ -404,7 +403,7 @@ func TestBasicInfo_WriteReadOnlyAttrReturnsErrBasicInfoUnknown(t *testing.T) {
 	b := newValidBasicInfo(t)
 	ctx := context.Background()
 	// VendorID (0x0002) is read-only.
-	err := b.MatterWrite(ctx, 0x0002, uint16(0x9999), hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(ctx, 0x0002, uint16(0x9999))
 	if err == nil {
 		t.Fatal("expected error for read-only attr, got nil")
 	}
@@ -416,7 +415,7 @@ func TestBasicInfo_WriteReadOnlyAttrReturnsErrBasicInfoUnknown(t *testing.T) {
 func TestBasicInfo_WriteReadOnlyAttrSentinelViaIs(t *testing.T) {
 	t.Parallel()
 	b := newValidBasicInfo(t)
-	err := b.MatterWrite(context.Background(), 0x0004, uint16(1), hmenum.CommandPriorityHigh)
+	err := b.MatterWrite(context.Background(), 0x0004, uint16(1))
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -488,7 +487,7 @@ func TestBasicInfo_InvokeReturnsError(t *testing.T) {
 	b := newValidBasicInfo(t)
 	ctx := context.Background()
 	for _, cmdID := range []uint32{0x00, 0x01, 0xFF} {
-		_, err := b.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := b.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -553,7 +552,7 @@ func TestBasicInfo_EmitStartUp_FiresEvent(t *testing.T) {
 	if ev.event != 0x0000 {
 		t.Errorf("event = 0x%04X, want 0x0000 (StartUp)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityCritical {
+	if ev.priority != mattercontract.EventPriorityCritical {
 		t.Errorf("priority = %v, want Critical", ev.priority)
 	}
 	payload, ok := ev.data.(core.StartUpEvent)
@@ -592,7 +591,7 @@ func TestBasicInfo_EmitShutDown_FiresEvent(t *testing.T) {
 	if ev.event != 0x0001 {
 		t.Errorf("event = 0x%04X, want 0x0001 (ShutDown)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityCritical {
+	if ev.priority != mattercontract.EventPriorityCritical {
 		t.Errorf("priority = %v, want Critical", ev.priority)
 	}
 	if _, ok := ev.data.(core.ShutDownEvent); !ok {
@@ -627,7 +626,7 @@ func TestBasicInfo_EmitLeave_FiresEvent(t *testing.T) {
 	if ev.event != 0x0002 {
 		t.Errorf("event = 0x%04X, want 0x0002 (Leave)", ev.event)
 	}
-	if ev.priority != interfaces.MatterEventPriorityInfo {
+	if ev.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority = %v, want Info", ev.priority)
 	}
 	payload, ok := ev.data.(core.LeaveEvent)
@@ -816,7 +815,7 @@ func TestBasicInfo_PersistentWriteHook_FiresOnNodeLabelWrite(t *testing.T) {
 		gotLoc = location
 	})
 
-	if err := b.MatterWrite(context.Background(), 0x0005, "living-room", hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterWrite(context.Background(), 0x0005, "living-room"); err != nil {
 		t.Fatalf("MatterWrite NodeLabel: %v", err)
 	}
 	if calls != 1 {
@@ -844,7 +843,7 @@ func TestBasicInfo_PersistentWriteHook_FiresOnLocationWrite(t *testing.T) {
 		gotLoc = location
 	})
 
-	if err := b.MatterWrite(context.Background(), 0x0006, "DE", hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterWrite(context.Background(), 0x0006, "DE"); err != nil {
 		t.Fatalf("MatterWrite Location: %v", err)
 	}
 	if calls != 1 {
@@ -868,7 +867,7 @@ func TestBasicInfo_PersistentWriteHook_NotFiredOnLocalConfigDisabledWrite(t *tes
 	var calls int
 	b.SetOnPersistentWrite(func(string, string) { calls++ })
 
-	if err := b.MatterWrite(context.Background(), 0x0010, true, hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterWrite(context.Background(), 0x0010, true); err != nil {
 		t.Fatalf("MatterWrite LocalConfigDisabled: %v", err)
 	}
 	if calls != 0 {
@@ -920,7 +919,7 @@ func TestBasicInfo_PersistentWriteHook_DetachedByNil(t *testing.T) {
 	b.SetOnPersistentWrite(func(string, string) { calls++ })
 	b.SetOnPersistentWrite(nil)
 
-	if err := b.MatterWrite(context.Background(), 0x0005, "no-hook", hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterWrite(context.Background(), 0x0005, "no-hook"); err != nil {
 		t.Fatalf("MatterWrite NodeLabel with detached hook: %v", err)
 	}
 	if calls != 0 {
@@ -934,10 +933,10 @@ type fakeEventEmitter struct {
 	clusterID uint32
 	eventID   uint32
 	payload   any
-	priority  interfaces.MatterEventPriority
+	priority  mattercontract.EventPriority
 }
 
-func (f *fakeEventEmitter) MatterEmitEvent(ep uint16, clID, evID uint32, payload any, pri interfaces.MatterEventPriority) {
+func (f *fakeEventEmitter) MatterEmitEvent(ep uint16, clID, evID uint32, payload any, pri mattercontract.EventPriority) {
 	f.endpoint = ep
 	f.clusterID = clID
 	f.eventID = evID
@@ -998,7 +997,7 @@ func TestBasicInfo_EmitReachableChanged(t *testing.T) {
 	if em.eventID != wantEvent {
 		t.Errorf("emitted eventID=0x%04X, want 0x%04X (ReachableChanged)", em.eventID, wantEvent)
 	}
-	if em.priority != interfaces.MatterEventPriorityInfo {
+	if em.priority != mattercontract.EventPriorityInfo {
 		t.Errorf("priority=%v, want Info", em.priority)
 	}
 	payload, ok := em.payload.(core.ReachableChangedEvent)
@@ -1098,7 +1097,7 @@ func TestBasicInfo_MatterWrite_LocationTypeMismatch(t *testing.T) {
 	t.Parallel()
 	bi := newValidBasicInfo(t)
 	const attrLocation = 0x0006
-	err := bi.MatterWrite(context.Background(), attrLocation, uint32(42), hmenum.CommandPriorityHigh)
+	err := bi.MatterWrite(context.Background(), attrLocation, uint32(42))
 	if err == nil {
 		t.Fatal("MatterWrite(Location, uint32): expected error, got nil")
 	}
@@ -1288,7 +1287,7 @@ func TestBasicInfo_UniqueIDSurvivesNodeLabelWrite(t *testing.T) {
 	uidBefore, _ := b.MatterRead(0x0012)
 	serialBefore, _ := b.MatterRead(0x000F)
 
-	if err := b.MatterWrite(context.Background(), 0x0005, "Wohnzimmer", hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterWrite(context.Background(), 0x0005, "Wohnzimmer"); err != nil {
 		t.Fatalf("MatterWrite(NodeLabel): %v", err)
 	}
 

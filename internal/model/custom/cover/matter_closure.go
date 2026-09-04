@@ -143,15 +143,15 @@ func (s *garageClosureServer) MatterRead(attrID uint32) (value any, ok bool) {
 }
 
 func (s *garageClosureServer) MatterWrite(
-	ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority,
+	ctx context.Context, attrID uint32, value any,
 ) error {
-	return s.srv.MatterWrite(ctx, attrID, value, priority)
+	return s.srv.MatterWrite(ctx, attrID, value)
 }
 
 func (s *garageClosureServer) MatterInvoke(
-	ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority,
+	ctx context.Context, cmdID uint32, fields any,
 ) (response any, err error) {
-	resp, err := s.srv.MatterInvoke(ctx, cmdID, fields, priority)
+	resp, err := s.srv.MatterInvoke(ctx, cmdID, fields)
 	if err != nil {
 		return nil, err
 	}

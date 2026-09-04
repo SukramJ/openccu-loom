@@ -12,7 +12,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func defaultDescriptor(t *testing.T) *core.Descriptor {
@@ -160,7 +159,7 @@ func TestDescriptor_WriteReturnsError(t *testing.T) {
 	d := defaultDescriptor(t)
 	ctx := context.Background()
 	for _, attrID := range []uint32{0x0000, 0x0001, 0x0002, 0x0003, 0xFFFD} {
-		err := d.MatterWrite(ctx, attrID, nil, hmenum.CommandPriorityHigh)
+		err := d.MatterWrite(ctx, attrID, nil)
 		if err == nil {
 			t.Errorf("MatterWrite(0x%04X) expected error, got nil", attrID)
 		}
@@ -172,7 +171,7 @@ func TestDescriptor_InvokeReturnsError(t *testing.T) {
 	d := defaultDescriptor(t)
 	ctx := context.Background()
 	for _, cmdID := range []uint32{0x00, 0x01, 0xFF} {
-		_, err := d.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := d.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}
@@ -245,7 +244,7 @@ func TestDescriptor_ReadReturnsDefensiveCopy(t *testing.T) {
 func TestDescriptor_WriteErrorWrapsReadOnly(t *testing.T) {
 	t.Parallel()
 	d := defaultDescriptor(t)
-	err := d.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh)
+	err := d.MatterWrite(context.Background(), 0x0000, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

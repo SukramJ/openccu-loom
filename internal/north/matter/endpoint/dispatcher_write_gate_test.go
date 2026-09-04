@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // recordingServer records every attribute ID passed to MatterWrite so a
@@ -27,29 +26,29 @@ func (s *recordingServer) MatterRead(_ uint32) (any, bool) { return nil, false }
 func (s *recordingServer) MatterReportable() []uint32      { return s.attrs }
 func (s *recordingServer) MatterAttributes() []uint32      { return s.attrs }
 
-func (s *recordingServer) MatterWrite(_ context.Context, attr uint32, _ any, _ hmenum.CommandPriority) error {
+func (s *recordingServer) MatterWrite(_ context.Context, attr uint32, _ any) error {
 	s.writeCalls = append(s.writeCalls, attr)
 	return nil
 }
 
-func (s *recordingServer) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s *recordingServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 
 var (
-	_ interfaces.MatterClusterServer          = (*recordingServer)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*recordingServer)(nil)
+	_ mattercontract.ClusterServer          = (*recordingServer)(nil)
+	_ mattercontract.ClusterAttributeLister = (*recordingServer)(nil)
 )
 
 // recordingSource is a MatterEndpointSource backed by one recordingServer.
 type recordingSource struct{ srv *recordingServer }
 
 func (s recordingSource) MatterDeviceType() uint16 { return 0x010A }
-func (s recordingSource) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{s.srv}
+func (s recordingSource) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{s.srv}
 }
 
-var _ interfaces.MatterEndpointSource = recordingSource{}
+var _ mattercontract.EndpointSource = recordingSource{}
 
 func recordedWrite(calls []uint32, attr uint32) bool {
 	for _, a := range calls {

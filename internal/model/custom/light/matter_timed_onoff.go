@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // matterTimedHold is the reserved "hold indefinitely" value for the
@@ -56,10 +55,6 @@ type timedOnOffState struct {
 
 	timedOnActive    bool
 	delayedOffActive bool
-	// priority carries the CommandPriority of the arming command so
-	// the autonomous off at countdown expiry writes to the CCU with
-	// the same urgency the controller requested.
-	priority hmenum.CommandPriority
 	// stop is non-nil while a tick goroutine runs; maybeStopLocked
 	// closes it (ending that goroutine) when both countdowns idle.
 	// Guarded by mu.
@@ -179,7 +174,7 @@ func (l *Light) matterTimedHandleOff() {
 //   - Otherwise OnTime rises to max(request, current), OffWaitTime is
 //     replaced, the timed-on countdown arms (unless OnTime is 0 or the
 //     0xFFFF hold) and the device turns on.
-func (l *Light) matterOnWithTimedOff(ctx context.Context, onOffControl uint8, onTime, offWaitTime uint16, priority hmenum.CommandPriority) error {
+func (l *Light) matterOnWithTimedOff(ctx context.Context, onOffControl uint8, onTime, offWaitTime uint16) error {
 	const acceptOnlyWhenOnBit = 0x01
 	on, _ := l.IsOn()
 	if onOffControl&acceptOnlyWhenOnBit != 0 && !on {
@@ -204,7 +199,6 @@ func (l *Light) matterOnWithTimedOff(ctx context.Context, onOffControl uint8, on
 	prevTimedOn, prevDelayedOff := t.timedOnActive, t.delayedOffActive
 	t.onTime = max(onTime, t.onTime)
 	t.offWaitTime = offWaitTime
-	t.priority = priority
 	if t.onTime != 0 && t.onTime != matterTimedHold {
 		t.timedOnActive = true
 		t.ensureLoopLocked(l)
@@ -214,7 +208,7 @@ func (l *Light) matterOnWithTimedOff(ctx context.Context, onOffControl uint8, on
 	t.maybeStopLocked()
 	t.mu.Unlock()
 
-	if err := l.TurnOn(ctx, priority); err != nil {
+	if err := l.TurnOn(ctx, matterDispatchPriority); err != nil {
 		// Roll the armed countdown back — matter.js state mutations are
 		// transactional and revert when on() fails, so a rejected CCU
 		// write must not leave a ticking timed-on phase behind.
@@ -323,7 +317,6 @@ func (l *Light) matterTimedAdvance(ctx context.Context) {
 	t := &l.timed
 	t.mu.Lock()
 	var turnOff bool
-	var priority hmenum.CommandPriority
 	if t.timedOnActive {
 		switch {
 		case t.onTime == matterTimedHold:
@@ -333,7 +326,6 @@ func (l *Light) matterTimedAdvance(ctx context.Context) {
 			t.timedOnActive = false
 			t.offWaitTime = 0
 			turnOff = true
-			priority = t.priority
 		default:
 			t.onTime--
 		}
@@ -355,7 +347,7 @@ func (l *Light) matterTimedAdvance(ctx context.Context) {
 	if turnOff {
 		// Autonomous off at timed-on expiry. matter.js awaits off()
 		// inside the tick; the bridge maps it onto a CCU write.
-		_ = l.TurnOff(custom.EnsureContext(ctx), priority)
+		_ = l.TurnOff(custom.EnsureContext(ctx), matterDispatchPriority)
 		l.dataVersion.Bump()
 	}
 }

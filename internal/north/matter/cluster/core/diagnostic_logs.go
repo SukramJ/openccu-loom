@@ -11,8 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // DiagnosticLogs implements the Matter DiagnosticLogs cluster (0x0032)
@@ -118,15 +117,15 @@ func (d *DiagnosticLogs) SetBootEpoch(t time.Time) {
 // Compile-time assertions: DiagnosticLogs satisfies MatterClusterServer,
 // the attribute-lister capability, and the command-lister capability.
 var (
-	_ interfaces.MatterClusterServer          = (*DiagnosticLogs)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*DiagnosticLogs)(nil)
-	_ interfaces.MatterClusterCommandLister   = (*DiagnosticLogs)(nil)
+	_ mattercontract.ClusterServer          = (*DiagnosticLogs)(nil)
+	_ mattercontract.ClusterAttributeLister = (*DiagnosticLogs)(nil)
+	_ mattercontract.ClusterCommandLister   = (*DiagnosticLogs)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (d *DiagnosticLogs) MatterClusterID() uint32 { return diaglogsClusterID }
 
-// MatterRead implements [interfaces.MatterClusterServer]. The cluster
+// MatterRead implements [mattercontract.ClusterServer]. The cluster
 // has no readable attributes other than the global ones.
 func (d *DiagnosticLogs) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
@@ -139,7 +138,7 @@ func (d *DiagnosticLogs) MatterRead(attrID uint32) (any, bool) {
 }
 
 // MatterWrite always rejects — DiagnosticLogs has no writable attributes.
-func (d *DiagnosticLogs) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (d *DiagnosticLogs) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: DiagnosticLogs is read-only (got attr 0x%04X)", attrID)
 }
 
@@ -149,7 +148,7 @@ func (d *DiagnosticLogs) MatterWrite(_ context.Context, attrID uint32, _ any, _ 
 // payload. Provider errors map to LogStatusBusy with empty content
 // per §11.11.6.1 (the spec frames Busy as "transient failure to
 // access logs", which fits any provider exception).
-func (d *DiagnosticLogs) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (d *DiagnosticLogs) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	if cmdID != diaglogsCmdRetrieveLogsRequest {
 		return nil, im.UnsupportedCommandf("matter: DiagnosticLogs command 0x%02X not supported", cmdID)
 	}
@@ -213,7 +212,7 @@ func decodeRetrieveLogsIntent(fields any) uint8 {
 	return IntentEndUserSupport
 }
 
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterAcceptedCommands implements [mattercontract.ClusterCommandLister].
 // Lists the command IDs the server handles via MatterInvoke.
 // Mirrors matter.js packages/model/src/standard/elements/
 // diagnostic-logs.element.ts accepted commands.
@@ -223,7 +222,7 @@ func (d *DiagnosticLogs) MatterAcceptedCommands() []uint32 {
 	}
 }
 
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// MatterGeneratedCommands implements [mattercontract.ClusterCommandLister].
 // Lists the response command IDs this server may emit.
 // Mirrors matter.js packages/model/src/standard/elements/
 // diagnostic-logs.element.ts generated commands.

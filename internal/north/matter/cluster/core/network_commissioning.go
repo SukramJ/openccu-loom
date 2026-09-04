@@ -10,8 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // NetworkCommissioning implements the Matter NetworkCommissioning
@@ -35,7 +34,7 @@ type NetworkCommissioning struct {
 	// dataVersion tracks the per-cluster monotonic counter per Matter
 	// §10.6.5. Bumped at construction so the initial version is a non-zero
 	// sentinel (prevents DataVersionFilter=0 false-positive cache hits).
-	// Satisfies [interfaces.MatterClusterDataVersion]. Mirrors matter.js
+	// Satisfies [mattercontract.ClusterDataVersion]. Mirrors matter.js
 	// NetworkCommissioning behavior layer auto-tracking and chip
 	// src/app/clusters/network-commissioning/NetworkCommissioningCluster.cpp
 	// ember dirty-marking mechanism.
@@ -129,14 +128,14 @@ func NewNetworkCommissioning(cfg NetworkCommissioningConfig) *NetworkCommissioni
 // MatterClusterServer, the attribute-lister capability, and
 // MatterClusterDataVersion.
 var (
-	_ interfaces.MatterClusterServer                  = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeLister         = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterDataVersion             = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeReadPrivilege  = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeWritePrivilege = (*NetworkCommissioning)(nil)
+	_ mattercontract.ClusterServer                  = (*NetworkCommissioning)(nil)
+	_ mattercontract.ClusterAttributeLister         = (*NetworkCommissioning)(nil)
+	_ mattercontract.ClusterDataVersion             = (*NetworkCommissioning)(nil)
+	_ mattercontract.ClusterAttributeReadPrivilege  = (*NetworkCommissioning)(nil)
+	_ mattercontract.ClusterAttributeWritePrivilege = (*NetworkCommissioning)(nil)
 )
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+// MatterDataVersion implements [mattercontract.ClusterDataVersion].
 // Returns the per-cluster monotonic counter seeded at construction.
 // Mirrors matter.js NetworkCommissioning behavior layer DataVersion
 // tracking and chip's ember dirty-marking mechanism
@@ -145,10 +144,10 @@ func (n *NetworkCommissioning) MatterDataVersion() uint32 {
 	return n.dataVersion.Current()
 }
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (n *NetworkCommissioning) MatterClusterID() uint32 { return netcommClusterID }
 
-// MinReadPrivilege implements [interfaces.MatterClusterAttributeReadPrivilege].
+// MinReadPrivilege implements [mattercontract.ClusterAttributeReadPrivilege].
 // MaxNetworks / Networks / LastNetworkingStatus / LastNetworkId /
 // LastConnectErrorValue are all read-access "R A" (Administer) per Matter
 // §11.9 — a merely-View subject must not read them, nor have them streamed
@@ -169,7 +168,7 @@ func (n *NetworkCommissioning) MinReadPrivilege(attrID uint32) uint8 {
 	}
 }
 
-// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// MinWritePrivilege implements [mattercontract.ClusterAttributeWritePrivilege].
 // InterfaceEnabled (0x0004) requires Administer (5) per Matter §11.9
 // (access "RW VA"). Mirrors matter.js
 // packages/model/src/standard/elements/network-commissioning.element.ts:47.
@@ -182,7 +181,7 @@ func (n *NetworkCommissioning) MinWritePrivilege(attrID uint32) uint8 {
 	}
 }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (n *NetworkCommissioning) MatterRead(attrID uint32) (any, bool) {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
@@ -221,7 +220,7 @@ func (n *NetworkCommissioning) MatterRead(attrID uint32) (any, bool) {
 
 // MatterWrite handles InterfaceEnabled writes (Matter §11.9.6.4).
 // Other attributes are read-only.
-func (n *NetworkCommissioning) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (n *NetworkCommissioning) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != netcommAttrInterfaceEnabled {
 		return fmt.Errorf("matter: NetworkCommissioning attribute 0x%04X is read-only", attrID)
 	}
@@ -237,7 +236,7 @@ func (n *NetworkCommissioning) MatterWrite(_ context.Context, attrID uint32, val
 
 // MatterInvoke rejects every command — openccu-loom ships Ethernet-only
 // and Ethernet has no commissioning surface.
-func (n *NetworkCommissioning) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (n *NetworkCommissioning) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: NetworkCommissioning command 0x%02X not supported (Ethernet-only)", cmdID)
 }
 

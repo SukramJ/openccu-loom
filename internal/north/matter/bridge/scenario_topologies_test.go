@@ -15,7 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // scenarioTopology bundles a snapshotter + the notifier sources it
@@ -40,14 +40,14 @@ type scenarioFakeNotifier struct {
 }
 
 var (
-	_ interfaces.MatterMeasurementSource      = (*scenarioFakeNotifier)(nil)
-	_ interfaces.MatterFloatMeasurementSource = (*scenarioFakeNotifier)(nil)
-	_ interfaces.MatterChangeNotifier         = (*scenarioFakeNotifier)(nil)
+	_ mattercontract.MeasurementSource      = (*scenarioFakeNotifier)(nil)
+	_ mattercontract.FloatMeasurementSource = (*scenarioFakeNotifier)(nil)
+	_ mattercontract.ChangeNotifier         = (*scenarioFakeNotifier)(nil)
 )
 
 func (n *scenarioFakeNotifier) DataPointKey() hmtypes.DataPointKey { return n.key }
-func (n *scenarioFakeNotifier) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementTemperature
+func (n *scenarioFakeNotifier) MatterMeasurementClass() mattercontract.MeasurementClass {
+	return mattercontract.MeasurementTemperature
 }
 
 func (n *scenarioFakeNotifier) MatterFloatValue() (float64, bool) {
@@ -144,15 +144,15 @@ type scenarioFakeFabricReader struct {
 }
 
 var (
-	_ interfaces.MatterEndpointSource = (*scenarioFakeFabricReader)(nil)
-	_ interfaces.MatterClusterServer  = (*scenarioFakeFabricReader)(nil)
-	_ interfaces.FabricScopedReader   = (*scenarioFakeFabricReader)(nil)
+	_ mattercontract.EndpointSource     = (*scenarioFakeFabricReader)(nil)
+	_ mattercontract.ClusterServer      = (*scenarioFakeFabricReader)(nil)
+	_ mattercontract.FabricScopedReader = (*scenarioFakeFabricReader)(nil)
 )
 
 func (n *scenarioFakeFabricReader) DataPointKey() hmtypes.DataPointKey { return n.key }
 func (*scenarioFakeFabricReader) MatterDeviceType() uint16             { return 0x010A }
-func (n *scenarioFakeFabricReader) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{n}
+func (n *scenarioFakeFabricReader) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{n}
 }
 func (*scenarioFakeFabricReader) MatterClusterID() uint32 { return 0x0006 }
 func (*scenarioFakeFabricReader) MatterRead(attrID uint32) (any, bool) {
@@ -170,11 +170,11 @@ func (n *scenarioFakeFabricReader) MatterReadFiltered(ctx context.Context, attrI
 	return fabric, true
 }
 
-func (*scenarioFakeFabricReader) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (*scenarioFakeFabricReader) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (*scenarioFakeFabricReader) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (*scenarioFakeFabricReader) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 func (*scenarioFakeFabricReader) MatterReportable() []uint32 { return []uint32{0x0000} }
@@ -252,10 +252,10 @@ type scenarioFakeOnOffEndpointSource struct {
 }
 
 var (
-	_ interfaces.MatterEndpointSource     = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ interfaces.MatterClusterServer      = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ interfaces.MatterChangeNotifier     = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ interfaces.MatterClusterDataVersion = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ mattercontract.EndpointSource     = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ mattercontract.ClusterServer      = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ mattercontract.ChangeNotifier     = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ mattercontract.ClusterDataVersion = (*scenarioFakeOnOffEndpointSource)(nil)
 )
 
 func (n *scenarioFakeOnOffEndpointSource) DataPointKey() hmtypes.DataPointKey { return n.key }
@@ -264,8 +264,8 @@ func (n *scenarioFakeOnOffEndpointSource) DataPointKey() hmtypes.DataPointKey { 
 // packages/node/src/devices/on-off-plug-in-unit.ts.
 func (*scenarioFakeOnOffEndpointSource) MatterDeviceType() uint16 { return 0x010A }
 
-func (n *scenarioFakeOnOffEndpointSource) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{n, &scenarioFakeLevelControlServer{owner: n}}
+func (n *scenarioFakeOnOffEndpointSource) MatterClusterServers() []mattercontract.ClusterServer {
+	return []mattercontract.ClusterServer{n, &scenarioFakeLevelControlServer{owner: n}}
 }
 
 // scenarioFakeLevelControlServer is a sibling cluster server on the
@@ -279,7 +279,7 @@ type scenarioFakeLevelControlServer struct {
 	owner *scenarioFakeOnOffEndpointSource
 }
 
-var _ interfaces.MatterClusterServer = (*scenarioFakeLevelControlServer)(nil)
+var _ mattercontract.ClusterServer = (*scenarioFakeLevelControlServer)(nil)
 
 func (*scenarioFakeLevelControlServer) MatterClusterID() uint32 { return 0x0008 }
 func (l *scenarioFakeLevelControlServer) MatterRead(attrID uint32) (any, bool) {
@@ -300,11 +300,11 @@ func (l *scenarioFakeLevelControlServer) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-func (*scenarioFakeLevelControlServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (*scenarioFakeLevelControlServer) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (*scenarioFakeLevelControlServer) MatterInvoke(_ context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+func (*scenarioFakeLevelControlServer) MatterInvoke(_ context.Context, cmdID uint32, fields any) (any, error) {
 	if cmdID != 0x00 && cmdID != 0x04 {
 		return nil, fmt.Errorf("unknown LevelControl cmd 0x%02X", cmdID)
 	}
@@ -338,7 +338,7 @@ func (n *scenarioFakeOnOffEndpointSource) MatterRead(attrID uint32) (any, bool) 
 // *custom.Switch translates the write into a CCU SetValue; the fake
 // just mutates the boolean and bumps DataVersion so subsequent
 // reads / reports observe the new state.
-func (n *scenarioFakeOnOffEndpointSource) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (n *scenarioFakeOnOffEndpointSource) MatterWrite(_ context.Context, attrID uint32, value any) error {
 	if attrID != 0x0000 {
 		return nil
 	}
@@ -353,7 +353,7 @@ func (n *scenarioFakeOnOffEndpointSource) MatterWrite(_ context.Context, attrID 
 	return nil
 }
 
-func (*scenarioFakeOnOffEndpointSource) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (*scenarioFakeOnOffEndpointSource) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 

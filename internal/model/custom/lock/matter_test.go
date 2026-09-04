@@ -10,14 +10,13 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // srv returns the DoorLockServer mounted by the lock's MatterClusterServers.
 func srv(l *Lock) interface {
 	MatterClusterID() uint32
 	MatterRead(uint32) (any, bool)
-	MatterInvoke(context.Context, uint32, any, hmenum.CommandPriority) (any, error)
+	MatterInvoke(context.Context, uint32, any) (any, error)
 	MatterReportable() []uint32
 } {
 	servers := l.MatterClusterServers()
@@ -27,7 +26,7 @@ func srv(l *Lock) interface {
 	type fullServer interface {
 		MatterClusterID() uint32
 		MatterRead(uint32) (any, bool)
-		MatterInvoke(context.Context, uint32, any, hmenum.CommandPriority) (any, error)
+		MatterInvoke(context.Context, uint32, any) (any, error)
 		MatterReportable() []uint32
 	}
 	return servers[0].(fullServer)
@@ -113,7 +112,7 @@ func TestLockTypeIsDeadBolt(t *testing.T) {
 func TestLockDoorCommand(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{})
-	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil); err != nil {
 		t.Fatalf("LockDoor err: %v", err)
 	}
 	if len(w.calls) == 0 {
@@ -125,7 +124,7 @@ func TestLockDoorCommand(t *testing.T) {
 func TestUnlockDoorCommand(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{})
-	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnlockDoor, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnlockDoor, nil); err != nil {
 		t.Fatalf("UnlockDoor err: %v", err)
 	}
 	if len(w.calls) == 0 {
@@ -137,7 +136,7 @@ func TestUnlockDoorCommand(t *testing.T) {
 // command is gated by [LockCapabilities.SupportsOpen].
 func TestUnboltDoorRequiresSupportsOpen(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: false})
-	_, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnboltDoor, nil, hmenum.CommandPriorityHigh)
+	_, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnboltDoor, nil)
 	if !errors.Is(err, ErrNotSupported) {
 		t.Fatalf("UnboltDoor without SupportsOpen err = %v, want ErrNotSupported", err)
 	}
@@ -147,7 +146,7 @@ func TestUnboltDoorRequiresSupportsOpen(t *testing.T) {
 func TestUnboltDoorWhenSupported(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{SupportsOpen: true})
-	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnboltDoor, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnboltDoor, nil); err != nil {
 		t.Fatalf("UnboltDoor err: %v", err)
 	}
 	if len(w.calls) == 0 {
@@ -158,7 +157,7 @@ func TestUnboltDoorWhenSupported(t *testing.T) {
 // TestUnknownLockCommand surfaces an error for an unknown command ID.
 func TestUnknownLockCommand(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	_, err := srv(r.lock).MatterInvoke(context.Background(), 0x99, nil, hmenum.CommandPriorityHigh)
+	_, err := srv(r.lock).MatterInvoke(context.Background(), 0x99, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown command ID 0x99")
 	}

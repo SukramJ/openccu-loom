@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestOTARequestor_ClusterID(t *testing.T) {
@@ -87,7 +86,7 @@ func TestOTARequestor_ReadUpdateStateProgressNil(t *testing.T) {
 func TestOTARequestor_WriteDefaultOTAProvidersNoOp(t *testing.T) {
 	t.Parallel()
 	o := core.NewOTASoftwareUpdateRequestor()
-	err := o.MatterWrite(context.Background(), 0x0000, []any{}, hmenum.CommandPriorityHigh)
+	err := o.MatterWrite(context.Background(), 0x0000, []any{})
 	if err != nil {
 		t.Fatalf("Write DefaultOTAProviders: %v", err)
 	}
@@ -98,7 +97,7 @@ func TestOTARequestor_WriteOtherAttrReturnsError(t *testing.T) {
 	o := core.NewOTASoftwareUpdateRequestor()
 	ctx := context.Background()
 	for _, attrID := range []uint32{0x0001, 0x0002, 0x0003, 0xFFFD} {
-		err := o.MatterWrite(ctx, attrID, nil, hmenum.CommandPriorityHigh)
+		err := o.MatterWrite(ctx, attrID, nil)
 		if err == nil {
 			t.Errorf("MatterWrite(0x%04X) expected error, got nil", attrID)
 		}
@@ -109,7 +108,7 @@ func TestOTARequestor_InvokeAnnounceOTAProvider(t *testing.T) {
 	t.Parallel()
 	o := core.NewOTASoftwareUpdateRequestor()
 	ctx := context.Background()
-	resp, err := o.MatterInvoke(ctx, 0x00, nil, hmenum.CommandPriorityHigh)
+	resp, err := o.MatterInvoke(ctx, 0x00, nil)
 	if err != nil {
 		t.Fatalf("MatterInvoke(AnnounceOTAProvider) error: %v", err)
 	}
@@ -123,7 +122,7 @@ func TestOTARequestor_InvokeUnknownCmdReturnsError(t *testing.T) {
 	o := core.NewOTASoftwareUpdateRequestor()
 	ctx := context.Background()
 	for _, cmdID := range []uint32{0x01, 0x02, 0xFF} {
-		_, err := o.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := o.MatterInvoke(ctx, cmdID, nil)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
 		}

@@ -17,6 +17,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached these calls defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
+
 // Compile-time assertions: Siren and SmokeSiren participate in the
 // Matter source surface (ADR 0012). Siren projects onto an
 // OnOffPlugInUnit (0x010A) endpoint with OnOff + BooleanState clusters
@@ -264,7 +276,7 @@ func (s sirenOnOffServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s sirenOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
+func (s sirenOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	switch attrID {
 	case matterAttrOnOffOnOff:
 		on, ok := value.(bool)
@@ -275,9 +287,9 @@ func (s sirenOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value 
 		if on {
 			// TurnOn with the empty OnConfig: device-defined defaults pick the tone /
 			// light selection.
-			err = s.s.TurnOn(ctx, OnConfig{}, priority)
+			err = s.s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
 		} else {
-			err = s.s.TurnOff(ctx, priority)
+			err = s.s.TurnOff(ctx, matterDispatchPriority)
 		}
 		if err != nil {
 			return err
@@ -323,37 +335,37 @@ func (s sirenOnOffServer) MinWritePrivilege(attrID uint32) uint8 {
 	return 3 // Operate
 }
 
-func (s sirenOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
+func (s sirenOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any) (any, error) {
 	var err error
 	switch cmdID {
 	case matterCmdOff:
-		err = s.s.TurnOff(ctx, priority)
+		err = s.s.TurnOff(ctx, matterDispatchPriority)
 	case matterCmdOn:
-		err = s.s.TurnOn(ctx, OnConfig{}, priority)
+		err = s.s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
 	case matterCmdToggle:
 		// An unobserved siren is treated as silent, so a first Toggle raises
 		// the alarm rather than doing nothing — the same reading the switch
 		// projection applies.
 		active, observed := s.s.IsActive()
 		if observed && active {
-			err = s.s.TurnOff(ctx, priority)
+			err = s.s.TurnOff(ctx, matterDispatchPriority)
 		} else {
-			err = s.s.TurnOn(ctx, OnConfig{}, priority)
+			err = s.s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
 		}
 	case matterCmdOffWithEffect:
 		// OffWithEffect (LT, mandatory): no dimming-effect engine on a
 		// siren, so the effect identifier/variant are ignored and the
 		// alarm is turned off. on-off.element.ts:41.
-		err = s.s.TurnOff(ctx, priority)
+		err = s.s.TurnOff(ctx, matterDispatchPriority)
 	case matterCmdOnWithRecallGlobalScene:
 		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
 		// recall collapses to a plain On. on-off.element.ts:46.
-		err = s.s.TurnOn(ctx, OnConfig{}, priority)
+		err = s.s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
 	case matterCmdOnWithTimedOff:
 		// OnWithTimedOff (LT, mandatory): no on-timer, so the timed-off
 		// semantics are dropped and the alarm is turned on.
 		// on-off.element.ts:51.
-		err = s.s.TurnOn(ctx, OnConfig{}, priority)
+		err = s.s.TurnOn(ctx, OnConfig{}, matterDispatchPriority)
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -543,11 +555,11 @@ func (s smokeCOServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s smokeCOServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s smokeCOServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 }
 
-func (s smokeCOServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s smokeCOServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	// SmokeCOAlarm has cluster commands (SelfTestRequest etc.) but
 	// HM-SWSD exposes none of them through the wire layer. Reject
 	// every cmdID; a SelfTest mapping is possible if a HM equivalent

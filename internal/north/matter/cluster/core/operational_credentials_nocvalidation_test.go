@@ -38,10 +38,10 @@ func TestAddNOC_MintedOverWrongKeyRejectedAsInvalidPublicKey(t *testing.T) {
 
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
-	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, 0); err != nil {
+	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}); err != nil {
 		t.Fatalf("CSRRequest: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func TestAddNOC_MintedOverWrongKeyRejectedAsInvalidPublicKey(t *testing.T) {
 		IPKValue:         make([]byte, 16),
 		CaseAdminSubject: 0xABCD,
 		AdminVendorID:    0x1234,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestAddNOC_SameFabricIDAndRootTwiceRejectedAsFabricConflict(t *testing.T) {
 
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
 		RootCACertificate: rootRaw,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("AddTrustedRootCertificate (round 2): %v", err)
 	}
 	pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
@@ -98,7 +98,7 @@ func TestAddNOC_SameFabricIDAndRootTwiceRejectedAsFabricConflict(t *testing.T) {
 		IPKValue:         make([]byte, 16),
 		CaseAdminSubject: 0xABCD,
 		AdminVendorID:    0x1234,
-	}, 0)
+	})
 	if err != nil {
 		t.Fatalf("AddNOC (round 2): %v", err)
 	}
@@ -135,7 +135,7 @@ func TestUpdateNOC_SignedByDifferentRootRejectedAsInvalidNOC(t *testing.T) {
 	fabCtx := im.WithFabricFilter(ctx, true, fabricIndex)
 	nocRaw := mintUpdateNOC(fabCtx, t, oc, otherRootPriv, testDefaultFabricID, testDefaultNodeID)
 
-	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw}, 0)
+	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw})
 	if err != nil {
 		t.Fatalf("UpdateNOC: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestUpdateNOC_MintedOverWrongKeyRejectedAsInvalidPublicKey(t *testing.T) {
 	if _, err := oc.MatterInvoke(fabCtx, 0x04, core.CSRRequest{
 		CSRNonce:       make([]byte, 32),
 		IsForUpdateNOC: true,
-	}, 0); err != nil {
+	}); err != nil {
 		t.Fatalf("CSRRequest (IsForUpdateNOC): %v", err)
 	}
 	wrongPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -183,7 +183,7 @@ func TestUpdateNOC_MintedOverWrongKeyRejectedAsInvalidPublicKey(t *testing.T) {
 	}
 	nocRaw := buildCoreSignedCert(t, wrongPriv, false, rootPriv)
 
-	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw}, 0)
+	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw})
 	if err != nil {
 		t.Fatalf("UpdateNOC: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestUpdateNOC_DifferentFabricIDRejectedAsInvalidNOC(t *testing.T) {
 	const differentFabricID = testDefaultFabricID + 1
 	nocRaw := mintUpdateNOC(fabCtx, t, oc, rootPriv, differentFabricID, testDefaultNodeID)
 
-	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw}, 0)
+	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw})
 	if err != nil {
 		t.Fatalf("UpdateNOC: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestUpdateNOC_NewNodeIDUpdatesStoreAndFiresWithdraw(t *testing.T) {
 	fabCtx := im.WithFabricFilter(ctx, true, fabricIndex)
 	nocRaw := mintUpdateNOC(fabCtx, t, oc, rootPriv, testDefaultFabricID, newNodeID)
 
-	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw}, 0)
+	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{NOCValue: nocRaw})
 	if err != nil {
 		t.Fatalf("UpdateNOC: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestRemoveFabric_FiresWithdrawBeforeMDNSReannounce(t *testing.T) {
 		t.Fatalf("GetFabric before RemoveFabric: %v", err)
 	}
 
-	resp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: fabricIndex}, 0)
+	resp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: fabricIndex})
 	if err != nil {
 		t.Fatalf("RemoveFabric: %v", err)
 	}

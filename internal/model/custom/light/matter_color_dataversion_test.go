@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestParityMatterJS_CTColorDataVersionBumpsOnInvoke verifies that a
@@ -35,7 +34,7 @@ func TestParityMatterJS_CTColorDataVersionBumpsOnInvoke(t *testing.T) {
 		}
 	}
 	// MoveToColorTemperature(370 mireds ≈ 2700 K).
-	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(370), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(370)); err != nil {
 		t.Fatalf("MoveToColorTemperature: %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -91,7 +90,7 @@ func TestParityMatterJS_HSColorDataVersionBumpsOnInvoke(t *testing.T) {
 			hs = v
 		}
 	}
-	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 200}); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -149,7 +148,7 @@ func TestParityMatterJS_RGBWColorDataVersionBumpsOnHSInvoke(t *testing.T) {
 			rgbw = v
 		}
 	}
-	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 64, Saturation: 128}, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 64, Saturation: 128}); err != nil {
 		t.Fatalf("RGBW MoveToHueAndSaturation: %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -179,7 +178,7 @@ func TestParityMatterJS_RGBWColorDataVersionBumpsOnCTInvoke(t *testing.T) {
 			rgbw = v
 		}
 	}
-	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(370), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, uint16(370)); err != nil {
 		t.Fatalf("RGBW MoveToColorTemperature: %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {

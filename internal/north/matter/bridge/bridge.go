@@ -36,7 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Errors.
@@ -105,7 +105,7 @@ type Config struct {
 
 	// IncludeMeasurements passes [endpoint.Config.IncludeMeasurements]
 	// through to the assembler so standalone sensor endpoints (Temperature,
-	// Humidity, …) are created from [interfaces.MatterMeasurementSource]
+	// Humidity, …) are created from [mattercontract.MeasurementSource]
 	// DPs. Off by default; operators turn it on with
 	// `north.matter.include_measurements`.
 	//
@@ -130,9 +130,12 @@ type Config struct {
 	// NodeLabel suffix of measurement sub-endpoints. Nil is tolerated
 	// (title-cased parameter fallback).
 	Labels device.ParameterTranslator
-	// Locale passes [endpoint.Config.Locale] through: the language of the
-	// NodeLabel channel-number fallback ("Channel N" / "Kanal N").
-	Locale string
+	// ChannelLabel passes [endpoint.Config.ChannelLabel] through: the
+	// already-localized word for a channel ("Channel" / "Kanal") used as
+	// the NodeLabel channel-number fallback. The Matter subtree resolves
+	// no catalogues of its own — the host hands the finished word down,
+	// so translation stays with the daemon that owns entity naming.
+	ChannelLabel string
 }
 
 // validate reports whether the config carries every required field.
@@ -177,14 +180,14 @@ type Bridge struct {
 	// endpoint 0 (BasicInformation, GeneralCommissioning, …). Held on
 	// the bridge so [Bridge.Reassemble] can re-stamp them onto each
 	// freshly assembled root endpoint without the daemon re-attaching.
-	rootClusters []interfaces.MatterClusterServer
+	rootClusters []mattercontract.ClusterServer
 	// aggregatorClusters carry the cluster servers attached to the
 	// Aggregator endpoint (EP 1) — Descriptor (mandatory) + optional
 	// Identify. Apple-bridge topology fix: EP 1 hosts the
 	// Aggregator device type and its Descriptor.PartsList enumerates
 	// the bridged children. Mirrors matter.js's
 	// `examples/device-bridge-onoff/src/BridgedDevicesNode.ts`.
-	aggregatorClusters []interfaces.MatterClusterServer
+	aggregatorClusters []mattercontract.ClusterServer
 	sessions           SessionLookup
 	paseHandler        PaseHandler
 	paseProvider       PaseHandlerProvider // optional; wins over paseHandler when set
@@ -205,7 +208,7 @@ type Bridge struct {
 	subManager *subscription.Manager // optional; when set Subscribe is fully wired
 
 	// measurementUnsubscribers holds the unsubscribe closures returned
-	// by [interfaces.MatterChangeNotifier.OnMatterValueChanged] for
+	// by [mattercontract.ChangeNotifier.OnMatterValueChanged] for
 	// every bridged endpoint whose source pushes value changes. Called
 	// and cleared at the start of each reassemble + when a fresh
 	// subscription manager is attached, then re-populated by
@@ -483,7 +486,7 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 		NodeLabel:               cfg.NodeLabel,
 		IncludeMeasurements:     cfg.IncludeMeasurements,
 		Labels:                  cfg.Labels,
-		Locale:                  cfg.Locale,
+		ChannelLabel:            cfg.ChannelLabel,
 	}, logger)
 	if err != nil {
 		return nil, fmt.Errorf("bridge: assembler: %w", err)
@@ -650,8 +653,8 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	// aggregator set from after the paired
 	// [Bridge.AttachAggregatorClusters].
 	b.mu.RLock()
-	rootClusters := append([]interfaces.MatterClusterServer(nil), b.rootClusters...)
-	aggregatorClusters := append([]interfaces.MatterClusterServer(nil), b.aggregatorClusters...)
+	rootClusters := append([]mattercontract.ClusterServer(nil), b.rootClusters...)
+	aggregatorClusters := append([]mattercontract.ClusterServer(nil), b.aggregatorClusters...)
 	b.mu.RUnlock()
 	if root := topology.FindByID(0); root != nil && len(rootClusters) > 0 {
 		root.PublishClusterServers(rootClusters)
@@ -704,7 +707,7 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 		// ClusterServers resolves all three cases: the published set on
 		// the root / aggregator, the materialised set everywhere else.
 		for _, srv := range endpoint.ClusterServers(ep) {
-			recv, ok := srv.(interfaces.MatterEventReceiver)
+			recv, ok := srv.(mattercontract.EventReceiver)
 			if !ok {
 				continue
 			}
@@ -718,7 +721,7 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 			// updates fan out as Matter events. The unsubscribe is
 			// retained so the next reassemble tears the hook down.
 			if !ep.IsRoot() {
-				if emitter, ok := srv.(generic.MatterSwitchEventEmitter); ok {
+				if emitter, ok := srv.(mattercontract.SwitchEventEmitter); ok {
 					if subscriber, ok := ep.Measurement.(matterSwitchSubscribable); ok {
 						switchUnsubs = append(switchUnsubs, subscriber.WireMatterSwitchHandler(emitter))
 					}
@@ -848,22 +851,30 @@ type matterEndpointReceiver interface {
 // matterSwitchSubscribable is the model-side surface of a press
 // source (the per-channel [generic.ButtonGroup], or a lone Button /
 // Action DP) that translates its CCU press updates into Matter §1.13
-// switch events. The signature deliberately names the model-side
-// [generic.MatterSwitchEventEmitter] interface: Go interface
-// satisfaction requires identical parameter types, so a bridge-local
-// emitter interface in this position can never be satisfied by the
-// model types' method set — the assertion in the reassemble wiring
-// would then silently never match and no press event would reach a
-// commissioner. The returned unsubscribe closure is retained in
+// switch events.
+//
+// The parameter names [mattercontract.SwitchEventEmitter] — the shared
+// port contract, which the model's own method signature names too (as
+// an alias). That sharing is the whole point: Go interface
+// satisfaction requires identical parameter types, so re-declaring an
+// emitter interface here, however faithful a copy, could never be
+// satisfied by the model types' method set. The assertion in the
+// reassemble wiring would then silently never match and no press
+// event would reach a commissioner — no compile error, no runtime
+// error, just a bridge that never reports a button. The behavioural
+// guard against that is
+// tests/contract/wiring_pins/matter_switch_press_wiring_test.go.
+//
+// The returned unsubscribe closure is retained in
 // [Bridge.switchUnsubscribers] and drained on the next reassemble.
 type matterSwitchSubscribable interface {
-	WireMatterSwitchHandler(generic.MatterSwitchEventEmitter) func()
+	WireMatterSwitchHandler(mattercontract.SwitchEventEmitter) func()
 }
 
 // Compile-time guard: the consolidated button group — the shape the
 // endpoint assembler mounts as ep.Measurement on every GenericSwitch
-// endpoint — must satisfy the reassemble wiring assertion. Fails the
-// build if the two interfaces drift apart again.
+// endpoint — must satisfy the reassemble wiring assertion. Catches a
+// drift at build time that the behavioural pin catches at test time.
 var _ matterSwitchSubscribable = (*generic.ButtonGroup)(nil)
 
 // SetOnFabricAdded wires the post-AddNOC hook. The bridge does not
@@ -981,8 +992,8 @@ func (b *Bridge) CommissioningWindow() *CommissioningWindow {
 // chip-tool that has already established a session and started
 // reading must see the cluster set without waiting for a topology
 // re-roll.
-func (b *Bridge) AttachRootClusters(servers []interfaces.MatterClusterServer) {
-	cp := append([]interfaces.MatterClusterServer(nil), servers...)
+func (b *Bridge) AttachRootClusters(servers []mattercontract.ClusterServer) {
+	cp := append([]mattercontract.ClusterServer(nil), servers...)
 	b.mu.Lock()
 	b.rootClusters = cp
 	if b.topology != nil {
@@ -1031,8 +1042,8 @@ func (b *Bridge) AttachRootPartsListProvider(provider func() []uint16) bool {
 // Pass nil to clear. Calling this after [Bridge.Start] swaps in the
 // new servers on the next [Bridge.Reassemble] and on the live topology
 // immediately.
-func (b *Bridge) AttachAggregatorClusters(servers []interfaces.MatterClusterServer) {
-	cp := append([]interfaces.MatterClusterServer(nil), servers...)
+func (b *Bridge) AttachAggregatorClusters(servers []mattercontract.ClusterServer) {
+	cp := append([]mattercontract.ClusterServer(nil), servers...)
 	b.mu.Lock()
 	b.aggregatorClusters = cp
 	if b.topology != nil {

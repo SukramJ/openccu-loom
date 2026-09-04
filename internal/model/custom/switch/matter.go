@@ -15,6 +15,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached these calls defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
+
 // Compile-time assertions: Switch participates in the Matter source
 // surface (ADR 0012) as an OnOffPlugInUnit endpoint that contributes
 // the OnOff cluster.
@@ -202,7 +214,7 @@ func (s *Switch) MatterDataVersion() uint32 { return s.Current() }
 // matter.js OnOffServer.ts:80 (offWaitTime reset), :102 (onTime reset),
 // :39 (startUpOnOff read-back). on-off.element.ts:31-36 marks all three
 // access "RW VO"/"RW VM".
-func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
+func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	switch attrID {
 	case matterAttrOnOff:
 		// Guard nil before type-asserting to bool. Matter OnOff has quality "N S"
@@ -218,7 +230,7 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 		if !ok {
 			return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
 		}
-		if err := s.Set(ctx, on, priority); err != nil {
+		if err := s.Set(ctx, on, matterDispatchPriority); err != nil {
 			return err
 		}
 		s.Bump()
@@ -273,25 +285,25 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 // on-timer engine, so the LT commands collapse to plain On/Off — the
 // device-type conformance only requires that they be accepted without
 // error.
-func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
+func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any) (any, error) {
 	var err error
 	switch cmdID {
 	case matterCmdOff:
-		err = s.TurnOff(ctx, priority)
+		err = s.TurnOff(ctx, matterDispatchPriority)
 	case matterCmdOn:
-		err = s.TurnOn(ctx, priority)
+		err = s.TurnOn(ctx, matterDispatchPriority)
 		if err == nil {
 			s.globalSceneControl.Store(true)
 		}
 	case matterCmdToggle:
 		cur, observed := s.IsOn()
 		if !observed || !cur {
-			err = s.TurnOn(ctx, priority)
+			err = s.TurnOn(ctx, matterDispatchPriority)
 			if err == nil {
 				s.globalSceneControl.Store(true)
 			}
 		} else {
-			err = s.TurnOff(ctx, priority)
+			err = s.TurnOff(ctx, matterDispatchPriority)
 		}
 	case matterCmdOffWithEffect:
 		// OffWithEffect (LT, mandatory): no dimming-effect engine on a
@@ -299,14 +311,14 @@ func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority
 		// the switch is turned off. on-off.element.ts:41. matter.js
 		// OnOffServer.ts:158-169 also clears GlobalSceneControl here —
 		// a plain Off never touches it.
-		err = s.TurnOff(ctx, priority)
+		err = s.TurnOff(ctx, matterDispatchPriority)
 		if err == nil {
 			s.globalSceneControl.Store(false)
 		}
 	case matterCmdOnWithRecallGlobalScene:
 		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
 		// recall collapses to a plain On. on-off.element.ts:46.
-		err = s.TurnOn(ctx, priority)
+		err = s.TurnOn(ctx, matterDispatchPriority)
 		if err == nil {
 			s.globalSceneControl.Store(true)
 		}
@@ -315,7 +327,7 @@ func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority
 		// semantics are dropped and the switch is turned on.
 		// on-off.element.ts:51. matter.js OnOffServer.ts:224 ends
 		// onWithTimedOff() with on(), which also sets GlobalSceneControl.
-		err = s.TurnOn(ctx, priority)
+		err = s.TurnOn(ctx, matterDispatchPriority)
 		if err == nil {
 			s.globalSceneControl.Store(true)
 		}

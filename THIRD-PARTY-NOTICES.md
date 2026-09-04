@@ -20,7 +20,10 @@ cover content that actually ships inside the binary:
   [`docs/attribution.md`](./docs/attribution.md).
 
 Full license texts referenced below live under [`licenses/`](./licenses/):
-[`MIT.txt`](./licenses/MIT.txt) and [`Apache-2.0.txt`](./licenses/Apache-2.0.txt).
+[`MIT.txt`](./licenses/MIT.txt), [`Apache-2.0.txt`](./licenses/Apache-2.0.txt)
+and [`LICENSE-filippo.io-nistec.txt`](./licenses/LICENSE-filippo.io-nistec.txt),
+alongside the reproduced upstream
+[`NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt).
 
 ---
 
@@ -117,10 +120,14 @@ the matter.js `path:function` they mirror.
 - Source: <https://github.com/project-chip/matter.js>
 - Copyright: © Project CHIP / the matter.js Authors.
 - License: Apache License 2.0 — see [`licenses/Apache-2.0.txt`](./licenses/Apache-2.0.txt).
-- No matter.js source is reproduced verbatim. The canonical upstream `NOTICE`
-  (if present at the pinned HEAD) travels with the matter.js repository; the
-  matter.js schema pin used for parity lives at
-  `notes/parity/matter/matter-schema-snapshot.json`.
+- Upstream `NOTICE`, reproduced verbatim as required by its own final line:
+  [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt).
+- No matter.js source code is reproduced verbatim. What does ship inside every
+  binary is the parity schema snapshot — the matter.js element model extracted
+  from HEAD — embedded from `internal/north/matter/parity/schema.json`
+  (516,843 bytes) by the `//go:embed` in
+  `internal/north/matter/parity/parity.go`. The master copy it is kept in sync
+  with lives at `notes/parity/matter/matter-schema-snapshot.json`.
 
 ### home-assistant-matter-bridge — Apache-2.0
 
@@ -169,6 +176,7 @@ direct dependencies declared in [`go.mod`](./go.mod) include:
 
 | Module | License (family) |
 | --- | --- |
+| `filippo.io/nistec` | BSD-3-Clause |
 | `github.com/SukramJ/godevccu` | MIT |
 | `github.com/getkin/kin-openapi` | MIT |
 | `github.com/go-chi/chi/v5` | MIT |
@@ -190,3 +198,25 @@ This table covers the direct requirements; the full transitive set (including
 the indirect dependencies in `go.mod`) is permissive on the same basis. To
 regenerate an exhaustive, machine-verified list, run a tool such as
 `go-licenses report ./...` against the module graph.
+
+One of these carries a per-module notice obligation and is therefore recorded
+in full below.
+
+### filippo.io/nistec — BSD-3-Clause
+
+An exported build of the standard library's internal NIST P-curve
+implementation. Linked into the binary and used for the P-256 point arithmetic
+of the Matter SPAKE2+ handshake
+(`internal/north/matter/secure/spake2/spake2.go`); the stdlib exposes no
+public API for the operations that handshake needs.
+
+- Source: <https://filippo.io/nistec>
+- Copyright notice (verbatim from upstream `LICENSE`):
+
+  ```
+  Copyright 2009 The Go Authors.
+  ```
+
+- License: BSD-3-Clause — the upstream text is reproduced at
+  [`licenses/LICENSE-filippo.io-nistec.txt`](./licenses/LICENSE-filippo.io-nistec.txt),
+  and its third clause names Google LLC and its contributors.

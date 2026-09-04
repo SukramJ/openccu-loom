@@ -96,7 +96,7 @@ func TestSirenOnOffOffCommandTurnsOff(t *testing.T) {
 		SupportsAcoustic: true, SupportsOptical: true,
 	})
 	srv := findCluster(t, r.siren, 0x0006)
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("Off err: %v", err)
 	}
 	if len(w.calls) == 0 {
@@ -203,7 +203,7 @@ func TestSmokeSirenCOStateNotServedWithoutCOFeature(t *testing.T) {
 func TestSmokeSirenInvokeRejectsAllCommands(t *testing.T) {
 	r := newSmokeRig(t)
 	srv := findCluster(t, r.siren, 0x005C)
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := srv.MatterInvoke(context.Background(), 0x00, nil)
 	if !errors.Is(err, errMatterUnknownCommand) {
 		t.Fatalf("err = %v, want errMatterUnknownCommand", err)
 	}

@@ -32,7 +32,7 @@ func TestColorTempMoveToColorTemperatureTypedWireShape(t *testing.T) {
 		}
 	}
 	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 370}
-	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, req, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, req); err != nil {
 		t.Fatalf("MoveToColorTemperature typed wire-shape err: %v", err)
 	}
 	got := w.last()
@@ -60,7 +60,7 @@ func TestColorTempMoveToColorTemperatureGenericTagMapWireShape(t *testing.T) {
 		}
 	}
 	fields := map[uint8]any{0: uint64(370)}
-	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := cc.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, fields); err != nil {
 		t.Fatalf("MoveToColorTemperature generic wire-shape err: %v", err)
 	}
 	got := w.last()
@@ -86,7 +86,7 @@ func TestRGBWMoveToColorTemperatureGenericTagMapWireShape(t *testing.T) {
 		}
 	}
 	fields := map[uint8]any{0: uint64(370)}
-	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToColorTemperature, fields); err != nil {
 		t.Fatalf("MoveToColorTemperature generic wire-shape err: %v", err)
 	}
 	got := w.last()

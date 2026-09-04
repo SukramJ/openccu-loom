@@ -1191,7 +1191,7 @@ func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeVa
 
 // defaultCommandFieldsWriter is the wire writer the bridge plugs
 // into [im.InvokeResponse.MarshalTLV]. Type-switches on the
-// cluster-native response struct returned by [interfaces.MatterClusterServer.MatterInvoke]
+// cluster-native response struct returned by [mattercontract.ClusterServer.MatterInvoke]
 // and emits the matching TLV. Commands without response fields (the
 // status-only OnOff / LevelControl / etc. clusters) hit the
 // `default` arm and emit an empty Structure — chip-tool's

@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 462.
+Guards without a doc comment: 7 of 463.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -449,6 +449,7 @@ Guards without a doc comment: 7 of 462.
 | TestPin_ThermostatServer_MinSetpointDeadBand_Default | wiring_pins/matter_min_setpoint_deadband_test.go | TestPin_ThermostatServer_MinSetpointDeadBand_Default pins that a freshly constructed HEAT+COOL+AUTO ThermostatServer reports MinSetpointDeadBand (attribute 0x0019) as 20 (= 2.0°C), matching the matter.js HEAD default in packages/model/src/standard/elements/thermostat-cluster.element.ts. |
 | TestMatterDiagnosticsSurfacesAreWired | wiring_pins/matter_session_diagnostics_test.go | TestMatterDiagnosticsSurfacesAreWired pins the other three diagnostic surfaces the same way, for the same reason: each answers 503 "Matter bridge not enabled" on a running bridge when its port is unset, which reads as a configuration problem rather than a wiring one. |
 | TestMatterSessionListerIsWiredFromBothManagers | wiring_pins/matter_session_diagnostics_test.go | TestMatterSessionListerIsWiredFromBothManagers pins the composition root's half of the session-diagnostics surface. |
+| TestAPhysicalPressReachesTheMatterEventLog | wiring_pins/matter_switch_press_wiring_test.go | TestAPhysicalPressReachesTheMatterEventLog pins the one seam that carries a button from the CCU to a commissioner: the reassemble wiring that subscribes a bridged GenericSwitch cluster to its endpoint's press source. |
 | TestPin_MCPFleetSeams_WiredInDaemon | wiring_pins/mcp_fleet_seams_test.go | TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every fleet read seam to the MCP server. |
 | TestPin_DeferredCreationToggle_AppliedOnReload | wiring_pins/pending_devices_gate_test.go | TestPin_DeferredCreationToggle_AppliedOnReload pins that a live config edit actually reaches the per-central handler. |
 | TestPin_DeferredCreationToggle_ManagerBound | wiring_pins/pending_devices_gate_test.go | TestPin_DeferredCreationToggle_ManagerBound pins the other half: the reload path can only reach the handles if the composition root hands them over. |

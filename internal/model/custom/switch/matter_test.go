@@ -142,7 +142,7 @@ func TestMatterInvokeLightingGatedCommands(t *testing.T) {
 	for _, tc := range cases {
 		w := &stubWriter{}
 		s := newTestSwitch(t, "HmIP-PS:3", "", w)
-		if _, err := s.MatterInvoke(context.Background(), tc.cmd, nil, hmenum.CommandPriorityHigh); err != nil {
+		if _, err := s.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
 			t.Fatalf("MatterInvoke(0x%02X) error: %v", tc.cmd, err)
 		}
 		if w.lastVal != tc.want {
@@ -168,28 +168,28 @@ func TestGlobalSceneControlLifecycle(t *testing.T) {
 		t.Fatalf("initial GlobalSceneControl = (%v, %v), want (true, true)", v, ok)
 	}
 
-	if _, err := s.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("On error: %v", err)
 	}
 	if v, ok := s.MatterRead(0x4000); !ok || v != true {
 		t.Fatalf("GlobalSceneControl after On = (%v, %v), want (true, true)", v, ok)
 	}
 
-	if _, err := s.MatterInvoke(context.Background(), 0x40, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x40, nil); err != nil {
 		t.Fatalf("OffWithEffect error: %v", err)
 	}
 	if v, ok := s.MatterRead(0x4000); !ok || v != false {
 		t.Fatalf("GlobalSceneControl after OffWithEffect = (%v, %v), want (false, true)", v, ok)
 	}
 
-	if _, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("plain Off error: %v", err)
 	}
 	if v, ok := s.MatterRead(0x4000); !ok || v != false {
 		t.Fatalf("GlobalSceneControl after plain Off = (%v, %v), want (false, true) — a plain Off must not change it", v, ok)
 	}
 
-	if _, err := s.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("second On error: %v", err)
 	}
 	if v, ok := s.MatterRead(0x4000); !ok || v != true {
@@ -212,14 +212,14 @@ func TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue(t *testing.T) {
 	w := &stubWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
 
-	if _, err := s.MatterInvoke(context.Background(), 0x40, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x40, nil); err != nil {
 		t.Fatalf("OffWithEffect error: %v", err)
 	}
 	if v, _ := s.MatterRead(0x4000); v != false {
 		t.Fatalf("precondition: GlobalSceneControl = %v, want false", v)
 	}
 
-	if _, err := s.MatterInvoke(context.Background(), 0x41, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x41, nil); err != nil {
 		t.Fatalf("OnWithRecallGlobalScene error: %v", err)
 	}
 	if v, ok := s.MatterRead(0x4000); !ok || v != true {
@@ -243,7 +243,7 @@ func TestMatterReadUnknownAttribute(t *testing.T) {
 func TestMatterWriteOnOffSetsState(t *testing.T) {
 	w := &stubWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if err := s.MatterWrite(context.Background(), 0x0000, true, hmenum.CommandPriorityHigh); err != nil {
+	if err := s.MatterWrite(context.Background(), 0x0000, true); err != nil {
 		t.Fatalf("MatterWrite(OnOff, true) error: %v", err)
 	}
 	if w.lastParm != hmenum.ParameterState || w.lastVal != true {
@@ -256,7 +256,7 @@ func TestMatterWriteOnOffSetsState(t *testing.T) {
 // mismatch first, but defence-in-depth matters.
 func TestMatterWriteOnOffWrongType(t *testing.T) {
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	err := s.MatterWrite(context.Background(), 0x0000, "true", hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x0000, "true")
 	if !errors.Is(err, errMatterValueType) {
 		t.Fatalf("MatterWrite(OnOff, string) err = %v, want errMatterValueType", err)
 	}
@@ -266,7 +266,7 @@ func TestMatterWriteOnOffWrongType(t *testing.T) {
 // unsupported attribute IDs. Attribute 0x4004 is not defined on OnOff.
 func TestMatterWriteUnknownAttributeRejected(t *testing.T) {
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	err := s.MatterWrite(context.Background(), 0x4004, uint16(0), hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x4004, uint16(0))
 	if !errors.Is(err, errMatterUnknownAttribute) {
 		t.Fatalf("MatterWrite(unknown) err = %v, want errMatterUnknownAttribute", err)
 	}
@@ -277,7 +277,7 @@ func TestMatterWriteUnknownAttributeRejected(t *testing.T) {
 func TestMatterInvokeOff(t *testing.T) {
 	w := &stubWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if _, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x00, nil); err != nil {
 		t.Fatalf("MatterInvoke(Off) error: %v", err)
 	}
 	if w.lastParm != hmenum.ParameterState || w.lastVal != false {
@@ -289,7 +289,7 @@ func TestMatterInvokeOff(t *testing.T) {
 func TestMatterInvokeOn(t *testing.T) {
 	w := &stubWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if _, err := s.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x01, nil); err != nil {
 		t.Fatalf("MatterInvoke(On) error: %v", err)
 	}
 	if w.lastParm != hmenum.ParameterState || w.lastVal != true {
@@ -302,7 +302,7 @@ func TestMatterInvokeToggleFromOn(t *testing.T) {
 	w := &stubWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
 	s.OnState(true)
-	if _, err := s.MatterInvoke(context.Background(), 0x02, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x02, nil); err != nil {
 		t.Fatalf("MatterInvoke(Toggle) error: %v", err)
 	}
 	if w.lastVal != false {
@@ -315,7 +315,7 @@ func TestMatterInvokeToggleFromOn(t *testing.T) {
 func TestMatterInvokeToggleUnobserved(t *testing.T) {
 	w := &stubWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if _, err := s.MatterInvoke(context.Background(), 0x02, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), 0x02, nil); err != nil {
 		t.Fatalf("MatterInvoke(Toggle) error: %v", err)
 	}
 	if w.lastVal != true {
@@ -327,7 +327,7 @@ func TestMatterInvokeToggleUnobserved(t *testing.T) {
 // is above the highest defined OnOff command (OnWithTimedOff 0x42).
 func TestMatterInvokeUnknownCommand(t *testing.T) {
 	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	_, err := s.MatterInvoke(context.Background(), 0x43, nil, hmenum.CommandPriorityHigh)
+	_, err := s.MatterInvoke(context.Background(), 0x43, nil)
 	if !errors.Is(err, errMatterUnknownCommand) {
 		t.Fatalf("MatterInvoke(0x43) err = %v, want errMatterUnknownCommand", err)
 	}
@@ -352,7 +352,7 @@ func TestMatterReportableListsOnOff(t *testing.T) {
 func TestMatterWriteNilValueIsNoOp(t *testing.T) {
 	w := &stubWriter{}
 	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	err := s.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh)
+	err := s.MatterWrite(context.Background(), 0x0000, nil)
 	if err != nil {
 		t.Fatalf("MatterWrite(OnOff, nil) = %v, want nil (no-op)", err)
 	}
@@ -395,7 +395,7 @@ func TestMatterWriteLTAttributesAcceptDecodedUint64(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-			err := s.MatterWrite(context.Background(), tc.attr, tc.write, hmenum.CommandPriorityHigh)
+			err := s.MatterWrite(context.Background(), tc.attr, tc.write)
 			if err != nil {
 				t.Fatalf("MatterWrite(%s, uint64) error: %v", tc.name, err)
 			}

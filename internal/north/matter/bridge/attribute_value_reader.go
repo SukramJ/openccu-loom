@@ -15,7 +15,7 @@ import (
 // plugs into [im.UnmarshalWriteRequestTLV]. It dispatches on
 // (path.Cluster, path.Attribute) and converts the TLV element tree
 // into the cluster-native Go value the cluster server expects in
-// [interfaces.MatterClusterServer.MatterWrite].
+// [mattercontract.ClusterServer.MatterWrite].
 //
 // Apple Home's post-CommissioningComplete flow writes
 // `AccessControl.ACL` (cluster 0x001F, attribute 0x0000) to install

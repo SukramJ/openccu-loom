@@ -993,7 +993,7 @@ func TestCoverMatterClusterID(t *testing.T) {
 func TestCoverMatterWrite(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0))
 	if err == nil {
 		t.Error("MatterWrite must return error (writes not supported)")
 	}
@@ -1074,7 +1074,7 @@ func TestBlindMatterClusterID(t *testing.T) {
 func TestBlindMatterWrite(t *testing.T) {
 	b := newBlindRig(t, "VCU:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	srv := b.MatterClusterServers()[0]
-	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0))
 	if err == nil {
 		t.Error("Blind MatterWrite must return error")
 	}
@@ -1129,23 +1129,23 @@ func TestBlindMatterInvokeAllCommands(t *testing.T) {
 	srv := b.MatterClusterServers()[0]
 
 	// UpOrOpen.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil); err != nil {
 		t.Errorf("Blind UpOrOpen: %v", err)
 	}
 	// DownOrClose.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil); err != nil {
 		t.Errorf("Blind DownOrClose: %v", err)
 	}
 	// StopMotion.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
 		t.Errorf("Blind StopMotion: %v", err)
 	}
 	// GoToLiftPercentage.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000), hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000)); err != nil {
 		t.Errorf("Blind GoToLift: %v", err)
 	}
 	// Unknown.
-	if _, err := srv.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("Blind unknown command must error")
 	}
 }
@@ -1169,7 +1169,7 @@ func TestGarageMatterWrite(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	srv := g.MatterClusterServers()[0]
 	err := srv.MatterWrite(context.Background(), clusterwire.ClosureControlAttrMainState,
-		uint8(0), hmenum.CommandPriorityHigh)
+		uint8(0))
 	if err == nil {
 		t.Error("Garage MatterWrite must return error: every ClosureControl attribute is R V")
 	}
@@ -1226,23 +1226,23 @@ func TestGarageMatterInvokeAllCommands(t *testing.T) {
 	} {
 		req := clusterwire.MoveToRequest{Position: &target}
 		if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdMoveTo,
-			req, hmenum.CommandPriorityHigh); err != nil {
+			req); err != nil {
 			t.Errorf("Garage MoveTo(%d): %v", target, err)
 		}
 	}
 	// Stop.
 	if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdStop,
-		nil, hmenum.CommandPriorityHigh); err != nil {
+		nil); err != nil {
 		t.Errorf("Garage Stop: %v", err)
 	}
 	// Calibrate belongs to the Calibration feature, which this profile
 	// does not advertise.
 	if _, err := srv.MatterInvoke(context.Background(), clusterwire.ClosureControlCmdCalibrate,
-		nil, hmenum.CommandPriorityHigh); err == nil {
+		nil); err == nil {
 		t.Error("Garage Calibrate must be refused without the Calibration feature")
 	}
 	// Unknown.
-	if _, err := srv.MatterInvoke(context.Background(), 0xFF, nil, hmenum.CommandPriorityHigh); err == nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("Garage unknown command must error")
 	}
 }

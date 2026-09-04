@@ -9,8 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // OTASoftwareUpdateRequestor implements the Matter cluster (0x002A)
@@ -71,14 +70,14 @@ func NewOTASoftwareUpdateRequestor() *OTASoftwareUpdateRequestor {
 // Compile-time assertions: OTASoftwareUpdateRequestor satisfies
 // MatterClusterServer and the attribute-lister capability.
 var (
-	_ interfaces.MatterClusterServer          = (*OTASoftwareUpdateRequestor)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*OTASoftwareUpdateRequestor)(nil)
+	_ mattercontract.ClusterServer          = (*OTASoftwareUpdateRequestor)(nil)
+	_ mattercontract.ClusterAttributeLister = (*OTASoftwareUpdateRequestor)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (o *OTASoftwareUpdateRequestor) MatterClusterID() uint32 { return otaRequestorClusterID }
 
-// MatterRead implements [interfaces.MatterClusterServer].
+// MatterRead implements [mattercontract.ClusterServer].
 func (o *OTASoftwareUpdateRequestor) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case otaRequestorAttrDefaultOTAProviders:
@@ -102,7 +101,7 @@ func (o *OTASoftwareUpdateRequestor) MatterRead(attrID uint32) (any, bool) {
 // MatterWrite accepts DefaultOTAProviders writes and silently
 // discards them — the bridge does not act on Matter OTA providers
 // in v1.1.
-func (o *OTASoftwareUpdateRequestor) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (o *OTASoftwareUpdateRequestor) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	if attrID != otaRequestorAttrDefaultOTAProviders {
 		return fmt.Errorf("matter: OTASoftwareUpdateRequestor is read-only (got attr 0x%04X)", attrID)
 	}
@@ -111,7 +110,7 @@ func (o *OTASoftwareUpdateRequestor) MatterWrite(_ context.Context, attrID uint3
 
 // MatterInvoke handles AnnounceOTAProvider. The stub accepts the
 // announcement but takes no action.
-func (o *OTASoftwareUpdateRequestor) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (o *OTASoftwareUpdateRequestor) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	if cmdID != otaRequestorCmdAnnounceOTAProvider {
 		return nil, im.UnsupportedCommandf("matter: OTASoftwareUpdateRequestor command 0x%02X not supported", cmdID)
 	}

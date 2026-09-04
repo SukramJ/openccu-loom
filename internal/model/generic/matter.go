@@ -92,7 +92,7 @@ func matterMeasurementForParameter(p hmenum.Parameter) interfaces.MatterMeasurem
 // as boolean sources. Leak and moisture parameters map to the Leak
 // class, which materialises as a ContactSensor endpoint rather than the
 // dedicated WaterLeakDetector device type — see
-// interfaces.MatterMeasurementClassDeviceType and the pinning test for
+// mattercontract.MeasurementClassDeviceType and the pinning test for
 // why that divergence is deliberate. Battery alerts (LOWBAT / LOW_BAT)
 // also surface here so the bridge can roll them up onto the host
 // endpoint's PowerSource cluster.

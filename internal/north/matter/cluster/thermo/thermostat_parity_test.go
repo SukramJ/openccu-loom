@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestParity_Thermostat_SystemMode_ControlSequenceConsistency verifies
@@ -117,7 +116,7 @@ func TestParityMatterJS_Thermostat_SetpointConstraintError(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := tc.srv.MatterWrite(ctx, tc.attrID, tc.value, hmenum.CommandPriorityHigh)
+			err := tc.srv.MatterWrite(ctx, tc.attrID, tc.value)
 			if err == nil {
 				t.Fatal("expected ConstraintError, got nil")
 			}
@@ -138,7 +137,7 @@ func TestParityMatterJS_Thermostat_SetpointWithinLimitsAccepted(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	srv := newHeatOnly()
-	if err := srv.MatterWrite(ctx, 0x0012, int16(2500), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(ctx, 0x0012, int16(2500)); err != nil {
 		t.Fatalf("write within limits: %v", err)
 	}
 	v, _ := srv.MatterRead(0x0012)
@@ -168,7 +167,7 @@ func TestParityMatterJS_Thermostat_SystemModeConstraintError(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := tc.srv.MatterWrite(ctx, 0x001C, tc.mode, hmenum.CommandPriorityHigh)
+			err := tc.srv.MatterWrite(ctx, 0x001C, tc.mode)
 			if err == nil {
 				t.Fatal("expected ConstraintError, got nil")
 			}
@@ -204,7 +203,7 @@ func TestParityMatterJS_Thermostat_SetpointRaiseLowerInvalidCommand(t *testing.T
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			fields := map[string]any{"mode": uint8(tc.mode), "amount": int8(10)}
-			_, err := tc.srv.MatterInvoke(ctx, 0x00, fields, hmenum.CommandPriorityHigh)
+			_, err := tc.srv.MatterInvoke(ctx, 0x00, fields)
 			if err == nil {
 				t.Fatal("expected InvalidCommand, got nil")
 			}
@@ -228,7 +227,7 @@ func TestParityMatterJS_Thermostat_SetpointRaiseLowerAppliesDelta(t *testing.T) 
 	srv := newHeatOnly() // initial occupHeat = 2000
 	// mode=1 (Heat), amount=5 → delta = 5*10 = 50 → new = 2050
 	fields := map[string]any{"mode": uint8(1), "amount": int8(5)}
-	if _, err := srv.MatterInvoke(ctx, 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(ctx, 0x00, fields); err != nil {
 		t.Fatalf("SetpointRaiseLower: %v", err)
 	}
 	v, _ := srv.MatterRead(0x0012)
@@ -246,7 +245,7 @@ func TestParityMatterJS_Thermostat_SetpointRaiseLowerClampsToLimits(t *testing.T
 	srv := newHeatOnly() // maxHeat = 3000, initial = 2000
 	// amount=200 → delta=2000 → 2000+2000=4000 > 3000 → clamped to 3000
 	fields := map[string]any{"mode": uint8(1), "amount": int8(100)}
-	if _, err := srv.MatterInvoke(ctx, 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := srv.MatterInvoke(ctx, 0x00, fields); err != nil {
 		t.Fatalf("SetpointRaiseLower clamp: %v", err)
 	}
 	v, _ := srv.MatterRead(0x0012)

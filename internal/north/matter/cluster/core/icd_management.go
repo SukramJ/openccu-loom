@@ -9,8 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ICDManagement implements the minimum required surface of the
@@ -41,14 +40,14 @@ const (
 func NewICDManagement() *ICDManagement { return &ICDManagement{} }
 
 var (
-	_ interfaces.MatterClusterServer          = (*ICDManagement)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*ICDManagement)(nil)
+	_ mattercontract.ClusterServer          = (*ICDManagement)(nil)
+	_ mattercontract.ClusterAttributeLister = (*ICDManagement)(nil)
 )
 
-// MatterClusterID implements [interfaces.MatterClusterServer].
+// MatterClusterID implements [mattercontract.ClusterServer].
 func (i *ICDManagement) MatterClusterID() uint32 { return icdClusterID }
 
-// MatterRead implements [interfaces.MatterClusterServer]. Values
+// MatterRead implements [mattercontract.ClusterServer]. Values
 // signal "always-on, no idle" so commissioners that gate ICD-related
 // flows on these reads see the bridge as a non-ICD device.
 func (i *ICDManagement) MatterRead(attrID uint32) (any, bool) {
@@ -75,16 +74,16 @@ func (i *ICDManagement) MatterRead(attrID uint32) (any, bool) {
 	return nil, false
 }
 
-// MatterWrite implements [interfaces.MatterClusterServer]. Attributes
+// MatterWrite implements [mattercontract.ClusterServer]. Attributes
 // are read-only on the bridge.
-func (i *ICDManagement) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (i *ICDManagement) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("matter: ICDManagement attribute 0x%04X is read-only", attrID)
 }
 
-// MatterInvoke implements [interfaces.MatterClusterServer]. ICD
+// MatterInvoke implements [mattercontract.ClusterServer]. ICD
 // commands (RegisterClient / UnregisterClient / StayActiveRequest)
 // all require feature flags we don't advertise.
-func (i *ICDManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (i *ICDManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, im.UnsupportedCommandf("matter: ICDManagement command 0x%02X not supported", cmdID)
 }
 

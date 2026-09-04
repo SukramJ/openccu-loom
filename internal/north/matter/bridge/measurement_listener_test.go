@@ -17,18 +17,18 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Compile-time guard: notifiableTempSource must satisfy both source interfaces.
 var (
-	_ interfaces.MatterMeasurementSource = (*notifiableTempSource)(nil)
-	_ interfaces.MatterChangeNotifier    = (*notifiableTempSource)(nil)
+	_ mattercontract.MeasurementSource = (*notifiableTempSource)(nil)
+	_ mattercontract.ChangeNotifier    = (*notifiableTempSource)(nil)
 )
 
 // notifiableTempSource is a test-only measurement source that implements
-// [interfaces.MatterFloatMeasurementSource] (Temperature class) and
-// [interfaces.MatterChangeNotifier]. It records the subscriber callback
+// [mattercontract.FloatMeasurementSource] (Temperature class) and
+// [mattercontract.ChangeNotifier]. It records the subscriber callback
 // and lets tests trigger it on demand.
 type notifiableTempSource struct {
 	mu  sync.Mutex
@@ -43,8 +43,8 @@ func newNotifiableTempSource(channelAddr, param string) *notifiableTempSource {
 }
 
 func (s *notifiableTempSource) DataPointKey() hmtypes.DataPointKey { return s.key }
-func (s *notifiableTempSource) MatterMeasurementClass() interfaces.MatterMeasurementClass {
-	return interfaces.MatterMeasurementTemperature
+func (s *notifiableTempSource) MatterMeasurementClass() mattercontract.MeasurementClass {
+	return mattercontract.MeasurementTemperature
 }
 func (s *notifiableTempSource) MatterFloatValue() (float64, bool) { return 21.0, true }
 

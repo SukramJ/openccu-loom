@@ -24,8 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ─── udpPort ─────────────────────────────────────────────────────────────────
@@ -474,7 +473,7 @@ func TestMatterEmitEvent_IsAliasOfEmitEvent(t *testing.T) {
 	b := newStartedBridge(t)
 	// MatterEmitEvent is an alias of EmitEvent; calling it must not panic.
 	// No subscription manager is wired in tests so the event is only logged.
-	b.MatterEmitEvent(0, 0x0028, 0x00, nil, interfaces.MatterEventPriorityInfo)
+	b.MatterEmitEvent(0, 0x0028, 0x00, nil, mattercontract.EventPriorityInfo)
 }
 
 // ─── endpointCount ───────────────────────────────────────────────────────────
@@ -573,7 +572,7 @@ func TestAttachRootClusters_WithStartedBridge_TopologyPath(t *testing.T) {
 	// After Start, b.topology is non-nil (initial Reassemble ran).
 	// Attaching clusters must not panic and must update the root endpoint.
 	c := &noopCluster{id: 0x0028}
-	b.AttachRootClusters([]interfaces.MatterClusterServer{c})
+	b.AttachRootClusters([]mattercontract.ClusterServer{c})
 	// A second call exercises the overwrite path.
 	b.AttachRootClusters(nil)
 }
@@ -582,7 +581,7 @@ func TestAttachAggregatorClusters_WithStartedBridge_TopologyPath(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
 	c := &noopCluster{id: 0x001D}
-	b.AttachAggregatorClusters([]interfaces.MatterClusterServer{c})
+	b.AttachAggregatorClusters([]mattercontract.ClusterServer{c})
 	b.AttachAggregatorClusters(nil)
 }
 
@@ -596,11 +595,11 @@ func (n *noopCluster) MatterRead(_ uint32) (any, bool) {
 	return nil, false
 }
 
-func (n *noopCluster) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+func (n *noopCluster) MatterWrite(_ context.Context, _ uint32, _ any) error {
 	return nil
 }
 
-func (n *noopCluster) MatterInvoke(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (n *noopCluster) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
 	return nil, nil
 }
 func (n *noopCluster) MatterReportable() []uint32 { return nil }

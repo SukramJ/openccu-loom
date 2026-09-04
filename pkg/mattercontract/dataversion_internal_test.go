@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package hmtypes
+package mattercontract
 
 // Whitebox test for DataVersionTracker that exercises the wrap-around
 // branch in Bump (next==0 path). This requires direct access to the

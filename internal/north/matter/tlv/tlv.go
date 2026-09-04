@@ -101,7 +101,7 @@ func FullyQualifiedTag(vendor, profile uint16, number uint32) Tag {
 }
 
 // BoundedString is a UTF-8 string paired with a maximum byte length.
-// Cluster servers that return a BoundedString from [interfaces.MatterClusterServer.MatterRead]
+// Cluster servers that return a BoundedString from [mattercontract.ClusterServer.MatterRead]
 // signal to the bridge encoder that [Encoder.PutUTF8Bounded] should be
 // used instead of the generic [Encoder.PutUTF8].
 //

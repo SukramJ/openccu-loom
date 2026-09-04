@@ -189,7 +189,7 @@ func TestMatterWrite_AlwaysReturnsError(t *testing.T) {
 	if len(servers) == 0 {
 		t.Fatal("MatterClusterServers returned empty slice")
 	}
-	err := servers[0].MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh)
+	err := servers[0].MatterWrite(context.Background(), 0x0000, nil)
 	if err == nil {
 		t.Fatal("MatterWrite must return an error for any attribute ID")
 	}

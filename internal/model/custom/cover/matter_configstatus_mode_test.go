@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestCoverConfigStatusAdvertisesLiftPositionAware locks the
@@ -61,10 +60,10 @@ func TestBlindConfigStatusAdvertisesLiftAndTiltPositionAware(t *testing.T) {
 func TestCoverMatterWriteAcceptsValidMode(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	if err := srv.MatterWrite(context.Background(), matterAttrMode, uint8(0x01), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrMode, uint8(0x01)); err != nil {
 		t.Fatalf("MatterWrite(Mode, 0x01) = %v, want nil (valid ModeBitmap value)", err)
 	}
-	if err := srv.MatterWrite(context.Background(), matterAttrMode, uint8(0x0F), hmenum.CommandPriorityHigh); err != nil {
+	if err := srv.MatterWrite(context.Background(), matterAttrMode, uint8(0x0F)); err != nil {
 		t.Fatalf("MatterWrite(Mode, 0x0F) = %v, want nil (constraint boundary)", err)
 	}
 }
@@ -75,7 +74,7 @@ func TestCoverMatterWriteAcceptsValidMode(t *testing.T) {
 func TestCoverMatterWriteRejectsOutOfRangeMode(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	err := srv.MatterWrite(context.Background(), matterAttrMode, uint8(0x10), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrMode, uint8(0x10))
 	if !errors.Is(err, errMatterValueType) {
 		t.Fatalf("MatterWrite(Mode, 0x10) = %v, want errMatterValueType (constraint max 15)", err)
 	}
@@ -87,7 +86,7 @@ func TestCoverMatterWriteRejectsOutOfRangeMode(t *testing.T) {
 func TestCoverMatterWriteOtherAttributesStillRejected(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0), hmenum.CommandPriorityHigh)
+	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0))
 	if !errors.Is(err, errMatterUnknownAttribute) {
 		t.Fatalf("MatterWrite(Type, 0) = %v, want errMatterUnknownAttribute", err)
 	}
@@ -101,7 +100,7 @@ func TestCoverMatterWriteOtherAttributesStillRejected(t *testing.T) {
 // TestGarageMatterWrite.
 func TestBlindMatterWriteAcceptsValidMode(t *testing.T) {
 	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	if err := b.MatterClusterServers()[0].MatterWrite(context.Background(), matterAttrMode, uint8(0x03), hmenum.CommandPriorityHigh); err != nil {
+	if err := b.MatterClusterServers()[0].MatterWrite(context.Background(), matterAttrMode, uint8(0x03)); err != nil {
 		t.Fatalf("Blind MatterWrite(Mode, 0x03) = %v, want nil", err)
 	}
 }

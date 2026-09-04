@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestGroups_MatterClusterID_NonZero(t *testing.T) {
@@ -75,7 +74,7 @@ func TestGroups_MatterRead_Unknown_ReturnsFalse(t *testing.T) {
 func TestGroups_MatterWrite_ReturnsError(t *testing.T) {
 	t.Parallel()
 	g := wire.Groups{}
-	if err := g.MatterWrite(context.Background(), 0x0000, nil, hmenum.CommandPriorityHigh); err == nil {
+	if err := g.MatterWrite(context.Background(), 0x0000, nil); err == nil {
 		t.Error("MatterWrite: want non-nil error")
 	}
 }
@@ -83,7 +82,7 @@ func TestGroups_MatterWrite_ReturnsError(t *testing.T) {
 func TestGroups_MatterInvoke_ReturnsError(t *testing.T) {
 	t.Parallel()
 	g := wire.Groups{}
-	_, err := g.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := g.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
 	}
@@ -106,7 +105,7 @@ func TestGroups_MatterInvoke_ReturnsError(t *testing.T) {
 func TestGroupsInvokeContainsNoCommands(t *testing.T) {
 	t.Parallel()
 	g := wire.Groups{}
-	_, err := g.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	_, err := g.MatterInvoke(context.Background(), 0x00, nil)
 	if err == nil {
 		t.Fatal("MatterInvoke returned nil error, want rejection")
 	}
@@ -123,7 +122,7 @@ func TestGroupsInvokeRejectsAllCommandIDs(t *testing.T) {
 	t.Parallel()
 	g := wire.Groups{}
 	for _, cmdID := range []uint32{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x40, 0xFF} {
-		_, err := g.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		_, err := g.MatterInvoke(context.Background(), cmdID, nil)
 		if err == nil {
 			t.Errorf("cmdID 0x%02X: MatterInvoke returned nil, want error", cmdID)
 		}

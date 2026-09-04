@@ -19,6 +19,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached these calls defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
+
 // Compile-time assertion: Climate participates in the Matter source
 // surface (ADR 0012) as a Matter Thermostat (0x0301) endpoint
 // with four cluster servers: Thermostat (0x0201),
@@ -602,7 +614,7 @@ func (s climateThermostatServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
+func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32, value any) error {
 	var err error
 	switch attrID {
 	case matterAttrThermOccupiedHeatSp:
@@ -615,7 +627,7 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 		if !ok {
 			return fmt.Errorf("%w: setpoint write expected numeric, got %T", errMatterValueType, value)
 		}
-		err = s.c.SetTemperature(ctx, matterToCelsius(v), priority)
+		err = s.c.SetTemperature(ctx, matterToCelsius(v), matterDispatchPriority)
 	case matterAttrThermOccupiedCoolSp:
 		// Conformance "COOL" — not a writable attribute at all when the
 		// FeatureMap omits COOL, so this reaches the wire as an unknown
@@ -628,7 +640,7 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 		if !ok {
 			return fmt.Errorf("%w: setpoint write expected numeric, got %T", errMatterValueType, value)
 		}
-		err = s.c.SetTemperature(ctx, matterToCelsius(v), priority)
+		err = s.c.SetTemperature(ctx, matterToCelsius(v), matterDispatchPriority)
 	case matterAttrThermSystemMode:
 		// SystemMode is an enum8; the decoder delivers it as uint64. Coerce,
 		// mirroring the setpoint path and thermo/thermostat_server.go.
@@ -646,7 +658,7 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 				fmt.Sprintf("matter: SystemMode=%d not supported by FeatureMap 0x%02X", raw, fm),
 			}
 		}
-		err = s.c.SetMode(ctx, mode, priority)
+		err = s.c.SetMode(ctx, mode, matterDispatchPriority)
 	default:
 		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 	}
@@ -657,7 +669,7 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 	return nil
 }
 
-func (s climateThermostatServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+func (s climateThermostatServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
 	if cmdID != matterCmdSetpointRaiseLower {
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -678,7 +690,7 @@ func (s climateThermostatServer) MatterInvoke(ctx context.Context, cmdID uint32,
 	// `mode` (Heat/Cool/Both) is informational on heating-only HM
 	// devices — every effective adjust hits the single setpoint.
 	_ = mode
-	if err := s.c.SetTemperature(ctx, target, priority); err != nil {
+	if err := s.c.SetTemperature(ctx, target, matterDispatchPriority); err != nil {
 		return nil, err
 	}
 	s.c.dataVersion.Bump()
@@ -772,11 +784,11 @@ func (s climateThermostatUIServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s climateThermostatUIServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
+func (s climateThermostatUIServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
 	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 }
 
-func (s climateThermostatUIServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+func (s climateThermostatUIServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
 	return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 }
 
