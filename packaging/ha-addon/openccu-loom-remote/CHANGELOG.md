@@ -4,6 +4,48 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.73.0
+
+Fixed: MQTT published `ch3`-style markers where you had named a channel on the
+CCU. Only devices with several primary channels were affected, and only on
+MQTT — the REST API, the web UI and the daemon's own model showed your label
+all along. Those entities change their displayed name with this update. Their
+`entity_id` does not move, so automations keep working; a channel discovered
+for the first time after the update takes its id from the new name.
+
+Fixed: in the alarm policies view, two of the three "require code to silence"
+switches were stored and then ignored. Only the one for MQTT ever had an
+effect — a keypad or remote press is already authenticated by its slot or
+binding and carries no code that could be typed, and a keypad press never
+reaches the silence action at all. If you had switched on either of the other
+two, you were shown a protection that was not there. Check that view if you
+relied on it.
+
+Fixed: every un-ignore pattern this project documented was one the parser
+refuses. The reference config, the concept document and the field's own help
+text taught `MODEL:CHANNEL:PARAMETER`; what actually works is a bare
+`PARAMETER` — matching that parameter on any model and channel — or the fully
+qualified `PARAMETER:PARAMSET@MODEL:CHANNEL`. The documentation now says so.
+If a parameter you un-ignored never appeared, this is why.
+
+Fixed: raising the history rollup lag could delete raw history that had never
+been folded into hourly values, permanently and without a message. It affected
+installations whose retention sat between the two settings. The two now move
+together.
+
+Fixed: the firmware download endpoint reported success for a request the CCU
+never received — the action it posted does not exist on the CCU. It now uses
+the CCU's own firmware download, which takes no parameters: a supplied URL is
+accepted and ignored. A success answer now means the CCU reported the download
+worked.
+
+Also fixed: telling the CCU that a channel's value is in use is a write, not a
+read — it creates or removes the direct link between the channel and this
+daemon. It is treated as one now.
+
+Removed: two internal helpers that nothing called. No effect on a running
+installation.
+
 # 0.72.2
 
 Fixed: on some devices a schedule switch point acted on a different channel

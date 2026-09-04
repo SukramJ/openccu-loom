@@ -216,7 +216,7 @@ func TestDeciderConcurrentReadsAreSafe(t *testing.T) {
 			// Both calls are legal regardless of result; we only care that
 			// there is no data race.
 			_ = d.IsParameterIgnored(model, "TRANSCEIVER", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterPartyTemperature)
-			_ = d.IsParameterHidden(model, "TRANSCEIVER", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterOnTimeList1)
+			_ = d.IsParameterIgnoredForCentral("ccu-test", model, "TRANSCEIVER", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterOnTimeList1)
 		}(i)
 	}
 	wg.Wait()

@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.73.0] - 2026-09-04
+
+### Removed
+
+- **Two exports whose comments named a caller that does not exist.**
+  `InterfaceClient.ModifiedAt` / `SetModifiedAt` documented themselves as
+  driven by the central's event path; nothing set them and nothing read them,
+  and the per-interface timestamp they duplicated is kept by the event
+  coordinator (`lastEventStamp`). `ParameterDecider.IsParameterHidden` and
+  `IsParameterHiddenForCentral` were aliases of the `Ignored` pair with no
+  production caller. Both were found by the pre-release comment-claims sweep.
+  No behaviour changes: neither path ever ran.
+
 ### Fixed
 
 - **The reachability analyzer's diagnostics were invisible.** Its logger

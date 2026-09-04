@@ -524,21 +524,6 @@ func (d *ParameterDecider) Len() int {
 	return n
 }
 
-// IsParameterHidden is an alias for [IsParameterIgnored] kept for
-// API parity
-// share the same answer: hidden ≡ ignored from the user's POV.
-// channelNo is the channel number; pass [channelNoUnknown] (-1) when
-// the channel number is not available.
-func (d *ParameterDecider) IsParameterHidden(model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
-	return d.IsParameterIgnored(model, channelType, channelNo, paramset, p)
-}
-
-// IsParameterHiddenForCentral is [ParameterDecider.IsParameterHidden]
-// scoped to one central; see [ParameterDecider.IsParameterIgnoredForCentral].
-func (d *ParameterDecider) IsParameterHiddenForCentral(central, model, channelType string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
-	return d.IsParameterIgnoredForCentral(central, model, channelType, channelNo, paramset, p)
-}
-
 // IsUnIgnored reports whether the (model, channelNo, paramset, parameter)
 // tuple is explicitly un-ignored. Mirrors
 // `ParameterVisibilityDecider.is_un_ignored`.
