@@ -22,6 +22,7 @@ package mattercontract
 // Mirrors matter.js packages/node/src/behaviors/switch/SwitchServer.ts,
 // which derives the same sequence from one currentPosition stream per
 // switch.
+// loom:reachable:reason="called through a type assertion in internal/north/matter/bridge when a cluster server is wired to its press source; an interface type has no construction site the analyzer can follow"
 type SwitchEventEmitter interface {
 	// FireInitialPress reports the switch leaving its idle position.
 	FireInitialPress(newPosition uint8)

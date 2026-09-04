@@ -15,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // [interfaces.MatterDeviceTypeName] is the only place a Matter device type
@@ -33,7 +34,7 @@ import (
 //     read out of the type checker, with each returned constant resolved to
 //     its value. A method returning a non-constant expression is reported as
 //     unresolvable rather than guessed at.
-//   - measurement classes: [interfaces.MatterMeasurementClassDeviceType] over
+//   - measurement classes: [mattercontract.MeasurementClassDeviceType] over
 //     measurementClasses, the list that
 //     TestMeasurementClassEnumerationIsComplete keeps complete.
 //
@@ -124,7 +125,7 @@ func TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType(t *testing.T) {
 
 	sources := w2PkgAdvertisedDeviceTypes(t)
 	for _, class := range measurementClasses {
-		if id := interfaces.MatterMeasurementClassDeviceType(class); id != 0 {
+		if id := mattercontract.MeasurementClassDeviceType(class); id != 0 {
 			sources = append(sources, w2PkgMatterDeviceTypeSource{
 				id:   id,
 				from: fmt.Sprintf("MatterMeasurementClassDeviceType(class %d)", class),

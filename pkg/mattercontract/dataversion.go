@@ -48,6 +48,7 @@ type DataVersionTracker struct {
 
 // InitialDataVersion returns a uniformly-random non-zero uint32. It
 // is a package-level var for test-side override.
+// loom:reachable:reason="called by the tracker in this file when seeding a zero version; exported only so a test can substitute a deterministic sequence, which leaves it without an external production caller"
 var InitialDataVersion = func() uint32 {
 	var b [4]byte
 	if _, err := rand.Read(b[:]); err != nil {

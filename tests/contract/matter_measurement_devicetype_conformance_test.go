@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // A Matter endpoint is a device type plus the clusters that device type is
@@ -98,8 +99,8 @@ func TestMeasurementClassProjectsOntoAConformantDeviceType(t *testing.T) {
 
 	checked := 0
 	for _, class := range measurementClasses {
-		deviceType := uint32(interfaces.MatterMeasurementClassDeviceType(class))
-		clusterID := interfaces.MatterMeasurementClassClusterID(class)
+		deviceType := uint32(mattercontract.MeasurementClassDeviceType(class))
+		clusterID := mattercontract.MeasurementClassClusterID(class)
 
 		if clusterID == 0 {
 			t.Errorf("measurement class %d maps to cluster 0 — it would be StateUnmappable "+
@@ -162,7 +163,7 @@ func TestHostRiddenMeasurementClassesHaveAHost(t *testing.T) {
 	t.Parallel()
 
 	for class, reason := range hostRiddenMeasurementClasses {
-		clusterID := interfaces.MatterMeasurementClassClusterID(class)
+		clusterID := mattercontract.MeasurementClassClusterID(class)
 		if clusterID == 0 {
 			t.Errorf("host-ridden class %d has no cluster at all; the entry %q describes nothing", class, reason)
 			continue
@@ -202,8 +203,8 @@ func TestMeasurementClassEnumerationIsComplete(t *testing.T) {
 		}
 	}
 	next := highest + 1
-	if interfaces.MatterMeasurementClassClusterID(next) != 0 ||
-		interfaces.MatterMeasurementClassDeviceType(next) != 0 {
+	if mattercontract.MeasurementClassClusterID(next) != 0 ||
+		mattercontract.MeasurementClassDeviceType(next) != 0 {
 		t.Errorf("measurement class %d projects onto a cluster or device type but is missing from "+
 			"measurementClasses — add it there so the conformance guards cover it", next)
 	}
@@ -248,11 +249,11 @@ func TestMeasurementClassesUnderInvestigationAreStillBroken(t *testing.T) {
 	t.Parallel()
 
 	for class, defect := range measurementClassesUnderInvestigation {
-		if interfaces.MatterMeasurementClassDeviceType(class) != 0 {
+		if mattercontract.MeasurementClassDeviceType(class) != 0 {
 			t.Errorf("measurement class %d now maps to device type 0x%04X, so the defect recorded "+
 				"in measurementClassesUnderInvestigation is fixed — delete the entry so the class "+
 				"is guarded again. Recorded defect: %s",
-				class, interfaces.MatterMeasurementClassDeviceType(class), defect)
+				class, mattercontract.MeasurementClassDeviceType(class), defect)
 		}
 	}
 }

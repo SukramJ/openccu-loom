@@ -152,20 +152,6 @@ type MatterEligibilityVerdict = mattercontract.EligibilityVerdict
 // MatterEligibilitySource is a compatibility alias for [mattercontract.EligibilitySource].
 type MatterEligibilitySource = mattercontract.EligibilitySource
 
-// MatterMeasurementClassDeviceType returns the standalone Matter
-// Device Type (uint16) that best wraps the given measurement class
-// when the source is materialised as its own sensor endpoint. Zero
-// for `MatterMeasurementNone` and any value with no standalone
-// device-type counterpart (Battery / Power / Energy roll up to a
-// host endpoint instead).
-//
-// Compatibility wrapper; [mattercontract.MeasurementClassDeviceType] is
-// the single source of truth for the mapping and carries the full
-// rationale for each entry.
-func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
-	return mattercontract.MeasurementClassDeviceType(class)
-}
-
 // MatterDeviceTypeName returns the operator-facing name for a Matter
 // Device Type ID. Returns the empty string for `0` (no device type)
 // and a hex fallback like "0x0123" for IDs the model does not project
@@ -178,13 +164,4 @@ func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
 // there.
 func MatterDeviceTypeName(id uint16) string {
 	return mattercontract.DeviceTypeName(id)
-}
-
-// MatterMeasurementClassClusterID returns the cluster ID the given
-// measurement class projects to. Counterpart to
-// [MatterMeasurementClassDeviceType] for the cluster slot.
-//
-// Compatibility wrapper for [mattercontract.MeasurementClassClusterID].
-func MatterMeasurementClassClusterID(class MatterMeasurementClass) uint32 {
-	return mattercontract.MeasurementClassClusterID(class)
 }

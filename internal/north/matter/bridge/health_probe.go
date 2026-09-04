@@ -36,6 +36,7 @@ type Status interface {
 // probe never sets a catalogue key, a timestamp or the staleness
 // exemption — so the Matter subtree needs no dependency on the tracker
 // package. The host converts on the way in.
+// loom:reachable:reason="constructed by the probe in this file and consumed through HealthRecorder, which the daemon satisfies with a translating adapter in cmd/openccu-loom; interface satisfaction is invisible to the analyzer"
 type HealthSample struct {
 	Healthy bool
 	// Note is the stable, English machine string. The tracker's scoring
