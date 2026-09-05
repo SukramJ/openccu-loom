@@ -25,7 +25,7 @@ For implementation truth, consult the authoritative sources:
 | REST API contract | `assets/openapi.yaml` (CI-validated, runtime-validated by daemon) |
 | WebSocket command contract | `assets/wsapi.json` |
 | MQTT topic + payload structure | ADR 0011 (`mqtt-topic-and-payload-architecture`), extended for alarm topics by ADR 0052 |
-| Matter cluster + device-type surface | `docs/matter-parity-contract.md` (binding), `internal/north/matter/schema/` (generated) |
+| Matter cluster + device-type surface | `docs/matter-parity-contract.md` (binding), `go-fabric/schema/` (generated, in the module) |
 | Alarm system design + safety model | `notes/concepts/alarm-concept.md`; operator view in `docs/alarm-user-guide.md` |
 | Configuration knobs | `example.config.yaml` (annotated) + `GET /api/v1/config/schema` (complete, live) |
 | Operator-facing behaviour | `docs/user-guide.md`, `docs/user/` |
@@ -586,13 +586,22 @@ cluster subset, DP→cluster mapping, and effort estimates live in
 **[ADR 0012](docs/adr/0012-matter-pure-go-implementation.md)**.
 Bring-up bug lessons (7 structural bugs from the live chip-tool
 smoke runs, waves 7–12) are recorded in
-**[ADR 0013](docs/adr/0013-matter-commissioning-bring-up.md)**. The
-matter packages under `internal/north/matter/` and the
-`internal/north/matter/bridge/` runtime package are all populated
-and tested (including the Subscribe-with-events foundation, the
-GenericSwitch / Schedules / AdministratorCommissioning clusters, and
-the REST API); the daemon wires the bridge behind
-`cfg.North.Matter.Enabled` (default off; operator opt-in via config).
+**[ADR 0013](docs/adr/0013-matter-commissioning-bring-up.md)**. **Since 0.74.0 the Matter stack is a dependency, not a subtree.** It
+lives in **[`github.com/SukramJ/go-fabric`](https://github.com/SukramJ/go-fabric)**
+(MIT, this project's own module): the protocol substrate, the cluster
+servers, the interaction model, commissioning, mDNS and the generated
+schema. What stays here is `internal/north/matteradapter` — the walk
+from this daemon's device model to a flat endpoint description — plus
+the REST surface, the configuration and the persistence of endpoint
+identity. ADR 0012's decision for a pure-Go implementation is unchanged;
+only the location is. The reasoning, the decisions and the phased plan
+are in
+[`notes/plans/matter-library-extraction.md`](notes/plans/matter-library-extraction.md).
+
+The bridge is wired behind `cfg.North.Matter.Enabled` (default off;
+operator opt-in via config), and the module is required at a
+pseudo-version — it carries no tag until a reference application has
+exercised its API from outside.
 
 ### 6.1 What's shipped
 
@@ -603,10 +612,10 @@ the REST API); the daemon wires the bridge behind
   responder, channel session.Encrypt/Decrypt with replay-window.
 - **Interaction Model**: `Read` / `Write` / `Invoke` / `Subscribe`
   (initial-report) / `TimedRequest` all fully wired in
-  `internal/north/matter/bridge/receive.go` →
+  `go-fabric/bridge/receive.go` →
   `endpoint.TopologyDispatcher` → cluster servers → `bridge/reply.go`.
 - **Cluster servers**: 12 generic measurement servers in
-  `internal/north/matter/cluster/measurement/` (Temperature,
+  `go-fabric/cluster/measurement/` (Temperature,
   Humidity, Illuminance, Pressure, BooleanState, OccupancySensing,
   CO2, PM2.5, PM10, PowerSource, ElectricalPower, ElectricalEnergy)
   + 12 bridge-core clusters (Descriptor, Binding, BasicInformation,
@@ -641,14 +650,19 @@ the REST API); the daemon wires the bridge behind
 **Architecture principle: rich model, dumb bridge.** Same pattern as
 ADR 0011 (MQTT) and ADR 0010 (HA Discovery): the projection from a
 DataPoint to a Matter endpoint / cluster lives on the DataPoint
-itself, not in `internal/north/matter/`. The bridge owns the Matter
-wire format (TLV codec, MRP framing, Secure Channel, IM dispatcher);
-the model owns *what each DP means in Matter terms* via interface
-methods declared in `internal/model/{custom,generic,calculated}/.../matter.go`.
+itself, not in the Matter layer. The module owns the Matter wire format
+(TLV codec, MRP framing, Secure Channel, IM dispatcher); the model owns
+*what each DP means in Matter terms* via interface methods declared in
+`internal/model/{custom,generic,calculated}/.../matter.go`.
 The interface contracts (`EndpointSource`, `ClusterServer`,
-`MeasurementClass`, `MeasurementSource`) live in
-`pkg/interfaces/matter.go`. ADR 0012 §"Source surface" is the
-specification of those types.
+`MeasurementClass`, `MeasurementSource`) are declared by the module, in
+`go-fabric/contract`; `pkg/interfaces` keeps prefixed aliases so callers
+outside the Matter path read unchanged. ADR 0012 §"Source surface" is
+the specification of those types.
+
+The split runs where the host vocabulary stops: the module names no
+Homematic concept, and endpoint identity — a five-part key this daemon
+renders — reaches it through a port rather than as a type it declares.
 
 ### 6.3 Forward-compat
 
@@ -672,7 +686,7 @@ of `central`, `client`, or `model`:
   `internal/model/calculated/matter.go`; adding a new calculated
   sensor post-0.1.0 is a model-package change, not a bridge change.
 - `DeviceCreatedEvent` / `DeviceRemovedEvent` give the endpoint
-  assembler in `internal/north/matter/endpoint/` the trigger to
+  assembler in `internal/north/matteradapter` the trigger to
   build / tear down bridged endpoints; it does so by walking the
   model and asking each DP for its projection, not by hard-coding
   type switches.
@@ -877,7 +891,7 @@ Coverage producers in place:
 - **MQTT broker** — `internal/north/mqtt.StartHealthProbe`
   (30 s cadence; healthy when the broker session is up + the
   bridge has acknowledged at least one publish since reconnect).
-- **Matter bridge** — `internal/north/matter/bridge.StartHealthProbe`
+- **Matter bridge** — `go-fabric/bridge.StartHealthProbe`
   (30 s cadence; healthy when the UDP listener is bound).
 - **Scheduler + REST/WS** — surfaced via gauges
   (`scheduler.jobs`, `scheduler.failures`, `rest.5xx`,
