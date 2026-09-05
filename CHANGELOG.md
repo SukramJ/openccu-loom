@@ -47,6 +47,61 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A scheduler health test raced the bookkeeping it asserted on.**
+  `TestHealthHeartbeatRecordsSchedulerLiveness` injected a failing job,
+  synchronised on a channel the job sent from inside `Run`, then stopped the
+  scheduler and asserted the failure had been counted. But `scheduler.invoke`
+  counts a failure only while the context is live — `err != nil &&
+  ctx.Err() == nil`, because a job aborted by shutdown is not a real failure —
+  and `Stop` cancels that context. Signalling on entry says the job began, not
+  that its outcome was recorded, so the test raced the count and lost about
+  once in thirty runs locally, more under CI load. It now waits for
+  `TotalFailures` itself to move before stopping the scheduler. The production
+  behaviour is unchanged and was never wrong.
+
+- **The scenario suite failed under CI load on traffic the bridge is
+  required to send.** Three scenarios went red across three runs, and on
+  `main` as readily as on a branch: the peer harness read every datagram off
+  the socket as an application message, so two kinds of MRP bookkeeping
+  reached steps that had not asked for anything. A standalone acknowledgement
+  (Secure Channel opcode `0x10`) tripped `expect_no_tx` as "the bridge sent
+  when it should not have" and `drain_subscribe_chunks` as an unexpected
+  opcode — the bridge owes that ack for the scenario's own traffic and emits
+  it on the ack timer, so which step is running when it lands follows machine
+  load. A retransmission was worse: `dataversion__monotonic_per_cluster` read
+  the resend of a report it had already consumed as the *second* report and
+  compared a DataVersion against itself, reporting a monotonicity violation
+  against a bridge that had done nothing wrong. The peer now classifies both
+  as transport noise and skips them, which is what a controller does (Spec
+  §4.6.7 has the receiver drop duplicates). The one scenario that wants the
+  duplicate — `mrp__retransmit_on_lost_report` — still sees it, because a peer
+  pretending a datagram was lost forgets its counter. The classifier is pinned
+  by tests including a negative control that ordinary IM traffic is never
+  filtered, and the harness reports what it absorbed, so a green run cannot be
+  mistaken for the filter having been the reason.
+
+- **The chip-tool suite called a PASE handshake a successful commissioning.**
+  `PairingSuccess` accepted three markers, and read against chip-tool's own
+  source none of them meant what the name says. `"Pairing Success"` is printed
+  by `OnPairingComplete` once PASE alone has finished
+  (`PairingCommand.cpp:519`), and is additionally a substring of
+  `"Secure Pairing Success"` (`:505`), so it could not even tell the PASE
+  stage from the CASE stage. `"Commissioning complete"` matches the line the
+  controller prints for *any* finished attempt — `CHIPDeviceController.cpp:2196`
+  renders `"success"` or the error string into the same sentence — so a
+  commissioning that died in operational discovery satisfied it. `"Pairing
+  complete"` appears nowhere in the tree. Seven of the suite's eight call
+  sites run full commissioning flows and asserted on this; a bridge that
+  completed PASE, installed the fabric and then failed to advertise its
+  operational record would have passed all of them. The predicate now keys on
+  `"Device commissioning completed with success"` alone, the PASE-only
+  wrong-passcode test keys on the new `PASEEstablished` (against the old
+  predicate it could not have failed), and `HandshakeStage` names the furthest
+  stage reached so a failure says where it stopped. The parser guards carry no
+  `chiptool` build tag: they parse text and start no process, so they run in
+  the ordinary test suite rather than only in the label-gated job — which is
+  the job that would not have run.
+
 - **The matter.js schema extractor silently dropped elements that share a tag
   and id.** Request and response commands do, so the second replaced the first:
   the Groups cluster carried 6 commands where matter.js declares 10, and 35

@@ -66,6 +66,24 @@ type scenarioHarness struct {
 
 	bindings   map[string]any
 	logCapture *scenarioLogCapture
+
+	// seenCounters records, per session, the MRP message counters the
+	// peer has already taken delivery of. A datagram whose counter is
+	// in here is a retransmission: MRP re-ships a reliable message
+	// until it is acknowledged, so the same ReportData can arrive
+	// twice with nothing wrong. A real controller drops the duplicate
+	// (Spec §4.6.7); this peer did not, so a step reading "the next
+	// message" could be handed the previous one — which is how
+	// dataversion__monotonic_per_cluster came to compare a
+	// DataVersion against itself.
+	seenCounters map[uint16]map[uint32]struct{}
+
+	// skippedAcks / skippedDupes count what the filter absorbed, and
+	// are reported at the end of the run. They are the evidence that
+	// the filter did anything: a scenario that goes green while both
+	// are zero was not fixed by it.
+	skippedAcks  int
+	skippedDupes int
 }
 
 // Per-subscription session keys derive from a fixed base + the
@@ -272,6 +290,7 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 		peerSessionByID: peerSessionByID,
 		topology:        topology,
 		bindings:        make(map[string]any),
+		seenCounters:    make(map[uint16]map[uint32]struct{}),
 		logCapture:      logCap,
 	}
 
@@ -483,6 +502,15 @@ func (h *scenarioHarness) run() {
 			h.t.Errorf("%s: unhandled kind", stepCtx)
 		}
 	}
+	// Report what the transport filter absorbed. Without this a run that
+	// goes green says nothing about whether the filter was the reason:
+	// zero on both counters means the scenario never met the condition
+	// the filter exists for, and its passing is evidence about something
+	// else.
+	if h.skippedAcks > 0 || h.skippedDupes > 0 {
+		h.t.Logf("transport filter: skipped %d standalone ack(s), %d retransmission(s)",
+			h.skippedAcks, h.skippedDupes)
+	}
 }
 
 // fireAttributeChange simulates a CCU echo by handing the bridge's own
@@ -557,41 +585,109 @@ func (h *scenarioHarness) fireNotifierSource(ctx string, _ scenarioStep) {
 	src.fire()
 }
 
-// readOutbound pulls the next datagram off the peer socket and decodes
-// its two headers. The IM body is returned alongside so callers can
-// assert on it without decrypting twice.
-func (h *scenarioHarness) readOutbound(ctx string) (message.Header, message.ProtocolHeader, []byte, bool) {
+// outboundDatagram is one decoded datagram off the peer socket.
+type outboundDatagram struct {
+	hdr   message.Header
+	proto message.ProtocolHeader
+	body  []byte
+	size  int
+}
+
+// readDatagram pulls one datagram off the peer socket and decodes its
+// two headers, without judging what it is. A read that runs into the
+// deadline reports timedOut and fails nothing — the callers differ on
+// whether silence is the pass or the failure. Any other problem
+// (undecodable header, unknown session, bad MIC) is a hard error here,
+// because no caller can proceed past it.
+func (h *scenarioHarness) readDatagram(ctx string, deadline time.Time) (dg outboundDatagram, ok, timedOut bool) {
 	h.t.Helper()
-	_ = h.peerConn.SetReadDeadline(time.Now().Add(scenarioReadDeadline))
+	_ = h.peerConn.SetReadDeadline(deadline)
 	buf := make([]byte, 1500)
 	n, _, err := h.peerConn.ReadFromUDP(buf)
 	if err != nil {
-		h.t.Errorf("%s: peer ReadFromUDP: %v", ctx, err)
-		return message.Header{}, message.ProtocolHeader{}, nil, false
+		return outboundDatagram{}, false, true
 	}
 	got := buf[:n]
 
 	hdr, hdrLen, err := message.UnmarshalHeader(got)
 	if err != nil {
 		h.t.Errorf("%s: UnmarshalHeader: %v", ctx, err)
-		return message.Header{}, message.ProtocolHeader{}, nil, false
+		return outboundDatagram{}, false, false
 	}
-	peerSess, ok := h.peerSessionByID[hdr.SessionID]
-	if !ok {
+	peerSess, sessOK := h.peerSessionByID[hdr.SessionID]
+	if !sessOK {
 		h.t.Errorf("%s: no peer session for header.SessionID=%d (have %v)", ctx, hdr.SessionID, sortedSessionIDs(h.peerSessionByID))
-		return message.Header{}, message.ProtocolHeader{}, nil, false
+		return outboundDatagram{}, false, false
 	}
 	plain, _, err := peerSess.Decrypt(&hdr, securityFlagsByte(&hdr), got[hdrLen:])
 	if err != nil {
 		h.t.Errorf("%s: decrypt: %v", ctx, err)
-		return message.Header{}, message.ProtocolHeader{}, nil, false
+		return outboundDatagram{}, false, false
 	}
 	proto, protoLen, err := message.UnmarshalProtocolHeader(plain)
 	if err != nil {
 		h.t.Errorf("%s: UnmarshalProtocolHeader: %v", ctx, err)
-		return message.Header{}, message.ProtocolHeader{}, nil, false
+		return outboundDatagram{}, false, false
 	}
-	return hdr, proto, plain[protoLen:], true
+	return outboundDatagram{hdr: hdr, proto: proto, body: plain[protoLen:], size: n}, true, false
+}
+
+// transportNoise reports whether a datagram is MRP bookkeeping rather
+// than something a scenario step asked about, and names it if so.
+//
+// Two kinds qualify, and both are correct behaviour the bridge may emit
+// at a moment no scenario controls:
+//
+//   - A standalone acknowledgement (Secure Channel, opcode 0x10). The
+//     bridge owes an ack for every reliable message it receives and
+//     sends one on its own cadence when no reply carries it — go-fabric
+//     transport/mrp/ack.go:50 puts that at ~200 ms after receipt. The
+//     step that happens to be running then did not ask for it.
+//   - A retransmission: a counter this session already delivered. MRP
+//     re-ships until acknowledged, so a slow or reordered ack produces a
+//     second copy of a message the peer already has. Spec §4.6.7 has the
+//     receiver drop it; this peer now does too.
+//
+// Filtering these is not leniency. A step that reads "the next message"
+// means the next one the bridge composed, and neither of these is that.
+func (h *scenarioHarness) transportNoise(dg outboundDatagram) (string, bool) {
+	if dg.proto.ProtocolID == mrp.SecureChannelProtocolID && dg.proto.Opcode == mrp.StandaloneAckOpcode {
+		h.skippedAcks++
+		return "standalone ack", true
+	}
+	seen := h.seenCounters[dg.hdr.SessionID]
+	if seen == nil {
+		seen = make(map[uint32]struct{})
+		h.seenCounters[dg.hdr.SessionID] = seen
+	}
+	if _, dup := seen[dg.hdr.MessageCounter]; dup {
+		h.skippedDupes++
+		return "retransmission", true
+	}
+	seen[dg.hdr.MessageCounter] = struct{}{}
+	return "", false
+}
+
+// readOutbound pulls the next datagram the scenario is actually about,
+// skipping the transport noise [transportNoise] classifies. The IM body
+// is returned alongside so callers can assert on it without decrypting
+// twice.
+func (h *scenarioHarness) readOutbound(ctx string) (message.Header, message.ProtocolHeader, []byte, bool) {
+	h.t.Helper()
+	deadline := time.Now().Add(scenarioReadDeadline)
+	for {
+		dg, ok, timedOut := h.readDatagram(ctx, deadline)
+		if !ok {
+			if timedOut {
+				h.t.Errorf("%s: peer ReadFromUDP: no application message within %s", ctx, scenarioReadDeadline)
+			}
+			return message.Header{}, message.ProtocolHeader{}, nil, false
+		}
+		if _, noise := h.transportNoise(dg); noise {
+			continue
+		}
+		return dg.hdr, dg.proto, dg.body, true
+	}
 }
 
 // expectTX captures the next outbound datagram on peerConn, decrypts
@@ -897,15 +993,30 @@ func (h *scenarioHarness) expectNoTX(ctx string, st scenarioStep) {
 	if window == 0 {
 		window = 500 * time.Millisecond
 	}
-	_ = h.peerConn.SetReadDeadline(time.Now().Add(window))
-	buf := make([]byte, 1500)
-	n, _, err := h.peerConn.ReadFromUDP(buf)
-	if err != nil {
-		// Read timeout = no traffic = pass.
+	// The window is a budget for the whole step, not per datagram: an
+	// ack landing mid-window must not extend the quiet period it is
+	// being measured against.
+	deadline := time.Now().Add(window)
+	for {
+		dg, ok, timedOut := h.readDatagram(ctx, deadline)
+		if !ok {
+			if timedOut {
+				return // no application traffic in the window = pass
+			}
+			return // readDatagram already failed the test
+		}
+		if kind, noise := h.transportNoise(dg); noise {
+			// MRP bookkeeping is not the bridge "sending": it is owed
+			// for traffic the scenario itself produced, and its timing
+			// tracks the ack timer rather than anything under test.
+			h.t.Logf("%s: ignoring %s (%d B) inside the quiet window", ctx, kind, dg.size)
+			continue
+		}
+		h.t.Errorf("%s: peer received a %d B application message during the quiet window — "+
+			"bridge sent when it should not have. protocol=0x%04X opcode=0x%02X exchange=%d",
+			ctx, dg.size, dg.proto.ProtocolID, dg.proto.Opcode, dg.proto.ExchangeID)
 		return
 	}
-	h.t.Errorf("%s: peer received %d B during the quiet window — bridge sent when it should not have. hex: %x",
-		ctx, n, buf[:n])
 }
 
 // closeSession drives the session-teardown cascade: CloseSession evicts
@@ -925,10 +1036,16 @@ func (h *scenarioHarness) closeSession(ctx string, st scenarioStep) {
 // expect_tx step asserts the retransmit lands.
 func (h *scenarioHarness) dropNextTX(ctx string, _ scenarioStep) {
 	h.t.Helper()
-	_ = h.peerConn.SetReadDeadline(time.Now().Add(scenarioReadDeadline))
-	buf := make([]byte, 1500)
-	if _, _, err := h.peerConn.ReadFromUDP(buf); err != nil {
-		h.t.Errorf("%s: peer ReadFromUDP (intended-drop): %v", ctx, err)
+	hdr, _, _, ok := h.readOutbound(ctx)
+	if !ok {
+		return
+	}
+	// The peer is pretending this datagram never arrived, so it must not
+	// remember having seen it: otherwise the retransmit the scenario is
+	// waiting for would be filtered as a duplicate and the step would
+	// time out against correct bridge behaviour.
+	if seen := h.seenCounters[hdr.SessionID]; seen != nil {
+		delete(seen, hdr.MessageCounter)
 	}
 }
 
