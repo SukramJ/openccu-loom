@@ -187,7 +187,11 @@ func TestCommissioning_WrongPasscode_Fails(t *testing.T) {
 		"--bypass-attestation-verifier", "true",
 		"--pase-only", "true",
 	)
-	if harness.PairingSuccess(out) {
+	// PASE-only run: assert on the PASE marker itself. PairingSuccess
+	// keys on OnCommissioningComplete, which `--pase-only true` never
+	// reaches, so it would be false here whatever the passcode did --
+	// a check that cannot fail measures nothing.
+	if harness.PASEEstablished(out) {
 		t.Fatalf("PASE should have failed with wrong passcode but reported success:\n%s", out)
 	}
 	if !harness.PairingFailed(out) {

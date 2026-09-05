@@ -47,6 +47,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The chip-tool suite called a PASE handshake a successful commissioning.**
+  `PairingSuccess` accepted three markers, and read against chip-tool's own
+  source none of them meant what the name says. `"Pairing Success"` is printed
+  by `OnPairingComplete` once PASE alone has finished
+  (`PairingCommand.cpp:519`), and is additionally a substring of
+  `"Secure Pairing Success"` (`:505`), so it could not even tell the PASE
+  stage from the CASE stage. `"Commissioning complete"` matches the line the
+  controller prints for *any* finished attempt — `CHIPDeviceController.cpp:2196`
+  renders `"success"` or the error string into the same sentence — so a
+  commissioning that died in operational discovery satisfied it. `"Pairing
+  complete"` appears nowhere in the tree. Seven of the suite's eight call
+  sites run full commissioning flows and asserted on this; a bridge that
+  completed PASE, installed the fabric and then failed to advertise its
+  operational record would have passed all of them. The predicate now keys on
+  `"Device commissioning completed with success"` alone, the PASE-only
+  wrong-passcode test keys on the new `PASEEstablished` (against the old
+  predicate it could not have failed), and `HandshakeStage` names the furthest
+  stage reached so a failure says where it stopped. The parser guards carry no
+  `chiptool` build tag: they parse text and start no process, so they run in
+  the ordinary test suite rather than only in the label-gated job — which is
+  the job that would not have run.
+
 - **The matter.js schema extractor silently dropped elements that share a tag
   and id.** Request and response commands do, so the second replaced the first:
   the Groups cluster carried 6 commands where matter.js declares 10, and 35
