@@ -1,7 +1,7 @@
 # Extracting the Matter Implementation into a Reusable Go Module
 
 **Working document — `notes/plans/matter-library-extraction.md`**
-Status: the fourteen decisions in §7 were taken on 2026-09-04. **Phase 0 is implemented and green** (branch `feature/matter-phase0`, ten commits; `make test` and repo-wide `make lint` both clean) — §4.0 records what each milestone actually did and where it diverged. Phases 1 onward are not started.
+Status: the fourteen decisions in §7 were taken on 2026-09-04. **Phase 0 is implemented and green** (branch `feature/matter-phase0`, ten commits; `make test` and repo-wide `make lint` both clean) — §4.0 records what each milestone actually did and where it diverged. Phases 1 onward are not started, and **§0.6.1 raises D18**: whether goal 3 — matching `home-assistant-matter-bridge` — should stand at all. It gates the scope of Phase 3 and nothing earlier.
 Every claim about the current code carries a `path:line` or verbatim command output. Claims that were adversarially re-checked are stated plainly; everything else is marked **UNVERIFIED** in those words, and §8 collects them so nothing hides in prose.
 
 **The three goals this roadmap is measured against** (stated 2026-09-04; §0.6 records how far the plan meets them):
@@ -89,6 +89,34 @@ Measured 2026-09-04 against the three goals stated above. Two were already met b
 | **3b. That bridge carries no Homematic domain knowledge** | **Was violated by D4; closed by D15** | Most of the plan points the right way: naming stays host-side (non-goal 10), `eligibility.go` moves host-side (D5), `hmenum.CommandPriority` is dropped (D3), `DataPointUsage` becomes a `VisibilityFilter` (C8). **The exception was `store.EndpointKey`** — `{CentralName, DeviceAddress, ChannelNo, DPKind, DPKey}` across six `Store` methods and two tables, which D4 let travel "byte-for-byte, Homematic-flavoured shape and all". **D15** turns endpoint identity into a port instead. |
 
 Checked and found clean while measuring 3b: `eligibility/vendor_name.go` and `compat.go` carry **CSA vendor-id → controller-name / ecosystem** tables only (Apple 0x1349, Google 0x6006, Amazon 0x1217, …) — Matter ecosystem knowledge, no Homematic content. D5 keeping them library-side is compatible with goal 3.
+
+#### 0.6.1 Decision brief — is goal 3 the right goal? (**open**, D18)
+
+Goals 1 and 2 follow from loom's own needs. **Goal 3 does not**, and this section exists because nobody has been asked whether it should stand. It is raised as a question, not resolved here.
+
+**The question already has an answer on file, for a narrower version of itself.** `docs/adr/0012-matter-pure-go-implementation.md` (accepted 2026-05-05) weighed exactly this as **Option B — matter.js sidecar**: the daemon spawns and supervises matter.js, talking to it over loopback. It was rejected on three grounds — a Node.js runtime at ~50–100 MB RSS on the CCU add-on path (1 GB RAM, ARMv7/Cortex-A7, `packaging/ccu-addon/`), a third API surface (the sidecar IPC) needing its own versioning and tests, and a second security-patching pipeline. Note what that ADR does *not* claim: it calls the single-static-binary property *"valuable but not load-bearing — a build-output convenience, not a deployment requirement"*. Anyone arguing for Go from the single-binary angle is arguing against our own ADR.
+
+**What has moved since, in both directions.**
+
+* *Toward Go:* Option A's decisive cost — *"no usable Go starting point … realistic effort 12–16 weeks solo"* — is spent. 53,082 non-test LOC exist, pair against real controllers and carry a chip-tool CI leg. That is sunk, and it is not spent again.
+* *Toward matter.js:* the coverage gap is now quantified and it is wide. 135 cluster servers against roughly 20 (§0.3); 13 of hamb's 24 domains reachable (§3.1); the schema snapshot 59 commits behind (R5); and P3.2 measured as XL against servers that have never driven a device (R14).
+
+**The argument that actually carries, and it is one.** `CLAUDE.md:64-66` states the product goal: loom serves *"users who want MQTT / REST / UI / **Matter access without HA**"*. Running matter.js inside Home Assistant does not serve that case. Someone bridging their Homematic blinds into Apple Home through loom's CCU add-on has no Home Assistant — otherwise they would use the HA integration. And in the HA case loom's bridge is not needed at all: hamb already exists and is mature.
+
+**The uncomfortable consequence.** The Go implementation is justified by *loom's own use case* — Matter on a CCU, no second runtime, no HA — and **not** by being a hamb replacement. Goal 3 asserts the second. Against hamb, a thin Go stack competes with a mature project that already does the job, and Phase 3 buys at XL cost what has been available there for years.
+
+If that holds, the item in question is not the Go implementation but **the breadth of Phase 3**. Phases 0–2 stand either way: they are hygiene, and they make the Matter side independently maintainable and testable. Only Phase 3 in its current scope rests on a competition nobody has decided to enter.
+
+**What would flip the answer** — each of these is a real, checkable condition, not a hedge:
+
+| If | Then |
+|---|---|
+| the CCU add-on path is dropped | the constraint that carried ADR 0012 is gone; a sidecar becomes defensible and goal 3 gets cheap |
+| certification ever becomes a goal (D9 reversed) | no path avoids a stack that knows the test suite |
+| all 24 domains are genuinely wanted | XL in-house work stands against finished third-party code, and the answer turns |
+| a second host materialises that is *not* Home Assistant | goal 3 stops being hamb-shaped and becomes its own thing |
+
+**Open decision D18: does goal 3 stand as written, narrow to "whatever loom itself needs on the CCU path", or go?** It gates the scope of Phase 3 — not Phases 0–2, which proceed regardless.
 
 ---
 
@@ -543,6 +571,7 @@ All fourteen were decided on **2026-09-04**. Each row records the choice, the re
 | **D11** | Controller/initiator role, and WaterLeakDetector 0x0043? | **Role stays a non-goal; 0x0043 behind a host opt-in** | The crypto is role-complete (`sigma.NewInitiator`, `spake2.NewProver`) but has zero non-test callers and nothing above it; adding the role reshapes `im` and `secure/operational`. It stays where it is — costing nothing and keeping the decision reversible. For 0x0043, P3.10 already carries the right shape: reachable only through an explicit host flag, with re-enabling gated on a *recorded* Alexa pairing run rather than a green unit test (`pkg/interfaces/matter.go:483-502`). |
 | **D12** | Are group sessions in scope? | **Cluster servers yes, group-cast no** | Groups (0x0004) and ScenesManagement (0x0062) commands arrive over unicast, so real servers repair the conformance gap on 11 already-claimed domains without any group addressing. New session types, operational group-key derivation and IPv6 multicast membership stay out (non-goal 5). |
 | **D13** | Does the library get a reference daemon? | **Yes, and it is the example** | `tests/chiptool/` (7,706 LOC) execs `./bin/openccu-loom` and cannot move, so without one the library ships with no real-commissioner guard (R8). P4.1 and P4.2 are nearly the same artefact: an example that cannot be written without reaching into internals is the honest test that the seam is wrong. **They merge.** |
+| **D18** | **OPEN** — does goal 3 (hamb equivalence) stand? | *unanswered* | Goals 1 and 2 follow from loom's needs; goal 3 does not, and was never put to the maintainer. `docs/adr/0012:74-90` already rejected a matter.js sidecar on the CCU add-on's resource envelope, and `CLAUDE.md:64-66` makes "Matter without HA" the product goal — which is what justifies a Go stack, rather than out-competing hamb. Full brief and the four conditions that would flip it: §0.6.1. Gates the scope of Phase 3 only. |
 | **D17** | Which name, concretely? *(the instance D7 left open)* | **`github.com/SukramJ/go-fabric`** | A *fabric* is Matter's own term for the trust domain a controller and its devices share — specification vocabulary, not a mark, and already 85 occurrences in `secure/operational/manager.go`. It reads as Matter to anyone who knows the protocol and as weaving to anyone who does not, which keeps the family tie to `loom`. House form matches `go-mqtt` and `go-openccu-data`. Discoverability rides on the description, topics and README, which Apache-2.0 §6 explicitly permits as *"reasonable and customary use in describing the origin of the Work"* — the module path itself stays free of the mark. Packages become `go-fabric/contract`, `go-fabric/cluster/...`, `go-fabric/bridge`. |
 | **D14** | Version lane? | **Independent, SemVer** | `go-mqtt` already demonstrates the pattern (`docs/adr/0050:61-75`). A Matter fix must reach a consumer without a daemon release — that is the point of the extraction. Without its own lane the library is published in form only and still chained to the daemon's cadence. |
 | **D15** | Does the endpoint key travel? *(raised by the goal alignment; narrows D4)* | **No — endpoint identity becomes a port** | `EndpointKey{CentralName, DeviceAddress, ChannelNo, DPKind, DPKey}` is host vocabulary: `DPKind ∈ {custom, generic, calculated, combined, measurement}` is loom's datapoint taxonomy, and channels do not exist in Home Assistant. Letting it travel would oblige a `go-matter-bridge` to populate fields that mean nothing to it — **goal 3 violated in the module's own API**. So the nine protocol-generic tables travel as D4 decided; `matter_endpoints` and `matter_exposures` stay host-side behind an interface, and the library holds an opaque key (string / `Stringer`). loom renders its 5-tuple to **exactly today's string**, pinned by a golden test, so migration 007's re-pair warning stays inert. Fits D5, which already puts allowlist policy host-side. |
@@ -562,7 +591,7 @@ All fourteen were decided on **2026-09-04**. Each row records the choice, the re
 * **D15 narrows D4** — `matter_endpoints` and `matter_exposures` stay host-side; C14 and §5.3 are rewritten accordingly, and P2.4 gains a byte-identity criterion.
 * **D16 adds a behaviour gate to P3.2 and re-cuts it** — non-goal 8 previously covered Phases 0–2 only, leaving the plan's largest move without a criterion that could fail. Measuring the move's *target* then showed it was not a move at all: P3.2 is now P3.2a (raise the library servers to production capability), P3.2b (classify each of the nine files as cluster logic, host policy or host binding) and P3.2c (switch over against the wire comparison).
 
-**Open decisions remaining: none.** D17 closed the one instance D7 had left open — the concrete module name. A question that arises during the work becomes a new dated row here.
+**Open decisions remaining: one — D18** (§0.6.1): does goal 3, the hamb-equivalence target, stand as written? It gates the scope of Phase 3 and nothing earlier. D17 closed the instance D7 had left open. A question that arises during the work becomes a new dated row here.
 
 ---
 
