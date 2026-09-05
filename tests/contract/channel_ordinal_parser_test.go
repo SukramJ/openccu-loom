@@ -30,8 +30,7 @@ import (
 // pkg/hmproto's DeviceDescription.ChannelNo both call hmtypes now and keep
 // only their own no-separator fallback.
 var materializeChannelNoHandRolledParsers = map[string]string{
-	"internal/central/adapter/paramsets.go":  "channelNumberOf: backwards scan, sentinel 0 for a non-numeric suffix",
-	"internal/north/matter/bridge/bridge.go": "udpPort parses a network listen string, not a CCU address — a different grammar",
+	"internal/central/adapter/paramsets.go": "channelNumberOf: backwards scan, sentinel 0 for a non-numeric suffix",
 }
 
 // TestChannelOrdinalParsersDelegateToHmtypes fails when a file grows its own

@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric/contract"
+
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ---------------------------------------------------------------------------
@@ -62,7 +63,7 @@ func TestMatterMeasurementClassDeviceType(t *testing.T) {
 		{interfaces.MatterMeasurementNone, 0},
 	}
 	for _, tc := range cases {
-		got := mattercontract.MeasurementClassDeviceType(tc.class)
+		got := contract.MeasurementClassDeviceType(tc.class)
 		if got != tc.want {
 			t.Errorf("MatterMeasurementClassDeviceType(%v) = 0x%04X, want 0x%04X",
 				tc.class, got, tc.want)
@@ -82,7 +83,7 @@ func TestMatterMeasurementClassDeviceType(t *testing.T) {
 // notes/parity/by_design.md.
 func TestLeakClassMapsToContactSensorDeviceType(t *testing.T) {
 	t.Parallel()
-	got := mattercontract.MeasurementClassDeviceType(interfaces.MatterMeasurementLeak)
+	got := contract.MeasurementClassDeviceType(interfaces.MatterMeasurementLeak)
 	if got == 0x0043 {
 		t.Fatalf("MatterMeasurementLeak maps to WaterLeakDetector (0x0043); must stay ContactSensor (0x0015) — one 0x0043 endpoint breaks whole-bridge support on pinned controllers")
 	}
@@ -91,7 +92,7 @@ func TestLeakClassMapsToContactSensorDeviceType(t *testing.T) {
 	}
 	// The cluster slot stays BooleanState (0x0045) — ContactSensor's
 	// mandatory server cluster per contact-sensor.element.ts.
-	if cl := mattercontract.MeasurementClassClusterID(interfaces.MatterMeasurementLeak); cl != 0x0045 {
+	if cl := contract.MeasurementClassClusterID(interfaces.MatterMeasurementLeak); cl != 0x0045 {
 		t.Fatalf("MatterMeasurementClassClusterID(Leak) = 0x%04X, want 0x0045 (BooleanState)", cl)
 	}
 }
@@ -124,7 +125,7 @@ func TestMatterMeasurementClassClusterID(t *testing.T) {
 		{interfaces.MatterMeasurementNone, 0},
 	}
 	for _, tc := range cases {
-		got := mattercontract.MeasurementClassClusterID(tc.class)
+		got := contract.MeasurementClassClusterID(tc.class)
 		if got != tc.want {
 			t.Errorf("MatterMeasurementClassClusterID(%v) = 0x%04X, want 0x%04X",
 				tc.class, got, tc.want)

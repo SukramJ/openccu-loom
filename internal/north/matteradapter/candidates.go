@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/SukramJ/go-fabric/eligibility"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Candidate identifies one row in the allowlist UI list. The
-// 5-tuple matches [store.EndpointKey].
+// 5-tuple matches [matterendpoint.SourceKey].
 //
 // `ChannelType` carries the OCCU channel-type token (e.g.
 // `"HEATING_CLIMATECONTROL_TRANSCEIVER"`). The REST handler hands it
@@ -25,7 +26,7 @@ import (
 //
 // loom:reachable:reason="returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used"
 type Candidate struct {
-	Key         store.EndpointKey
+	Key         matterendpoint.SourceKey
 	DisplayName string
 	ChannelType string
 	Verdict     eligibility.Verdict
@@ -89,7 +90,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 	}
 	channelHasCustom := ch.CustomDataPoint() != nil
 
-	emit := func(kind store.DPKind, source any) {
+	emit := func(kind matterendpoint.DPKind, source any) {
 		if source == nil {
 			return
 		}
@@ -102,7 +103,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 		// embedded constituent's no_create usage, so it must not be filtered
 		// by that usage). The same helper gates the assembled topology, so the
 		// candidate list and the endpoints it produces cannot disagree.
-		if kind == store.DPKindGeneric && hideFromMatter(source, channelHasCustom, exposeSecondary) {
+		if kind == matterendpoint.DPKindGeneric && hideFromMatter(source, channelHasCustom, exposeSecondary) {
 			return
 		}
 		// A structurally-incomplete device — e.g. a custom light whose LEVEL
@@ -129,7 +130,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 			return
 		}
 		*out = append(*out, Candidate{
-			Key: store.EndpointKey{
+			Key: matterendpoint.SourceKey{
 				CentralName:   centralName,
 				DeviceAddress: dev.Address,
 				ChannelNo:     ch.Number,
@@ -144,17 +145,17 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 
 	// Custom DP (max one per channel).
 	if cdp := ch.CustomDataPoint(); cdp != nil {
-		emit(store.DPKindCustom, cdp)
+		emit(matterendpoint.DPKindCustom, cdp)
 	}
 
 	// Calculated DPs (derived sensors).
 	for _, calc := range ch.CalculatedDataPoints() {
-		emit(store.DPKindCalculated, calc)
+		emit(matterendpoint.DPKindCalculated, calc)
 	}
 
 	// Combined DPs (fan-out aggregations).
 	for _, comb := range ch.CombinedDataPoints() {
-		emit(store.DPKindCombined, comb)
+		emit(matterendpoint.DPKindCombined, comb)
 	}
 
 	// Generic DPs from VALUES paramset. MASTER DPs are config-only and
@@ -162,7 +163,7 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 	// Unmappable for them anyway, but skipping the iteration keeps
 	// the candidate list lean.
 	for _, dp := range ch.DataPoints() {
-		emit(store.DPKindGeneric, dp)
+		emit(matterendpoint.DPKindGeneric, dp)
 	}
 }
 

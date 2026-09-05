@@ -16,18 +16,20 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/bootid"
+	mattercore "github.com/SukramJ/go-fabric/cluster/core"
+	"github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/endpoint"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/bootid"
-	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // updateTopologyGolden rewrites the fixture from the current output:
@@ -41,7 +43,7 @@ import (
 var updateTopologyGolden = flag.Bool("update-topology-golden", false, "rewrite testdata/topology.golden.json")
 
 // goldenCentralName scopes every fixture device. It is part of every
-// [store.EndpointKey] and therefore feeds the UniqueID hash, so it is
+// [matterendpoint.SourceKey] and therefore feeds the UniqueID hash, so it is
 // pinned here rather than spelled out per call site.
 const goldenCentralName = "ccu-golden"
 
@@ -351,15 +353,9 @@ func recordTopology(t *testing.T, top *endpoint.Topology) goldenTopology {
 			Reachable:           ep.Reachable,
 			ParentEndpointID:    ep.ParentEndpointID,
 			HasParentEndpointID: ep.HasParentEndpointID,
-			SourceKey: goldenSourceKey{
-				CentralName:   ep.SourceKey.CentralName,
-				DeviceAddress: ep.SourceKey.DeviceAddress,
-				ChannelNo:     ep.SourceKey.ChannelNo,
-				DPKind:        string(ep.SourceKey.DPKind),
-				DPKey:         ep.SourceKey.DPKey,
-			},
-			ServerClusters: sortedClusterIDs(servers),
-			DeviceTypeList: []goldenDeviceType{},
+			SourceKey:           recordSourceKey(t, ep),
+			ServerClusters:      sortedClusterIDs(servers),
+			DeviceTypeList:      []goldenDeviceType{},
 		}
 		for _, srv := range servers {
 			switch s := srv.(type) {
@@ -401,12 +397,38 @@ func recordTopology(t *testing.T, top *endpoint.Topology) goldenTopology {
 	return out
 }
 
+// recordSourceKey recovers this daemon's 5-tuple from the opaque key the
+// bridge module carries on the assembled endpoint. A type assertion, not
+// a parse of the rendered form: the daemon put the value in and gets the
+// same value back, so nothing has to guess where one field ends and the
+// next begins. The root and Aggregator endpoints carry no key and record
+// the zero value, exactly as they did when the field was a plain struct.
+func recordSourceKey(t *testing.T, ep *endpoint.Endpoint) goldenSourceKey {
+	t.Helper()
+	if ep.SourceKey == nil {
+		return goldenSourceKey{}
+	}
+	k, ok := ep.SourceKey.(matterendpoint.SourceKey)
+	if !ok {
+		t.Fatalf("EP %d: SourceKey is %T, not %T — the assembler is no longer "+
+			"keying endpoints by this daemon's identity, so every persisted "+
+			"endpoint id and UniqueID has moved", ep.ID, ep.SourceKey, matterendpoint.SourceKey{})
+	}
+	return goldenSourceKey{
+		CentralName:   k.CentralName,
+		DeviceAddress: k.DeviceAddress,
+		ChannelNo:     k.ChannelNo,
+		DPKind:        string(k.DPKind),
+		DPKey:         k.DPKey,
+	}
+}
+
 // sortedClusterIDs returns the deduplicated, ascending server-cluster
 // list of one endpoint. Sorted on purpose: the recorded set answers
 // "which clusters does this endpoint serve", and mount order is a
 // separate property that [TestMeteringPlugProjectsOneElectricalSensorEndpoint]
 // and the dispatcher tests already own.
-func sortedClusterIDs(servers []mattercontract.ClusterServer) []string {
+func sortedClusterIDs(servers []contract.ClusterServer) []string {
 	ids := make([]uint32, 0, len(servers))
 	seen := make(map[uint32]struct{}, len(servers))
 	for _, s := range servers {
@@ -454,7 +476,7 @@ func sortedClusterIDs(servers []mattercontract.ClusterServer) []string {
 // EXCLUDED, and why:
 //
 //   - Per-cluster DataVersion. Seeded from a random non-zero value on
-//     first access ([mattercontract.DataVersionTracker]) and bound to
+//     first access ([contract.DataVersionTracker]) and bound to
 //     the assembler instance, so it differs on every run by design.
 //   - The root (EP 0) and Aggregator (EP 1) cluster sets. Those servers
 //     are built by the daemon and published onto the endpoints via

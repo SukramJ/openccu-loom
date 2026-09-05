@@ -8,10 +8,11 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/im"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // TestMatterBridgeEnforcesStoredACLAfterBoot asserts the effect of the

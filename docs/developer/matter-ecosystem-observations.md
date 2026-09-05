@@ -102,9 +102,9 @@ and that is where the guards sit:
 | `TestEveryMandatoryCommandIsAccepted` | Every conformance-`M` command appears in `AcceptedCommandList`. |
 | `TestMeasurementClassProjectsOntoAConformantDeviceType` | Every measurement class names a device type whose definition permits its cluster. |
 
-All five read the same oracle: the matter.js HEAD schema snapshot, regenerated
-by `make generate-matter-schema`. They live under `tests/integration/` and
-`tests/contract/`.
+All five read the same oracle: the matter.js HEAD schema snapshot, which the
+go-fabric module generates and this repo pins (`make sync-matter-schema`). They
+live under `tests/integration/` and `tests/contract/`.
 
 The one thing they cannot do is confirm a real controller's reaction. That
 needs the chip-tool suite (`.github/workflows/chiptool.yml`, `needs-chiptool`

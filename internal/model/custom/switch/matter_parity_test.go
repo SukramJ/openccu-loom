@@ -18,7 +18,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
+	"github.com/SukramJ/go-fabric/tlv"
 )
 
 // TestParityMatterJS_OnOffServer_AcceptsExtensionsTypeCheck verifies that

@@ -9,9 +9,10 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/onoff"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	"github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )

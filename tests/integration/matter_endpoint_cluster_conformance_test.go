@@ -14,12 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric/schema"
+
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -135,8 +136,8 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 			}
 			if _, known := schema.DeviceTypeServerClusters[deviceType]; !known {
 				t.Errorf("%s channel %d (%T) declares device type 0x%04X, absent from the matter.js "+
-					"HEAD schema snapshot — wrong id, or the snapshot is stale "+
-					"(`make generate-matter-schema`)", dev.Model, ch.Number, cdp, deviceType)
+					"HEAD schema snapshot — wrong id, or the pinned snapshot is stale "+
+					"(`make sync-matter-schema`)", dev.Model, ch.Number, cdp, deviceType)
 				continue
 			}
 

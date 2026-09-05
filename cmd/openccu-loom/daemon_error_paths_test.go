@@ -27,9 +27,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	"github.com/SukramJ/go-fabric/cluster/wire"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 

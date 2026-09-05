@@ -9,6 +9,10 @@ A release touches five version carriers. `release.yml` guards **both** add-on
 `config.yaml` versions against the tag, so a missed one fails the workflow
 after the tag is already pushed — bump them all in one commit.
 
+`github.com/SukramJ/go-fabric` is **not** one of the carriers. It is a
+dependency with its own cadence — see [Following go-fabric](#following-go-fabric)
+at the end.
+
 ## 1. Decide the number
 
 Read `CHANGELOG.md`'s unreleased section and the commits since the last tag
@@ -70,3 +74,47 @@ The runbook lives in that repo, as its `daemon-update` skill:
 Check `node-red-contrib-openccu-loom` too. It pins `SUPPORTED_API_MAJOR` in
 `lib/client.js`; a major bump here makes every server node warn until it is
 raised there.
+
+## Following go-fabric
+
+The Matter bridge stack lives in `github.com/SukramJ/go-fabric` and has an
+independent SemVer lane — the same arrangement ADR 0050 set up for `go-mqtt`,
+and the point of the extraction: a Matter fix reaches a consumer without a
+daemon release.
+
+**It is not a sixth version carrier.** Nothing in this repository states the
+module's version except the `require` line in `go.mod`; there is no config
+file, no changelog and no workflow guard tied to it. Bumping the require is
+an ordinary dependency change and does not by itself oblige a loom release —
+only the user-visible behaviour it brings does.
+
+How a go-fabric change reaches loom:
+
+1. Land the change in go-fabric and let its own CI go green
+   (`.github/workflows/ci.yml` there: build, vet, race tests, lint).
+2. Bump the require in loom and run the gate:
+
+   ```sh
+   go get github.com/SukramJ/go-fabric@<ref>   # <ref> is a tag or a commit SHA
+   go mod tidy
+   make lint && make test && make contract
+   ```
+
+3. If the bump changes user-visible behaviour, it gets a `CHANGELOG.md` entry
+   here like any other change — describe the behaviour, not the module
+   version.
+
+**Tag or pseudo-version.** The module carries no tags yet, so every bump is a
+pseudo-version. That is deliberate: the API has had one real caller, and a
+`v0.x` tag would freeze port shapes designed against a single consumer. Take
+a tag as soon as go-fabric publishes one — a tag is what makes the pin
+readable and what lets Dependabot do the bump. Until then `@main` and
+`@<commit-sha>` both work and both record the resolved pseudo-version in
+`go.mod`; name the SHA when you need a specific commit rather than the tip.
+
+There is no `go.work` and no filesystem `replace` in the committed tree — CI
+checks out one repository and resolves the module from the proxy. A local
+`go.work` is fine for development and must never reach a commit.
+
+Dependabot's root `gomod` entry covers the module, but has nothing to propose
+while it is untagged — see the comment in `.github/dependabot.yml`.

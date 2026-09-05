@@ -8,12 +8,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/im"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchdev "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -153,7 +154,7 @@ func assembleOne(t *testing.T, addr string, dev *device.Device) (dispatcher *end
 // The value used to travel as an argument on ClusterServer.MatterWrite /
 // MatterInvoke, hard-coded to High at the two dispatcher call sites and
 // forwarded untouched by every implementation. It is now a constant
-// named inside each cluster server instead, which keeps pkg/mattercontract
+// named inside each cluster server instead, which keeps pkg/contract
 // free of host imports — and moves the value out of sight of any test
 // that merely passes it in.
 //

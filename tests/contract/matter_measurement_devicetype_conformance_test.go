@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
+	"github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/schema"
+
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // A Matter endpoint is a device type plus the clusters that device type is
@@ -24,9 +25,9 @@ import (
 // The two guards below hold the measurement side of that contract: every
 // [interfaces.MatterMeasurementClass] must name a device type that exists,
 // and that device type must permit the class's cluster as a server. The
-// oracle is schema.DeviceTypeServerClusters, codegen'd from matter.js HEAD via
-// `make generate-matter-schema` — so the rules move when the spec does,
-// without anyone re-reading a PDF.
+// oracle is schema.DeviceTypeServerClusters, codegen'd from matter.js HEAD in
+// the go-fabric module — so the rules move when the spec does, without anyone
+// re-reading a PDF.
 //
 // The endpoint-source side of the same contract — a custom DP's
 // MatterDeviceType against its MatterClusterServers — needs real devices to
@@ -99,8 +100,8 @@ func TestMeasurementClassProjectsOntoAConformantDeviceType(t *testing.T) {
 
 	checked := 0
 	for _, class := range measurementClasses {
-		deviceType := uint32(mattercontract.MeasurementClassDeviceType(class))
-		clusterID := mattercontract.MeasurementClassClusterID(class)
+		deviceType := uint32(contract.MeasurementClassDeviceType(class))
+		clusterID := contract.MeasurementClassClusterID(class)
 
 		if clusterID == 0 {
 			t.Errorf("measurement class %d maps to cluster 0 — it would be StateUnmappable "+
@@ -133,8 +134,8 @@ func TestMeasurementClassProjectsOntoAConformantDeviceType(t *testing.T) {
 		allowed, known := schema.DeviceTypeAllowsServerCluster(deviceType, clusterID)
 		if !known {
 			t.Errorf("measurement class %d names device type 0x%04X, which the matter.js HEAD "+
-				"schema snapshot does not know — either the id is wrong or the snapshot is stale "+
-				"(`make generate-matter-schema`)", class, deviceType)
+				"schema snapshot does not know — either the id is wrong or the pinned snapshot is "+
+				"stale (`make sync-matter-schema`)", class, deviceType)
 			continue
 		}
 		if !allowed {
@@ -163,7 +164,7 @@ func TestHostRiddenMeasurementClassesHaveAHost(t *testing.T) {
 	t.Parallel()
 
 	for class, reason := range hostRiddenMeasurementClasses {
-		clusterID := mattercontract.MeasurementClassClusterID(class)
+		clusterID := contract.MeasurementClassClusterID(class)
 		if clusterID == 0 {
 			t.Errorf("host-ridden class %d has no cluster at all; the entry %q describes nothing", class, reason)
 			continue
@@ -203,8 +204,8 @@ func TestMeasurementClassEnumerationIsComplete(t *testing.T) {
 		}
 	}
 	next := highest + 1
-	if mattercontract.MeasurementClassClusterID(next) != 0 ||
-		mattercontract.MeasurementClassDeviceType(next) != 0 {
+	if contract.MeasurementClassClusterID(next) != 0 ||
+		contract.MeasurementClassDeviceType(next) != 0 {
 		t.Errorf("measurement class %d projects onto a cluster or device type but is missing from "+
 			"measurementClasses — add it there so the conformance guards cover it", next)
 	}
@@ -249,11 +250,11 @@ func TestMeasurementClassesUnderInvestigationAreStillBroken(t *testing.T) {
 	t.Parallel()
 
 	for class, defect := range measurementClassesUnderInvestigation {
-		if mattercontract.MeasurementClassDeviceType(class) != 0 {
+		if contract.MeasurementClassDeviceType(class) != 0 {
 			t.Errorf("measurement class %d now maps to device type 0x%04X, so the defect recorded "+
 				"in measurementClassesUnderInvestigation is fixed — delete the entry so the class "+
 				"is guarded again. Recorded defect: %s",
-				class, mattercontract.MeasurementClassDeviceType(class), defect)
+				class, contract.MeasurementClassDeviceType(class), defect)
 		}
 	}
 }

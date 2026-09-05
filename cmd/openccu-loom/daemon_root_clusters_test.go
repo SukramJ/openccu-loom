@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	mattercore "github.com/SukramJ/go-fabric/cluster/core"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // TestResolveBridgeUniqueIDStableAcrossRename pins Matter §11.1.5.13 quality F:

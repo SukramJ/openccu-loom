@@ -7,8 +7,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/closure"
-	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	"github.com/SukramJ/go-fabric/cluster/closure"
+	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 

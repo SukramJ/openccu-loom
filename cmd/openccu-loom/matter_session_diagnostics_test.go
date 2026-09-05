@@ -13,8 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/operational"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
+	"github.com/SukramJ/go-fabric/secure/operational"
+	"github.com/SukramJ/go-fabric/secure/sigma"
+
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 

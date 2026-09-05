@@ -384,7 +384,14 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // visible rather than absorbed. 1385 is the unique count, which is what
 // this ceiling was always meant to be: from here a newly dead export moves
 // it by exactly one.
-const reachabilityUnreachableCeiling = 1384
+//
+// Lowered 1384 -> 1119 when the Matter stack stopped being a subtree of this
+// module and became an external dependency. Its exported identifiers are no
+// longer this analyzer's population at all — the classification loop only
+// enumerates github.com/SukramJ/openccu-loom/... — so the drop is a change of
+// scope, not dead code that was reached or removed. Comparing this number
+// against any run from before that move compares two different populations.
+const reachabilityUnreachableCeiling = 1119
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's

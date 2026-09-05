@@ -9,11 +9,10 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )
 
-// modelNameResolver answers the Matter side's [endpoint.NameResolver]
+// modelNameResolver answers the Matter side's [NameResolver]
 // questions from the device model, so the label a bridged endpoint
 // carries is the model's own answer rather than a Matter-side
 // re-derivation.
@@ -41,7 +40,7 @@ type modelNameResolver struct {
 }
 
 // channelRef addresses one channel by device address and channel
-// number — the two coordinates [store.EndpointKey] carries.
+// number — the two coordinates [matterendpoint.SourceKey] carries.
 type channelRef struct {
 	deviceAddress string
 	channelNumber int
@@ -72,12 +71,12 @@ func newModelNameResolver(devices []*device.Device, labels device.ParameterTrans
 
 // channelFor returns the indexed channel for key, or nil when the key
 // names a source outside the indexed fleet.
-func (r *modelNameResolver) channelFor(key store.EndpointKey) *device.Channel {
+func (r *modelNameResolver) channelFor(key matterendpoint.SourceKey) *device.Channel {
 	return r.channels[channelRef{deviceAddress: key.DeviceAddress, channelNumber: key.ChannelNo}]
 }
 
-// EndpointLabel implements [endpoint.NameResolver].
-func (r *modelNameResolver) EndpointLabel(key store.EndpointKey) string {
+// EndpointLabel implements [NameResolver].
+func (r *modelNameResolver) EndpointLabel(key matterendpoint.SourceKey) string {
 	ch := r.channelFor(key)
 	label := ""
 	if ch != nil {
@@ -97,7 +96,7 @@ func (r *modelNameResolver) EndpointLabel(key store.EndpointKey) string {
 	return label
 }
 
-// ParameterLabel implements [endpoint.NameResolver]. It routes through
+// ParameterLabel implements [NameResolver]. It routes through
 // the same primitives as the MQTT discovery builder and the REST
 // data-point handler ([device.TranslatedParameterLabel] →
 // [naming.EntityDisplayName]) so the label matches the entity name
@@ -108,7 +107,7 @@ func (r *modelNameResolver) EndpointLabel(key store.EndpointKey) string {
 // empty label — the endpoint then carries the device + channel name
 // alone, mirroring how MQTT / REST collapse the entity name to the
 // device name for primary parameters.
-func (r *modelNameResolver) ParameterLabel(key store.EndpointKey) string {
+func (r *modelNameResolver) ParameterLabel(key matterendpoint.SourceKey) string {
 	channelType := ""
 	if ch := r.channelFor(key); ch != nil {
 		channelType = ch.Type
@@ -121,4 +120,4 @@ func (r *modelNameResolver) ParameterLabel(key store.EndpointKey) string {
 	return name
 }
 
-var _ endpoint.NameResolver = (*modelNameResolver)(nil)
+var _ NameResolver = (*modelNameResolver)(nil)

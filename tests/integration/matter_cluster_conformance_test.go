@@ -11,7 +11,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/parity"
+	"github.com/SukramJ/go-fabric/parity"
+
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -152,7 +153,7 @@ func walkMountedClusters(t *testing.T) []mountedCluster {
 				spec, known := specs[server.MatterClusterID()]
 				if !known {
 					t.Errorf("%s ch%d %T mounts cluster 0x%04X, absent from the matter.js HEAD schema "+
-						"snapshot — wrong id, or the snapshot is stale (`make generate-matter-schema`)",
+						"snapshot — wrong id, or the pinned snapshot is stale (`make sync-matter-schema`)",
 						dev.Model, ch.Number, cdp, server.MatterClusterID())
 					continue
 				}

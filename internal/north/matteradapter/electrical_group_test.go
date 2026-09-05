@@ -10,16 +10,17 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/endpoint"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // meteringPlugFloat adds a read-only float VALUES data point, the shape the
@@ -138,7 +139,7 @@ func TestMeteringPlugProjectsOneElectricalSensorEndpoint(t *testing.T) {
 	if len(electrical) != 1 {
 		t.Fatalf("expected exactly 1 ElectricalSensor endpoint for five electrical parameters, got %d", len(electrical))
 	}
-	if key := electrical[0].SourceKey.DPKey; key != matteradapter.ElectricalGroupDPKey {
+	if key := srcKey(t, electrical[0]).DPKey; key != matteradapter.ElectricalGroupDPKey {
 		t.Errorf("ElectricalSensor endpoint keyed on %q, want the consolidated %q", key, matteradapter.ElectricalGroupDPKey)
 	}
 
@@ -201,7 +202,7 @@ func TestElectricalSensorClusterSetDoesNotDependOnReportedValues(t *testing.T) {
 			t.Fatalf("%s is %T, which cannot be fed a float64 value; the test would measure nothing", p, dp)
 		}
 		fed.OnEvent(42.0)
-		src, ok := dp.(mattercontract.FloatMeasurementSource)
+		src, ok := dp.(contract.FloatMeasurementSource)
 		if !ok {
 			t.Fatalf("%s is %T, not a Matter measurement source", p, dp)
 		}

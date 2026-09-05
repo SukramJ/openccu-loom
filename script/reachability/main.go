@@ -109,7 +109,6 @@ const (
 	autoWhitelistTypeAlias       autoWhitelistReason = "auto-whitelist:pattern=type-alias"
 	autoWhitelistWSHandler       autoWhitelistReason = "auto-whitelist:pattern=ws-command-pkg"
 	autoWhitelistDiscovery       autoWhitelistReason = "auto-whitelist:pattern=mqtt-discovery-builder"
-	autoWhitelistMatterImpl      autoWhitelistReason = "auto-whitelist:pattern=matter-cluster-impl"
 	autoWhitelistCalculatedDP    autoWhitelistReason = "auto-whitelist:pattern=calculated-dp-no-identity-wrapper"
 	autoWhitelistHubFactory      autoWhitelistReason = "auto-whitelist:pattern=hub-factory-wrapper"
 	autoWhitelistVisibilityRules autoWhitelistReason = "auto-whitelist:pattern=visibility-rules-registry"
@@ -118,7 +117,6 @@ const (
 	autoWhitelistCustomMixin     autoWhitelistReason = "auto-whitelist:pattern=custom-mixin-factory"
 	autoWhitelistGenericHelper   autoWhitelistReason = "auto-whitelist:pattern=generic-model-helper"
 	autoWhitelistTestSeam        autoWhitelistReason = "auto-whitelist:pattern=test-seam-with-clock"
-	autoWhitelistMatterProtocol  autoWhitelistReason = "auto-whitelist:pattern=matter-protocol-handler"
 	autoWhitelistXMLRPCExtract   autoWhitelistReason = "auto-whitelist:pattern=xmlrpc-extract-helper"
 )
 
@@ -369,6 +367,12 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		}
 		pkgPath := p.Pkg.Path()
 
+		// Only this module's own identifiers are classified. Code consumed as
+		// an external dependency — the Matter stack among it — is skipped
+		// here, so no auto-whitelist rule below can ever fire for it. A rule
+		// keyed on a dependency's source path is dead weight that reads like a
+		// live exemption; if a dependency needs one, it belongs in that
+		// module's own analyzer run.
 		if !strings.HasPrefix(pkgPath, "github.com/SukramJ/openccu-loom/") {
 			continue
 		}
@@ -639,10 +643,6 @@ func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) 
 	if strings.HasPrefix(identifier, "Publish") && (strings.HasSuffix(identifier, "Discovery") || strings.Contains(identifier, "Discovery")) {
 		return autoWhitelistDiscovery, true
 	}
-	// Matter-Cluster-Implementierungen: Endpoint/Cluster-Methoden werden via Dispatcher gerufen
-	if strings.Contains(relFile, "internal/north/matter/cluster/") {
-		return autoWhitelistMatterImpl, true
-	}
 	// Calculated-DP no-identity wrappers: convenience constructors that delegate to
 	// the WithIdentity variant. Production callers always use the WithIdentity form;
 	// the plain New* forms serve test fixtures that don't carry CCU address context.
@@ -693,25 +693,10 @@ func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) 
 		strings.HasSuffix(identifier, "CappedWithClock") {
 		return autoWhitelistTestSeam, true
 	}
-	// Matter protocol handlers: TLV unmarshal, SPAKE2, Sigma, MRP — called via protocol stack.
-	// SetForTest in bootid is a test seam (explicitly documented as test-only).
-	if strings.Contains(relFile, "internal/north/matter/") {
-		lowerID := strings.ToLower(identifier)
-		if strings.HasPrefix(lowerID, "unmarshal") || strings.HasPrefix(lowerID, "decode") ||
-			strings.HasPrefix(lowerID, "must") || strings.HasPrefix(lowerID, "generate") ||
-			strings.HasPrefix(lowerID, "new") || strings.HasSuffix(lowerID, "fortest") {
-			return autoWhitelistMatterProtocol, true
-		}
-	}
 	// XML-RPC extract helpers: As* functions called via XML-RPC response parsing.
 	if strings.Contains(relFile, "internal/client/transport/xmlrpc/extract.go") ||
 		strings.Contains(relFile, "internal/client/transport/xmlrpc/message.go") {
 		return autoWhitelistXMLRPCExtract, true
-	}
-	// Matter conformance test-vector runner: RunVectorSet / MustHex are
-	// test-only helpers exported so codec-specific test files can import them.
-	if strings.Contains(relFile, "internal/north/matter/conformance/") {
-		return autoWhitelistTestSeam, true
 	}
 	// Hub model constructors: NewAlarmMessagesWithCentral and similar
 	// multi-CCU variants are called via the legacy no-central wrappers

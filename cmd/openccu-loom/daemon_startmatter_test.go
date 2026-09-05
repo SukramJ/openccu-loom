@@ -15,9 +15,10 @@ import (
 	"testing"
 	"time"
 
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // TestStartMatterBridge_EphemeralWindow exercises the EphemeralWindow branch of

@@ -6,7 +6,7 @@ package climate
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
+	"github.com/SukramJ/go-fabric/cluster/measurement"
 )
 
 // TestStMatCelsiusEncoderIsTheMeasurementOne pins that this profile encodes

@@ -8,8 +8,9 @@ import (
 	"errors"
 	"testing"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 )
 
 // TestMatterFabricRevokerAdapter_NilStore_Errors verifies that

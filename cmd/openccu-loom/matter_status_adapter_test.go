@@ -8,9 +8,10 @@ import (
 	"errors"
 	"testing"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // TestMatterStatusAdapter_NilBridge_Returns_Disabled verifies that when

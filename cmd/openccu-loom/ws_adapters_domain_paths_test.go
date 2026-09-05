@@ -20,13 +20,14 @@ import (
 	"strings"
 	"testing"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )

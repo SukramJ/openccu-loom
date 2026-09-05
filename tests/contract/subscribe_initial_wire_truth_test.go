@@ -10,9 +10,9 @@ import (
 	"io"
 	"testing"
 
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	"github.com/SukramJ/go-fabric/im"
+	"github.com/SukramJ/go-fabric/tlv"
 )
 
 // TestSubscribeInitial_WireTruth_StrictTLV asserts that every

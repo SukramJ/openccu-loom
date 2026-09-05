@@ -12,6 +12,8 @@ import (
 	"slices"
 	"sync"
 
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
@@ -19,7 +21,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/history"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -104,7 +105,7 @@ type centralOrchestrator struct {
 	// allowlist rows, which otherwise survive the removal and inflate
 	// GET /api/v1/matter/status's enabled_count for endpoints that can no
 	// longer exist.
-	matterExposureStore *matterstore.Store
+	matterExposureStore *matterendpoint.Store
 	// alarmHook subscribes an adopted central onto the alarm service's
 	// event routing and detaches it again by name. Set via
 	// [centralOrchestrator.setAlarmCentralHook]; zero while the alarm
@@ -343,7 +344,7 @@ func (o *centralOrchestrator) setMatterCentralHook(hook matterCentralHook) {
 // setMatterExposureStore installs the Matter exposure allowlist store so
 // removeCentral can drop a removed central's rows. Nil-safe / idempotent,
 // mirroring [centralOrchestrator.setMatterCentralHook].
-func (o *centralOrchestrator) setMatterExposureStore(store *matterstore.Store) {
+func (o *centralOrchestrator) setMatterExposureStore(store *matterendpoint.Store) {
 	if o == nil {
 		return
 	}

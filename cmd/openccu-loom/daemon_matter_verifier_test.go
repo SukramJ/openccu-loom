@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	"github.com/SukramJ/go-fabric/secure/spake2"
 )
 
 // verifierBytesFromPasscode derives the same 97-byte (w0 || L) wire

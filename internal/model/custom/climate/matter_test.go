@@ -8,8 +8,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/im"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 

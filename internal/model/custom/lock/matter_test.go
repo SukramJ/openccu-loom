@@ -8,8 +8,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 )
 
 // srv returns the DoorLockServer mounted by the lock's MatterClusterServers.

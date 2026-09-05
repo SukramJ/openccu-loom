@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 463.
+Guards without a doc comment: 7 of 457.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -184,13 +184,12 @@ Guards without a doc comment: 7 of 463.
 | TestLogStreamResume_SinceReturnsOnlyNewerRecords | log_stream_resume_contract_test.go | TestLogStreamResume_SinceReturnsOnlyNewerRecords verifies that Since(seq) returns only records with Seq > seq for several cursor values. |
 | TestMarkdownLinksValid | markdown_links_test.go | TestMarkdownLinksValid walks every Markdown file in the repository and fails when a Markdown-syntax link `[text] (path.md)` resolves to a non-existent file. |
 | TestMatterEndpointSourcesAreChangeNotifiers | matter_change_notifier_test.go | TestMatterEndpointSourcesAreChangeNotifiers guarantees that every type asserted as an interfaces.MatterEndpointSource also asserts interfaces.MatterChangeNotifier in the same file. |
-| TestMatterEventPrioritiesMatchMatterJS | matter_event_priority_parity_test.go | TestMatterEventPrioritiesMatchMatterJS walks every MatterEmitEvent call in the Matter tree and checks the priority it passes against [matterEventPriority]. |
 | TestHostRiddenMeasurementClassesHaveAHost | matter_measurement_devicetype_conformance_test.go | TestHostRiddenMeasurementClassesHaveAHost checks the claim each hostRiddenMeasurementClasses entry makes: that some device type specifies the class's cluster as a server, so there is a host endpoint the cluster can legitimately be mounted on. |
 | TestMeasurementClassEnumerationIsComplete | matter_measurement_devicetype_conformance_test.go | TestMeasurementClassEnumerationIsComplete fails when a class is added to the iota block without being added to measurementClasses, which would leave it silently unguarded. |
 | TestMeasurementClassProjectsOntoAConformantDeviceType | matter_measurement_devicetype_conformance_test.go | TestMeasurementClassProjectsOntoAConformantDeviceType asserts that every measurement class names a device type whose Device Library entry permits the class's cluster as a server. |
 | TestMeasurementClassesUnderInvestigationAreStillBroken | matter_measurement_devicetype_conformance_test.go | TestMeasurementClassesUnderInvestigationAreStillBroken keeps the known-defect list honest in the other direction: an entry whose defect has been fixed must be deleted, not left behind. |
 | TestScenarioCoverage | matter_scenario_gate_test.go | TestScenarioCoverage enforces that every custom-DP type with a Matter-side integration (a `<type>/matter.go` under internal/model/custom/) has at least one scenario tagged with its type name in notes/parity/matter/scenarios. |
-| TestMatterSchemaSnapshotInSync | matter_schema_sync_test.go | TestMatterSchemaSnapshotInSync asserts the two copies of the matter.js HEAD schema snapshot are byte-identical: the master at notes/parity/matter/matter-schema-snapshot.json (re-extracted by `make generate-matter-schema`) and the embedded copy at internal/north/matter/parity/schema.json that every matter parity test runs against. |
+| TestMatterSchemaSnapshotInSync | matter_schema_sync_test.go | TestMatterSchemaSnapshotInSync asserts that this repo's pinned copy of the matter.js HEAD schema snapshot — notes/parity/matter/matter-schema-snapshot.json — is byte-identical to the copy the Matter stack embeds and every Matter parity test reads (go-fabric's parity.SchemaJSON()). |
 | TestMCPCatalogueCoversEveryRESTDomain | mcp_rest_parity_test.go | TestMCPCatalogueCoversEveryRESTDomain is the parity guard ADR 0025 requires: "the tool catalogue must track the REST/WS surface". |
 | TestMCPExemptionsAreStillReal | mcp_rest_parity_test.go | TestMCPExemptionsAreStillReal keeps the ratchet honest: a declared exemption for a domain that no longer exists is stale bookkeeping that hides the next gap. |
 | TestMCPToolNamingTaxonomy | mcp_tool_catalogue_test.go | TestMCPToolNamingTaxonomy pins the naming concept documented over registerReadTools: every MCP tool name uses one of the sanctioned verb prefixes in allowedVerbs so the catalogue reads as a single coherent design rather than a grab-bag. |
@@ -397,15 +396,11 @@ Guards without a doc comment: 7 of 463.
 | TestPin_SyncCentralState_CalledInCentral | wiring_pins/central_wiring_test.go | TestPin_SyncCentralState_CalledInCentral pins that central.go calls Health.SyncCentralState so that subsequent client-health transitions feed back into EvaluateCentralState. |
 | TestPin_CommissioningComplete_ClearsPendingFabric | wiring_pins/chip_commissioning_complete_clears_pending_test.go | TestPin_CommissioningComplete_ClearsPendingFabric pins that the daemon wires SetOnCommissioningComplete so that a successful CommissioningComplete calls ClearPendingState on OperationalCredentials, which resets pendingInstallFabricIndex to zero. |
 | TestPin_FailSafeExpiry_RollsBackHalfPairedFabric | wiring_pins/chip_fail_safe_expiry_test.go | TestPin_FailSafeExpiry_RollsBackHalfPairedFabric pins that the daemon wires OnFailSafeExpiry (not just ClearPendingState) as the FailSafe-expired callback. |
-| TestPin_AddNOC_LengthCap | wiring_pins/chip_noc_length_cap_test.go | TestPin_AddNOC_LengthCap pins that handleAddNOC rejects NOC and ICAC payloads exceeding the 400-byte limit mandated by chip src/credentials/CHIPCert.h kMaxCHIPCertLength. |
 | TestPin_NewVerifier_CalledInDaemon | wiring_pins/chip_noc_verify_test.go | TestPin_NewVerifier_CalledInDaemon pins that daemon.go calls mattercert.NewVerifier when processing AddNOC operations. |
 | TestPin_OpenWindow_FailSafeCheck | wiring_pins/chip_open_window_pase_reject_test.go | TestPin_OpenWindow_FailSafeCheck pins that the daemon wires SetIsFailSafeArmed on the AdministratorCommissioning cluster, ensuring the FailSafe-disarmed pre-condition for OpenCommissioningWindow is active at runtime. |
-| TestPin_OpenWindow_PaseReject | wiring_pins/chip_open_window_pase_reject_test.go | TestPin_OpenWindow_PaseReject pins that AdministratorCommissioning.MatterInvoke contains the PASE-session pre-check before OpenCommissioningWindow. |
 | TestPin_OnMDNSReannounce_WiredInDaemon | wiring_pins/chip_remove_fabric_mdns_test.go | TestPin_OnMDNSReannounce_WiredInDaemon pins that daemon.go wires an OnMDNSReannounce callback. |
-| TestPin_RevertAddNOC_ACLCleanup | wiring_pins/chip_revert_acl_cleanup_test.go | TestPin_RevertAddNOC_ACLCleanup pins that revertAddNOC calls ReplaceACL to remove ACL entries for the reverted fabric. |
 | TestPin_StartReaper_CalledInDaemon | wiring_pins/chip_session_reaper_test.go | TestPin_StartReaper_CalledInDaemon pins that daemon.go starts the session reaper via Manager.StartReaper. |
 | TestPin_SetupPIN_TrivialCodeBlacklist | wiring_pins/chip_setup_pin_validation_test.go | TestPin_SetupPIN_TrivialCodeBlacklist pins that buildPaseAdapterFromCreds calls IsValidSetupPIN before deriving the SPAKE2+ verifier. |
-| TestPin_ValidateRCAC_SubjectVsIssuer | wiring_pins/chip_validate_rcac_test.go | TestPin_ValidateRCAC_SubjectVsIssuer pins that handleAddTrustedRootCertificate calls ValidateRCAC before storing the trust root. |
 | TestPin_CUxDWiring_ForwardsToRecordSession | wiring_pins/cuxd_recorder_test.go | TestPin_CUxDWiring_ForwardsToRecordSession pins that the hook actually calls the cache coordinator's RecordSession — the bridge from a CCU call to the recorder. |
 | TestPin_CUxDWiring_InstallsSessionHook | wiring_pins/cuxd_recorder_test.go | TestPin_CUxDWiring_InstallsSessionHook pins that cuxd_wiring.go sets the SessionRecorderHook field on the InterfaceClient Config. |
 | TestPin_CUxDWiring_RecordsAsBINRPC | wiring_pins/cuxd_recorder_test.go | TestPin_CUxDWiring_RecordsAsBINRPC pins that the CUxD session hook records under session.RPCTypeBIN, not RPCTypeXML. |
@@ -420,7 +415,6 @@ Guards without a doc comment: 7 of 463.
 | TestPin_RemoveChannel_CalledInCentral | wiring_pins/device_model_wiring_test.go | TestPin_RemoveChannel_CalledInCentral pins that central.go calls Device.RemoveChannel during RemoveDevice. |
 | TestPin_ACLLister_AttachedInDaemon | wiring_pins/dormant_capability_wiring_test.go | TestPin_ACLLister_AttachedInDaemon pins that the daemon attaches the store-backed ACL source to the Matter bridge. |
 | TestPin_ConnectivityProbe_WiredInHubWiring | wiring_pins/dormant_capability_wiring_test.go | TestPin_ConnectivityProbe_WiredInHubWiring pins that the hub wiring installs the Interface.listInterfaces probe as the Reconciler's Connect source. |
-| TestPin_Dispatcher_SetACLLister_CalledInBridge | wiring_pins/dormant_capability_wiring_test.go | TestPin_Dispatcher_SetACLLister_CalledInBridge pins that the bridge forwards the attached lister into the dispatcher gate. |
 | TestPin_KeepaliveEnablesPingPong | wiring_pins/dormant_capability_wiring_test.go | TestPin_KeepaliveEnablesPingPong pins that the periodic keepalive probes with ping-pong tracking ON. |
 | TestPin_NotifyCallback_WiredInCallbackHandler | wiring_pins/dormant_capability_wiring_test.go | TestPin_NotifyCallback_WiredInCallbackHandler pins that the inbound callback handler stamps the per-client callback-liveness timestamp for every event. |
 | TestPin_NotifyDeviceReachable_WiredInDaemon | wiring_pins/dormant_capability_wiring_test.go | TestPin_NotifyDeviceReachable_WiredInDaemon pins that the daemon forwards CCU device-availability transitions into the Matter bridge. |

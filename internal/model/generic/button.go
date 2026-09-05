@@ -7,10 +7,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/SukramJ/go-fabric/contract"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Button represents a CCU button channel — a stateless trigger that
@@ -81,7 +82,7 @@ func (b *Button) MatterSwitchSupportsLongPress() bool {
 // bridge name one identical type — an alias, not a copy, because Go
 // interface satisfaction compares parameter types by identity and a
 // second declaration of the same method set would not match.
-type MatterSwitchEventEmitter = mattercontract.SwitchEventEmitter
+type MatterSwitchEventEmitter = contract.SwitchEventEmitter
 
 // WireMatterSwitchHandler subscribes the receiver to this Button's
 // value-change stream and dispatches the Matter §1.13 GenericSwitch

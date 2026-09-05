@@ -7,8 +7,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 )
 
 // TestParityMatterJS_CTColorDataVersionBumpsOnInvoke verifies that a

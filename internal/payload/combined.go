@@ -30,7 +30,7 @@ const (
 // branch, so a fourth combined type compiled, attached to its channel,
 // published nothing, and looked exactly like a working one. The Matter
 // assembler already dispatches combined DPs through a capability
-// interface ([mattercontract.EndpointSource]); this is the same seam
+// interface ([contract.EndpointSource]); this is the same seam
 // for the MQTT plane, and [TestCombinedProjectionCoversEveryCombinedType]
 // is what keeps a new type from silently missing it.
 //

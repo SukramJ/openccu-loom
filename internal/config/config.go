@@ -20,8 +20,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/SukramJ/go-fabric/secure/spake2"
+
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )

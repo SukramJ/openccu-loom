@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
+	"github.com/SukramJ/go-fabric/diagevent"
 )
 
 // capturingMatterPublisher records the last MatterEvent it was handed so a

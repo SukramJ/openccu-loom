@@ -4,11 +4,11 @@
 pinned here. The authoritative Matter revision is whatever
 `notes/parity/matter/matter-schema-snapshot.json` records under `matter`
 (`revision`, `specificationVersion`, `sourceCommit`) — it moves with every
-`make generate-matter-schema`, so a number written into this page goes stale
+`make sync-matter-schema`, so a number written into this page goes stale
 within a release. At the time of writing the snapshot pins revision 1.6.0.
 **Related:** 
 **Related:** [ADR 0012](../../docs/adr/0012-matter-pure-go-implementation.md),
-[`internal/north/matter/conformance`](../../internal/north/matter/conformance)
+[go-fabric `conformance`](https://github.com/SukramJ/go-fabric/tree/main/conformance)
 
 This document collects the tests the v1.1 Matter bridge has to pass
 before every release. It mixes automated Go tests with manual smoke

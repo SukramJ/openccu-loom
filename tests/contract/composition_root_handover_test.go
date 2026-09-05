@@ -73,15 +73,11 @@ var compositionRootSeams = []compositionRootSeam{
 		fillFile: "cmd/openccu-loom/daemon_southbound.go",
 		minDecl:  12,
 	},
-	{
-		pkg: "matterbridge", typeName: "Config",
-		declDir:  "internal/north/matter/bridge",
-		fillFile: "cmd/openccu-loom/daemon_matter.go",
-		minDecl:  7,
-		notFilled: map[string]string{
-			"AdvertiseTimeout": "NewBridge substitutes 5s for a zero value (internal/north/matter/bridge/bridge.go:441) and no config key exposes it — the same shape as rest.Deps.WriteTimeout",
-		},
-	},
+	// The matterbridge.Config seam is not listed: the struct is declared in
+	// github.com/SukramJ/go-fabric/bridge, and this guard reads the
+	// declaration out of a repo-relative directory. It cannot see a
+	// declaration that lives in another module, and a seam entry that
+	// silently reads nothing is worse than no entry at all.
 	{
 		// The bridge consumes an assembled topology and no longer holds
 		// the knobs that govern assembly; the daemon builds the assembler

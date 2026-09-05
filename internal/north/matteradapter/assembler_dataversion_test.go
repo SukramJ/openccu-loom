@@ -7,10 +7,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/endpoint"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // buildCustomDPDevice returns a device whose single channel hosts a
@@ -30,7 +31,7 @@ func buildCustomDPDevice(addr, name, param string, deviceType uint16) *device.De
 // has the given address, or nil.
 func findBridgedByAddress(top *endpoint.Topology, addr string) *endpoint.Endpoint {
 	for _, ep := range top.Bridged() {
-		if ep.SourceKey.DeviceAddress == addr {
+		if ep.DeviceAddress == addr {
 			return ep
 		}
 	}
@@ -51,10 +52,10 @@ func findBridgedByAddress(top *endpoint.Topology, addr string) *endpoint.Endpoin
 func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
 	// Deterministic version seeds (distinct per fresh tracker) so the
 	// assertions are crisp. Not parallel — mutates a package var.
-	restore := mattercontract.InitialDataVersion
+	restore := contract.InitialDataVersion
 	var seed uint32
-	mattercontract.InitialDataVersion = func() uint32 { seed += 100; return seed }
-	t.Cleanup(func() { mattercontract.InitialDataVersion = restore })
+	contract.InitialDataVersion = func() uint32 { seed += 100; return seed }
+	t.Cleanup(func() { contract.InitialDataVersion = restore })
 
 	ctx := context.Background()
 	const central = "ccu1"

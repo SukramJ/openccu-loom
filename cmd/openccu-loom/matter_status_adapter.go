@@ -6,11 +6,14 @@ package main
 import (
 	"context"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	mattercore "github.com/SukramJ/go-fabric/cluster/core"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
@@ -23,8 +26,12 @@ type matterStatusReaderAdapter struct {
 	enabled bool
 	bridge  *matterbridge.Bridge
 	store   *matterstore.Store
-	window  *matterbridge.CommissioningWindow
-	cfg     *matterStatusConfig
+	// exposures counts the operator's enabled allowlist rows. Separate
+	// from store because the allowlist is keyed by this daemon's source
+	// 5-tuple and therefore lives host-side; see [matterendpoint].
+	exposures *matterendpoint.Store
+	window    *matterbridge.CommissioningWindow
+	cfg       *matterStatusConfig
 }
 
 type matterStatusConfig struct {
@@ -62,7 +69,9 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 		if err == nil {
 			res.FabricCount = len(fabrics)
 		}
-		enabled, err := r.store.CountEnabled(ctx, "")
+	}
+	if r.exposures != nil {
+		enabled, err := r.exposures.CountEnabled(ctx, "")
 		if err == nil {
 			res.EnabledCount = enabled
 		}

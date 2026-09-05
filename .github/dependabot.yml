@@ -1,6 +1,13 @@
 version: 2
 updates:
-  # Go modules (root)
+  # Go modules (root). This entry covers every require in the root go.mod,
+  # github.com/SukramJ/go-fabric included — the Matter bridge stack, which
+  # lives in its own repository on its own SemVer lane, the same shape ADR
+  # 0050 set for go-mqtt. It carries no tags yet, so the require here is a
+  # pseudo-version and there is no released version for Dependabot to move
+  # it to; until the first tag the bump is a deliberate
+  # `go get github.com/SukramJ/go-fabric@<commit>`. The release skill
+  # (.claude/skills/release/SKILL.md) has the procedure.
   - package-ecosystem: gomod
     directory: "/"
     schedule:
