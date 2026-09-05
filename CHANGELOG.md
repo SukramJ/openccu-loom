@@ -47,6 +47,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The reachability analyzer replaced three measurements with conventions,
+  and 1058 of its 1119 findings were artefacts of them.** A package-level var
+  counted as reachable if its import path contained `/cmd/` and as dead
+  otherwise, so all 243 exported vars outside the composition root were
+  reported dead — a number restating how many exported vars exist, unable to
+  move when a test is written. A named type counted as reachable only through
+  its method set, so a plain struct carried through a live signature read as
+  dead however heavily used; 850 were listed, 28 remain. And a test variant
+  was recognised by import path, but the "package under test" variant keeps
+  the path of the package it tests — so internal tests (`package foo` in a
+  `_test.go`) were missing from the root set, and their `Test*` functions were
+  inventoried as exported identifiers of the production package. That is the
+  drop in `total_exported` from 21401 to 5620: 15776 of the 18849 listed rows
+  were test functions such as `cmd/hmcli.TestAlarmDisarmPrintsOkOnSuccess`,
+  measured as part of the surface they test. All three are
+  measured now: whether reachable code loads or stores the var, whether it
+  names the type, and whether a package holds a function with a go-test
+  signature. That last one is a signature test rather than a name test because
+  this repo exports three REST handlers called `TestLinkAtDevice`,
+  `TestAlarmOutput` and `TestDeviceCommunication`, and a name test would have
+  dropped their whole package from the inventory. The var measurement excludes
+  one store — the package initialiser writing to its own var, since
+  `var Err = errors.New(...)` compiles to exactly that and counting it would
+  mark every initialised var as used, the same non-measurement facing the
+  other way. Each replacement was verified with a probe pair, one identifier
+  read by reachable code and one read by nothing, and the ceiling moves
+  1119 → 61 with no dead code reached or removed.
+
 - **A scheduler health test raced the bookkeeping it asserted on.**
   `TestHealthHeartbeatRecordsSchedulerLiveness` injected a failing job,
   synchronised on a channel the job sent from inside `Run`, then stopped the
