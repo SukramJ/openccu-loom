@@ -18,11 +18,12 @@ import (
 	"log/slog"
 	"testing"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // ── loadFabricRootPublicKey: success path (line 2330) ────────────────────────

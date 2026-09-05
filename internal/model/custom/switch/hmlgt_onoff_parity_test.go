@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/onoff"
 
-	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
+	matterparity "github.com/SukramJ/go-fabric/parity"
 )
 
 // hmLgtOnOffCluster is the matter.js OnOff element as the snapshot

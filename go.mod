@@ -34,7 +34,9 @@ require github.com/SukramJ/go-openccu-data v0.1.3
 
 require golang.org/x/term v0.45.0
 
-require filippo.io/nistec v0.0.4
+require filippo.io/nistec v0.0.4 // indirect
+
+require github.com/SukramJ/go-fabric v0.0.0-20260905121449-f2f65e6a9b73
 
 require (
 	github.com/SukramJ/go-mqtt v1.3.0

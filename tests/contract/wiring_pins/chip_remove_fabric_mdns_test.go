@@ -18,6 +18,6 @@ func TestPin_OnMDNSReannounce_WiredInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
 		"cmd/openccu-loom",
-		"internal/north/matter/cluster/core", "OnMDNSReannounce",
+		"github.com/SukramJ/go-fabric/cluster/core", "OnMDNSReannounce",
 	)
 }

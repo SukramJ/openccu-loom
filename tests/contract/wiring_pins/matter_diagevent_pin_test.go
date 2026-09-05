@@ -7,7 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
+	"github.com/SukramJ/go-fabric/bridge"
+
 	"github.com/SukramJ/openccu-loom/tests/contract"
 )
 

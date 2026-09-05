@@ -6,7 +6,7 @@ package cover
 import (
 	"testing"
 
-	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 )
 
 // TestClosureMainStateFollowsTheModelsMotion pins the Matter MainState to the

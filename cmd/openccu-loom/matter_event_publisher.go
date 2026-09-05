@@ -9,7 +9,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
+	"github.com/SukramJ/go-fabric/eligibility"
+
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )

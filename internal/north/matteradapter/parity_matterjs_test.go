@@ -26,11 +26,12 @@ import (
 	"slices"
 	"testing"
 
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/endpoint"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // stubParityClusterServer is a minimal [mattercontract.ClusterServer]

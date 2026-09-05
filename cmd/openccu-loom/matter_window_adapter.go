@@ -8,7 +8,8 @@ import (
 	"errors"
 	"log/slog"
 
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 

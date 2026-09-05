@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/onoff"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )

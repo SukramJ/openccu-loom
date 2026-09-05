@@ -5,7 +5,7 @@
 // bridge's endpoint specs.
 //
 // It is the only place where the two vocabularies meet. The Matter side
-// ([github.com/SukramJ/openccu-loom/internal/north/matter/endpoint])
+// ([github.com/SukramJ/go-fabric/endpoint])
 // knows nothing about devices, channels or data points: it consumes flat
 // [endpoint.Spec] values and turns them into a topology, allocating and
 // persisting endpoint ids. This package owns the other half — walking

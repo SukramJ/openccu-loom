@@ -13,9 +13,10 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/schema"
+
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // [interfaces.MatterDeviceTypeName] is the only place a Matter device type

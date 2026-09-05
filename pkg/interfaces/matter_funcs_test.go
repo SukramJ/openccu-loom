@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // ---------------------------------------------------------------------------

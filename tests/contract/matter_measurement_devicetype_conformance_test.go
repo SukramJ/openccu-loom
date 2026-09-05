@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/schema"
+
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // A Matter endpoint is a device type plus the clusters that device type is

@@ -9,10 +9,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster"
+	"github.com/SukramJ/go-fabric/cluster/thermo"
+	matterparity "github.com/SukramJ/go-fabric/parity"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
-	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 

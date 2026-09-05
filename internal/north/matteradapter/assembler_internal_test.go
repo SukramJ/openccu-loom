@@ -8,7 +8,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 

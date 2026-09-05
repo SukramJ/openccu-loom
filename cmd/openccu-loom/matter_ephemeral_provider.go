@@ -10,10 +10,11 @@ import (
 	"sync"
 	"time"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	mattercore "github.com/SukramJ/go-fabric/cluster/core"
+	"github.com/SukramJ/go-fabric/secure/operational"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/operational"
 )
 
 // matterEphemeralProvider implements

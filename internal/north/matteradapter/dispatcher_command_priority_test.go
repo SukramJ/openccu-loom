@@ -8,12 +8,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/im"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchdev "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"

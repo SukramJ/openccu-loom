@@ -9,18 +9,11 @@ import (
 	"github.com/SukramJ/openccu-loom/tests/contract"
 )
 
-// TestPin_OpenWindow_PaseReject pins that AdministratorCommissioning.MatterInvoke
-// contains the PASE-session pre-check before OpenCommissioningWindow. The check
-// enforces that Multi-Admin commissioning windows can only be opened over a CASE
-// session. Removing this guard would allow a PASE peer to open a commissioning
-// window, violating Matter §11.19.8.1.
-func TestPin_OpenWindow_PaseReject(t *testing.T) {
-	contract.MustFindCallerInFile(
-		t,
-		"internal/north/matter/cluster/wire/admincommissioning.go",
-		"internal/north/matter/im", "FabricFilterFromContext",
-	)
-}
+// The PASE-session pre-check in AdministratorCommissioning.MatterInvoke —
+// which enforces that a Multi-Admin commissioning window can only be opened
+// over a CASE session (Matter §11.19.8.1) — sits in
+// github.com/SukramJ/go-fabric/cluster/wire and is no longer reachable by a
+// source pin in this repository.
 
 // TestPin_OpenWindow_FailSafeCheck pins that the daemon wires
 // SetIsFailSafeArmed on the AdministratorCommissioning cluster, ensuring the

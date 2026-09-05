@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"log/slog"
 
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Config tunes the model walk and the topology assembly it feeds. The

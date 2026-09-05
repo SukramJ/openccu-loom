@@ -14,8 +14,9 @@ import (
 	"testing"
 	"unicode"
 
+	"github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // ---------------------------------------------------------------------------

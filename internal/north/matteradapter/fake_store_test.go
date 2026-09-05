@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/go-fabric/store"
 )
 
 // fakeStore is an in-memory, non-thread-safe implementation of the

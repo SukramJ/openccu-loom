@@ -15,9 +15,10 @@ import (
 	"strings"
 	"time"
 
+	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
+	"github.com/SukramJ/go-fabric/secure/spake2"
+
 	"github.com/SukramJ/openccu-loom/internal/i18n"
-	mattersetup "github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 )
 
 // validateFieldRanges range-checks the config leaves whose out-of-range

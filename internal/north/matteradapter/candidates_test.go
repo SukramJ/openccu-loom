@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/eligibility"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // fakeClusterServer is a minimal [mattercontract.ClusterServer] whose only

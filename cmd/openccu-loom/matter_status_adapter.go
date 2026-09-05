@@ -6,11 +6,12 @@ package main
 import (
 	"context"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	mattercore "github.com/SukramJ/go-fabric/cluster/core"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )

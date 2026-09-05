@@ -11,11 +11,12 @@ import (
 	"context"
 	"testing"
 
+	mattercluster "github.com/SukramJ/go-fabric/cluster"
+	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	mattercluster "github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"

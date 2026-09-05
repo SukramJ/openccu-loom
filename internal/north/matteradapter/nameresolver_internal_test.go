@@ -8,9 +8,10 @@ package matteradapter
 import (
 	"testing"
 
+	"github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 

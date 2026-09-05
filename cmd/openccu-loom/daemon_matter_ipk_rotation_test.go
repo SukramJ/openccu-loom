@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/go-fabric/secure/sigma"
+	matterstore "github.com/SukramJ/go-fabric/store"
 )
 
 // ── ipkOperationalCandidates ──────────────────────────────────────────────

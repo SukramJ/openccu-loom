@@ -7,10 +7,11 @@ import (
 	"context"
 	"sync"
 
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // Button represents a CCU button channel — a stateless trigger that

@@ -11,11 +11,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/go-fabric/diagevent"
+	"github.com/SukramJ/go-fabric/eligibility"
+	"github.com/SukramJ/go-fabric/secure/setup"
+	"github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
 

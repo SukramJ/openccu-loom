@@ -13,8 +13,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"

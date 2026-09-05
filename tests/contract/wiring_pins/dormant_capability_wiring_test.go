@@ -64,14 +64,12 @@ func TestPin_ACLLister_AttachedInDaemon(t *testing.T) {
 		"bridge", "AttachACLLister")
 }
 
-// TestPin_Dispatcher_SetACLLister_CalledInBridge pins that the bridge forwards
-// the attached lister into the dispatcher gate. AttachACLLister without this
-// forward would store the lister but leave CheckACL sourceless.
-func TestPin_Dispatcher_SetACLLister_CalledInBridge(t *testing.T) {
-	contract.MustFindMethodCall(t,
-		"internal/north/matter/bridge/bridge.go",
-		"dispatcher", "SetACLLister")
-}
+// The bridge-internal half of this pin — that AttachACLLister forwards the
+// lister into the dispatcher gate — cannot be measured from here any more:
+// the bridge source moved to github.com/SukramJ/go-fabric, and a source pin
+// only reads files in its own repository. The behavioural assertion in
+// cmd/openccu-loom/daemon_matter_acl_wiring_test.go still crosses that seam,
+// because it boots the real bridge and observes the refusal.
 
 // --- D1: connectivity reconcile probe ---
 

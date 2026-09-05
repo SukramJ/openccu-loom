@@ -9,9 +9,10 @@ import (
 	"slices"
 	"testing"
 
+	mattercluster "github.com/SukramJ/go-fabric/cluster"
+	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	mattercluster "github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
-	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 )
 
 // TestMatterDeviceTypeIsWindowCovering covers the two lift projections —

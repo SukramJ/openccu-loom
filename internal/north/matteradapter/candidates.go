@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/SukramJ/go-fabric/eligibility"
+	"github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 

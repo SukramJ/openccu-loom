@@ -10,16 +10,17 @@ import (
 	"strconv"
 	"testing"
 
+	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/endpoint"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // meteringPlugFloat adds a read-only float VALUES data point, the shape the

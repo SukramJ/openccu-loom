@@ -9,9 +9,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/onoff"
 
-	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
+	matterparity "github.com/SukramJ/go-fabric/parity"
 )
 
 // The generic Switch declares its own OnOff cluster id, attribute ids, command

@@ -6,7 +6,7 @@ package config
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
+	"github.com/SukramJ/go-fabric/secure/spake2"
 )
 
 // TestNorthMatter_WithDefaults_ZeroValue verifies that every documented

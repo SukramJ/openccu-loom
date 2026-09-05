@@ -15,10 +15,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/go-fabric/eligibility"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 

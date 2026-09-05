@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // modelNameResolver answers the Matter side's [endpoint.NameResolver]

@@ -3,13 +3,13 @@
 
 package interfaces
 
-import "github.com/SukramJ/openccu-loom/pkg/mattercontract"
+import mattercontract "github.com/SukramJ/go-fabric/contract"
 
 // The Matter port contracts live in
-// [github.com/SukramJ/openccu-loom/pkg/mattercontract], which depends on
-// nothing else in this repository at all. They are re-exported here as
-// aliases so the call sites that reach for them through this package
-// keep compiling; new code should name the mattercontract symbol directly.
+// [github.com/SukramJ/go-fabric/contract], a separate module that depends on
+// nothing in this repository. They are re-exported here as aliases so the
+// call sites that reach for them through this package keep compiling; new
+// code should name the mattercontract symbol directly.
 
 // MatterEndpointSource is a compatibility alias for [mattercontract.EndpointSource].
 type MatterEndpointSource = mattercontract.EndpointSource

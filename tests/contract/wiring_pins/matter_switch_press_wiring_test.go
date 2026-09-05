@@ -10,12 +10,13 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/mdns"
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	matterendpoint "github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"

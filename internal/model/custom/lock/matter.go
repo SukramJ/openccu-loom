@@ -7,9 +7,10 @@ import (
 	"context"
 	"fmt"
 
+	doorlockcluster "github.com/SukramJ/go-fabric/cluster/lock"
+	"github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	doorlockcluster "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/lock"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )

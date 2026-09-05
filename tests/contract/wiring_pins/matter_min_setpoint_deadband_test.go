@@ -6,7 +6,7 @@ package wiring_pins
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
+	"github.com/SukramJ/go-fabric/cluster/thermo"
 )
 
 // TestPin_ThermostatServer_MinSetpointDeadBand_Default pins that a freshly

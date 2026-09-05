@@ -8,9 +8,10 @@ import (
 	"errors"
 	"testing"
 
+	matterstore "github.com/SukramJ/go-fabric/store"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // TestRemoveCentralTearsDownABootTimeCentral pins the teardown path for a

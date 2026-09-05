@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/parity"
+	"github.com/SukramJ/go-fabric/parity"
 )
 
 // TestPin_ConcentrationClusters_SchemaRevision5 pins that the embedded

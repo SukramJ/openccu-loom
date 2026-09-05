@@ -9,9 +9,10 @@ import (
 	"log/slog"
 	"testing"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 

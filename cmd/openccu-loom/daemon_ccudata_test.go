@@ -12,8 +12,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/mdns"
+
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 )
 
 // ── loadTranslations ──────────────────────────────────────────────────────────
