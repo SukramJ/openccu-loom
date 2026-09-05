@@ -1,0 +1,272 @@
+{
+  "node_label": "GoldenBridge",
+  "vendor_id": "0x1234",
+  "product_id": "0x5678",
+  "endpoints": [
+    {
+      "endpoint_id": 0,
+      "device_type": "0x0016",
+      "device_type_list": [],
+      "friendly_name": "",
+      "unique_id": "",
+      "reachable": true,
+      "parent_endpoint_id": 0,
+      "has_parent_endpoint_id": false,
+      "source_key": {
+        "central_name": "",
+        "device_address": "",
+        "channel_no": 0,
+        "dp_kind": "",
+        "dp_key": ""
+      },
+      "server_clusters": []
+    },
+    {
+      "endpoint_id": 1,
+      "device_type": "0x000E",
+      "device_type_list": [],
+      "friendly_name": "",
+      "unique_id": "",
+      "reachable": true,
+      "parent_endpoint_id": 0,
+      "has_parent_endpoint_id": false,
+      "source_key": {
+        "central_name": "",
+        "device_address": "",
+        "channel_no": 0,
+        "dp_kind": "",
+        "dp_key": ""
+      },
+      "server_clusters": []
+    },
+    {
+      "endpoint_id": 2,
+      "device_type": "0x010A",
+      "device_type_list": [
+        {
+          "id": "0x010A",
+          "revision": 4
+        },
+        {
+          "id": "0x0013",
+          "revision": 3
+        }
+      ],
+      "friendly_name": "Desk Lamp Plug Channel 3",
+      "unique_id": "d4a675fb368b2162381d7dbe94eeba74",
+      "reachable": true,
+      "parent_endpoint_id": 1,
+      "has_parent_endpoint_id": true,
+      "source_key": {
+        "central_name": "ccu-golden",
+        "device_address": "0001PSM01",
+        "channel_no": 3,
+        "dp_kind": "custom",
+        "dp_key": "STATE"
+      },
+      "server_clusters": [
+        "0x0003",
+        "0x0004",
+        "0x0006",
+        "0x001D",
+        "0x0039",
+        "0x0062"
+      ]
+    },
+    {
+      "endpoint_id": 3,
+      "device_type": "0x0510",
+      "device_type_list": [
+        {
+          "id": "0x0510",
+          "revision": 1
+        },
+        {
+          "id": "0x0013",
+          "revision": 3
+        }
+      ],
+      "friendly_name": "Desk Lamp Plug Channel 6 (Electr",
+      "unique_id": "77ea59d757e1412e337dd30f5ce2c3f3",
+      "reachable": true,
+      "parent_endpoint_id": 1,
+      "has_parent_endpoint_id": true,
+      "source_key": {
+        "central_name": "ccu-golden",
+        "device_address": "0001PSM01",
+        "channel_no": 6,
+        "dp_kind": "generic",
+        "dp_key": "ELECTRICAL"
+      },
+      "server_clusters": [
+        "0x0003",
+        "0x001D",
+        "0x0039",
+        "0x0090",
+        "0x0091",
+        "0x009C"
+      ]
+    },
+    {
+      "endpoint_id": 4,
+      "device_type": "0x000F",
+      "device_type_list": [
+        {
+          "id": "0x000F",
+          "revision": 3
+        },
+        {
+          "id": "0x0013",
+          "revision": 3
+        }
+      ],
+      "friendly_name": "Hallway Remote Channel 1",
+      "unique_id": "b45f0f372d747ab46f99feb1644d5411",
+      "reachable": true,
+      "parent_endpoint_id": 1,
+      "has_parent_endpoint_id": true,
+      "source_key": {
+        "central_name": "ccu-golden",
+        "device_address": "0002WRC02",
+        "channel_no": 1,
+        "dp_kind": "generic",
+        "dp_key": "BUTTON"
+      },
+      "server_clusters": [
+        "0x0003",
+        "0x001D",
+        "0x002F",
+        "0x0039",
+        "0x003B"
+      ]
+    },
+    {
+      "endpoint_id": 5,
+      "device_type": "0x000F",
+      "device_type_list": [
+        {
+          "id": "0x000F",
+          "revision": 3
+        },
+        {
+          "id": "0x0013",
+          "revision": 3
+        }
+      ],
+      "friendly_name": "Hallway Remote Channel 2",
+      "unique_id": "134ca33f6fc6f5d64e5cdc92d7404be4",
+      "reachable": true,
+      "parent_endpoint_id": 1,
+      "has_parent_endpoint_id": true,
+      "source_key": {
+        "central_name": "ccu-golden",
+        "device_address": "0002WRC02",
+        "channel_no": 2,
+        "dp_kind": "generic",
+        "dp_key": "BUTTON"
+      },
+      "server_clusters": [
+        "0x0003",
+        "0x001D",
+        "0x0039",
+        "0x003B"
+      ]
+    },
+    {
+      "endpoint_id": 6,
+      "device_type": "0x0302",
+      "device_type_list": [
+        {
+          "id": "0x0302",
+          "revision": 3
+        },
+        {
+          "id": "0x0013",
+          "revision": 3
+        }
+      ],
+      "friendly_name": "Nursery Climate (Actual Temperat",
+      "unique_id": "021493530c5f2567a999bb480dade497",
+      "reachable": true,
+      "parent_endpoint_id": 1,
+      "has_parent_endpoint_id": true,
+      "source_key": {
+        "central_name": "ccu-golden",
+        "device_address": "0003STH03",
+        "channel_no": 1,
+        "dp_kind": "generic",
+        "dp_key": "ACTUAL_TEMPERATURE"
+      },
+      "server_clusters": [
+        "0x0003",
+        "0x001D",
+        "0x0039",
+        "0x0402"
+      ]
+    },
+    {
+      "endpoint_id": 7,
+      "device_type": "0x0307",
+      "device_type_list": [
+        {
+          "id": "0x0307",
+          "revision": 3
+        },
+        {
+          "id": "0x0013",
+          "revision": 3
+        }
+      ],
+      "friendly_name": "Nursery Climate (Humidity)",
+      "unique_id": "c081ca441f15bd230e78617743919ddb",
+      "reachable": true,
+      "parent_endpoint_id": 1,
+      "has_parent_endpoint_id": true,
+      "source_key": {
+        "central_name": "ccu-golden",
+        "device_address": "0003STH03",
+        "channel_no": 1,
+        "dp_kind": "generic",
+        "dp_key": "HUMIDITY"
+      },
+      "server_clusters": [
+        "0x0003",
+        "0x001D",
+        "0x0039",
+        "0x0405"
+      ]
+    },
+    {
+      "endpoint_id": 8,
+      "device_type": "0x0015",
+      "device_type_list": [
+        {
+          "id": "0x0015",
+          "revision": 2
+        },
+        {
+          "id": "0x0013",
+          "revision": 3
+        }
+      ],
+      "friendly_name": "0004SWDO4 Channel 1 (State)",
+      "unique_id": "06a6e49d34421a2efa93c391206b1e66",
+      "reachable": true,
+      "parent_endpoint_id": 1,
+      "has_parent_endpoint_id": true,
+      "source_key": {
+        "central_name": "ccu-golden",
+        "device_address": "0004SWDO4",
+        "channel_no": 1,
+        "dp_kind": "generic",
+        "dp_key": "STATE"
+      },
+      "server_clusters": [
+        "0x0003",
+        "0x001D",
+        "0x0039",
+        "0x0045"
+      ]
+    }
+  ]
+}
