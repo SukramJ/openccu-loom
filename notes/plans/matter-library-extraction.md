@@ -109,7 +109,7 @@ The rest of this section is the reasoning that led there, kept because the decis
 
 **The uncomfortable consequence.** The Go implementation is justified by *loom's own use case* — Matter on a CCU, no second runtime, no HA — and **not** by being a hamb replacement. Goal 3 asserts the second. Against hamb, a thin Go stack competes with a mature project that already does the job, and Phase 3 buys at XL cost what has been available there for years.
 
-If that holds, the item in question is not the Go implementation but **the breadth of Phase 3**. Phases 0–2 stand either way: they are hygiene, and they make the Matter side independently maintainable and testable. Only Phase 3 in its current scope rests on a competition nobody has decided to enter.
+If that holds, the item in question is not the Go implementation but **the breadth of Phase 3**. Only Phase 3 in its current scope rests on a competition nobody has decided to enter. *(This paragraph originally continued "Phases 0–2 stand either way: they are hygiene." That was true of Phase 1 and false of Phase 2 — the correction is in the decision below, and the sentence is dropped here rather than left to be read as current.)*
 
 **What would flip the answer** — each of these is a real, checkable condition, not a hedge:
 
