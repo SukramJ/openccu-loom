@@ -308,7 +308,7 @@ dependency, and no longer a parity target.
 | UI / CCU administration | none (HA provides the UI) | built-in Svelte 5 SPA, administration first-class |
 
 On the Matter side the gold standard is
-[matter.js](https://github.com/project-chip/matter.js) HEAD: cluster
+[matter.js](https://github.com/matter-js/matter.js) HEAD: cluster
 IDs, revisions, constraints and wire shape are mirrored from it and
 locked by parity tests.
 
@@ -403,7 +403,7 @@ With particular thanks:
 - [pydevccu](https://github.com/danielperna84/pydevccu) (MIT, Daniel
   Perna & SukramJ) — the CCU simulator that
   [godevccu](https://github.com/SukramJ/godevccu) is a Go port of.
-- [matter.js](https://github.com/project-chip/matter.js) (Apache-2.0) —
+- [matter.js](https://github.com/matter-js/matter.js) (Apache-2.0) —
   the gold standard for the entire Matter bridge.
 - [homematicip-local-frontend](https://github.com/SukramJ/homematicip-local-frontend)
   (MIT) and the [Home Assistant frontend](https://github.com/home-assistant/frontend)

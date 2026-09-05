@@ -8,7 +8,7 @@
     [Matter Ecosystem Observations](developer/matter-ecosystem-observations.md).
 
 OpenCCU-Loom's Matter side is a deliberate, behaviour-level port of
-[matter.js](https://github.com/project-chip/matter.js) HEAD. This page
+[matter.js](https://github.com/matter-js/matter.js) HEAD. This page
 defines what "parity" means in practice and which standing guards keep
 the port honest, so that a change which merely *looks* right but drifts
 from the gold standard cannot land unnoticed.

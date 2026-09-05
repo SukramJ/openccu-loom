@@ -11,9 +11,12 @@ repo-wide rules live in the root [`CLAUDE.md`](../../../CLAUDE.md).
 > `internal/north/matter/endpoint/`, `internal/north/matter/im/`,
 > `internal/north/matter/tlv/`, `internal/north/matter/secure/` and
 > any other Matter-side code:** the gold standard is
-> [`matter.js`](https://github.com/project-chip/matter.js) HEAD.
-> Apache-2.0 — MIT-compatible — and the certified, production-tested
-> reference Matter stack. The platform-specific exceptions Apple
+> [`matter.js`](https://github.com/matter-js/matter.js) HEAD.
+> Apache-2.0 — MIT-compatible — and the most production-tested
+> open reference stack. It is **not** certified: its own README states
+> that matter.js is not certified by the Connectivity Standards
+> Alliance, and devices built on it show up in the ecosystems as
+> uncertified test devices. The platform-specific exceptions Apple
 > Home / Google Home / Alexa apply have already been encoded into
 > matter.js's behavior + protocol layers through real interop
 > testing; we do not re-derive them, we mirror them.

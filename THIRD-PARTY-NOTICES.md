@@ -117,8 +117,12 @@ semantic port of matter.js HEAD: cluster IDs, revisions, attribute IDs,
 constraints, defaults, and wire shape are mirrored from it. 170+ Go files cite
 the matter.js `path:function` they mirror.
 
-- Source: <https://github.com/project-chip/matter.js>
-- Copyright: © Project CHIP / the matter.js Authors.
+- Source: <https://github.com/matter-js/matter.js>
+- Copyright: Copyright 2022-2026 Matter.js Authors (`LICENSE:189`).
+  The project began under the Connectivity Standards Alliance organisation
+  (`project-chip`, which still redirects) and now lives in its own
+  `matter-js` organisation, self-described as an unofficial implementation
+  of the Matter protocol. It is not a CSA project and is not certified.
 - License: Apache License 2.0 — see [`licenses/Apache-2.0.txt`](./licenses/Apache-2.0.txt).
 - Upstream `NOTICE`, reproduced verbatim as required by its own final line:
   [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt).

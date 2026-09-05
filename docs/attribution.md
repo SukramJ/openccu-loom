@@ -121,9 +121,12 @@ binary are addressed separately by ADR 0003 and the `NOTICE.md` of the
 
 ## matter.js — Apache-2.0
 
-- Source: <https://github.com/project-chip/matter.js> (local mirror
+- Source: <https://github.com/matter-js/matter.js> (local mirror
   `../matter.js/`)
-- Copyright: © Project CHIP / the matter.js Authors.
+- Copyright: Copyright 2022-2026 Matter.js Authors. The project started under
+  the Connectivity Standards Alliance organisation (`project-chip`, which
+  still redirects) and now lives in its own `matter-js` organisation. It is
+  not a CSA project and is not certified by the Alliance.
 - Used as: the gold standard for the entire Matter side. Everything under
   `internal/north/matter/` is a semantic port of matter.js HEAD — cluster IDs,
   revisions, attribute IDs, constraints, defaults and wire shape are mirrored

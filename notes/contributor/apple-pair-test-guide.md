@@ -353,7 +353,7 @@ still fails on a fresh iPad, suspect (in this order):
 2. **iCloud sync window**: HMHome propagation can take 60–90 s. Wait
    it out before retrying.
 3. **iOS version regression**: cross-check matter.js's
-   [Apple compat issue tracker](https://github.com/project-chip/matter.js/labels/apple%20home)
+   [Apple compat issue tracker](https://github.com/matter-js/matter.js/labels/apple%20home)
    for the iOS build the test iPad is on.
 4. **WLAN-side dropping IPv6 link-local multicast**: some consumer
    routers silently filter `ff02::fb` (mDNS over IPv6). Confirm with
