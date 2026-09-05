@@ -271,7 +271,7 @@ func New(cfg Config) *Lock {
 }
 
 // MatterDataVersion returns the current Matter cluster DataVersion counter.
-// Implements [mattercontract.ClusterDataVersion] via [matter.go].
+// Implements [contract.ClusterDataVersion] via [matter.go].
 func (l *Lock) MatterDataVersion() uint32 { return l.dataVersion.Current() }
 
 // DataPointKey returns the composite identifier used by the materializer

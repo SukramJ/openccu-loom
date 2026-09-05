@@ -4,8 +4,8 @@
 package hmtypes
 
 import (
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 )
 
-// DataVersionTracker is a compatibility alias for [mattercontract.DataVersionTracker].
-type DataVersionTracker = mattercontract.DataVersionTracker
+// DataVersionTracker is a compatibility alias for [contract.DataVersionTracker].
+type DataVersionTracker = contract.DataVersionTracker

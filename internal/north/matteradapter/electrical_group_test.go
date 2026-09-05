@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"testing"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -202,7 +202,7 @@ func TestElectricalSensorClusterSetDoesNotDependOnReportedValues(t *testing.T) {
 			t.Fatalf("%s is %T, which cannot be fed a float64 value; the test would measure nothing", p, dp)
 		}
 		fed.OnEvent(42.0)
-		src, ok := dp.(mattercontract.FloatMeasurementSource)
+		src, ok := dp.(contract.FloatMeasurementSource)
 		if !ok {
 			t.Fatalf("%s is %T, not a Matter measurement source", p, dp)
 		}

@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"math"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -36,7 +36,7 @@ type Config struct {
 	// NodeLabel is the user-visible bridge label.
 	NodeLabel string
 	// IncludeMeasurements toggles whether DPs that implement
-	// [mattercontract.MeasurementSource] (but not EndpointSource)
+	// [contract.MeasurementSource] (but not EndpointSource)
 	// produce standalone sensor endpoints. Off by default; operators
 	// turn it on with `north.matter.include_measurements`.
 	//
@@ -214,7 +214,7 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (end
 	if snap.CentralName == "" {
 		return endpoint.Snapshot{}, errors.New("matteradapter: snapshot CentralName is required")
 	}
-	var names NameResolver = a.cfg.NameResolver
+	names := a.cfg.NameResolver
 	if names == nil {
 		names = newModelNameResolver(snap.Devices, a.cfg.Labels, a.channelLabel())
 	}
@@ -265,14 +265,14 @@ func attachPowerSource(dev *device.Device, specs []endpoint.Spec) {
 	if dev == nil || len(specs) == 0 {
 		return
 	}
-	var battery mattercontract.MeasurementSource
+	var battery contract.MeasurementSource
 	for _, ch := range dev.Channels() {
 		if ch == nil {
 			continue
 		}
 		for _, gdp := range ch.DataPoints() {
-			meas, ok := gdp.(mattercontract.MeasurementSource)
-			if !ok || meas.MatterMeasurementClass() != mattercontract.MeasurementBattery {
+			meas, ok := gdp.(contract.MeasurementSource)
+			if !ok || meas.MatterMeasurementClass() != contract.MeasurementBattery {
 				continue
 			}
 			battery = meas
@@ -351,7 +351,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 
 	// Custom DP (max one per channel).
 	if cdp := ch.CustomDataPoint(); cdp != nil {
-		if src, ok := cdp.(mattercontract.EndpointSource); ok {
+		if src, ok := cdp.(contract.EndpointSource); ok {
 			ok, err := allow(matterendpoint.DPKindCustom, dpKey(cdp))
 			if err != nil {
 				return nil, err
@@ -365,7 +365,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 	// Calculated DPs.
 	for _, calc := range ch.CalculatedDataPoints() {
 		key := dpKey(calc)
-		if src, ok := calc.(mattercontract.EndpointSource); ok {
+		if src, ok := calc.(contract.EndpointSource); ok {
 			allowed, err := allow(matterendpoint.DPKindCalculated, key)
 			if err != nil {
 				return nil, err
@@ -379,8 +379,8 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !a.cfg.IncludeMeasurements {
 			continue
 		}
-		meas, ok := calc.(mattercontract.MeasurementSource)
-		if !ok || meas.MatterMeasurementClass() == mattercontract.MeasurementNone {
+		meas, ok := calc.(contract.MeasurementSource)
+		if !ok || meas.MatterMeasurementClass() == contract.MeasurementNone {
 			continue
 		}
 		// The allowlist row is keyed by the kind the candidate
@@ -401,7 +401,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 
 	// Combined DPs.
 	for _, comb := range ch.CombinedDataPoints() {
-		src, ok := comb.(mattercontract.EndpointSource)
+		src, ok := comb.(contract.EndpointSource)
 		if !ok {
 			continue
 		}
@@ -456,7 +456,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		// projection (the wrapper itself wires the same DP under the
 		// hood).
 		if !channelHasCustom {
-			if src, ok := gdp.(mattercontract.EndpointSource); ok {
+			if src, ok := gdp.(contract.EndpointSource); ok {
 				if servers := src.MatterClusterServers(); len(servers) > 0 {
 					allowed, err := allow(matterendpoint.DPKindGeneric, key)
 					if err != nil {
@@ -471,8 +471,8 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			}
 		}
 		// Path 2: Generic-DP measurement source.
-		meas, ok := gdp.(mattercontract.MeasurementSource)
-		if !ok || meas.MatterMeasurementClass() == mattercontract.MeasurementNone {
+		meas, ok := gdp.(contract.MeasurementSource)
+		if !ok || meas.MatterMeasurementClass() == contract.MeasurementNone {
 			continue
 		}
 		allowed, err := allow(matterendpoint.DPKindGeneric, key)
@@ -482,7 +482,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !allowed {
 			continue
 		}
-		if meas.MatterMeasurementClass() == mattercontract.MeasurementMomentarySwitch {
+		if meas.MatterMeasurementClass() == contract.MeasurementMomentarySwitch {
 			// Defer press DPs to the per-channel consolidation below.
 			// The allowlist stays per-parameter: only allowed members
 			// join the group, so an operator can e.g. expose the short
@@ -490,7 +490,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			pressMembers = append(pressMembers, gdp)
 			continue
 		}
-		if meas.MatterMeasurementClass() == mattercontract.MeasurementBattery {
+		if meas.MatterMeasurementClass() == contract.MeasurementBattery {
 			// PowerSource is mounted on one of the device's endpoints by
 			// attachPowerSource, never as an endpoint of its own — it has no
 			// device type, and an endpoint without one advertises
@@ -498,7 +498,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			continue
 		}
 		switch meas.MatterMeasurementClass() {
-		case mattercontract.MeasurementPower, mattercontract.MeasurementEnergy:
+		case contract.MeasurementPower, contract.MeasurementEnergy:
 			// Defer to the per-channel consolidation below. The allowlist
 			// stays per-parameter, so an operator can expose consumption
 			// while keeping voltage private.
@@ -573,7 +573,7 @@ func (a *Assembler) makeElectricalGroupSpec(
 	return endpoint.Spec{
 		StableKey:      sourceKey,
 		DeviceAddress:  dev.Address,
-		DeviceType:     measurementDeviceType(mattercontract.MeasurementElectrical),
+		DeviceType:     measurementDeviceType(contract.MeasurementElectrical),
 		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
 		ChannelAddress: ch.Address,
 		Availability:   dev.Available,
@@ -629,7 +629,7 @@ func (a *Assembler) makeButtonGroupSpec(
 	return endpoint.Spec{
 		StableKey:     sourceKey,
 		DeviceAddress: dev.Address,
-		DeviceType:    measurementDeviceType(mattercontract.MeasurementMomentarySwitch),
+		DeviceType:    measurementDeviceType(contract.MeasurementMomentarySwitch),
 		// The endpoint stands for the whole physical button (the
 		// channel), not one PRESS_* parameter — no parameter suffix.
 		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
@@ -694,7 +694,7 @@ func (a *Assembler) makeSpec(
 	ch *device.Channel,
 	kind matterendpoint.DPKind,
 	key string,
-	src mattercontract.EndpointSource,
+	src contract.EndpointSource,
 ) endpoint.Spec {
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
@@ -724,7 +724,7 @@ func (a *Assembler) makeMeasurementSpec(
 	ch *device.Channel,
 	kind matterendpoint.DPKind,
 	key string,
-	meas mattercontract.MeasurementSource,
+	meas contract.MeasurementSource,
 ) endpoint.Spec {
 	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
@@ -745,12 +745,12 @@ func (a *Assembler) makeMeasurementSpec(
 }
 
 // measurementDeviceType is a thin alias for
-// [mattercontract.MeasurementClassDeviceType], the canonical
+// [contract.MeasurementClassDeviceType], the canonical
 // MeasurementClass → DeviceType mapping. Kept so the walk reads in one
 // vocabulary; the contract package remains the single source of truth
 // (ADR 0012 "rich model, dumb bridge").
-func measurementDeviceType(class mattercontract.MeasurementClass) uint16 {
-	return mattercontract.MeasurementClassDeviceType(class)
+func measurementDeviceType(class contract.MeasurementClass) uint16 {
+	return contract.MeasurementClassDeviceType(class)
 }
 
 // dpKey extracts the persistence key from a DP. The Parameter field

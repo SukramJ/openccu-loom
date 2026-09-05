@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -52,10 +52,10 @@ func findBridgedByAddress(top *endpoint.Topology, addr string) *endpoint.Endpoin
 func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
 	// Deterministic version seeds (distinct per fresh tracker) so the
 	// assertions are crisp. Not parallel — mutates a package var.
-	restore := mattercontract.InitialDataVersion
+	restore := contract.InitialDataVersion
 	var seed uint32
-	mattercontract.InitialDataVersion = func() uint32 { seed += 100; return seed }
-	t.Cleanup(func() { mattercontract.InitialDataVersion = restore })
+	contract.InitialDataVersion = func() uint32 { seed += 100; return seed }
+	t.Cleanup(func() { contract.InitialDataVersion = restore })
 
 	ctx := context.Background()
 	const central = "ccu1"

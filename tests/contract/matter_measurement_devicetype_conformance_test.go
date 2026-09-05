@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/schema"
 
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -100,8 +100,8 @@ func TestMeasurementClassProjectsOntoAConformantDeviceType(t *testing.T) {
 
 	checked := 0
 	for _, class := range measurementClasses {
-		deviceType := uint32(mattercontract.MeasurementClassDeviceType(class))
-		clusterID := mattercontract.MeasurementClassClusterID(class)
+		deviceType := uint32(contract.MeasurementClassDeviceType(class))
+		clusterID := contract.MeasurementClassClusterID(class)
 
 		if clusterID == 0 {
 			t.Errorf("measurement class %d maps to cluster 0 — it would be StateUnmappable "+
@@ -164,7 +164,7 @@ func TestHostRiddenMeasurementClassesHaveAHost(t *testing.T) {
 	t.Parallel()
 
 	for class, reason := range hostRiddenMeasurementClasses {
-		clusterID := mattercontract.MeasurementClassClusterID(class)
+		clusterID := contract.MeasurementClassClusterID(class)
 		if clusterID == 0 {
 			t.Errorf("host-ridden class %d has no cluster at all; the entry %q describes nothing", class, reason)
 			continue
@@ -204,8 +204,8 @@ func TestMeasurementClassEnumerationIsComplete(t *testing.T) {
 		}
 	}
 	next := highest + 1
-	if mattercontract.MeasurementClassClusterID(next) != 0 ||
-		mattercontract.MeasurementClassDeviceType(next) != 0 {
+	if contract.MeasurementClassClusterID(next) != 0 ||
+		contract.MeasurementClassDeviceType(next) != 0 {
 		t.Errorf("measurement class %d projects onto a cluster or device type but is missing from "+
 			"measurementClasses — add it there so the conformance guards cover it", next)
 	}
@@ -250,11 +250,11 @@ func TestMeasurementClassesUnderInvestigationAreStillBroken(t *testing.T) {
 	t.Parallel()
 
 	for class, defect := range measurementClassesUnderInvestigation {
-		if mattercontract.MeasurementClassDeviceType(class) != 0 {
+		if contract.MeasurementClassDeviceType(class) != 0 {
 			t.Errorf("measurement class %d now maps to device type 0x%04X, so the defect recorded "+
 				"in measurementClassesUnderInvestigation is fixed — delete the entry so the class "+
 				"is guarded again. Recorded defect: %s",
-				class, mattercontract.MeasurementClassDeviceType(class), defect)
+				class, contract.MeasurementClassDeviceType(class), defect)
 		}
 	}
 }

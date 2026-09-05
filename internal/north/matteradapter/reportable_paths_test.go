@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -15,12 +15,12 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// stubFloatMeasNotifier is a minimal [mattercontract.FloatMeasurementSource]
-// + [mattercontract.ChangeNotifier] that reports Temperature class.
+// stubFloatMeasNotifier is a minimal [contract.FloatMeasurementSource]
+// + [contract.ChangeNotifier] that reports Temperature class.
 // Used to wire a bridged measurement endpoint that ReportablePaths can
 // walk over.
 type stubFloatMeasNotifier struct {
-	class mattercontract.MeasurementClass
+	class contract.MeasurementClass
 	val   float64
 	obs   bool
 }
@@ -29,7 +29,7 @@ func (s *stubFloatMeasNotifier) DataPointKey() hmtypes.DataPointKey {
 	return hmtypes.DataPointKey{ChannelAddress: "RPTEST:1", Parameter: "TEMPERATURE"}
 }
 
-func (s *stubFloatMeasNotifier) MatterMeasurementClass() mattercontract.MeasurementClass {
+func (s *stubFloatMeasNotifier) MatterMeasurementClass() contract.MeasurementClass {
 	return s.class
 }
 func (s *stubFloatMeasNotifier) MatterFloatValue() (float64, bool) { return s.val, s.obs }
@@ -48,7 +48,7 @@ func newTempMeasBridgedEndpoint(t *testing.T) *endpoint.Endpoint {
 	ch := addChannel(dev, "RPDEV0001:1", 1)
 
 	src := &stubFloatMeasNotifier{
-		class: mattercontract.MeasurementTemperature,
+		class: contract.MeasurementTemperature,
 		val:   21.0,
 		obs:   true,
 	}
@@ -127,7 +127,7 @@ func TestReportablePaths_AirQualityEndpoint_CoversBothDerivedClusters(t *testing
 	dev := newDevice("AQDEV0001", "CO2 Sensor")
 	ch := addChannel(dev, "AQDEV0001:1", 1)
 	ch.AttachCalculatedDataPoint(&stubFloatMeasNotifier{
-		class: mattercontract.MeasurementCO2,
+		class: contract.MeasurementCO2,
 		val:   650,
 		obs:   true,
 	})

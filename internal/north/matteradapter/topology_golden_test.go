@@ -18,7 +18,7 @@ import (
 
 	"github.com/SukramJ/go-fabric/bootid"
 	mattercore "github.com/SukramJ/go-fabric/cluster/core"
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -428,7 +428,7 @@ func recordSourceKey(t *testing.T, ep *endpoint.Endpoint) goldenSourceKey {
 // "which clusters does this endpoint serve", and mount order is a
 // separate property that [TestMeteringPlugProjectsOneElectricalSensorEndpoint]
 // and the dispatcher tests already own.
-func sortedClusterIDs(servers []mattercontract.ClusterServer) []string {
+func sortedClusterIDs(servers []contract.ClusterServer) []string {
 	ids := make([]uint32, 0, len(servers))
 	seen := make(map[uint32]struct{}, len(servers))
 	for _, s := range servers {
@@ -476,7 +476,7 @@ func sortedClusterIDs(servers []mattercontract.ClusterServer) []string {
 // EXCLUDED, and why:
 //
 //   - Per-cluster DataVersion. Seeded from a random non-zero value on
-//     first access ([mattercontract.DataVersionTracker]) and bound to
+//     first access ([contract.DataVersionTracker]) and bound to
 //     the assembler instance, so it differs on every run by design.
 //   - The root (EP 0) and Aggregator (EP 1) cluster sets. Those servers
 //     are built by the daemon and published onto the endpoints via

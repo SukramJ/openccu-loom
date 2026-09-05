@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/schema"
 
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -35,7 +35,7 @@ import (
 //     read out of the type checker, with each returned constant resolved to
 //     its value. A method returning a non-constant expression is reported as
 //     unresolvable rather than guessed at.
-//   - measurement classes: [mattercontract.MeasurementClassDeviceType] over
+//   - measurement classes: [contract.MeasurementClassDeviceType] over
 //     measurementClasses, the list that
 //     TestMeasurementClassEnumerationIsComplete keeps complete.
 //
@@ -126,7 +126,7 @@ func TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType(t *testing.T) {
 
 	sources := w2PkgAdvertisedDeviceTypes(t)
 	for _, class := range measurementClasses {
-		if id := mattercontract.MeasurementClassDeviceType(class); id != 0 {
+		if id := contract.MeasurementClassDeviceType(class); id != 0 {
 			sources = append(sources, w2PkgMatterDeviceTypeSource{
 				id:   id,
 				from: fmt.Sprintf("MatterMeasurementClassDeviceType(class %d)", class),

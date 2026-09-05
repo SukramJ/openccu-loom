@@ -9,9 +9,8 @@ import (
 	"fmt"
 	"testing"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
-	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -24,7 +23,7 @@ import (
 
 // ─── stub types ──────────────────────────────────────────────────────
 
-// stubEndpointSource is a minimal [mattercontract.EndpointSource] for tests.
+// stubEndpointSource is a minimal [contract.EndpointSource] for tests.
 // It only implements the interface; it has no real cluster logic.
 type stubEndpointSource struct {
 	key        hmtypes.DataPointKey
@@ -33,19 +32,19 @@ type stubEndpointSource struct {
 
 func (s *stubEndpointSource) DataPointKey() hmtypes.DataPointKey { return s.key }
 func (s *stubEndpointSource) MatterDeviceType() uint16           { return s.deviceType }
-func (s *stubEndpointSource) MatterClusterServers() []mattercontract.ClusterServer {
+func (s *stubEndpointSource) MatterClusterServers() []contract.ClusterServer {
 	return nil
 }
 
-// stubMeasurementSource is a minimal [mattercontract.MeasurementSource]
+// stubMeasurementSource is a minimal [contract.MeasurementSource]
 // that does NOT implement MatterEndpointSource.
 type stubMeasurementSource struct {
 	key   hmtypes.DataPointKey
-	class mattercontract.MeasurementClass
+	class contract.MeasurementClass
 }
 
 func (s *stubMeasurementSource) DataPointKey() hmtypes.DataPointKey { return s.key }
-func (s *stubMeasurementSource) MatterMeasurementClass() mattercontract.MeasurementClass {
+func (s *stubMeasurementSource) MatterMeasurementClass() contract.MeasurementClass {
 	return s.class
 }
 
@@ -364,7 +363,7 @@ func TestAssemble_MeasurementDP_ExcludedWhenFlagOff(t *testing.T) {
 
 	meas := &stubMeasurementSource{
 		key:   dpKey("TEMP0001:1", "APPARENT_TEMPERATURE"),
-		class: mattercontract.MeasurementTemperature,
+		class: contract.MeasurementTemperature,
 	}
 	ch.AttachCalculatedDataPoint(meas)
 
@@ -392,7 +391,7 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 
 	meas := &stubMeasurementSource{
 		key:   dpKey("TEMP0002:1", "APPARENT_TEMPERATURE"),
-		class: mattercontract.MeasurementTemperature,
+		class: contract.MeasurementTemperature,
 	}
 	ch.AttachCalculatedDataPoint(meas)
 
@@ -585,7 +584,7 @@ func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 		}
 	}
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
-		if _, err := fs.UpsertEndpointAssigning(ctx, fabricendpoint.Record{
+		if _, err := fs.UpsertEndpointAssigning(ctx, endpoint.Record{
 			Key:        legacyKey(param),
 			DeviceType: 0x000F,
 		}); err != nil {
@@ -601,7 +600,7 @@ func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 	}
 
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
-		if _, err := fs.GetEndpoint(ctx, legacyKey(param)); !errors.Is(err, fabricendpoint.ErrNotFound) {
+		if _, err := fs.GetEndpoint(ctx, legacyKey(param)); !errors.Is(err, endpoint.ErrNotFound) {
 			t.Errorf("legacy row %s must be garbage-collected, got err=%v", param, err)
 		}
 	}
@@ -1141,7 +1140,7 @@ func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
 	ch := addChannel(dev, "TEMP0003:1", 1)
 	ch.AttachCalculatedDataPoint(&stubMeasurementSource{
 		key:   dpKey("TEMP0003:1", "APPARENT_TEMPERATURE"),
-		class: mattercontract.MeasurementTemperature,
+		class: contract.MeasurementTemperature,
 	})
 
 	// The row an operator creates via the Matter allowlist for this

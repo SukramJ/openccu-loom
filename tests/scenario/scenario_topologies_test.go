@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 
 	"github.com/SukramJ/go-fabric/bridge"
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/im"
 
@@ -67,14 +67,14 @@ type scenarioFakeNotifier struct {
 }
 
 var (
-	_ mattercontract.MeasurementSource      = (*scenarioFakeNotifier)(nil)
-	_ mattercontract.FloatMeasurementSource = (*scenarioFakeNotifier)(nil)
-	_ mattercontract.ChangeNotifier         = (*scenarioFakeNotifier)(nil)
+	_ contract.MeasurementSource      = (*scenarioFakeNotifier)(nil)
+	_ contract.FloatMeasurementSource = (*scenarioFakeNotifier)(nil)
+	_ contract.ChangeNotifier         = (*scenarioFakeNotifier)(nil)
 )
 
 func (n *scenarioFakeNotifier) DataPointKey() hmtypes.DataPointKey { return n.key }
-func (n *scenarioFakeNotifier) MatterMeasurementClass() mattercontract.MeasurementClass {
-	return mattercontract.MeasurementTemperature
+func (n *scenarioFakeNotifier) MatterMeasurementClass() contract.MeasurementClass {
+	return contract.MeasurementTemperature
 }
 
 func (n *scenarioFakeNotifier) MatterFloatValue() (float64, bool) {
@@ -167,15 +167,15 @@ type scenarioFakeFabricReader struct {
 }
 
 var (
-	_ mattercontract.EndpointSource     = (*scenarioFakeFabricReader)(nil)
-	_ mattercontract.ClusterServer      = (*scenarioFakeFabricReader)(nil)
-	_ mattercontract.FabricScopedReader = (*scenarioFakeFabricReader)(nil)
+	_ contract.EndpointSource     = (*scenarioFakeFabricReader)(nil)
+	_ contract.ClusterServer      = (*scenarioFakeFabricReader)(nil)
+	_ contract.FabricScopedReader = (*scenarioFakeFabricReader)(nil)
 )
 
 func (n *scenarioFakeFabricReader) DataPointKey() hmtypes.DataPointKey { return n.key }
 func (*scenarioFakeFabricReader) MatterDeviceType() uint16             { return 0x010A }
-func (n *scenarioFakeFabricReader) MatterClusterServers() []mattercontract.ClusterServer {
-	return []mattercontract.ClusterServer{n}
+func (n *scenarioFakeFabricReader) MatterClusterServers() []contract.ClusterServer {
+	return []contract.ClusterServer{n}
 }
 func (*scenarioFakeFabricReader) MatterClusterID() uint32 { return 0x0006 }
 func (*scenarioFakeFabricReader) MatterRead(attrID uint32) (any, bool) {
@@ -276,10 +276,10 @@ type scenarioFakeOnOffEndpointSource struct {
 }
 
 var (
-	_ mattercontract.EndpointSource     = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ mattercontract.ClusterServer      = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ mattercontract.ChangeNotifier     = (*scenarioFakeOnOffEndpointSource)(nil)
-	_ mattercontract.ClusterDataVersion = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ contract.EndpointSource     = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ contract.ClusterServer      = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ contract.ChangeNotifier     = (*scenarioFakeOnOffEndpointSource)(nil)
+	_ contract.ClusterDataVersion = (*scenarioFakeOnOffEndpointSource)(nil)
 )
 
 func (n *scenarioFakeOnOffEndpointSource) DataPointKey() hmtypes.DataPointKey { return n.key }
@@ -288,8 +288,8 @@ func (n *scenarioFakeOnOffEndpointSource) DataPointKey() hmtypes.DataPointKey { 
 // packages/node/src/devices/on-off-plug-in-unit.ts.
 func (*scenarioFakeOnOffEndpointSource) MatterDeviceType() uint16 { return 0x010A }
 
-func (n *scenarioFakeOnOffEndpointSource) MatterClusterServers() []mattercontract.ClusterServer {
-	return []mattercontract.ClusterServer{n, &scenarioFakeLevelControlServer{owner: n}}
+func (n *scenarioFakeOnOffEndpointSource) MatterClusterServers() []contract.ClusterServer {
+	return []contract.ClusterServer{n, &scenarioFakeLevelControlServer{owner: n}}
 }
 
 // scenarioFakeLevelControlServer is a sibling cluster server on the
@@ -301,7 +301,7 @@ type scenarioFakeLevelControlServer struct {
 	owner *scenarioFakeOnOffEndpointSource
 }
 
-var _ mattercontract.ClusterServer = (*scenarioFakeLevelControlServer)(nil)
+var _ contract.ClusterServer = (*scenarioFakeLevelControlServer)(nil)
 
 func (*scenarioFakeLevelControlServer) MatterClusterID() uint32 { return 0x0008 }
 func (l *scenarioFakeLevelControlServer) MatterRead(attrID uint32) (any, bool) {

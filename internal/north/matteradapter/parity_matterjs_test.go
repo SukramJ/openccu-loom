@@ -26,7 +26,7 @@ import (
 	"slices"
 	"testing"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -34,7 +34,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// stubParityClusterServer is a minimal [mattercontract.ClusterServer]
+// stubParityClusterServer is a minimal [contract.ClusterServer]
 // that only advertises a cluster ID. Used to populate Source-backed
 // bridged endpoints in parity tests without importing any real cluster package.
 type stubParityClusterServer struct{ id uint32 }
@@ -53,15 +53,15 @@ func (s stubParityClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any
 }
 func (s stubParityClusterServer) MatterReportable() []uint32 { return nil }
 
-// stubSourceWithClusters is a minimal [mattercontract.EndpointSource]
+// stubSourceWithClusters is a minimal [contract.EndpointSource]
 // that returns a fixed set of cluster servers.
 type stubSourceWithClusters struct {
 	deviceType uint16
-	servers    []mattercontract.ClusterServer
+	servers    []contract.ClusterServer
 }
 
 func (s *stubSourceWithClusters) MatterDeviceType() uint16 { return s.deviceType }
-func (s *stubSourceWithClusters) MatterClusterServers() []mattercontract.ClusterServer {
+func (s *stubSourceWithClusters) MatterClusterServers() []contract.ClusterServer {
 	return s.servers
 }
 
@@ -326,7 +326,7 @@ func TestParityMatterJS_BridgedEndpoint_ServerListDerivedFromMountedClusters(t *
 		FriendlyName: "Test Device",
 		Source: &stubSourceWithClusters{
 			deviceType: 0x010A,
-			servers:    []mattercontract.ClusterServer{stubParityClusterServer{id: sourceClusterID}},
+			servers:    []contract.ClusterServer{stubParityClusterServer{id: sourceClusterID}},
 		},
 	}
 
@@ -336,7 +336,7 @@ func TestParityMatterJS_BridgedEndpoint_ServerListDerivedFromMountedClusters(t *
 	}
 
 	// Locate the Descriptor cluster (0x001D) in the returned slice.
-	var descriptorServer mattercontract.ClusterServer
+	var descriptorServer contract.ClusterServer
 	for _, srv := range servers {
 		if srv.MatterClusterID() == 0x001D {
 			descriptorServer = srv
@@ -421,24 +421,24 @@ func TestParityMatterJS_BridgedEndpoint_ServerListDerivedFromMountedClusters(t *
 	}
 }
 
-// stubFloatMeasurement is a [mattercontract.MeasurementSource] carrying
+// stubFloatMeasurement is a [contract.MeasurementSource] carrying
 // a float reading, the shape every analog sensor DP presents to the bridge.
 type stubFloatMeasurement struct {
-	class mattercontract.MeasurementClass
+	class contract.MeasurementClass
 	val   float64
 }
 
-func (s stubFloatMeasurement) MatterMeasurementClass() mattercontract.MeasurementClass {
+func (s stubFloatMeasurement) MatterMeasurementClass() contract.MeasurementClass {
 	return s.class
 }
 func (s stubFloatMeasurement) MatterFloatValue() (float64, bool) { return s.val, true }
 
 // stubBoolMeasurement is the binary counterpart of stubFloatMeasurement.
 type stubBoolMeasurement struct {
-	class mattercontract.MeasurementClass
+	class contract.MeasurementClass
 }
 
-func (s stubBoolMeasurement) MatterMeasurementClass() mattercontract.MeasurementClass {
+func (s stubBoolMeasurement) MatterMeasurementClass() contract.MeasurementClass {
 	return s.class
 }
 func (s stubBoolMeasurement) MatterBoolValue() (value, observed bool) { return true, true }
@@ -463,61 +463,61 @@ func TestParityMatterJS_MeasurementDeviceTypeMandatoryClusters(t *testing.T) {
 	rows := []struct {
 		deviceTypeName string
 		deviceType     uint16
-		measurement    mattercontract.MeasurementSource
+		measurement    contract.MeasurementSource
 		mandatory      []uint32
 	}{
 		{
 			deviceTypeName: "TemperatureSensor",
 			deviceType:     0x0302,
-			measurement:    stubFloatMeasurement{class: mattercontract.MeasurementTemperature, val: 21.5},
+			measurement:    stubFloatMeasurement{class: contract.MeasurementTemperature, val: 21.5},
 			mandatory:      []uint32{0x0402}, // TemperatureMeasurement
 		},
 		{
 			deviceTypeName: "HumiditySensor",
 			deviceType:     0x0307,
-			measurement:    stubFloatMeasurement{class: mattercontract.MeasurementHumidity, val: 48},
+			measurement:    stubFloatMeasurement{class: contract.MeasurementHumidity, val: 48},
 			mandatory:      []uint32{0x0405}, // RelativeHumidityMeasurement
 		},
 		{
 			deviceTypeName: "LightSensor",
 			deviceType:     0x0106,
-			measurement:    stubFloatMeasurement{class: mattercontract.MeasurementIlluminance, val: 300},
+			measurement:    stubFloatMeasurement{class: contract.MeasurementIlluminance, val: 300},
 			mandatory:      []uint32{0x0400}, // IlluminanceMeasurement
 		},
 		{
 			deviceTypeName: "PressureSensor",
 			deviceType:     0x0305,
-			measurement:    stubFloatMeasurement{class: mattercontract.MeasurementPressure, val: 1013},
+			measurement:    stubFloatMeasurement{class: contract.MeasurementPressure, val: 1013},
 			mandatory:      []uint32{0x0403}, // PressureMeasurement
 		},
 		{
 			deviceTypeName: "AirQualitySensorCO2",
 			deviceType:     0x002C,
-			measurement:    stubFloatMeasurement{class: mattercontract.MeasurementCO2, val: 650},
+			measurement:    stubFloatMeasurement{class: contract.MeasurementCO2, val: 650},
 			mandatory:      []uint32{0x005B}, // AirQuality — every concentration cluster is optional
 		},
 		{
 			deviceTypeName: "AirQualitySensorPM25",
 			deviceType:     0x002C,
-			measurement:    stubFloatMeasurement{class: mattercontract.MeasurementPM25, val: 12},
+			measurement:    stubFloatMeasurement{class: contract.MeasurementPM25, val: 12},
 			mandatory:      []uint32{0x005B},
 		},
 		{
 			deviceTypeName: "AirQualitySensorPM10",
 			deviceType:     0x002C,
-			measurement:    stubFloatMeasurement{class: mattercontract.MeasurementPM10, val: 30},
+			measurement:    stubFloatMeasurement{class: contract.MeasurementPM10, val: 30},
 			mandatory:      []uint32{0x005B},
 		},
 		{
 			deviceTypeName: "OccupancySensor",
 			deviceType:     0x0107,
-			measurement:    stubBoolMeasurement{class: mattercontract.MeasurementOccupancy},
+			measurement:    stubBoolMeasurement{class: contract.MeasurementOccupancy},
 			mandatory:      []uint32{0x0406}, // OccupancySensing
 		},
 		{
 			deviceTypeName: "ContactSensor",
 			deviceType:     0x0015,
-			measurement:    stubBoolMeasurement{class: mattercontract.MeasurementContact},
+			measurement:    stubBoolMeasurement{class: contract.MeasurementContact},
 			mandatory:      []uint32{0x0045}, // BooleanState
 		},
 	}
@@ -529,7 +529,7 @@ func TestParityMatterJS_MeasurementDeviceTypeMandatoryClusters(t *testing.T) {
 			// Pin the device type the assembler derives for this class —
 			// otherwise the mandatory set below would be checked against
 			// the wrong requirement list.
-			if got := mattercontract.MeasurementClassDeviceType(r.measurement.MatterMeasurementClass()); got != r.deviceType {
+			if got := contract.MeasurementClassDeviceType(r.measurement.MatterMeasurementClass()); got != r.deviceType {
 				t.Fatalf("device type for class = 0x%04X, want 0x%04X", got, r.deviceType)
 			}
 

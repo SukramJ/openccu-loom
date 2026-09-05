@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/goleak"
 
-	mattercontract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/im"
 
@@ -36,7 +36,7 @@ func (onOffStubServer) MatterInvoke(context.Context, uint32, any) (any, error) {
 	return nil, nil
 }
 
-// identifiableSource is a [mattercontract.EndpointSource] that mounts
+// identifiableSource is a [contract.EndpointSource] that mounts
 // one cluster server, so the assembled endpoint carries the full bridged
 // surface including Identify.
 type identifiableSource struct {
@@ -46,8 +46,8 @@ type identifiableSource struct {
 
 func (s *identifiableSource) DataPointKey() hmtypes.DataPointKey { return s.key }
 func (s *identifiableSource) MatterDeviceType() uint16           { return s.deviceType }
-func (s *identifiableSource) MatterClusterServers() []mattercontract.ClusterServer {
-	return []mattercontract.ClusterServer{onOffStubServer{}}
+func (s *identifiableSource) MatterClusterServers() []contract.ClusterServer {
+	return []contract.ClusterServer{onOffStubServer{}}
 }
 
 // buildIdentifiableDevice returns a device whose single channel hosts an

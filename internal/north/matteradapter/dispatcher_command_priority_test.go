@@ -154,7 +154,7 @@ func assembleOne(t *testing.T, addr string, dev *device.Device) (dispatcher *end
 // The value used to travel as an argument on ClusterServer.MatterWrite /
 // MatterInvoke, hard-coded to High at the two dispatcher call sites and
 // forwarded untouched by every implementation. It is now a constant
-// named inside each cluster server instead, which keeps pkg/mattercontract
+// named inside each cluster server instead, which keeps pkg/contract
 // free of host imports — and moves the value out of sight of any test
 // that merely passes it in.
 //
