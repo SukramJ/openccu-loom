@@ -11,9 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 )
 
@@ -23,17 +22,21 @@ import (
 
 // ─── snapshotters ─────────────────────────────────────────────────────
 
-// emptySnapshotter returns nil — produces a topology with only the root endpoint.
-func emptySnapshotter(_ context.Context) []matteradapter.DeviceSnapshot { return nil }
+// emptySnapshotter produces a topology with no bridged endpoints. A fresh
+// assembler per call keeps the parallel tests that share this function off
+// one another's endpoint-id store.
+func emptySnapshotter(ctx context.Context) (*endpoint.Topology, error) {
+	return bridge.NewEmptySnapshotter()(ctx)
+}
 
-// countingSnapshotter bumps an atomic counter on each call and returns nil.
+// countingSnapshotter bumps an atomic counter on each call.
 type countingSnapshotter struct {
 	count atomic.Int32
 }
 
-func (c *countingSnapshotter) snap(_ context.Context) []matteradapter.DeviceSnapshot {
+func (c *countingSnapshotter) snap(ctx context.Context) (*endpoint.Topology, error) {
 	c.count.Add(1)
-	return nil
+	return emptySnapshotter(ctx)
 }
 
 // ─── helper ───────────────────────────────────────────────────────────

@@ -75,7 +75,7 @@ func TestReassemble_ButtonGroupPressEventsFlowOnce(t *testing.T) {
 
 	b, err := New(
 		NewFakeStore(),
-		snapshotter,
+		NewAssemblingSnapshotter(snapshotter),
 		mdns.NewNoop(),
 		Config{
 			Listen:    ":0",
@@ -176,7 +176,7 @@ func TestReassemble_ReapsSubscriptionsForRemovedEndpoints(t *testing.T) {
 
 	b, err := New(
 		NewFakeStore(),
-		snapshotter,
+		NewAssemblingSnapshotter(snapshotter),
 		mdns.NewNoop(),
 		Config{
 			Listen:    ":0",
@@ -284,7 +284,7 @@ func TestReassemble_BridgedEndpointCountExcludesRootAndAggregator(t *testing.T) 
 
 	b, err := New(
 		NewFakeStore(),
-		snapshotter,
+		NewAssemblingSnapshotter(snapshotter),
 		mdns.NewNoop(),
 		Config{
 			Listen:    ":0",

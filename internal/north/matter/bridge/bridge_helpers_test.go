@@ -5,9 +5,9 @@ package bridge
 
 // White-box tests for miscellaneous unexported helpers:
 // udpPort, signalStatusResponseRX, protocolHeaderSize, securityFlagsByte,
-// AttachExposureChecker (nil-safe), AnnounceFabric / AnnounceCommissioning /
-// WithdrawCommissioning (noop-advertiser paths and the noop-vs-real
-// advertiser log-level distinction), MatterEmitEvent alias.
+// AnnounceFabric / AnnounceCommissioning / WithdrawCommissioning
+// (noop-advertiser paths and the noop-vs-real advertiser log-level
+// distinction), MatterEmitEvent alias.
 // Lives in package bridge to access unexported symbols.
 
 import (
@@ -240,20 +240,6 @@ func TestSecurityFlagsByte_SessionType(t *testing.T) {
 	if got&0x1F != 3 {
 		t.Errorf("SessionType bits: want 3 in low 5 bits, got 0x%02X", got)
 	}
-}
-
-// ─── AttachExposureChecker nil-safe ─────────────────────────────────────────
-
-func TestAttachExposureChecker_NilBridge_NoPanic(t *testing.T) {
-	t.Parallel()
-	var b *Bridge
-	b.AttachExposureChecker(nil) // must not panic
-}
-
-func TestAttachExposureChecker_NilChecker_NoPanic(t *testing.T) {
-	t.Parallel()
-	b := newStartedBridge(t)
-	b.AttachExposureChecker(nil) // must not panic
 }
 
 // ─── AnnounceFabric / AnnounceCommissioning / WithdrawCommissioning ──────────

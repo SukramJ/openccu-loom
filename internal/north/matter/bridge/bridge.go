@@ -8,9 +8,9 @@
 //
 // Layering: bridge depends on every other Matter sub-package
 // (endpoint, transport/udp, mdns, im) but on no daemon-internal
-// types — the model snapshot is supplied via the [Snapshotter]
-// callback so this package stays test-friendly without importing
-// internal/central.
+// types — the assembled endpoint topology is supplied via the
+// [Snapshotter] callback, so the host keeps ownership of its device
+// model and this package imports none of it.
 //
 // Lifecycle: [New] → [Start] → (optional) [Reassemble] → [Stop].
 // Start is idempotent (returns ErrAlreadyStarted on a second call).
@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
@@ -36,7 +34,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
-	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
@@ -50,27 +47,33 @@ var (
 	ErrAlreadyStarted = errors.New("bridge: already started")
 )
 
-// Snapshotter returns the current model snapshots for endpoint
-// topology assembly. Typically wraps the central registry walk:
+// Snapshotter supplies the endpoint topology the bridge serves.
 //
-//	func(ctx context.Context) []matteradapter.DeviceSnapshot {
-//	    var out []matteradapter.DeviceSnapshot
-//	    for _, c := range reg.List() {
-//	        out = append(out, matteradapter.DeviceSnapshot{
-//	            CentralName: c.Name(),
-//	            Devices:     c.ModelRegistry.List(),
-//	        })
-//	    }
-//	    return out
+// The bridge consumes a topology; it does not build one. Assembly —
+// walking a device model, deciding which sources are exposed, mapping
+// them onto clusters — is the host's job, and keeping it there is what
+// lets this package stay free of the daemon's model packages. A host
+// closure typically composes its own walk with the topology assembler
+// it owns:
+//
+//	func(ctx context.Context) (*endpoint.Topology, error) {
+//	    return assembler.AssembleDevices(ctx, walkTheRegistry(ctx))
 //	}
 //
 // The bridge calls Snapshotter once at [Start] and on every
-// [Reassemble]; it never caches the result — every call gets a
-// fresh snapshot.
-type Snapshotter func(ctx context.Context) []matteradapter.DeviceSnapshot
+// [Reassemble]; it never caches the result — every call gets a freshly
+// assembled topology. Returning a nil topology without an error is a
+// programming error and is rejected as one.
+type Snapshotter func(ctx context.Context) (*endpoint.Topology, error)
 
 // Config bundles the bridge's identity and listener parameters. All
 // fields are validated at [New] time.
+//
+// It carries nothing that governs topology assembly — which sources are
+// exposed, whether measurements become endpoints, how labels are
+// resolved. Those belong to whoever builds the topology behind the
+// [Snapshotter], and holding a second copy of them here would be a
+// setting that looks live and changes nothing.
 type Config struct {
 	// Listen is the UDP bind address. Empty defaults to ":5540" via
 	// the udp package's MatterPort default.
@@ -103,40 +106,6 @@ type Config struct {
 	// individual call is given its own context derived from the
 	// caller's; no global ticker is involved.
 	AdvertiseTimeout time.Duration
-
-	// IncludeMeasurements passes [matteradapter.Config.IncludeMeasurements]
-	// through to the assembler so standalone sensor endpoints (Temperature,
-	// Humidity, …) are created from [mattercontract.MeasurementSource]
-	// DPs. Off by default; operators turn it on with
-	// `north.matter.include_measurements`.
-	//
-	// The eligibility surface reports these DPs as mappable whatever this
-	// flag says, because it answers what the model can project rather than
-	// what the current configuration assembles. The two must not be
-	// conflated: for one release the flag had no config key at all, so
-	// every derived sensor an operator allowlisted was offered, accepted
-	// and then silently dropped here.
-	IncludeMeasurements bool
-
-	// ExposeSecondaryChannels passes [matteradapter.Config.ExposeSecondaryChannels]
-	// through to the assembler. Off by default: a multi-channel HmIP actor
-	// (switch / dimmer / cover / lock / siren / valve) projects a single
-	// Matter endpoint from its primary channel instead of duplicating the
-	// physical device across its status transmitter and virtual-receiver
-	// actor channels. Sourced from [config.NorthMatter.ExposeSecondaryChannels].
-	ExposeSecondaryChannels bool
-
-	// Labels passes [matteradapter.Config.Labels] through to the assembler:
-	// the daemon-locale-bound parameter translator used for the
-	// NodeLabel suffix of measurement sub-endpoints. Nil is tolerated
-	// (title-cased parameter fallback).
-	Labels device.ParameterTranslator
-	// ChannelLabel passes [matteradapter.Config.ChannelLabel] through: the
-	// already-localized word for a channel ("Channel" / "Kanal") used as
-	// the NodeLabel channel-number fallback. The Matter subtree resolves
-	// no catalogues of its own — the host hands the finished word down,
-	// so translation stays with the daemon that owns entity naming.
-	ChannelLabel string
 }
 
 // validate reports whether the config carries every required field.
@@ -170,7 +139,6 @@ type Bridge struct {
 	snapshotter Snapshotter
 	logger      *slog.Logger
 	advertiser  mdns.Advertiser
-	assembler   *matteradapter.Assembler
 
 	mu         sync.RWMutex
 	listener   *udp.Listener
@@ -480,26 +448,12 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 		advertiser = mdns.NewNoop()
 	}
 
-	asm, err := matteradapter.New(s, matteradapter.Config{
-		ExposeSecondaryChannels: cfg.ExposeSecondaryChannels,
-		VendorID:                cfg.VendorID,
-		ProductID:               cfg.ProductID,
-		NodeLabel:               cfg.NodeLabel,
-		IncludeMeasurements:     cfg.IncludeMeasurements,
-		Labels:                  cfg.Labels,
-		ChannelLabel:            cfg.ChannelLabel,
-	}, logger)
-	if err != nil {
-		return nil, fmt.Errorf("bridge: assembler: %w", err)
-	}
-
 	br := &Bridge{
 		cfg:           cfg,
 		store:         s,
 		snapshotter:   snap,
 		logger:        logger.With(slog.String("subsystem", "matter.bridge")),
 		advertiser:    advertiser,
-		assembler:     asm,
 		sessions:      noopSessionLookup{},
 		paseHandler:   noopPaseHandler{},
 		caseHandler:   noopCaseHandler{},
@@ -637,10 +591,15 @@ func (b *Bridge) Reassemble(ctx context.Context) error {
 // independently, and the last writer wins (subsequent reads see one
 // of the two assembled topologies, never a torn intermediate).
 func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit,funlen // single-purpose bridge topology reassembly with many endpoint/cluster branches
-	snapshots := b.snapshotter(ctx)
-	topology, err := b.assembler.AssembleDevices(ctx, snapshots)
+	topology, err := b.snapshotter(ctx)
 	if err != nil {
 		return fmt.Errorf("bridge: assemble: %w", err)
+	}
+	// A nil topology would surface much later as a nil dereference deep
+	// in the dispatcher, on whichever commissioner request arrived first.
+	// Fail where the mistake was made instead.
+	if topology == nil {
+		return errors.New("bridge: snapshotter returned a nil topology")
 	}
 	// Reattach the daemon-supplied root cluster servers to the fresh
 	// root endpoint so reads on endpoint 0 (BasicInformation,
@@ -872,12 +831,6 @@ type matterSwitchSubscribable interface {
 	WireMatterSwitchHandler(mattercontract.SwitchEventEmitter) func()
 }
 
-// Compile-time guard: the consolidated button group — the shape the
-// endpoint assembler mounts as ep.Measurement on every GenericSwitch
-// endpoint — must satisfy the reassemble wiring assertion. Catches a
-// drift at build time that the behavioural pin catches at test time.
-var _ matterSwitchSubscribable = (*generic.ButtonGroup)(nil)
-
 // SetOnFabricAdded wires the post-AddNOC hook. The bridge does not
 // install fabrics itself — the OperationalCredentials cluster does —
 // but the OpCreds wiring inside the daemon delegates here so a
@@ -924,20 +877,6 @@ func (b *Bridge) EmitFabricRemoved(fabricIndex uint8) {
 	if hook != nil {
 		hook(fabricIndex)
 	}
-}
-
-// AttachExposureChecker wires the allowlist gate the assembler
-// consults before bridging a model source. The default checker
-// permits everything (back-compat for tests + dev setups). Production
-// daemons should pass a `matter/store.Store`-backed checker so the
-// `matter_exposures` allowlist is enforced.
-//
-// Pass nil to revert to the allow-all default.
-func (b *Bridge) AttachExposureChecker(c matteradapter.ExposureChecker) {
-	if b == nil || b.assembler == nil {
-		return
-	}
-	b.assembler.SetExposureChecker(c)
 }
 
 // AttachACLLister wires the Matter ACL source the IM dispatcher enforces

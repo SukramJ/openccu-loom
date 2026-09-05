@@ -111,14 +111,13 @@ func buildBridgeWithTempSource(t *testing.T) (*bridge.Bridge, *notifiableTempSou
 
 	b, err := bridge.New(
 		bridge.NewFakeStore(),
-		snapFn,
+		bridge.NewMeasuringSnapshotter(snapFn),
 		mdns.NewNoop(),
 		bridge.Config{
-			Listen:              ":0",
-			VendorID:            0x1234,
-			ProductID:           0x5678,
-			NodeLabel:           "ml-test-bridge",
-			IncludeMeasurements: true,
+			Listen:    ":0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "ml-test-bridge",
 		},
 		nil,
 	)

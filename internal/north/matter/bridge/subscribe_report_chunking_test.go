@@ -85,11 +85,10 @@ func newStartedBridgeWithSnapshotter(t *testing.T, snap Snapshotter) *Bridge {
 		snap,
 		nil,
 		Config{
-			Listen:              ":0",
-			VendorID:            0x1234,
-			ProductID:           0x5678,
-			NodeLabel:           "chunk-test",
-			IncludeMeasurements: true,
+			Listen:    ":0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "chunk-test",
 		},
 		nil,
 	)

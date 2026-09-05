@@ -25,7 +25,7 @@ import (
 //
 // The first three fields are handed straight to [endpoint.Config]; the
 // rest govern the walk and have no meaning on the Matter side.
-// loom:reachable:reason="constructed by the bridge when it builds the assembler (internal/north/matter/bridge/bridge.go:483)"
+// loom:reachable:reason="constructed by the daemon when it builds the assembler (cmd/openccu-loom/daemon_matter.go, startMatterBridge)"
 type Config struct {
 	// VendorID is the bridge's IANA-assigned vendor identifier.
 	VendorID uint16
@@ -35,7 +35,15 @@ type Config struct {
 	NodeLabel string
 	// IncludeMeasurements toggles whether DPs that implement
 	// [mattercontract.MeasurementSource] (but not EndpointSource)
-	// produce standalone sensor endpoints. Off by default.
+	// produce standalone sensor endpoints. Off by default; operators
+	// turn it on with `north.matter.include_measurements`.
+	//
+	// The eligibility surface reports these DPs as mappable whatever this
+	// flag says, because it answers what the model can project rather than
+	// what the current configuration assembles. The two must not be
+	// conflated: for one release the flag had no config key at all, so
+	// every derived sensor an operator allowlisted was offered, accepted
+	// and then silently dropped here.
 	IncludeMeasurements bool
 	// ExposeSecondaryChannels, when true, materialises a Matter endpoint
 	// for a device's group-secondary channels (the status transmitter and
@@ -75,7 +83,7 @@ type Config struct {
 // A nil ExposureChecker means "allow everything" — the legacy
 // behaviour for tests + dev setups that have not yet wired the
 // allowlist UI. Production daemons must inject a real checker.
-// loom:reachable:reason="taken by Bridge.AttachExposureChecker (internal/north/matter/bridge/bridge.go:936) and satisfied host-side; interface satisfaction is invisible to the analyzer"
+// loom:reachable:reason="taken by Assembler.SetExposureChecker and satisfied host-side by the matter store (cmd/openccu-loom/daemon_matter.go, wireMatterRuntime); interface satisfaction is invisible to the analyzer"
 type ExposureChecker interface {
 	IsExposed(ctx context.Context, key store.EndpointKey) (bool, error)
 }

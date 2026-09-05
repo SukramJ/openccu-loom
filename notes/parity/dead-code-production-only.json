@@ -1,15 +1,15 @@
 {
-  "generated": "cc927f2b",
-  "head": "cc927f2b",
+  "generated": "6ff6f904",
+  "head": "6ff6f904",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 23998,
+    "total_exported": 23999,
     "reachable": 2863,
-    "whitelisted": 19724,
+    "whitelisted": 19725,
     "unreachable": 1411
   },
   "by_package": [
@@ -5339,7 +5339,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1373,
+      "line": 1312,
       "kind": "type"
     },
     {
@@ -5367,7 +5367,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "ErrAlreadyStarted",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 50,
+      "line": 47,
       "kind": "var"
     },
     {
@@ -5402,7 +5402,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "ErrNotStarted",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 47,
+      "line": 44,
       "kind": "var"
     },
     {
@@ -5521,7 +5521,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1013,
+      "line": 952,
       "kind": "type"
     },
     {
@@ -5591,7 +5591,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "Snapshotter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 70,
+      "line": 67,
       "kind": "type"
     },
     {
@@ -91939,7 +91939,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 463
+      "line": 431
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "NewAssemblingSnapshotter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/assembling_snapshotter_test.go",
+      "line": 44
     },
     {
       "package": "internal/north/matter/bridge",
@@ -91964,6 +91971,13 @@
     },
     {
       "package": "internal/north/matter/bridge",
+      "identifier": "NewEmptySnapshotter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/assembling_snapshotter_test.go",
+      "line": 74
+    },
+    {
+      "package": "internal/north/matter/bridge",
       "identifier": "NewFakeStore",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/fakestore_helpers_test.go",
@@ -91975,6 +91989,13 @@
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/handlers.go",
       "line": 698
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "NewMeasuringSnapshotter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/assembling_snapshotter_test.go",
+      "line": 51
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92114,49 +92135,49 @@
       "identifier": "TestAnnounceAndWithdrawCommissioning_RoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 279
+      "line": 265
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceCommissioning_NilBridge_NoPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 271
+      "line": 257
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceCommissioning_NoopAdvertiser_LogsNotAdvertised",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 374
+      "line": 360
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceCommissioning_RealAdvertiser_LogsPublished",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 402
+      "line": 388
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceFabric_NilAdvertiser_NoPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 261
+      "line": 247
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceFabric_NoopAdvertiser_LogsNotAdvertised",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 430
+      "line": 416
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceFabric_RealAdvertiser_LogsPublished",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 451
+      "line": 437
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92212,7 +92233,7 @@
       "identifier": "TestAttachAggregatorClusters_WithStartedBridge_TopologyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 580
+      "line": 566
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92227,20 +92248,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_attach_clusters_concurrency_test.go",
       "line": 28
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "TestAttachExposureChecker_NilBridge_NoPanic",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 247
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "TestAttachExposureChecker_NilChecker_NoPanic",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 253
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92261,14 +92268,14 @@
       "identifier": "TestAttachRootClusters_WithStartedBridge_TopologyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 569
+      "line": 555
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAttachSessionLookup_NilRevertsToNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 289
+      "line": 293
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92485,14 +92492,14 @@
       "identifier": "TestCaptureSubTarget_SkipsZeroOrNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 611
+      "line": 615
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaptureSubTarget_StoresMetadata",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 569
+      "line": 573
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92758,35 +92765,35 @@
       "identifier": "TestCheckTimedGate_ExpiredDeadlineRejects",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 490
+      "line": 494
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_TimedFlagWithoutPriorRejects",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 475
+      "line": 479
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_UntimedRequestNoPriorProceeds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 441
+      "line": 445
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_UntimedRequestWithPriorRejects",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 456
+      "line": 460
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_ValidDeadlineProceeds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 510
+      "line": 514
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94249,84 +94256,84 @@
       "identifier": "TestDispatch_IMInvalidOpcode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 401
+      "line": 405
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_IMReadRoutes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 311
+      "line": 315
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_IMResponseOpcodeIsUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 326
+      "line": 330
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_IMSubscribeReplies",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 354
+      "line": 358
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_NilSrcDoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 164
+      "line": 168
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_NoDispatcherDropsSilently",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 418
+      "line": 422
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_SecureChannelOpcode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 179
+      "line": 183
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_SessionMissingSurfaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 272
+      "line": 276
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_TooShortBuffer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 153
+      "line": 157
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_UnknownProtocolID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 197
+      "line": 201
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_VendorIDZeroStillRoutesNormally",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 250
+      "line": 254
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_VendorQualifiedProtocolCollisionRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 219
+      "line": 223
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94396,14 +94403,14 @@
       "identifier": "TestEndpointCount_NilTopology_ReturnsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 483
+      "line": 469
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestEndpointCount_StartedBridgeWithoutSources_IsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 495
+      "line": 481
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94466,7 +94473,7 @@
       "identifier": "TestHandleDatagram_TooShortDoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 556
+      "line": 542
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94522,14 +94529,14 @@
       "identifier": "TestHandlerContext_NilCtx_ReturnsBackground",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 531
+      "line": 517
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestHandlerContext_StartedBridge_ReturnsNonNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 542
+      "line": 528
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94592,7 +94599,7 @@
       "identifier": "TestMatterEmitEvent_IsAliasOfEmitEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 471
+      "line": 457
     },
     {
       "package": "internal/north/matter/bridge",
@@ -95341,28 +95348,28 @@
       "identifier": "TestReplyTimedStatus_NilSrc_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 507
+      "line": 493
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReplyTimedStatus_WithSrc_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 519
+      "line": 505
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReportSubscriptionChunksAnOversizedOngoingReport",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/subscribe_report_chunking_test.go",
-      "line": 212
+      "line": 211
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReportSubscriptionEventsChunksAnOversizedReport",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/subscribe_report_chunking_test.go",
-      "line": 267
+      "line": 266
     },
     {
       "package": "internal/north/matter/bridge",
@@ -95915,7 +95922,7 @@
       "identifier": "TestTimedRequest_SessionScopeIsolation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 531
+      "line": 535
     },
     {
       "package": "internal/north/matter/bridge",
@@ -105818,7 +105825,7 @@
     {
       "package": "internal/north/matteradapter",
       "identifier": "Config",
-      "reason": "constructed by the bridge when it builds the assembler (internal/north/matter/bridge/bridge.go:483)",
+      "reason": "constructed by the daemon when it builds the assembler (cmd/openccu-loom/daemon_matter.go, startMatterBridge)",
       "file": "internal/north/matteradapter/assembler.go",
       "line": 29
     },
@@ -105827,14 +105834,14 @@
       "identifier": "DeviceSnapshot",
       "reason": "constructed per registered central by the daemon snapshotter (cmd/openccu-loom/daemon_matter.go:3358)",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 149
+      "line": 157
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "ExposureChecker",
-      "reason": "taken by Bridge.AttachExposureChecker (internal/north/matter/bridge/bridge.go:936) and satisfied host-side; interface satisfaction is invisible to the analyzer",
+      "reason": "taken by Assembler.SetExposureChecker and satisfied host-side by the matter store (cmd/openccu-loom/daemon_matter.go, wireMatterRuntime); interface satisfaction is invisible to the analyzer",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 79
+      "line": 87
     },
     {
       "package": "internal/north/matteradapter",
@@ -145552,7 +145559,7 @@
       "identifier": "TestCompositionRootHandsOverEveryDeclaredField",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/composition_root_handover_test.go",
-      "line": 118
+      "line": 133
     },
     {
       "package": "tests/contract",
@@ -147869,7 +147876,7 @@
       "identifier": "TestAPhysicalPressReachesTheMatterEventLog",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/matter_switch_press_wiring_test.go",
-      "line": 54
+      "line": 55
     },
     {
       "package": "tests/contract/wiring_pins",

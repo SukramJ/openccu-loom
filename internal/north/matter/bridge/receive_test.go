@@ -16,8 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-
+	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
@@ -44,7 +43,12 @@ func (f wbFakeSessionLookup) Lookup(_ uint16) (*channel.Session, bool) {
 
 // ─── snapshotter ─────────────────────────────────────────────────────────
 
-func wbEmptySnapshotter(_ context.Context) []matteradapter.DeviceSnapshot { return nil }
+// wbEmptySnapshotter yields a topology with no bridged endpoints. A fresh
+// assembler per call keeps the parallel tests that share this function
+// off one another's endpoint-id store.
+func wbEmptySnapshotter(ctx context.Context) (*endpoint.Topology, error) {
+	return NewEmptySnapshotter()(ctx)
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 
