@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
@@ -71,19 +73,31 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	// Same three arguments the composition root passes in
-	// cmd/openccu-loom/daemon_matter.go: the matter store over the
-	// shared DB handle, a snapshotter closure over the live model, and
-	// an advertiser.
-	snapshotter := func(_ context.Context) []matterendpoint.Snapshot {
-		return []matterendpoint.Snapshot{{
+	// Same composition the root performs in
+	// cmd/openccu-loom/daemon_matter.go: the daemon owns the assembler,
+	// walks its own model, and hands the bridge one closure that returns
+	// the finished topology. The bridge never sees a device.
+	store := matterstore.New(db)
+	walk := func(_ context.Context) []matteradapter.DeviceSnapshot {
+		return []matteradapter.DeviceSnapshot{{
 			CentralName:   "ccu1",
 			Devices:       []*device.Device{dev},
 			ModelComplete: true,
 		}}
 	}
+	assembler, err := matteradapter.New(store, matteradapter.Config{
+		VendorID:  0x1234,
+		ProductID: 0x5678,
+		NodeLabel: "switch-press-wiring-pin",
+	}, nil)
+	if err != nil {
+		t.Fatalf("matteradapter.New: %v", err)
+	}
+	snapshotter := func(ctx context.Context) (*matterendpoint.Topology, error) {
+		return assembler.AssembleDevices(ctx, walk(ctx))
+	}
 	bridge, err := matterbridge.New(
-		matterstore.New(db),
+		store,
 		snapshotter,
 		mdns.NewNoop(),
 		matterbridge.Config{
@@ -116,7 +130,7 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 		found    int
 	)
 	for _, ep := range topo.Bridged() {
-		if ep.SourceKey.DPKey == matterendpoint.ButtonGroupDPKey {
+		if ep.SourceKey.DPKey == matteradapter.ButtonGroupDPKey {
 			switchEP = ep.ID
 			found++
 		}

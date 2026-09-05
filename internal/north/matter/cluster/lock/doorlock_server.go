@@ -16,7 +16,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
@@ -81,11 +80,14 @@ var (
 // IsLocked returns (locked=true, observed=true) when the lock state is known
 // and the lock is in the locked position.
 // LockInvoke dispatches LockDoor / UnlockDoor / UnboltDoor commands to the
-// CCU. cmdID is one of the [wire.DoorLockCmd*] constants.
+// CCU. cmdID is one of the [wire.DoorLockCmd*] constants. The
+// implementation owns the southbound urgency of the write it performs:
+// the cluster contract carries no priority, so a host whose command
+// queue ranks by urgency names the value it wants inside LockInvoke.
 type StateSource interface {
 	IsJammed() bool
 	IsLocked() (locked, observed bool)
-	LockInvoke(ctx context.Context, cmdID uint32, priority hmenum.CommandPriority) error
+	LockInvoke(ctx context.Context, cmdID uint32) error
 }
 
 // DoorLockConfig holds the construction parameters for [DoorLockServer].
@@ -194,25 +196,13 @@ func (*DoorLockServer) MatterWrite(_ context.Context, attrID uint32, _ any) erro
 	return fmt.Errorf("%w: 0x%04X", errUnknownAttribute, attrID)
 }
 
-// matterDispatchPriority is the southbound urgency every Matter-driven
-// write and invoke carries. The bridge is a controller-facing
-// foreground path — a tap in a Matter app must not queue behind a
-// background refresh — so it dispatches at High, and the cluster
-// contract no longer negotiates it per call.
-//
-// Spelled out as a constant rather than left to a variable: the zero
-// value of [hmenum.CommandPriority] is Critical, so anything that
-// reached this call defaulted would silently escalate every bridged
-// command.
-const matterDispatchPriority = hmenum.CommandPriorityHigh
-
 // MatterInvoke implements [mattercontract.ClusterServer]. Dispatches
 // LockDoor / UnlockDoor / UnboltDoor to the underlying source and fires
 // the LockOperation event on success.
 func (s *DoorLockServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any) (any, error) {
 	switch cmdID {
 	case wire.DoorLockCmdLockDoor, wire.DoorLockCmdUnlockDoor, wire.DoorLockCmdUnboltDoor:
-		if err := s.src.LockInvoke(ctx, cmdID, matterDispatchPriority); err != nil {
+		if err := s.src.LockInvoke(ctx, cmdID); err != nil {
 			return nil, err
 		}
 		s.tracker().Bump()

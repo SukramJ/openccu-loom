@@ -5,114 +5,15 @@ package endpoint
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 
-	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // isNotFound matches the [store.ErrEndpointNotFound] sentinel via
 // errors.Is. Wrapped to keep the assembler call sites concise.
 func isNotFound(err error) bool {
 	return errors.Is(err, store.ErrEndpointNotFound)
-}
-
-// friendlyName composes the BridgedDeviceBasicInformation NodeLabel
-// for one bridged endpoint. The label is operator-facing and shows up
-// in Apple Home / Google Home as the device card title.
-//
-// The device+channel portion is the model's own answer:
-// [device.Channel.NameData] ([naming.NameData.TranslatedFullName]) is
-// the same naming authority MQTT discovery and REST use, including its
-// device/channel de-duplication rule ([naming] package doc) — Matter
-// must not re-derive that rule, or the two planes drift apart and show
-// the same device under two different names. paramSuffix is appended
-// last when this is a measurement / calculated sub-endpoint
-// distinguishable only by parameter; it is already resolved through
-// the same naming primitives by [Assembler.parameterSuffix].
-//
-// One piece has no model equivalent: a channel the operator never
-// named collapses, in [naming.NameData], to the device name alone —
-// fine for MQTT/REST, which disambiguate same-named entities by their
-// stable id, but Matter's NodeLabel is the only thing Apple/Google
-// Home show, so several unnamed channels of one device would all
-// render identically. channelLabel + the raw channel number is kept
-// as a Matter-only disambiguator for that case.
-//
-// Caps the result at 32 utf-8 bytes (Matter NodeLabel maximum,
-// §9.13.6.5). The truncation is byte-based with a defensive rune
-// boundary check; over-long inputs lose the suffix first, then the
-// disambiguator.
-func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix, channelLabel string) string {
-	label := ch.NameData().TranslatedFullName()
-	if label == "" {
-		// Neither the device nor the channel carries an operator name;
-		// [naming.NameData] has nothing to build on either. Fall back to
-		// the device address, the one identifier guaranteed to exist.
-		if dev != nil {
-			label = dev.Address
-		}
-	}
-	if ch != nil && ch.Number > 0 && ch.Name() == "" {
-		label = strings.TrimSpace(fmt.Sprintf("%s %s %d", label, channelLabel, ch.Number))
-	}
-	if paramSuffix != "" {
-		label = strings.TrimSpace(label + " (" + paramSuffix + ")")
-	}
-	return truncateUTF8(label, 32)
-}
-
-// parameterSuffix resolves the parameter-level display label embedded
-// as the [friendlyName] suffix of measurement sub-endpoints. It routes
-// through the same primitives as the MQTT discovery builder and the
-// REST data-point handler ([device.TranslatedParameterLabel] →
-// [naming.EntityDisplayName]) so the suffix matches the entity name
-// those surfaces emit for the same data point: locale-aware OCCU
-// translation first, title-cased parameter as fallback.
-//
-// A parameter flagged "primary" (explicit-empty translation) yields an
-// empty suffix — the endpoint then carries the device + channel name
-// alone, mirroring how MQTT / REST collapse the entity name to the
-// device name for primary parameters.
-func (a *Assembler) parameterSuffix(ch *device.Channel, parameter string) string {
-	channelType := ""
-	if ch != nil {
-		channelType = ch.Type
-	}
-	translation, labelOmitted := device.TranslatedParameterLabel(parameter, channelType, a.cfg.Labels)
-	name, omitted := naming.EntityDisplayName(translation, labelOmitted, parameter)
-	if omitted {
-		return ""
-	}
-	return name
-}
-
-// truncateUTF8 caps s at maxBytes, snapping to a rune boundary.
-// Matter NodeLabel is utf-8 with a 32-byte (not 32-codepoint) cap.
-func truncateUTF8(s string, maxBytes int) string {
-	if len(s) <= maxBytes {
-		return s
-	}
-	cut := maxBytes
-	for cut > 0 && (s[cut]&0xC0) == 0x80 { //nolint:revive // continuation byte
-		cut--
-	}
-	return s[:cut]
-}
-
-// measurementDeviceType is a thin alias for
-// [mattercontract.MeasurementClassDeviceType], the canonical
-// MatterMeasurementClass → DeviceType mapping. Kept here for
-// backward compatibility with the existing test surface; new code
-// should call the interfaces helper directly so the model layer
-// remains the single source of truth (ADR 0012 "rich model, dumb
-// bridge").
-func measurementDeviceType(class mattercontract.MeasurementClass) uint16 {
-	return mattercontract.MeasurementClassDeviceType(class)
 }
 
 // deviceTypeRevision returns the Matter Application Cluster Library

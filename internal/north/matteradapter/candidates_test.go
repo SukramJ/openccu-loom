@@ -1,19 +1,40 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package eligibility_test
+package matteradapter_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
+
+// fakeClusterServer is a minimal [mattercontract.ClusterServer] whose only
+// job is to make a source advertise a cluster id, so the candidate walk sees
+// a non-empty cluster set without pulling in a real cluster implementation.
+type fakeClusterServer struct {
+	clusterID uint32
+}
+
+func (f *fakeClusterServer) MatterClusterID() uint32 { return f.clusterID }
+
+func (f *fakeClusterServer) MatterRead(_ uint32) (any, bool) { return nil, false }
+
+func (f *fakeClusterServer) MatterWrite(_ context.Context, _ uint32, _ any) error { return nil }
+
+func (f *fakeClusterServer) MatterInvoke(_ context.Context, _ uint32, _ any) (any, error) {
+	return nil, nil
+}
+
+func (f *fakeClusterServer) MatterReportable() []uint32 { return nil }
 
 // genericParamDP is a minimal ParameterDataPoint implementation that also
 // implements MatterEndpointSource so it surfaces as Mappable via the
@@ -68,7 +89,7 @@ func (o *opaqueDP) DataPointKey() hmtypes.DataPointKey { return o.key }
 func TestCollectCandidates_NilDevice(t *testing.T) {
 	t.Parallel()
 	devices := []*device.Device{nil}
-	got := eligibility.CollectCandidates("central1", devices, false)
+	got := matteradapter.CollectCandidates("central1", devices, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for nil device, got %d", len(got))
 	}
@@ -78,7 +99,7 @@ func TestCollectCandidates_NilDevice(t *testing.T) {
 // returns an empty slice.
 func TestCollectCandidates_EmptyDeviceList(t *testing.T) {
 	t.Parallel()
-	got := eligibility.CollectCandidates("central1", nil, false)
+	got := matteradapter.CollectCandidates("central1", nil, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0, got %d", len(got))
 	}
@@ -92,7 +113,7 @@ func TestCollectCandidates_DeviceNoChannels(t *testing.T) {
 		Address: "A1:0",
 		Model:   "HmIP-TEST",
 	})
-	got := eligibility.CollectCandidates("c1", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c1", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for device with no channels, got %d", len(got))
 	}
@@ -107,7 +128,7 @@ func TestCollectCandidates_DeviceWithEmptyChannel(t *testing.T) {
 		Model:   "HmIP-TEST",
 	})
 	d.AddChannel("A2:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
-	got := eligibility.CollectCandidates("c2", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c2", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for empty channel, got %d", len(got))
 	}
@@ -131,7 +152,7 @@ func TestCollectCandidates_CustomDP_Mappable(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("central", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("central", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -163,7 +184,7 @@ func TestCollectCandidates_CalculatedDP_Mappable(t *testing.T) {
 	}
 	ch.AttachCalculatedDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -187,14 +208,14 @@ func TestCollectCandidates_OpaqueDP_Skipped(t *testing.T) {
 		key: hmtypes.DataPointKey{Parameter: "OPAQUE"},
 	})
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Fatalf("expected 0 candidates for opaque DP, got %d: %+v", len(got), got)
 	}
 }
 
 // namedDP implements AttachableDataPoint + Name() but no
-// DataPointKey.Parameter — exercises the Name() fallback branch in dpKey.
+// DataPointKey.Parameter — exercises the Name() fallback branch in candidateDPKey.
 type namedDP struct {
 	name    string
 	devType uint16
@@ -209,7 +230,7 @@ func (n *namedDP) MatterClusterServers() []mattercontract.ClusterServer {
 }
 
 // unknownDP has no DataPointKey.Parameter and no Name().
-// dpKey falls through to the "unknown(%T)" branch.
+// candidateDPKey falls through to the "unknown(%T)" branch.
 type unknownDP struct {
 	devType uint16
 	cluster uint32
@@ -221,7 +242,7 @@ func (u *unknownDP) MatterClusterServers() []mattercontract.ClusterServer {
 	return []mattercontract.ClusterServer{&fakeClusterServer{clusterID: u.cluster}}
 }
 
-// TestCollectCandidates_NameDPKey verifies the Name() dpKey fallback path.
+// TestCollectCandidates_NameDPKey verifies the Name() candidateDPKey fallback path.
 func TestCollectCandidates_NameDPKey(t *testing.T) {
 	t.Parallel()
 	d := device.New(device.Config{
@@ -232,7 +253,7 @@ func TestCollectCandidates_NameDPKey(t *testing.T) {
 	dp := &namedDP{name: "my-light", devType: 0x0100, cluster: 0x0006}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -241,7 +262,7 @@ func TestCollectCandidates_NameDPKey(t *testing.T) {
 	}
 }
 
-// TestCollectCandidates_UnknownDPKey verifies the unknown(%T) dpKey fallback.
+// TestCollectCandidates_UnknownDPKey verifies the unknown(%T) candidateDPKey fallback.
 func TestCollectCandidates_UnknownDPKey(t *testing.T) {
 	t.Parallel()
 	d := device.New(device.Config{
@@ -252,7 +273,7 @@ func TestCollectCandidates_UnknownDPKey(t *testing.T) {
 	dp := &unknownDP{devType: 0x0100, cluster: 0x0006}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -283,7 +304,7 @@ func TestCollectCandidates_GenericDP_Mappable(t *testing.T) {
 	}
 	ch.Put(dp) // adds to VALUES paramset → DataPoints()
 
-	got := eligibility.CollectCandidates("central", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("central", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate for generic DP, got %d", len(got))
 	}
@@ -295,35 +316,13 @@ func TestCollectCandidates_GenericDP_Mappable(t *testing.T) {
 	}
 }
 
-// TestCollectCandidates_NilClusterServer verifies that a nil cluster server
-// in the list is skipped (clusterIDs nil guard).
-func TestCollectCandidates_NilClusterServer(t *testing.T) {
-	t.Parallel()
-	// fakeEndpointSourceWithNilCluster returns clusters where the first is nil.
-	src := &fakeEndpointSource{
-		deviceType: 0x0100,
-		clusters: []mattercontract.ClusterServer{
-			nil,                                   // nil server — must be skipped
-			&fakeClusterServer{clusterID: 0x0006}, // valid server
-		},
-	}
-	got := eligibility.DeriveMatterEligibility(src)
-	// Should still be Mappable with 1 cluster (nil was skipped).
-	if got.State != eligibility.StateMappable {
-		t.Errorf("expected Mappable, got %v (reason: %q)", got.State, got.Reason)
-	}
-	if len(got.Clusters) != 1 || got.Clusters[0] != 0x0006 {
-		t.Errorf("clusters: got %v, want [0x0006]", got.Clusters)
-	}
-}
-
 // TestCollectCandidates_NilChannel verifies that a nil channel is silently skipped.
 func TestCollectCandidates_NilChannel(t *testing.T) {
 	t.Parallel()
 	// device.New doesn't expose a way to inject a nil channel directly;
 	// use a device with no channels (already covered) and verify no panic.
 	d := device.New(device.Config{Address: "I1:0"})
-	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates, got %d", len(got))
 	}
@@ -345,7 +344,7 @@ func TestCollectCandidates_DisplayNameFallbackToAddress(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
+	got := matteradapter.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}

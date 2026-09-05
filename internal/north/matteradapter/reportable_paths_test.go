@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
@@ -54,12 +55,12 @@ func newTempMeasBridgedEndpoint(t *testing.T) *endpoint.Endpoint {
 
 	cfg := validConfig()
 	cfg.IncludeMeasurements = true
-	a, err := endpoint.New(newFakeStore(), cfg, nil)
+	a, err := matteradapter.New(newFakeStore(), cfg, nil)
 	if err != nil {
-		t.Fatalf("endpoint.New: %v", err)
+		t.Fatalf("matteradapter.New: %v", err)
 	}
-	snap := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	snap := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
+	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -132,11 +133,11 @@ func TestReportablePaths_AirQualityEndpoint_CoversBothDerivedClusters(t *testing
 
 	cfg := validConfig()
 	cfg.IncludeMeasurements = true
-	a, err := endpoint.New(newFakeStore(), cfg, nil)
+	a, err := matteradapter.New(newFakeStore(), cfg, nil)
 	if err != nil {
-		t.Fatalf("endpoint.New: %v", err)
+		t.Fatalf("matteradapter.New: %v", err)
 	}
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}

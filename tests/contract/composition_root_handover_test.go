@@ -77,9 +77,24 @@ var compositionRootSeams = []compositionRootSeam{
 		pkg: "matterbridge", typeName: "Config",
 		declDir:  "internal/north/matter/bridge",
 		fillFile: "cmd/openccu-loom/daemon_matter.go",
+		minDecl:  7,
+		notFilled: map[string]string{
+			"AdvertiseTimeout": "NewBridge substitutes 5s for a zero value (internal/north/matter/bridge/bridge.go:441) and no config key exposes it — the same shape as rest.Deps.WriteTimeout",
+		},
+	},
+	{
+		// The bridge consumes an assembled topology and no longer holds
+		// the knobs that govern assembly; the daemon builds the assembler
+		// and fills these. The seam moved with them — the never-filled
+		// IncludeMeasurements this guard was written for now lives here,
+		// and dropping the entry would have retired the coverage along
+		// with the field's old home.
+		pkg: "matteradapter", typeName: "Config",
+		declDir:  "internal/north/matteradapter",
+		fillFile: "cmd/openccu-loom/daemon_matter.go",
 		minDecl:  8,
 		notFilled: map[string]string{
-			"AdvertiseTimeout": "NewBridge substitutes 5s for a zero value (internal/north/matter/bridge/bridge.go:469) and no config key exposes it — the same shape as rest.Deps.WriteTimeout",
+			"NameResolver": "nil selects the model-backed resolver the assembler builds from the walked devices (internal/north/matteradapter/assembler.go), which is the daemon's own naming path — the field exists for an owner substituting a different model",
 		},
 	},
 	{

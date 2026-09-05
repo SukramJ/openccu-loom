@@ -24,13 +24,14 @@ package integration
 import (
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/light"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/lock"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -121,7 +122,7 @@ func makeSmokeSmokeSirenDevice(addr, name string) *device.Device {
 func assertCategoryBridgedEndpoint(t *testing.T, dev *device.Device, wantDeviceType uint16, wantClusters []uint32) {
 	t.Helper()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: []*device.Device{dev}},
 	})
 

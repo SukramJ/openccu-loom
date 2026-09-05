@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -89,7 +90,7 @@ func buildMeteringPlug(t *testing.T) *device.Device {
 // assembleTopology runs the real assembler over dev.
 func assembleTopology(t *testing.T, dev *device.Device) *endpoint.Topology {
 	t.Helper()
-	a, err := endpoint.New(newFakeStore(), endpoint.Config{
+	a, err := matteradapter.New(newFakeStore(), matteradapter.Config{
 		VendorID:  0xFFF1,
 		ProductID: 0x8000,
 		NodeLabel: "electrical-group-test",
@@ -97,7 +98,7 @@ func assembleTopology(t *testing.T, dev *device.Device) *endpoint.Topology {
 	if err != nil {
 		t.Fatalf("assembler: %v", err)
 	}
-	top, err := a.Assemble(context.Background(), []endpoint.Snapshot{
+	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{
 		{CentralName: "c", Devices: []*device.Device{dev}},
 	})
 	if err != nil {
@@ -137,8 +138,8 @@ func TestMeteringPlugProjectsOneElectricalSensorEndpoint(t *testing.T) {
 	if len(electrical) != 1 {
 		t.Fatalf("expected exactly 1 ElectricalSensor endpoint for five electrical parameters, got %d", len(electrical))
 	}
-	if key := electrical[0].SourceKey.DPKey; key != endpoint.ElectricalGroupDPKey {
-		t.Errorf("ElectricalSensor endpoint keyed on %q, want the consolidated %q", key, endpoint.ElectricalGroupDPKey)
+	if key := electrical[0].SourceKey.DPKey; key != matteradapter.ElectricalGroupDPKey {
+		t.Errorf("ElectricalSensor endpoint keyed on %q, want the consolidated %q", key, matteradapter.ElectricalGroupDPKey)
 	}
 
 	// The switch endpoint must be free of electrical clusters.

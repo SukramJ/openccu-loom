@@ -10,8 +10,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 
@@ -190,21 +190,21 @@ type matterCandidateProviderAdapter struct {
 }
 
 // MatterCandidates implements [handlers.MatterCandidateProvider]. It calls
-// [eligibility.CollectCandidates] directly (rather than through a stored
+// [matteradapter.CollectCandidates] directly (rather than through a stored
 // closure) so the production reachability graph can trace the Matter
 // eligibility entry points from this method — the reachability analyzer seeds
 // the REST handler that invokes this as an entry point but cannot follow an
 // indirect call through a func-typed struct field.
-func (a *matterCandidateProviderAdapter) MatterCandidates(_ context.Context) []eligibility.Candidate {
+func (a *matterCandidateProviderAdapter) MatterCandidates(_ context.Context) []matteradapter.Candidate {
 	if a == nil || a.reg == nil || a.cfg == nil {
 		return nil
 	}
-	var out []eligibility.Candidate
+	var out []matteradapter.Candidate
 	for _, u := range a.reg.List() {
 		if u == nil || u.ModelRegistry == nil {
 			continue
 		}
-		out = append(out, eligibility.CollectCandidates(u.Name(), u.ModelRegistry.List(), a.cfg.North.Matter.ExposeSecondaryChannels)...)
+		out = append(out, matteradapter.CollectCandidates(u.Name(), u.ModelRegistry.List(), a.cfg.North.Matter.ExposeSecondaryChannels)...)
 	}
 	return out
 }

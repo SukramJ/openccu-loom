@@ -93,11 +93,12 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 	logger := slog.New(logCap)
 
 	topology := resolveTopology(s.Given.Topology)
-	snapshotter := wbEmptySnapshotter
-	includeMeasurements := false
+	// Each scenario topology carries its own assembler (measurement
+	// endpoints included — the scenarios are written against them); the
+	// empty fixture needs none.
+	snapshotter := Snapshotter(wbEmptySnapshotter)
 	if topology != nil {
 		snapshotter = topology.snapshotter
-		includeMeasurements = true
 	}
 
 	br, err := New(
@@ -105,11 +106,10 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 		snapshotter,
 		mdns.NewNoop(),
 		Config{
-			Listen:              "127.0.0.1:0",
-			VendorID:            0x1234,
-			ProductID:           0x5678,
-			NodeLabel:           "scenario-harness",
-			IncludeMeasurements: includeMeasurements,
+			Listen:    "127.0.0.1:0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "scenario-harness",
 		},
 		logger,
 	)

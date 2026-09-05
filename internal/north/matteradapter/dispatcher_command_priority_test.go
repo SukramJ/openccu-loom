@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -128,11 +129,11 @@ func buildThermostatDevice(t *testing.T, addr string, w custom.Writer) *device.D
 // bridged endpoint ID together with the dispatcher.
 func assembleOne(t *testing.T, addr string, dev *device.Device) (dispatcher *endpoint.TopologyDispatcher, endpointID uint16) {
 	t.Helper()
-	a, err := endpoint.New(newFakeStore(), validConfig(), nil)
+	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
 	if err != nil {
-		t.Fatalf("endpoint.New: %v", err)
+		t.Fatalf("matteradapter.New: %v", err)
 	}
-	top, err := a.Assemble(context.Background(), []endpoint.Snapshot{{
+	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{{
 		CentralName: "ccu1",
 		Devices:     []*device.Device{dev},
 	}})

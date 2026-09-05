@@ -113,9 +113,9 @@ func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 		// MatterEndpointSource nor MatterMeasurementSource, and every
 		// one of its constituent Action* generic DPs (DISPLAY_DATA_*,
 		// ACOUSTIC_NOTIFICATION_SELECTION, COMBINED_PARAMETER, ...)
-		// classifies the same way. The eligibility collector's
+		// classifies the same way. The candidate collector's
 		// "opaque source" skip
-		// (internal/north/matter/eligibility/eligibility.go,
+		// (internal/north/matteradapter/candidates.go,
 		// collectChannelCandidates) drops the whole channel from the
 		// candidate list rather than surfacing it as an explicit
 		// unmappable row — so this channel must be entirely absent

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package eligibility_test
+package matteradapter_test
 
 import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -48,14 +48,14 @@ func TestCollectCandidates_SkipsPanickingDevice(t *testing.T) {
 		cluster: 0x0006,
 	})
 
-	var got []eligibility.Candidate
+	var got []matteradapter.Candidate
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				t.Fatalf("CollectCandidates panicked on a broken device instead of skipping it: %v", r)
 			}
 		}()
-		got = eligibility.CollectCandidates("central", []*device.Device{broken, healthy}, false)
+		got = matteradapter.CollectCandidates("central", []*device.Device{broken, healthy}, false)
 	}()
 
 	if len(got) != 1 {

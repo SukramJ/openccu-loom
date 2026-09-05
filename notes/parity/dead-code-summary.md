@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: ec457756
-HEAD: ec457756
+Generated: 6ff6f904
+HEAD: 6ff6f904
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 23992 |
-| Reachable | 2886 |
-| Whitelisted | 19721 |
-| **Unreachable** | **1385** |
+| Total Exported | 23999 |
+| Reachable | 2890 |
+| Whitelisted | 19725 |
+| **Unreachable** | **1384** |
 
 ## Top-20 Packages by Dead Code
 
@@ -143,7 +143,7 @@ HEAD: ec457756
 | internal/north/filter | 0 | 1 | 0 |
 | internal/north/matter/bridge | 0 | 23 | 19 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/endpoint | 0 | 4 | 0 |
+| internal/north/matter/endpoint | 0 | 3 | 0 |
 | internal/north/matter/im | 0 | 30 | 8 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/mdns | 0 | 4 | 2 |

@@ -1,16 +1,16 @@
 {
-  "generated": "ec457756",
-  "head": "ec457756",
+  "generated": "6ff6f904",
+  "head": "6ff6f904",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 23992,
-    "reachable": 2886,
-    "whitelisted": 19721,
-    "unreachable": 1385
+    "total_exported": 23999,
+    "reachable": 2890,
+    "whitelisted": 19725,
+    "unreachable": 1384
   },
   "by_package": [
     {
@@ -430,7 +430,7 @@
     {
       "package": "internal/north/matter/endpoint",
       "unreachable_funcs": 0,
-      "unreachable_types": 4,
+      "unreachable_types": 3,
       "unreachable_other": 0
     },
     {
@@ -5299,7 +5299,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1372,
+      "line": 1312,
       "kind": "type"
     },
     {
@@ -5327,7 +5327,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "ErrAlreadyStarted",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 49,
+      "line": 47,
       "kind": "var"
     },
     {
@@ -5362,7 +5362,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "ErrNotStarted",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 46,
+      "line": 44,
       "kind": "var"
     },
     {
@@ -5481,7 +5481,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1012,
+      "line": 952,
       "kind": "type"
     },
     {
@@ -5551,7 +5551,7 @@
       "package": "internal/north/matter/bridge",
       "identifier": "Snapshotter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 69,
+      "line": 67,
       "kind": "type"
     },
     {
@@ -5675,23 +5675,16 @@
     },
     {
       "package": "internal/north/matter/endpoint",
-      "identifier": "ExposureChecker",
-      "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 91,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/endpoint",
       "identifier": "Snapshot",
       "file": "internal/north/matter/endpoint/types.go",
-      "line": 20,
+      "line": 19,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "Store",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 76,
+      "line": 46,
       "kind": "type"
     },
     {
@@ -14437,42 +14430,42 @@
       "identifier": "TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
-      "line": 53
+      "line": 54
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterCentralHook_ForwardsAvailabilityChanges",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
-      "line": 138
+      "line": 139
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterCentralHook_KicksAnAlreadyReadyCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
-      "line": 115
+      "line": 116
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterCentralHook_NilUnitIsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
-      "line": 215
+      "line": 216
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterCentralHook_ReAdoptedCentralStartsModelIncomplete",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
-      "line": 236
+      "line": 237
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterCentralHook_UnwireStopsSubscriptions",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
-      "line": 179
+      "line": 180
     },
     {
       "package": "cmd/openccu-loom",
@@ -14703,21 +14696,21 @@
       "identifier": "TestMatterSnapshotOmitsUnreleasedDevices",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_release_gate_test.go",
-      "line": 37
+      "line": 38
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterSnapshotter_NilReadinessFailsSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 167
+      "line": 168
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterSnapshotter_StampsModelCompletePerCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 123
+      "line": 124
     },
     {
       "package": "cmd/openccu-loom",
@@ -16488,7 +16481,7 @@
       "identifier": "TestUnregisteringACentralClearsItsReadinessLatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 190
+      "line": 191
     },
     {
       "package": "cmd/openccu-loom",
@@ -17783,28 +17776,28 @@
       "identifier": "TestWireMatterCentralReadiness_LatchesOnSouthboundReady",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 20
+      "line": 21
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireMatterCentralReadiness_NilRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 102
+      "line": 103
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 51
+      "line": 52
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireMatterCentralReadiness_UnsubscribeStopsLatching",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 83
+      "line": 84
     },
     {
       "package": "cmd/openccu-loom",
@@ -69811,6 +69804,13 @@
     },
     {
       "package": "internal/model/custom/cover",
+      "identifier": "TestClosureCommandsReachTheWriterAtHighPriority",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/cover/matter_closure_command_priority_test.go",
+      "line": 53
+    },
+    {
+      "package": "internal/model/custom/cover",
       "identifier": "TestClosureMainStateFollowsTheModelsMotion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/cover/matter_closure_motion_test.go",
@@ -74540,6 +74540,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/lock/matter_test.go",
       "line": 37
+    },
+    {
+      "package": "internal/model/custom/lock",
+      "identifier": "TestMatterLockCommandsReachTheWriterAtHighPriority",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/lock/matter_command_priority_test.go",
+      "line": 54
     },
     {
       "package": "internal/model/custom/lock",
@@ -91731,7 +91738,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 462
+      "line": 431
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "NewAssemblingSnapshotter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/assembling_snapshotter_test.go",
+      "line": 44
     },
     {
       "package": "internal/north/matter/bridge",
@@ -91756,6 +91770,13 @@
     },
     {
       "package": "internal/north/matter/bridge",
+      "identifier": "NewEmptySnapshotter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/assembling_snapshotter_test.go",
+      "line": 74
+    },
+    {
+      "package": "internal/north/matter/bridge",
       "identifier": "NewFakeStore",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/fakestore_helpers_test.go",
@@ -91767,6 +91788,13 @@
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/handlers.go",
       "line": 698
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "NewMeasuringSnapshotter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/assembling_snapshotter_test.go",
+      "line": 51
     },
     {
       "package": "internal/north/matter/bridge",
@@ -91906,49 +91934,49 @@
       "identifier": "TestAnnounceAndWithdrawCommissioning_RoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 279
+      "line": 265
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceCommissioning_NilBridge_NoPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 271
+      "line": 257
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceCommissioning_NoopAdvertiser_LogsNotAdvertised",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 374
+      "line": 360
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceCommissioning_RealAdvertiser_LogsPublished",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 402
+      "line": 388
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceFabric_NilAdvertiser_NoPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 261
+      "line": 247
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceFabric_NoopAdvertiser_LogsNotAdvertised",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 430
+      "line": 416
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAnnounceFabric_RealAdvertiser_LogsPublished",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 451
+      "line": 437
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92004,7 +92032,7 @@
       "identifier": "TestAttachAggregatorClusters_WithStartedBridge_TopologyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 580
+      "line": 566
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92019,20 +92047,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_attach_clusters_concurrency_test.go",
       "line": 28
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "TestAttachExposureChecker_NilBridge_NoPanic",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 247
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "TestAttachExposureChecker_NilChecker_NoPanic",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 253
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92053,14 +92067,14 @@
       "identifier": "TestAttachRootClusters_WithStartedBridge_TopologyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 569
+      "line": 555
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestAttachSessionLookup_NilRevertsToNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 288
+      "line": 293
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92277,14 +92291,14 @@
       "identifier": "TestCaptureSubTarget_SkipsZeroOrNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 610
+      "line": 615
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCaptureSubTarget_StoresMetadata",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 568
+      "line": 573
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92550,35 +92564,35 @@
       "identifier": "TestCheckTimedGate_ExpiredDeadlineRejects",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 489
+      "line": 494
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_TimedFlagWithoutPriorRejects",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 474
+      "line": 479
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_UntimedRequestNoPriorProceeds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 440
+      "line": 445
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_UntimedRequestWithPriorRejects",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 455
+      "line": 460
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestCheckTimedGate_ValidDeadlineProceeds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 509
+      "line": 514
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94041,84 +94055,84 @@
       "identifier": "TestDispatch_IMInvalidOpcode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 400
+      "line": 405
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_IMReadRoutes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 310
+      "line": 315
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_IMResponseOpcodeIsUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 325
+      "line": 330
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_IMSubscribeReplies",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 353
+      "line": 358
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_NilSrcDoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 163
+      "line": 168
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_NoDispatcherDropsSilently",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 417
+      "line": 422
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_SecureChannelOpcode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 178
+      "line": 183
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_SessionMissingSurfaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 271
+      "line": 276
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_TooShortBuffer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 152
+      "line": 157
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_UnknownProtocolID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 196
+      "line": 201
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_VendorIDZeroStillRoutesNormally",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 249
+      "line": 254
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDispatch_VendorQualifiedProtocolCollisionRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 218
+      "line": 223
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94188,14 +94202,14 @@
       "identifier": "TestEndpointCount_NilTopology_ReturnsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 483
+      "line": 469
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestEndpointCount_StartedBridgeWithoutSources_IsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 495
+      "line": 481
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94258,7 +94272,7 @@
       "identifier": "TestHandleDatagram_TooShortDoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 556
+      "line": 542
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94314,14 +94328,14 @@
       "identifier": "TestHandlerContext_NilCtx_ReturnsBackground",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 531
+      "line": 517
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestHandlerContext_StartedBridge_ReturnsNonNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 542
+      "line": 528
     },
     {
       "package": "internal/north/matter/bridge",
@@ -94384,7 +94398,7 @@
       "identifier": "TestMatterEmitEvent_IsAliasOfEmitEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 471
+      "line": 457
     },
     {
       "package": "internal/north/matter/bridge",
@@ -95084,21 +95098,21 @@
       "identifier": "TestReassemble_BridgedEndpointCountExcludesRootAndAggregator",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_reassemble_test.go",
-      "line": 264
+      "line": 266
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReassemble_ButtonGroupPressEventsFlowOnce",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_reassemble_test.go",
-      "line": 57
+      "line": 59
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReassemble_ReapsSubscriptionsForRemovedEndpoints",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_reassemble_test.go",
-      "line": 163
+      "line": 165
     },
     {
       "package": "internal/north/matter/bridge",
@@ -95133,28 +95147,28 @@
       "identifier": "TestReplyTimedStatus_NilSrc_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 507
+      "line": 493
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReplyTimedStatus_WithSrc_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 519
+      "line": 505
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReportSubscriptionChunksAnOversizedOngoingReport",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/subscribe_report_chunking_test.go",
-      "line": 212
+      "line": 211
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReportSubscriptionEventsChunksAnOversizedReport",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/subscribe_report_chunking_test.go",
-      "line": 267
+      "line": 266
     },
     {
       "package": "internal/north/matter/bridge",
@@ -95707,7 +95721,7 @@
       "identifier": "TestTimedRequest_SessionScopeIsolation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/receive_test.go",
-      "line": 530
+      "line": 535
     },
     {
       "package": "internal/north/matter/bridge",
@@ -95868,49 +95882,49 @@
       "identifier": "ClusterRevision",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
-      "line": 32
+      "line": 31
     },
     {
       "package": "internal/north/matter/cluster/closure",
       "identifier": "Config",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
-      "line": 55
+      "line": 60
     },
     {
       "package": "internal/north/matter/cluster/closure",
       "identifier": "ControlServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
-      "line": 73
+      "line": 78
     },
     {
       "package": "internal/north/matter/cluster/closure",
       "identifier": "MoveHandler",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
-      "line": 48
+      "line": 52
     },
     {
       "package": "internal/north/matter/cluster/closure",
       "identifier": "NewControlServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
-      "line": 92
+      "line": 97
     },
     {
       "package": "internal/north/matter/cluster/closure",
       "identifier": "PositioningVentilationFeatureMap",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
-      "line": 39
+      "line": 38
     },
     {
       "package": "internal/north/matter/cluster/closure",
       "identifier": "StopHandler",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/closure/closurecontrol_server.go",
-      "line": 51
+      "line": 56
     },
     {
       "package": "internal/north/matter/cluster/core",
@@ -97247,77 +97261,77 @@
       "identifier": "ColorControlClusterRevision",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/light/colorcontrol_server.go",
-      "line": 258
+      "line": 250
     },
     {
       "package": "internal/north/matter/cluster/light",
       "identifier": "ColorControlServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/light/colorcontrol_server.go",
-      "line": 71
+      "line": 75
     },
     {
       "package": "internal/north/matter/cluster/light",
       "identifier": "ColorControlServerConfig",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/light/colorcontrol_server.go",
-      "line": 28
+      "line": 27
     },
     {
       "package": "internal/north/matter/cluster/light",
       "identifier": "ColorTemperatureWriter",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/light/colorcontrol_server.go",
-      "line": 60
+      "line": 64
     },
     {
       "package": "internal/north/matter/cluster/light",
       "identifier": "DefaultColorControlServerConfig",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/light/colorcontrol_server.go",
-      "line": 45
+      "line": 44
     },
     {
       "package": "internal/north/matter/cluster/light",
       "identifier": "NewColorControlServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/light/colorcontrol_server.go",
-      "line": 80
+      "line": 84
     },
     {
       "package": "internal/north/matter/cluster/lock",
       "identifier": "DoorLockConfig",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/lock/doorlock_server.go",
-      "line": 92
+      "line": 94
     },
     {
       "package": "internal/north/matter/cluster/lock",
       "identifier": "DoorLockServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/lock/doorlock_server.go",
-      "line": 114
+      "line": 116
     },
     {
       "package": "internal/north/matter/cluster/lock",
       "identifier": "LockOperationEvent",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/lock/doorlock_server.go",
-      "line": 64
+      "line": 63
     },
     {
       "package": "internal/north/matter/cluster/lock",
       "identifier": "NewDoorLockServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/lock/doorlock_server.go",
-      "line": 135
+      "line": 137
     },
     {
       "package": "internal/north/matter/cluster/lock",
       "identifier": "StateSource",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/lock/doorlock_server.go",
-      "line": 85
+      "line": 87
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -99785,13 +99799,6 @@
     },
     {
       "package": "internal/north/matter/eligibility",
-      "identifier": "Candidate",
-      "reason": "returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 56
-    },
-    {
-      "package": "internal/north/matter/eligibility",
       "identifier": "CompatFinding",
       "reason": "returned by Compat, which the daemon's matterCompatibilityReporter calls on each GET /api/v1/matter/compatibility; a data struct whose fields the REST layer copies out, invisible to the analyzer's method-based type heuristic",
       "file": "internal/north/matter/eligibility/compat.go",
@@ -99809,7 +99816,7 @@
       "identifier": "State",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 35
+      "line": 38
     },
     {
       "package": "internal/north/matter/eligibility",
@@ -99841,13 +99848,6 @@
     },
     {
       "package": "internal/north/matter/eligibility",
-      "identifier": "TestDPKeyProbesHaveProductionImplementations",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/eligibility/eligibility_internal_test.go",
-      "line": 22
-    },
-    {
-      "package": "internal/north/matter/eligibility",
       "identifier": "TestEcosystemClassificationUsesTheRealVendorIds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/eligibility/vendor_name_test.go",
@@ -99869,13 +99869,6 @@
     },
     {
       "package": "internal/north/matter/eligibility",
-      "identifier": "TestHideFromMatter",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/eligibility/constituent_filter_test.go",
-      "line": 19
-    },
-    {
-      "package": "internal/north/matter/eligibility",
       "identifier": "TestVendorNameReadsAsAControllerNotAnId",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/eligibility/vendor_name_test.go",
@@ -99886,14 +99879,28 @@
       "identifier": "Verdict",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 32
+      "line": 35
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "identifier": "AvailabilityProbe",
+      "reason": "carried on Spec and Endpoint and called by materialize on every dispatch; a named func type reached only through a struct field is invisible to the analyzer",
+      "file": "internal/north/matter/endpoint/spec.go",
+      "line": 26
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "identifier": "NameResolver",
+      "reason": "implemented host-side by matteradapter.modelNameResolver (nameresolver.go:124) and injected through the adapter config; interface satisfaction is invisible to the analyzer",
+      "file": "internal/north/matter/endpoint/spec.go",
+      "line": 90
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 123
+      "line": 73
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -99901,6 +99908,13 @@
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/endpoint/dispatcher.go",
       "line": 94
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "identifier": "Spec",
+      "reason": "constructed by the host adapter and consumed by Assemble in this package; a struct that only ever travels as a slice element has no construction site the analyzer follows (internal/north/matteradapter/assembler.go:188)",
+      "file": "internal/north/matter/endpoint/spec.go",
+      "line": 40
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -99914,7 +99928,7 @@
       "identifier": "TestAssignOrReuseID_DeviceTypeDrift",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1493
+      "line": 1397
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -99928,14 +99942,14 @@
       "identifier": "TestClusterDataVersion_WithVersion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1057
+      "line": 1056
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestClusterDataVersion_WithoutVersion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1066
+      "line": 1065
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -99984,42 +99998,42 @@
       "identifier": "TestCurrentDataVersion_BridgedIgnoresInstanceTracker",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1210
+      "line": 1209
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestCurrentDataVersion_BridgedStableAcrossCalls",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1190
+      "line": 1189
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestCurrentDataVersion_ClusterNotFound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1176
+      "line": 1175
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestCurrentDataVersion_RootUsesInstanceTracker",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1234
+      "line": 1233
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestDeviceTypeRevision_KnownType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1463
+      "line": 1367
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestDeviceTypeRevision_UnknownType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1479
+      "line": 1383
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -100027,69 +100041,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_acl_test.go",
       "line": 234
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestFriendlyName_DeviceAndChannelName",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 163
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestFriendlyName_DeviceNameOnly",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 151
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestFriendlyName_LengthCapping",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 238
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestFriendlyName_MatchesModelNaming",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 202
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestFriendlyName_NoNameFallsBackToAddress",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 184
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestFriendlyName_WithParamSuffix",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 173
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestGenericDPKeyForMeasurement_Empty",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1334
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestGenericDPKeyForMeasurement_HasKey",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1323
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestGenericDPKeyForMeasurement_NoInterface",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1345
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -100145,21 +100096,21 @@
       "identifier": "TestInvokeErrorStatus_InvalidCommandArgument",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 915
+      "line": 914
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestInvokeErrorStatus_Nil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 903
+      "line": 902
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestInvokeUnsupportedCommandMapsTo0x81",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1594
+      "line": 1497
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -100173,273 +100124,210 @@
       "identifier": "TestInvoke_SuccessAndUnknownCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 649
+      "line": 648
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestInvoke_TypedStatusCodeError_TakesPriority",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 787
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestMeasurementDeviceType",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 99
+      "line": 786
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestNewTopologyDispatcher_NilReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 180
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestParameterSuffix_ChannelTypedLookup",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 314
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestParameterSuffix_NilChannel",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 344
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestParameterSuffix_NilChannelTitleCase",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 357
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestParameterSuffix_NilLabels",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 273
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestParameterSuffix_PrimaryMarker",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 299
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestParameterSuffix_TranslatedLabel",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 285
+      "line": 179
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestReadOne_FabricScoped_FallThrough",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1139
+      "line": 1138
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestReadOne_FabricScoped_NilValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1125
+      "line": 1124
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestReadOne_FabricScoped_NonNilValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1111
+      "line": 1110
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestReadOne_MatterRead_NilValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1159
+      "line": 1158
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestReadOne_SynthesizeGlobal",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1004
+      "line": 1003
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_AttributeNotImplemented",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 237
+      "line": 236
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_ConcreteEndpointReturnsUnsupportedCluster",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 548
+      "line": 547
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_ConcreteHit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 192
+      "line": 191
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_NullValueSurfaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 251
+      "line": 250
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_UnknownCluster",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 223
+      "line": 222
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_UnknownEndpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 210
+      "line": 209
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_WildcardAttributeReturnsGlobals",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 335
+      "line": 334
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_WildcardAttribute_ListerExpands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 469
+      "line": 468
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_WildcardAttribute_ListerWithoutGlobalsStillGetsThem",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 433
+      "line": 432
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_WildcardClusterFansOut",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 311
+      "line": 310
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_WildcardEndpointFansOut",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 276
+      "line": 275
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRead_WildcardEndpointSkipsEndpointsWithoutCluster",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 520
+      "line": 519
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRenderSourceKey_CentralAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1421
+      "line": 1325
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRenderSourceKey_EndpointKey",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1366
+      "line": 1270
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRenderSourceKey_EndpointKeyPointer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1388
+      "line": 1292
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRenderSourceKey_Nil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1358
+      "line": 1262
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRenderSourceKey_NilPointer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1404
+      "line": 1308
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRenderSourceKey_ReflectiveFallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1447
+      "line": 1351
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestRenderSourceKey_Stringer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1437
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestSetExposureChecker_Nil",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1270
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestSetExposureChecker_NonNil",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 1291
+      "line": 1341
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestSynthesizeGlobalRead_AcceptedCommandList_WithLister",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 949
+      "line": 948
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestSynthesizeGlobalRead_EventList_ReturnsUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 993
+      "line": 992
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestSynthesizeGlobalRead_GeneratedCommandList_WithLister",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 971
+      "line": 970
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -100468,34 +100356,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
       "line": 135
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestTruncateUTF8_ASCIIOver",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 66
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestTruncateUTF8_BelowMax",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 48
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestTruncateUTF8_ExactlyMax",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 57
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "TestTruncateUTF8_MultiByteAtCutPoint",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/endpoint/helpers_internal_test.go",
-      "line": 78
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -100537,7 +100397,7 @@
       "identifier": "TestWriteErrorStatus_ResourceExhausted_StringHeuristic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 883
+      "line": 882
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -100558,14 +100418,14 @@
       "identifier": "TestWrite_ConstraintMaps",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 616
+      "line": 615
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_GenericErrorMapsToFailure",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 630
+      "line": 629
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -100579,56 +100439,56 @@
       "identifier": "TestWrite_IsNull",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 863
+      "line": 862
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_ReadOnlyMapsToUnsupportedWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 588
+      "line": 587
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_Success",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 574
+      "line": 573
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_TypedStatusCodeError_TakesPriority",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 765
+      "line": 764
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_TypedStatusCodeError_WrappedInFmt",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 805
+      "line": 804
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_UnknownAttributeMaps",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 602
+      "line": 601
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_UnsupportedCluster",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 847
+      "line": 846
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestWrite_UnsupportedEndpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
-      "line": 831
+      "line": 830
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -105753,6 +105613,167 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/udp/listener_test.go",
       "line": 132
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "Candidate",
+      "reason": "returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used",
+      "file": "internal/north/matteradapter/candidates.go",
+      "line": 27
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "Config",
+      "reason": "constructed by the daemon when it builds the assembler (cmd/openccu-loom/daemon_matter.go, startMatterBridge)",
+      "file": "internal/north/matteradapter/assembler.go",
+      "line": 29
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "DeviceSnapshot",
+      "reason": "constructed per registered central by the daemon snapshotter (cmd/openccu-loom/daemon_matter.go:3358)",
+      "file": "internal/north/matteradapter/assembler.go",
+      "line": 157
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "ExposureChecker",
+      "reason": "taken by Assembler.SetExposureChecker and satisfied host-side by the matter store (cmd/openccu-loom/daemon_matter.go, wireMatterRuntime); interface satisfaction is invisible to the analyzer",
+      "file": "internal/north/matteradapter/assembler.go",
+      "line": 87
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestDPKeyProbesHaveProductionImplementations",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/candidates_internal_test.go",
+      "line": 22
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestGenericDPKeyForMeasurement_Empty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/assembler_internal_test.go",
+      "line": 74
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestGenericDPKeyForMeasurement_HasKey",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/assembler_internal_test.go",
+      "line": 63
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestGenericDPKeyForMeasurement_NoInterface",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/assembler_internal_test.go",
+      "line": 85
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestHideFromMatter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/constituent_filter_test.go",
+      "line": 19
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestNodeLabel_DeviceAndChannelName",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 63
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestNodeLabel_DeviceNameOnly",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 51
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestNodeLabel_LengthCapping",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 138
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestNodeLabel_MatchesModelNaming",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 102
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestNodeLabel_NoNameFallsBackToAddress",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 84
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestNodeLabel_WithParamSuffix",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 73
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestParameterLabel_ChannelTypedLookup",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 211
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestParameterLabel_NilLabels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 170
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestParameterLabel_PrimaryMarker",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 196
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestParameterLabel_TranslatedLabel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 182
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestParameterLabel_UnknownChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 242
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestParameterLabel_UnknownChannelTitleCase",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/nameresolver_internal_test.go",
+      "line": 256
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestSetExposureChecker_Nil",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/assembler_internal_test.go",
+      "line": 27
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "TestSetExposureChecker_NonNil",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matteradapter/assembler_internal_test.go",
+      "line": 39
     },
     {
       "package": "internal/north/mcp",
@@ -116231,21 +116252,21 @@
       "identifier": "TestActorFromRequest_IdentityWithoutSubject_ReturnsAnonymous",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 628
+      "line": 629
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestActorFromRequest_NoContext_ReturnsAnonymous",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 619
+      "line": 620
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestActorFromRequest_WithAuthenticatedIdentity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 608
+      "line": 609
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121229,21 +121250,21 @@
       "identifier": "TestMatterCandidateProviderFunc_Nil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 694
+      "line": 695
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterCandidateProviderFunc_NonNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 702
+      "line": 703
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterCommissioningClose_CloserError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 551
+      "line": 552
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121257,14 +121278,14 @@
       "identifier": "TestMatterCommissioningClose_HappyPath_Returns204",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 540
+      "line": 541
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterCommissioningClose_NilCloser_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 529
+      "line": 530
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121348,161 +121369,161 @@
       "identifier": "TestMatterExposable_HappyPath_Returns200_MergesData",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 201
+      "line": 202
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_NilProvider_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 178
+      "line": 179
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_NilStore_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 189
+      "line": 190
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_ParameterLabel_TitleCasedWhenLabelerIsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 834
+      "line": 835
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_SortOrder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 783
+      "line": 784
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_StoreListError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 679
+      "line": 680
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_BadItemKey_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 404
+      "line": 405
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_EmptyItems_Returns204",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 391
+      "line": 392
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_HappyPath_Returns200_AppliedCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 421
+      "line": 422
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_NilStore_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 378
+      "line": 379
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_PublishesOneFramePerAffectedRow",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 337
+      "line": 338
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_StoreError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 732
+      "line": 733
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_AttributesTheAuthenticatedSubject",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 645
+      "line": 646
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_BadBody_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 284
+      "line": 285
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_HappyPath_Returns204_PublishesEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 310
+      "line": 311
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_InvalidKey_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 296
+      "line": 297
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_NilStore_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 271
+      "line": 272
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_StoreError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 716
+      "line": 717
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_NilRevoker_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 460
+      "line": 461
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_NonNumericID_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 473
+      "line": 474
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_RevokerError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 512
+      "line": 513
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_ValidID_Returns204",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 499
+      "line": 500
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_ZeroID_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 486
+      "line": 487
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121565,28 +121586,28 @@
       "identifier": "TestMatterShare_HappyPath_RecordsAuditUnderShareAction",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 581
+      "line": 582
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterShare_NilOpener_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 564
+      "line": 565
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterStatus_NilReader_Returns200_Disabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 121
+      "line": 122
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterStatus_WithReader_Returns200_WithSnapshot",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 139
+      "line": 140
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123707,7 +123728,7 @@
       "identifier": "TestRecordMatterAudit_NonNilRecorder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 877
+      "line": 878
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125352,21 +125373,21 @@
       "identifier": "TestValidateExposureKey_AllKnownKinds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 755
+      "line": 756
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestValidateExposureKey_EmptyFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 764
+      "line": 765
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestValidateExposureKey_UnknownKind",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 748
+      "line": 749
     },
     {
       "package": "internal/north/rest/handlers",
@@ -145337,7 +145358,7 @@
       "identifier": "TestCompositionRootHandsOverEveryDeclaredField",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/composition_root_handover_test.go",
-      "line": 118
+      "line": 133
     },
     {
       "package": "tests/contract",
@@ -147654,7 +147675,7 @@
       "identifier": "TestAPhysicalPressReachesTheMatterEventLog",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/matter_switch_press_wiring_test.go",
-      "line": 53
+      "line": 55
     },
     {
       "package": "tests/contract/wiring_pins",

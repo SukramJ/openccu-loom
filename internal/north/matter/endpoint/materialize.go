@@ -140,9 +140,8 @@ func ClusterServers(ep *Endpoint) []mattercontract.ClusterServer { //nolint:funl
 	// fabric-level UID) the way matter.js's own bridged-device pattern
 	// uses them.
 	productName := ""
-	address := ""
-	if ep.BridgedDevice != nil {
-		address = ep.BridgedDevice.Address
+	address := ep.SourceKey.DeviceAddress
+	if address != "" {
 		productName = address
 	}
 	if productName == "" {
@@ -178,7 +177,7 @@ func ClusterServers(ep *Endpoint) []mattercontract.ClusterServer { //nolint:funl
 	// materialise call (cluster servers are reconstructed per dispatch,
 	// so each Read self-heals to the current availability). When the CCU
 	// device drops — interface circuit-breaker open, STICKY_UNREACH —
-	// `dev.Available()` returns false and Apple/Google see the bridged
+	// [Endpoint.Availability] returns false and Apple/Google see the bridged
 	// device as unreachable. The bridge separately fires the §9.13.6
 	// ReachableChanged event on the flip (see Bridge.NotifyDeviceReachable)
 	// so subscribed commissioners learn about it without re-reading.
@@ -190,8 +189,8 @@ func ClusterServers(ep *Endpoint) []mattercontract.ClusterServer { //nolint:funl
 	// permanently-dead device must NOT advertise Reachable=true forever —
 	// that was the dormant bug this wiring closes.
 	reachable := true
-	if ep.BridgedDevice != nil {
-		reachable = ep.BridgedDevice.Available()
+	if ep.Availability != nil {
+		reachable = ep.Availability()
 	}
 	bridged, err := mattercore.NewBridgedDeviceBasicInformation(mattercore.BridgedConfig{
 		// Apple's HMHome layer successfully projects HMCharacteristic values

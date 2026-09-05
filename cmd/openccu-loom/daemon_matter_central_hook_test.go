@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -87,7 +88,7 @@ func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.
 	if !readiness.isReady("ccu-adopted") {
 		t.Error("adopted central not latched after its southbound-ready event")
 	}
-	byName := map[string]endpoint.Snapshot{}
+	byName := map[string]matteradapter.DeviceSnapshot{}
 	for _, s := range matterSnapshotter(reg, readiness)(context.Background()) {
 		byName[s.CentralName] = s
 	}

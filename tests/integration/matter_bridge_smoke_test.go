@@ -14,6 +14,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
@@ -125,8 +127,8 @@ func (s *smokeEndpointSource) MatterClusterServers() []interfaces.MatterClusterS
 // ─── builder helpers ──────────────────────────────────────────────────────────
 
 // smokeValidConfig returns a minimal assembler config.
-func smokeValidConfig() endpoint.Config {
-	return endpoint.Config{
+func smokeValidConfig() matteradapter.Config {
+	return matteradapter.Config{
 		VendorID:  0xFFF1,
 		ProductID: 0x8001,
 		NodeLabel: "SmokeTestBridge",
@@ -135,13 +137,13 @@ func smokeValidConfig() endpoint.Config {
 
 // buildSmokeTopology assembles a fresh topology from the given snapshots using
 // an in-memory store. Helper shared by multiple test cases.
-func buildSmokeTopology(t *testing.T, snaps []endpoint.Snapshot) *endpoint.Topology {
+func buildSmokeTopology(t *testing.T, snaps []matteradapter.DeviceSnapshot) *endpoint.Topology {
 	t.Helper()
-	a, err := endpoint.New(newSmokeFakeStore(), smokeValidConfig(), nil)
+	a, err := matteradapter.New(newSmokeFakeStore(), smokeValidConfig(), nil)
 	if err != nil {
-		t.Fatalf("endpoint.New: %v", err)
+		t.Fatalf("matteradapter.New: %v", err)
 	}
-	top, err := a.Assemble(context.Background(), snaps)
+	top, err := a.AssembleDevices(context.Background(), snaps)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -215,7 +217,7 @@ func hasClusterID(ids []uint32, clusterID uint32) bool {
 func TestMatterBridgeSmoke_RootDeviceType(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices:     []*device.Device{makeSmokeOnOffDevice("SMOKE0001", "Light A")},
@@ -248,7 +250,7 @@ func TestMatterBridgeSmoke_RootDeviceType(t *testing.T) {
 func TestMatterBridgeSmoke_AggregatorDeviceType(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices:     []*device.Device{makeSmokeOnOffDevice("SMOKE0002", "Light B")},
@@ -288,7 +290,7 @@ func TestMatterBridgeSmoke_AggregatorDeviceType(t *testing.T) {
 func TestMatterBridgeSmoke_BridgedEndpointDeviceTypes(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices: []*device.Device{
@@ -347,7 +349,7 @@ func TestMatterBridgeSmoke_BridgedEndpointDeviceTypes(t *testing.T) {
 func TestMatterBridgeSmoke_PartsListPropagation(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices: []*device.Device{
@@ -414,7 +416,7 @@ func TestMatterBridgeSmoke_PartsListPropagation(t *testing.T) {
 func TestMatterBridgeSmoke_ServerListContainsBDBI(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices: []*device.Device{
@@ -446,7 +448,7 @@ func TestMatterBridgeSmoke_ServerListContainsBDBI(t *testing.T) {
 func TestMatterBridgeSmoke_BDBINodeLabelAndUniqueID(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices: []*device.Device{
@@ -538,7 +540,7 @@ func TestMatterBridgeSmoke_EmptySnapshotProducesRootAndAggregator(t *testing.T) 
 func TestMatterBridgeSmoke_MultiSnapshotComposition(t *testing.T) {
 	t.Parallel()
 
-	snaps := []endpoint.Snapshot{
+	snaps := []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices:     []*device.Device{makeSmokeOnOffDevice("SMOKE0040", "CCU1 Light")},
@@ -583,7 +585,7 @@ func TestMatterBridgeSmoke_MultiSnapshotComposition(t *testing.T) {
 func TestMatterBridgeSmoke_BridgedNodeDeviceTypeInClusterSurface(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices:     []*device.Device{makeSmokeOnOffDevice("SMOKE0060", "Light For DT Check")},
@@ -630,7 +632,7 @@ func TestMatterBridgeSmoke_BridgedNodeDeviceTypeInClusterSurface(t *testing.T) {
 func TestMatterBridgeSmoke_BridgedEndpointParentEndpointID(t *testing.T) {
 	t.Parallel()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []matteradapter.DeviceSnapshot{
 		{
 			CentralName: "ccu1",
 			Devices: []*device.Device{

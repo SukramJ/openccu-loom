@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/closure"
 	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -90,15 +89,19 @@ func closureCommandFor(target clusterwire.ClosureTargetPosition) (DoorCommand, b
 func newGarageClosureServer(g *Garage) *garageClosureServer {
 	p := &garageClosureServer{g: g}
 	p.srv = closure.NewControlServer(closure.Config{
-		Move: func(ctx context.Context, target clusterwire.ClosureTargetPosition, priority hmenum.CommandPriority) error {
+		// The handlers name matterDispatchPriority themselves: the cluster
+		// contract carries no priority, and Critical is the zero value of
+		// the command-priority enum, so a value left to travel implicitly
+		// would escalate rather than degrade.
+		Move: func(ctx context.Context, target clusterwire.ClosureTargetPosition) error {
 			command, ok := closureCommandFor(target)
 			if !ok {
 				return errMatterUnknownCommand
 			}
-			return g.command(ctx, command, priority)
+			return g.command(ctx, command, matterDispatchPriority)
 		},
-		Stop: func(ctx context.Context, priority hmenum.CommandPriority) error {
-			return g.Stop(ctx, priority)
+		Stop: func(ctx context.Context) error {
+			return g.Stop(ctx, matterDispatchPriority)
 		},
 	})
 	p.publish()

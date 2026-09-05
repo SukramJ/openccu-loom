@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
@@ -104,20 +105,19 @@ func buildBridgeWithTempSource(t *testing.T) (*bridge.Bridge, *notifiableTempSou
 	ch := dev.AddChannel(chAddr, 1, "WEATHER", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
 
-	snapFn := func(_ context.Context) []endpoint.Snapshot {
-		return []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
+	snapFn := func(_ context.Context) []matteradapter.DeviceSnapshot {
+		return []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
 	}
 
 	b, err := bridge.New(
 		bridge.NewFakeStore(),
-		snapFn,
+		bridge.NewMeasuringSnapshotter(snapFn),
 		mdns.NewNoop(),
 		bridge.Config{
-			Listen:              ":0",
-			VendorID:            0x1234,
-			ProductID:           0x5678,
-			NodeLabel:           "ml-test-bridge",
-			IncludeMeasurements: true,
+			Listen:    ":0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "ml-test-bridge",
 		},
 		nil,
 	)

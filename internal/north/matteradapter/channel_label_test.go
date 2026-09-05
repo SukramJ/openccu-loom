@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 
 // TestAssemble_ChannelLabelReachesTheNodeLabel pins the channel word an
 // assembled endpoint falls back to when its channel carries no name of its
 // own. The assembler resolves no translation catalogue itself — the host
-// hands it the finished word — so an ignored [endpoint.Config.ChannelLabel]
+// hands it the finished word — so an ignored [matteradapter.Config.ChannelLabel]
 // would silently leave every locale on the English fallback, which is
 // exactly the kind of drop that shows up first on an operator's Matter
 // controller rather than in a test.
@@ -44,11 +44,11 @@ func TestAssemble_ChannelLabelReachesTheNodeLabel(t *testing.T) {
 
 			cfg := validConfig()
 			cfg.ChannelLabel = tc.label
-			a, err := endpoint.New(newFakeStore(), cfg, nil)
+			a, err := matteradapter.New(newFakeStore(), cfg, nil)
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
-			top, err := a.Assemble(context.Background(), []endpoint.Snapshot{
+			top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{
 				{CentralName: "ccu1", Devices: []*device.Device{dev}},
 			})
 			if err != nil {

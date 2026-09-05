@@ -226,3 +226,25 @@ func TestDeriveMatterEligibility_MeasurementSource_UsesClassDeviceTypeAndCluster
 		t.Errorf("clusters: got %v, want [%d]", got.Clusters, wantCl)
 	}
 }
+
+// TestDeriveMatterEligibility_NilClusterServerSkipped verifies that a nil
+// entry in a source's cluster-server list is skipped rather than counted:
+// counting it would let a source with no usable cluster read as Mappable.
+func TestDeriveMatterEligibility_NilClusterServerSkipped(t *testing.T) {
+	t.Parallel()
+	src := &fakeEndpointSource{
+		deviceType: 0x0100,
+		clusters: []mattercontract.ClusterServer{
+			nil,                                   // nil server — must be skipped
+			&fakeClusterServer{clusterID: 0x0006}, // valid server
+		},
+	}
+	got := eligibility.DeriveMatterEligibility(src)
+	// Should still be Mappable with 1 cluster (nil was skipped).
+	if got.State != eligibility.StateMappable {
+		t.Errorf("expected Mappable, got %v (reason: %q)", got.State, got.Reason)
+	}
+	if len(got.Clusters) != 1 || got.Clusters[0] != 0x0006 {
+		t.Errorf("clusters: got %v, want [0x0006]", got.Clusters)
+	}
+}

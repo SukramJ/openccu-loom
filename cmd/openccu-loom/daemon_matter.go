@@ -41,7 +41,7 @@ import (
 	matterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	matterschema "github.com/SukramJ/openccu-loom/internal/north/matter/schema"
@@ -54,6 +54,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
@@ -143,7 +144,13 @@ type matterBridgeBundle struct {
 	bridge *matterbridge.Bridge
 	stop   func()
 	store  *matterstore.Store
-	opMgr  *operational.Manager
+	// assembler turns this daemon's device model into the endpoint
+	// topology the bridge serves. The bridge consumes a topology and
+	// never builds one, so the assembler and everything that configures
+	// it — the exposure allowlist above all — live on this side of the
+	// boundary and are reached through here.
+	assembler *matteradapter.Assembler
+	opMgr     *operational.Manager
 	// subMgr is the IM subscription manager. Carried so the REST
 	// diagnostics surface can report how many subscriptions ride on each
 	// session — a commissioned controller holding none looks identical
@@ -219,7 +226,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// removed" and wipe the persisted endpoint-ID rows on every boot,
 	// renumbering the bridged fleet for paired controllers.
 	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
-	snap := matterSnapshotter(reg, readiness)
+	walk := matterSnapshotter(reg, readiness)
 
 	advertiser, closeAdvertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; the subtype responder runs for the advertiser's lifetime and is released through closeAdvertiser
 	// The Matter subtree resolves no translation catalogues of its own, so
@@ -233,17 +240,34 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			channelLabel = w
 		}
 	}
-	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
-		Listen:                  mc.Listen,
-		PreferIPv4:              mc.PreferIPv4,
+	// The daemon owns topology assembly: it knows the device model, the
+	// operator's exposure allowlist and the locale, none of which the
+	// Matter subtree may see. The bridge is handed the finished topology
+	// through the snapshotter below.
+	assembler, err := matteradapter.New(store, matteradapter.Config{
 		VendorID:                mc.VendorID,
 		ProductID:               mc.ProductID,
 		NodeLabel:               mc.NodeLabel,
-		Discriminator:           mc.Discriminator,
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
 		IncludeMeasurements:     mc.IncludeMeasurements,
 		Labels:                  labels,
 		ChannelLabel:            channelLabel,
+	}, logger)
+	if err != nil {
+		logger.Warn("matter.bridge.assembler", slog.String("err", err.Error()))
+		unwireReadiness()
+		closeAdvertiser()
+		return nil
+	}
+	snap := matterTopologySnapshotter(assembler, walk)
+
+	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
+		Listen:        mc.Listen,
+		PreferIPv4:    mc.PreferIPv4,
+		VendorID:      mc.VendorID,
+		ProductID:     mc.ProductID,
+		NodeLabel:     mc.NodeLabel,
+		Discriminator: mc.Discriminator,
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
@@ -1063,6 +1087,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		bridge:         bridge,
 		stop:           stop,
 		store:          store,
+		assembler:      assembler,
 		opMgr:          opMgr,
 		subMgr:         subMgr,
 		advertiser:     advertiser,
@@ -3349,19 +3374,34 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 	return unsub
 }
 
-// matterSnapshotter builds the bridge's topology snapshotter: one
-// [endpoint.Snapshot] per registered central, read live from the central
-// registry so runtime-added centrals surface on the next assembly. Each
-// snapshot's ModelComplete flag is stamped from the readiness latch; a nil
-// readiness marks every central model-incomplete (the GC-off fail-safe).
-func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness) matterbridge.Snapshotter {
-	return func(_ context.Context) []endpoint.Snapshot {
-		var out []endpoint.Snapshot
+// matterTopologySnapshotter composes the model walk with topology
+// assembly into the single callback the bridge holds.
+//
+// The bridge calls this at the top of each (re)assembly, off its own
+// lock, exactly where it previously called the walk and the assembler in
+// sequence — so a snapshot and the topology built from it stay one
+// atomic step from the bridge's point of view, and a reassembly still
+// reads the model as late as possible rather than at wiring time.
+func matterTopologySnapshotter(asm *matteradapter.Assembler, walk func(context.Context) []matteradapter.DeviceSnapshot) matterbridge.Snapshotter {
+	return func(ctx context.Context) (*matterendpoint.Topology, error) {
+		return asm.AssembleDevices(ctx, walk(ctx))
+	}
+}
+
+// matterSnapshotter builds the model walk behind the bridge's
+// snapshotter: one [matteradapter.DeviceSnapshot] per registered central,
+// read live from the central registry so runtime-added centrals surface
+// on the next assembly. Each snapshot's ModelComplete flag is stamped
+// from the readiness latch; a nil readiness marks every central
+// model-incomplete (the GC-off fail-safe).
+func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness) func(context.Context) []matteradapter.DeviceSnapshot {
+	return func(_ context.Context) []matteradapter.DeviceSnapshot {
+		var out []matteradapter.DeviceSnapshot
 		for _, u := range reg.List() {
 			if u == nil || u.ModelRegistry == nil {
 				continue
 			}
-			out = append(out, endpoint.Snapshot{
+			out = append(out, matteradapter.DeviceSnapshot{
 				CentralName:   u.Name(),
 				Devices:       releasedDevicesOf(u),
 				ModelComplete: readiness != nil && readiness.isReady(u.Name()),
@@ -3522,7 +3562,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// Subscribe expands to 60+ KB, the post-CASE phase exceeds
 		// Apple's pairing-UI timeout and the user sees a generic
 		// add-failed error even though the cryptographic handshake completed.
-		mb.AttachExposureChecker(mfs)
+		bundle.assembler.SetExposureChecker(mfs)
 		if err := mb.Reassemble(ctx); err != nil {
 			logger.Warn("matter.bridge.reassemble.after_exposure_checker",
 				slog.String("err", err.Error()))
@@ -4065,12 +4105,8 @@ func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo
 		if rev, ok := matterschema.DeviceTypeRevision(uint32(ep.DeviceType)); ok {
 			info.DeviceTypeRevision = rev
 		}
-		if ep.BridgedDevice != nil {
-			info.DeviceAddress = ep.BridgedDevice.Address
-		}
-		if ep.Channel != nil {
-			info.ChannelAddress = ep.Channel.Address
-		}
+		info.DeviceAddress = ep.SourceKey.DeviceAddress
+		info.ChannelAddress = ep.ChannelAddress
 		if ep.Source != nil {
 			seen := make(map[uint32]struct{})
 			for _, cs := range ep.Source.MatterClusterServers() {

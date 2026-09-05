@@ -14,8 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -32,16 +32,16 @@ type MatterExposureStore interface {
 // MatterCandidateProvider yields the per-source classification result
 // the operator-facing UI lists. The daemon wires this to a closure
 // that walks every Unit's model registry through
-// `eligibility.CollectCandidates`.
+// `matteradapter.CollectCandidates`.
 type MatterCandidateProvider interface {
-	MatterCandidates(ctx context.Context) []eligibility.Candidate
+	MatterCandidates(ctx context.Context) []matteradapter.Candidate
 }
 
 // MatterCandidateProviderFunc adapts a closure into the interface.
-type MatterCandidateProviderFunc func(ctx context.Context) []eligibility.Candidate
+type MatterCandidateProviderFunc func(ctx context.Context) []matteradapter.Candidate
 
 // MatterCandidates implements [MatterCandidateProvider].
-func (f MatterCandidateProviderFunc) MatterCandidates(ctx context.Context) []eligibility.Candidate {
+func (f MatterCandidateProviderFunc) MatterCandidates(ctx context.Context) []matteradapter.Candidate {
 	if f == nil {
 		return nil
 	}

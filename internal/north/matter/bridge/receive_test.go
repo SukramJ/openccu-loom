@@ -43,7 +43,12 @@ func (f wbFakeSessionLookup) Lookup(_ uint16) (*channel.Session, bool) {
 
 // ─── snapshotter ─────────────────────────────────────────────────────────
 
-func wbEmptySnapshotter(_ context.Context) []endpoint.Snapshot { return nil }
+// wbEmptySnapshotter yields a topology with no bridged endpoints. A fresh
+// assembler per call keeps the parallel tests that share this function
+// off one another's endpoint-id store.
+func wbEmptySnapshotter(ctx context.Context) (*endpoint.Topology, error) {
+	return NewEmptySnapshotter()(ctx)
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 
