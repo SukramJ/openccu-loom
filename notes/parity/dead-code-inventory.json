@@ -1,15 +1,15 @@
 {
-  "generated": "14c43e38",
-  "head": "14c43e38",
+  "generated": "a8c2b5d4",
+  "head": "a8c2b5d4",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 21354,
-    "reachable": 2512,
-    "whitelisted": 17723,
+    "total_exported": 21369,
+    "reachable": 2520,
+    "whitelisted": 17730,
     "unreachable": 1119
   },
   "by_package": [
@@ -89701,21 +89701,28 @@
       "identifier": "Config",
       "reason": "constructed by the daemon when it builds the assembler (cmd/openccu-loom/daemon_matter.go, startMatterBridge)",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 30
+      "line": 31
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "DeviceSnapshot",
       "reason": "constructed per registered central by the daemon snapshotter (cmd/openccu-loom/daemon_matter.go:3358)",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 158
+      "line": 184
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "ExposureChecker",
       "reason": "taken by Assembler.SetExposureChecker and satisfied host-side by the matter store (cmd/openccu-loom/daemon_matter.go, wireMatterRuntime); interface satisfaction is invisible to the analyzer",
       "file": "internal/north/matteradapter/assembler.go",
-      "line": 88
+      "line": 114
+    },
+    {
+      "package": "internal/north/matteradapter",
+      "identifier": "NameResolver",
+      "reason": "satisfied by modelNameResolver and injected through Config; interface satisfaction is invisible to the analyzer",
+      "file": "internal/north/matteradapter/assembler.go",
+      "line": 94
     },
     {
       "package": "internal/north/matteradapter",
@@ -89729,21 +89736,21 @@
       "identifier": "TestGenericDPKeyForMeasurement_Empty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matteradapter/assembler_internal_test.go",
-      "line": 75
+      "line": 74
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "TestGenericDPKeyForMeasurement_HasKey",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matteradapter/assembler_internal_test.go",
-      "line": 64
+      "line": 63
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "TestGenericDPKeyForMeasurement_NoInterface",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matteradapter/assembler_internal_test.go",
-      "line": 86
+      "line": 85
     },
     {
       "package": "internal/north/matteradapter",
@@ -89841,14 +89848,14 @@
       "identifier": "TestSetExposureChecker_Nil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matteradapter/assembler_internal_test.go",
-      "line": 28
+      "line": 27
     },
     {
       "package": "internal/north/matteradapter",
       "identifier": "TestSetExposureChecker_NonNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matteradapter/assembler_internal_test.go",
-      "line": 40
+      "line": 39
     },
     {
       "package": "internal/north/mcp",
@@ -98584,14 +98591,14 @@
       "identifier": "MatterCandidateProvider",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 37
+      "line": 36
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterCandidateProviderFunc",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 42
+      "line": 41
     },
     {
       "package": "internal/north/rest/handlers",
@@ -98605,14 +98612,14 @@
       "identifier": "MatterCommissioningClose",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 423
+      "line": 422
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterCommissioningCloser",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 414
+      "line": 413
     },
     {
       "package": "internal/north/rest/handlers",
@@ -98766,56 +98773,56 @@
       "identifier": "MatterExposable",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 87
+      "line": 86
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposeBulk",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 254
+      "line": 253
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposeUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 179
+      "line": 178
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposureBulkUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 244
+      "line": 243
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposureList",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 77
+      "line": 76
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposureResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 59
+      "line": 58
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposureStore",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 26
+      "line": 25
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterExposureUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 153
+      "line": 152
     },
     {
       "package": "internal/north/rest/handlers",
@@ -98843,14 +98850,14 @@
       "identifier": "MatterFabricRevoke",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 384
+      "line": 383
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterFabricRevoker",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 376
+      "line": 375
     },
     {
       "package": "internal/north/rest/handlers",
@@ -98976,28 +98983,28 @@
       "identifier": "MatterShare",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 449
+      "line": 448
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 364
+      "line": 363
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatusReader",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 346
+      "line": 345
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "MatterStatusResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter_exposures.go",
-      "line": 351
+      "line": 350
     },
     {
       "package": "internal/north/rest/handlers",
@@ -100327,21 +100334,21 @@
       "identifier": "TestActorFromRequest_IdentityWithoutSubject_ReturnsAnonymous",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 630
+      "line": 631
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestActorFromRequest_NoContext_ReturnsAnonymous",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 621
+      "line": 622
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestActorFromRequest_WithAuthenticatedIdentity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 610
+      "line": 611
     },
     {
       "package": "internal/north/rest/handlers",
@@ -105325,21 +105332,21 @@
       "identifier": "TestMatterCandidateProviderFunc_Nil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 696
+      "line": 697
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterCandidateProviderFunc_NonNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 704
+      "line": 705
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterCommissioningClose_CloserError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 553
+      "line": 554
     },
     {
       "package": "internal/north/rest/handlers",
@@ -105353,14 +105360,14 @@
       "identifier": "TestMatterCommissioningClose_HappyPath_Returns204",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 542
+      "line": 543
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterCommissioningClose_NilCloser_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 531
+      "line": 532
     },
     {
       "package": "internal/north/rest/handlers",
@@ -105444,161 +105451,161 @@
       "identifier": "TestMatterExposable_HappyPath_Returns200_MergesData",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 203
+      "line": 204
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_NilProvider_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 180
+      "line": 181
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_NilStore_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 191
+      "line": 192
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_ParameterLabel_TitleCasedWhenLabelerIsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 836
+      "line": 837
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_SortOrder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 785
+      "line": 786
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposable_StoreListError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 681
+      "line": 682
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_BadItemKey_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 406
+      "line": 407
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_EmptyItems_Returns204",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 393
+      "line": 394
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_HappyPath_Returns200_AppliedCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 423
+      "line": 424
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_NilStore_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 380
+      "line": 381
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_PublishesOneFramePerAffectedRow",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 339
+      "line": 340
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeBulk_StoreError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 734
+      "line": 735
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_AttributesTheAuthenticatedSubject",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 647
+      "line": 648
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_BadBody_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 286
+      "line": 287
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_HappyPath_Returns204_PublishesEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 312
+      "line": 313
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_InvalidKey_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 298
+      "line": 299
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_NilStore_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 273
+      "line": 274
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterExposeUpdate_StoreError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 718
+      "line": 719
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_NilRevoker_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 462
+      "line": 463
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_NonNumericID_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 475
+      "line": 476
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_RevokerError_Returns500",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 514
+      "line": 515
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_ValidID_Returns204",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 501
+      "line": 502
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterFabricRevoke_ZeroID_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 488
+      "line": 489
     },
     {
       "package": "internal/north/rest/handlers",
@@ -105661,28 +105668,28 @@
       "identifier": "TestMatterShare_HappyPath_RecordsAuditUnderShareAction",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 583
+      "line": 584
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterShare_NilOpener_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 566
+      "line": 567
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterStatus_NilReader_Returns200_Disabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 123
+      "line": 124
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestMatterStatus_WithReader_Returns200_WithSnapshot",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 141
+      "line": 142
     },
     {
       "package": "internal/north/rest/handlers",
@@ -107803,7 +107810,7 @@
       "identifier": "TestRecordMatterAudit_NonNilRecorder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 879
+      "line": 880
     },
     {
       "package": "internal/north/rest/handlers",
@@ -109448,21 +109455,21 @@
       "identifier": "TestValidateExposureKey_AllKnownKinds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 757
+      "line": 758
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestValidateExposureKey_EmptyFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 766
+      "line": 767
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestValidateExposureKey_UnknownKind",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
-      "line": 750
+      "line": 751
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119522,6 +119529,41 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/linkprofile/sentinel_internal_test.go",
       "line": 21
+    },
+    {
+      "package": "internal/store/matterendpoint",
+      "identifier": "DPKind",
+      "reason": "passed by the adapter when it emits a candidate (internal/north/matteradapter/candidates.go:93); a named string type reached only as an argument is invisible to the analyzer",
+      "file": "internal/store/matterendpoint/sourcekey.go",
+      "line": 16
+    },
+    {
+      "package": "internal/store/matterendpoint",
+      "identifier": "ErrEndpointIDExhausted",
+      "reason": "returned by AssignEndpointID in this file when the 1..65534 range is full; a sentinel is part of the contract even while no caller distinguishes it yet",
+      "file": "internal/store/matterendpoint/endpoints.go",
+      "line": 20
+    },
+    {
+      "package": "internal/store/matterendpoint",
+      "identifier": "ErrExposureNotFound",
+      "reason": "returned by the allowlist lookup in this file; a sentinel is part of the contract even while callers treat a miss as absence",
+      "file": "internal/store/matterendpoint/exposures.go",
+      "line": 36
+    },
+    {
+      "package": "internal/store/matterendpoint",
+      "identifier": "ExposureRecord",
+      "reason": "returned through the GetExposure port the REST exposures handler declares (internal/north/rest/handlers/matter_exposures.go:26)",
+      "file": "internal/store/matterendpoint/exposures.go",
+      "line": 25
+    },
+    {
+      "package": "internal/store/matterendpoint",
+      "identifier": "TestIsSQLiteBusy",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/matterendpoint/endpoints_retry_test.go",
+      "line": 17
     },
     {
       "package": "internal/store/patches",
@@ -130357,7 +130399,7 @@
       "identifier": "TestMatterSchemaSnapshotInSync",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/matter_schema_sync_test.go",
-      "line": 34
+      "line": 43
     },
     {
       "package": "tests/contract",
@@ -131715,7 +131757,7 @@
       "identifier": "TestAPhysicalPressReachesTheMatterEventLog",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/matter_switch_press_wiring_test.go",
-      "line": 56
+      "line": 57
     },
     {
       "package": "tests/contract/wiring_pins",
@@ -132402,6 +132444,13 @@
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/harness/mcasttest/mcasttest.go",
       "line": 116
+    },
+    {
+      "package": "tests/scenario",
+      "identifier": "TestScenarios",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/scenario/scenario_run_test.go",
+      "line": 55
     }
   ]
 }

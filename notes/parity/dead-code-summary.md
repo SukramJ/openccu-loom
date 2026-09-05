@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 14c43e38
-HEAD: 14c43e38
+Generated: a8c2b5d4
+HEAD: a8c2b5d4
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 21354 |
-| Reachable | 2512 |
-| Whitelisted | 17723 |
+| Total Exported | 21369 |
+| Reachable | 2520 |
+| Whitelisted | 17730 |
 | **Unreachable** | **1119** |
 
 ## Top-20 Packages by Dead Code

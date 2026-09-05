@@ -12,6 +12,7 @@ import (
 // DPKind classifies a Matter endpoint's source within the model.
 // Persisted as a TEXT column with a CHECK constraint — the database
 // rejects unknown kinds at insert time.
+// loom:reachable:reason="passed by the adapter when it emits a candidate (internal/north/matteradapter/candidates.go:93); a named string type reached only as an argument is invisible to the analyzer"
 type DPKind string
 
 // DPKind values. The string forms match the dp_kind CHECK constraint in

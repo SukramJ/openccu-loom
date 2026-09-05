@@ -16,6 +16,7 @@ import (
 
 // ErrEndpointIDExhausted is returned when [Store.AssignEndpointID] runs
 // out of free 2..65534 slots.
+// loom:reachable:reason="returned by AssignEndpointID in this file when the 1..65534 range is full; a sentinel is part of the contract even while no caller distinguishes it yet"
 var ErrEndpointIDExhausted = errors.New("matter endpoint store: endpoint id exhausted")
 
 // GetEndpoint implements [fabricendpoint.Store]. It returns

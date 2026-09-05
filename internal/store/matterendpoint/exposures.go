@@ -21,6 +21,7 @@ import (
 // `matter_exposures` table therefore yields an empty topology except for
 // the root endpoint — the §1 "Allowlist instead of Denylist" guarantee
 // from `notes/concepts/matter-ui-concept.md`.
+// loom:reachable:reason="returned through the GetExposure port the REST exposures handler declares (internal/north/rest/handlers/matter_exposures.go:26)"
 type ExposureRecord struct {
 	Key          SourceKey
 	Enabled      bool
@@ -31,6 +32,7 @@ type ExposureRecord struct {
 }
 
 // ErrExposureNotFound is returned when an allowlist key lookup misses.
+// loom:reachable:reason="returned by the allowlist lookup in this file; a sentinel is part of the contract even while callers treat a miss as absence"
 var ErrExposureNotFound = errors.New("matter endpoint store: exposure not found")
 
 // GetExposure returns the allowlist row for key. Returns
