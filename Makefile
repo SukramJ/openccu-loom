@@ -192,8 +192,18 @@ wire-compare: ## compare Go wire calls against aiohomematic reference (fails for
 	$(GO) test -tags=wire_reference ./tests/contract/wire_snapshots/ -run TestReferenceCompare -v
 
 .PHONY: scenarios
-scenarios: ## run behavior scenarios (notes/parity/matter/scenarios/*.json against the bridge harness)
-	$(GO) test ./internal/north/matter/bridge/ -run TestScenarios -count=1 -race -timeout=60s
+scenarios: ## UNRUNNABLE: the scenario corpus lives here, its harness left with the Matter stack
+	@echo "make scenarios cannot run: the corpus and its runner are in different repositories."
+	@echo ""
+	@echo "  corpus : notes/parity/matter/scenarios/*.json  (here; read by TestScenarioCoverage)"
+	@echo "  harness: went with the Matter stack into go-fabric, and did not travel"
+	@echo "           because the corpus it replays is single-sourced in this repo"
+	@echo ""
+	@echo "Nothing replays these scenarios today. TestScenarioCoverage still"
+	@echo "demands an entry per Matter-mappable custom DP, so the corpus is"
+	@echo "maintained but never executed. Deciding where corpus and harness"
+	@echo "belong together is an open call; weakening the gate is not an answer."
+	@exit 1
 
 .PHONY: scenarios-regen-sidecars
 scenarios-regen-sidecars: ## regenerate matter.js-canonical reference sidecars for every scenario (needs ../matter.js npm-installed)
@@ -362,7 +372,13 @@ FUZZ_TIMEOUT ?= 120s
 
 .PHONY: fuzz
 fuzz: ## run each fuzz target for $(FUZZTIME) executions as a smoke test
-	@for pkg in $$($(GO) list ./internal/client/transport/xmlrpc/... ./internal/client/transport/binrpc/... ./internal/client/transport/jsonrpc/... ./internal/north/matter/im/... ./internal/north/matter/tlv/...); do \
+	@# `go list` prints nothing and exits 1 when ANY pattern misses, so a stale
+	@# pattern turns this loop into a no-op that still reports success. Capture
+	@# the list, fail on a bad pattern, and fail again on an empty result — the
+	@# Matter im/tlv patterns rotted here unnoticed when that stack moved out.
+	@pkgs=$$($(GO) list ./internal/client/transport/xmlrpc/... ./internal/client/transport/binrpc/... ./internal/client/transport/jsonrpc/...) || exit 1; \
+	if [ -z "$$pkgs" ]; then echo "fuzz: no packages matched — the pattern list is stale"; exit 1; fi; \
+	for pkg in $$pkgs; do \
 		for fn in $$($(GO) test -list 'Fuzz.*' $$pkg 2>/dev/null | grep '^Fuzz'); do \
 			echo "-> fuzz $$pkg :: $$fn ($(FUZZTIME))"; \
 			$(GO) test $$pkg -fuzz=^$${fn}$$ -fuzztime=$(FUZZTIME) -timeout=$(FUZZ_TIMEOUT) -run=^$$ || exit 1; \

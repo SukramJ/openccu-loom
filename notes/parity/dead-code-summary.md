@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 6ff6f904
-HEAD: 6ff6f904
+Generated: 14c43e38
+HEAD: 14c43e38
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 23999 |
-| Reachable | 2890 |
-| Whitelisted | 19725 |
-| **Unreachable** | **1384** |
+| Total Exported | 21354 |
+| Reachable | 2512 |
+| Whitelisted | 17723 |
+| **Unreachable** | **1119** |
 
 ## Top-20 Packages by Dead Code
 
@@ -20,7 +20,6 @@ HEAD: 6ff6f904
 | pkg/hmlog | 4 | 9 | 0 |
 | internal/central/adapter | 2 | 27 | 26 |
 | internal/client/backends | 2 | 20 | 2 |
-| internal/north/matter/tlv | 2 | 5 | 13 |
 | internal/north/webhook | 2 | 1 | 0 |
 | internal/payload | 2 | 117 | 3 |
 | internal/audit | 1 | 9 | 1 |
@@ -36,6 +35,7 @@ HEAD: 6ff6f904
 | internal/addonupdate | 0 | 6 | 9 |
 | internal/alarm | 0 | 12 | 0 |
 | internal/alarm/codes | 0 | 6 | 0 |
+| internal/alarm/engine | 0 | 30 | 6 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -57,8 +57,6 @@ HEAD: 6ff6f904
 | internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 403 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 111 |
-| internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
-| internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 108 |
 | internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 105 |
 | internal/payload | For | internal/payload/payload.go | 39 |
@@ -78,7 +76,6 @@ HEAD: 6ff6f904
 | pkg/hmlog | 4 | 9 | 0 |
 | internal/central/adapter | 2 | 27 | 26 |
 | internal/client/backends | 2 | 20 | 2 |
-| internal/north/matter/tlv | 2 | 5 | 13 |
 | internal/north/webhook | 2 | 1 | 0 |
 | internal/payload | 2 | 117 | 3 |
 | internal/audit | 1 | 9 | 1 |
@@ -141,25 +138,6 @@ HEAD: 6ff6f904
 | internal/north/bridge | 0 | 3 | 0 |
 | internal/north/discovery/ssdp | 0 | 1 | 0 |
 | internal/north/filter | 0 | 1 | 0 |
-| internal/north/matter/bridge | 0 | 23 | 19 |
-| internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/endpoint | 0 | 3 | 0 |
-| internal/north/matter/im | 0 | 30 | 8 |
-| internal/north/matter/im/subscription | 0 | 5 | 4 |
-| internal/north/matter/mdns | 0 | 4 | 2 |
-| internal/north/matter/schema | 0 | 0 | 4 |
-| internal/north/matter/secure/aesccm | 0 | 0 | 5 |
-| internal/north/matter/secure/attestation | 0 | 1 | 8 |
-| internal/north/matter/secure/channel | 0 | 2 | 5 |
-| internal/north/matter/secure/mattercert | 0 | 3 | 8 |
-| internal/north/matter/secure/operational | 0 | 1 | 2 |
-| internal/north/matter/secure/setup | 0 | 1 | 0 |
-| internal/north/matter/secure/sigma | 0 | 13 | 6 |
-| internal/north/matter/secure/spake2 | 0 | 4 | 5 |
-| internal/north/matter/store | 0 | 17 | 9 |
-| internal/north/matter/transport/message | 0 | 2 | 6 |
-| internal/north/matter/transport/mrp | 0 | 4 | 2 |
-| internal/north/matter/transport/udp | 0 | 2 | 2 |
 | internal/north/mcp | 0 | 12 | 0 |
 | internal/north/mqtt | 0 | 36 | 2 |
 | internal/north/rest/problem | 0 | 3 | 4 |
@@ -176,4 +154,3 @@ HEAD: 6ff6f904
 | pkg/hmevent | 0 | 4 | 0 |
 | pkg/hmui | 0 | 1 | 0 |
 | pkg/interfaces | 0 | 20 | 3 |
-| pkg/mattercontract | 0 | 20 | 0 |
