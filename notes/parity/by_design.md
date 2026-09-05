@@ -4,7 +4,7 @@
 **Purpose:** Catalogue of all intentional structural divergences between OpenCCU-Loom (Go) and its two reference implementations:
 
 - **CCU side** — [aiohomematic](https://github.com/SukramJ/aiohomematic) (Python). Sections §1+ below carry the original aiohomematic-vs-Go content.
-- **Matter side** — [matter.js](https://github.com/project-chip/matter.js) HEAD. ([home-assistant-matter-bridge](https://github.com/Nabu-Casa/home-assistant-matter-bridge) is a supplementary read for bridge composition patterns but **not** a gold standard — it carries HA-specific shims that do not translate to OpenCCU-Loom.) See section §"Matter / matter.js Divergences" near the end.
+- **Matter side** — [matter.js](https://github.com/matter-js/matter.js) HEAD. ([home-assistant-matter-bridge](https://github.com/Nabu-Casa/home-assistant-matter-bridge) is a supplementary read for bridge composition patterns but **not** a gold standard — it carries HA-specific shims that do not translate to OpenCCU-Loom.) See section §"Matter / matter.js Divergences" near the end.
 
 The two reference layers do not overlap: CCU wire knowledge stays in aiohomematic, Matter wire knowledge stays in matter.js. See [CLAUDE.md §matter.js as the Matter Gold Standard](../../CLAUDE.md#matterjs-as-the-matter-gold-standard) for the workflow rule.
 

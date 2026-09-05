@@ -251,7 +251,7 @@ type*, never the *device*.
 
 Everything under `internal/north/matter/` (and the wire paths in `bridge/`,
 `endpoint/`, `im/`, `tlv/`, `secure/`) is a semantic 1:1 port of
-[matter.js](https://github.com/project-chip/matter.js) HEAD (Apache-2.0).
+[matter.js](https://github.com/matter-js/matter.js) HEAD (Apache-2.0).
 Cluster IDs, revisions, attribute IDs, constraints, defaults and wire shape
 are taken verbatim — hand-coding any of them from the Matter PDF is
 forbidden, because drift produces silent Apple/Google pair-aborts. The full
