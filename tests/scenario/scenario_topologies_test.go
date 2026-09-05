@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/contract"
 	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/endpoint/endpointtest"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -30,8 +31,12 @@ type scenarioTopology struct {
 	snapshotter bridge.Snapshotter
 	// store is the endpoint-id store the assembler writes through. The
 	// harness hands the same instance to the bridge so both halves
-	// share one id space, which is how the daemon wires them.
-	store   *scenarioStore
+	// share one id space, which is how the daemon wires them. Each
+	// topology builds its own, so parallel scenarios never share an
+	// endpoint-id counter — two scenarios assigning the same device to
+	// different endpoint ids would otherwise make their wire
+	// expectations depend on execution order.
+	store   *endpointtest.FakeStore
 	sources map[string]*scenarioFakeNotifier
 }
 
@@ -41,8 +46,8 @@ type scenarioTopology struct {
 // the daemon uses rather than by a harness-local approximation — the
 // endpoint ids the scenario JSON names (2, 3, …) are the ids that walk
 // allocates.
-func newScenarioSnapshotter(snapshots []matteradapter.DeviceSnapshot) (bridge.Snapshotter, *scenarioStore, error) {
-	epStore := newScenarioStore()
+func newScenarioSnapshotter(snapshots []matteradapter.DeviceSnapshot) (bridge.Snapshotter, *endpointtest.FakeStore, error) {
+	epStore := endpointtest.NewFakeStore()
 	asm, err := matteradapter.New(epStore, matteradapter.Config{
 		VendorID:            0x1234,
 		ProductID:           0x5678,

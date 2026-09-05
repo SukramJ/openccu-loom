@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/SukramJ/go-fabric/bridge"
+	"github.com/SukramJ/go-fabric/bridge/bridgetest"
 	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/endpoint/endpointtest"
 	"github.com/SukramJ/go-fabric/im"
 	"github.com/SukramJ/go-fabric/im/subscription"
 	"github.com/SukramJ/go-fabric/mdns"
@@ -76,6 +78,21 @@ const (
 	scenarioPeerNodeID   uint64 = 0xCCCCDDDD
 )
 
+// peerInitialCounter is the MRP counter the peer's session for
+// subscription idx emits on its FIRST datagram. channel.Config's
+// InitialCounter primes the counter with this exact value
+// (secure/channel/session.go seeds mrp.NewCounterFromSeed, which stores
+// the seed verbatim), and Counter.NextNoRollover returns the current
+// value before advancing — so no offset separates the seed from the
+// first counter on the wire.
+//
+// Both the session seed and the subscription target's anchor derive
+// from this one function, because the two must stay exactly one apart:
+// see establishSubscription for what a drift between them costs.
+func peerInitialCounter(idx int) uint32 {
+	return 200 + uint32(idx)*1000 //nolint:gosec // G115: idx is bounded by the subscription count
+}
+
 // scenarioReadDeadline bounds every blocking read on the peer socket.
 // Long enough to absorb the engine's MinIntervalFloor gate (1 s in the
 // harness default) plus one MRP backoff.
@@ -87,10 +104,9 @@ const scenarioReadDeadline = 2 * time.Second
 //   - Real subscription.Manager attached, wired to the bridge's own
 //     Reporter, so the engine ships through the production path.
 //   - Every subscription the scenario declares (unless it opts out with
-//     skip_auto_subscribe) established by an actual SubscribeRequest
-//     from the peer socket. The bridge only learns where to ship a
-//     subscription's reports from that request, so establishing them
-//     any other way would leave the engine with nowhere to send.
+//     skip_auto_subscribe) established off the wire — see
+//     establishSubscription. Bring-up emits no datagram at all, so a
+//     scenario's first step measures its own traffic and nothing else.
 func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 	t.Helper()
 
@@ -101,20 +117,18 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 	if err != nil {
 		t.Fatalf("scenario: topology: %v", err)
 	}
-	// Each scenario topology carries its own assembler and store; the
-	// empty fixture gets one built here so both halves still share a
-	// single endpoint-id space, exactly as the daemon wires them.
+	// A named topology carries its own assembler and store, because only
+	// the host can project its device model into endpoint specs. The
+	// empty fixture needs no host model at all, so it takes the module's
+	// own root-plus-aggregator snapshotter rather than a local copy.
 	var (
 		snapshotter bridge.Snapshotter
-		epStore     *scenarioStore
+		epStore     matterendpoint.Store
 	)
 	if topology != nil {
 		snapshotter, epStore = topology.snapshotter, topology.store
 	} else {
-		snapshotter, epStore, err = newScenarioSnapshotter(nil)
-		if err != nil {
-			t.Fatalf("scenario: empty topology: %v", err)
-		}
+		snapshotter, epStore = endpointtest.NewEmptySnapshotter(), endpointtest.NewFakeStore()
 	}
 
 	br, err := bridge.New(
@@ -199,7 +213,7 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 			DecryptKey:     bridgeKey,
 			LocalNodeID:    scenarioPeerNodeID,
 			PeerNodeID:     scenarioBridgeNodeID,
-			InitialCounter: 200 + uint32(i)*1000, //nolint:gosec // G115: i is bounded by the subscription count
+			InitialCounter: peerInitialCounter(i),
 		})
 		if err != nil {
 			t.Fatalf("scenario: peer session[%d]: %v", i, err)
@@ -271,11 +285,36 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 	return h
 }
 
-// establishSubscription drives one SubscribeRequest from the peer and
-// consumes the reply chain (initial ReportData chunks, each acked,
-// then the SubscribeResponse). This is the only route by which the
-// bridge learns a subscription's reply target, so it is also what makes
-// every later engine tick shippable.
+// establishSubscription puts one subscription in place without moving
+// a byte: subscription.Manager.Subscribe admits it and allocates the
+// id, and bridgetest.EstablishSubscriptionTarget registers where its
+// reports travel. Setup therefore leaves nothing in flight, so the
+// first measured step observes only what that step provoked.
+//
+// A wire round-trip would work too, and used to be the only way to
+// reach the reply target — but its SubscribeRequest, per-chunk
+// StatusResponses and StandaloneAcks land in whatever window the
+// scenario measures next, and on a loaded machine they land inside it.
+//
+// The two calls mirror what the bridge itself does for a Subscribe it
+// accepts (go-fabric bridge/subscribe_dispatch.go:238 for the args,
+// :286 for the target capture): the same cadence, paths and session,
+// then the target built from the request's own headers. sendFromPeer
+// stamps no SourceNodeID on the peer's datagrams, so a wire-driven
+// Subscribe left the bridge with no peer node id either — hence
+// HasPeerNodeID stays false rather than carrying scenarioPeerNodeID.
+//
+// PeerCounter anchors the bridge's inbound duplicate-detection window
+// for this session, which the modelled SubscribeRequest would have done
+// by being decrypted. The anchor is the counter that request CONSUMED,
+// so it sits one below the first counter the peer actually sends:
+// go-fabric transport/mrp/window.go:112 primes the window at the
+// anchored value and :118 then rejects that same value as a duplicate,
+// so anchoring at peerInitialCounter(idx) itself would make the peer's
+// first real datagram the duplicate. Leaving it unanchored is what let
+// a StandaloneAck and its StatusResponse race: a secure window primes
+// with an all-ones bitmap (:114), so whichever arrived second lost the
+// earlier counter to the duplicate path.
 func (h *scenarioHarness) establishSubscription(idx int, spec scenarioSubSpec) {
 	h.t.Helper()
 
@@ -287,57 +326,29 @@ func (h *scenarioHarness) establishSubscription(idx int, spec scenarioSubSpec) {
 	if maxCeil == 0 {
 		maxCeil = 60
 	}
-	req := im.SubscribeRequest{
-		KeepSubscriptions:  true,
+
+	sub, err := h.subMgr.Subscribe(subscription.SubscribeArgs{
+		FabricIndex:        spec.FabricIndex,
+		SessionID:          spec.SessionID,
 		MinIntervalFloor:   minFloor,
 		MaxIntervalCeiling: maxCeil,
-		AttributeRequests:  h.pathsOf(spec, false),
-	}
-	enc := tlv.NewEncoder()
-	req.MarshalTLV(enc)
-	body, err := enc.Bytes()
+		KeepSubscriptions:  true,
+		AttributePaths:     h.pathsOf(spec, false),
+	})
 	if err != nil {
-		h.t.Fatalf("scenario: encode setup SubscribeRequest[%d]: %v", idx, err)
+		h.t.Fatalf("scenario: setup subscribe[%d]: manager rejected the subscription: %v; captured log: %s",
+			idx, err, h.logCapture.dump())
 	}
-	if !h.sendFromPeer(spec, im.OpcodeSubscribeRequest, spec.PeerSubscribeExchangeID, body, true, true) {
-		return
+	if err := bridgetest.EstablishSubscriptionTarget(h.br, sub.ID, bridgetest.SubscriptionTarget{
+		Peer:        h.peerAddr,
+		SessionID:   spec.SessionID,
+		ExchangeID:  spec.PeerSubscribeExchangeID,
+		PeerCounter: peerInitialCounter(idx) - 1,
+	}); err != nil {
+		h.t.Fatalf("scenario: setup subscribe[%d]: establish report target for subscription %d: %v",
+			idx, sub.ID, err)
 	}
-
-	deadline := time.Now().Add(5 * time.Second)
-	chunks := 0
-	for time.Now().Before(deadline) {
-		hdr, proto, imBody, ok := h.readOutbound(fmt.Sprintf("setup subscribe[%d]", idx))
-		if !ok {
-			return
-		}
-		h.ackIfNeeded(spec, hdr, proto)
-		switch proto.Opcode {
-		case im.OpcodeReportData:
-			chunks++
-			h.sendStatusResponseOn(spec, proto.ExchangeID, im.StatusSuccess, true)
-		case im.OpcodeSubscribeResponse:
-			subID, err := tlvSubscribeResponseSubscriptionID(imBody)
-			if err != nil {
-				h.t.Errorf("scenario: setup subscribe[%d]: read SubscriptionID: %v", idx, err)
-				return
-			}
-			sub, err := h.subMgr.Get(subID)
-			if err != nil {
-				h.t.Errorf("scenario: setup subscribe[%d]: manager has no subscription %d: %v", idx, subID, err)
-				return
-			}
-			h.subs[idx] = sub
-			return
-		case im.OpcodeStatusResponse:
-			h.t.Errorf("scenario: setup subscribe[%d]: bridge rejected the subscription with a StatusResponse after %d chunk(s); captured log: %s",
-				idx, chunks, h.logCapture.dump())
-			return
-		default:
-			h.t.Errorf("scenario: setup subscribe[%d]: unexpected opcode 0x%02X", idx, proto.Opcode)
-			return
-		}
-	}
-	h.t.Errorf("scenario: setup subscribe[%d]: no SubscribeResponse after %d chunk(s)", idx, chunks)
+	h.subs[idx] = sub
 }
 
 // pathsOf converts a spec's attribute paths into the concrete form the

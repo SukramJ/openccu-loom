@@ -88,22 +88,6 @@ func tlvSubscribeResponseMaxInterval(body []byte) (uint16, error) {
 	return uint16(v), nil //nolint:gosec // G115: range guarded by the overflow check above
 }
 
-// tlvSubscribeResponseSubscriptionID extracts the SubscriptionID
-// (context tag 0 uint32) a SubscribeResponseMessage echoes back. The
-// harness needs it to resolve the *subscription.Subscription the
-// bridge admitted for a wire-driven Subscribe, since the manager
-// keys its registry by that identifier.
-func tlvSubscribeResponseSubscriptionID(body []byte) (uint32, error) {
-	v, err := tlvTopLevelContextUint(body, 0)
-	if err != nil {
-		return 0, err
-	}
-	if v > 0xFFFFFFFF {
-		return 0, fmt.Errorf("SubscriptionID overflow: %d", v)
-	}
-	return uint32(v), nil //nolint:gosec // G115: range guarded by the overflow check above
-}
-
 // tlvTopLevelContextUint returns the unsigned value carried by the
 // first non-container element at depth 1 whose context tag is `tag`.
 func tlvTopLevelContextUint(body []byte, tag uint32) (uint64, error) {
