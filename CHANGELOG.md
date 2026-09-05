@@ -47,6 +47,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A scheduler health test raced the bookkeeping it asserted on.**
+  `TestHealthHeartbeatRecordsSchedulerLiveness` injected a failing job,
+  synchronised on a channel the job sent from inside `Run`, then stopped the
+  scheduler and asserted the failure had been counted. But `scheduler.invoke`
+  counts a failure only while the context is live — `err != nil &&
+  ctx.Err() == nil`, because a job aborted by shutdown is not a real failure —
+  and `Stop` cancels that context. Signalling on entry says the job began, not
+  that its outcome was recorded, so the test raced the count and lost about
+  once in thirty runs locally, more under CI load. It now waits for
+  `TotalFailures` itself to move before stopping the scheduler. The production
+  behaviour is unchanged and was never wrong.
+
 - **The scenario suite failed under CI load on traffic the bridge is
   required to send.** Three scenarios went red across three runs, and on
   `main` as readily as on a branch: the peer harness read every datagram off

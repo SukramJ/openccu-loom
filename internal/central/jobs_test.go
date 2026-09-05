@@ -1048,18 +1048,12 @@ func TestHealthHeartbeatRecordsSchedulerLiveness(t *testing.T) {
 	// --- Degraded path: inject a scheduler failure between ticks ---
 	//
 	// A job that returns an error on RunOnStart advances TotalFailures past the
-	// zero baseline captured above. A channel synchronises the test without
-	// relying on wall-clock sleeps.
-	failRan := make(chan struct{}, 1)
+	// zero baseline captured above.
 	if err := c.Scheduler.Add(scheduler.Job{
 		Name:       "test.failing_job",
 		Interval:   time.Minute, // long interval — only RunOnStart invocation matters
 		RunOnStart: true,
 		Run: func(_ context.Context) error {
-			select {
-			case failRan <- struct{}{}:
-			default:
-			}
 			return errors.New("injected failure")
 		},
 	}); err != nil {
@@ -1071,11 +1065,19 @@ func TestHealthHeartbeatRecordsSchedulerLiveness(t *testing.T) {
 	if err := c.Scheduler.Start(schedCtx); err != nil {
 		t.Fatalf("scheduler start: %v", err)
 	}
-	select {
-	case <-failRan:
-		// failure has been recorded by the scheduler
-	case <-schedCtx.Done():
-		t.Fatal("timed out waiting for failing job to run")
+	// Wait for the failure to be *counted*, not merely for the job to have
+	// been entered. Signalling from inside Run cannot stand in for the
+	// bookkeeping: scheduler.invoke only counts a failure while the context
+	// is live (`err != nil && ctx.Err() == nil` — a job aborted by shutdown
+	// is not a real failure), and Stop cancels that context. A test that
+	// signals on entry and stops immediately therefore races the count it
+	// is about to assert on, and loses often enough to matter under load.
+	deadline := time.Now().Add(5 * time.Second)
+	for c.Scheduler.TotalFailures() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the failing job's failure to be counted")
+		}
+		time.Sleep(time.Millisecond)
 	}
 	c.Scheduler.Stop()
 
