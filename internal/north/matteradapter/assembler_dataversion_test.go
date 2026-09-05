@@ -31,7 +31,7 @@ func buildCustomDPDevice(addr, name, param string, deviceType uint16) *device.De
 // has the given address, or nil.
 func findBridgedByAddress(top *endpoint.Topology, addr string) *endpoint.Endpoint {
 	for _, ep := range top.Bridged() {
-		if ep.SourceKey.DeviceAddress == addr {
+		if ep.DeviceAddress == addr {
 			return ep
 		}
 	}

@@ -63,7 +63,9 @@ Two clarifications, because both have been got wrong before:
 | [`doc-backlog.md`](./doc-backlog.md) | Gaps in the *published* documentation. |
 
 Several files here are consumed by tooling, not only by readers —
-`parity/matter/matter-schema-snapshot.json` feeds
-`make generate-matter-schema`, and `parity/dead-code-*.json` are the
-reachability ratchet's baselines. Moving anything under `parity/` means
-updating the `Makefile` and `script/` alongside it.
+`parity/matter/matter-schema-snapshot.json` is the pinned copy of the
+go-fabric module's Matter schema extract, refreshed by
+`make sync-matter-schema` and held by `TestMatterSchemaSnapshotInSync`, and
+`parity/dead-code-*.json` are the reachability ratchet's baselines. Moving
+anything under `parity/` means updating the `Makefile` and `script/`
+alongside it.

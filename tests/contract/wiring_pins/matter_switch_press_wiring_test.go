@@ -13,7 +13,8 @@ import (
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/mdns"
-	matterstore "github.com/SukramJ/go-fabric/store"
+
+	loomendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -78,7 +79,7 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 	// cmd/openccu-loom/daemon_matter.go: the daemon owns the assembler,
 	// walks its own model, and hands the bridge one closure that returns
 	// the finished topology. The bridge never sees a device.
-	store := matterstore.New(db)
+	identity := loomendpoint.New(db)
 	walk := func(_ context.Context) []matteradapter.DeviceSnapshot {
 		return []matteradapter.DeviceSnapshot{{
 			CentralName:   "ccu1",
@@ -86,7 +87,7 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 			ModelComplete: true,
 		}}
 	}
-	assembler, err := matteradapter.New(store, matteradapter.Config{
+	assembler, err := matteradapter.New(identity, matteradapter.Config{
 		VendorID:  0x1234,
 		ProductID: 0x5678,
 		NodeLabel: "switch-press-wiring-pin",
@@ -98,7 +99,7 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 		return assembler.AssembleDevices(ctx, walk(ctx))
 	}
 	bridge, err := matterbridge.New(
-		store,
+		identity,
 		snapshotter,
 		mdns.NewNoop(),
 		matterbridge.Config{
@@ -131,7 +132,8 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 		found    int
 	)
 	for _, ep := range topo.Bridged() {
-		if ep.SourceKey.DPKey == matteradapter.ButtonGroupDPKey {
+		key, ok := ep.SourceKey.(loomendpoint.SourceKey)
+		if ok && key.DPKey == matteradapter.ButtonGroupDPKey {
 			switchEP = ep.ID
 			found++
 		}

@@ -17,7 +17,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 
 	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/store"
+
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -44,48 +45,56 @@ const (
 
 // ─── test fakes ───────────────────────────────────────────────────────────────
 
-// smokeFakeStore is an in-memory [endpoint.Store] for bridge smoke tests.
+// smokeFakeStore is an in-memory [endpoint.Store] for bridge smoke
+// tests. It indexes rows by the daemon's own key, recovered from the
+// opaque one the bridge module carries — the same way the SQLite store
+// does.
 type smokeFakeStore struct {
-	rows   map[store.EndpointKey]store.EndpointRecord
+	rows   map[matterendpoint.SourceKey]endpoint.Record
 	nextID uint16
 }
 
 func newSmokeFakeStore() *smokeFakeStore {
 	return &smokeFakeStore{
-		rows:   make(map[store.EndpointKey]store.EndpointRecord),
+		rows:   make(map[matterendpoint.SourceKey]endpoint.Record),
 		nextID: 2, // bridged endpoints start at 2; root=0, aggregator=1 are structural
 	}
 }
 
-func (s *smokeFakeStore) GetEndpoint(_ context.Context, key store.EndpointKey) (store.EndpointRecord, error) {
-	rec, ok := s.rows[key]
+func smokeKey(key endpoint.SourceKey) matterendpoint.SourceKey {
+	k, _ := key.(matterendpoint.SourceKey)
+	return k
+}
+
+func (s *smokeFakeStore) GetEndpoint(_ context.Context, key endpoint.SourceKey) (endpoint.Record, error) {
+	rec, ok := s.rows[smokeKey(key)]
 	if !ok {
-		return store.EndpointRecord{}, store.ErrEndpointNotFound
+		return endpoint.Record{}, endpoint.ErrNotFound
 	}
 	return rec, nil
 }
 
-func (s *smokeFakeStore) UpsertEndpointAssigning(_ context.Context, rec store.EndpointRecord) (uint16, error) {
+func (s *smokeFakeStore) UpsertEndpointAssigning(_ context.Context, rec endpoint.Record) (uint16, error) {
 	if rec.EndpointID == 0 {
 		rec.EndpointID = s.nextID
 		s.nextID++
 	}
-	s.rows[rec.Key] = rec
+	s.rows[smokeKey(rec.Key)] = rec
 	return rec.EndpointID, nil
 }
 
-func (s *smokeFakeStore) ListEndpoints(_ context.Context, centralName string) ([]store.EndpointRecord, error) {
-	var out []store.EndpointRecord
-	for _, rec := range s.rows {
-		if centralName == "" || rec.Key.CentralName == centralName {
+func (s *smokeFakeStore) ListEndpoints(_ context.Context, scope string) ([]endpoint.Record, error) {
+	var out []endpoint.Record
+	for key, rec := range s.rows {
+		if scope == "" || key.CentralName == scope {
 			out = append(out, rec)
 		}
 	}
 	return out, nil
 }
 
-func (s *smokeFakeStore) RemoveEndpoint(_ context.Context, key store.EndpointKey) error {
-	delete(s.rows, key)
+func (s *smokeFakeStore) RemoveEndpoint(_ context.Context, key endpoint.SourceKey) error {
+	delete(s.rows, smokeKey(key))
 	return nil
 }
 

@@ -106,7 +106,7 @@ them with every change:
 
 | Guard | Location | Locks |
 | --- | --- | --- |
-| **Schema parity** | `internal/north/matter/**/parity_matterjs_test.go`; pin `notes/parity/matter/matter-schema-snapshot.json` (regen via `notes/parity/matter/extract-from-matter-js.ts`) | cluster / device-type IDs, revisions, attribute / command / event IDs vs matter.js HEAD |
+| **Schema parity** | the `*parity_matterjs_test.go` files in the go-fabric module (extract + generator live there); this repo pins the same bytes at `notes/parity/matter/matter-schema-snapshot.json`, held by `TestMatterSchemaSnapshotInSync` and refreshed with `make sync-matter-schema` | cluster / device-type IDs, revisions, attribute / command / event IDs vs matter.js HEAD |
 | **Behavioural negative-write parity** | `internal/north/matter/cluster/matter_negative_write_parity_test.go` | a write/invoke matter.js *rejects* is rejected by Loom with the matching IM status (ConstraintError 0x87 / InvalidCommand 0x85), plus boundary positive controls against over-rejection. Add one row per new constraint. |
 | **Wire-codec parity** | `internal/north/matter/tlv/parity_matterjs_test.go`; fixtures `notes/parity/matter/tlv-wire-fixtures.json` | byte-level TLV / IM shape |
 | **Wiring-capability pins** | `tests/contract/wiring_pins/dormant_capability_wiring_test.go` | every capability gate / setter is actually wired on the production path — fails the build the moment a wiring is removed, even though the capability keeps passing its own unit test (the "implemented but never wired" bug class) |

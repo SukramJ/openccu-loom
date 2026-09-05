@@ -13,20 +13,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	matterstore "github.com/SukramJ/go-fabric/store"
-
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // MatterExposureStore is the narrow facade `/matter/exposable` reads
-// through. Mirrors the concrete `*matter/store.Store` API.
+// through. Mirrors the concrete [matterendpoint.Store] API.
 type MatterExposureStore interface {
-	GetExposure(ctx context.Context, key matterstore.EndpointKey) (matterstore.ExposureRecord, error)
-	ListExposures(ctx context.Context, centralName string) ([]matterstore.ExposureRecord, error)
-	UpsertExposure(ctx context.Context, rec matterstore.ExposureRecord) error
+	GetExposure(ctx context.Context, key matterendpoint.SourceKey) (matterendpoint.ExposureRecord, error)
+	ListExposures(ctx context.Context, centralName string) ([]matterendpoint.ExposureRecord, error)
+	UpsertExposure(ctx context.Context, rec matterendpoint.ExposureRecord) error
 	CountEnabled(ctx context.Context, centralName string) (int, error)
 }
 
@@ -100,7 +99,7 @@ func MatterExposable(provider MatterCandidateProvider, store MatterExposureStore
 			return
 		}
 		// Index existing rows by tuple for O(1) merge.
-		index := make(map[matterstore.EndpointKey]matterstore.ExposureRecord, len(exposures))
+		index := make(map[matterendpoint.SourceKey]matterendpoint.ExposureRecord, len(exposures))
 		for i := range exposures {
 			index[exposures[i].Key] = exposures[i]
 		}
@@ -197,12 +196,12 @@ func MatterExposeUpdate(store MatterExposureStore, publisher MatterEventPublishe
 			return
 		}
 		actor := actorFromRequest(req)
-		rec := matterstore.ExposureRecord{
-			Key: matterstore.EndpointKey{
+		rec := matterendpoint.ExposureRecord{
+			Key: matterendpoint.SourceKey{
 				CentralName:   body.CentralName,
 				DeviceAddress: body.DeviceAddress,
 				ChannelNo:     body.ChannelNo,
-				DPKind:        matterstore.DPKind(body.DPKind),
+				DPKind:        matterendpoint.DPKind(body.DPKind),
 				DPKey:         body.DPKey,
 			},
 			Enabled:      body.Enabled,
@@ -279,12 +278,12 @@ func MatterExposeBulk(store MatterExposureStore, publisher MatterEventPublisher,
 						fmt.Sprintf("Invalid item %d", applied), err.Error()))
 				return
 			}
-			rec := matterstore.ExposureRecord{
-				Key: matterstore.EndpointKey{
+			rec := matterendpoint.ExposureRecord{
+				Key: matterendpoint.SourceKey{
 					CentralName:   it.CentralName,
 					DeviceAddress: it.DeviceAddress,
 					ChannelNo:     it.ChannelNo,
-					DPKind:        matterstore.DPKind(it.DPKind),
+					DPKind:        matterendpoint.DPKind(it.DPKind),
 					DPKey:         it.DPKey,
 				},
 				Enabled:      it.Enabled,
@@ -318,9 +317,9 @@ func validateExposureKey(centralName, addr, kind, key string) error {
 	if centralName == "" || addr == "" || kind == "" || key == "" {
 		return errors.New("central_name, device_address, dp_kind, dp_key are all required")
 	}
-	switch matterstore.DPKind(kind) {
-	case matterstore.DPKindCustom, matterstore.DPKindGeneric, matterstore.DPKindCalculated,
-		matterstore.DPKindCombined, matterstore.DPKindMeasurement:
+	switch matterendpoint.DPKind(kind) {
+	case matterendpoint.DPKindCustom, matterendpoint.DPKindGeneric, matterendpoint.DPKindCalculated,
+		matterendpoint.DPKindCombined, matterendpoint.DPKindMeasurement:
 	default:
 		return fmt.Errorf("dp_kind %q is not one of custom|generic|calculated|combined|measurement", kind)
 	}

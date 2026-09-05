@@ -11,11 +11,12 @@ import (
 
 	mattercontract "github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/store"
+	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -100,7 +101,7 @@ func pressButtonDP(channelAddr string, p hmenum.Parameter) *generic.Button {
 // dpKeyAllowChecker allows exactly the listed dp_key values.
 type dpKeyAllowChecker struct{ allowed map[string]bool }
 
-func (c dpKeyAllowChecker) IsExposed(_ context.Context, key store.EndpointKey) (bool, error) {
+func (c dpKeyAllowChecker) IsExposed(_ context.Context, key matterendpoint.SourceKey) (bool, error) {
 	return c.allowed[key.DPKey], nil
 }
 
@@ -263,7 +264,7 @@ func TestAssemble_CustomDP_EndpointSource(t *testing.T) {
 	}
 
 	// SourceKey fields.
-	sk := bridged.SourceKey
+	sk := srcKey(t, bridged)
 	if sk.CentralName != centralName {
 		t.Errorf("SourceKey.CentralName=%q, want %q", sk.CentralName, centralName)
 	}
@@ -273,8 +274,8 @@ func TestAssemble_CustomDP_EndpointSource(t *testing.T) {
 	if sk.ChannelNo != chNo {
 		t.Errorf("SourceKey.ChannelNo=%d, want %d", sk.ChannelNo, chNo)
 	}
-	if sk.DPKind != store.DPKindCustom {
-		t.Errorf("SourceKey.DPKind=%q, want %q", sk.DPKind, store.DPKindCustom)
+	if sk.DPKind != matterendpoint.DPKindCustom {
+		t.Errorf("SourceKey.DPKind=%q, want %q", sk.DPKind, matterendpoint.DPKindCustom)
 	}
 	if sk.DPKey != dpParam {
 		t.Errorf("SourceKey.DPKey=%q, want %q", sk.DPKey, dpParam)
@@ -344,8 +345,8 @@ func TestAssemble_CalculatedDP_EndpointSource(t *testing.T) {
 	}
 
 	bridged := top.Endpoints[2]
-	if bridged.SourceKey.DPKind != store.DPKindCalculated {
-		t.Errorf("DPKind=%q, want calculated", bridged.SourceKey.DPKind)
+	if srcKey(t, bridged).DPKind != matterendpoint.DPKindCalculated {
+		t.Errorf("DPKind=%q, want calculated", srcKey(t, bridged).DPKind)
 	}
 	if bridged.Source == nil {
 		t.Error("Source should be non-nil for calculated MatterEndpointSource")
@@ -412,8 +413,8 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 	// The kind is the source's kind, not its projection: the allowlist
 	// row for a calculated DP is persisted as "calculated" whether the
 	// DP projects an actor endpoint or a standalone sensor endpoint.
-	if bridged.SourceKey.DPKind != store.DPKindCalculated {
-		t.Errorf("DPKind=%q, want calculated", bridged.SourceKey.DPKind)
+	if srcKey(t, bridged).DPKind != matterendpoint.DPKindCalculated {
+		t.Errorf("DPKind=%q, want calculated", srcKey(t, bridged).DPKind)
 	}
 	if bridged.Source != nil {
 		t.Error("Source should be nil for measurement-only endpoint")
@@ -459,11 +460,11 @@ func TestAssemble_ButtonChannelConsolidatesPressDPs(t *testing.T) {
 		t.Fatalf("expected ONE consolidated button endpoint, got %d", len(bridged))
 	}
 	ep := bridged[0]
-	if ep.SourceKey.DPKey != matteradapter.ButtonGroupDPKey {
-		t.Errorf("DPKey = %q, want %q", ep.SourceKey.DPKey, matteradapter.ButtonGroupDPKey)
+	if srcKey(t, ep).DPKey != matteradapter.ButtonGroupDPKey {
+		t.Errorf("DPKey = %q, want %q", srcKey(t, ep).DPKey, matteradapter.ButtonGroupDPKey)
 	}
-	if ep.SourceKey.DPKind != store.DPKindGeneric {
-		t.Errorf("DPKind = %q, want generic", ep.SourceKey.DPKind)
+	if srcKey(t, ep).DPKind != matterendpoint.DPKindGeneric {
+		t.Errorf("DPKind = %q, want generic", srcKey(t, ep).DPKind)
 	}
 	if ep.DeviceType != 0x000F {
 		t.Errorf("DeviceType = 0x%04X, want 0x000F (Generic Switch)", ep.DeviceType)
@@ -504,10 +505,10 @@ func TestAssemble_MultiButtonRemote_OneEndpointPerChannel(t *testing.T) {
 	}
 	channels := map[int]bool{}
 	for _, ep := range bridged {
-		if ep.SourceKey.DPKey != matteradapter.ButtonGroupDPKey {
-			t.Errorf("DPKey = %q, want %q", ep.SourceKey.DPKey, matteradapter.ButtonGroupDPKey)
+		if srcKey(t, ep).DPKey != matteradapter.ButtonGroupDPKey {
+			t.Errorf("DPKey = %q, want %q", srcKey(t, ep).DPKey, matteradapter.ButtonGroupDPKey)
 		}
-		channels[ep.SourceKey.ChannelNo] = true
+		channels[srcKey(t, ep).ChannelNo] = true
 	}
 	if !channels[1] || !channels[2] {
 		t.Errorf("expected endpoints for channels 1 and 2, got %v", channels)
@@ -574,17 +575,17 @@ func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 	ch.Put(pressButtonDP("BTN0003:1", hmenum.ParameterPressLong))
 
 	fs := newFakeStore()
-	legacyKey := func(param string) store.EndpointKey {
-		return store.EndpointKey{
+	legacyKey := func(param string) matterendpoint.SourceKey {
+		return matterendpoint.SourceKey{
 			CentralName:   "ccu1",
 			DeviceAddress: "BTN0003",
 			ChannelNo:     1,
-			DPKind:        store.DPKindGeneric,
+			DPKind:        matterendpoint.DPKindGeneric,
 			DPKey:         param,
 		}
 	}
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
-		if _, err := fs.UpsertEndpointAssigning(ctx, store.EndpointRecord{
+		if _, err := fs.UpsertEndpointAssigning(ctx, fabricendpoint.Record{
 			Key:        legacyKey(param),
 			DeviceType: 0x000F,
 		}); err != nil {
@@ -600,7 +601,7 @@ func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 	}
 
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
-		if _, err := fs.GetEndpoint(ctx, legacyKey(param)); !errors.Is(err, store.ErrEndpointNotFound) {
+		if _, err := fs.GetEndpoint(ctx, legacyKey(param)); !errors.Is(err, fabricendpoint.ErrNotFound) {
 			t.Errorf("legacy row %s must be garbage-collected, got err=%v", param, err)
 		}
 	}
@@ -683,10 +684,10 @@ func TestAssemble_FreshIDForNewSource(t *testing.T) {
 	// Find src1 and src2 IDs in the second run.
 	var id1, id2 uint16
 	for _, ep := range top2.Bridged() {
-		if ep.SourceKey.DeviceAddress == "DEV0001" {
+		if srcKey(t, ep).DeviceAddress == "DEV0001" {
 			id1 = ep.ID
 		}
-		if ep.SourceKey.DeviceAddress == "DEV0002" {
+		if srcKey(t, ep).DeviceAddress == "DEV0002" {
 			id2 = ep.ID
 		}
 	}
@@ -744,8 +745,10 @@ func TestAssemble_GCRemovesVanishedSources(t *testing.T) {
 	if len(rows) != 1 {
 		t.Errorf("store has %d rows for ccu1, want 1 (dev2 should be GC'd)", len(rows))
 	}
-	if len(rows) == 1 && rows[0].Key.DeviceAddress != "GC0001" {
-		t.Errorf("remaining row has DeviceAddress=%q, want GC0001", rows[0].Key.DeviceAddress)
+	if len(rows) == 1 {
+		if got := fakeKey(rows[0].Key).DeviceAddress; got != "GC0001" {
+			t.Errorf("remaining row has DeviceAddress=%q, want GC0001", got)
+		}
 	}
 }
 
@@ -838,7 +841,7 @@ func TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly(t *testing.T) {
 	}
 	var wantDev1ID uint16
 	for _, ep := range top1.Bridged() {
-		if ep.SourceKey.DeviceAddress == "RDY0001" {
+		if srcKey(t, ep).DeviceAddress == "RDY0001" {
 			wantDev1ID = ep.ID
 		}
 	}
@@ -867,8 +870,8 @@ func TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("store has %d rows for ccu1, want 1 (dev2 should be GC'd after ready)", len(rows))
 	}
-	if rows[0].Key.DeviceAddress != "RDY0001" {
-		t.Errorf("remaining row has DeviceAddress=%q, want RDY0001", rows[0].Key.DeviceAddress)
+	if got := fakeKey(rows[0].Key).DeviceAddress; got != "RDY0001" {
+		t.Errorf("remaining row has DeviceAddress=%q, want RDY0001", got)
 	}
 	bridged := top3.Bridged()
 	if len(bridged) != 1 || bridged[0].ID != wantDev1ID {
@@ -1078,9 +1081,11 @@ func TestAssemble_TopologyCarriesConfigMetadata(t *testing.T) {
 // [dpKeyAllowChecker] it matches on the full 5-tuple, so a probe that
 // carries a different dp_kind than the persisted row is denied — the
 // way the SQL-backed allowlist behaves.
-type kindKeyAllowChecker struct{ allowed map[store.EndpointKey]bool }
+type kindKeyAllowChecker struct {
+	allowed map[matterendpoint.SourceKey]bool
+}
 
-func (c kindKeyAllowChecker) IsExposed(_ context.Context, key store.EndpointKey) (bool, error) {
+func (c kindKeyAllowChecker) IsExposed(_ context.Context, key matterendpoint.SourceKey) (bool, error) {
 	return c.allowed[key], nil
 }
 
@@ -1141,18 +1146,18 @@ func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
 
 	// The row an operator creates via the Matter allowlist for this
 	// candidate.
-	row := store.EndpointKey{
+	row := matterendpoint.SourceKey{
 		CentralName:   "ccu1",
 		DeviceAddress: "TEMP0003",
 		ChannelNo:     1,
-		DPKind:        store.DPKindCalculated,
+		DPKind:        matterendpoint.DPKindCalculated,
 		DPKey:         "APPARENT_TEMPERATURE",
 	}
 
 	cfg := validConfig()
 	cfg.IncludeMeasurements = true
 	a, _ := matteradapter.New(newFakeStore(), cfg, nil)
-	a.SetExposureChecker(kindKeyAllowChecker{allowed: map[store.EndpointKey]bool{row: true}})
+	a.SetExposureChecker(kindKeyAllowChecker{allowed: map[matterendpoint.SourceKey]bool{row: true}})
 
 	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
@@ -1162,8 +1167,8 @@ func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
 	if len(bridged) != 1 {
 		t.Fatalf("got %d bridged endpoints, want 1 (the allowlisted calculated measurement)", len(bridged))
 	}
-	if bridged[0].SourceKey != row {
-		t.Errorf("SourceKey=%+v, want %+v", bridged[0].SourceKey, row)
+	if got := srcKey(t, bridged[0]); got != row {
+		t.Errorf("SourceKey=%+v, want %+v", got, row)
 	}
 }
 
@@ -1174,15 +1179,15 @@ func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
 type stubNameResolver struct {
 	base   string
 	suffix string
-	asked  []store.EndpointKey
+	asked  []matterendpoint.SourceKey
 }
 
-func (r *stubNameResolver) EndpointLabel(key store.EndpointKey) string {
+func (r *stubNameResolver) EndpointLabel(key matterendpoint.SourceKey) string {
 	r.asked = append(r.asked, key)
 	return r.base
 }
 
-func (r *stubNameResolver) ParameterLabel(store.EndpointKey) string { return r.suffix }
+func (r *stubNameResolver) ParameterLabel(matterendpoint.SourceKey) string { return r.suffix }
 
 // TestAssembleDevices_ConfiguredNameResolverOwnsTheLabel pins that the
 // naming authority is injectable and actually consulted: with a

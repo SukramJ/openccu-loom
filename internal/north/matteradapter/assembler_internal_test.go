@@ -8,8 +8,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/store"
-
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -20,7 +19,7 @@ import (
 // denyAllChecker is an ExposureChecker that rejects everything.
 type denyAllChecker struct{}
 
-func (denyAllChecker) IsExposed(_ context.Context, _ store.EndpointKey) (bool, error) {
+func (denyAllChecker) IsExposed(_ context.Context, _ matterendpoint.SourceKey) (bool, error) {
 	return false, nil
 }
 

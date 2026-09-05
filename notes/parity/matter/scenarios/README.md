@@ -13,10 +13,27 @@ message wire shape **and** multi-message conversation behavior.
 ## Test entrypoint
 
 ```
-go test ./internal/north/matter/bridge/ -run TestScenarios -count=1 -race
+make scenarios
+# or: go test ./tests/scenario/ -run TestScenarios -count=1 -race
 ```
 
-The harness implementation: `internal/north/matter/bridge/scenario_*.go`.
+The harness implementation: `tests/scenario/scenario_*_test.go`.
+
+The Matter stack itself now lives in `github.com/SukramJ/go-fabric`; the
+corpus stayed here because the coverage gate
+(`tests/contract/matter_scenario_gate_test.go`) derives the required set
+from `internal/model/custom`. The harness therefore drives the bridge
+from *outside* the module, through its exported API only — which makes
+this suite the first real consumer of that API as well as a behaviour
+regression net.
+
+One consequence is worth knowing before writing a scenario: the bridge
+learns where to ship a subscription's reports only from an actual
+`SubscribeRequest`, so the harness establishes every declared
+subscription over the wire during setup (unless the spec sets
+`skip_auto_subscribe`, in which case a step drives the Subscribe
+itself). The setup exchange and its initial ReportData burst are
+consumed before the first step runs.
 
 ## File format
 
@@ -93,7 +110,7 @@ Steps are dispatched by `actor` + `kind`. Phase-A supports four kinds:
 | `bridge` | `expect_no_tx`          | Assert the peer socket receives nothing for `timeout_millis` (default 500). Post-condition after fault-injection steps that should leave the bridge silent (closed session, evicted subscription). |
 | `bridge` | `close_session`         | Drives `subMgr.CloseSession(given.session_id)` — mirrors the F1 cascade the daemon wires via `opMgr.SetOnSessionClose(subMgr.CloseSession)`. |
 | `peer`   | `drop_next_tx`          | Read the next outbound datagram and discard it (no StatusResponse). The bridge's outbound-reliable tracker keeps the retransmit entry; `tick_retransmit` drives the re-ship. |
-| `bridge` | `tick_retransmit`       | Invoke one `tickOutboundReliable` cycle synchronously with a +2 s clock so any pending retransmit fires immediately. The harness does not run the ack-pump goroutine (it stays dormant when `AttachAckTracker` is called after `Start`); scenarios drive ticks explicitly so timing is deterministic and free of sleep flake. |
+| `bridge` | `tick_retransmit`       | Yield for one MRP backoff so the bridge's own ack pump re-ships the dropped datagram. go-fabric exports a single-shot tick for the *inbound* ack half (`Bridge.RunAckPumpOnce`) but none for the outbound retransmit half, so the harness attaches the tracker before `Start` — the daemon's own order — and lets the pump run for real. |
 | any      | `wait`                  | `time.Sleep(timeout_millis)` — used only when the scenario needs to span a deadline the harness can't otherwise observe. Prefer `tick_retransmit` and per-step polling. |
 
 ### TLV-body assertions in `expect_tx`

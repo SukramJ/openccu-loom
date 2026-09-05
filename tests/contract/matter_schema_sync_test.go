@@ -12,44 +12,52 @@ import (
 	matterparity "github.com/SukramJ/go-fabric/parity"
 )
 
-// TestMatterSchemaSnapshotInSync asserts that the master copy of the matter.js
-// HEAD schema snapshot in this repo — notes/parity/matter/matter-schema-snapshot.json,
-// re-extracted by `make generate-matter-schema` — is byte-identical to the copy
-// the Matter stack embeds and every Matter parity test actually reads
-// (go-fabric's parity.SchemaJSON()).
+// TestMatterSchemaSnapshotInSync asserts that this repo's pinned copy of the
+// matter.js HEAD schema snapshot — notes/parity/matter/matter-schema-snapshot.json
+// — is byte-identical to the copy the Matter stack embeds and every Matter
+// parity test reads (go-fabric's parity.SchemaJSON()).
 //
-// Both halves are still live here, they just no longer sit in one module. The
-// master is read by tests/chiptool/wire_truth_test.go and by
-// script/generate_matter_schema.go; the embedded copy is what
-// internal/model/custom/*/parity_matterjs_test.go compares device profiles
-// against. Keeping them in step is now a cross-repo copy behind a module
-// version pin, which is strictly easier to forget than the single `cp` it used
-// to be: regenerate the master here, publish the Matter stack from an older
-// extract, and every parity test passes against a snapshot that is not the one
-// this repo believes it pinned.
+// Why a second copy exists at all. The extractor and the generator live in
+// go-fabric now, beside the schema package they feed; nothing in this repo
+// produces the snapshot any more. The copy that stayed is a lockfile, not a
+// source: `go.mod` pins a module version, which says nothing about which
+// matter.js commit that module was extracted from, and a schema change is
+// exactly the kind of thing that rides in unnoticed on a routine dependency
+// bump. With the pin checked in, such a bump turns red here and the new bytes
+// have to be landed deliberately, as a diff someone reads.
 //
-// A failure means the two extracts disagree. Re-extract, copy into the Matter
-// stack, publish it, and bump the dependency — do not silence this by editing
-// either JSON by hand.
+// The cost of the choice, stated plainly: the pin is refreshed by copying from
+// the module under test (`make sync-matter-schema`), so this guard cannot tell
+// a reviewed bump from a mechanical one — it can only make the bump visible.
+// The alternative, dropping the copy and reading parity.SchemaJSON() here,
+// removes a file that can go stale but leaves the comparison asserting the
+// embed equals itself, and no schema change in a dependency bump would ever
+// surface in this repo's own diff. Visible-and-mechanical beats invisible.
+//
+// The pinned file is also what tests/chiptool/wire_truth_test.go reads, so the
+// chip-tool wire guards and the module agree on one set of revisions.
+//
+// A failure means the module shipped a different extract than the one pinned
+// here. Run `make sync-matter-schema` and review what moved — do not silence
+// this by hand-editing either JSON.
 func TestMatterSchemaSnapshotInSync(t *testing.T) {
 	root := contractRepoRoot(t)
-	master := filepath.Join(root, "notes", "parity", "matter", "matter-schema-snapshot.json")
+	pinned := filepath.Join(root, "notes", "parity", "matter", "matter-schema-snapshot.json")
 
-	data, err := os.ReadFile(master) //nolint:gosec // fixed in-repo path resolved from the test file location
+	data, err := os.ReadFile(pinned) //nolint:gosec // fixed in-repo path resolved from the test file location
 	if err != nil {
-		t.Fatalf("read %s: %v", master, err)
+		t.Fatalf("read %s: %v", pinned, err)
 	}
 
-	masterSum := sha256.Sum256(data)
+	pinnedSum := sha256.Sum256(data)
 	embeddedSum := sha256.Sum256(matterparity.SchemaJSON())
 
-	if masterSum != embeddedSum {
+	if pinnedSum != embeddedSum {
 		t.Fatalf("matter schema snapshots diverge:\n"+
-			"  master   %s (sha256 %x)\n"+
+			"  pinned   %s (sha256 %x)\n"+
 			"  embedded github.com/SukramJ/go-fabric/parity.SchemaJSON() (sha256 %x)\n"+
-			"one of the two extracts is stale — re-extract the master with "+
-			"`make generate-matter-schema`, copy it into the Matter stack's parity "+
-			"package, and bump the dependency",
-			master, masterSum, embeddedSum)
+			"the module ships a different extract than the one pinned here — run "+
+			"`make sync-matter-schema` and review the resulting diff",
+			pinned, pinnedSum, embeddedSum)
 	}
 }

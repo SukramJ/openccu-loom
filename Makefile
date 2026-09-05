@@ -192,18 +192,8 @@ wire-compare: ## compare Go wire calls against aiohomematic reference (fails for
 	$(GO) test -tags=wire_reference ./tests/contract/wire_snapshots/ -run TestReferenceCompare -v
 
 .PHONY: scenarios
-scenarios: ## UNRUNNABLE: the scenario corpus lives here, its harness left with the Matter stack
-	@echo "make scenarios cannot run: the corpus and its runner are in different repositories."
-	@echo ""
-	@echo "  corpus : notes/parity/matter/scenarios/*.json  (here; read by TestScenarioCoverage)"
-	@echo "  harness: went with the Matter stack into go-fabric, and did not travel"
-	@echo "           because the corpus it replays is single-sourced in this repo"
-	@echo ""
-	@echo "Nothing replays these scenarios today. TestScenarioCoverage still"
-	@echo "demands an entry per Matter-mappable custom DP, so the corpus is"
-	@echo "maintained but never executed. Deciding where corpus and harness"
-	@echo "belong together is an open call; weakening the gate is not an answer."
-	@exit 1
+scenarios: ## replay the Matter behaviour corpus (notes/parity/matter/scenarios) against a live go-fabric bridge
+	$(GO) test -count=1 -timeout=300s ./tests/scenario/ -v
 
 .PHONY: scenarios-regen-sidecars
 scenarios-regen-sidecars: ## regenerate matter.js-canonical reference sidecars for every scenario (needs ../matter.js npm-installed)
@@ -507,28 +497,19 @@ bump-ccudata: ## bump the go-openccu-data data-artifact module to its latest tag
 	go get github.com/SukramJ/go-openccu-data@latest && go mod tidy
 	@echo "-- data artifact bumped; run 'make test' to validate --"
 
-MATTERJS_DIR ?= ../matter.js
-
-.PHONY: generate-matter-schema
-generate-matter-schema: ## regenerate matter schema snapshot + internal/north/matter/schema/ from matter.js HEAD
-	# Step 1: extract the schema from the matter.js checkout (must be built:
-	# `cd $(MATTERJS_DIR)/packages/model && npm run build`). The extractor
-	# resolves type-inheritance, so type-referencing clusters keep their
-	# inherited revision + members. Node >= 23 runs the .ts directly; it is
-	# copied into the matter.js tree so the bare `@matter/model` import resolves.
-	cp notes/parity/matter/extract-from-matter-js.ts $(MATTERJS_DIR)/.occu-extract.mts
-	cd $(MATTERJS_DIR) && node .occu-extract.mts \
-		> $(CURDIR)/notes/parity/matter/matter-schema-snapshot.json; \
-		rc=$$?; rm -f .occu-extract.mts; exit $$rc
-	# Step 2: keep the parity embed copy in sync (see internal/north/matter/parity/parity.go).
-	cp notes/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json
-	# Step 3: regenerate the typed Go revision/name maps from the snapshot.
-	$(GO) run ./script/generate_matter_schema.go
-	@if command -v $(GOFUMPT) >/dev/null 2>&1; then \
-		$(GOFUMPT) -w internal/north/matter/schema/; \
-	else \
-		gofmt -w internal/north/matter/schema/; \
-	fi
+.PHONY: sync-matter-schema
+sync-matter-schema: ## refresh the pinned matter.js schema snapshot from the go-fabric module
+	# The extractor and the generator live in go-fabric, next to the schema
+	# package they feed; regenerating the extract is a step in that repo.
+	# What this repo keeps is a pin: one copy of the bytes the Matter stack
+	# was built from, so an upstream schema change cannot arrive unreviewed
+	# inside a dependency bump. TestMatterSchemaSnapshotInSync fails until
+	# this target is run, which is the point — it forces the change into a
+	# diff someone reads.
+	install -m 0644 \
+		"$$($(GO) list -m -f '{{.Dir}}' github.com/SukramJ/go-fabric)/parity/schema.json" \
+		notes/parity/matter/matter-schema-snapshot.json
+	@echo "-- schema pin refreshed from the go-fabric module; review the diff before committing --"
 
 .PHONY: export-schemas
 export-schemas: ## emit assets/schemas/{enums,types}.json for external-language codegen

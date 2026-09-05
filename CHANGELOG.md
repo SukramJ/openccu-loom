@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Matter behaviour corpus runs again.** The 41 scenario files under
+  `notes/parity/matter/scenarios/` had no runner after the Matter stack moved
+  into `github.com/SukramJ/go-fabric`: the corpus stayed here, because the
+  coverage gate derives its required set from `internal/model/custom`, and the
+  harness went nowhere. It is back as `tests/scenario/`, driving the bridge
+  from outside the module through its exported API only — 30 scenarios replay,
+  none skipped, and `make scenarios` runs them instead of printing why it
+  cannot. Being an outside consumer changed one thing: the bridge learns a
+  subscription's reply target only from a real `SubscribeRequest`, so the
+  harness now establishes every subscription over the wire rather than
+  planting the routing entry, which is what the daemon does too.
 - **The matter.js NOTICE now ships with the source.** Its closing line requires
   it to accompany all copies, and the repo did not carry it. The notices file
   also hedged that the NOTICE "travels with the matter.js repository" while
@@ -18,6 +29,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   production dependency used by the SPAKE2 implementation and appeared in no
   notice at all. Its licence is BSD-3-Clause, so it needed its own licence text
   alongside the Apache and MIT copies.
+
+### Changed
+
+- **The Matter schema pipeline moved to the module it feeds.** The matter.js
+  extractor and the schema generator followed `schema/` and the embedded
+  extract into `github.com/SukramJ/go-fabric`, so `make generate-matter-schema`
+  is gone — it had been copying into `internal/north/matter/`, a path that left
+  with the Matter stack, and failed at the first `cp`. What stays here is one
+  pinned copy of the extract at
+  `notes/parity/matter/matter-schema-snapshot.json`: `go.mod` pins a module
+  version, which says nothing about the matter.js commit that module was built
+  from, so without the pin a schema change could ride into the daemon inside a
+  routine dependency bump with nothing to show for it in this repo's diff.
+  `TestMatterSchemaSnapshotInSync` holds it, `make sync-matter-schema` refreshes
+  it from the module, and the pinned bytes are unchanged by the move.
 
 ### Fixed
 

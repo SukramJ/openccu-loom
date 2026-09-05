@@ -33,7 +33,7 @@ import (
 	matterwire "github.com/SukramJ/go-fabric/cluster/wire"
 	"github.com/SukramJ/go-fabric/diagevent"
 	"github.com/SukramJ/go-fabric/eligibility"
-	matterendpoint "github.com/SukramJ/go-fabric/endpoint"
+	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/im/subscription"
 	"github.com/SukramJ/go-fabric/mdns"
 	matterschema "github.com/SukramJ/go-fabric/schema"
@@ -46,6 +46,8 @@ import (
 	"github.com/SukramJ/go-fabric/secure/spake2"
 	matterstore "github.com/SukramJ/go-fabric/store"
 	"github.com/SukramJ/go-fabric/transport/mrp"
+
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -145,6 +147,10 @@ type matterBridgeBundle struct {
 	bridge *matterbridge.Bridge
 	stop   func()
 	store  *matterstore.Store
+	// identity persists endpoint ids and the exposure allowlist — the two
+	// tables keyed by this daemon's source 5-tuple rather than by anything
+	// Matter defines. See [matterendpoint].
+	identity *matterendpoint.Store
 	// assembler turns this daemon's device model into the endpoint
 	// topology the bridge serves. The bridge consumes a topology and
 	// never builds one, so the assembler and everything that configures
@@ -202,6 +208,11 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 
 	store := matterstore.New(db)
+	// Endpoint identity and the exposure allowlist are keyed by this
+	// daemon's own 5-tuple, so they are persisted here rather than by the
+	// bridge module — which sees only an opaque key. Same database handle,
+	// same migrations; two access surfaces because two owners.
+	identity := matterendpoint.New(db)
 
 	// Single defaulting point: the SAME defaulted view feeds the bridge
 	// core here and the opener / advertisement / REST setup-payload in
@@ -245,7 +256,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// operator's exposure allowlist and the locale, none of which the
 	// Matter subtree may see. The bridge is handed the finished topology
 	// through the snapshotter below.
-	assembler, err := matteradapter.New(store, matteradapter.Config{
+	assembler, err := matteradapter.New(identity, matteradapter.Config{
 		VendorID:                mc.VendorID,
 		ProductID:               mc.ProductID,
 		NodeLabel:               mc.NodeLabel,
@@ -262,7 +273,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 	snap := matterTopologySnapshotter(assembler, walk)
 
-	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
+	bridge, err := matterbridge.New(identity, snap, advertiser, matterbridge.Config{
 		Listen:        mc.Listen,
 		PreferIPv4:    mc.PreferIPv4,
 		VendorID:      mc.VendorID,
@@ -1088,6 +1099,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		bridge:         bridge,
 		stop:           stop,
 		store:          store,
+		identity:       identity,
 		assembler:      assembler,
 		opMgr:          opMgr,
 		subMgr:         subMgr,
@@ -3111,7 +3123,7 @@ type matterWiring struct {
 	// central_adopt.go), which that REST-facing interface does not declare.
 	// It still satisfies handlers.MatterExposureStore at every assignment
 	// site below.
-	exposureStore *matterstore.Store
+	exposureStore *matterendpoint.Store
 	candidates    handlers.MatterCandidateProvider
 	pub           *matterEventPublisher
 	reassembler   handlers.MatterTopologyReassembler
@@ -3384,7 +3396,7 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 // atomic step from the bridge's point of view, and a reassembly still
 // reads the model as late as possible rather than at wiring time.
 func matterTopologySnapshotter(asm *matteradapter.Assembler, walk func(context.Context) []matteradapter.DeviceSnapshot) matterbridge.Snapshotter {
-	return func(ctx context.Context) (*matterendpoint.Topology, error) {
+	return func(ctx context.Context) (*fabricendpoint.Topology, error) {
 		return asm.AssembleDevices(ctx, walk(ctx))
 	}
 }
@@ -3535,6 +3547,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		mcfg := cfg.North.Matter.WithDefaults()
 		mb := bundle.bridge
 		mfs := bundle.store
+		mids := bundle.identity
 		teardown = bundle.stop
 		wiring.fabricStore = mfs
 		wiring.sessionLister = matterSessionLister{op: bundle.opMgr, sub: bundle.subMgr}
@@ -3548,7 +3561,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// bridge serves its first datagram; here we only expose the bridge as
 		// the REST surface's reporter.
 		wiring.diagEvents = mb
-		wiring.exposureStore = mfs
+		wiring.exposureStore = mids
 		// Wire the allowlist checker so the assembler only bridges
 		// sources that the operator has explicitly enabled. Default
 		// = empty allowlist = empty topology. The exposure-management
@@ -3563,7 +3576,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// Subscribe expands to 60+ KB, the post-CASE phase exceeds
 		// Apple's pairing-UI timeout and the user sees a generic
 		// add-failed error even though the cryptographic handshake completed.
-		bundle.assembler.SetExposureChecker(mfs)
+		bundle.assembler.SetExposureChecker(mids)
 		if err := mb.Reassemble(ctx); err != nil {
 			logger.Warn("matter.bridge.reassemble.after_exposure_checker",
 				slog.String("err", err.Error()))
@@ -3880,10 +3893,11 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		mb.SetOnFabricAdded(wiring.pub.publishFabricAdded)
 		mb.SetOnFabricRemoved(wiring.pub.publishFabricRemoved)
 		wiring.statusReader = &matterStatusReaderAdapter{
-			enabled: mcfg.Enabled,
-			bridge:  mb,
-			store:   mfs,
-			window:  window,
+			enabled:   mcfg.Enabled,
+			bridge:    mb,
+			store:     mfs,
+			exposures: mids,
+			window:    window,
 			cfg: &matterStatusConfig{
 				advertising: mcfg.MDNSAdvertise == "zeroconf",
 			},
@@ -4106,7 +4120,7 @@ func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo
 		if rev, ok := matterschema.DeviceTypeRevision(uint32(ep.DeviceType)); ok {
 			info.DeviceTypeRevision = rev
 		}
-		info.DeviceAddress = ep.SourceKey.DeviceAddress
+		info.DeviceAddress = ep.DeviceAddress
 		info.ChannelAddress = ep.ChannelAddress
 		if ep.Source != nil {
 			seen := make(map[uint32]struct{})

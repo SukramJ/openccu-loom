@@ -136,8 +136,8 @@ func TestBridgedEndpointClustersConformToTheirDeviceType(t *testing.T) {
 			}
 			if _, known := schema.DeviceTypeServerClusters[deviceType]; !known {
 				t.Errorf("%s channel %d (%T) declares device type 0x%04X, absent from the matter.js "+
-					"HEAD schema snapshot — wrong id, or the snapshot is stale "+
-					"(`make generate-matter-schema`)", dev.Model, ch.Number, cdp, deviceType)
+					"HEAD schema snapshot — wrong id, or the pinned snapshot is stale "+
+					"(`make sync-matter-schema`)", dev.Model, ch.Number, cdp, deviceType)
 				continue
 			}
 

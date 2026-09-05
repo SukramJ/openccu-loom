@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -33,8 +33,8 @@ func makeChannel(dev *device.Device, addr string, no int, name string) *device.C
 // keyFor is the endpoint key the assembly would build for (dev, ch,
 // param). A nil channel yields channel 0, which no test device carries
 // — that is how the "source outside the indexed fleet" path is reached.
-func keyFor(dev *device.Device, ch *device.Channel, param string) store.EndpointKey {
-	key := store.EndpointKey{DeviceAddress: dev.Address, DPKey: param}
+func keyFor(dev *device.Device, ch *device.Channel, param string) matterendpoint.SourceKey {
+	key := matterendpoint.SourceKey{DeviceAddress: dev.Address, DPKey: param}
 	if ch != nil {
 		key.ChannelNo = ch.Number
 	}

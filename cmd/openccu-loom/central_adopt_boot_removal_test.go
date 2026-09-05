@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	matterstore "github.com/SukramJ/go-fabric/store"
+	loomendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -228,15 +228,15 @@ func TestRemoveCentralPurgesTheMatterExposureAllowlist(t *testing.T) {
 	wireCentralNorthbound(orch.sbDeps, unit)
 
 	db := openMigratedTestDB(t, "matter_purge_exposures.db")
-	exposureStore := matterstore.New(db)
+	exposureStore := loomendpoint.New(db)
 	orch.setMatterExposureStore(exposureStore)
 
-	removedKey := matterstore.EndpointKey{CentralName: removed, DeviceAddress: "S:1", ChannelNo: 1, DPKind: matterstore.DPKindCustom, DPKey: "D"}
-	survivorKey := matterstore.EndpointKey{CentralName: survivor, DeviceAddress: "S:1", ChannelNo: 1, DPKind: matterstore.DPKindCustom, DPKey: "D"}
-	if err := exposureStore.UpsertExposure(ctx, matterstore.ExposureRecord{Key: removedKey, Enabled: true, Actor: "test"}); err != nil {
+	removedKey := loomendpoint.SourceKey{CentralName: removed, DeviceAddress: "S:1", ChannelNo: 1, DPKind: loomendpoint.DPKindCustom, DPKey: "D"}
+	survivorKey := loomendpoint.SourceKey{CentralName: survivor, DeviceAddress: "S:1", ChannelNo: 1, DPKind: loomendpoint.DPKindCustom, DPKey: "D"}
+	if err := exposureStore.UpsertExposure(ctx, loomendpoint.ExposureRecord{Key: removedKey, Enabled: true, Actor: "test"}); err != nil {
 		t.Fatalf("UpsertExposure(removed): %v", err)
 	}
-	if err := exposureStore.UpsertExposure(ctx, matterstore.ExposureRecord{Key: survivorKey, Enabled: true, Actor: "test"}); err != nil {
+	if err := exposureStore.UpsertExposure(ctx, loomendpoint.ExposureRecord{Key: survivorKey, Enabled: true, Actor: "test"}); err != nil {
 		t.Fatalf("UpsertExposure(survivor): %v", err)
 	}
 
@@ -244,7 +244,7 @@ func TestRemoveCentralPurgesTheMatterExposureAllowlist(t *testing.T) {
 		t.Fatalf("removeCentral: %v", err)
 	}
 
-	if _, err := exposureStore.GetExposure(ctx, removedKey); !errors.Is(err, matterstore.ErrExposureNotFound) {
+	if _, err := exposureStore.GetExposure(ctx, removedKey); !errors.Is(err, loomendpoint.ErrExposureNotFound) {
 		t.Errorf("removed central's exposure row survived removeCentral: err=%v, want ErrExposureNotFound", err)
 	}
 	if _, err := exposureStore.GetExposure(ctx, survivorKey); err != nil {

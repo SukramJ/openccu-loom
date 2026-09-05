@@ -16,7 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/go-fabric/eligibility"
-	matterstore "github.com/SukramJ/go-fabric/store"
+
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -29,14 +30,14 @@ import (
 
 type fakeExposureStore struct {
 	mu        sync.Mutex
-	records   []matterstore.ExposureRecord
-	upserted  []matterstore.ExposureRecord
+	records   []matterendpoint.ExposureRecord
+	upserted  []matterendpoint.ExposureRecord
 	listErr   error
 	upsertErr error
 	count     int
 }
 
-func (f *fakeExposureStore) GetExposure(_ context.Context, key matterstore.EndpointKey) (matterstore.ExposureRecord, error) {
+func (f *fakeExposureStore) GetExposure(_ context.Context, key matterendpoint.SourceKey) (matterendpoint.ExposureRecord, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for i := range f.records {
@@ -44,16 +45,16 @@ func (f *fakeExposureStore) GetExposure(_ context.Context, key matterstore.Endpo
 			return f.records[i], nil
 		}
 	}
-	return matterstore.ExposureRecord{}, matterstore.ErrExposureNotFound
+	return matterendpoint.ExposureRecord{}, matterendpoint.ErrExposureNotFound
 }
 
-func (f *fakeExposureStore) ListExposures(_ context.Context, _ string) ([]matterstore.ExposureRecord, error) {
+func (f *fakeExposureStore) ListExposures(_ context.Context, _ string) ([]matterendpoint.ExposureRecord, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.records, f.listErr
 }
 
-func (f *fakeExposureStore) UpsertExposure(_ context.Context, rec matterstore.ExposureRecord) error {
+func (f *fakeExposureStore) UpsertExposure(_ context.Context, rec matterendpoint.ExposureRecord) error {
 	if f.upsertErr != nil {
 		return f.upsertErr
 	}
@@ -202,11 +203,11 @@ func TestMatterExposable_NilStore_Returns503(t *testing.T) {
 
 func TestMatterExposable_HappyPath_Returns200_MergesData(t *testing.T) {
 	t.Parallel()
-	key := matterstore.EndpointKey{
+	key := matterendpoint.SourceKey{
 		CentralName:   "ccu-01",
 		DeviceAddress: "DEV001",
 		ChannelNo:     1,
-		DPKind:        matterstore.DPKindCustom,
+		DPKind:        matterendpoint.DPKindCustom,
 		DPKey:         "onoff",
 	}
 	provider := &fakeCandidateProvider{
@@ -223,7 +224,7 @@ func TestMatterExposable_HappyPath_Returns200_MergesData(t *testing.T) {
 		},
 	}
 	store := &fakeExposureStore{
-		records: []matterstore.ExposureRecord{
+		records: []matterendpoint.ExposureRecord{
 			{
 				Key:          key,
 				Enabled:      true,
@@ -787,17 +788,17 @@ func TestMatterExposable_SortOrder(t *testing.T) {
 	provider := &fakeCandidateProvider{
 		candidates: []matteradapter.Candidate{
 			{
-				Key: matterstore.EndpointKey{
+				Key: matterendpoint.SourceKey{
 					CentralName: "ccu-02", DeviceAddress: "DEV002",
-					ChannelNo: 1, DPKind: matterstore.DPKindGeneric, DPKey: "STATE",
+					ChannelNo: 1, DPKind: matterendpoint.DPKindGeneric, DPKey: "STATE",
 				},
 				DisplayName: "Second",
 				Verdict:     eligibility.Verdict{State: eligibility.StateMappable},
 			},
 			{
-				Key: matterstore.EndpointKey{
+				Key: matterendpoint.SourceKey{
 					CentralName: "ccu-01", DeviceAddress: "DEV001",
-					ChannelNo: 1, DPKind: matterstore.DPKindGeneric, DPKey: "STATE",
+					ChannelNo: 1, DPKind: matterendpoint.DPKindGeneric, DPKey: "STATE",
 				},
 				DisplayName: "First",
 				Verdict:     eligibility.Verdict{State: eligibility.StateMappable},
@@ -838,11 +839,11 @@ func TestMatterExposable_ParameterLabel_TitleCasedWhenLabelerIsNil(t *testing.T)
 	provider := &fakeCandidateProvider{
 		candidates: []matteradapter.Candidate{
 			{
-				Key: matterstore.EndpointKey{
+				Key: matterendpoint.SourceKey{
 					CentralName:   "ccu-01",
 					DeviceAddress: "DEV001",
 					ChannelNo:     1,
-					DPKind:        matterstore.DPKindGeneric,
+					DPKind:        matterendpoint.DPKindGeneric,
 					DPKey:         "RSSI_DEVICE",
 				},
 				ChannelType: "MAINTENANCE",

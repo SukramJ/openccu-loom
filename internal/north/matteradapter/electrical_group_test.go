@@ -139,7 +139,7 @@ func TestMeteringPlugProjectsOneElectricalSensorEndpoint(t *testing.T) {
 	if len(electrical) != 1 {
 		t.Fatalf("expected exactly 1 ElectricalSensor endpoint for five electrical parameters, got %d", len(electrical))
 	}
-	if key := electrical[0].SourceKey.DPKey; key != matteradapter.ElectricalGroupDPKey {
+	if key := srcKey(t, electrical[0]).DPKey; key != matteradapter.ElectricalGroupDPKey {
 		t.Errorf("ElectricalSensor endpoint keyed on %q, want the consolidated %q", key, matteradapter.ElectricalGroupDPKey)
 	}
 

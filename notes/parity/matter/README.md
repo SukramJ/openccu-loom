@@ -9,8 +9,19 @@ top-level `matter` object records the provenance of each regeneration: the
 matter.js source commit (`sourceCommit`) the schema was extracted from, plus
 the Matter spec `revision` / `specificationVersion` /
 `interactionModelRevision` / `dataModelRevision` reported by `@matter/model`.
-`extract-from-matter-js.ts` captures these automatically, so the reference is
-always traceable to an exact matter.js commit.
+The extractor captures these automatically, so the reference is always
+traceable to an exact matter.js commit.
+
+**The schema snapshot is a pin, not a source.** The extractor and the
+generator that turns the extract into Go maps both live in the
+[go-fabric](https://github.com/SukramJ/go-fabric) module, as its
+`script/extract-from-matter-js.ts` and `script/generate_matter_schema.go`,
+next to the `schema` package they feed. The copy here exists so a
+change to the Matter schema cannot arrive unnoticed inside a dependency bump:
+`TestMatterSchemaSnapshotInSync` (`tests/contract/`) compares it against the
+module's embedded copy, and `make sync-matter-schema` refreshes it once the
+new bytes are deliberate. The TLV and IM wire-fixture generators below are a
+separate pipeline and still live here.
 
 ---
 
@@ -18,7 +29,7 @@ always traceable to an exact matter.js commit.
 
 | File | Purpose | Regen |
 |---|---|---|
-| `matter-schema-snapshot.json` | Cluster IDs, revisions, attribute IDs, device-type revisions from `@matter/model` | `extract-from-matter-js.ts` |
+| `matter-schema-snapshot.json` | Cluster IDs, revisions, attribute IDs, device-type revisions from `@matter/model` | `make sync-matter-schema` (extracted in go-fabric) |
 | `tlv-wire-fixtures.json` | Low-level TLV primitive wire bytes (uint, bool, string, tags) | `generate-tlv-wire-fixtures.ts` |
 | `im-wire-fixtures.json` | IM-message-level wire bytes (ReportData, StatusResponse, …) | `generate-im-wire-fixtures.ts` |
 
@@ -29,12 +40,11 @@ always traceable to an exact matter.js commit.
 ### Cluster/device-type schema snapshot
 
 ```sh
-cd /Users/markus/Documents/GitHub/matter.js
-node /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/extract-from-matter-js.ts \
-    > /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/matter-schema-snapshot.json
-cp /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/matter-schema-snapshot.json \
-    /Users/markus/Documents/GitHub/openccu-loom/internal/north/matter/parity/schema.json
+make sync-matter-schema
 ```
+
+Re-extracting from matter.js HEAD happens in go-fabric first — see that
+module's `CLAUDE.md` — and only then is the pin here refreshed.
 
 ### TLV primitive wire fixtures
 
@@ -63,9 +73,9 @@ or edit the `matterJsRoot` constant at the top of the generator.
 
 | Fixture file | Go test |
 |---|---|
-| `matter-schema-snapshot.json` | `internal/north/matter/parity/` |
-| `tlv-wire-fixtures.json` | `internal/north/matter/tlv/` (look for `parity_matterjs_test.go`) |
-| `im-wire-fixtures.json` | `internal/north/matter/im/wire_fixtures_parity_test.go` |
+| `matter-schema-snapshot.json` | `tests/contract/matter_schema_sync_test.go` (the pin) and `tests/chiptool/wire_truth_test.go`; the parity tests that read the same bytes live in the go-fabric module |
+| `tlv-wire-fixtures.json` | go-fabric `tlv/parity_matterjs_test.go` (embedded from that module's `tlv/testdata/`) |
+| `im-wire-fixtures.json` | go-fabric `im/wire_fixtures_parity_test.go` (embedded from that module's `im/testdata/`) |
 
 ---
 

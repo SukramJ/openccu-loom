@@ -8,13 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 
 	mattercontract "github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
-	"github.com/SukramJ/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -73,7 +74,32 @@ type Config struct {
 	// primitives as the MQTT discovery builder and the REST data-point
 	// handler. Supplying one is how an owner with a different model keeps
 	// its own names on the Matter plane instead of having them re-derived.
-	NameResolver endpoint.NameResolver
+	NameResolver NameResolver
+}
+
+// NameResolver is this daemon's naming authority for endpoint labels.
+//
+// Labels are never derived on the Matter side. The name a device carries
+// is a product decision every north-bound surface has to agree on, and
+// re-deriving it for Matter alone makes the same device show up under
+// two names in two places. The walk therefore asks for finished strings
+// and only applies the Matter-specific parts through
+// [endpoint.ComposeNodeLabel]: the parameter suffix and the 32-byte
+// NodeLabel cap (Matter §9.13.6.5).
+//
+// Both methods are addressed by [matterendpoint.SourceKey] — the
+// daemon's own coordinates — which is why the interface lives here and
+// not in the bridge module.
+// loom:reachable:reason="satisfied by modelNameResolver and injected through Config; interface satisfaction is invisible to the analyzer"
+type NameResolver interface {
+	// EndpointLabel returns the operator-facing base label of the source
+	// identified by key — before any parameter suffix and before the
+	// NodeLabel cap.
+	EndpointLabel(key matterendpoint.SourceKey) string
+	// ParameterLabel returns the operator-facing label of the parameter
+	// key names, or "" when that parameter is the source's primary one
+	// and therefore adds nothing to the base label.
+	ParameterLabel(key matterendpoint.SourceKey) string
 }
 
 // ExposureChecker is the walk's allowlist gate. Implementations
@@ -86,13 +112,13 @@ type Config struct {
 // allowlist UI. Production daemons must inject a real checker.
 // loom:reachable:reason="taken by Assembler.SetExposureChecker and satisfied host-side by the matter store (cmd/openccu-loom/daemon_matter.go, wireMatterRuntime); interface satisfaction is invisible to the analyzer"
 type ExposureChecker interface {
-	IsExposed(ctx context.Context, key store.EndpointKey) (bool, error)
+	IsExposed(ctx context.Context, key matterendpoint.SourceKey) (bool, error)
 }
 
 // allowAllExposureChecker is the nil-safe fallback.
 type allowAllExposureChecker struct{}
 
-func (allowAllExposureChecker) IsExposed(_ context.Context, _ store.EndpointKey) (bool, error) {
+func (allowAllExposureChecker) IsExposed(_ context.Context, _ matterendpoint.SourceKey) (bool, error) {
 	return true, nil
 }
 
@@ -188,11 +214,11 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (end
 	if snap.CentralName == "" {
 		return endpoint.Snapshot{}, errors.New("matteradapter: snapshot CentralName is required")
 	}
-	names := a.cfg.NameResolver
+	var names NameResolver = a.cfg.NameResolver
 	if names == nil {
 		names = newModelNameResolver(snap.Devices, a.cfg.Labels, a.channelLabel())
 	}
-	out := endpoint.Snapshot{CentralName: snap.CentralName, ModelComplete: snap.ModelComplete}
+	out := endpoint.Snapshot{Scope: snap.CentralName, ModelComplete: snap.ModelComplete}
 	for _, dev := range snap.Devices {
 		if dev == nil {
 			continue
@@ -261,14 +287,27 @@ func attachPowerSource(dev *device.Device, specs []endpoint.Spec) {
 	}
 	target := 0
 	for i := 1; i < len(specs); i++ {
-		if specs[i].StableKey.ChannelNo < specs[target].StableKey.ChannelNo {
+		if specChannelNo(specs[i]) < specChannelNo(specs[target]) {
 			target = i
 		}
 	}
 	specs[target].PowerSource = battery
 }
 
-func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names endpoint.NameResolver, dev *device.Device, ch *device.Channel) ([]endpoint.Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
+// specChannelNo reads the channel number back out of a spec's stable
+// key. The bridge module carries the key opaquely, so the assertion —
+// not a parse of its rendered form — is how this package recovers its
+// own coordinates. A spec this package did not build has no channel and
+// sorts last, which keeps [attachPowerSource] deterministic instead of
+// panicking.
+func specChannelNo(spec endpoint.Spec) int {
+	if k, ok := spec.StableKey.(matterendpoint.SourceKey); ok {
+		return k.ChannelNo
+	}
+	return math.MaxInt
+}
+
+func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel) ([]endpoint.Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
 	out := make([]endpoint.Spec, 0, 4)
 
 	// An operator-hidden channel projects no endpoint, mirroring the
@@ -296,8 +335,8 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		return out, nil
 	}
 
-	allow := func(kind store.DPKind, key string) (bool, error) {
-		exposed, err := a.exposures.IsExposed(ctx, store.EndpointKey{
+	allow := func(kind matterendpoint.DPKind, key string) (bool, error) {
+		exposed, err := a.exposures.IsExposed(ctx, matterendpoint.SourceKey{
 			CentralName:   centralName,
 			DeviceAddress: dev.Address,
 			ChannelNo:     ch.Number,
@@ -313,12 +352,12 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 	// Custom DP (max one per channel).
 	if cdp := ch.CustomDataPoint(); cdp != nil {
 		if src, ok := cdp.(mattercontract.EndpointSource); ok {
-			ok, err := allow(store.DPKindCustom, dpKey(cdp))
+			ok, err := allow(matterendpoint.DPKindCustom, dpKey(cdp))
 			if err != nil {
 				return nil, err
 			}
 			if ok {
-				out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindCustom, dpKey(cdp), src))
+				out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src))
 			}
 		}
 	}
@@ -327,14 +366,14 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 	for _, calc := range ch.CalculatedDataPoints() {
 		key := dpKey(calc)
 		if src, ok := calc.(mattercontract.EndpointSource); ok {
-			allowed, err := allow(store.DPKindCalculated, key)
+			allowed, err := allow(matterendpoint.DPKindCalculated, key)
 			if err != nil {
 				return nil, err
 			}
 			if !allowed {
 				continue
 			}
-			out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindCalculated, key, src))
+			out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src))
 			continue
 		}
 		if !a.cfg.IncludeMeasurements {
@@ -350,14 +389,14 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		// Probing a different kind here can never match the row the
 		// operator switched on, so the exposure would stay inert while
 		// the UI reports it as enabled.
-		allowed, err := allow(store.DPKindCalculated, key)
+		allowed, err := allow(matterendpoint.DPKindCalculated, key)
 		if err != nil {
 			return nil, err
 		}
 		if !allowed {
 			continue
 		}
-		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, store.DPKindCalculated, key, meas))
+		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas))
 	}
 
 	// Combined DPs.
@@ -366,14 +405,14 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !ok {
 			continue
 		}
-		allowed, err := allow(store.DPKindCombined, dpKey(comb))
+		allowed, err := allow(matterendpoint.DPKindCombined, dpKey(comb))
 		if err != nil {
 			return nil, err
 		}
 		if !allowed {
 			continue
 		}
-		out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindCombined, dpKey(comb), src))
+		out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src))
 	}
 
 	// Generic DPs project to Matter on two paths:
@@ -419,14 +458,14 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !channelHasCustom {
 			if src, ok := gdp.(mattercontract.EndpointSource); ok {
 				if servers := src.MatterClusterServers(); len(servers) > 0 {
-					allowed, err := allow(store.DPKindGeneric, key)
+					allowed, err := allow(matterendpoint.DPKindGeneric, key)
 					if err != nil {
 						return nil, err
 					}
 					if !allowed {
 						continue
 					}
-					out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindGeneric, key, src))
+					out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src))
 					continue
 				}
 			}
@@ -436,7 +475,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !ok || meas.MatterMeasurementClass() == mattercontract.MeasurementNone {
 			continue
 		}
-		allowed, err := allow(store.DPKindGeneric, key)
+		allowed, err := allow(matterendpoint.DPKindGeneric, key)
 		if err != nil {
 			return nil, err
 		}
@@ -467,7 +506,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			continue
 		default:
 		}
-		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, store.DPKindGeneric, key, meas))
+		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas))
 	}
 
 	if len(pressMembers) > 0 {
@@ -507,7 +546,7 @@ const ElectricalGroupDPKey = "ELECTRICAL"
 // when no member survives the group's parameter filter.
 func (a *Assembler) makeElectricalGroupSpec(
 	centralName string,
-	names endpoint.NameResolver,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
 	members []device.ParameterDataPoint,
@@ -524,15 +563,16 @@ func (a *Assembler) makeElectricalGroupSpec(
 	if group == nil {
 		return endpoint.Spec{}, false
 	}
-	sourceKey := store.EndpointKey{
+	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
 		ChannelNo:     ch.Number,
-		DPKind:        store.DPKindGeneric,
+		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ElectricalGroupDPKey,
 	}
 	return endpoint.Spec{
 		StableKey:      sourceKey,
+		DeviceAddress:  dev.Address,
 		DeviceType:     measurementDeviceType(mattercontract.MeasurementElectrical),
 		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
 		ChannelAddress: ch.Address,
@@ -566,7 +606,7 @@ const ButtonGroupDPKey = "BUTTON"
 // the group's press family enumerate the same parameters.
 func (a *Assembler) makeButtonGroupSpec(
 	centralName string,
-	names endpoint.NameResolver,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
 	members []device.ParameterDataPoint,
@@ -579,16 +619,17 @@ func (a *Assembler) makeButtonGroupSpec(
 	if group == nil {
 		return endpoint.Spec{}, false
 	}
-	sourceKey := store.EndpointKey{
+	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
 		ChannelNo:     ch.Number,
-		DPKind:        store.DPKindGeneric,
+		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ButtonGroupDPKey,
 	}
 	return endpoint.Spec{
-		StableKey:  sourceKey,
-		DeviceType: measurementDeviceType(mattercontract.MeasurementMomentarySwitch),
+		StableKey:     sourceKey,
+		DeviceAddress: dev.Address,
+		DeviceType:    measurementDeviceType(mattercontract.MeasurementMomentarySwitch),
 		// The endpoint stands for the whole physical button (the
 		// channel), not one PRESS_* parameter — no parameter suffix.
 		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
@@ -648,14 +689,14 @@ func genericDPKeyForMeasurement(dp any) string {
 // makeSpec describes one source-backed bridged endpoint.
 func (a *Assembler) makeSpec(
 	centralName string,
-	names endpoint.NameResolver,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
-	kind store.DPKind,
+	kind matterendpoint.DPKind,
 	key string,
 	src mattercontract.EndpointSource,
 ) endpoint.Spec {
-	sourceKey := store.EndpointKey{
+	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
 		ChannelNo:     ch.Number,
@@ -664,6 +705,7 @@ func (a *Assembler) makeSpec(
 	}
 	return endpoint.Spec{
 		StableKey:      sourceKey,
+		DeviceAddress:  dev.Address,
 		DeviceType:     src.MatterDeviceType(),
 		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
 		ChannelAddress: ch.Address,
@@ -677,14 +719,14 @@ func (a *Assembler) makeSpec(
 // one channel are otherwise indistinguishable in a controller's UI.
 func (a *Assembler) makeMeasurementSpec(
 	centralName string,
-	names endpoint.NameResolver,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
-	kind store.DPKind,
+	kind matterendpoint.DPKind,
 	key string,
 	meas mattercontract.MeasurementSource,
 ) endpoint.Spec {
-	sourceKey := store.EndpointKey{
+	sourceKey := matterendpoint.SourceKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
 		ChannelNo:     ch.Number,
@@ -693,6 +735,7 @@ func (a *Assembler) makeMeasurementSpec(
 	}
 	return endpoint.Spec{
 		StableKey:      sourceKey,
+		DeviceAddress:  dev.Address,
 		DeviceType:     measurementDeviceType(meas.MatterMeasurementClass()),
 		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
 		ChannelAddress: ch.Address,

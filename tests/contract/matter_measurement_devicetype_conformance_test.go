@@ -25,9 +25,9 @@ import (
 // The two guards below hold the measurement side of that contract: every
 // [interfaces.MatterMeasurementClass] must name a device type that exists,
 // and that device type must permit the class's cluster as a server. The
-// oracle is schema.DeviceTypeServerClusters, codegen'd from matter.js HEAD via
-// `make generate-matter-schema` — so the rules move when the spec does,
-// without anyone re-reading a PDF.
+// oracle is schema.DeviceTypeServerClusters, codegen'd from matter.js HEAD in
+// the go-fabric module — so the rules move when the spec does, without anyone
+// re-reading a PDF.
 //
 // The endpoint-source side of the same contract — a custom DP's
 // MatterDeviceType against its MatterClusterServers — needs real devices to
@@ -134,8 +134,8 @@ func TestMeasurementClassProjectsOntoAConformantDeviceType(t *testing.T) {
 		allowed, known := schema.DeviceTypeAllowsServerCluster(deviceType, clusterID)
 		if !known {
 			t.Errorf("measurement class %d names device type 0x%04X, which the matter.js HEAD "+
-				"schema snapshot does not know — either the id is wrong or the snapshot is stale "+
-				"(`make generate-matter-schema`)", class, deviceType)
+				"schema snapshot does not know — either the id is wrong or the pinned snapshot is "+
+				"stale (`make sync-matter-schema`)", class, deviceType)
 			continue
 		}
 		if !allowed {
