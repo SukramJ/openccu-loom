@@ -7,10 +7,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -88,7 +89,7 @@ func addressesOf(devs []*device.Device) []string {
 }
 
 // devicesIn flattens the snapshotter's per-central output.
-func devicesIn(snaps []endpoint.DeviceSnapshot) []*device.Device {
+func devicesIn(snaps []matteradapter.DeviceSnapshot) []*device.Device {
 	var out []*device.Device
 	for i := range snaps {
 		out = append(out, snaps[i].Devices...)

@@ -16,7 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
@@ -43,7 +44,7 @@ func (f wbFakeSessionLookup) Lookup(_ uint16) (*channel.Session, bool) {
 
 // ─── snapshotter ─────────────────────────────────────────────────────────
 
-func wbEmptySnapshotter(_ context.Context) []endpoint.DeviceSnapshot { return nil }
+func wbEmptySnapshotter(_ context.Context) []matteradapter.DeviceSnapshot { return nil }
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 

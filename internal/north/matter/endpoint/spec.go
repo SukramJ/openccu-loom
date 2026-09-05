@@ -22,6 +22,7 @@ import (
 // the state the topology was built with. nil means "always reachable",
 // which is what an endpoint with no live source (the root and the
 // aggregator) needs.
+// loom:reachable:reason="carried on Spec and Endpoint and called by materialize on every dispatch; a named func type reached only through a struct field is invisible to the analyzer"
 type AvailabilityProbe func() bool
 
 // Spec is one bridged endpoint as its owner describes it: the
@@ -35,6 +36,7 @@ type AvailabilityProbe func() bool
 // and persistence, the three-tier root/aggregator scaffolding, the
 // per-endpoint state that must survive a reassembly, the cluster
 // surface — depends on nothing but the fields below.
+// loom:reachable:reason="constructed by the host adapter and consumed by Assemble in this package; a struct that only ever travels as a slice element has no construction site the analyzer follows (internal/north/matteradapter/assembler.go:188)"
 type Spec struct {
 	// StableKey identifies the source across reassemblies and daemon
 	// restarts. It is the matter_endpoints primary key, so it decides
@@ -84,6 +86,7 @@ type Spec struct {
 // Both methods are addressed by [store.EndpointKey], so an
 // implementation resolves them against its own model without the
 // assembly knowing what that model looks like.
+// loom:reachable:reason="implemented host-side by matteradapter.modelNameResolver (nameresolver.go:124) and injected through the adapter config; interface satisfaction is invisible to the analyzer"
 type NameResolver interface {
 	// EndpointLabel returns the operator-facing base label of the
 	// source identified by key — before any parameter suffix and
@@ -95,10 +98,14 @@ type NameResolver interface {
 	ParameterLabel(key store.EndpointKey) string
 }
 
-// composeNodeLabel appends the parameter suffix to the base label and
+// ComposeNodeLabel appends the parameter suffix to the base label and
 // caps the result at the Matter NodeLabel maximum. Over-long inputs
 // lose the suffix first, then the tail of the base label.
-func composeNodeLabel(base, suffix string) string {
+//
+// Exported for the owner that fills [Spec.FriendlyName]: the suffix
+// convention and the 32-byte cap are Matter's, so a caller composing a
+// label must not re-derive either of them.
+func ComposeNodeLabel(base, suffix string) string {
 	if suffix != "" {
 		base = strings.TrimSpace(base + " (" + suffix + ")")
 	}

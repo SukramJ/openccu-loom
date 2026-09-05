@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
+	"errors"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
@@ -53,4 +54,14 @@ func (s *fakeStore) ListEndpoints(_ context.Context, centralName string) ([]stor
 func (s *fakeStore) RemoveEndpoint(_ context.Context, key store.EndpointKey) error {
 	delete(s.rows, key)
 	return nil
+}
+
+// errStoreError is a sentinel used in tests that need GetEndpoint to fail.
+var errStoreError = errors.New("fake store: injected error")
+
+// failingStore returns errStoreError from GetEndpoint.
+type failingStore struct{ *fakeStore }
+
+func (f *failingStore) GetEndpoint(_ context.Context, _ store.EndpointKey) (store.EndpointRecord, error) {
+	return store.EndpointRecord{}, errStoreError
 }

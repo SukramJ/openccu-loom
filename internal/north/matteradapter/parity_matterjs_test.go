@@ -18,7 +18,7 @@
 // verifies the structural invariants so a change in the assembler logic does
 // not silently break the Apple Home / Google Home bridge composition pattern.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
@@ -96,16 +97,16 @@ func TestParityMatterJS_AggregatorTopology_ThreeTier(t *testing.T) {
 		deviceType: 0x010A, // OnOffPlugInUnit
 	})
 
-	snap := endpoint.DeviceSnapshot{
+	snap := matteradapter.DeviceSnapshot{
 		CentralName: "ccu1",
 		Devices:     []*device.Device{dev1, dev2},
 	}
 
-	a, err := endpoint.New(newFakeStore(), validConfig(), nil)
+	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
+	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -184,7 +185,7 @@ func TestParityMatterJS_AggregatorTopology_ThreeTier(t *testing.T) {
 func TestParityMatterJS_AggregatorTopology_EmptySnapshotIsStillPresent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
+	a, _ := matteradapter.New(newFakeStore(), validConfig(), nil)
 
 	top, err := a.AssembleDevices(ctx, nil)
 	if err != nil {
@@ -222,8 +223,8 @@ func TestParityMatterJS_AggregatorTopology_PartsListContainsBridgedIDs(t *testin
 		deviceType: 0x010A,
 	})
 
-	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	a, _ := matteradapter.New(newFakeStore(), validConfig(), nil)
+	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -272,10 +273,10 @@ func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T
 	})
 
 	fs := newFakeStore()
-	a, _ := endpoint.New(fs, validConfig(), nil)
+	a, _ := matteradapter.New(fs, validConfig(), nil)
 
-	full := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
-	top1, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{full})
+	full := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
+	top1, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{full})
 	if err != nil {
 		t.Fatalf("Assemble(full): %v", err)
 	}
@@ -283,8 +284,8 @@ func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T
 
 	// A model-incomplete assembly (the boot-time shape) keeps the number
 	// reserved even though the source is currently absent.
-	incomplete := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
-	if _, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{incomplete}); err != nil {
+	incomplete := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
+	if _, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{incomplete}); err != nil {
 		t.Fatalf("Assemble(incomplete): %v", err)
 	}
 	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 1 || rows[0].EndpointID != assigned {
@@ -293,8 +294,8 @@ func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T
 
 	// Only a model-complete assembly without the source (the explicit
 	// removal case) releases the number.
-	removed := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: true}
-	if _, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{removed}); err != nil {
+	removed := matteradapter.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: true}
+	if _, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{removed}); err != nil {
 		t.Fatalf("Assemble(removed): %v", err)
 	}
 	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 0 {

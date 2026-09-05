@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package eligibility
+package matteradapter
 
 import (
 	"slices"
@@ -18,11 +18,11 @@ import (
 // model actually materialises. A probe that no production type satisfies is
 // a permanently dead rung: the key silently falls through to the next one
 // while the doc comment keeps promising a derivation that never happens.
-// Add a rung to [dpKey] and it has to appear here with a real implementor.
+// Add a rung to [candidateDPKey] and it has to appear here with a real implementor.
 func TestDPKeyProbesHaveProductionImplementations(t *testing.T) {
 	t.Parallel()
 	// One representative per source kind collectChannelCandidates feeds to
-	// dpKey: the custom wrapper on a channel, a calculated DP, a generic DP.
+	// candidateDPKey: the custom wrapper on a channel, a calculated DP, a generic DP.
 	// Typed nil pointers suffice — a type assertion never dereferences.
 	sources := []any{
 		(*light.Light)(nil),
@@ -39,7 +39,7 @@ func TestDPKeyProbesHaveProductionImplementations(t *testing.T) {
 	}
 	for _, probe := range probes {
 		if !slices.ContainsFunc(sources, probe.matches) {
-			t.Errorf("no production data-point type implements %s — the dpKey rung using it can never run", probe.name)
+			t.Errorf("no production data-point type implements %s — the candidateDPKey rung using it can never run", probe.name)
 		}
 	}
 }

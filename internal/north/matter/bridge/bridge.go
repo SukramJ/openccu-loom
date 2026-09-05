@@ -36,6 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
@@ -52,10 +53,10 @@ var (
 // Snapshotter returns the current model snapshots for endpoint
 // topology assembly. Typically wraps the central registry walk:
 //
-//	func(ctx context.Context) []endpoint.DeviceSnapshot {
-//	    var out []endpoint.DeviceSnapshot
+//	func(ctx context.Context) []matteradapter.DeviceSnapshot {
+//	    var out []matteradapter.DeviceSnapshot
 //	    for _, c := range reg.List() {
-//	        out = append(out, endpoint.DeviceSnapshot{
+//	        out = append(out, matteradapter.DeviceSnapshot{
 //	            CentralName: c.Name(),
 //	            Devices:     c.ModelRegistry.List(),
 //	        })
@@ -66,7 +67,7 @@ var (
 // The bridge calls Snapshotter once at [Start] and on every
 // [Reassemble]; it never caches the result — every call gets a
 // fresh snapshot.
-type Snapshotter func(ctx context.Context) []endpoint.DeviceSnapshot
+type Snapshotter func(ctx context.Context) []matteradapter.DeviceSnapshot
 
 // Config bundles the bridge's identity and listener parameters. All
 // fields are validated at [New] time.
@@ -103,7 +104,7 @@ type Config struct {
 	// caller's; no global ticker is involved.
 	AdvertiseTimeout time.Duration
 
-	// IncludeMeasurements passes [endpoint.Config.IncludeMeasurements]
+	// IncludeMeasurements passes [matteradapter.Config.IncludeMeasurements]
 	// through to the assembler so standalone sensor endpoints (Temperature,
 	// Humidity, …) are created from [mattercontract.MeasurementSource]
 	// DPs. Off by default; operators turn it on with
@@ -117,7 +118,7 @@ type Config struct {
 	// and then silently dropped here.
 	IncludeMeasurements bool
 
-	// ExposeSecondaryChannels passes [endpoint.Config.ExposeSecondaryChannels]
+	// ExposeSecondaryChannels passes [matteradapter.Config.ExposeSecondaryChannels]
 	// through to the assembler. Off by default: a multi-channel HmIP actor
 	// (switch / dimmer / cover / lock / siren / valve) projects a single
 	// Matter endpoint from its primary channel instead of duplicating the
@@ -125,12 +126,12 @@ type Config struct {
 	// actor channels. Sourced from [config.NorthMatter.ExposeSecondaryChannels].
 	ExposeSecondaryChannels bool
 
-	// Labels passes [endpoint.Config.Labels] through to the assembler:
+	// Labels passes [matteradapter.Config.Labels] through to the assembler:
 	// the daemon-locale-bound parameter translator used for the
 	// NodeLabel suffix of measurement sub-endpoints. Nil is tolerated
 	// (title-cased parameter fallback).
 	Labels device.ParameterTranslator
-	// ChannelLabel passes [endpoint.Config.ChannelLabel] through: the
+	// ChannelLabel passes [matteradapter.Config.ChannelLabel] through: the
 	// already-localized word for a channel ("Channel" / "Kanal") used as
 	// the NodeLabel channel-number fallback. The Matter subtree resolves
 	// no catalogues of its own — the host hands the finished word down,
@@ -169,7 +170,7 @@ type Bridge struct {
 	snapshotter Snapshotter
 	logger      *slog.Logger
 	advertiser  mdns.Advertiser
-	assembler   *endpoint.Assembler
+	assembler   *matteradapter.Assembler
 
 	mu         sync.RWMutex
 	listener   *udp.Listener
@@ -479,7 +480,7 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 		advertiser = mdns.NewNoop()
 	}
 
-	asm, err := endpoint.New(s, endpoint.Config{
+	asm, err := matteradapter.New(s, matteradapter.Config{
 		ExposeSecondaryChannels: cfg.ExposeSecondaryChannels,
 		VendorID:                cfg.VendorID,
 		ProductID:               cfg.ProductID,
@@ -932,7 +933,7 @@ func (b *Bridge) EmitFabricRemoved(fabricIndex uint8) {
 // `matter_exposures` allowlist is enforced.
 //
 // Pass nil to revert to the allow-all default.
-func (b *Bridge) AttachExposureChecker(c endpoint.ExposureChecker) {
+func (b *Bridge) AttachExposureChecker(c matteradapter.ExposureChecker) {
 	if b == nil || b.assembler == nil {
 		return
 	}

@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	matterendpoint "github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -75,8 +76,8 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 	// cmd/openccu-loom/daemon_matter.go: the matter store over the
 	// shared DB handle, a snapshotter closure over the live model, and
 	// an advertiser.
-	snapshotter := func(_ context.Context) []matterendpoint.DeviceSnapshot {
-		return []matterendpoint.DeviceSnapshot{{
+	snapshotter := func(_ context.Context) []matteradapter.DeviceSnapshot {
+		return []matteradapter.DeviceSnapshot{{
 			CentralName:   "ccu1",
 			Devices:       []*device.Device{dev},
 			ModelComplete: true,
@@ -116,7 +117,7 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 		found    int
 	)
 	for _, ep := range topo.Bridged() {
-		if ep.SourceKey.DPKey == matterendpoint.ButtonGroupDPKey {
+		if ep.SourceKey.DPKey == matteradapter.ButtonGroupDPKey {
 			switchEP = ep.ID
 			found++
 		}

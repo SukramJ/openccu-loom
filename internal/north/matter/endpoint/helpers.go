@@ -5,140 +5,15 @@ package endpoint
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 
-	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
 // isNotFound matches the [store.ErrEndpointNotFound] sentinel via
 // errors.Is. Wrapped to keep the assembler call sites concise.
 func isNotFound(err error) bool {
 	return errors.Is(err, store.ErrEndpointNotFound)
-}
-
-// modelNameResolver answers the library's [NameResolver] questions from
-// the device model, so the label a bridged endpoint carries is the
-// model's own answer rather than a Matter-side re-derivation.
-//
-// [device.Channel.NameData] ([naming.NameData.TranslatedFullName]) is
-// the same naming authority MQTT discovery and REST use, including its
-// device/channel de-duplication rule ([naming] package doc) — Matter
-// must not re-derive that rule, or the two planes drift apart and show
-// the same device under two different names.
-//
-// One piece has no model equivalent: a channel the operator never
-// named collapses, in [naming.NameData], to the device name alone —
-// fine for MQTT/REST, which disambiguate same-named entities by their
-// stable id, but Matter's NodeLabel is the only thing Apple/Google
-// Home show, so several unnamed channels of one device would all
-// render identically. channelWord + the raw channel number is kept as
-// a Matter-only disambiguator for that case.
-type modelNameResolver struct {
-	devices  map[string]*device.Device
-	channels map[channelRef]*device.Channel
-	labels   device.ParameterTranslator
-	// channelWord is the localized word for a channel ("Channel",
-	// "Kanal"), supplied by the host that owns the catalogue.
-	channelWord string
-}
-
-// channelRef addresses one channel by device address and channel
-// number — the two coordinates [store.EndpointKey] carries.
-type channelRef struct {
-	deviceAddress string
-	channelNumber int
-}
-
-// newModelNameResolver indexes one central's fleet for label lookup.
-func newModelNameResolver(devices []*device.Device, labels device.ParameterTranslator, channelWord string) *modelNameResolver {
-	r := &modelNameResolver{
-		devices:     make(map[string]*device.Device, len(devices)),
-		channels:    make(map[channelRef]*device.Channel, len(devices)*4),
-		labels:      labels,
-		channelWord: channelWord,
-	}
-	for _, dev := range devices {
-		if dev == nil {
-			continue
-		}
-		r.devices[dev.Address] = dev
-		for _, ch := range dev.Channels() {
-			if ch == nil {
-				continue
-			}
-			r.channels[channelRef{deviceAddress: dev.Address, channelNumber: ch.Number}] = ch
-		}
-	}
-	return r
-}
-
-// channelFor returns the indexed channel for key, or nil when the key
-// names a source outside the indexed fleet.
-func (r *modelNameResolver) channelFor(key store.EndpointKey) *device.Channel {
-	return r.channels[channelRef{deviceAddress: key.DeviceAddress, channelNumber: key.ChannelNo}]
-}
-
-// EndpointLabel implements [NameResolver].
-func (r *modelNameResolver) EndpointLabel(key store.EndpointKey) string {
-	ch := r.channelFor(key)
-	label := ""
-	if ch != nil {
-		label = ch.NameData().TranslatedFullName()
-	}
-	if label == "" {
-		// Neither the device nor the channel carries an operator name;
-		// [naming.NameData] has nothing to build on either. Fall back to
-		// the device address, the one identifier guaranteed to exist.
-		if dev := r.devices[key.DeviceAddress]; dev != nil {
-			label = dev.Address
-		}
-	}
-	if ch != nil && ch.Number > 0 && ch.Name() == "" {
-		label = strings.TrimSpace(fmt.Sprintf("%s %s %d", label, r.channelWord, ch.Number))
-	}
-	return label
-}
-
-// ParameterLabel implements [NameResolver]. It routes through the same
-// primitives as the MQTT discovery builder and the REST data-point
-// handler ([device.TranslatedParameterLabel] →
-// [naming.EntityDisplayName]) so the label matches the entity name
-// those surfaces emit for the same data point: locale-aware OCCU
-// translation first, title-cased parameter as fallback.
-//
-// A parameter flagged "primary" (explicit-empty translation) yields an
-// empty label — the endpoint then carries the device + channel name
-// alone, mirroring how MQTT / REST collapse the entity name to the
-// device name for primary parameters.
-func (r *modelNameResolver) ParameterLabel(key store.EndpointKey) string {
-	channelType := ""
-	if ch := r.channelFor(key); ch != nil {
-		channelType = ch.Type
-	}
-	translation, labelOmitted := device.TranslatedParameterLabel(key.DPKey, channelType, r.labels)
-	name, omitted := naming.EntityDisplayName(translation, labelOmitted, key.DPKey)
-	if omitted {
-		return ""
-	}
-	return name
-}
-
-var _ NameResolver = (*modelNameResolver)(nil)
-
-// measurementDeviceType is a thin alias for
-// [mattercontract.MeasurementClassDeviceType], the canonical
-// MatterMeasurementClass → DeviceType mapping. Kept here for
-// backward compatibility with the existing test surface; new code
-// should call the interfaces helper directly so the model layer
-// remains the single source of truth (ADR 0012 "rich model, dumb
-// bridge").
-func measurementDeviceType(class mattercontract.MeasurementClass) uint16 {
-	return mattercontract.MeasurementClassDeviceType(class)
 }
 
 // deviceTypeRevision returns the Matter Application Cluster Library

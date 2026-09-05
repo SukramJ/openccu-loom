@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 
 // ---------------------------------------------------------------------------
@@ -66,10 +67,10 @@ func (f *fakeExposureStore) CountEnabled(_ context.Context, _ string) (int, erro
 }
 
 type fakeCandidateProvider struct {
-	candidates []eligibility.Candidate
+	candidates []matteradapter.Candidate
 }
 
-func (f *fakeCandidateProvider) MatterCandidates(_ context.Context) []eligibility.Candidate {
+func (f *fakeCandidateProvider) MatterCandidates(_ context.Context) []matteradapter.Candidate {
 	return f.candidates
 }
 
@@ -208,7 +209,7 @@ func TestMatterExposable_HappyPath_Returns200_MergesData(t *testing.T) {
 		DPKey:         "onoff",
 	}
 	provider := &fakeCandidateProvider{
-		candidates: []eligibility.Candidate{
+		candidates: []matteradapter.Candidate{
 			{
 				Key:         key,
 				DisplayName: "Living Room Switch",
@@ -701,8 +702,8 @@ func TestMatterCandidateProviderFunc_Nil(t *testing.T) {
 
 func TestMatterCandidateProviderFunc_NonNil(t *testing.T) {
 	t.Parallel()
-	want := []eligibility.Candidate{{DisplayName: "test"}}
-	f := MatterCandidateProviderFunc(func(_ context.Context) []eligibility.Candidate {
+	want := []matteradapter.Candidate{{DisplayName: "test"}}
+	f := MatterCandidateProviderFunc(func(_ context.Context) []matteradapter.Candidate {
 		return want
 	})
 	got := f.MatterCandidates(context.Background())
@@ -783,7 +784,7 @@ func TestValidateExposureKey_EmptyFields(t *testing.T) {
 func TestMatterExposable_SortOrder(t *testing.T) {
 	t.Parallel()
 	provider := &fakeCandidateProvider{
-		candidates: []eligibility.Candidate{
+		candidates: []matteradapter.Candidate{
 			{
 				Key: matterstore.EndpointKey{
 					CentralName: "ccu-02", DeviceAddress: "DEV002",
@@ -834,7 +835,7 @@ func TestMatterExposable_SortOrder(t *testing.T) {
 func TestMatterExposable_ParameterLabel_TitleCasedWhenLabelerIsNil(t *testing.T) {
 	t.Parallel()
 	provider := &fakeCandidateProvider{
-		candidates: []eligibility.Candidate{
+		candidates: []matteradapter.Candidate{
 			{
 				Key: matterstore.EndpointKey{
 					CentralName:   "ccu-01",

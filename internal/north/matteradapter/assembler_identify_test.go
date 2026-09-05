@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
@@ -120,12 +121,12 @@ func TestAssemble_IdentifyRunsAcrossReassemblyAndStopsWhenTheEndpointVanishes(t 
 	devX := buildIdentifiableDevice("AAA0001", "X")
 	devY := buildIdentifiableDevice("BBB0002", "Y")
 
-	a, err := endpoint.New(newFakeStore(), validConfig(), nil)
+	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
-	top1, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX, devY}}})
+	top1, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX, devY}}})
 	if err != nil {
 		t.Fatalf("Assemble #1: %v", err)
 	}
@@ -144,7 +145,7 @@ func TestAssemble_IdentifyRunsAcrossReassemblyAndStopsWhenTheEndpointVanishes(t 
 
 	// (1) Unrelated change: sibling Y removed. X is rebuilt as a new
 	// *Endpoint but must keep identifying.
-	top2, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX}}})
+	top2, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX}}})
 	if err != nil {
 		t.Fatalf("Assemble #2: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestAssemble_IdentifyRunsAcrossReassemblyAndStopsWhenTheEndpointVanishes(t 
 	}
 
 	// (2) X itself vanishes: its countdown must stop with it.
-	if _, err = a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: central, ModelComplete: true}}); err != nil {
+	if _, err = a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{{CentralName: central, ModelComplete: true}}); err != nil {
 		t.Fatalf("Assemble #3: %v", err)
 	}
 	goleak.VerifyNone(t, ignore)

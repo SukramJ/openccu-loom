@@ -351,7 +351,7 @@ device** rather than one endpoint per Discovery entity
 reshapes the candidate list the "Expose" tab renders:
 
 - **Secondary / group-STATE constituents are folded by default.**
-  `eligibility.go` `CollectCandidates` drops a custom-DP entity's
+  `matteradapter.CollectCandidates` drops a custom-DP entity's
   non-primary constituents when `exposeSecondary` is false (the
   default). Only the device's primary host entity surfaces as a
   candidate. The redundant per-channel group-STATE rows no longer

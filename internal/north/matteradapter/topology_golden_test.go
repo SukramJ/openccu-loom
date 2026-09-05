@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"bytes"
@@ -23,6 +23,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bootid"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -31,7 +32,7 @@ import (
 
 // updateTopologyGolden rewrites the fixture from the current output:
 //
-//	go test -update-topology-golden ./internal/north/matter/endpoint/...
+//	go test -update-topology-golden ./internal/north/matteradapter/...
 //
 // Declared with its own flag name because the repository already owns a
 // package-level `-update` in tests/golden and a `-update-naming`
@@ -313,8 +314,8 @@ func goldenContactSensor(t *testing.T) *device.Device {
 // under. ChannelLabel is deliberately left empty so the recorded names
 // travel through [Assembler.channelLabel]'s own fallback word rather
 // than a value the test supplies.
-func goldenConfig() endpoint.Config {
-	return endpoint.Config{
+func goldenConfig() matteradapter.Config {
+	return matteradapter.Config{
 		VendorID:            0x1234,
 		ProductID:           0x5678,
 		NodeLabel:           "GoldenBridge",
@@ -431,7 +432,7 @@ func sortedClusterIDs(servers []mattercontract.ClusterServer) []string {
 
 // TestAssembledTopologyMatchesGolden is the behaviour-preservation
 // anchor for the endpoint assembler: it runs the real
-// [endpoint.Assembler] over a fixed, hand-built device fleet and pins
+// [matteradapter.Assembler] over a fixed, hand-built device fleet and pins
 // everything an already-commissioned controller has cached about the
 // result.
 //
@@ -480,7 +481,7 @@ func sortedClusterIDs(servers []mattercontract.ClusterServer) []string {
 //
 // Refresh after an intentional change with:
 //
-//	go test -update-topology-golden ./internal/north/matter/endpoint/...
+//	go test -update-topology-golden ./internal/north/matteradapter/...
 func TestAssembledTopologyMatchesGolden(t *testing.T) {
 	if got := bootid.Salt(); got != [16]byte{} {
 		t.Fatalf("bootid rotation is enabled in this test binary (salt %x); every recorded UniqueID "+
@@ -488,11 +489,11 @@ func TestAssembledTopologyMatchesGolden(t *testing.T) {
 			"at package scope — move that into its own binary before touching this fixture.", got)
 	}
 
-	a, err := endpoint.New(newFakeStore(), goldenConfig(), slog.New(slog.DiscardHandler))
+	a, err := matteradapter.New(newFakeStore(), goldenConfig(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	top, err := a.AssembleDevices(context.Background(), []endpoint.DeviceSnapshot{{
+	top, err := a.AssembleDevices(context.Background(), []matteradapter.DeviceSnapshot{{
 		CentralName:   goldenCentralName,
 		Devices:       goldenFleet(t),
 		ModelComplete: true,
@@ -531,7 +532,7 @@ func TestAssembledTopologyMatchesGolden(t *testing.T) {
 	}
 	wantRaw, err := os.ReadFile(goldenPath) //nolint:gosec // G304: constant path under the package's own testdata
 	if err != nil {
-		t.Fatalf("read golden: %v — run `go test -update-topology-golden ./internal/north/matter/endpoint/...`", err)
+		t.Fatalf("read golden: %v — run `go test -update-topology-golden ./internal/north/matteradapter/...`", err)
 	}
 	// Windows checkouts with core.autocrlf=true rewrite LF→CRLF on text
 	// files; the encoder always emits LF.

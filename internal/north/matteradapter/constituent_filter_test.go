@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package eligibility
+package matteradapter
 
 import (
 	"testing"

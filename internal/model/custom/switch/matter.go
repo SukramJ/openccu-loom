@@ -114,7 +114,7 @@ func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInU
 // in any role — its carrier is ElectricalSensor (0x0510), which also makes
 // PowerTopology mandatory alongside them. The metering channel now projects
 // its own consolidated ElectricalSensor endpoint; see
-// endpoint.ElectricalGroupDPKey.
+// matteradapter.ElectricalGroupDPKey.
 func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{
 		s,

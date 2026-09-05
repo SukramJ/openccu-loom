@@ -41,7 +41,6 @@ import (
 	matterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	matterschema "github.com/SukramJ/openccu-loom/internal/north/matter/schema"
@@ -54,6 +53,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
@@ -3350,18 +3350,18 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 }
 
 // matterSnapshotter builds the bridge's topology snapshotter: one
-// [endpoint.DeviceSnapshot] per registered central, read live from the central
+// [matteradapter.DeviceSnapshot] per registered central, read live from the central
 // registry so runtime-added centrals surface on the next assembly. Each
 // snapshot's ModelComplete flag is stamped from the readiness latch; a nil
 // readiness marks every central model-incomplete (the GC-off fail-safe).
 func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness) matterbridge.Snapshotter {
-	return func(_ context.Context) []endpoint.DeviceSnapshot {
-		var out []endpoint.DeviceSnapshot
+	return func(_ context.Context) []matteradapter.DeviceSnapshot {
+		var out []matteradapter.DeviceSnapshot
 		for _, u := range reg.List() {
 			if u == nil || u.ModelRegistry == nil {
 				continue
 			}
-			out = append(out, endpoint.DeviceSnapshot{
+			out = append(out, matteradapter.DeviceSnapshot{
 				CentralName:   u.Name(),
 				Devices:       releasedDevicesOf(u),
 				ModelComplete: readiness != nil && readiness.isReady(u.Name()),

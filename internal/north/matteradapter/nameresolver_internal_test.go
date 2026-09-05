@@ -1,56 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Package endpoint (internal white-box tests for unexported helpers).
-package endpoint
+// Package matteradapter (internal white-box tests for the model-backed
+// naming authority).
+package matteradapter
 
 import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
-
-// ─── measurementDeviceType ───────────────────────────────────────────
-
-func TestMeasurementDeviceType(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		class mattercontract.MeasurementClass
-		want  uint16
-	}{
-		{mattercontract.MeasurementTemperature, 0x0302},
-		{mattercontract.MeasurementHumidity, 0x0307},
-		{mattercontract.MeasurementIlluminance, 0x0106},
-		{mattercontract.MeasurementPressure, 0x0305},
-		{mattercontract.MeasurementCO2, 0x002C},
-		{mattercontract.MeasurementPM25, 0x002C},
-		{mattercontract.MeasurementPM10, 0x002C},
-		{mattercontract.MeasurementOccupancy, 0x0107},
-		{mattercontract.MeasurementContact, 0x0015},
-		// Leak rides on ContactSensor (0x0015), not WaterLeakDetector
-		// (0x0043) — see mattercontract.MeasurementClassDeviceType.
-		{mattercontract.MeasurementLeak, 0x0015},
-		{mattercontract.MeasurementMomentarySwitch, 0x000F},
-		{mattercontract.MeasurementBattery, 0x0000},
-		{mattercontract.MeasurementPower, 0x0000},
-		{mattercontract.MeasurementEnergy, 0x0000},
-		{mattercontract.MeasurementNone, 0x0000},
-	}
-
-	for _, tc := range cases {
-		t.Run("", func(t *testing.T) {
-			t.Parallel()
-			got := measurementDeviceType(tc.class)
-			if got != tc.want {
-				t.Errorf("class=%d: got 0x%04X, want 0x%04X", tc.class, got, tc.want)
-			}
-		})
-	}
-}
 
 // ─── node label ──────────────────────────────────────────────────────
 
@@ -83,7 +45,7 @@ func keyFor(dev *device.Device, ch *device.Channel, param string) store.Endpoint
 // authority for the base label, then compose + cap.
 func nodeLabelFor(dev *device.Device, ch *device.Channel, paramSuffix, channelWord string) string {
 	r := newModelNameResolver([]*device.Device{dev}, nil, channelWord)
-	return composeNodeLabel(r.EndpointLabel(keyFor(dev, ch, "")), paramSuffix)
+	return endpoint.ComposeNodeLabel(r.EndpointLabel(keyFor(dev, ch, "")), paramSuffix)
 }
 
 func TestNodeLabel_DeviceNameOnly(t *testing.T) {

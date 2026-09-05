@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-package endpoint_test
+package matteradapter_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 )
 
 // TestAssemble_LargeFleet600Endpoints regresses against ADR 0012
@@ -55,12 +55,12 @@ func TestAssemble_LargeFleet600Endpoints(t *testing.T) {
 		devs = append(devs, dev)
 	}
 
-	snap := endpoint.DeviceSnapshot{CentralName: centralName, Devices: devs}
-	a, err := endpoint.New(newFakeStore(), validConfig(), nil)
+	snap := matteradapter.DeviceSnapshot{CentralName: centralName, Devices: devs}
+	a, err := matteradapter.New(newFakeStore(), validConfig(), nil)
 	if err != nil {
-		t.Fatalf("endpoint.New: %v", err)
+		t.Fatalf("matteradapter.New: %v", err)
 	}
-	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
+	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -128,13 +128,13 @@ func TestAssemble_RejectEndpointIDOverflow(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(src)
 
-	snap := endpoint.DeviceSnapshot{CentralName: centralName, Devices: []*device.Device{dev}}
+	snap := matteradapter.DeviceSnapshot{CentralName: centralName, Devices: []*device.Device{dev}}
 
 	fs := newFakeStore()
 	fs.nextID = 0xFFFE // next assignment would land on 0xFFFE; the one after that overflows.
 
-	a, _ := endpoint.New(fs, validConfig(), nil)
-	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
+	a, _ := matteradapter.New(fs, validConfig(), nil)
+	top, err := a.AssembleDevices(ctx, []matteradapter.DeviceSnapshot{snap})
 	if err != nil {
 		// Acceptable: the assigner refused to mint near the boundary.
 		// The goal is "no silent wraparound" — log and move on.

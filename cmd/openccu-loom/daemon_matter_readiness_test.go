@@ -7,9 +7,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -66,7 +67,7 @@ func TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag(t *testing.T) {
 		t.Error("ccu-b must stay model-incomplete; its bring-up has not completed")
 	}
 
-	byName := map[string]endpoint.DeviceSnapshot{}
+	byName := map[string]matteradapter.DeviceSnapshot{}
 	for _, s := range matterSnapshotter(reg, readiness)(context.Background()) {
 		byName[s.CentralName] = s
 	}
@@ -128,7 +129,7 @@ func TestMatterSnapshotter_StampsModelCompletePerCentral(t *testing.T) {
 	snap := matterSnapshotter(reg, readiness)
 
 	// Boot shape: registered centrals, no device load completed yet.
-	byName := map[string]endpoint.DeviceSnapshot{}
+	byName := map[string]matteradapter.DeviceSnapshot{}
 	for _, s := range snap(context.Background()) {
 		byName[s.CentralName] = s
 	}
@@ -148,7 +149,7 @@ func TestMatterSnapshotter_StampsModelCompletePerCentral(t *testing.T) {
 		CentralName: "ccu-a",
 	})
 
-	byName = map[string]endpoint.DeviceSnapshot{}
+	byName = map[string]matteradapter.DeviceSnapshot{}
 	for _, s := range snap(context.Background()) {
 		byName[s.CentralName] = s
 	}

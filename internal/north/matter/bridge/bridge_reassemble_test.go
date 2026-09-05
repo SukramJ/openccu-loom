@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	endpointpkg "github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
@@ -63,8 +65,8 @@ func TestReassemble_ButtonGroupPressEventsFlowOnce(t *testing.T) {
 	ch.Put(short)
 	ch.Put(pressButtonDP("BTN0001:1", hmenum.ParameterPressLong))
 
-	snapshotter := func(_ context.Context) []endpointpkg.DeviceSnapshot {
-		return []endpointpkg.DeviceSnapshot{{
+	snapshotter := func(_ context.Context) []matteradapter.DeviceSnapshot {
+		return []matteradapter.DeviceSnapshot{{
 			CentralName:   "ccu1",
 			Devices:       []*device.Device{dev},
 			ModelComplete: true,
@@ -105,7 +107,7 @@ func TestReassemble_ButtonGroupPressEventsFlowOnce(t *testing.T) {
 	var buttonEP uint16
 	found := 0
 	for _, ep := range topo.Bridged() {
-		if ep.SourceKey.DPKey == endpointpkg.ButtonGroupDPKey {
+		if ep.SourceKey.DPKey == matteradapter.ButtonGroupDPKey {
 			buttonEP = ep.ID
 			found++
 		}
@@ -166,7 +168,7 @@ func TestReassemble_ReapsSubscriptionsForRemovedEndpoints(t *testing.T) {
 	// Build and start a bridge with a controlled snapshotter.
 	// Step 1: the snapshotter returns endpoint 5 in the topology.
 	var snapshotterEps []*endpointpkg.Endpoint
-	snapshotter := func(_ context.Context) []endpointpkg.DeviceSnapshot {
+	snapshotter := func(_ context.Context) []matteradapter.DeviceSnapshot {
 		// Return nil devices; reassembleLocked builds its own root+aggregator,
 		// so we patch b.topology directly below.
 		return nil
@@ -269,11 +271,11 @@ func TestReassemble_BridgedEndpointCountExcludesRootAndAggregator(t *testing.T) 
 	ch.Put(pressButtonDP("BTN0002:1", hmenum.ParameterPressShort))
 
 	var withDevice bool
-	snapshotter := func(_ context.Context) []endpointpkg.DeviceSnapshot {
+	snapshotter := func(_ context.Context) []matteradapter.DeviceSnapshot {
 		if !withDevice {
 			return nil
 		}
-		return []endpointpkg.DeviceSnapshot{{
+		return []matteradapter.DeviceSnapshot{{
 			CentralName:   "ccu1",
 			Devices:       []*device.Device{dev},
 			ModelComplete: true,
