@@ -47,6 +47,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The scenario suite failed under CI load on traffic the bridge is
+  required to send.** Three scenarios went red across three runs, and on
+  `main` as readily as on a branch: the peer harness read every datagram off
+  the socket as an application message, so two kinds of MRP bookkeeping
+  reached steps that had not asked for anything. A standalone acknowledgement
+  (Secure Channel opcode `0x10`) tripped `expect_no_tx` as "the bridge sent
+  when it should not have" and `drain_subscribe_chunks` as an unexpected
+  opcode — the bridge owes that ack for the scenario's own traffic and emits
+  it on the ack timer, so which step is running when it lands follows machine
+  load. A retransmission was worse: `dataversion__monotonic_per_cluster` read
+  the resend of a report it had already consumed as the *second* report and
+  compared a DataVersion against itself, reporting a monotonicity violation
+  against a bridge that had done nothing wrong. The peer now classifies both
+  as transport noise and skips them, which is what a controller does (Spec
+  §4.6.7 has the receiver drop duplicates). The one scenario that wants the
+  duplicate — `mrp__retransmit_on_lost_report` — still sees it, because a peer
+  pretending a datagram was lost forgets its counter. The classifier is pinned
+  by tests including a negative control that ordinary IM traffic is never
+  filtered, and the harness reports what it absorbed, so a green run cannot be
+  mistaken for the filter having been the reason.
+
 - **The chip-tool suite called a PASE handshake a successful commissioning.**
   `PairingSuccess` accepted three markers, and read against chip-tool's own
   source none of them meant what the name says. `"Pairing Success"` is printed
