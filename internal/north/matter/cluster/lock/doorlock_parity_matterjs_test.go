@@ -11,7 +11,6 @@ import (
 	doorlockcluster "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/lock"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // stubSource is a minimal StateSource for tests.
@@ -24,7 +23,7 @@ type stubSource struct {
 
 func (s *stubSource) IsJammed() bool                    { return s.jammed }
 func (s *stubSource) IsLocked() (locked, observed bool) { return s.locked, s.observed }
-func (s *stubSource) LockInvoke(_ context.Context, cmdID uint32, _ hmenum.CommandPriority) error {
+func (s *stubSource) LockInvoke(_ context.Context, cmdID uint32) error {
 	s.invoked = append(s.invoked, cmdID)
 	return nil
 }

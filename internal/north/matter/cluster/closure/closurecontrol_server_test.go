@@ -11,7 +11,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/closure"
 	clusterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // recordingHandlers captures what the server forwarded to the device.
@@ -24,14 +23,14 @@ type recordingHandlers struct {
 
 func (h *recordingHandlers) config() closure.Config {
 	return closure.Config{
-		Move: func(_ context.Context, target clusterwire.ClosureTargetPosition, _ hmenum.CommandPriority) error {
+		Move: func(_ context.Context, target clusterwire.ClosureTargetPosition) error {
 			if h.moveErr != nil {
 				return h.moveErr
 			}
 			h.moved = append(h.moved, target)
 			return nil
 		},
-		Stop: func(_ context.Context, _ hmenum.CommandPriority) error {
+		Stop: func(_ context.Context) error {
 			if h.stopErr != nil {
 				return h.stopErr
 			}

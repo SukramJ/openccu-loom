@@ -10,22 +10,19 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/light"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // fakeColorTemperatureWriter is a test double for ColorTemperatureWriter that
 // records the last call arguments and an optional injected error.
 type fakeColorTemperatureWriter struct {
-	calls        int
-	lastMireds   uint16
-	lastPriority hmenum.CommandPriority
-	injectErr    error
+	calls      int
+	lastMireds uint16
+	injectErr  error
 }
 
-func (f *fakeColorTemperatureWriter) SetColorTemperatureMireds(_ context.Context, mireds uint16, priority hmenum.CommandPriority) error {
+func (f *fakeColorTemperatureWriter) SetColorTemperatureMireds(_ context.Context, mireds uint16) error {
 	f.calls++
 	f.lastMireds = mireds
-	f.lastPriority = priority
 	return f.injectErr
 }
 
@@ -46,8 +43,8 @@ func currentMireds(t *testing.T, srv *light.ColorControlServer) uint16 {
 
 // TestColorControl_WriteThrough_WriterCalledOnce verifies that a successful
 // MoveToColorTemperature with a wired writer calls the writer exactly once with
-// the exact (in-range) mired value and the supplied priority, returns (nil, nil),
-// and updates the reported state.
+// the exact (in-range) mired value, returns (nil, nil), and updates the
+// reported state.
 func TestColorControl_WriteThrough_WriterCalledOnce(t *testing.T) {
 	t.Parallel()
 	cfg := light.DefaultColorControlServerConfig() // min=153 max=500, initial=370
@@ -69,9 +66,6 @@ func TestColorControl_WriteThrough_WriterCalledOnce(t *testing.T) {
 	}
 	if w.lastMireds != target {
 		t.Errorf("writer received mireds=%d, want %d", w.lastMireds, target)
-	}
-	if w.lastPriority != hmenum.CommandPriorityHigh {
-		t.Errorf("writer received priority=%v, want CommandPriorityHigh", w.lastPriority)
 	}
 	if got := currentMireds(t, srv); got != target {
 		t.Errorf("reported state = %d after write-through, want %d", got, target)
@@ -200,38 +194,5 @@ func TestColorControl_WriteThrough_SetWriterNil(t *testing.T) {
 	}
 	if got := currentMireds(t, srv); got != target {
 		t.Errorf("reported state = %d, want %d", got, target)
-	}
-}
-
-// TestColorControl_WriteThrough_UsesHighPriority pins the southbound
-// urgency of the ColorControl write-through.
-//
-// It replaces an earlier test that fed a priority into MatterInvoke and
-// checked it came back out. That contract is gone: the priority is no
-// longer an argument on the cluster-server interface, so the value the
-// writer sees is now decided here, by matterDispatchPriority, and a
-// test that supplies it can no longer observe a regression.
-//
-// The failure this guards is silent — nothing downstream of the writer
-// branches on the priority, so a wrong value changes only queue
-// ordering under load. And [hmenum.CommandPriorityCritical] is the ZERO
-// value, so the natural regression escalates every colour-temperature
-// write instead of degrading it.
-func TestColorControl_WriteThrough_UsesHighPriority(t *testing.T) {
-	t.Parallel()
-	srv := light.NewColorControlServer(light.DefaultColorControlServerConfig())
-	w := &fakeColorTemperatureWriter{}
-	srv.SetWriter(w)
-
-	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 300}); err != nil {
-		t.Fatalf("MatterInvoke: %v", err)
-	}
-	if w.calls == 0 {
-		t.Fatal("writer was never called, so no priority was observed")
-	}
-	if w.lastPriority != hmenum.CommandPriorityHigh {
-		t.Errorf("writer received priority=%v, want %v (Critical is the zero value, so an unset priority lands there)",
-			w.lastPriority, hmenum.CommandPriorityHigh)
 	}
 }

@@ -28,6 +28,18 @@ var (
 // matterDeviceTypeDoorLock is the Matter Device Type ID for Door Lock.
 const matterDeviceTypeDoorLock uint16 = 0x000A
 
+// matterDispatchPriority is the southbound urgency every Matter-driven
+// write and invoke carries. The bridge is a controller-facing
+// foreground path — a tap in a Matter app must not queue behind a
+// background refresh — so it dispatches at High, and the cluster
+// contract no longer negotiates it per call.
+//
+// Spelled out as a constant rather than left to a variable: the zero
+// value of [hmenum.CommandPriority] is Critical, so anything that
+// reached these calls defaulted would silently escalate every bridged
+// command.
+const matterDispatchPriority = hmenum.CommandPriorityHigh
+
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
 func (l *Lock) MatterDeviceType() uint16 { return matterDeviceTypeDoorLock }
 
@@ -66,15 +78,17 @@ func (l *Lock) MatterClusterServers() []interfaces.MatterClusterServer {
 }
 
 // LockInvoke implements [doorlockcluster.StateSource]. Dispatches
-// the Matter command ID to the corresponding HM operation.
-func (l *Lock) LockInvoke(ctx context.Context, cmdID uint32, priority hmenum.CommandPriority) error {
+// the Matter command ID to the corresponding HM operation at
+// [matterDispatchPriority] — the cluster contract carries no priority,
+// so the urgency of a bridged lock operation is decided here.
+func (l *Lock) LockInvoke(ctx context.Context, cmdID uint32) error {
 	switch cmdID {
 	case wire.DoorLockCmdLockDoor:
-		return l.Lock(ctx, priority)
+		return l.Lock(ctx, matterDispatchPriority)
 	case wire.DoorLockCmdUnlockDoor:
-		return l.Unlock(ctx, priority)
+		return l.Unlock(ctx, matterDispatchPriority)
 	case wire.DoorLockCmdUnboltDoor:
-		return l.Open(ctx, priority)
+		return l.Open(ctx, matterDispatchPriority)
 	default:
 		return fmt.Errorf("lock: unknown Matter command 0x%02X", cmdID)
 	}

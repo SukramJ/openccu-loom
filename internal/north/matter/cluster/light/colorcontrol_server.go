@@ -20,7 +20,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ColorControlServerConfig holds the static configuration injected at
@@ -57,8 +56,13 @@ func DefaultColorControlServerConfig() ColorControlServerConfig {
 // to the CCU. A write error aborts the command and leaves the in-process
 // CurrentColorTemperatureMireds attribute unchanged, so the reported state
 // never claims a value the device did not accept.
+//
+// The implementation owns the southbound urgency of the write it
+// performs: the cluster contract carries no priority, so a host whose
+// command queue ranks by urgency names the value it wants inside
+// SetColorTemperatureMireds.
 type ColorTemperatureWriter interface {
-	SetColorTemperatureMireds(ctx context.Context, mireds uint16, priority hmenum.CommandPriority) error
+	SetColorTemperatureMireds(ctx context.Context, mireds uint16) error
 }
 
 // ColorControlServer is a minimal CT-only ColorControl cluster server
@@ -137,18 +141,6 @@ func (s *ColorControlServer) MatterWrite(_ context.Context, attrID uint32, _ any
 	return fmt.Errorf("colorcontrol: attribute 0x%04X is not writable", attrID)
 }
 
-// matterDispatchPriority is the southbound urgency every Matter-driven
-// write and invoke carries. The bridge is a controller-facing
-// foreground path — a tap in a Matter app must not queue behind a
-// background refresh — so it dispatches at High, and the cluster
-// contract no longer negotiates it per call.
-//
-// Spelled out as a constant rather than left to a variable: the zero
-// value of [hmenum.CommandPriority] is Critical, so anything that
-// reached this call defaulted would silently escalate every bridged
-// command.
-const matterDispatchPriority = hmenum.CommandPriorityHigh
-
 // MatterInvoke handles ColorControl commands. MoveToColorTemperature
 // (0x0A) crops the target to [MinMireds, MaxMireds] and updates the
 // in-process CT state per matter.js ColorControlServer.ts:moveToColorTemperatureLogic
@@ -186,7 +178,7 @@ func (s *ColorControlServer) MatterInvoke(ctx context.Context, cmdID uint32, fie
 		// rejected write never leaves CurrentColorTemperatureMireds claiming
 		// a value the CCU did not accept.
 		if s.writer != nil {
-			if err := s.writer.SetColorTemperatureMireds(ctx, target, matterDispatchPriority); err != nil {
+			if err := s.writer.SetColorTemperatureMireds(ctx, target); err != nil {
 				return nil, fmt.Errorf("colorcontrol: MoveToColorTemperature write-through: %w", err)
 			}
 		}

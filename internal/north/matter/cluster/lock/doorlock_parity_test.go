@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/lock"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // fakeLockSource satisfies StateSource for tests.
@@ -17,7 +16,7 @@ type fakeLockSource struct{}
 
 func (f *fakeLockSource) IsJammed() bool                    { return false }
 func (f *fakeLockSource) IsLocked() (locked, observed bool) { return true, true }
-func (f *fakeLockSource) LockInvoke(_ context.Context, _ uint32, _ hmenum.CommandPriority) error {
+func (f *fakeLockSource) LockInvoke(_ context.Context, _ uint32) error {
 	return nil
 }
 

@@ -23,7 +23,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ClusterRevision is the ClosureControl cluster revision this server
@@ -45,10 +44,16 @@ const PositioningVentilationFeatureMap = wire.ClosureControlFeaturePositioning |
 // Failure status and leaves its target state untouched, so a controller
 // that could not reach the device does not see a target the device never
 // accepted.
-type MoveHandler func(ctx context.Context, target wire.ClosureTargetPosition, priority hmenum.CommandPriority) error
+//
+// The handler owns the southbound urgency of the write it performs: the
+// cluster contract carries no priority, so a host whose command queue
+// ranks by urgency names the value it wants at the handler, where the
+// device vocabulary is already in scope.
+type MoveHandler func(ctx context.Context, target wire.ClosureTargetPosition) error
 
-// StopHandler halts motion.
-type StopHandler func(ctx context.Context, priority hmenum.CommandPriority) error
+// StopHandler halts motion. Like [MoveHandler] it owns the southbound
+// urgency of its own write.
+type StopHandler func(ctx context.Context) error
 
 // Config carries the handlers and initial state for a
 // [ControlServer].
@@ -193,9 +198,9 @@ func (s *ControlServer) MatterInvoke(
 ) (response any, err error) {
 	switch cmdID {
 	case wire.ClosureControlCmdMoveTo:
-		return nil, s.invokeMoveTo(ctx, fields, matterDispatchPriority)
+		return nil, s.invokeMoveTo(ctx, fields)
 	case wire.ClosureControlCmdStop:
-		return nil, s.invokeStop(ctx, matterDispatchPriority)
+		return nil, s.invokeStop(ctx)
 	case wire.ClosureControlCmdCalibrate:
 		return nil, closureUnsupportedCommandErr{
 			"closurecontrol: Calibrate requires the Calibration feature, which this server does not advertise",
@@ -205,20 +210,8 @@ func (s *ControlServer) MatterInvoke(
 	}
 }
 
-// matterDispatchPriority is the southbound urgency every Matter-driven
-// write and invoke carries. The bridge is a controller-facing
-// foreground path — a tap in a Matter app must not queue behind a
-// background refresh — so it dispatches at High, and the cluster
-// contract no longer negotiates it per call.
-//
-// Spelled out as a constant rather than left to a variable: the zero
-// value of [hmenum.CommandPriority] is Critical, so anything that
-// reached this call defaulted would silently escalate every bridged
-// command.
-const matterDispatchPriority = hmenum.CommandPriorityHigh
-
 // invokeMoveTo applies a MoveTo request.
-func (s *ControlServer) invokeMoveTo(ctx context.Context, fields any, priority hmenum.CommandPriority) error {
+func (s *ControlServer) invokeMoveTo(ctx context.Context, fields any) error {
 	req, err := moveToRequest(fields)
 	if err != nil {
 		return err
@@ -237,7 +230,7 @@ func (s *ControlServer) invokeMoveTo(ctx context.Context, fields any, priority h
 	if s.move == nil {
 		return errors.New("closurecontrol: MoveTo has no handler")
 	}
-	if err := s.move(ctx, *req.Position, priority); err != nil {
+	if err := s.move(ctx, *req.Position); err != nil {
 		// Deliberately no state change: recording a target the device
 		// refused would leave the controller reading a move that never
 		// happened.
@@ -252,11 +245,11 @@ func (s *ControlServer) invokeMoveTo(ctx context.Context, fields any, priority h
 }
 
 // invokeStop halts motion.
-func (s *ControlServer) invokeStop(ctx context.Context, priority hmenum.CommandPriority) error {
+func (s *ControlServer) invokeStop(ctx context.Context) error {
 	if s.stop == nil {
 		return errors.New("closurecontrol: Stop has no handler")
 	}
-	if err := s.stop(ctx, priority); err != nil {
+	if err := s.stop(ctx); err != nil {
 		return fmt.Errorf("closurecontrol: Stop: %w", err)
 	}
 	s.mu.Lock()

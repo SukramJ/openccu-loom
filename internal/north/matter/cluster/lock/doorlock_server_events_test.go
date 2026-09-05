@@ -11,7 +11,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/lock"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
@@ -28,7 +27,7 @@ type eventTestSource struct {
 func (s *eventTestSource) IsJammed() bool                    { return false }
 func (s *eventTestSource) IsLocked() (locked, observed bool) { return s.locked, s.observed }
 
-func (s *eventTestSource) LockInvoke(_ context.Context, cmdID uint32, _ hmenum.CommandPriority) error {
+func (s *eventTestSource) LockInvoke(_ context.Context, cmdID uint32) error {
 	s.invoked = append(s.invoked, cmdID)
 	return s.invokeErr
 }
