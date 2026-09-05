@@ -391,7 +391,43 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // enumerates github.com/SukramJ/openccu-loom/... — so the drop is a change of
 // scope, not dead code that was reached or removed. Comparing this number
 // against any run from before that move compares two different populations.
-const reachabilityUnreachableCeiling = 1119
+//
+// Lowered 1119 -> 61 when three conventions in the analyzer were replaced by
+// measurements. None of them could produce a different answer in response to
+// the code changing, which is what made them guesses:
+//
+//   - A package-level var counted as reachable if its package path contained
+//     "/cmd/", and as dead otherwise. That reported every exported var outside
+//     the composition root as dead — 243 of them, a number that restated how
+//     many exported vars exist. Reachable code loading from or storing to the
+//     var is measured now. (Its own initialiser does not count: `var Err = ...`
+//     compiles to a store in the package init, and counting that would mark
+//     every initialised var as used, which is the same non-measurement facing
+//     the other way.)
+//   - A named type counted as reachable only if one of its methods was, so a
+//     plain struct carried through a live signature read as dead however
+//     heavily it was used. 850 types were listed; 28 remain. Being named in
+//     reachable code is measured now, with the method-set rule kept alongside
+//     for types reached only through interface dispatch.
+//   - A test variant was recognised by its import path, but the
+//     "package under test" variant keeps the path of the package it tests. So
+//     only external test packages (`package foo_test`) were seen. Internal
+//     ones were missing from the root set, and their Test* functions were
+//     inventoried as exported identifiers of the package under test: 15776 of
+//     the 18849 listed rows were test functions, which is the drop in
+//     total_exported from 21401 to 5620. The identifiers were folded across
+//     package variants already, so nothing was double-counted — the surface
+//     simply included the tests measuring it. Test variants are recognised by holding a
+//     function whose signature is a go-test signature now, which also keeps
+//     the three exported REST handlers named TestLinkAtDevice,
+//     TestAlarmOutput and TestDeviceCommunication from taking their package
+//     out of the inventory.
+//
+// So this is a change of measurement, not of the tree: no dead code was
+// reached or removed. Each replacement was checked with a probe pair — an
+// identifier read by reachable code and one read by nothing — and reports the
+// two different answers a measurement has to be able to give.
+const reachabilityUnreachableCeiling = 61
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's
