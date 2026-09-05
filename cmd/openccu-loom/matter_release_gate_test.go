@@ -88,7 +88,7 @@ func addressesOf(devs []*device.Device) []string {
 }
 
 // devicesIn flattens the snapshotter's per-central output.
-func devicesIn(snaps []endpoint.Snapshot) []*device.Device {
+func devicesIn(snaps []endpoint.DeviceSnapshot) []*device.Device {
 	var out []*device.Device
 	for i := range snaps {
 		out = append(out, snaps[i].Devices...)

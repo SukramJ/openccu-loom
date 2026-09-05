@@ -66,7 +66,7 @@ func TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag(t *testing.T) {
 		t.Error("ccu-b must stay model-incomplete; its bring-up has not completed")
 	}
 
-	byName := map[string]endpoint.Snapshot{}
+	byName := map[string]endpoint.DeviceSnapshot{}
 	for _, s := range matterSnapshotter(reg, readiness)(context.Background()) {
 		byName[s.CentralName] = s
 	}
@@ -128,7 +128,7 @@ func TestMatterSnapshotter_StampsModelCompletePerCentral(t *testing.T) {
 	snap := matterSnapshotter(reg, readiness)
 
 	// Boot shape: registered centrals, no device load completed yet.
-	byName := map[string]endpoint.Snapshot{}
+	byName := map[string]endpoint.DeviceSnapshot{}
 	for _, s := range snap(context.Background()) {
 		byName[s.CentralName] = s
 	}
@@ -148,7 +148,7 @@ func TestMatterSnapshotter_StampsModelCompletePerCentral(t *testing.T) {
 		CentralName: "ccu-a",
 	})
 
-	byName = map[string]endpoint.Snapshot{}
+	byName = map[string]endpoint.DeviceSnapshot{}
 	for _, s := range snap(context.Background()) {
 		byName[s.CentralName] = s
 	}

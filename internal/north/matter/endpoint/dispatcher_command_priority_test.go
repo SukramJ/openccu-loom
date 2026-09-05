@@ -132,7 +132,7 @@ func assembleOne(t *testing.T, addr string, dev *device.Device) (dispatcher *end
 	if err != nil {
 		t.Fatalf("endpoint.New: %v", err)
 	}
-	top, err := a.Assemble(context.Background(), []endpoint.Snapshot{{
+	top, err := a.AssembleDevices(context.Background(), []endpoint.DeviceSnapshot{{
 		CentralName: "ccu1",
 		Devices:     []*device.Device{dev},
 	}})

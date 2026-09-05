@@ -97,7 +97,7 @@ func assembleTopology(t *testing.T, dev *device.Device) *endpoint.Topology {
 	if err != nil {
 		t.Fatalf("assembler: %v", err)
 	}
-	top, err := a.Assemble(context.Background(), []endpoint.Snapshot{
+	top, err := a.AssembleDevices(context.Background(), []endpoint.DeviceSnapshot{
 		{CentralName: "c", Devices: []*device.Device{dev}},
 	})
 	if err != nil {

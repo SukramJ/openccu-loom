@@ -21,88 +21,114 @@ func isNotFound(err error) bool {
 	return errors.Is(err, store.ErrEndpointNotFound)
 }
 
-// friendlyName composes the BridgedDeviceBasicInformation NodeLabel
-// for one bridged endpoint. The label is operator-facing and shows up
-// in Apple Home / Google Home as the device card title.
+// modelNameResolver answers the library's [NameResolver] questions from
+// the device model, so the label a bridged endpoint carries is the
+// model's own answer rather than a Matter-side re-derivation.
 //
-// The device+channel portion is the model's own answer:
 // [device.Channel.NameData] ([naming.NameData.TranslatedFullName]) is
 // the same naming authority MQTT discovery and REST use, including its
 // device/channel de-duplication rule ([naming] package doc) — Matter
 // must not re-derive that rule, or the two planes drift apart and show
-// the same device under two different names. paramSuffix is appended
-// last when this is a measurement / calculated sub-endpoint
-// distinguishable only by parameter; it is already resolved through
-// the same naming primitives by [Assembler.parameterSuffix].
+// the same device under two different names.
 //
 // One piece has no model equivalent: a channel the operator never
 // named collapses, in [naming.NameData], to the device name alone —
 // fine for MQTT/REST, which disambiguate same-named entities by their
 // stable id, but Matter's NodeLabel is the only thing Apple/Google
 // Home show, so several unnamed channels of one device would all
-// render identically. channelLabel + the raw channel number is kept
-// as a Matter-only disambiguator for that case.
-//
-// Caps the result at 32 utf-8 bytes (Matter NodeLabel maximum,
-// §9.13.6.5). The truncation is byte-based with a defensive rune
-// boundary check; over-long inputs lose the suffix first, then the
-// disambiguator.
-func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix, channelLabel string) string {
-	label := ch.NameData().TranslatedFullName()
+// render identically. channelWord + the raw channel number is kept as
+// a Matter-only disambiguator for that case.
+type modelNameResolver struct {
+	devices  map[string]*device.Device
+	channels map[channelRef]*device.Channel
+	labels   device.ParameterTranslator
+	// channelWord is the localized word for a channel ("Channel",
+	// "Kanal"), supplied by the host that owns the catalogue.
+	channelWord string
+}
+
+// channelRef addresses one channel by device address and channel
+// number — the two coordinates [store.EndpointKey] carries.
+type channelRef struct {
+	deviceAddress string
+	channelNumber int
+}
+
+// newModelNameResolver indexes one central's fleet for label lookup.
+func newModelNameResolver(devices []*device.Device, labels device.ParameterTranslator, channelWord string) *modelNameResolver {
+	r := &modelNameResolver{
+		devices:     make(map[string]*device.Device, len(devices)),
+		channels:    make(map[channelRef]*device.Channel, len(devices)*4),
+		labels:      labels,
+		channelWord: channelWord,
+	}
+	for _, dev := range devices {
+		if dev == nil {
+			continue
+		}
+		r.devices[dev.Address] = dev
+		for _, ch := range dev.Channels() {
+			if ch == nil {
+				continue
+			}
+			r.channels[channelRef{deviceAddress: dev.Address, channelNumber: ch.Number}] = ch
+		}
+	}
+	return r
+}
+
+// channelFor returns the indexed channel for key, or nil when the key
+// names a source outside the indexed fleet.
+func (r *modelNameResolver) channelFor(key store.EndpointKey) *device.Channel {
+	return r.channels[channelRef{deviceAddress: key.DeviceAddress, channelNumber: key.ChannelNo}]
+}
+
+// EndpointLabel implements [NameResolver].
+func (r *modelNameResolver) EndpointLabel(key store.EndpointKey) string {
+	ch := r.channelFor(key)
+	label := ""
+	if ch != nil {
+		label = ch.NameData().TranslatedFullName()
+	}
 	if label == "" {
 		// Neither the device nor the channel carries an operator name;
 		// [naming.NameData] has nothing to build on either. Fall back to
 		// the device address, the one identifier guaranteed to exist.
-		if dev != nil {
+		if dev := r.devices[key.DeviceAddress]; dev != nil {
 			label = dev.Address
 		}
 	}
 	if ch != nil && ch.Number > 0 && ch.Name() == "" {
-		label = strings.TrimSpace(fmt.Sprintf("%s %s %d", label, channelLabel, ch.Number))
+		label = strings.TrimSpace(fmt.Sprintf("%s %s %d", label, r.channelWord, ch.Number))
 	}
-	if paramSuffix != "" {
-		label = strings.TrimSpace(label + " (" + paramSuffix + ")")
-	}
-	return truncateUTF8(label, 32)
+	return label
 }
 
-// parameterSuffix resolves the parameter-level display label embedded
-// as the [friendlyName] suffix of measurement sub-endpoints. It routes
-// through the same primitives as the MQTT discovery builder and the
-// REST data-point handler ([device.TranslatedParameterLabel] →
-// [naming.EntityDisplayName]) so the suffix matches the entity name
+// ParameterLabel implements [NameResolver]. It routes through the same
+// primitives as the MQTT discovery builder and the REST data-point
+// handler ([device.TranslatedParameterLabel] →
+// [naming.EntityDisplayName]) so the label matches the entity name
 // those surfaces emit for the same data point: locale-aware OCCU
 // translation first, title-cased parameter as fallback.
 //
 // A parameter flagged "primary" (explicit-empty translation) yields an
-// empty suffix — the endpoint then carries the device + channel name
+// empty label — the endpoint then carries the device + channel name
 // alone, mirroring how MQTT / REST collapse the entity name to the
 // device name for primary parameters.
-func (a *Assembler) parameterSuffix(ch *device.Channel, parameter string) string {
+func (r *modelNameResolver) ParameterLabel(key store.EndpointKey) string {
 	channelType := ""
-	if ch != nil {
+	if ch := r.channelFor(key); ch != nil {
 		channelType = ch.Type
 	}
-	translation, labelOmitted := device.TranslatedParameterLabel(parameter, channelType, a.cfg.Labels)
-	name, omitted := naming.EntityDisplayName(translation, labelOmitted, parameter)
+	translation, labelOmitted := device.TranslatedParameterLabel(key.DPKey, channelType, r.labels)
+	name, omitted := naming.EntityDisplayName(translation, labelOmitted, key.DPKey)
 	if omitted {
 		return ""
 	}
 	return name
 }
 
-// truncateUTF8 caps s at maxBytes, snapping to a rune boundary.
-// Matter NodeLabel is utf-8 with a 32-byte (not 32-codepoint) cap.
-func truncateUTF8(s string, maxBytes int) string {
-	if len(s) <= maxBytes {
-		return s
-	}
-	cut := maxBytes
-	for cut > 0 && (s[cut]&0xC0) == 0x80 { //nolint:revive // continuation byte
-		cut--
-	}
-	return s[:cut]
-}
+var _ NameResolver = (*modelNameResolver)(nil)
 
 // measurementDeviceType is a thin alias for
 // [mattercontract.MeasurementClassDeviceType], the canonical

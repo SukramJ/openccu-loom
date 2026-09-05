@@ -193,7 +193,7 @@ func TestAssemble_EmptySnapshotsProducesRootOnly(t *testing.T) {
 	ctx := context.Background()
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
 
-	top, err := a.Assemble(ctx, nil)
+	top, err := a.AssembleDevices(ctx, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -229,11 +229,11 @@ func TestAssemble_EmptyDeviceList_RootOnly(t *testing.T) {
 	ctx := context.Background()
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
 
-	snap := endpoint.Snapshot{
+	snap := endpoint.DeviceSnapshot{
 		CentralName: "ccu1",
 		Devices:     nil,
 	}
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -265,13 +265,13 @@ func TestAssemble_CustomDP_EndpointSource(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(src)
 
-	snap := endpoint.Snapshot{CentralName: centralName, Devices: []*device.Device{dev}}
+	snap := endpoint.DeviceSnapshot{CentralName: centralName, Devices: []*device.Device{dev}}
 
 	cfg := validConfig()
 	fs := newFakeStore()
 	a, _ := endpoint.New(fs, cfg, nil)
 
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -297,8 +297,8 @@ func TestAssemble_CustomDP_EndpointSource(t *testing.T) {
 	if bridged.Measurement != nil {
 		t.Error("Measurement should be nil for custom DP endpoint")
 	}
-	if bridged.Channel == nil {
-		t.Error("Channel should be non-nil")
+	if bridged.ChannelAddress == "" {
+		t.Error("ChannelAddress should be non-empty")
 	}
 
 	// SourceKey fields.
@@ -370,10 +370,10 @@ func TestAssemble_CalculatedDP_EndpointSource(t *testing.T) {
 	}
 	ch.AttachCalculatedDataPoint(src)
 
-	snap := endpoint.Snapshot{CentralName: centralName, Devices: []*device.Device{dev}}
+	snap := endpoint.DeviceSnapshot{CentralName: centralName, Devices: []*device.Device{dev}}
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
 
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestAssemble_MeasurementDP_ExcludedWhenFlagOff(t *testing.T) {
 	cfg.IncludeMeasurements = false
 	a, _ := endpoint.New(newFakeStore(), cfg, nil)
 
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 	cfg.IncludeMeasurements = true
 	a, _ := endpoint.New(newFakeStore(), cfg, nil)
 
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -460,8 +460,8 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 	if bridged.Measurement == nil {
 		t.Error("Measurement should be non-nil for measurement endpoint")
 	}
-	if bridged.Channel == nil {
-		t.Error("Channel should be non-nil for measurement endpoint")
+	if bridged.ChannelAddress == "" {
+		t.Error("ChannelAddress should be non-empty for measurement endpoint")
 	}
 	if bridged.DeviceType != 0x0302 {
 		t.Errorf("DeviceType=0x%04X, want 0x0302 (Temperature Sensor)", bridged.DeviceType)
@@ -488,7 +488,7 @@ func TestAssemble_ButtonChannelConsolidatesPressDPs(t *testing.T) {
 	}
 
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -532,7 +532,7 @@ func TestAssemble_MultiButtonRemote_OneEndpointPerChannel(t *testing.T) {
 	}
 
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -571,7 +571,7 @@ func TestAssemble_ButtonGroupAllowlistPerMember(t *testing.T) {
 
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
 	a.SetExposureChecker(dpKeyAllowChecker{allowed: map[string]bool{"PRESS_SHORT": true}})
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build()}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{build()}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -589,7 +589,7 @@ func TestAssemble_ButtonGroupAllowlistPerMember(t *testing.T) {
 
 	denyAll, _ := endpoint.New(newFakeStore(), validConfig(), nil)
 	denyAll.SetExposureChecker(dpKeyAllowChecker{allowed: map[string]bool{}})
-	top2, err := denyAll.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build()}}})
+	top2, err := denyAll.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{build()}}})
 	if err != nil {
 		t.Fatalf("Assemble (deny all): %v", err)
 	}
@@ -632,7 +632,7 @@ func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
 	}
 
 	a, _ := endpoint.New(fs, validConfig(), nil)
-	if _, err := a.Assemble(ctx, []endpoint.Snapshot{
+	if _, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
 	}); err != nil {
 		t.Fatalf("Assemble: %v", err)
@@ -659,19 +659,19 @@ func TestAssemble_StableEndpointIDs(t *testing.T) {
 	src := &stubEndpointSource{key: dpKey("DEV0001:1", "LIGHT"), deviceType: 0x0100}
 	ch.SetCustomDataPoint(src)
 
-	snap := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
+	snap := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
 
 	fs := newFakeStore()
 	a, _ := endpoint.New(fs, validConfig(), nil)
 
-	top1, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	top1, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("first Assemble: %v", err)
 	}
 	// Endpoints[2] is the first bridged endpoint (root=0, aggregator=1, bridged=2).
 	id1 := top1.Endpoints[2].ID
 
-	top2, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	top2, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("second Assemble: %v", err)
 	}
@@ -692,21 +692,21 @@ func TestAssemble_FreshIDForNewSource(t *testing.T) {
 	ch1 := addChannel(dev1, "DEV0001:1", 1)
 	src1 := &stubEndpointSource{key: dpKey("DEV0001:1", "LIGHT"), deviceType: 0x0100}
 	ch1.SetCustomDataPoint(src1)
-	snap1 := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}}
+	snap1 := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}}
 
 	dev2 := newDevice("DEV0002", "Lamp2")
 	ch2 := addChannel(dev2, "DEV0002:1", 1)
 	src2 := &stubEndpointSource{key: dpKey("DEV0002:1", "LIGHT"), deviceType: 0x0100}
 	ch2.SetCustomDataPoint(src2)
-	snap2 := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev2}}
+	snap2 := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev2}}
 
-	snapBoth := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}}
+	snapBoth := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}}
 
 	fs := newFakeStore()
 	a, _ := endpoint.New(fs, validConfig(), nil)
 
 	// First run: only src1.
-	top1, err := a.Assemble(ctx, []endpoint.Snapshot{snap1})
+	top1, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap1})
 	if err != nil {
 		t.Fatalf("first Assemble: %v", err)
 	}
@@ -714,7 +714,7 @@ func TestAssemble_FreshIDForNewSource(t *testing.T) {
 	idFirst := top1.Endpoints[2].ID
 
 	// Second run: src1 + src2.
-	top2, err := a.Assemble(ctx, []endpoint.Snapshot{snapBoth})
+	top2, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snapBoth})
 	if err != nil {
 		t.Fatalf("second Assemble: %v", err)
 	}
@@ -764,14 +764,14 @@ func TestAssemble_GCRemovesVanishedSources(t *testing.T) {
 
 	// Run 1: both. ModelComplete vouches that the device list is the
 	// full fleet, so the assembler may treat absent rows as vanished.
-	snapBoth := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
-	if _, err := a.Assemble(ctx, []endpoint.Snapshot{snapBoth}); err != nil {
+	snapBoth := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
+	if _, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snapBoth}); err != nil {
 		t.Fatalf("first Assemble: %v", err)
 	}
 
 	// Run 2: only dev1 (dev2 vanishes).
-	snap1Only := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
-	if _, err := a.Assemble(ctx, []endpoint.Snapshot{snap1Only}); err != nil {
+	snap1Only := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
+	if _, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap1Only}); err != nil {
 		t.Fatalf("second Assemble: %v", err)
 	}
 
@@ -807,8 +807,8 @@ func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
 	a, _ := endpoint.New(fs, validConfig(), nil)
 
 	// Run 1 (previous daemon life): full model — persists the row.
-	full := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
-	top1, err := a.Assemble(ctx, []endpoint.Snapshot{full})
+	full := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
+	top1, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{full})
 	if err != nil {
 		t.Fatalf("first Assemble: %v", err)
 	}
@@ -817,8 +817,8 @@ func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
 	// Run 2 (boot of the next daemon life): the central is registered
 	// but its device load has not completed — empty Devices, not
 	// model-complete. The persisted row must survive.
-	boot := endpoint.Snapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
-	top2, err := a.Assemble(ctx, []endpoint.Snapshot{boot})
+	boot := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
+	top2, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{boot})
 	if err != nil {
 		t.Fatalf("boot Assemble: %v", err)
 	}
@@ -835,7 +835,7 @@ func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
 
 	// Run 3 (ready reassemble): the device load completed — the source
 	// must reappear under its persisted endpoint ID, not a fresh one.
-	top3, err := a.Assemble(ctx, []endpoint.Snapshot{full})
+	top3, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{full})
 	if err != nil {
 		t.Fatalf("ready Assemble: %v", err)
 	}
@@ -870,8 +870,8 @@ func TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly(t *testing.T) {
 	a, _ := endpoint.New(fs, validConfig(), nil)
 
 	// Run 1 (previous daemon life): both devices persisted.
-	both := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
-	top1, err := a.Assemble(ctx, []endpoint.Snapshot{both})
+	both := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
+	top1, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{both})
 	if err != nil {
 		t.Fatalf("first Assemble: %v", err)
 	}
@@ -883,8 +883,8 @@ func TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly(t *testing.T) {
 	}
 
 	// Run 2 (boot): model incomplete — both rows survive.
-	boot := endpoint.Snapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
-	if _, err := a.Assemble(ctx, []endpoint.Snapshot{boot}); err != nil {
+	boot := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
+	if _, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{boot}); err != nil {
 		t.Fatalf("boot Assemble: %v", err)
 	}
 	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 2 {
@@ -894,8 +894,8 @@ func TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly(t *testing.T) {
 	// Run 3 (ready reassemble): dev2 was genuinely removed while the
 	// daemon was down. GC must reap it now that the model is complete,
 	// and dev1 must keep its persisted ID.
-	onlyDev1 := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
-	top3, err := a.Assemble(ctx, []endpoint.Snapshot{onlyDev1})
+	onlyDev1 := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
+	top3, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{onlyDev1})
 	if err != nil {
 		t.Fatalf("ready Assemble: %v", err)
 	}
@@ -935,13 +935,13 @@ func TestAssemble_MultiCentralDistinctIDs(t *testing.T) {
 	src2 := &stubEndpointSource{key: dpKey(chAddr, "LIGHT"), deviceType: 0x0100}
 	ch2.SetCustomDataPoint(src2)
 
-	snapCCU1 := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}}
-	snapCCU2 := endpoint.Snapshot{CentralName: "ccu2", Devices: []*device.Device{dev2}}
+	snapCCU1 := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}}
+	snapCCU2 := endpoint.DeviceSnapshot{CentralName: "ccu2", Devices: []*device.Device{dev2}}
 
 	fs := newFakeStore()
 	a, _ := endpoint.New(fs, validConfig(), nil)
 
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snapCCU1, snapCCU2})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snapCCU1, snapCCU2})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -977,9 +977,9 @@ func TestAssemble_EmptyCentralNameReturnsError(t *testing.T) {
 	ch.SetCustomDataPoint(src)
 
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	snap := endpoint.Snapshot{CentralName: "", Devices: []*device.Device{dev}}
+	snap := endpoint.DeviceSnapshot{CentralName: "", Devices: []*device.Device{dev}}
 
-	_, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	_, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err == nil {
 		t.Error("expected error for empty CentralName, got nil")
 	}
@@ -1000,8 +1000,8 @@ func TestAssemble_StoreGetErrorPropagates(t *testing.T) {
 	fs := &failingStore{newFakeStore()}
 	a, _ := endpoint.New(fs, validConfig(), nil)
 
-	snap := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
-	_, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	snap := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
+	_, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err == nil {
 		t.Error("expected error from store, got nil")
 	}
@@ -1022,7 +1022,7 @@ func TestTopology_FindByID_HitAndMiss(t *testing.T) {
 	ch.SetCustomDataPoint(src)
 
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -1046,7 +1046,7 @@ func TestTopology_Bridged_EmptyWhenOnlyRoot(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	top, _ := a.Assemble(ctx, nil)
+	top, _ := a.AssembleDevices(ctx, nil)
 	if got := top.Bridged(); got != nil {
 		t.Errorf("Bridged() on root-only topology = %v, want nil", got)
 	}
@@ -1062,7 +1062,7 @@ func TestTopology_Bridged_ExcludesRoot(t *testing.T) {
 	ch.SetCustomDataPoint(src)
 
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	top, _ := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, _ := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 
 	bridged := top.Bridged()
 	if len(bridged) != 1 {
@@ -1096,7 +1096,7 @@ func TestAssemble_TopologyCarriesConfigMetadata(t *testing.T) {
 		NodeLabel: "MyBridge",
 	}
 	a, _ := endpoint.New(newFakeStore(), cfg, nil)
-	top, err := a.Assemble(ctx, nil)
+	top, err := a.AssembleDevices(ctx, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -1145,7 +1145,7 @@ func TestAssemble_HiddenChannelIsNotBridged(t *testing.T) {
 	}
 
 	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
-	visible, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build(false)}}})
+	visible, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{build(false)}}})
 	if err != nil {
 		t.Fatalf("Assemble (visible): %v", err)
 	}
@@ -1153,7 +1153,7 @@ func TestAssemble_HiddenChannelIsNotBridged(t *testing.T) {
 		t.Fatalf("visible channel: got %d bridged endpoints, want 1", got)
 	}
 
-	hidden, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build(true)}}})
+	hidden, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{build(true)}}})
 	if err != nil {
 		t.Fatalf("Assemble (hidden): %v", err)
 	}
@@ -1193,7 +1193,7 @@ func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
 	a, _ := endpoint.New(newFakeStore(), cfg, nil)
 	a.SetExposureChecker(kindKeyAllowChecker{allowed: map[store.EndpointKey]bool{row: true}})
 
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -1203,5 +1203,75 @@ func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
 	}
 	if bridged[0].SourceKey != row {
 		t.Errorf("SourceKey=%+v, want %+v", bridged[0].SourceKey, row)
+	}
+}
+
+// ─── NameResolver ────────────────────────────────────────────────────
+
+// stubNameResolver answers both label questions from a fixed pair, so a
+// test can tell a resolver-supplied label from a model-derived one.
+type stubNameResolver struct {
+	base   string
+	suffix string
+	asked  []store.EndpointKey
+}
+
+func (r *stubNameResolver) EndpointLabel(key store.EndpointKey) string {
+	r.asked = append(r.asked, key)
+	return r.base
+}
+
+func (r *stubNameResolver) ParameterLabel(store.EndpointKey) string { return r.suffix }
+
+// TestAssembleDevices_ConfiguredNameResolverOwnsTheLabel pins that the
+// naming authority is injectable and actually consulted: with a
+// resolver configured, the NodeLabel is the resolver's answer, not one
+// re-derived from the device model. Naming is a product decision every
+// north-bound surface has to agree on, so an owner has to be able to
+// keep it in one place.
+func TestAssembleDevices_ConfiguredNameResolverOwnsTheLabel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	const centralName = "ccu1"
+	const devAddr = "ABC0009"
+	const chAddr = "ABC0009:1"
+	const chNo = 1
+
+	dev := newDevice(devAddr, "Modellname")
+	ch := addChannel(dev, chAddr, chNo)
+	ch.SetCustomDataPoint(&stubEndpointSource{
+		key:        dpKey(chAddr, "RGBW_LIGHT"),
+		deviceType: 0x0101,
+	})
+
+	names := &stubNameResolver{base: "Resolver Label"}
+	cfg := validConfig()
+	cfg.NameResolver = names
+
+	a, err := endpoint.New(newFakeStore(), cfg, nil)
+	if err != nil {
+		t.Fatalf("endpoint.New: %v", err)
+	}
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{
+		CentralName: centralName,
+		Devices:     []*device.Device{dev},
+	}})
+	if err != nil {
+		t.Fatalf("AssembleDevices: %v", err)
+	}
+
+	bridged := top.Bridged()
+	if len(bridged) != 1 {
+		t.Fatalf("len(Bridged())=%d, want 1", len(bridged))
+	}
+	if got := bridged[0].FriendlyName; got != names.base {
+		t.Errorf("FriendlyName=%q, want the configured resolver's %q", got, names.base)
+	}
+	if len(names.asked) != 1 {
+		t.Fatalf("resolver was asked %d times, want exactly once", len(names.asked))
+	}
+	if got := names.asked[0]; got.DeviceAddress != devAddr || got.ChannelNo != chNo {
+		t.Errorf("resolver was asked for %+v, want the endpoint's own device/channel (%s, %d)", got, devAddr, chNo)
 	}
 }

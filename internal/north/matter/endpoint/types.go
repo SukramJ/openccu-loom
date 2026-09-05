@@ -7,27 +7,25 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/SukramJ/openccu-loom/internal/model/device"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/mattercontract"
 )
 
-// Snapshot is one central's contribution to a topology assembly.
-// The caller (typically the daemon bootstrap or the bridge core)
-// builds snapshots by reading each Unit.ModelRegistry and
-// passes the slice to [Assembler.Assemble].
+// Snapshot is one central's contribution to a topology assembly: the
+// endpoints it wants bridged, already described as flat
+// [Spec] values. The caller walks its own model to produce
+// them and passes the slice to [Assembler.Assemble].
 type Snapshot struct {
-	// CentralName scopes every endpoint produced from Devices to
+	// CentralName scopes every endpoint produced from Endpoints to
 	// this central — required for multi-CCU correctness.
 	CentralName string
-	// Devices is the list of model devices visible on this central
-	// at snapshot time. nil-safe — empty slice produces zero
-	// endpoints.
-	Devices []*device.Device
+	// Endpoints describes every bridged endpoint this central
+	// contributes. nil-safe — an empty slice produces zero endpoints.
+	Endpoints []Spec
 	// ModelComplete reports whether this central's initial device load
-	// has finished, i.e. Devices is the authoritative full fleet rather
-	// than a boot-time (still-empty or partially loaded) view. The
+	// has finished, i.e. Endpoints is the authoritative full fleet
+	// rather than a boot-time (still-empty or partially loaded) view. The
 	// assembler only garbage-collects persisted endpoint-ID rows for
 	// model-complete snapshots: the topology is first assembled at
 	// daemon start, before the readiness-gated CCU device load, and a
@@ -81,15 +79,18 @@ type Endpoint struct {
 	// endpoint (the root carries the bridge's NodeLabel directly,
 	// supplied via Config).
 	FriendlyName string
-	// BridgedDevice points to the source device, or nil for the
-	// root endpoint. The bridge reads availability + product name
-	// from here.
-	BridgedDevice *device.Device
-	// Channel points to the source channel, or nil for the root
-	// endpoint. Sensor sub-endpoints (DPKindMeasurement) point at
-	// the channel that hosts the measurement DP — the measurement
-	// itself rides in Measurement.
-	Channel *device.Channel
+	// Availability probes the source's LIVE reachability, or is nil on
+	// the root endpoint and on any endpoint with no live source. The
+	// bridged cluster surface is rebuilt on every dispatch and re-reads
+	// it there, so a source that dies after assembly stops advertising
+	// Reachable=true instead of keeping the topology-time reading
+	// forever. Reachable above carries that reading for callers that
+	// only inspect the assembled topology.
+	Availability AvailabilityProbe
+	// ChannelAddress is the source's address in the owner's own
+	// namespace, carried through from [Spec.ChannelAddress] for
+	// diagnostics. Empty for the root endpoint.
+	ChannelAddress string
 	// Source is the rich-model implementation of the cluster
 	// surface. nil for the root endpoint and for measurement-only
 	// sub-endpoints (which use Measurement instead).

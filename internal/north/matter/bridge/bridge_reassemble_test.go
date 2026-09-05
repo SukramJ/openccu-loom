@@ -63,8 +63,8 @@ func TestReassemble_ButtonGroupPressEventsFlowOnce(t *testing.T) {
 	ch.Put(short)
 	ch.Put(pressButtonDP("BTN0001:1", hmenum.ParameterPressLong))
 
-	snapshotter := func(_ context.Context) []endpointpkg.Snapshot {
-		return []endpointpkg.Snapshot{{
+	snapshotter := func(_ context.Context) []endpointpkg.DeviceSnapshot {
+		return []endpointpkg.DeviceSnapshot{{
 			CentralName:   "ccu1",
 			Devices:       []*device.Device{dev},
 			ModelComplete: true,
@@ -166,7 +166,7 @@ func TestReassemble_ReapsSubscriptionsForRemovedEndpoints(t *testing.T) {
 	// Build and start a bridge with a controlled snapshotter.
 	// Step 1: the snapshotter returns endpoint 5 in the topology.
 	var snapshotterEps []*endpointpkg.Endpoint
-	snapshotter := func(_ context.Context) []endpointpkg.Snapshot {
+	snapshotter := func(_ context.Context) []endpointpkg.DeviceSnapshot {
 		// Return nil devices; reassembleLocked builds its own root+aggregator,
 		// so we patch b.topology directly below.
 		return nil
@@ -269,11 +269,11 @@ func TestReassemble_BridgedEndpointCountExcludesRootAndAggregator(t *testing.T) 
 	ch.Put(pressButtonDP("BTN0002:1", hmenum.ParameterPressShort))
 
 	var withDevice bool
-	snapshotter := func(_ context.Context) []endpointpkg.Snapshot {
+	snapshotter := func(_ context.Context) []endpointpkg.DeviceSnapshot {
 		if !withDevice {
 			return nil
 		}
-		return []endpointpkg.Snapshot{{
+		return []endpointpkg.DeviceSnapshot{{
 			CentralName:   "ccu1",
 			Devices:       []*device.Device{dev},
 			ModelComplete: true,

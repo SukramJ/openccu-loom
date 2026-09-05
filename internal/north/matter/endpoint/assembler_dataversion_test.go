@@ -70,7 +70,7 @@ func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
 	}
 
 	// (1) Initial assembly with X + Y.
-	top1, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: central, Devices: []*device.Device{devX, devY}}})
+	top1, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX, devY}}})
 	if err != nil {
 		t.Fatalf("Assemble #1: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
 	// (2) Reassemble triggered by an UNRELATED change: Y removed. X's
 	// DataVersion must be UNCHANGED even though the *Endpoint struct is
 	// rebuilt.
-	top2, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: central, Devices: []*device.Device{devX}}})
+	top2, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX}}})
 	if err != nil {
 		t.Fatalf("Assemble #2: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
 	}
 
 	// ...and the bump survives the next reassembly.
-	top3, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: central, Devices: []*device.Device{devX}}})
+	top3, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX}}})
 	if err != nil {
 		t.Fatalf("Assemble #3: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestAssemble_BridgedDataVersionSurvivesUnrelatedReassemble(t *testing.T) {
 	// (4) A brand-new endpoint (device Z) gets its OWN nonzero version,
 	// independent of X — two different devices must not collide.
 	devZ := buildCustomDPDevice("CCC0003", "Z", "RGBW_LIGHT", 0x0101)
-	top4, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: central, Devices: []*device.Device{devX, devZ}}})
+	top4, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: central, Devices: []*device.Device{devX, devZ}}})
 	if err != nil {
 		t.Fatalf("Assemble #4: %v", err)
 	}

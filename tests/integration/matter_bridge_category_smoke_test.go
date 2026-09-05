@@ -121,7 +121,7 @@ func makeSmokeSmokeSirenDevice(addr, name string) *device.Device {
 func assertCategoryBridgedEndpoint(t *testing.T, dev *device.Device, wantDeviceType uint16, wantClusters []uint32) {
 	t.Helper()
 
-	top := buildSmokeTopology(t, []endpoint.Snapshot{
+	top := buildSmokeTopology(t, []endpoint.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: []*device.Device{dev}},
 	})
 

@@ -75,8 +75,8 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 	// cmd/openccu-loom/daemon_matter.go: the matter store over the
 	// shared DB handle, a snapshotter closure over the live model, and
 	// an advertiser.
-	snapshotter := func(_ context.Context) []matterendpoint.Snapshot {
-		return []matterendpoint.Snapshot{{
+	snapshotter := func(_ context.Context) []matterendpoint.DeviceSnapshot {
+		return []matterendpoint.DeviceSnapshot{{
 			CentralName:   "ccu1",
 			Devices:       []*device.Device{dev},
 			ModelComplete: true,

@@ -119,8 +119,8 @@ func buildTwoCentralsTopology() *scenarioTopology {
 	}
 	devA, _ := mkCentral("ccuA", "ONOFFA01", 1)
 	devB, _ := mkCentral("ccuB", "ONOFFB01", 1)
-	snap := Snapshotter(func(_ context.Context) []endpoint.Snapshot {
-		return []endpoint.Snapshot{
+	snap := Snapshotter(func(_ context.Context) []endpoint.DeviceSnapshot {
+		return []endpoint.DeviceSnapshot{
 			{CentralName: "ccuA", Devices: []*device.Device{devA}},
 			{CentralName: "ccuB", Devices: []*device.Device{devB}},
 		}
@@ -195,8 +195,8 @@ func buildFabricScopedReaderTopology() *scenarioTopology {
 	dev := device.New(device.Config{Address: devAddr, Name: "Fabric-Scoped"})
 	ch := dev.AddChannel(chAddr, 1, "SWITCH", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
-	snap := Snapshotter(func(_ context.Context) []endpoint.Snapshot {
-		return []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
+	snap := Snapshotter(func(_ context.Context) []endpoint.DeviceSnapshot {
+		return []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
 	})
 	return &scenarioTopology{
 		snapshotter: snap,
@@ -226,8 +226,8 @@ func buildManyTempSensorsTopology() *scenarioTopology {
 		ch.AttachCalculatedDataPoint(src)
 		sources[chAddr+"/ACTUAL_TEMPERATURE"] = src
 	}
-	snap := Snapshotter(func(_ context.Context) []endpoint.Snapshot {
-		return []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
+	snap := Snapshotter(func(_ context.Context) []endpoint.DeviceSnapshot {
+		return []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
 	})
 	return &scenarioTopology{
 		snapshotter: snap,
@@ -411,8 +411,8 @@ func buildSingleOnOffEndpointSourceTopology() *scenarioTopology {
 	ch := dev.AddChannel(chAddr, 1, "SWITCH", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
 
-	snap := Snapshotter(func(_ context.Context) []endpoint.Snapshot {
-		return []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
+	snap := Snapshotter(func(_ context.Context) []endpoint.DeviceSnapshot {
+		return []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
 	})
 	return &scenarioTopology{
 		snapshotter: snap,
@@ -472,8 +472,8 @@ func buildSingleTempSensorTopology() *scenarioTopology {
 	ch := dev.AddChannel(chAddr, 1, "WEATHER", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
 
-	snap := Snapshotter(func(_ context.Context) []endpoint.Snapshot {
-		return []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
+	snap := Snapshotter(func(_ context.Context) []endpoint.DeviceSnapshot {
+		return []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
 	})
 	return &scenarioTopology{
 		snapshotter: snap,

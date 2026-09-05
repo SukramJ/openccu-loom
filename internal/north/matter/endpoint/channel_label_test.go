@@ -48,7 +48,7 @@ func TestAssemble_ChannelLabelReachesTheNodeLabel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
-			top, err := a.Assemble(context.Background(), []endpoint.Snapshot{
+			top, err := a.AssembleDevices(context.Background(), []endpoint.DeviceSnapshot{
 				{CentralName: "ccu1", Devices: []*device.Device{dev}},
 			})
 			if err != nil {

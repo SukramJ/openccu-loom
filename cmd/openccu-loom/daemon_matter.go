@@ -3350,18 +3350,18 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 }
 
 // matterSnapshotter builds the bridge's topology snapshotter: one
-// [endpoint.Snapshot] per registered central, read live from the central
+// [endpoint.DeviceSnapshot] per registered central, read live from the central
 // registry so runtime-added centrals surface on the next assembly. Each
 // snapshot's ModelComplete flag is stamped from the readiness latch; a nil
 // readiness marks every central model-incomplete (the GC-off fail-safe).
 func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness) matterbridge.Snapshotter {
-	return func(_ context.Context) []endpoint.Snapshot {
-		var out []endpoint.Snapshot
+	return func(_ context.Context) []endpoint.DeviceSnapshot {
+		var out []endpoint.DeviceSnapshot
 		for _, u := range reg.List() {
 			if u == nil || u.ModelRegistry == nil {
 				continue
 			}
-			out = append(out, endpoint.Snapshot{
+			out = append(out, endpoint.DeviceSnapshot{
 				CentralName:   u.Name(),
 				Devices:       releasedDevicesOf(u),
 				ModelComplete: readiness != nil && readiness.isReady(u.Name()),
@@ -4065,12 +4065,8 @@ func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo
 		if rev, ok := matterschema.DeviceTypeRevision(uint32(ep.DeviceType)); ok {
 			info.DeviceTypeRevision = rev
 		}
-		if ep.BridgedDevice != nil {
-			info.DeviceAddress = ep.BridgedDevice.Address
-		}
-		if ep.Channel != nil {
-			info.ChannelAddress = ep.Channel.Address
-		}
+		info.DeviceAddress = ep.SourceKey.DeviceAddress
+		info.ChannelAddress = ep.ChannelAddress
 		if ep.Source != nil {
 			seen := make(map[uint32]struct{})
 			for _, cs := range ep.Source.MatterClusterServers() {

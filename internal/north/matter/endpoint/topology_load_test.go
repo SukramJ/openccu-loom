@@ -55,12 +55,12 @@ func TestAssemble_LargeFleet600Endpoints(t *testing.T) {
 		devs = append(devs, dev)
 	}
 
-	snap := endpoint.Snapshot{CentralName: centralName, Devices: devs}
+	snap := endpoint.DeviceSnapshot{CentralName: centralName, Devices: devs}
 	a, err := endpoint.New(newFakeStore(), validConfig(), nil)
 	if err != nil {
 		t.Fatalf("endpoint.New: %v", err)
 	}
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -128,13 +128,13 @@ func TestAssemble_RejectEndpointIDOverflow(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(src)
 
-	snap := endpoint.Snapshot{CentralName: centralName, Devices: []*device.Device{dev}}
+	snap := endpoint.DeviceSnapshot{CentralName: centralName, Devices: []*device.Device{dev}}
 
 	fs := newFakeStore()
 	fs.nextID = 0xFFFE // next assignment would land on 0xFFFE; the one after that overflows.
 
 	a, _ := endpoint.New(fs, validConfig(), nil)
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		// Acceptable: the assigner refused to mint near the boundary.
 		// The goal is "no silent wraparound" — log and move on.

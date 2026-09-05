@@ -43,7 +43,7 @@ func (f wbFakeSessionLookup) Lookup(_ uint16) (*channel.Session, bool) {
 
 // ─── snapshotter ─────────────────────────────────────────────────────────
 
-func wbEmptySnapshotter(_ context.Context) []endpoint.Snapshot { return nil }
+func wbEmptySnapshotter(_ context.Context) []endpoint.DeviceSnapshot { return nil }
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 

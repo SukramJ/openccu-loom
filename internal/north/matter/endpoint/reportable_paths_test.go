@@ -58,8 +58,8 @@ func newTempMeasBridgedEndpoint(t *testing.T) *endpoint.Endpoint {
 	if err != nil {
 		t.Fatalf("endpoint.New: %v", err)
 	}
-	snap := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{snap})
+	snap := endpoint.DeviceSnapshot{CentralName: "ccu1", Devices: []*device.Device{dev}}
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{snap})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestReportablePaths_AirQualityEndpoint_CoversBothDerivedClusters(t *testing
 	if err != nil {
 		t.Fatalf("endpoint.New: %v", err)
 	}
-	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	top, err := a.AssembleDevices(ctx, []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}

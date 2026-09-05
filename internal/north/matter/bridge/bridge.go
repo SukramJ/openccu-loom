@@ -52,10 +52,10 @@ var (
 // Snapshotter returns the current model snapshots for endpoint
 // topology assembly. Typically wraps the central registry walk:
 //
-//	func(ctx context.Context) []endpoint.Snapshot {
-//	    var out []endpoint.Snapshot
+//	func(ctx context.Context) []endpoint.DeviceSnapshot {
+//	    var out []endpoint.DeviceSnapshot
 //	    for _, c := range reg.List() {
-//	        out = append(out, endpoint.Snapshot{
+//	        out = append(out, endpoint.DeviceSnapshot{
 //	            CentralName: c.Name(),
 //	            Devices:     c.ModelRegistry.List(),
 //	        })
@@ -66,7 +66,7 @@ var (
 // The bridge calls Snapshotter once at [Start] and on every
 // [Reassemble]; it never caches the result — every call gets a
 // fresh snapshot.
-type Snapshotter func(ctx context.Context) []endpoint.Snapshot
+type Snapshotter func(ctx context.Context) []endpoint.DeviceSnapshot
 
 // Config bundles the bridge's identity and listener parameters. All
 // fields are validated at [New] time.
@@ -637,7 +637,7 @@ func (b *Bridge) Reassemble(ctx context.Context) error {
 // of the two assembled topologies, never a torn intermediate).
 func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit,funlen // single-purpose bridge topology reassembly with many endpoint/cluster branches
 	snapshots := b.snapshotter(ctx)
-	topology, err := b.assembler.Assemble(ctx, snapshots)
+	topology, err := b.assembler.AssembleDevices(ctx, snapshots)
 	if err != nil {
 		return fmt.Errorf("bridge: assemble: %w", err)
 	}

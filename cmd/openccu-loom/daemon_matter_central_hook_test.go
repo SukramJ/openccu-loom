@@ -87,7 +87,7 @@ func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.
 	if !readiness.isReady("ccu-adopted") {
 		t.Error("adopted central not latched after its southbound-ready event")
 	}
-	byName := map[string]endpoint.Snapshot{}
+	byName := map[string]endpoint.DeviceSnapshot{}
 	for _, s := range matterSnapshotter(reg, readiness)(context.Background()) {
 		byName[s.CentralName] = s
 	}

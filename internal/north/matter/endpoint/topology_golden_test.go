@@ -463,8 +463,8 @@ func sortedClusterIDs(servers []mattercontract.ClusterServer) []string {
 //   - Live measurement values. Nothing in the fleet is fed a value, and
 //     the recorded shape reads no measurement attribute, so a reading
 //     cannot leak into the fixture.
-//   - Pointer-valued fields (BridgedDevice, Channel, Source,
-//     Measurement). Identity, not wire content.
+//   - Pointer-valued fields (Source, Measurement, PowerSource) and the
+//     live availability probe. Identity, not wire content.
 //
 // DETERMINISM: the assembler sorts its output by endpoint id
 // (Assemble's sort.SliceStable), and every model accessor it walks —
@@ -492,7 +492,7 @@ func TestAssembledTopologyMatchesGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	top, err := a.Assemble(context.Background(), []endpoint.Snapshot{{
+	top, err := a.AssembleDevices(context.Background(), []endpoint.DeviceSnapshot{{
 		CentralName:   goldenCentralName,
 		Devices:       goldenFleet(t),
 		ModelComplete: true,

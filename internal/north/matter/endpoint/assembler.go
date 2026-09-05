@@ -54,6 +54,13 @@ type Config struct {
 	// falls back to the English "Channel": translation belongs to the host,
 	// which resolves the catalogue and supplies the finished word.
 	ChannelLabel string
+	// NameResolver is the naming authority the device walk asks for every
+	// operator-facing label. Nil selects the model-backed resolver built
+	// from the walked devices, which routes through the same naming
+	// primitives as the MQTT discovery builder and the REST data-point
+	// handler. Supplying one is how an owner with a different model keeps
+	// its own names on the Matter plane instead of having them re-derived.
+	NameResolver NameResolver
 }
 
 // Validate returns nil when the config is internally consistent.
@@ -161,10 +168,11 @@ func (a *Assembler) SetExposureChecker(c ExposureChecker) {
 	a.exposures = c
 }
 
-// Assemble produces the topology from the given snapshots. Endpoint
-// IDs are looked up in the store; new sources receive a fresh ID
-// allocated under a transaction. Vanished sources (rows in the store
-// with no matching snapshot entry) are removed.
+// Assemble produces the topology from the given snapshots of
+// [Spec] values. Endpoint IDs are looked up in the store; new
+// sources receive a fresh ID allocated under a transaction. Vanished
+// sources (rows in the store with no matching snapshot entry) are
+// removed.
 //
 // Snapshots must have unique CentralName values; the assembler does
 // not deduplicate. The caller is expected to pass exactly one
@@ -194,11 +202,17 @@ func (a *Assembler) Assemble(ctx context.Context, snapshots []Snapshot) (*Topolo
 
 	seen := make(map[store.EndpointKey]struct{})
 	for _, snap := range snapshots {
-		eps, err := a.assembleSnapshot(ctx, snap, seen)
-		if err != nil {
-			return nil, err
+		if snap.CentralName == "" {
+			return nil, errors.New("endpoint: snapshot CentralName is required")
 		}
-		topology.Endpoints = append(topology.Endpoints, eps...)
+		for i := range snap.Endpoints {
+			ep, err := a.buildEndpoint(ctx, &snap.Endpoints[i])
+			if err != nil {
+				return nil, err
+			}
+			seen[ep.SourceKey] = struct{}{}
+			topology.Endpoints = append(topology.Endpoints, ep)
+		}
 	}
 
 	if err := a.gcVanished(ctx, snapshots, seen); err != nil {
@@ -242,36 +256,110 @@ const deviceTypeRootNode = 0x0016
 // ("Aggregator" / 0x000E) and matter.js's `AggregatorDt.id`.
 const deviceTypeAggregator = 0x000E
 
-func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) {
-	if snap.CentralName == "" {
-		return nil, errors.New("endpoint: snapshot CentralName is required")
+// buildEndpoint turns one [Spec] into the assembled endpoint:
+// it resolves the persisted endpoint id for the spec's stable key and
+// binds the per-identity state that has to survive a reassembly.
+func (a *Assembler) buildEndpoint(ctx context.Context, spec *Spec) (*Endpoint, error) {
+	id, err := a.assignOrReuseID(ctx, spec.StableKey, spec.DeviceType)
+	if err != nil {
+		return nil, err
 	}
-	out := make([]*Endpoint, 0, 8)
+	reachable := true
+	if spec.Availability != nil {
+		reachable = spec.Availability()
+	}
+	return &Endpoint{
+		ID:         id,
+		DeviceType: spec.DeviceType,
+		Reachable:  reachable,
+		// The 32-byte NodeLabel cap is Matter's constraint, so the
+		// assembly enforces it however the label was produced.
+		FriendlyName:   truncateUTF8(spec.FriendlyName, nodeLabelMaxBytes),
+		ChannelAddress: spec.ChannelAddress,
+		Availability:   spec.Availability,
+		Source:         spec.Source,
+		Measurement:    spec.Measurement,
+		PowerSource:    spec.PowerSource,
+		SourceKey:      spec.StableKey,
+		// Reuse the state bound to this stable source key so the
+		// endpoint's per-cluster version and Identify server survive
+		// reassembly.
+		state: a.states.stateFor(spec.StableKey),
+		// Bridged endpoints are children of the Aggregator (EP 1).
+		// Mirrors chip examples/bridge-app/linux/main.cpp:261-276
+		// AddDeviceEndpoint(..., parentEndpointId=1) and matter.js
+		// aggregator.add(child) which establishes the same parent chain.
+		ParentEndpointID:    1,
+		HasParentEndpointID: true,
+	}, nil
+}
 
+// DeviceSnapshot is one central's device fleet as the daemon holds it.
+// It is the model-walking counterpart of [Snapshot]: the walk in
+// [Assembler.AssembleDevices] turns it into the flat [Spec]
+// values the assembly itself consumes.
+type DeviceSnapshot struct {
+	// CentralName scopes every endpoint produced from Devices to this
+	// central — required for multi-CCU correctness.
+	CentralName string
+	// Devices is the list of model devices visible on this central at
+	// snapshot time. nil-safe — an empty slice produces zero endpoints.
+	Devices []*device.Device
+	// ModelComplete reports whether this central's initial device load
+	// has finished. Carried through to [Snapshot.ModelComplete], which
+	// documents what it gates.
+	ModelComplete bool
+}
+
+// AssembleDevices walks the model fleets in snapshots, describes every
+// endpoint they should project as an [Spec], and assembles the
+// topology from those.
+func (a *Assembler) AssembleDevices(ctx context.Context, snapshots []DeviceSnapshot) (*Topology, error) {
+	specs := make([]Snapshot, 0, len(snapshots))
+	for _, snap := range snapshots {
+		s, err := a.snapshotSpecs(ctx, snap)
+		if err != nil {
+			return nil, err
+		}
+		specs = append(specs, s)
+	}
+	return a.Assemble(ctx, specs)
+}
+
+// snapshotSpecs describes one central's fleet as endpoint specs.
+func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (Snapshot, error) {
+	if snap.CentralName == "" {
+		return Snapshot{}, errors.New("endpoint: snapshot CentralName is required")
+	}
+	names := a.cfg.NameResolver
+	if names == nil {
+		names = newModelNameResolver(snap.Devices, a.cfg.Labels, a.channelLabel())
+	}
+	out := Snapshot{CentralName: snap.CentralName, ModelComplete: snap.ModelComplete}
 	for _, dev := range snap.Devices {
 		if dev == nil {
 			continue
 		}
-		deviceEndpoints := make([]*Endpoint, 0, 4)
+		deviceSpecs := make([]Spec, 0, 4)
 		for _, ch := range dev.Channels() {
 			if ch == nil {
 				continue
 			}
-			eps, err := a.assembleChannel(ctx, snap.CentralName, dev, ch, seen)
+			specs, err := a.channelSpecs(ctx, snap.CentralName, names, dev, ch)
 			if err != nil {
-				return nil, err
+				return Snapshot{}, err
 			}
-			deviceEndpoints = append(deviceEndpoints, eps...)
+			deviceSpecs = append(deviceSpecs, specs...)
 		}
-		attachPowerSource(dev, deviceEndpoints)
-		out = append(out, deviceEndpoints...)
+		attachPowerSource(dev, deviceSpecs)
+		out.Endpoints = append(out.Endpoints, deviceSpecs...)
 	}
 	return out, nil
 }
 
 // attachPowerSource binds the device's battery reading to exactly one of its
-// endpoints, so the PowerSource cluster (0x002F) is served where the Device
-// Library puts it.
+// endpoint specs, so the PowerSource cluster (0x002F) is served where the
+// Device Library puts it.
 //
 // PowerSource is a property of the physical device, not of any one function it
 // exposes, and BridgedNode (0x0013) — the secondary device type every bridged
@@ -289,9 +377,9 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 // has one battery, and advertising it twice would have controllers show two
 // battery levels for one device. The target is the lowest-numbered channel's
 // first endpoint, which is the device's primary function: channel order is the
-// CCU's own, and assembleChannel appends in a stable order within a channel.
-func attachPowerSource(dev *device.Device, eps []*Endpoint) {
-	if dev == nil || len(eps) == 0 {
+// CCU's own, and channelSpecs appends in a stable order within a channel.
+func attachPowerSource(dev *device.Device, specs []Spec) {
+	if dev == nil || len(specs) == 0 {
 		return
 	}
 	var battery mattercontract.MeasurementSource
@@ -314,20 +402,17 @@ func attachPowerSource(dev *device.Device, eps []*Endpoint) {
 	if battery == nil {
 		return
 	}
-	target := eps[0]
-	for _, ep := range eps[1:] {
-		if ep.Channel == nil || target.Channel == nil {
-			continue
-		}
-		if ep.Channel.Number < target.Channel.Number {
-			target = ep
+	target := 0
+	for i := 1; i < len(specs); i++ {
+		if specs[i].StableKey.ChannelNo < specs[target].StableKey.ChannelNo {
+			target = i
 		}
 	}
-	target.PowerSource = battery
+	specs[target].PowerSource = battery
 }
 
-func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
-	out := make([]*Endpoint, 0, 4)
+func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names NameResolver, dev *device.Device, ch *device.Channel) ([]Spec, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
+	out := make([]Spec, 0, 4)
 
 	// An operator-hidden channel projects no endpoint, mirroring the
 	// candidate enumeration that already drops it. Both gates are needed:
@@ -376,12 +461,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 				return nil, err
 			}
 			if ok {
-				ep, err := a.makeEndpoint(ctx, centralName, dev, ch, store.DPKindCustom, dpKey(cdp), src)
-				if err != nil {
-					return nil, err
-				}
-				seen[ep.SourceKey] = struct{}{}
-				out = append(out, ep)
+				out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindCustom, dpKey(cdp), src))
 			}
 		}
 	}
@@ -397,12 +477,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			if !allowed {
 				continue
 			}
-			ep, err := a.makeEndpoint(ctx, centralName, dev, ch, store.DPKindCalculated, key, src)
-			if err != nil {
-				return nil, err
-			}
-			seen[ep.SourceKey] = struct{}{}
-			out = append(out, ep)
+			out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindCalculated, key, src))
 			continue
 		}
 		if !a.cfg.IncludeMeasurements {
@@ -425,12 +500,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		if !allowed {
 			continue
 		}
-		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindCalculated, key, meas)
-		if err != nil {
-			return nil, err
-		}
-		seen[ep.SourceKey] = struct{}{}
-		out = append(out, ep)
+		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, store.DPKindCalculated, key, meas))
 	}
 
 	// Combined DPs.
@@ -446,12 +516,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		if !allowed {
 			continue
 		}
-		ep, err := a.makeEndpoint(ctx, centralName, dev, ch, store.DPKindCombined, dpKey(comb), src)
-		if err != nil {
-			return nil, err
-		}
-		seen[ep.SourceKey] = struct{}{}
-		out = append(out, ep)
+		out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindCombined, dpKey(comb), src))
 	}
 
 	// Generic DPs project to Matter on two paths:
@@ -504,12 +569,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 					if !allowed {
 						continue
 					}
-					ep, err := a.makeEndpoint(ctx, centralName, dev, ch, store.DPKindGeneric, key, src)
-					if err != nil {
-						return nil, err
-					}
-					seen[ep.SourceKey] = struct{}{}
-					out = append(out, ep)
+					out = append(out, a.makeSpec(centralName, names, dev, ch, store.DPKindGeneric, key, src))
 					continue
 				}
 			}
@@ -550,33 +610,18 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			continue
 		default:
 		}
-		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindGeneric, key, meas)
-		if err != nil {
-			return nil, err
-		}
-		seen[ep.SourceKey] = struct{}{}
-		out = append(out, ep)
+		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, store.DPKindGeneric, key, meas))
 	}
 
 	if len(pressMembers) > 0 {
-		ep, err := a.makeButtonGroupEndpoint(ctx, centralName, dev, ch, pressMembers)
-		if err != nil {
-			return nil, err
-		}
-		if ep != nil {
-			seen[ep.SourceKey] = struct{}{}
-			out = append(out, ep)
+		if spec, ok := a.makeButtonGroupSpec(centralName, names, dev, ch, pressMembers); ok {
+			out = append(out, spec)
 		}
 	}
 
 	if len(electricalMembers) > 0 {
-		ep, err := a.makeElectricalGroupEndpoint(ctx, centralName, dev, ch, electricalMembers)
-		if err != nil {
-			return nil, err
-		}
-		if ep != nil {
-			seen[ep.SourceKey] = struct{}{}
-			out = append(out, ep)
+		if spec, ok := a.makeElectricalGroupSpec(centralName, names, dev, ch, electricalMembers); ok {
+			out = append(out, spec)
 		}
 	}
 
@@ -600,16 +645,16 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 // non-conformant; ElectricalSensor is their specified carrier.
 const ElectricalGroupDPKey = "ELECTRICAL"
 
-// makeElectricalGroupEndpoint builds the single ElectricalSensor endpoint for
-// one channel from its allowed electrical DPs. Returns (nil, nil) when no
-// member survives the group's parameter filter.
-func (a *Assembler) makeElectricalGroupEndpoint(
-	ctx context.Context,
+// makeElectricalGroupSpec describes the single ElectricalSensor endpoint for
+// one channel from its allowed electrical DPs. The second result is false
+// when no member survives the group's parameter filter.
+func (a *Assembler) makeElectricalGroupSpec(
 	centralName string,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
 	members []device.ParameterDataPoint,
-) (*Endpoint, error) {
+) (Spec, bool) {
 	srcs := make([]generic.ElectricalGroupMember, 0, len(members))
 	for _, m := range members {
 		src, ok := m.(generic.ElectricalGroupMember)
@@ -620,7 +665,7 @@ func (a *Assembler) makeElectricalGroupEndpoint(
 	}
 	group := generic.NewElectricalGroup(srcs...)
 	if group == nil {
-		return nil, nil
+		return Spec{}, false
 	}
 	sourceKey := store.EndpointKey{
 		CentralName:   centralName,
@@ -629,25 +674,14 @@ func (a *Assembler) makeElectricalGroupEndpoint(
 		DPKind:        store.DPKindGeneric,
 		DPKey:         ElectricalGroupDPKey,
 	}
-	deviceType := measurementDeviceType(mattercontract.MeasurementElectrical)
-	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
-	if err != nil {
-		return nil, err
-	}
-	return &Endpoint{
-		ID:            id,
-		DeviceType:    deviceType,
-		Reachable:     dev.Available(),
-		FriendlyName:  friendlyName(dev, ch, a.parameterSuffix(ch, ElectricalGroupDPKey), a.channelLabel()),
-		BridgedDevice: dev,
-		Channel:       ch,
-		Measurement:   group,
-		SourceKey:     sourceKey,
-		state:         a.states.stateFor(sourceKey),
-		// Same parent chain as every other bridged endpoint.
-		ParentEndpointID:    1,
-		HasParentEndpointID: true,
-	}, nil
+	return Spec{
+		StableKey:      sourceKey,
+		DeviceType:     measurementDeviceType(mattercontract.MeasurementElectrical),
+		FriendlyName:   composeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
+		ChannelAddress: ch.Address,
+		Availability:   dev.Available,
+		Measurement:    group,
+	}, true
 }
 
 // ButtonGroupDPKey is the synthetic dp_key persisted for the
@@ -668,25 +702,25 @@ func (a *Assembler) makeElectricalGroupEndpoint(
 // fresh endpoint id, so controllers re-learn button devices once.
 const ButtonGroupDPKey = "BUTTON"
 
-// makeButtonGroupEndpoint builds the single GenericSwitch endpoint for
-// one physical button from the channel's allowed press DPs. Returns
-// (nil, nil) when no member survives the group's press-family filter —
-// defensive only, since the MomentarySwitch classification and the
-// group's press family enumerate the same parameters.
-func (a *Assembler) makeButtonGroupEndpoint(
-	ctx context.Context,
+// makeButtonGroupSpec describes the single GenericSwitch endpoint for
+// one physical button from the channel's allowed press DPs. The second
+// result is false when no member survives the group's press-family
+// filter — defensive only, since the MomentarySwitch classification and
+// the group's press family enumerate the same parameters.
+func (a *Assembler) makeButtonGroupSpec(
 	centralName string,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
 	members []device.ParameterDataPoint,
-) (*Endpoint, error) {
+) (Spec, bool) {
 	srcs := make([]generic.PressEventSource, 0, len(members))
 	for _, m := range members {
 		srcs = append(srcs, m)
 	}
 	group := generic.NewButtonGroup(srcs...)
 	if group == nil {
-		return nil, nil
+		return Spec{}, false
 	}
 	sourceKey := store.EndpointKey{
 		CentralName:   centralName,
@@ -695,31 +729,16 @@ func (a *Assembler) makeButtonGroupEndpoint(
 		DPKind:        store.DPKindGeneric,
 		DPKey:         ButtonGroupDPKey,
 	}
-	deviceType := measurementDeviceType(mattercontract.MeasurementMomentarySwitch)
-	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
-	if err != nil {
-		return nil, err
-	}
-	return &Endpoint{
-		ID:         id,
-		DeviceType: deviceType,
-		Reachable:  dev.Available(),
+	return Spec{
+		StableKey:  sourceKey,
+		DeviceType: measurementDeviceType(mattercontract.MeasurementMomentarySwitch),
 		// The endpoint stands for the whole physical button (the
 		// channel), not one PRESS_* parameter — no parameter suffix.
-		FriendlyName:  friendlyName(dev, ch, "", a.channelLabel()),
-		BridgedDevice: dev,
-		Channel:       ch,
-		Measurement:   group,
-		SourceKey:     sourceKey,
-		// Reuse the state bound to this stable source key so the
-		// endpoint's per-cluster version and Identify server survive
-		// reassembly.
-		state: a.states.stateFor(sourceKey),
-		// Bridged under the Aggregator (EP 1), same parent chain as
-		// every other bridged endpoint.
-		ParentEndpointID:    1,
-		HasParentEndpointID: true,
-	}, nil
+		FriendlyName:   composeNodeLabel(names.EndpointLabel(sourceKey), ""),
+		ChannelAddress: ch.Address,
+		Availability:   dev.Available,
+		Measurement:    group,
+	}, true
 }
 
 // hideFromMatter reports whether a generic DP should be dropped from the
@@ -767,15 +786,16 @@ func genericDPKeyForMeasurement(dp any) string {
 	return ""
 }
 
-func (a *Assembler) makeEndpoint(
-	ctx context.Context,
+// makeSpec describes one source-backed bridged endpoint.
+func (a *Assembler) makeSpec(
 	centralName string,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
 	kind store.DPKind,
 	key string,
 	src mattercontract.EndpointSource,
-) (*Endpoint, error) {
+) Spec {
 	sourceKey := store.EndpointKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
@@ -783,43 +803,28 @@ func (a *Assembler) makeEndpoint(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	deviceType := src.MatterDeviceType()
-
-	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
-	if err != nil {
-		return nil, err
+	return Spec{
+		StableKey:      sourceKey,
+		DeviceType:     src.MatterDeviceType(),
+		FriendlyName:   composeNodeLabel(names.EndpointLabel(sourceKey), ""),
+		ChannelAddress: ch.Address,
+		Availability:   dev.Available,
+		Source:         src,
 	}
-	return &Endpoint{
-		ID:            id,
-		DeviceType:    deviceType,
-		Reachable:     dev.Available(),
-		FriendlyName:  friendlyName(dev, ch, "", a.channelLabel()),
-		BridgedDevice: dev,
-		Channel:       ch,
-		Source:        src,
-		SourceKey:     sourceKey,
-		// Reuse the state bound to this stable source key so the
-		// endpoint's per-cluster version and Identify server survive
-		// reassembly.
-		state: a.states.stateFor(sourceKey),
-		// Bridged endpoints are children of the Aggregator (EP 1).
-		// Mirrors chip examples/bridge-app/linux/main.cpp:261-276
-		// AddDeviceEndpoint(..., parentEndpointId=1) and matter.js
-		// aggregator.add(child) which establishes the same parent chain.
-		ParentEndpointID:    1,
-		HasParentEndpointID: true,
-	}, nil
 }
 
-func (a *Assembler) makeMeasurementEndpoint(
-	ctx context.Context,
+// makeMeasurementSpec describes one standalone sensor endpoint. Its
+// label carries the parameter suffix, because several measurements of
+// one channel are otherwise indistinguishable in a controller's UI.
+func (a *Assembler) makeMeasurementSpec(
 	centralName string,
+	names NameResolver,
 	dev *device.Device,
 	ch *device.Channel,
 	kind store.DPKind,
 	key string,
 	meas mattercontract.MeasurementSource,
-) (*Endpoint, error) {
+) Spec {
 	sourceKey := store.EndpointKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
@@ -827,31 +832,14 @@ func (a *Assembler) makeMeasurementEndpoint(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	deviceType := measurementDeviceType(meas.MatterMeasurementClass())
-
-	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
-	if err != nil {
-		return nil, err
+	return Spec{
+		StableKey:      sourceKey,
+		DeviceType:     measurementDeviceType(meas.MatterMeasurementClass()),
+		FriendlyName:   composeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
+		ChannelAddress: ch.Address,
+		Availability:   dev.Available,
+		Measurement:    meas,
 	}
-	return &Endpoint{
-		ID:            id,
-		DeviceType:    deviceType,
-		Reachable:     dev.Available(),
-		FriendlyName:  friendlyName(dev, ch, a.parameterSuffix(ch, key), a.channelLabel()),
-		BridgedDevice: dev,
-		Channel:       ch,
-		Source:        nil,
-		Measurement:   meas,
-		SourceKey:     sourceKey,
-		// Reuse the state bound to this stable source key so the
-		// endpoint's per-cluster version and Identify server survive
-		// reassembly.
-		state: a.states.stateFor(sourceKey),
-		// Measurement sub-endpoints are also bridged under the Aggregator
-		// (EP 1). Same parent-chain as source endpoints.
-		ParentEndpointID:    1,
-		HasParentEndpointID: true,
-	}, nil
 }
 
 // assignOrReuseID looks up the existing endpoint_id for sourceKey;

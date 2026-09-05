@@ -104,8 +104,8 @@ func buildBridgeWithTempSource(t *testing.T) (*bridge.Bridge, *notifiableTempSou
 	ch := dev.AddChannel(chAddr, 1, "WEATHER", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
 
-	snapFn := func(_ context.Context) []endpoint.Snapshot {
-		return []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
+	snapFn := func(_ context.Context) []endpoint.DeviceSnapshot {
+		return []endpoint.DeviceSnapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}}
 	}
 
 	b, err := bridge.New(
