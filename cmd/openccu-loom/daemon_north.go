@@ -98,7 +98,9 @@ func buildAuthStores(cfg *config.Config, wsHub *ws.Hub, sessionPersist auth.Sess
 		users.Put(name, hashed, auth.RoleAdmin)
 	}
 	tokens := auth.NewMemoryTokenStore(buildTokenMap(cfg))
-	sessions := buildSessionStore(sessionPersist, logger)
+	sessions := buildSessionStore(sessionPersist, logger, auth.SessionStoreOptions{
+		IdleTTL: cfg.North.REST.Auth.SessionIdleTimeout,
+	})
 
 	if cfg.North.REST.Auth.BearerAuthEnabled() {
 		// WS upgrades authenticate via the same Bearer tokens; the hub
@@ -125,16 +127,20 @@ func buildAuthStores(cfg *config.Config, wsHub *ws.Hub, sessionPersist auth.Sess
 // backing is available, else the in-memory store. A persistence
 // hydration error degrades to in-memory (login still works) rather than
 // aborting boot.
-func buildSessionStore(persist auth.SessionPersistence, logger *slog.Logger) *auth.SessionStore {
+//
+// opts carries the operator's `north.rest.auth.session_idle_timeout`: the
+// idle eviction is a documented control of the store, and this is the one
+// place the configured value reaches it — every constructor below takes it.
+func buildSessionStore(persist auth.SessionPersistence, logger *slog.Logger, opts auth.SessionStoreOptions) *auth.SessionStore {
 	if persist == nil {
-		return auth.NewSessionStore()
+		return auth.NewSessionStoreWithOptions(opts)
 	}
-	sessions, err := auth.NewPersistentSessionStore(persist, logger)
+	sessions, err := auth.NewPersistentSessionStoreWithOptions(persist, logger, opts)
 	if err != nil {
 		logger.Warn("auth.session.persist.hydrate",
 			slog.String("err", err.Error()),
 			slog.String("effect", "sessions in-memory only this run"))
-		return auth.NewSessionStore()
+		return auth.NewSessionStoreWithOptions(opts)
 	}
 	return sessions
 }

@@ -7997,11 +7997,15 @@ func TestChannelKeyBitmask_WeekProfileWithEntries(t *testing.T) {
 		Name:        "CKBwp1DEV01B30",
 	})
 	c.ModelRegistry.Put(d)
-	ch := d.AddChannel("CKBwp1DEV01B30:1", 1, "CLIMATECONTROL_VENT_DRIVE", hmenum.ParamsetKeyValues)
+	ch := d.AddChannel("CKBwp1DEV01B30:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
 
-	// Install a WeekProfile with schedule-enabled entries.
+	// Install a WeekProfile whose registered target carries the bit the
+	// device's own channel list assigns channel 1 (position 0).
 	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
 		ScheduleType: weekprofile.ScheduleTypeDefault,
+	})
+	wp.SetAvailableTargetChannels(map[string]weekprofile.TargetChannelInfo{
+		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary", Bit: 0, BitKnown: true},
 	})
 	_ = wp.SetScheduleEnabled(context.Background(), "1_1", true, hmenum.CommandPriorityHigh) // register "1_1" as enabled
 	ch.AttachWeekProfile(wp)
@@ -8012,7 +8016,7 @@ func TestChannelKeyBitmask_WeekProfileWithEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("channelKeyBitmask error: %v", err)
 	}
-	wantBit, _ := weekprofile.ChannelKeyToBitmask("1_1")
+	wantBit, _ := wp.ChannelKeyBit("1_1")
 	if bitmask != wantBit {
 		t.Errorf("expected bitmask %d, got %d", wantBit, bitmask)
 	}
@@ -8038,7 +8042,7 @@ func TestChannelKeyBitmask_WeekProfileEmptyScheduleEnabled(t *testing.T) {
 		Name:        "CKBwpEmpty1DEV01B30",
 	})
 	c.ModelRegistry.Put(d)
-	ch := d.AddChannel("CKBwpEmpty1DEV01B30:1", 1, "CLIMATECONTROL_VENT_DRIVE", hmenum.ParamsetKeyValues)
+	ch := d.AddChannel("CKBwpEmpty1DEV01B30:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
 
 	// Install a WeekProfile with NO ScheduleEnabled entries.
 	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
@@ -8052,10 +8056,10 @@ func TestChannelKeyBitmask_WeekProfileEmptyScheduleEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("channelKeyBitmask error: %v", err)
 	}
-	// Default fallback should be "1_1".
-	wantBit, _ := weekprofile.ChannelKeyToBitmask("1_1")
-	if bitmask != wantBit {
-		t.Errorf("expected default bitmask, got %d", bitmask)
+	// Default fallback is "1_1": the lowest bit of the device's own
+	// schedule-relevant channel list — channel 1 at position 0.
+	if bitmask != 1 {
+		t.Errorf("expected default bitmask 1 (position 0 of the device's receiver list), got %d", bitmask)
 	}
 }
 

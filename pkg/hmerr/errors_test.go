@@ -287,6 +287,7 @@ func TestSentinelRoundTrips(t *testing.T) {
 		ErrClientException,
 		ErrInternalBackendException,
 		ErrUnsupported,
+		ErrUnencodableString,
 		ErrParameterHidden,
 	}
 

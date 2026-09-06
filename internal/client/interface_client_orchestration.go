@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -305,9 +306,11 @@ func (c *InterfaceClient) CommandTracker() *reliability.CommandTracker {
 	return c.commandTracker
 }
 
-// WriteUnconfirmedValue records the sent value in the CommandTracker so
-// north-bound adapters can return the optimistic value immediately before the
-// CCU echoes back a callback.
+// WriteUnconfirmedValue records the sent value in the CommandTracker. The
+// tracker's readers are the metrics aggregator (its `command_tracker` size
+// gauge) and the callback path, which clears the entry on the CCU's echo;
+// no north-bound adapter consults the recorded value — optimistic read-back
+// lives on the data point itself (generic.DataPoint's unconfirmed slot).
 //
 // When parameter is in ConvertableParameters (COMBINED_PARAMETER or
 // LEVEL_COMBINED), the combined wire string is decomposed into its constituent
@@ -744,7 +747,10 @@ func (c *InterfaceClient) SetValue(
 		defer throttle.Release()
 		return b.SetValue(ctx, channelAddress, parameter, value, priority, rxMode)
 	}
-	err := c.cfg.Circuit.Do(ctx, "setValue", func(ctx context.Context) error {
+	// Forward the caller's priority: a CRITICAL write (alarm stop/silence)
+	// must be attempted as a single probe through an OPEN breaker, which
+	// only DoWithPriority grants.
+	err := c.cfg.Circuit.DoWithPriority(ctx, "setValue", priority, func(ctx context.Context) error {
 		if skipRetry {
 			return c.cfg.Retrier.DoOnce(ctx, writeOnce)
 		}
@@ -815,7 +821,8 @@ func (c *InterfaceClient) PutParamset(
 		pKey := hmenum.ParamsetKey(paramsetKeyOrLinkAddress)
 		return b.PutParamset(ctx, channelAddress, pKey, values, priority, rxMode)
 	}
-	err := c.cfg.Circuit.Do(ctx, "putParamset", func(ctx context.Context) error {
+	// Forward the caller's priority (see [InterfaceClient.SetValue]).
+	err := c.cfg.Circuit.DoWithPriority(ctx, "putParamset", priority, func(ctx context.Context) error {
 		if skipRetry {
 			return c.cfg.Retrier.DoOnce(ctx, putOnce)
 		}
@@ -926,9 +933,13 @@ func (c *InterfaceClient) UpdateParamsetDescriptions(
 	return nil
 }
 
-// isUnsupported returns true when err is or wraps ErrUnsupported.
+// isUnsupported reports whether err is or wraps an unsupported-operation
+// sentinel. Two exist: backends.ErrUnsupported, raised by a backend that
+// has no counterpart for the call, and hmerr.ErrUnsupported, raised by the
+// transport/API layers — both mean "skip this capability", and both must
+// survive the %w wraps the call chain adds.
 func isUnsupported(err error) bool {
-	return err != nil && err.Error() == backends.ErrUnsupported.Error()
+	return errors.Is(err, backends.ErrUnsupported) || errors.Is(err, hmerr.ErrUnsupported)
 }
 
 // ---------------------------------------------------------------------------

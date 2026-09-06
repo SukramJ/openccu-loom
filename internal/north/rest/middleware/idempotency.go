@@ -86,6 +86,12 @@ func idempotencyMiddleware(cache *idempotencyCache) func(http.Handler) http.Hand
 			case cacheStateHit:
 				w.Header().Set("Idempotent-Replay", "true")
 				for k, vs := range entry.header {
+					// Set, never Add: the entry holds only what the
+					// handler itself contributed, and a header the
+					// current request already carries (an infrastructure
+					// one re-stamped by an outer middleware) must keep
+					// the current value rather than gain a stale second.
+					w.Header().Del(k)
 					for _, v := range vs {
 						w.Header().Add(k, v)
 					}
@@ -110,7 +116,7 @@ func idempotencyMiddleware(cache *idempotencyCache) func(http.Handler) http.Hand
 				// First request for this key — fall through, execute the
 				// handler and record the response below.
 			}
-			rec := &recorder{ResponseWriter: w, header: http.Header{}, status: 200}
+			rec := newRecorder(w)
 			done := false
 			defer func() {
 				// Release the reserved slot if the handler panicked or
@@ -291,17 +297,18 @@ func (c *idempotencyCache) release(id string) {
 
 type recorder struct {
 	http.ResponseWriter
-	header http.Header
-	status int
-	body   bytes.Buffer
+	// baseline is the response header as it stood before the wrapped
+	// handler ran — everything the middlewares mounted outside
+	// Idempotency (RequestID, SecurityHeaders) already stamped on the
+	// live, shared header map. snapshot() subtracts it so a replay
+	// never re-emits another request's X-Request-ID.
+	baseline http.Header
+	status   int
+	body     bytes.Buffer
 }
 
-func (r *recorder) Header() http.Header {
-	// Merge into the recorder-level header as well so snapshot()
-	// captures the final state.
-	h := r.ResponseWriter.Header()
-	r.header = h
-	return h
+func newRecorder(w http.ResponseWriter) *recorder {
+	return &recorder{ResponseWriter: w, baseline: w.Header().Clone(), status: 200}
 }
 
 func (r *recorder) WriteHeader(status int) {
@@ -314,10 +321,28 @@ func (r *recorder) Write(p []byte) (int, error) {
 	return r.ResponseWriter.Write(p)
 }
 
+// snapshot captures the response the handler produced: its status, its
+// body, and only those headers the handler itself set or changed.
 func (r *recorder) snapshot() idempotentEntry {
-	hdr := make(http.Header, len(r.header))
-	for k, vs := range r.header {
+	live := r.Header()
+	hdr := make(http.Header, len(live))
+	for k, vs := range live {
+		if sameHeaderValues(r.baseline[k], vs) {
+			continue
+		}
 		hdr[k] = append([]string(nil), vs...)
 	}
 	return idempotentEntry{status: r.status, header: hdr, body: append([]byte(nil), r.body.Bytes()...)}
+}
+
+func sameHeaderValues(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

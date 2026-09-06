@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -33,17 +34,34 @@ import (
 // first group, which is what a single-channel device exposes.
 const scheduleFallbackChannelKey = "1_1"
 
-// scheduleFallbackBitmask resolves [scheduleFallbackChannelKey] through the
-// model's bit table. Which key to fall back to is wiring policy and stays
-// here; what bit that key carries is not. The error path matters: a silent
-// miss would degrade to bitmask 0, and "WPTCLS=0" is a write the CCU accepts
-// while it targets no channel at all.
-func scheduleFallbackBitmask() (uint32, error) {
-	bit, ok := weekprofile.ChannelKeyToBitmask(scheduleFallbackChannelKey)
-	if !ok || bit == 0 {
-		return 0, fmt.Errorf("unknown channel key %q", scheduleFallbackChannelKey)
+// scheduleFallbackBitmask resolves [scheduleFallbackChannelKey] for a
+// device whose schedule is not modelled: the key names the first channel
+// of the device's schedule-relevant list, and the CCU addresses that
+// channel with the lowest bit its list assigns — position 0 for every
+// positional family, and whatever the device's own order says for the two
+// that are not (see [weekprofile.TargetBitOrder]). A device the model does
+// not know, or one whose channel types the editor would not list, takes
+// position 0: that is the first checkbox of any editor page, and the only
+// key this path resolves. Which key to fall back to is wiring policy and
+// stays here; what bit it carries comes from the device's own channel list.
+func scheduleFallbackBitmask(dev *device.Device) (uint32, error) {
+	if dev == nil {
+		return 1, nil
 	}
-	return bit, nil
+	order := weekprofile.TargetBitOrder(dev.Model, typedChannelsOf(dev))
+	if len(order) == 0 {
+		return 1, nil
+	}
+	lowest, first := uint(0), true
+	for _, bit := range order {
+		if first || bit < lowest {
+			lowest, first = bit, false
+		}
+	}
+	if lowest > 31 {
+		return 0, fmt.Errorf("unknown channel key %q: bit %d out of range", scheduleFallbackChannelKey, lowest)
+	}
+	return uint32(1) << lowest, nil
 }
 
 // SetScheduleEnabled enables or disables the weekly program on the
@@ -122,59 +140,66 @@ func (s *SchedulesDomain) SetScheduleEnabled(
 }
 
 // channelKeyBitmask computes the WPTCLS bitmask for the given channel key,
-// resolving every key through the model's bit table.
+// resolving every key through the device's week-profile data point, which
+// carries the bit the CCU addresses each registered channel with.
 //
 // When channelKey is empty the bitmask is the OR of all channels registered
-// in the device's ProfileDataPoint. When channelKey is non-empty and unknown
-// a descriptive error is returned. When no ProfileDataPoint is found in the
-// model the fallback is [scheduleFallbackChannelKey], the shape of the most
-// common single-channel device.
+// in the device's ProfileDataPoint. When channelKey is non-empty and the
+// data point does not carry it, a descriptive error is returned — a key
+// with no known bit is refused, never guessed. When no ProfileDataPoint is
+// found in the model only [scheduleFallbackChannelKey] resolves, to the
+// lowest bit of the device's own schedule-relevant channel list, the shape
+// of the most common single-channel device.
 func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, channelKey string) (uint32, error) {
 	_ = ctx // reserved for future use
 
-	if channelKey != "" {
-		bitmask, ok := weekprofile.ChannelKeyToBitmask(channelKey)
-		if !ok {
-			return 0, fmt.Errorf("unknown channel key %q", channelKey)
-		}
-		return bitmask, nil
-	}
-
-	// Empty channelKey → all channels. Walk the model's ProfileDataPoint
-	// to discover which keys are registered.
-	if s.registry == nil {
-		return scheduleFallbackBitmask()
-	}
-	for _, u := range s.registry.List() {
-		dev, ok := u.ModelRegistry.Get(deviceAddress)
-		if !ok {
-			continue
-		}
-		for _, ch := range dev.Channels() {
-			if ch.WeekProfile() == nil {
-				continue
-			}
-			enabled := ch.WeekProfile().ScheduleEnabled()
-			if len(enabled) == 0 {
+	var dev *device.Device
+	if s.registry != nil {
+		for _, u := range s.registry.List() {
+			if d, ok := u.ModelRegistry.Get(deviceAddress); ok {
+				dev = d
 				break
 			}
-			var bitmask uint32
-			for key := range enabled {
-				if b, ok := weekprofile.ChannelKeyToBitmask(key); ok {
-					bitmask |= b
-				}
-			}
-			if bitmask != 0 {
-				return bitmask, nil
-			}
-			break
 		}
-		// Device found but no week profile with registered channels.
-		break
+	}
+	var wp *weekprofile.ProfileDataPoint
+	if dev != nil {
+		for _, ch := range dev.Channels() {
+			if ch.WeekProfile() != nil {
+				wp = ch.WeekProfile()
+				break
+			}
+		}
 	}
 
-	// Default: single-channel device.
-	return scheduleFallbackBitmask()
+	if channelKey != "" {
+		if wp != nil {
+			if bitmask, ok := wp.ChannelKeyBit(channelKey); ok {
+				return bitmask, nil
+			}
+			if len(wp.AvailableTargetChannels()) > 0 {
+				return 0, fmt.Errorf("unknown channel key %q", channelKey)
+			}
+		}
+		if channelKey != scheduleFallbackChannelKey {
+			return 0, fmt.Errorf("unknown channel key %q", channelKey)
+		}
+		return scheduleFallbackBitmask(dev)
+	}
+
+	// Empty channelKey → all channels registered on the week profile.
+	if wp != nil {
+		var bitmask uint32
+		for key := range wp.ScheduleEnabled() {
+			if b, ok := wp.ChannelKeyBit(key); ok {
+				bitmask |= b
+			}
+		}
+		if bitmask != 0 {
+			return bitmask, nil
+		}
+	}
+	return scheduleFallbackBitmask(dev)
 }
 
 // scheduleProfileFor returns the week-profile data point of the first

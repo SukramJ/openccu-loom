@@ -498,6 +498,29 @@ func TestClimateDisableAwayIP(t *testing.T) {
 	if !ok || p != ProfileNone {
 		t.Errorf("Profile() = (%v, %v), want (none, true)", p, ok)
 	}
+	// The wire shape is the reference stack's (climate.py
+	// disable_away_mode): an AWAY window that is already over, both dates
+	// at the firmware's initial value. Not SET_POINT_MODE=0 with an end of
+	// "now" and an untouched start — no other authority ends a party that
+	// way, and a still-future start with an end of now is an inverted
+	// window.
+	if len(w.puts) != 1 {
+		t.Fatalf("DisableAway IP issued %d putParamset calls, want 1", len(w.puts))
+	}
+	got := w.puts[0]
+	want := map[string]any{
+		"SET_POINT_MODE":   int32(2),
+		"PARTY_TIME_START": "2000_01_01 00:00",
+		"PARTY_TIME_END":   "2000_01_01 00:00",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("DisableAway IP wrote %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("DisableAway IP wrote %s=%v (%T), want %v (%T)", k, got[k], got[k], v, v)
+		}
+	}
 }
 
 // TestClimateDisableAwayRF pins that leaving away/party mode on a classic

@@ -2827,8 +2827,8 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 	// the same idle/active/threshold triplet Sigma2 tag 5 and the mDNS
 	// SII/SAI keys carry. Mirrors matter.js PaseServer.ts:151.
 	sp := bridgeSessionParameters()
-	idle := uint16(sp.SessionIdleInterval)     //nolint:gosec // bridgeSessionParameters values are spec defaults ≤ 4000
-	active := uint16(sp.SessionActiveInterval) //nolint:gosec // see above
+	idle := sp.SessionIdleInterval
+	active := sp.SessionActiveInterval
 	thresh := sp.SessionActiveThreshold
 	paseAdapter.SetResponderMRPParams(&spake2.MRPParameters{
 		IdleRetransTimeoutMs:   &idle,
@@ -2862,10 +2862,10 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 		if pm := paseAdapter.PeerMRPParams(); pm != nil {
 			var idleMs, activeMs, threshMs uint32
 			if pm.IdleRetransTimeoutMs != nil {
-				idleMs = uint32(*pm.IdleRetransTimeoutMs)
+				idleMs = *pm.IdleRetransTimeoutMs
 			}
 			if pm.ActiveRetransTimeoutMs != nil {
-				activeMs = uint32(*pm.ActiveRetransTimeoutMs)
+				activeMs = *pm.ActiveRetransTimeoutMs
 			}
 			if pm.ActiveThresholdTimeMs != nil {
 				threshMs = uint32(*pm.ActiveThresholdTimeMs)

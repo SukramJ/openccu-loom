@@ -269,24 +269,51 @@ func (s *BINRPCServer) Close() error {
 	return nil
 }
 
-// handleConn reads exactly one request, dispatches it, writes one
-// response. The peer allowlist is enforced earlier, in the [Serve]
-// accept loop, so a disallowed peer never reaches this goroutine.
+// handleConn serves every request the connection carries: read one,
+// dispatch it, write its response, and read the next until the peer
+// closes or a deadline lapses. The peer allowlist is enforced earlier, in
+// the [Serve] accept loop, so a disallowed peer never reaches this
+// goroutine.
+//
+// One request per connection was the shape before, and it is the shape
+// the integration simulator happens to send (it dials per call) — so no
+// test could see what a socket-reusing peer sees. The CCU's own BIN-RPC
+// client keeps its socket open across calls (libXmlRpc XmlRpcClient
+// setKeepOpen, parking the connection IDLE after each response), and a
+// server that closes after the first request turns every later callback
+// on that socket into a failed write plus a reconnect, or into a lost
+// event. Serving the connection until the peer is done costs nothing for
+// a peer that dials per call and is correct for one that does not.
 func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 	defer func() { _ = conn.Close() }()
 
-	_ = conn.SetDeadline(time.Now().Add(s.ioTimeout))
+	for {
+		_ = conn.SetDeadline(time.Now().Add(s.ioTimeout))
 
-	req, err := binrpc.ReadRequest(io.LimitReader(conn, binrpc.MaxMessageSize+8))
-	if err != nil {
-		s.logger.Debug(
-			"binrpc callback: decode request failed",
-			slog.String("remote", conn.RemoteAddr().String()),
-			slog.String("err", err.Error()),
-		)
-		return
+		req, err := binrpc.ReadRequest(io.LimitReader(conn, binrpc.MaxMessageSize+8))
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				s.logger.Debug(
+					"binrpc callback: decode request failed",
+					slog.String("remote", conn.RemoteAddr().String()),
+					slog.String("err", err.Error()),
+				)
+			}
+			return
+		}
+		if !s.serveRequest(ctx, conn, req) {
+			return
+		}
+		if ctx.Err() != nil || s.closed.Load() {
+			return
+		}
 	}
+}
 
+// serveRequest dispatches one decoded request and writes its response.
+// Returns false when the response could not be written, which ends the
+// connection.
+func (s *BINRPCServer) serveRequest(ctx context.Context, conn net.Conn, req *binrpc.Request) bool {
 	result, dispatchErr := s.dispatch(ctx, req)
 
 	var buf bytes.Buffer
@@ -307,7 +334,7 @@ func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 		if err := binrpc.WriteFault(&buf, fault); err != nil {
 			s.logger.Error("binrpc callback: encode fault failed",
 				slog.String("method", req.Method), slog.String("err", err.Error()))
-			return
+			return false
 		}
 	} else {
 		if result == nil {
@@ -316,7 +343,7 @@ func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 		if err := binrpc.WriteResponse(&buf, result); err != nil {
 			s.logger.Error("binrpc callback: encode response failed",
 				slog.String("method", req.Method), slog.String("err", err.Error()))
-			return
+			return false
 		}
 	}
 
@@ -324,7 +351,9 @@ func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 		s.logger.Debug("binrpc callback: write response failed",
 			slog.String("remote", conn.RemoteAddr().String()),
 			slog.String("err", err.Error()))
+		return false
 	}
+	return true
 }
 
 // BINRPCSupportedMethods lists every callback method the BIN-RPC listener

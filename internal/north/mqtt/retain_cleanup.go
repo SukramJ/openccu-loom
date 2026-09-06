@@ -146,12 +146,17 @@ func retiredMetricSpelling(base, centralName, liveTopic string) string {
 //
 //	<topic_base>/<central>/<iface>/<address>/<channelNo>/state
 //
-// where channelNo is a small non-negative integer. The current
-// topology still publishes the channel-aggregate at this exact
-// shape for custom-DP rollups, so this matcher is **not** broadly
-// destructive — it stays available for legacy schemas where the
-// state JSON shape differs and operators want to force a clean
-// republish.
+// where channelNo is a small non-negative integer.
+//
+// The shape is retired: no current publisher writes it — the
+// channel-aggregate moved to the per-source `<addr>/<ch>/custom/
+// <kind>` slot. The matcher exists so a broker still holding
+// retained payloads from the retired schema is cleaned at boot.
+//
+// A future publisher must therefore not reuse this shape without
+// removing the matcher first, or its retained state is wiped on the
+// next boot. Guarded by
+// TestNoTopicBuilderMethodProducesLegacyAggregateStateShape.
 //
 // Exposed for unit testing — production callers consume it via
 // [RetainCleanup.collect].

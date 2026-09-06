@@ -17,8 +17,7 @@ import (
 // payload-builder smoke tests.
 type discoveryCtx struct{}
 
-func (discoveryCtx) AggregatedStateTopic() string { return "test/state" }
-func (discoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (discoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
 func (discoveryCtx) ServiceMethodCommandTopic(method string) string {
 	return "test/svc/" + method + "/set"
 }

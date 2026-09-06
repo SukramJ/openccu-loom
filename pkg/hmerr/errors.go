@@ -63,6 +63,16 @@ var (
 	// currently selected backend (e.g. CCU-Jack in v1.0).
 	ErrUnsupported = errors.New("operation not supported")
 
+	// ErrUnencodableString signals that a string value carries a character
+	// the CCU transports cannot represent. XML-RPC and BIN-RPC speak
+	// ISO-8859-1 end to end (the CCU stores and displays Latin-1; libXmlRpc
+	// decodes only the five named XML entities, so a numeric character
+	// reference is stored literally), so a '€', an emoji or a Cyrillic
+	// letter has no faithful encoding on the wire. The write is refused
+	// before any RPC is issued; callers answer with HTTP 422 / WS code
+	// "unencodable_string" and name the offending value.
+	ErrUnencodableString = errors.New("string contains a character the CCU cannot store (ISO-8859-1 only)")
+
 	// ErrParameterHidden signals that a write was rejected because the
 	// visibility gate determined the parameter is hidden (e.g.
 	// builtInGlobalHides or a model-level hide rule). Callers should

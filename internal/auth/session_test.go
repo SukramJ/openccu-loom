@@ -400,7 +400,7 @@ func discardLogger() *slog.Logger {
 // SaveSession on the persistence layer and the entry is findable there.
 func TestPersistentSessionStoreIssueSaves(t *testing.T) {
 	fake := newFakePersist()
-	store, err := NewPersistentSessionStore(fake, discardLogger())
+	store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
 	if err != nil {
 		t.Fatalf("NewPersistentSessionStore: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestPersistentSessionStoreIssueSaves(t *testing.T) {
 // DeleteSession and the entry is removed from the persistence layer.
 func TestPersistentSessionStoreRevokeDeletes(t *testing.T) {
 	fake := newFakePersist()
-	store, err := NewPersistentSessionStore(fake, discardLogger())
+	store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
 	if err != nil {
 		t.Fatalf("NewPersistentSessionStore: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestNewPersistentSessionStoreHydrates(t *testing.T) {
 	}
 	fake.preloaded = []*Session{preloaded}
 
-	store, err := NewPersistentSessionStore(fake, discardLogger())
+	store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
 	if err != nil {
 		t.Fatalf("NewPersistentSessionStore: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestNewPersistentSessionStorePropagatesHydrationError(t *testing.T) {
 	fake := newFakePersist()
 	fake.loadErr = errors.New("db down")
 
-	_, err := NewPersistentSessionStore(fake, discardLogger())
+	_, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
 	if err == nil {
 		t.Fatal("expected error from NewPersistentSessionStore, got nil")
 	}
@@ -491,7 +491,7 @@ func TestNewPersistentSessionStorePropagatesHydrationError(t *testing.T) {
 func TestPurgeExpiredEvictsAndDelegates(t *testing.T) {
 	fake := newFakePersist()
 	fake.sentinelCount = 7
-	store, err := NewPersistentSessionStore(fake, discardLogger())
+	store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
 	if err != nil {
 		t.Fatalf("NewPersistentSessionStore: %v", err)
 	}

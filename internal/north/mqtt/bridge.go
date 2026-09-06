@@ -1047,45 +1047,6 @@ func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 	return nil
 }
 
-// PublishSourceState publishes one channel's aggregated semantic
-// state under [TopicBuilder.AggregatedState], JSON-encoded from
-// `src.State()`.
-//
-// **ADR 0011 retired the staggered-DP problem this method
-// used to gate.** The aggregate state topic now carries only derived
-// fields the model can compute deterministically (Climate's
-// `hvac_mode`, `preset_mode`, `action`; Lock's `lock_state`; Cover's
-// `direction`); direct wire values went to the per-DP slot topics
-// each with its own availability lane. The `payload.Observable`
-// gate that lived here in commit a7e1f0a (gating the publish until
-// every constituent DP was observed) is therefore obsolete — the
-// JSON shape is now intrinsically consistent.
-//
-// `central`, `iface`, `address`, `channel` scope the topic; passing
-// an empty central falls back to the bridge's configured default.
-// Returns nil silently when the raw plane is disabled.
-func (b *Bridge) PublishSourceState(ctx context.Context, centralName, iface, address string, channel int, src interface{ State() pload.StatePayload }) error {
-	if !b.cfg.RawEnabled {
-		return nil
-	}
-	if src == nil {
-		return nil
-	}
-	state := src.State()
-	if state == nil {
-		state = map[string]any{}
-	}
-	payloadBytes, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-	if centralName == "" {
-		centralName = b.cfg.CentralName
-	}
-	topic := b.topics.AggregatedState(centralName, iface, address, channel)
-	return b.publishRawRetained(ctx, topic, payloadBytes)
-}
-
 // --- ADR 0011 publish helpers (per-DP topology) -----------------------
 
 // PublishCustomDPState publishes the curated derived-state JSON for

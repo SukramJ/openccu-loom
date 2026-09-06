@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
-	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -193,72 +192,4 @@ func TestPublishStateNoLongerAutoPublishesAggregate(t *testing.T) {
 	}
 }
 
-// TestPublishSourceStateOptInOnly verifies that PublishSourceState is
-// still callable directly (kept for benchmarks and callers that want
-// to opt back into the legacy aggregate shape during migration), but
-// is NOT auto-triggered from PublishState.
-func TestPublishSourceStateOptInOnly(t *testing.T) {
-	t.Parallel()
-	pub := &recordingPublisher{}
-	b := NewBridge(BridgeConfig{
-		Base:               "gh",
-		CentralName:        "ccu",
-		RawEnabled:         false, // raw plane disabled → no publish
-		HADiscoveryEnabled: false,
-	}, pub)
-
-	src := &stubSource{state: map[string]any{"hvac_mode": "heat"}}
-	if err := b.PublishState(context.Background(), Event{
-		Source:        src,
-		Interface:     "HmIP-RF",
-		DeviceAddress: "BWTH004",
-		ChannelNo:     1,
-		Parameter:     "ACTUAL_TEMPERATURE",
-		Value:         21.5,
-	}); err != nil {
-		t.Fatalf("PublishState: %v", err)
-	}
-
-	pub.mu.Lock()
-	defer pub.mu.Unlock()
-	for _, p := range pub.recs {
-		if strings.HasSuffix(p.topic, "/1/state") {
-			t.Errorf("raw-disabled bridge published aggregated topic %q", p.topic)
-		}
-	}
-}
-
 var _ = hmenum.ParameterActualTemperature // import keep
-
-// TestPublishSourceStateAlwaysPublishes pins the post-ADR-0011-phase-2
-// contract: the aggregate state topic carries derived-only fields,
-// so there is no longer a "wait until every constituent DP is
-// observed" condition. The previous payload.Observable gate (commit
-// a7e1f0a) was a workaround for the staggered-DP-publish problem
-// that ADR 0011 retired structurally — direct wire values now have
-// their own per-DP topics each with an independent availability lane.
-func TestPublishSourceStateAlwaysPublishes(t *testing.T) {
-	t.Parallel()
-	pub := &recordingPublisher{}
-	b := NewBridge(BridgeConfig{
-		Base:        "gh",
-		CentralName: "ccu",
-		RawEnabled:  true,
-	}, pub)
-
-	src := &stubSource{state: map[string]any{"hvac_mode": "heat"}}
-	if err := b.PublishSourceState(context.Background(), "ccu", "HmIP-RF", "BWTH001", 1, src); err != nil {
-		t.Fatalf("PublishSourceState: %v", err)
-	}
-	pub.mu.Lock()
-	defer pub.mu.Unlock()
-	matches := 0
-	for _, p := range pub.recs {
-		if strings.HasSuffix(p.topic, "/1/state") {
-			matches++
-		}
-	}
-	if matches != 1 {
-		t.Fatalf("expected 1 state publish, got %d", matches)
-	}
-}

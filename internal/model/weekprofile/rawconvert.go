@@ -982,33 +982,27 @@ func toFloat(v any) float64 {
 // TargetChannelBits maps an "actor_sub" channel key to its bit position in
 // the CCU's TARGET_CHANNELS mask.
 //
-// The CCU does not compute this position and neither does this package any
-// more. Its weekly-program editor reads the device's own virtual-receiver
-// channel numbers and uses `number - 1` as the bit:
+// The position is the channel's index in the device's schedule-relevant
+// channel list — the rule the CCU's own weekly-program editor applies, see
+// [TargetBitOrder] for the firmware lines and the two families that deviate
+// from it. Neither the old 3*(actor-1)+(sub-1) formula nor the "channel
+// number minus one" that replaced it was that rule: the first held only
+// for receivers running contiguously from channel 1, the second only for
+// HmIP-DRG-DALI, and each addressed a channel the operator did not pick on
+// every other device, silently.
 //
-//	valCheckBox = Math.pow(2, (self.virtualChannels[index] - 1))
-//	                        (www/config/easymodes/js/HmIPWeeklyProgram.js:2918)
-//	this.virtualChannels = getWPVirtualChannels(device.channels, expert)
-//	                        (same file, :394; the collector is at :200)
-//
-// A formula replaced that lookup here — 3*(actor-1) + (sub-1) — and it is only
-// right for a device whose virtual receivers run contiguously from channel 1.
-// The firmware carries explicit lists for several that do not: HmIP-BSL on
-// firmware 2 is [4,5,6,8,9,10,12,13,14] (7 and 11 are skipped), HmIP-WKP is
-// [1,3,5,7,9,11,13,15], HmIP-WGS is [7,9,10,11], HmIP-SMO230 is [10,11,12] and
-// a window drive is [2] — same file, :394-418. On each of those the formula
-// addressed a channel the operator did not pick, silently, on a real device.
-//
-// So the bit comes from the device now. The daemon already resolves each key
-// to a real channel for `available_target_channels`
-// (adapter.deriveTargetChannels), which is the same resolution the editor
-// performs, so nothing new has to be discovered — it only has to reach here.
+// So the bit comes from the device's channel list. The daemon resolves
+// each key to a real channel for `available_target_channels`
+// (adapter.deriveTargetChannels), which is where the list is at hand, and
+// the resolved bit travels here inside [TargetChannelInfo].
 type TargetChannelBits map[string]uint
 
-// TargetChannelBitsFrom builds the bit map from the resolved target channels.
+// TargetChannelBitsFrom builds the bit map from the resolved target
+// channels: each key takes the bit [TargetBitOrder] assigned its channel,
+// carried in [TargetChannelInfo.Bit].
 //
 // Returns nil when nothing can be resolved. Callers treat that as "do not
-// write TARGET_CHANNELS at all" rather than falling back to the formula: an
+// write TARGET_CHANNELS at all" rather than falling back to a formula: an
 // unwritten optional field leaves the device holding what it had, while a
 // guessed one switches a channel nobody selected.
 func TargetChannelBitsFrom(channels map[string]TargetChannelInfo) TargetChannelBits {
@@ -1017,10 +1011,10 @@ func TargetChannelBitsFrom(channels map[string]TargetChannelInfo) TargetChannelB
 	}
 	out := make(TargetChannelBits, len(channels))
 	for key, info := range channels {
-		if info.ChannelNo < 1 {
+		if !info.BitKnown {
 			continue
 		}
-		out[key] = uint(info.ChannelNo - 1)
+		out[key] = info.Bit
 	}
 	if len(out) == 0 {
 		return nil

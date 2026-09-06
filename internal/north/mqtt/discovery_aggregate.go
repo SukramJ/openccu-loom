@@ -366,14 +366,6 @@ type discoveryCtx struct {
 	ev Event
 }
 
-func (c discoveryCtx) AggregatedStateTopic() string {
-	// Deprecated: kept as an alias to CustomDPStateTopic so callers
-	// in transition compile. The bridge no longer publishes content
-	// to the bare `<addr>/<ch>/state` shape — it has been retired in
-	// favour of the per-source `<addr>/<ch>/custom/<kind>` slot.
-	return c.CustomDPStateTopic()
-}
-
 // CustomDPStateTopic returns the channel's custom-DP slot state
 // topic `<addr>/<ch>/custom/<kind>`. The kind is read from the
 // event's Source via the [payload.Slotted] interface — every

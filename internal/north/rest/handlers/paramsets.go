@@ -114,6 +114,14 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
 				return
 			}
+			if errors.Is(err, hmerr.ErrUnencodableString) {
+				// The value cannot reach the CCU at all (its paramsets are
+				// ISO-8859-1); no RPC was issued, so this is the client's
+				// payload, not an upstream failure.
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeValidation, r, "Unencodable string", err.Error()))
+				return
+			}
 			if errors.Is(err, device.ErrChannelOperationLocked) {
 				writeChannelLocked(w, r)
 				return
@@ -183,6 +191,14 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 			if errors.Is(err, hmerr.ErrParameterHidden) {
 				problem.Write(w, http.StatusForbidden,
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
+				return
+			}
+			if errors.Is(err, hmerr.ErrUnencodableString) {
+				// The value cannot reach the CCU at all (its paramsets are
+				// ISO-8859-1); no RPC was issued, so this is the client's
+				// payload, not an upstream failure.
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeValidation, r, "Unencodable string", err.Error()))
 				return
 			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Link paramset write failed", err)

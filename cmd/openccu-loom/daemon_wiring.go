@@ -161,8 +161,13 @@ func seedCentralHealthAndMetricsFor(
 // central's EventBus per call (multi-CCU deployments hit different busses).
 //
 // The CommandTracker hook fires after each successful SetValue: it calls
-// WriteUnconfirmedValue on the matching InterfaceClient so north-bound adapters
-// can return the new value immediately before the CCU echoes back a callback.
+// WriteUnconfirmedValue on the matching InterfaceClient, which records the
+// sent value in that client's CommandTracker. What reads the tracker today
+// is the metrics aggregator (its `command_tracker` size gauge, via
+// [metrics.InterfaceClientMetrics.CommandTrackerSize]) and the callback path,
+// which clears the entry when the CCU echoes the value back. No north-bound
+// adapter consults the per-key value: optimistic read-back lives on the data
+// point itself (generic.DataPoint's unconfirmed slot), not here.
 func wireValueWriterHooks(reg *central.Registry, valueWriter *clientpkg.ValueWriter, linksDomain *adapter.LinksDomain, logger *slog.Logger) {
 	for _, u := range reg.List() {
 		if err := adapter.WireLinkCoordinator(u, linksDomain); err != nil {
@@ -174,7 +179,7 @@ func wireValueWriterHooks(reg *central.Registry, valueWriter *clientpkg.ValueWri
 		Name:         "client.value_writer_hooks",
 		Collaborator: "*client.ValueWriter bus resolver and command tracker",
 		Phase:        wiring.PhaseOnce,
-		Why:          "a value write reaches the CCU and is recorded by no command tracker, so the in-flight gauge under-reports and the callback path has no entry to clear when the CCU echoes the value back",
+		Why:          "a value write reaches the CCU and is recorded by no command tracker, so the metrics aggregator's command_tracker size gauge stays at zero for every interface and the callback path has no entry to clear when the CCU echoes the value back",
 	}, func() { wireValueWriterHookFns(reg, valueWriter) })
 }
 

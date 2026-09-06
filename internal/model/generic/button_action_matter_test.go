@@ -116,11 +116,12 @@ func TestButton_WireMatterSwitchHandler_PressLongRelease(t *testing.T) {
 
 func TestButton_WireMatterSwitchHandler_PressCont_RepeatsSuppressed(t *testing.T) {
 	t.Parallel()
-	// A BidCos hold repeats PRESS_CONT roughly every 300 ms. One
-	// physical hold is ONE Matter gesture: the first continuation
-	// frame opens the press cycle (InitialPress), every repeat is
-	// suppressed — a per-update LongPress stream would fire one
-	// controller automation per 300 ms of holding.
+	// A lone PRESS_CONT DP is a group of one: no PRESS_LONG_RELEASE
+	// member exists, so the hold end can never be signalled and each
+	// continuation frame must close its own gesture. Repeat
+	// suppression applies only where a release member can reopen the
+	// cycle — see
+	// TestButtonGroup_PressContWithReleaseMember_RepeatsStaySuppressed.
 	b := NewButton(baseCfg(hmenum.ParameterPressCont, hmenum.ParameterTypeBool,
 		hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
 	e := &matterSwitchEmitter4{}
@@ -128,11 +129,14 @@ func TestButton_WireMatterSwitchHandler_PressCont_RepeatsSuppressed(t *testing.T
 	for range 5 {
 		b.OnEvent(true)
 	}
-	if e.initPresses != 1 {
-		t.Errorf("PressCont x5: got initPresses=%d, want 1 (repeats suppressed)", e.initPresses)
+	if e.initPresses != 5 {
+		t.Errorf("PressCont x5: got initPresses=%d, want 5 (one gesture per frame)", e.initPresses)
 	}
-	if e.longPresses != 0 {
-		t.Errorf("PressCont x5: got longPresses=%d, want 0 (deferred to the release)", e.longPresses)
+	if e.longPresses != 5 {
+		t.Errorf("PressCont x5: got longPresses=%d, want 5 (no release member)", e.longPresses)
+	}
+	if e.longReleases != 5 {
+		t.Errorf("PressCont x5: got longReleases=%d, want 5 (each gesture closed)", e.longReleases)
 	}
 }
 
@@ -537,10 +541,10 @@ func TestAction_WireMatterSwitchHandler_PressLongRelease(t *testing.T) {
 
 func TestAction_WireMatterSwitchHandler_PressCont_RepeatsSuppressed(t *testing.T) {
 	t.Parallel()
-	// Same press-cycle semantics as the Button wrapper: one physical
-	// hold is ONE Matter gesture — the first continuation frame opens
-	// the press cycle (InitialPress), repeats are suppressed, and the
-	// LongPress is deferred to the release synthesis.
+	// Same press-cycle semantics as the Button wrapper: a lone
+	// PRESS_CONT DP has no PRESS_LONG_RELEASE member, so every
+	// continuation frame is a complete gesture rather than a
+	// suppressed repeat of a cycle nothing could ever close.
 	a := NewAction(baseCfg(hmenum.ParameterPressCont, hmenum.ParameterTypeAction,
 		hmenum.OperationsWrite|hmenum.OperationsEvent))
 	e := &matterSwitchEmitter4{}
@@ -548,11 +552,14 @@ func TestAction_WireMatterSwitchHandler_PressCont_RepeatsSuppressed(t *testing.T
 	for range 5 {
 		a.OnEvent(true)
 	}
-	if e.initPresses != 1 {
-		t.Errorf("PressCont x5: got initPresses=%d, want 1 (repeats suppressed)", e.initPresses)
+	if e.initPresses != 5 {
+		t.Errorf("PressCont x5: got initPresses=%d, want 5 (one gesture per frame)", e.initPresses)
 	}
-	if e.longPresses != 0 {
-		t.Errorf("PressCont x5: got longPresses=%d, want 0 (deferred to the release)", e.longPresses)
+	if e.longPresses != 5 {
+		t.Errorf("PressCont x5: got longPresses=%d, want 5 (no release member)", e.longPresses)
+	}
+	if e.longReleases != 5 {
+		t.Errorf("PressCont x5: got longReleases=%d, want 5 (each gesture closed)", e.longReleases)
 	}
 }
 
@@ -638,5 +645,64 @@ func TestActionMatterHelpers(t *testing.T) {
 	// MatterSwitchPositions is always 2.
 	if longPress.MatterSwitchPositions() != 2 {
 		t.Fatal("MatterSwitchPositions must be 2")
+	}
+}
+
+func TestButtonGroup_PressContWithoutReleaseMember_CompletesCycle(t *testing.T) {
+	t.Parallel()
+	// HM-Sen-DB-PCB channel 1 declares PRESS_SHORT + PRESS_CONT and
+	// nothing else. Without a PRESS_LONG_RELEASE member the device can
+	// never signal the hold end, so a CONT-opened hold would latch
+	// forever: no LongPress, no LongRelease, every later CONT
+	// suppressed. Each PRESS_CONT must therefore be a complete
+	// InitialPress -> LongPress -> LongRelease gesture, mirroring the
+	// PRESS_LONG branch.
+	short := pressButton(hmenum.ParameterPressShort)
+	cont := pressButton(hmenum.ParameterPressCont)
+	g := NewButtonGroup(short, cont)
+	r := &matterSwitchSeqRecorder{}
+	defer g.WireMatterSwitchHandler(r)()
+
+	cont.OnEvent(true)
+	r.assertSeq(t, "IP", "LP", "LR")
+	if got := g.MatterSwitchCurrentPosition(); got != switchNeutralPosition {
+		t.Fatalf("CurrentPosition after first CONT = %d, want %d", got, switchNeutralPosition)
+	}
+
+	cont.OnEvent(true)
+	r.assertSeq(t, "IP", "LP", "LR", "IP", "LP", "LR")
+	if got := g.MatterSwitchCurrentPosition(); got != switchNeutralPosition {
+		t.Fatalf("CurrentPosition after second CONT = %d, want %d", got, switchNeutralPosition)
+	}
+
+	// No hold is open, so the following short press must not emit a
+	// stray stale-close release before its own gesture.
+	short.OnEvent(true)
+	r.assertSeq(t, "IP", "LP", "LR", "IP", "LP", "LR", "IP", "SR")
+}
+
+func TestButtonGroup_PressContWithReleaseMember_RepeatsStaySuppressed(t *testing.T) {
+	t.Parallel()
+	// Counterpart: with PRESS_LONG_RELEASE present the device DOES
+	// signal the hold end, so the ~300 ms BidCos CONT repeats stay
+	// collapsed into one gesture and the position reads pressed while
+	// the hold is open.
+	cont := pressButton(hmenum.ParameterPressCont)
+	release := pressButton(hmenum.ParameterPressLongRelease)
+	g := NewButtonGroup(cont, release)
+	r := &matterSwitchSeqRecorder{}
+	defer g.WireMatterSwitchHandler(r)()
+
+	cont.OnEvent(true)
+	cont.OnEvent(true)
+	cont.OnEvent(true)
+	r.assertSeq(t, "IP")
+	if got := g.MatterSwitchCurrentPosition(); got != switchPressedPosition {
+		t.Fatalf("CurrentPosition while held = %d, want %d", got, switchPressedPosition)
+	}
+	release.OnEvent(true)
+	r.assertSeq(t, "IP", "LP", "LR")
+	if got := g.MatterSwitchCurrentPosition(); got != switchNeutralPosition {
+		t.Fatalf("CurrentPosition after release = %d, want %d", got, switchNeutralPosition)
 	}
 }

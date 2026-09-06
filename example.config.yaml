@@ -159,6 +159,11 @@ north:
       #   enabled: false                  # unset → on in the HA add-on; false opts out
       #   trusted_proxy_cidr: "172.30.32.0/23"  # HA Supervisor subnet
       #   role: admin                     # granted role: admin | operator | viewer
+      # Idle timeout for a logged-in session. A session unused for longer than
+      # this is evicted on its next request, even while its absolute lifetime
+      # is still running — it caps how long a stolen but unused session cookie
+      # stays usable. 0 (the default) disables the idle check.
+      # session_idle_timeout: 30m
   # MCP server (Model Context Protocol) — exposes the daemon to LLM
   # agents as tools over Streamable HTTP, mounted on the REST listener
   # behind the same auth chain. Disabled by default. Read-only even when

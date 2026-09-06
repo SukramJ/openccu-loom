@@ -151,6 +151,15 @@ func writeString(w io.Writer, s string) error {
 // writeRawString writes `<length:u32><ISO-8859-1 bytes>` with no type tag.
 // Used for the method name in a request and as the tail of a typeString.
 func writeRawString(w io.Writer, s string) error {
+	// Refuse a rune outside ISO-8859-1 with the sentinel a caller can match:
+	// the CCU is Latin-1 end to end, so there is no faithful transliteration,
+	// and the raw charmap failure would surface as an opaque encode error.
+	// The check precedes every byte of this value on the frame.
+	for _, r := range s {
+		if r > 0xFF {
+			return fmt.Errorf("%w: %q", hmerr.ErrUnencodableString, truncateRunes(s, maxUnencodableEcho))
+		}
+	}
 	enc := charmap.ISO8859_1.NewEncoder()
 	raw, err := enc.Bytes([]byte(s))
 	if err != nil {
@@ -258,4 +267,17 @@ func encodeDouble(val float64) (mantissa, exponent int32, err error) {
 		return 0, 0, fmt.Errorf("binrpc: mantissa out of range: %g", mant)
 	}
 	return int32(mant), int32(exp), nil
+}
+
+// maxUnencodableEcho bounds how much of an offending string the refusal
+// echoes back: enough to identify the value, short enough for a log line.
+const maxUnencodableEcho = 32
+
+// truncateRunes shortens s to at most n runes without splitting one.
+func truncateRunes(s string, n int) string {
+	rs := []rune(s)
+	if len(rs) <= n {
+		return s
+	}
+	return string(rs[:n])
 }

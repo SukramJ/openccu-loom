@@ -457,10 +457,11 @@ func TestParseSimpleScheduleWithDomainNonLock(t *testing.T) {
 }
 
 // lockDomainBits pins a device whose door-lock actor is real channel 1
-// ("1_1") and permission actor is real channel 2 ("2_1") — bit = channel
-// number - 1, per [weekprofile.TargetChannelBitsFrom]. This is the map the
-// caller (targetChannelBitsFor) would resolve for such a device; it is not
-// derived from the old 3*(actor-1)+(sub-1) formula.
+// ("1_1") and permission actor is real channel 2 ("2_1") — the bit is the
+// channel's position in the device's schedule-relevant list, per
+// [weekprofile.TargetBitOrder], which for channels 1 and 2 is 0 and 1. This
+// is the map the caller (targetChannelBitsFor) would resolve for such a
+// device.
 var lockDomainBits = weekprofile.TargetChannelBits{"1_1": 0, "2_1": 1}
 
 func TestParseSimpleScheduleWithDomainLockDoorLock(t *testing.T) {

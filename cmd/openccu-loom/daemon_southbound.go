@@ -241,6 +241,14 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// injects the live HTTPBackupRestorer into it after the first
 	// successful hub handshake.
 	backupAdapter := buildBackupAdapter(cfg, reg, logger)
+	// The retained-orphan sweep hook is installed BEFORE the bring-ups
+	// start: a central whose descriptors are cached finishes hydration
+	// and publishes its snapshot on the fan-out worker within
+	// milliseconds, and a hook that lands after that pass is not run for
+	// it — the central's only sweep would then wait for the next broker
+	// reconnect. Wiring rule 3 (production order) applies to the hook the
+	// same way it applies to the subsystems the snapshot feeds.
+	wireRetainedOrphanSweeps(ctx, d, cfg, logger)
 	// WireCentrals returns immediately: each central's southbound bring-up runs
 	// in the background, gated on CCU readiness. No wiring timeout here — a
 	// co-booting CCU is waited on indefinitely (the bring-up is bounded by the
@@ -423,8 +431,6 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	if d.mqttWiring != nil {
 		d.bootCleanups.run(ctx, d.mqttWiring.Bridge())
 	}
-
-	wireRetainedOrphanSweeps(ctx, d, cfg, logger)
 
 	// Push the post-hydration snapshot of every observed VALUES data
 	// point through the EventBridge so the broker carries retained

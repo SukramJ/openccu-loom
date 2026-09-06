@@ -68,20 +68,37 @@ type SessionStore struct {
 	logger  *slog.Logger
 }
 
-// NewSessionStore constructs an in-memory store with no durable backing.
-func NewSessionStore() *SessionStore {
-	return &SessionStore{TTL: SessionTTL, now: time.Now, items: make(map[string]*Session)}
+// SessionStoreOptions carries the tunables a composition root passes to a
+// session store. The zero value reproduces the historical behaviour, so a
+// caller that has nothing to configure keeps using the plain constructors.
+type SessionStoreOptions struct {
+	// IdleTTL is the inactivity window after which a session is evicted on
+	// its next lookup. Zero disables the idle check. Mirrors
+	// north.rest.auth.session_idle_timeout.
+	IdleTTL time.Duration
 }
 
-// NewPersistentSessionStore constructs a save-through session store
-// backed by persist. It hydrates the in-memory map from the persisted
-// active sessions so a daemon restart no longer logs active browsers
-// out. A hydration failure is returned (and is fatal to the caller's
-// construction step); subsequent persist failures during Issue/Revoke/
-// purge are best-effort and logged, never propagated.
-func NewPersistentSessionStore(persist SessionPersistence, logger *slog.Logger) (*SessionStore, error) {
+// NewSessionStore constructs an in-memory store with no durable backing.
+func NewSessionStore() *SessionStore {
+	return NewSessionStoreWithOptions(SessionStoreOptions{})
+}
+
+// NewSessionStoreWithOptions is [NewSessionStore] with the tunables of opts
+// applied.
+func NewSessionStoreWithOptions(opts SessionStoreOptions) *SessionStore {
+	return &SessionStore{TTL: SessionTTL, IdleTTL: opts.IdleTTL, now: time.Now, items: make(map[string]*Session)}
+}
+
+// NewPersistentSessionStoreWithOptions constructs a save-through session
+// store backed by persist, with the tunables of opts applied. It hydrates
+// the in-memory map from the persisted active sessions so a daemon restart
+// no longer logs active browsers out. A hydration failure is returned (and
+// is fatal to the caller's construction step); subsequent persist failures
+// during Issue/Revoke/purge are best-effort and logged, never propagated.
+func NewPersistentSessionStoreWithOptions(persist SessionPersistence, logger *slog.Logger, opts SessionStoreOptions) (*SessionStore, error) {
 	s := &SessionStore{
 		TTL:     SessionTTL,
+		IdleTTL: opts.IdleTTL,
 		now:     time.Now,
 		items:   make(map[string]*Session),
 		persist: persist,

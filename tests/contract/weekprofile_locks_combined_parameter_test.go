@@ -87,37 +87,51 @@ func weekprofileLocksFallbackDomain(t *testing.T) (*adapter.SchedulesDomain, *we
 // TestWeekprofileLocksBackendFallbackUsesTheModelBitTable pins the adapter's
 // unmodelled-device write path to the week-profile model's own encoding.
 //
-// The adapter used to carry a second copy of the 24-bit channel table and its
-// own WPTCLS/WPTCL rendering, so a bit reassigned in the model left the
-// fallback writing the previous bit — a wrong channel toggled on a real
-// device. Expectation and observation here share no literal: the want side is
-// built from weekprofile.ChannelKeyToBitmask + BuildCombinedParameterValue,
-// the got side is whatever the live SetScheduleEnabled path put on the wire.
+// The adapter used to carry a second copy of a channel table and its own
+// WPTCLS/WPTCL rendering, so a bit reassigned in the model left the fallback
+// writing the previous bit — a wrong channel toggled on a real device. Expectation
+// and observation here share no literal: the want side is built from
+// weekprofile.TargetBitOrder over the fixture device's own channels +
+// BuildCombinedParameterValue, the got side is whatever the live
+// SetScheduleEnabled path put on the wire.
+//
+// Without a modelled week profile only the fallback key "1_1" resolves — to
+// the lowest bit of the device's schedule-relevant list — and every other key
+// is refused rather than guessed: the key→channel map is minted from the
+// custom-DP groups, and a device without one has no such map.
 func TestWeekprofileLocksBackendFallbackUsesTheModelBitTable(t *testing.T) {
 	t.Parallel()
 	domain, backend, address := weekprofileLocksFallbackDomain(t)
 	ctx := context.Background()
 
+	order := weekprofile.TargetBitOrder("HmIP-BSM", []weekprofile.TypedChannel{
+		{No: 4, Type: "SWITCH_VIRTUAL_RECEIVER"}, {No: 8, Type: "SWITCH_WEEK_PROFILE"},
+	})
+	bit, ok := order[4]
+	if !ok {
+		t.Fatal("fixture device's receiver channel 4 has no position in the model's order")
+	}
 	written := 0
-	for _, key := range weekprofile.AllChannelKeys() {
-		bit, ok := weekprofile.ChannelKeyToBitmask(key)
-		if !ok {
-			t.Fatalf("model does not carry channel key %q", key)
+	for _, enabled := range []bool{true, false} {
+		if err := domain.SetScheduleEnabled(ctx, address, enabled, "1_1"); err != nil {
+			t.Fatalf("SetScheduleEnabled(1_1, %v): %v", enabled, err)
 		}
-		for _, enabled := range []bool{true, false} {
-			if err := domain.SetScheduleEnabled(ctx, address, enabled, key); err != nil {
-				t.Fatalf("SetScheduleEnabled(%q, %v): %v", key, enabled, err)
-			}
-			if len(backend.values) != written+1 {
-				t.Fatalf("key %q enabled=%v: got %d COMBINED_PARAMETER writes, want %d",
-					key, enabled, len(backend.values), written+1)
-			}
-			want := weekprofile.BuildCombinedParameterValue(bit, enabled)
-			if got := backend.values[written]; got != want {
-				t.Errorf("key %q enabled=%v: wrote %q, model renders %q", key, enabled, got, want)
-			}
-			written++
+		if len(backend.values) != written+1 {
+			t.Fatalf("enabled=%v: got %d COMBINED_PARAMETER writes, want %d", enabled, len(backend.values), written+1)
 		}
+		want := weekprofile.BuildCombinedParameterValue(uint32(1)<<bit, enabled)
+		if got := backend.values[written]; got != want {
+			t.Errorf("enabled=%v: wrote %q, model renders %q", enabled, got, want)
+		}
+		written++
+	}
+	for _, key := range []string{"1_2", "2_1", "9_9"} {
+		if err := domain.SetScheduleEnabled(ctx, address, true, key); err == nil {
+			t.Errorf("key %q was written for a device with no modelled key map; it must be refused", key)
+		}
+	}
+	if len(backend.values) != written {
+		t.Errorf("refused keys still reached the wire: %d writes, want %d", len(backend.values), written)
 	}
 }
 

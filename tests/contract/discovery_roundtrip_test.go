@@ -121,8 +121,7 @@ func (roundtripWriter) SetValue(context.Context, string, hmenum.Parameter, any, 
 // wiring. Mirrors internal/model/custom/cover/payload_discovery_test.go:discoveryCtx.
 type roundtripDiscoveryCtx struct{}
 
-func (roundtripDiscoveryCtx) AggregatedStateTopic() string { return "rt/state" }
-func (roundtripDiscoveryCtx) CustomDPStateTopic() string   { return "rt/custom/state" }
+func (roundtripDiscoveryCtx) CustomDPStateTopic() string { return "rt/custom/state" }
 
 func (roundtripDiscoveryCtx) ServiceMethodCommandTopic(m string) string {
 	return "rt/svc/" + m + "/set"
