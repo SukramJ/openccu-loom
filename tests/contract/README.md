@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 459.
+Guards without a doc comment: 7 of 460.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -184,6 +184,7 @@ Guards without a doc comment: 7 of 459.
 | TestLogStreamResume_SSEHandler_BackfillNoDuplicates | log_stream_resume_contract_test.go | TestLogStreamResume_SSEHandler_BackfillNoDuplicates exercises the StreamLogs HTTP handler with ?since= and Last-Event-ID and verifies that no id: value in the SSE body is <= the cursor. |
 | TestLogStreamResume_SSEHandler_EventFrameShape | log_stream_resume_contract_test.go | TestLogStreamResume_SSEHandler_EventFrameShape verifies the canonical SSE event format: each log event must have id:, event: log, and data: lines in the body when backfill records are present. |
 | TestLogStreamResume_SinceReturnsOnlyNewerRecords | log_stream_resume_contract_test.go | TestLogStreamResume_SinceReturnsOnlyNewerRecords verifies that Since(seq) returns only records with Seq > seq for several cursor values. |
+| TestGoFabricDocLinksResolveInLocalCheckout | markdown_links_test.go | TestGoFabricDocLinksResolveInLocalCheckout checks the path component of every https://github.com/SukramJ/go-fabric/{blob,tree,raw}/main/<path> reference in this repository's Markdown against a local go-fabric checkout, and fails when such a reference names a path that checkout does not carry. |
 | TestMarkdownLinksValid | markdown_links_test.go | TestMarkdownLinksValid walks every Markdown file in the repository and fails when a Markdown-syntax link `[text] (path.md)` resolves to a non-existent file. |
 | TestMatterEndpointSourcesAreChangeNotifiers | matter_change_notifier_test.go | TestMatterEndpointSourcesAreChangeNotifiers guarantees that every type asserted as an interfaces.MatterEndpointSource also asserts interfaces.MatterChangeNotifier in the same file. |
 | TestHostRiddenMeasurementClassesHaveAHost | matter_measurement_devicetype_conformance_test.go | TestHostRiddenMeasurementClassesHaveAHost checks the claim each hostRiddenMeasurementClasses entry makes: that some device type specifies the class's cluster as a server, so there is a host endpoint the cluster can legitimately be mounted on. |

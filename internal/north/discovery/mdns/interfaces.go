@@ -13,9 +13,11 @@ import (
 // virtualisation bridge whose addresses are not routable from peers.
 // The Matter bridge's advertiser applies the same rule and does NOT share this
 // code: it moved to the go-fabric module and carries its own copy
-// (go-fabric mdns/interface_filter.go). Nothing checks that the two stay in
-// agreement — the predicate is duplicated across a module boundary with no
-// test on either side comparing them.
+// (go-fabric mdns/interface_filter.go). The duplication stands — it crosses a
+// module boundary and cannot be removed from this side — but it is no longer
+// silent: TestVirtualInterfaceNameAgreesWithGoFabric (internal/netutil)
+// compares this rule against the go-fabric filter the daemon actually links
+// and fails when the two classify one interface name differently.
 func isVirtualInterfaceName(name string) bool {
 	return netutil.IsVirtualInterfaceName(name)
 }

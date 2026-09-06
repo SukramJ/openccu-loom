@@ -3879,6 +3879,53 @@ work when the bridge exposes a timed-quality attribute or targets large
 controller fleets, respectively.
 (Re-audit 2026-05-31, findings F3 / F4.)
 
+### BD-Matter-SpeakerPartialNoSoundfileNoRepetitions — the sound player is a Speaker minus the two data points that decide what plays
+
+**Decision.** `siren.SoundPlayer` (the HmIP-MP3P channel-2 playback unit)
+projects onto the Matter **Speaker** device type `0x0022` with the two clusters
+that type mandates — OnOff `0x0006` and LevelControl `0x0008`
+(`internal/model/custom/siren/sound_matter.go`). Two of the profile's own data
+points are deliberately **not** projected and stay MQTT/REST-only:
+
+| Data point | Go field | Why no cluster |
+|---|---|---|
+| `SOUNDFILE` | `SoundPlayer.soundfile` (`sound.go`, a `generic.Select` over the device's 256-entry VALUE_LIST) | Matter has no cluster for selecting a stored audio file on a speaker |
+| `REPETITIONS` | `SoundPlayer.repetitions` (`sound.go`, a write-only `generic.ActionSelect` over the `REPETITIONS_nnn` labels) | Matter has no cluster for a playback repeat count |
+
+The endpoint therefore reports
+`MatterEligibility().State == interfaces.MatterEligibilityPartial`: volume
+(LevelControl) and audible/silent (OnOff) map in full, the *content* of the
+playback does not. Concretely, `OnOff.On` resumes whatever file the device last
+selected and `SoundPlayer.playVolume` writes neither parameter — a Matter
+controller has no vocabulary for either, so inventing a value would make the
+Matter path change device state that no other surface changes.
+
+**Why this is by design and not a gap.** The Speaker device type mandates
+exactly these two clusters and nothing else — matter.js
+`packages/model/src/standard/elements/speaker.element.ts:12-19` lists OnOff and
+LevelControl with conformance `"M"` and declares no further requirement. There
+is no optional Matter cluster left unmounted here: the missing capability has
+no cluster to mount at all, in any device type. A projection that faked it
+(e.g. mapping soundfile indices onto scene numbers or onto LevelControl's
+`OnLevel`) would hand a controller a control that means something different
+from what it appears to mean.
+
+Note that ADR 0012's "Out of Matter scope" table still lists
+`siren.SoundPlayer` as `Stays MQTT-only` on the ground that Matter 1.5.1 has no
+speaker cluster. That row predates the Speaker projection and is now correct
+only for the two data points named above, not for the data point as a whole.
+
+**Guard.** `TestSoundPlayerEligibilityIsPartial`
+(`internal/model/custom/siren/sound_matter_test.go`) pins the verdict: state
+`Partial`, device type `0x0022`, and exactly the two mandatory Speaker
+clusters. A future projection that mounted a third cluster, or that flipped the
+verdict to full, fails there.
+
+**Retirement condition.** A Matter release that adds a cluster carrying media
+selection or a repeat count for a Speaker-class device — or a device type whose
+requirements cover them — retires this entry: the two data points then get
+projected, the verdict becomes full, and the ADR 0012 row goes with it.
+
 ### BD-Visibility-HiddenAliasesIgnored — IsParameterHidden returns the ignore decision
 
 The reference `parameter_decider.py:parameter_is_hidden` computes
