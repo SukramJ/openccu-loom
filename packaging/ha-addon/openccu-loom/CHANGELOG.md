@@ -1,5 +1,30 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.74.0
+
+Added: read/write selection lists and the MP3P sound player now appear in the
+Matter bridge. A selection list reaches a Matter controller as a mode select
+carrying your CCU's own options, and the sound player as a speaker with volume
+and an audible/silent switch. Neither had any Matter representation before.
+Selection lists that can only be written, or only read, stay out: a mode a
+controller cannot change, or one that can only echo the last write, is not
+honestly a mode select.
+
+Added: a true/false reading the daemon does not recognise by name now reaches
+Matter as a contact sensor instead of disappearing. Previously any boolean
+nobody had classified was dropped while building the bridge — not refused, not
+logged, and indistinguishable from a device that has no such state. Device
+housekeeping flags stay out on purpose; reachability already reaches a
+controller by its own route.
+
+Fixed: three Matter issues in the bridge stack. A session whose fabric could
+not be identified was read as "still commissioning" and passed the access
+check; a pairing window opened during commissioning could be completed by an
+already-paired controller, aborting the administrator who opened it; and a
+certificate whose validity window overflowed the date conversion was accepted.
+This add-on was not exposed to the first two, and all three now hold in every
+configuration.
+
 ## 0.73.0
 
 Fixed: MQTT published `ch3`-style markers where you had named a channel on the

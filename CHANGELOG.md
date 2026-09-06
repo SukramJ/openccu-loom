@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.74.0] - 2026-09-06
+
 ### Added
 
 - **Read/write ENUM data points reach Matter as ModeSelect, and the MP3P sound
