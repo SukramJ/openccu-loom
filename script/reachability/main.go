@@ -255,11 +255,9 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		// for dead-code that has no production caller.
 		if !productionOnly {
 			if strings.HasSuffix(pkgPath, "_test") || isTestPkg(p) {
-				for name, mem := range p.Members {
-					if fn, ok := mem.(*ssa.Function); ok {
-						if strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Benchmark") {
-							entryFuncs = append(entryFuncs, fn)
-						}
+				for _, mem := range p.Members {
+					if fn, ok := mem.(*ssa.Function); ok && isTestFunc(fn) {
+						entryFuncs = append(entryFuncs, fn)
 					}
 				}
 			}
@@ -328,6 +326,10 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		}
 	}
 	logger.Debug("reachable functions", "count", len(reachableFuncs))
+
+	refs := buildReferenceIndex(reachableFuncs)
+	logger.Debug("reference index built",
+		"named_types", len(refs.namedTypes), "globals", len(refs.globals))
 
 	// --- 5. Explizite Whitelist aus AST-Kommentaren einlesen ---
 	whitelisted := make(map[whitelistKey]WhitelistEntry)
@@ -443,8 +445,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 				continue
 			}
 
-			// Erreichbarkeit prüfen (Verfeinerung 1: Type via Methoden)
-			if isReachable(member, reachableFuncs, p) {
+			if isReachable(member, reachableFuncs, refs, p) {
 				if cls.unreachable != nil {
 					disagreements++
 				}
@@ -896,19 +897,170 @@ HEAD: {{.Head}}
 	return tmpl.Execute(f, data)
 }
 
-// isTestPkg prüft ob ein SSA-Package ein Test-Package ist.
+// isTestFunc reports whether fn is a go-test entry point: the signature, not
+// the name. Three exported REST handlers in this repo are called
+// TestLinkAtDevice, TestAlarmOutput and TestDeviceCommunication -- a name
+// test would take them for tests, seed RTA with them, and (worse) classify
+// internal/north/rest/handlers as a test package and drop the whole package
+// from the inventory. What actually distinguishes a test is its parameter:
+// exactly one *testing.T / *testing.B / *testing.F, and nothing returned.
+func isTestFunc(fn *ssa.Function) bool {
+	sig := fn.Signature
+	if sig == nil || sig.Recv() != nil || sig.Results().Len() != 0 || sig.Params().Len() != 1 {
+		return false
+	}
+	switch types.TypeString(sig.Params().At(0).Type(), nil) {
+	case "*testing.T", "*testing.B", "*testing.F":
+		return true
+	default:
+		return false
+	}
+}
+
+// isTestPkg reports whether an SSA package is a test variant.
 func isTestPkg(p *ssa.Package) bool {
 	if p.Pkg == nil {
 		return false
 	}
 	path := p.Pkg.Path()
-	return strings.HasSuffix(path, "_test") || strings.Contains(path, ".test")
+	if strings.HasSuffix(path, "_test") || strings.Contains(path, ".test") {
+		return true
+	}
+	// The "package under test" variant keeps the path of the package it
+	// tests -- go/packages distinguishes it by ID, not by import path -- so a
+	// path test alone sees only external test packages (`package foo_test`)
+	// and misses every internal one (`package foo` in a _test.go file). Those
+	// are the majority here, and anything reached only from them read as
+	// dead. Ask the members instead: a package holding a Test/Benchmark/Fuzz
+	// function is a test variant, whatever its path says.
+	for _, mem := range p.Members {
+		if fn, ok := mem.(*ssa.Function); ok && isTestFunc(fn) {
+			return true
+		}
+	}
+	return false
+}
+
+// referenceIndex records what reachable code actually mentions, for the two
+// member kinds RTA cannot speak to.
+type referenceIndex struct {
+	// namedTypes holds types.TypeString of every named type reachable code
+	// names — in a signature, an allocation, an operand, a conversion.
+	namedTypes map[string]bool
+	// globals holds "<pkgpath>.<name>" of every package-level var reachable
+	// code loads from or stores to.
+	globals map[string]bool
+}
+
+// buildReferenceIndex walks every reachable function and records the named
+// types and package-level vars its code actually mentions.
+//
+// This exists because RTA answers exactly one question — is this FUNCTION
+// called — and the other two member kinds each need their own mechanism
+// rather than a convention standing in for one. What the two replaced
+// conventions had in common is that neither could produce a different answer
+// in response to the code changing, which is what makes them guesses rather
+// than measurements. The details are at the two branches of isReachable that
+// consume this index.
+//
+// One store is excluded, and it is the difference between measuring globals
+// and merely inverting the old convention: the package initialiser writing to
+// a var of its own package. `var ErrNotFound = errors.New(...)` compiles to a
+// store in the synthetic init, and init is reachable in every package that
+// has one — so counting it would mark every initialised var as used, which is
+// nearly all of them. Sentinel errors are the class this measurement is most
+// about, and they are all initialised. Its own initialisation is not a use of
+// a var; a store from anywhere else is, because something chose to set it.
+func buildReferenceIndex(reachable map[*ssa.Function]bool) *referenceIndex {
+	idx := &referenceIndex{
+		namedTypes: make(map[string]bool),
+		globals:    make(map[string]bool),
+	}
+	seenType := make(map[types.Type]bool)
+
+	for fn := range reachable {
+		if fn == nil {
+			continue
+		}
+		idx.markType(fn.Signature, seenType)
+		for _, p := range fn.Params {
+			idx.markType(p.Type(), seenType)
+		}
+		for _, l := range fn.Locals {
+			idx.markType(l.Type(), seenType)
+		}
+		inPkgInit := fn.Pkg != nil && fn == fn.Pkg.Func("init")
+		for _, b := range fn.Blocks {
+			for _, instr := range b.Instrs {
+				if v, ok := instr.(ssa.Value); ok {
+					idx.markType(v.Type(), seenType)
+				}
+				store, isStore := instr.(*ssa.Store)
+				for _, op := range instr.Operands(nil) {
+					if op == nil || *op == nil {
+						continue
+					}
+					if g, ok := (*op).(*ssa.Global); ok && g.Pkg != nil && g.Pkg.Pkg != nil {
+						// The package initialiser storing to a var of its own
+						// package is that var being created, not used.
+						initSelfStore := isStore && inPkgInit && op == &store.Addr && g.Pkg == fn.Pkg
+						if !initSelfStore {
+							idx.globals[g.Pkg.Pkg.Path()+"."+g.Name()] = true
+						}
+					}
+					idx.markType((*op).Type(), seenType)
+				}
+			}
+		}
+	}
+	return idx
+}
+
+// markType records every named type reachable from t, descending through the
+// type constructors that can wrap one.
+func (idx *referenceIndex) markType(t types.Type, seen map[types.Type]bool) { //nolint:gocognit // one branch per type constructor
+	if t == nil || seen[t] {
+		return
+	}
+	seen[t] = true
+
+	switch u := t.(type) {
+	case *types.Named:
+		idx.namedTypes[types.TypeString(u, nil)] = true
+		for i := range u.TypeArgs().Len() {
+			idx.markType(u.TypeArgs().At(i), seen)
+		}
+	case *types.Alias:
+		idx.markType(types.Unalias(u), seen)
+	case *types.Pointer:
+		idx.markType(u.Elem(), seen)
+	case *types.Slice:
+		idx.markType(u.Elem(), seen)
+	case *types.Array:
+		idx.markType(u.Elem(), seen)
+	case *types.Chan:
+		idx.markType(u.Elem(), seen)
+	case *types.Map:
+		idx.markType(u.Key(), seen)
+		idx.markType(u.Elem(), seen)
+	case *types.Tuple:
+		for i := range u.Len() {
+			idx.markType(u.At(i).Type(), seen)
+		}
+	case *types.Signature:
+		idx.markType(u.Params(), seen)
+		idx.markType(u.Results(), seen)
+	case *types.Struct:
+		for i := range u.NumFields() {
+			idx.markType(u.Field(i).Type(), seen)
+		}
+	}
 }
 
 // isReachable prüft ob ein SSA-Member von einem Entry-Point aus erreichbar ist.
 // Verfeinerung 1: Typen gelten als erreichbar wenn irgendeine ihrer Methoden
 // (Value- oder Pointer-Receiver) im Callgraph erreichbar ist.
-func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, pkg *ssa.Package) bool {
+func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, refs *referenceIndex, pkg *ssa.Package) bool {
 	switch m := member.(type) {
 	case *ssa.Function:
 		return reachable[m]
@@ -917,14 +1069,24 @@ func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, pkg *ssa.P
 		if !ok {
 			return false
 		}
-		// Value-Receiver-Methoden: direkt über named.Method(i) zugänglich
+		// Named in reachable code -- a signature, an allocation, an operand,
+		// a conversion. Judging a type only by its method set judges it by
+		// whether it HAS methods: a plain struct carried through a reachable
+		// signature would read as unreached forever, however heavily it is
+		// used. The method-set rule below is kept alongside this one because
+		// a type reached only through interface dispatch shows up there and
+		// in no signature.
+		if refs.namedTypes[types.TypeString(named, nil)] {
+			return true
+		}
+		// Value-receiver methods are reachable through named.Methods().
 		for method := range named.Methods() {
 			fn := pkg.Prog.FuncValue(method)
 			if fn != nil && reachable[fn] {
 				return true
 			}
 		}
-		// Pointer-Receiver-Methoden: über MethodSet des Pointer-Typs
+		// Pointer-receiver methods only show up in the pointer type's method set.
 		ptrType := types.NewPointer(named)
 		mset := types.NewMethodSet(ptrType)
 		for sel := range mset.Methods() {
@@ -942,14 +1104,26 @@ func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, pkg *ssa.P
 		}
 		return false
 	case *ssa.Global:
-		// Globals in cmd/-Packages konservativ als erreichbar markieren
-		pkgPath := pkg.Pkg.Path()
-		if strings.Contains(pkgPath, "/cmd/") {
+		// A package-level var is never a call target, so RTA cannot speak to
+		// it. What replaced that measurement was a convention -- "inside
+		// /cmd/ counts as reachable, everything else does not" -- which
+		// reports every exported var outside the composition root as dead
+		// whatever the code does. The number it produces restates how many
+		// exported vars exist and cannot move in response to a test being
+		// written. Sentinel errors are most of that class here, and a test
+		// asserting errors.Is(err, hmerr.ErrNotFound) does reach one.
+		//
+		// So it is measured instead: does reachable code load from or store
+		// to this var.
+		if m.Pkg == nil || m.Pkg.Pkg == nil {
 			return true
 		}
-		return false
+		return refs.globals[m.Pkg.Pkg.Path()+"."+m.Name()]
 	default:
-		// Konservativ: unbekannte Member als erreichbar markieren
+		// *ssa.NamedConst: a constant is folded into its use site, so no SSA
+		// instruction ever names it and there is nothing to observe. The
+		// measurement is not performable for constants, so they are reported
+		// as reachable rather than counted as dead on no evidence.
 		return true
 	}
 }

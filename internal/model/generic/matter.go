@@ -132,8 +132,21 @@ func (s *Sensor[T]) MatterMeasurementClass() interfaces.MatterMeasurementClass {
 
 // MatterMeasurementClass implements
 // [interfaces.MatterMeasurementSource]. The binary-sensor classifier
-// is consulted first; falls back to the analog table for parameters
-// that share a name across both surfaces (rare).
+// is consulted first; then the analog table, for parameters that share
+// a name across both surfaces (rare); and a parameter neither table
+// names still gets a Matter projection rather than being dropped.
+//
+// That last step is the point. Both tables are whitelists of parameter
+// names, so every boolean the CCU grows that nobody has classified yet
+// used to vanish from the Matter surface silently -- not refused, not
+// logged, just absent, and indistinguishable from a device that has no
+// such state. A BinarySensor is boolean by construction, and a boolean
+// state is exactly what ContactSensor 0x0015 exists to carry through
+// its mandatory BooleanState 0x0045 server. Naming it Contact says only
+// what is known: this is a two-state reading. It does not claim the
+// reading means a door, which is why an unknown parameter must never
+// reach the Occupancy or Leak classes -- those assert a meaning the
+// tables above have actually established.
 func (b *BinarySensor) MatterMeasurementClass() interfaces.MatterMeasurementClass {
 	if b == nil {
 		return interfaces.MatterMeasurementNone
@@ -141,7 +154,42 @@ func (b *BinarySensor) MatterMeasurementClass() interfaces.MatterMeasurementClas
 	if class := matterMeasurementForBinaryParameter(b.Parameter()); class != interfaces.MatterMeasurementNone {
 		return class
 	}
-	return matterMeasurementForParameter(b.Parameter())
+	if class := matterMeasurementForParameter(b.Parameter()); class != interfaces.MatterMeasurementNone {
+		return class
+	}
+	if isDeviceHousekeepingParameter(b.Parameter()) {
+		return interfaces.MatterMeasurementNone
+	}
+	return interfaces.MatterMeasurementContact
+}
+
+// isDeviceHousekeepingParameter names the boolean parameters that
+// describe the device's own condition rather than something it senses.
+// They are the one class that must keep opting out once an unclassified
+// boolean stops being dropped: UNREACH and STICKY_UNREACH already reach
+// a controller as BridgedDeviceBasicInformation.Reachable, and the two
+// pending flags are configuration state with no Matter reading behind
+// them. Projecting any of them as a contact would put a second, wrong
+// answer next to the right one.
+//
+// This is a name list rather than a property test, and that is measured
+// rather than lazy. The SERVICE flag looks like the property and is not:
+// LOWBAT carries it (FLAGS=9 in
+// internal/model/device/definitionexport/testdata/expected_paramset_descriptions.json)
+// while being deliberately classified as a battery reading, so a SERVICE
+// pre-filter would delete an established classification. The flag is not
+// even stable across our own sources — the same UNREACH is FLAGS=9 there
+// and flags=1 in tests/integration/testdata/model_snapshot_openccu-loom.json.
+// A list that says which parameters and why is honest; a property test on
+// a value that disagrees with itself is not.
+func isDeviceHousekeepingParameter(p hmenum.Parameter) bool {
+	switch p {
+	case hmenum.ParameterUnreach, hmenum.ParameterStickyUnreach,
+		hmenum.ParameterConfigPending, hmenum.ParameterUpdatePending:
+		return true
+	default:
+		return false
+	}
 }
 
 // MatterFloatValue implements

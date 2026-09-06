@@ -229,9 +229,13 @@ func (c *Controller) RunWithTimeout(parent context.Context, t *testing.T, timeou
 	return out, nil
 }
 
-// Pair commissions the bridge over PASE via the chip-tool
-// `pairing already-discovered` flow. Returns the captured output
-// so tests can also assert on the success marker.
+// Pair runs the chip-tool `pairing already-discovered` flow with
+// `--pase-only true`: it establishes PASE and stops there, so no fabric
+// is installed and no operational session exists afterwards. Assert its
+// output with [PASEEstablished] -- [PairingSuccess] keys on
+// OnCommissioningComplete, which this flow never reaches, and would read
+// as a failure on a perfectly good PASE. Use [PairFull] for anything that
+// needs a commissioned bridge. Returns the captured output.
 //
 //   - addr  → bridge IP (use [PairTargetHost]; ipv6only chip-tool
 //     builds reject IPv4 literals)

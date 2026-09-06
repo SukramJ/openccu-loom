@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-//go:build chiptool
-
 package harness
 
 import (
@@ -11,6 +9,13 @@ import (
 	"strconv"
 	"strings"
 )
+
+// The file carries no `chiptool` build tag, unlike the rest of the package:
+// it parses text and starts no process, so its guards run in the ordinary
+// `go test ./...` rather than only when the label-gated commissioner suite
+// does. That matters here specifically — the defect these predicates had was
+// one a green CI could not see, because the job that would have exercised
+// them is the one that does not run by default.
 
 // chip-tool's output is unstructured text with a handful of stable
 // marker lines. The regexps below match those markers exactly; we
@@ -48,14 +53,71 @@ var (
 	reEventNumber = regexp.MustCompile(`EventNumber:\s+(0x[0-9A-Fa-f]+)`)
 )
 
-// PairingSuccess returns true when chip-tool reported a successful
-// commissioning. The marker is stable across chip-tool master since
-// at least 2024-10 and is the same one `make matter-smoke` greps
-// for in its assertion path.
+// chip-tool prints a success line at each of three stages, and only the
+// last one means the commissioning finished. Read out of the
+// connectedhomeip tree rather than inferred from the wording
+// (examples/chip-tool/commands/pairing/PairingCommand.cpp):
+//
+//	:505  "Secure Pairing Success"
+//	:506  "CASE establishment successful"              — OnStatusUpdate
+//	:519  "Pairing Success"
+//	:520  "PASE establishment successful"              — OnPairingComplete
+//	:559  "Device commissioning completed with success" — OnCommissioningComplete
+//
+// Each constant below is the *companion* line rather than the "… Success"
+// one, because "Pairing Success" is a substring of "Secure Pairing Success":
+// a Contains for the former cannot tell the PASE stage from the CASE stage.
+// The companion lines share no such prefix.
+const (
+	// markerPASE is printed once PASE alone has finished. A run that
+	// establishes PASE and then dies in AddNOC, CASE or operational
+	// discovery prints it and exits non-zero.
+	markerPASE = "PASE establishment successful"
+
+	// markerCASE is printed once a CASE session stands. Commissioning can
+	// still fail after it.
+	markerCASE = "CASE establishment successful"
+
+	// markerCommissioning is the only line that means the operational
+	// session is usable — OnCommissioningComplete with CHIP_NO_ERROR.
+	markerCommissioning = "Device commissioning completed with success"
+)
+
+// PairingSuccess reports whether chip-tool finished a whole
+// commissioning. It deliberately does not accept the earlier stages: a
+// bridge that completes PASE, installs the fabric and then fails
+// operational discovery reaches neither an operational session nor any
+// of the reads the suite performs afterwards, and a predicate that
+// called that success would report the suite green through exactly the
+// defect it exists to catch.
+//
+// For a run started with `--pase-only true` this is always false by
+// construction — use [PASEEstablished] there.
 func PairingSuccess(out string) bool {
-	return strings.Contains(out, "Pairing Success") ||
-		strings.Contains(out, "Pairing complete") ||
-		strings.Contains(out, "Commissioning complete")
+	return strings.Contains(out, markerCommissioning)
+}
+
+// PASEEstablished reports whether the PASE handshake alone succeeded.
+// This is the assertion for a `--pase-only true` run, where no later
+// stage is attempted and [PairingSuccess] can never be true.
+func PASEEstablished(out string) bool {
+	return strings.Contains(out, markerPASE)
+}
+
+// HandshakeStage names the furthest stage chip-tool reported, so a
+// failed pairing says where it stopped rather than only that it did.
+// Intended for test failure messages.
+func HandshakeStage(out string) string {
+	switch {
+	case strings.Contains(out, markerCommissioning):
+		return "commissioning complete"
+	case strings.Contains(out, markerCASE):
+		return "CASE established, commissioning did not complete"
+	case strings.Contains(out, markerPASE):
+		return "PASE established, CASE not reached"
+	default:
+		return "PASE not established"
+	}
 }
 
 // PairingFailed scans for chip-tool's structured failure markers.
@@ -84,7 +146,7 @@ func FindAttrUint(out, name string) (int64, bool) {
 
 // FindAttrBool returns the first TRUE/FALSE value for the given
 // attribute name. Returns (false, false) when absent.
-func FindAttrBool(out, name string) (bool, bool) {
+func FindAttrBool(out, name string) (value, ok bool) {
 	for _, m := range reAttrBool.FindAllStringSubmatch(out, -1) {
 		if strings.EqualFold(m[1], name) {
 			return m[2] == "TRUE", true
@@ -126,7 +188,7 @@ func ContainsAttr(out, name string) bool {
 func FindAttrStringPerEndpoint(out, name string) map[uint16]string {
 	result := make(map[uint16]string)
 	lines := strings.Split(out, "\n")
-	for i := 0; i < len(lines); i++ {
+	for i := range lines {
 		m := reEndpointPath.FindStringSubmatch(lines[i])
 		if m == nil {
 			continue
@@ -143,7 +205,7 @@ func FindAttrStringPerEndpoint(out, name string) map[uint16]string {
 				break
 			}
 			vm := reAttrString.FindStringSubmatch(lines[j])
-			if vm != nil && strings.EqualFold(vm[1], name) {
+			if len(vm) == 3 && strings.EqualFold(vm[1], name) {
 				result[ep] = vm[2]
 				break
 			}
@@ -158,7 +220,7 @@ func FindAttrStringPerEndpoint(out, name string) map[uint16]string {
 func FindAttrBoolPerEndpoint(out, name string) map[uint16]bool {
 	result := make(map[uint16]bool)
 	lines := strings.Split(out, "\n")
-	for i := 0; i < len(lines); i++ {
+	for i := range lines {
 		m := reEndpointPath.FindStringSubmatch(lines[i])
 		if m == nil {
 			continue
@@ -173,7 +235,7 @@ func FindAttrBoolPerEndpoint(out, name string) map[uint16]bool {
 				break
 			}
 			vm := reAttrBool.FindStringSubmatch(lines[j])
-			if vm != nil && strings.EqualFold(vm[1], name) {
+			if len(vm) == 3 && strings.EqualFold(vm[1], name) {
 				result[ep] = strings.EqualFold(vm[2], "true")
 				break
 			}
@@ -289,7 +351,7 @@ func HasCluster(ids []uint32, cluster uint32) bool {
 func ServerListIDsPerEndpoint(out string) map[uint16][]uint32 {
 	result := make(map[uint16][]uint32)
 	lines := strings.Split(out, "\n")
-	for i := 0; i < len(lines); i++ {
+	for i := range lines {
 		m := reEndpointPath.FindStringSubmatch(lines[i])
 		if m == nil {
 			continue

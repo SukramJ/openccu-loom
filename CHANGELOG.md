@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Read/write ENUM data points reach Matter as ModeSelect, and the MP3P sound
+  player as a Speaker.** Neither had any Matter projection: an ENUM was
+  unrepresentable, and `siren.SoundPlayer` said in source that it was excluded
+  from the surface entirely. A `generic.Select` now advertises device type
+  0x0027 and serves ModeSelect 0x0050 from its own VALUE_LIST — one mode per
+  entry, label and index from the list, `ChangeToMode` routed to the data
+  point. Write-only and read-only ENUMs stay out on purpose, and the file says
+  why: a mode whose `CurrentMode` can only echo our own last write, or whose
+  mandatory `ChangeToMode` would always fail, is not honestly a ModeSelect.
+  The sound player advertises Speaker 0x0022 with volume on LevelControl and
+  the audible/silent axis on OnOff — mapped to real data points (DIRECTION,
+  and `StopSound` writing LEVEL=0) rather than to an invented mute flag, since
+  on this device muted and silent are the same state.
+
 - **The Matter behaviour corpus runs again.** The 41 scenario files under
   `notes/parity/matter/scenarios/` had no runner after the Matter stack moved
   into `github.com/SukramJ/go-fabric`: the corpus stayed here, because the
@@ -46,6 +60,105 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it from the module, and the pinned bytes are unchanged by the move.
 
 ### Fixed
+
+- **An unclassified boolean data point no longer vanishes from the Matter
+  surface.** Both classifiers are whitelists of parameter names, so every
+  boolean the CCU grows that nobody has named yet returned
+  `MeasurementNone` and was dropped while assembling endpoints — not
+  refused, not logged, and indistinguishable from a device that has no such
+  state. A `BinarySensor` is boolean by construction, so it now falls back to
+  ContactSensor 0x0015, whose mandatory BooleanState 0x0045 server is exactly
+  a two-state reading. Naming it Contact claims only what is known; an
+  unknown parameter never reaches Occupancy or Leak, which assert what a
+  reading *means*. Device housekeeping keeps opting out by name — UNREACH and
+  STICKY_UNREACH already reach a controller as
+  BridgedDeviceBasicInformation.Reachable, and the two pending flags have no
+  reading behind them. (The roadmap named OnOffSensor 0x0850 for this. That
+  device type has only Descriptor and Identify as *server* clusters — OnOff is
+  a client cluster there — so the endpoint could not have carried the value.)
+
+- **The reachability analyzer replaced three measurements with conventions,
+  and 1058 of its 1119 findings were artefacts of them.** A package-level var
+  counted as reachable if its import path contained `/cmd/` and as dead
+  otherwise, so all 243 exported vars outside the composition root were
+  reported dead — a number restating how many exported vars exist, unable to
+  move when a test is written. A named type counted as reachable only through
+  its method set, so a plain struct carried through a live signature read as
+  dead however heavily used; 850 were listed, 28 remain. And a test variant
+  was recognised by import path, but the "package under test" variant keeps
+  the path of the package it tests — so internal tests (`package foo` in a
+  `_test.go`) were missing from the root set, and their `Test*` functions were
+  inventoried as exported identifiers of the production package. That is the
+  drop in `total_exported` from 21401 to 5620: 15776 of the 18849 listed rows
+  were test functions such as `cmd/hmcli.TestAlarmDisarmPrintsOkOnSuccess`,
+  measured as part of the surface they test. All three are
+  measured now: whether reachable code loads or stores the var, whether it
+  names the type, and whether a package holds a function with a go-test
+  signature. That last one is a signature test rather than a name test because
+  this repo exports three REST handlers called `TestLinkAtDevice`,
+  `TestAlarmOutput` and `TestDeviceCommunication`, and a name test would have
+  dropped their whole package from the inventory. The var measurement excludes
+  one store — the package initialiser writing to its own var, since
+  `var Err = errors.New(...)` compiles to exactly that and counting it would
+  mark every initialised var as used, the same non-measurement facing the
+  other way. Each replacement was verified with a probe pair, one identifier
+  read by reachable code and one read by nothing, and the ceiling moves
+  1119 → 61 with no dead code reached or removed.
+
+- **A scheduler health test raced the bookkeeping it asserted on.**
+  `TestHealthHeartbeatRecordsSchedulerLiveness` injected a failing job,
+  synchronised on a channel the job sent from inside `Run`, then stopped the
+  scheduler and asserted the failure had been counted. But `scheduler.invoke`
+  counts a failure only while the context is live — `err != nil &&
+  ctx.Err() == nil`, because a job aborted by shutdown is not a real failure —
+  and `Stop` cancels that context. Signalling on entry says the job began, not
+  that its outcome was recorded, so the test raced the count and lost about
+  once in thirty runs locally, more under CI load. It now waits for
+  `TotalFailures` itself to move before stopping the scheduler. The production
+  behaviour is unchanged and was never wrong.
+
+- **The scenario suite failed under CI load on traffic the bridge is
+  required to send.** Three scenarios went red across three runs, and on
+  `main` as readily as on a branch: the peer harness read every datagram off
+  the socket as an application message, so two kinds of MRP bookkeeping
+  reached steps that had not asked for anything. A standalone acknowledgement
+  (Secure Channel opcode `0x10`) tripped `expect_no_tx` as "the bridge sent
+  when it should not have" and `drain_subscribe_chunks` as an unexpected
+  opcode — the bridge owes that ack for the scenario's own traffic and emits
+  it on the ack timer, so which step is running when it lands follows machine
+  load. A retransmission was worse: `dataversion__monotonic_per_cluster` read
+  the resend of a report it had already consumed as the *second* report and
+  compared a DataVersion against itself, reporting a monotonicity violation
+  against a bridge that had done nothing wrong. The peer now classifies both
+  as transport noise and skips them, which is what a controller does (Spec
+  §4.6.7 has the receiver drop duplicates). The one scenario that wants the
+  duplicate — `mrp__retransmit_on_lost_report` — still sees it, because a peer
+  pretending a datagram was lost forgets its counter. The classifier is pinned
+  by tests including a negative control that ordinary IM traffic is never
+  filtered, and the harness reports what it absorbed, so a green run cannot be
+  mistaken for the filter having been the reason.
+
+- **The chip-tool suite called a PASE handshake a successful commissioning.**
+  `PairingSuccess` accepted three markers, and read against chip-tool's own
+  source none of them meant what the name says. `"Pairing Success"` is printed
+  by `OnPairingComplete` once PASE alone has finished
+  (`PairingCommand.cpp:519`), and is additionally a substring of
+  `"Secure Pairing Success"` (`:505`), so it could not even tell the PASE
+  stage from the CASE stage. `"Commissioning complete"` matches the line the
+  controller prints for *any* finished attempt — `CHIPDeviceController.cpp:2196`
+  renders `"success"` or the error string into the same sentence — so a
+  commissioning that died in operational discovery satisfied it. `"Pairing
+  complete"` appears nowhere in the tree. Seven of the suite's eight call
+  sites run full commissioning flows and asserted on this; a bridge that
+  completed PASE, installed the fabric and then failed to advertise its
+  operational record would have passed all of them. The predicate now keys on
+  `"Device commissioning completed with success"` alone, the PASE-only
+  wrong-passcode test keys on the new `PASEEstablished` (against the old
+  predicate it could not have failed), and `HandshakeStage` names the furthest
+  stage reached so a failure says where it stopped. The parser guards carry no
+  `chiptool` build tag: they parse text and start no process, so they run in
+  the ordinary test suite rather than only in the label-gated job — which is
+  the job that would not have run.
 
 - **The matter.js schema extractor silently dropped elements that share a tag
   and id.** Request and response commands do, so the second replaced the first:

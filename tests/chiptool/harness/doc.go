@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-//go:build chiptool
-
 // Package harness brings up a openccu-loom daemon wired for Matter
 // against an in-process godevccu simulator and exposes a thin
 // chip-tool wrapper that the per-suite tests share.
