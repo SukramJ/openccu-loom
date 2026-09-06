@@ -1,6 +1,6 @@
 {
-  "generated": "be31a802",
-  "head": "be31a802",
+  "generated": "8144d929",
+  "head": "8144d929",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -2846,7 +2846,7 @@
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 297
+      "line": 302
     },
     {
       "package": "internal/model/custom/siren",
@@ -2881,7 +2881,7 @@
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 134
+      "line": 139
     },
     {
       "package": "internal/model/custom/siren",
@@ -3483,7 +3483,7 @@
       "identifier": "NewSelect",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/select.go",
-      "line": 21
+      "line": 30
     },
     {
       "package": "internal/model/generic",
@@ -3595,7 +3595,7 @@
       "identifier": "Select",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/select.go",
-      "line": 16
+      "line": 17
     },
     {
       "package": "internal/model/generic",
@@ -4958,7 +4958,7 @@
     {
       "package": "internal/netutil",
       "identifier": "IsVirtualInterfaceName",
-      "reason": "statically called by the client-discovery and Matter mDNS advertisers (internal/north/discovery/mdns, internal/north/matter/mdns); those advertiser paths sit behind the daemon wiring the RTA entry-point analysis already tolerates as unreachable for the caller packages",
+      "reason": "statically called by the client-discovery mDNS advertiser (internal/north/discovery/mdns); that advertiser path sits behind the daemon wiring the RTA entry-point analysis already tolerates as unreachable for the caller package",
       "file": "internal/netutil/interfaces.go",
       "line": 42
     },
@@ -4979,7 +4979,7 @@
     {
       "package": "internal/north/matteradapter",
       "identifier": "DeviceSnapshot",
-      "reason": "constructed per registered central by the daemon snapshotter (cmd/openccu-loom/daemon_matter.go:3358)",
+      "reason": "constructed per registered central by matterSnapshotter in cmd/openccu-loom/daemon_matter.go",
       "file": "internal/north/matteradapter/assembler.go",
       "line": 184
     },
@@ -5317,21 +5317,21 @@
       "identifier": "LookupBinarySensorRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 90
+      "line": 98
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupButtonRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 146
+      "line": 154
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupCoverRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 120
+      "line": 128
     },
     {
       "package": "internal/north/mqtt",
@@ -5359,49 +5359,49 @@
       "identifier": "LookupLockRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 126
+      "line": 134
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupNumberRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 99
+      "line": 107
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupRulesForComponent",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 170
+      "line": 178
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupSelectRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 155
+      "line": 163
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupSensorRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 81
+      "line": 89
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupSirenRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 136
+      "line": 144
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupSwitchRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 108
+      "line": 116
     },
     {
       "package": "internal/north/mqtt",
@@ -5415,7 +5415,7 @@
       "identifier": "LookupValveRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
-      "line": 141
+      "line": 149
     },
     {
       "package": "internal/north/mqtt",

@@ -3,17 +3,25 @@
 
 package mqtt
 
-// This file routes [EntityDescriptionFor] through the the upstream HA-integration reference
-// rule tables (`entity_helpers/descriptions/`) only. Per the parity-audit
-// L5 fix the old tables are *not* consulted
-// any more — the upstream HA-integration reference is the single source of truth for
-// per-device entity-category / enabled-default / icon overrides.
+// This file holds the per-domain rule lookups. [LookupRulesForComponent]
+// below is the single entry point into them, and it is what
+// EntityDescriptionFor (entity_descriptions.go) consults before falling back
+// to the wire defaults.
 //
-// Each domain has two maps in its dedicated file:
+// The rule tables themselves live one per domain and are derived from the
+// HA-integration reference (`entity_helpers/descriptions/`), which is the
+// single source of truth for per-device entity-category / enabled-default /
+// icon overrides.
 //
-//   - <domain>RulesByDeviceAndParam — most specific (mirrors
-//     the Python `priority=10` device-overrides).
-//   - <domain>RulesByParam — generic per-parameter rule.
+// A domain has either one table or two, depending on whether its overrides
+// are per-parameter:
+//
+//   - <domain>RulesByDeviceAndParam — most specific (mirrors the Python
+//     `priority=10` device-overrides).
+//   - <domain>RulesByParam — generic per-parameter rule. Domains whose
+//     overrides are device-wide (cover, siren, valve) carry only the first
+//     table, with an empty parameter slot, and route through
+//     [lookupDeviceOnlyRules].
 //
 // Lookup precedence:
 //

@@ -180,7 +180,7 @@ func (a *Assembler) channelLabel() string {
 // It is the model-walking counterpart of [endpoint.Snapshot]: the walk in
 // [Assembler.AssembleDevices] turns it into the flat [endpoint.Spec]
 // values the assembly itself consumes.
-// loom:reachable:reason="constructed per registered central by the daemon snapshotter (cmd/openccu-loom/daemon_matter.go:3358)"
+// loom:reachable:reason="constructed per registered central by matterSnapshotter in cmd/openccu-loom/daemon_matter.go"
 type DeviceSnapshot struct {
 	// CentralName scopes every endpoint produced from Devices to this
 	// central — required for multi-CCU correctness.
@@ -258,9 +258,11 @@ func (a *Assembler) snapshotSpecs(ctx context.Context, snap DeviceSnapshot) (end
 //
 // Exactly one endpoint gets it. A device with a switch and a metering channel
 // has one battery, and advertising it twice would have controllers show two
-// battery levels for one device. The target is the lowest-numbered channel's
-// first endpoint, which is the device's primary function: channel order is the
-// CCU's own, and channelSpecs appends in a stable order within a channel.
+// battery levels for one device. The target is searched for explicitly rather
+// than taken from slice order: the spec with the smallest channel number wins,
+// read back through [specChannelNo], because the lowest-numbered channel is
+// the device's primary function. Ties keep the earliest spec, which is the
+// order channelSpecs appended within that one channel.
 func attachPowerSource(dev *device.Device, specs []endpoint.Spec) {
 	if dev == nil || len(specs) == 0 {
 		return

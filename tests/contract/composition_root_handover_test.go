@@ -58,7 +58,7 @@ var compositionRootSeams = []compositionRootSeam{
 		fillFile: "cmd/openccu-loom/daemon_rest_mount.go",
 		minDecl:  100,
 		notFilled: map[string]string{
-			"WriteTimeout": "NewRouter substitutes 30s for a zero value (internal/north/rest/router.go:595) and no config key exposes it, so the daemon has nothing to pass — leaving it unset selects the default rather than dropping a collaborator",
+			"WriteTimeout": "NewRouter substitutes 30s for a zero value (internal/north/rest/router.go, at the top of NewRouter) and no config key exposes it, so the daemon has nothing to pass — leaving it unset selects the default rather than dropping a collaborator",
 		},
 	},
 	{
