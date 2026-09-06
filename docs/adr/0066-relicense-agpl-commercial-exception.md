@@ -1,5 +1,14 @@
 # ADR 0066 — Relicense to AGPL-3.0-only with a commercial exception
 
+> **Historical paths.** Since 0.74.0 the Matter stack is a dependency, not a
+> subtree: it lives in the [go-fabric](https://github.com/SukramJ/go-fabric)
+> module and `internal/north/matter/` no longer exists in this repository. The
+> paths below are left as they were when the decision was made — a record
+> rewritten to match today's tree stops being a record. For where each piece
+> lives now, see
+> [`SPECIFICATION.md`](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md)
+> §6.
+
 - **Status**: rejected (2026-08-28)
 - **Date**: 2026-08-26
 - **Supersedes**: nothing. [ADR 0001 — License: MIT](./0001-license-mit.md) stands.

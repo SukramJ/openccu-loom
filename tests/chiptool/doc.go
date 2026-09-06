@@ -29,7 +29,7 @@
 // asserting that a write matter.js REJECTS is also rejected by the bridge
 // at the reference-controller level — is covered in-process by the Go
 // behaviour-parity suite (the constraint-rejection table under
-// internal/north/matter/cluster/) but is NOT yet exercised through
+// go-fabric's cluster package) but is NOT yet exercised through
 // chip-tool. When extending this suite, add negative cases that Invoke a
 // constraint-violating command and assert chip-tool reports the matching
 // IM status rather than Status: 0x0 (success):

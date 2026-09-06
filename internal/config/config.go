@@ -1101,8 +1101,8 @@ type NorthMatterCommissioning struct {
 	//
 	// The range is enforced — together with the trivially-guessable
 	// codes the spec forbids — by validateMatter, which asks
-	// internal/north/matter/secure/setup.IsValidSetupPIN so the config
-	// tier and the PASE builder accept exactly the same set.
+	// go-fabric's secure/setup.IsValidSetupPIN so the config tier and
+	// the PASE builder accept exactly the same set.
 	Passcode uint32 `yaml:"passcode" json:"passcode" cfg:"secret"`
 
 	// Salt is the PBKDF2 salt persisted alongside the passcode

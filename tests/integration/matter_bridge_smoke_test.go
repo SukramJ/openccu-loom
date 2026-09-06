@@ -335,8 +335,9 @@ func TestMatterBridgeSmoke_BridgedEndpointDeviceTypes(t *testing.T) {
 		}
 
 		// DeviceTypeList attribute = 0x0000. We verify it is present and
-		// non-nil; the order (primary first, BridgedNode second) is locked
-		// by parity tests in internal/north/matter/endpoint/.
+		// non-nil; the order (primary first, BridgedNode second) is produced
+		// by go-fabric endpoint/materialize.go and locked by the topology
+		// golden in internal/north/matteradapter.
 		dtRaw, ok := desc.MatterRead(0x0000)
 		if !ok {
 			t.Errorf("EP %d: Descriptor.DeviceTypeList returned ok=false", ep.ID)

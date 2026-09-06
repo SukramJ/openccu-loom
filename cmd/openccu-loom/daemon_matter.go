@@ -2059,9 +2059,9 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 			// `RootNodeDt.id = 0x16, revision = 4` (per
 			// `packages/model/src/standard/elements/root-node.element.ts`
 			// in matter.js HEAD). Every root endpoint MUST advertise the
-			// RootNode device type. The schema table in
-			// `internal/north/matter/schema/devicetypes.go` already
-			// carries `0x0016: 4` — older hardcoded `Revision: 3` value
+			// RootNode device type. The schema table in go-fabric's
+			// `schema/devicetypes.go` already carries `0x0016: 4` —
+			// the older hardcoded `Revision: 3` value
 			// here drifted behind matter.js HEAD; Apple Home's HAP
 			// mapper logs `Unable to find HAP service type for
 			// deviceType 22` when an unexpected revision flows through.

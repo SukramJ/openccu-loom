@@ -12,8 +12,9 @@
 // the TLS flag. See ADR 0021 for the design rationale and security
 // trade-off.
 //
-// This package is intentionally separate from the Matter-side
-// `internal/north/matter/mdns/` package — the two consumers have
+// This package is intentionally separate from the Matter-side mDNS
+// advertiser, which lives in the go-fabric module's `mdns` package
+// and keeps its own copy of the interface filter — the two consumers have
 // different lifecycle and tuning requirements (Matter advertises
 // commissioning + operational records with subtype responders;
 // daemon-discovery wants exactly one straightforward service). The

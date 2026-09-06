@@ -39,7 +39,7 @@ const (
 // endpoint's press source.
 //
 // The seam is invisible when it breaks. It is a pair of type
-// assertions in internal/north/matter/bridge/bridge.go — the cluster
+// assertions in go-fabric bridge/bridge.go — the cluster
 // server to [contract.SwitchEventEmitter], the endpoint's
 // measurement source to the bridge's matterSwitchSubscribable. Both
 // are optional capability checks, so a failed assertion is not an

@@ -22,7 +22,7 @@ import (
 // program. That is exactly the failure that hid a bridged dimmer's and
 // thermostat's external changes from Apple Home. The bridge wires a change
 // listener via ep.Source.(interfaces.MatterChangeNotifier)
-// (internal/north/matter/bridge/subscribe.go, wireMeasurementListenersLocked),
+// (go-fabric bridge/subscribe.go, wireMeasurementListenersLocked),
 // so a source that does not implement OnMatterValueChanged is silently
 // skipped.
 //

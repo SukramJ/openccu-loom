@@ -53,7 +53,7 @@ var (
 
 // Matter Device Type IDs and cluster IDs follow the Matter 1.5.1
 // Application Cluster Specification. The OnOff command ids come from
-// internal/north/matter/cluster/wire, which owns the wire contract; the
+// go-fabric's cluster/wire, which owns the wire contract; the
 // device types, cluster ids, LT attribute ids, the LT feature bit and the
 // cluster revisions are declared here next to the projection that
 // advertises them. The OnOff half is pinned against the matter.js
@@ -70,7 +70,7 @@ const (
 	// mandatory on OnOffLight + DimmableLight (matter.js
 	// packages/node/src/devices/on-off-light.ts). Light contributes
 	// them via the shared stubs in
-	// internal/north/matter/cluster/wire/{groups,scenes_management}.go.
+	// go-fabric cluster/wire/{groups,scenes_management}.go.
 
 	matterAttrOnOffOnOff   uint32 = 0x0000
 	matterAttrLevelCurrent uint32 = 0x0000
@@ -126,7 +126,7 @@ const (
 
 	// The six OnOff command IDs are the wire contract, so they are read
 	// from the package that owns it —
-	// internal/north/matter/cluster/wire/onoff.go — instead of being
+	// go-fabric cluster/wire/onoff.go — instead of being
 	// transcribed a second time here. matter.js
 	// packages/model/src/standard/elements/on-off.element.ts marks Off "M",
 	// On and Toggle "!OFFONLY", and the three 0x4x commands "LT": all six
@@ -861,7 +861,7 @@ func extractLevelOptions(fields any) (mask, override uint8) {
 // Step / StepWithOnOff payload. Step has no typed decoder in the bridge,
 // so the real wire path lands here as the tag-keyed map[uint8]any that
 // decodeGenericTagMap produces (unsigned ints as uint64) — see
-// internal/north/matter/bridge/fields_reader.go. The string-keyed shape
+// go-fabric bridge/fields_reader.go. The string-keyed shape
 // is kept for the in-package tests.
 func extractStepSize(fields any) (uint8, error) {
 	switch v := fields.(type) {

@@ -153,8 +153,14 @@ func TestSubsystemPathMapsThePackageTree(t *testing.T) {
 			want: "openccu-loom.client.transport.xmlrpc",
 		},
 		{
-			fn:   "github.com/SukramJ/openccu-loom/internal/north/matter.(*Bridge).Start",
-			want: "openccu-loom.north.matter",
+			// The Matter stack moved to the go-fabric module, so no loom
+			// package derives this subsystem any more. The case stays because
+			// it is about the derivation rule, not about that package — it
+			// pins that a three-segment internal/north/<x> path collapses to
+			// "openccu-loom.north.<x>", which internal/north/matteradapter
+			// below exercises with a package that does exist.
+			fn:   "github.com/SukramJ/openccu-loom/internal/north/matteradapter.(*Assembler).Assemble",
+			want: "openccu-loom.north.matteradapter",
 		},
 		{
 			fn:   "github.com/SukramJ/openccu-loom/pkg/hmlog.BuildFullStack",

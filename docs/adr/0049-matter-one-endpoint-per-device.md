@@ -1,5 +1,14 @@
 # ADR 0049 — Matter exposes one endpoint per physical device by default
 
+> **Historical paths.** Since 0.74.0 the Matter stack is a dependency, not a
+> subtree: it lives in the [go-fabric](https://github.com/SukramJ/go-fabric)
+> module and `internal/north/matter/` no longer exists in this repository. The
+> paths below are left as they were when the decision was made — a record
+> rewritten to match today's tree stops being a record. For where each piece
+> lives now, see
+> [`SPECIFICATION.md`](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md)
+> §6.
+
 - **Status**: Accepted
 - **Date**: 2026-07-10
 - **Related**:
@@ -91,7 +100,11 @@ constituents (and whole secondary channels) unless the flag is set.
 - **One clean Matter endpoint per device by default.** A valve is one OnOff
   endpoint, not four. Power users opt into the full channel fan-out with a
   single expert flag; the flag is plumbed through
-  `bridge.Config` → `endpoint.Config` and `eligibility.CollectCandidates`.
+  `bridge.Config` → `endpoint.Config` and
+  `internal/north/matteradapter.CollectCandidates`. (The Matter stack moved to
+  the go-fabric module, and the candidate walk stayed here: there is no
+  `eligibility.CollectCandidates` in either repository, which is what this line
+  used to name.)
 - **`ce_state` has no Python-reference equivalent.** aiohomematic's model has
   no such usage, so the cross-stack model-parity snapshot would flag every
   group-STATE DP as drift. `script/model_snapshot_diff.py` canonicalises

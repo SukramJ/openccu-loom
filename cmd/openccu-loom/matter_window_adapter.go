@@ -20,10 +20,10 @@ import (
 // expects [handlers.MatterCommissioningWindowResult]).
 //
 // The two result types are structurally identical; this adapter
-// keeps the import directions clean — `internal/north/matter/bridge`
-// must not import `internal/north/rest/handlers` (that would be a
-// cycle, and conceptually the bridge has no business knowing about
-// REST).
+// keeps the import directions clean — the bridge lives in the separate
+// github.com/SukramJ/go-fabric module, which cannot import
+// `internal/north/rest/handlers` at all, and conceptually it has no
+// business knowing about REST.
 //
 // The adapter additionally drives the `_matterc._udp` mDNS publish
 // lifecycle: a successful open emits the commissionable record

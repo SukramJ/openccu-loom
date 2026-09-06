@@ -14,7 +14,7 @@ import (
 // exact payload shape the bridge's commandFieldsReader produces for a
 // command with no typed decoder: a context-tag-keyed map[uint8]any whose
 // unsigned integer values land as uint64 (see decodeGenericTagMap in
-// internal/north/matter/bridge/fields_reader.go). Tag 0 is
+// go-fabric bridge/fields_reader.go). Tag 0 is
 // LiftPercent100thsValue. The prior extractor only accepted a bare
 // uint16 or a string-keyed map, so every real Apple/Google
 // "blind to N %" reached the server as an error.

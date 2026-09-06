@@ -145,7 +145,7 @@ func TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType(t *testing.T) {
 		if name == fmt.Sprintf("0x%04X", src.id) {
 			t.Errorf("MatterDeviceTypeName(0x%04X) falls through to the hex fallback, but %s advertises that "+
 				"device type; the SPA then groups and searches the exposure row under the raw hex string. "+
-				"matter.js HEAD names it %q (internal/north/matter/schema/devicetypes.go)",
+				"matter.js HEAD names it %q (go-fabric schema/devicetypes.go)",
 				src.id, src.from, schema.DeviceTypeNames[uint32(src.id)])
 			continue
 		}

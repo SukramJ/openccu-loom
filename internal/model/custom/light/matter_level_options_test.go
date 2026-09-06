@@ -175,7 +175,7 @@ func TestLevelInvokeMoveToLevelWithOnOffMinLevelTurnsOff(t *testing.T) {
 
 // TestLevelInvokeStepDownFloorsAtMinLevelNotOff drives Step (0x02) with the
 // tag-keyed map[uint8]any shape decodeGenericTagMap produces on the real
-// wire path (see internal/north/matter/bridge/fields_reader.go), rather
+// wire path (see go-fabric bridge/fields_reader.go), rather
 // than the string-keyed in-package shape. A plain Step can never turn the
 // device off — the target clamps to MinLevel (1), mirroring matter.js
 // Transitions.ts:139's min/max property clamp.

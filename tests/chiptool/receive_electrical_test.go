@@ -23,8 +23,8 @@ import (
 // cross-channel onto the switch host endpoint; the endpoint's OnOff notifier
 // only marks its own cluster, so the ElectricalPowerServer forwards the POWER
 // sensor's own notifier and the bridge wires it to the ActivePower reportable
-// path (internal/north/matter/cluster/measurement/measurement.go +
-// internal/north/matter/bridge/subscribe.go wireMeasurementListenersLocked).
+// path (go-fabric cluster/measurement/measurement.go +
+// go-fabric bridge/subscribe.go wireMeasurementListenersLocked).
 func TestReceive_ElectricalPowerMeasurement(t *testing.T) {
 	b := requireBridge(t)
 	eps := discoverEndpointsWith(t, b, 0x0090, 0)

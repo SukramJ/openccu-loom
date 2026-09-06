@@ -22,8 +22,8 @@ import (
 // therefore present a Device Attestation chain (DAC → PAI → PAA)
 // that chip-tool's compiled-in trust store accepts.
 //
-// openccu-loom embeds the official CSA Test PAA by default (see
-// internal/north/matter/secure/attestation/testpaa.go); chip-tool's
+// The bridge embeds the official CSA Test PAA by default (see
+// go-fabric secure/attestation/testpaa.go); chip-tool's
 // reference build ships the matching PAA root in its trust store, so
 // the validation completes without operator-supplied attestation
 // material. Production deployments swap the chain via

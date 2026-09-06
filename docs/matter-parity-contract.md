@@ -8,19 +8,30 @@
     [Matter Ecosystem Observations](developer/matter-ecosystem-observations.md).
 
 OpenCCU-Loom's Matter side is a deliberate, behaviour-level port of
-[matter.js](https://github.com/matter-js/matter.js) HEAD. This page
-defines what "parity" means in practice and which standing guards keep
-the port honest, so that a change which merely *looks* right but drifts
-from the gold standard cannot land unnoticed.
+[matter.js](https://github.com/matter-js/matter.js) HEAD. The Matter stack
+itself is no longer part of this repository: the wire format — TLV codec,
+Interaction Model, PASE / CASE, MRP, DNS-SD, the cluster servers and the
+endpoint assembler — lives in the
+[go-fabric](https://github.com/SukramJ/go-fabric) module, which this daemon
+embeds. What stays here is the host side: the model walk in
+`internal/north/matteradapter/`, the endpoint store in
+`internal/store/matterendpoint/`, and the per-device projections under
+`internal/model/custom/<dp>/matter.go`. This page defines what "parity" means
+in practice and which standing guards keep the port honest, so that a change
+which merely *looks* right but drifts from the gold standard cannot land
+unnoticed.
 
 **Audience:** every contributor and AI agent that touches Matter-side code in
-OpenCCU-Loom. This is a standing contract, not an audit you run once. Read it
-before your first Matter change and treat it as binding.
+OpenCCU-Loom or in go-fabric. This is a standing contract, not an audit you run
+once. Read it before your first Matter change and treat it as binding.
 
-It complements the [`matter.js as the Matter Gold Standard`](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md#matterjs-as-the-matter-gold-standard)
-section of `CLAUDE.md`: that section tells you matter.js HEAD is the gold
-standard; this document tells you what *parity* means, why **behaviour** parity
-(not just schema parity) is the bar, and which standing guards enforce it.
+It complements the [`matter.js HEAD is the Matter gold standard`](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md#matterjs-head-is-the-matter-gold-standard)
+section of this repository's `CLAUDE.md` and the fuller
+[`matter.js is the gold standard`](https://github.com/SukramJ/go-fabric/blob/main/CLAUDE.md#matterjs-is-the-gold-standard)
+section of go-fabric's: those tell you matter.js HEAD is the gold standard and
+how to regenerate the schema; this document tells you what *parity* means, why
+**behaviour** parity (not just schema parity) is the bar, and which standing
+guards enforce it.
 
 ---
 
@@ -107,10 +118,10 @@ them with every change:
 | Guard | Location | Locks |
 | --- | --- | --- |
 | **Schema parity** | the `*parity_matterjs_test.go` files in the go-fabric module (extract + generator live there); this repo pins the same bytes at `notes/parity/matter/matter-schema-snapshot.json`, held by `TestMatterSchemaSnapshotInSync` and refreshed with `make sync-matter-schema` | cluster / device-type IDs, revisions, attribute / command / event IDs vs matter.js HEAD |
-| **Behavioural negative-write parity** | `internal/north/matter/cluster/matter_negative_write_parity_test.go` | a write/invoke matter.js *rejects* is rejected by Loom with the matching IM status (ConstraintError 0x87 / InvalidCommand 0x85), plus boundary positive controls against over-rejection. Add one row per new constraint. |
-| **Wire-codec parity** | `internal/north/matter/tlv/parity_matterjs_test.go`; fixtures `notes/parity/matter/tlv-wire-fixtures.json` | byte-level TLV / IM shape |
+| **Behavioural negative-write parity** | go-fabric [`cluster/matter_negative_write_parity_test.go`](https://github.com/SukramJ/go-fabric/blob/main/cluster/matter_negative_write_parity_test.go) | a write/invoke matter.js *rejects* is rejected with the matching IM status (ConstraintError 0x87 / InvalidCommand 0x85), plus boundary positive controls against over-rejection. Add one row per new constraint. |
+| **Wire-codec parity** | go-fabric [`tlv/parity_matterjs_test.go`](https://github.com/SukramJ/go-fabric/blob/main/tlv/parity_matterjs_test.go) and [`im/wire_fixtures_parity_test.go`](https://github.com/SukramJ/go-fabric/blob/main/im/wire_fixtures_parity_test.go), each embedding its own `testdata/` copy of the fixtures; the generators and the pinned originals stay here at `notes/parity/matter/{tlv,im}-wire-fixtures.json` | byte-level TLV / IM shape |
 | **Wiring-capability pins** | `tests/contract/wiring_pins/dormant_capability_wiring_test.go` | every capability gate / setter is actually wired on the production path — fails the build the moment a wiring is removed, even though the capability keeps passing its own unit test (the "implemented but never wired" bug class) |
-| **Reference-controller validation** | `tests/chiptool/` (`//go:build chiptool`), `internal/north/matter/conformance/` | end-to-end behaviour against the real `chip-tool` commissioner |
+| **Reference-controller validation** | `tests/chiptool/` (`//go:build chiptool`) here; go-fabric [`conformance/`](https://github.com/SukramJ/go-fabric/tree/main/conformance) | end-to-end behaviour against the real `chip-tool` commissioner |
 | **Divergence catalogue** | [`notes/parity/by_design.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md) | every intentional deviation, with rationale |
 
 When a parity sweep is genuinely warranted, prefer extending these guards over

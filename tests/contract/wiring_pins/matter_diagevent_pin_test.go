@@ -35,7 +35,7 @@ func TestABridgeWithoutARingStillServesAnEmptyTrace(t *testing.T) {
 //
 // That the Bridge type itself forwards an attached ring's contents to
 // DiagnosticEvents() is proven directly against the real constructor in
-// internal/north/matter/bridge/bridge_diagnostic_events_test.go
+// go-fabric's bridge/bridge_diagnostic_events_test.go
 // (TestDiagnosticRingAttachIsSafeWhileTheReceivePathRecords) — building
 // a bare &bridge.Bridge{} and calling the setter on it here would only
 // re-prove that same fact and never touch the composition root, which

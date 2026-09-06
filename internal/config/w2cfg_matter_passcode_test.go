@@ -15,8 +15,8 @@ import "testing"
 // logged one warning — a bridge that advertises, accepts no pairing, and
 // says nothing on the surface the operator used.
 //
-// The legal set is chip's IsValidSetupPIN (mirrored in
-// internal/north/matter/secure/setup), not a range re-derived here.
+// The legal set is chip's IsValidSetupPIN (mirrored in go-fabric's
+// secure/setup), not a range re-derived here.
 func TestW2CfgValidateRejectsAnUnusableMatterPasscode(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

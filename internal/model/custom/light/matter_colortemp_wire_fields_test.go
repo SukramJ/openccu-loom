@@ -17,7 +17,7 @@ import (
 // (a ColorTempLight's ColorControl server) with the real wire shape the
 // bridge's fields reader produces for MoveToColorTemperature (0x0A): this
 // command HAS a typed decoder (decodeMoveToColorTemperatureFields in
-// internal/north/matter/bridge/fields_reader.go), so the payload arrives
+// go-fabric bridge/fields_reader.go), so the payload arrives
 // as wire.MoveToColorTemperatureRequest, not a map. 370 mireds ≈ 2700 K.
 // colorStubWriter (not the float64-only stubWriter) is required here
 // because SetKelvin writes an int32, not a float64.
@@ -45,7 +45,7 @@ func TestColorTempMoveToColorTemperatureTypedWireShape(t *testing.T) {
 // TestColorTempMoveToColorTemperatureGenericTagMapWireShape covers the
 // generic-decode fallback: a command-tag-keyed map[uint8]any whose
 // unsigned integer values land as uint64 (see decodeGenericTagMap in
-// internal/north/matter/bridge/fields_reader.go). Tag 0 is
+// go-fabric bridge/fields_reader.go). Tag 0 is
 // ColorTemperatureMireds. The prior extractor only accepted a typed
 // request, bare uint16, or string-keyed map, so a generic-decode path
 // (e.g. an unrecognised sub-shape) would have failed here.

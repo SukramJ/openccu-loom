@@ -295,8 +295,8 @@ func (c *Controller) PairFullWithPasscode(ctx context.Context, t *testing.T, add
 // verifier` flag is omitted, so chip-tool walks the DAC → PAI → PAA
 // chain and validates the CD against its compiled-in trust store.
 // The bridge must present a chain rooted in a PAA chip-tool already
-// trusts (openccu-loom embeds the official CSA Test PAA by default;
-// see internal/north/matter/secure/attestation/testpaa.go).
+// trusts (the bridge embeds the official CSA Test PAA by default;
+// see go-fabric secure/attestation/testpaa.go).
 func (c *Controller) PairFullVerifyAttestation(ctx context.Context, t *testing.T, addr string, port int) (string, error) {
 	t.Helper()
 	return c.Run(

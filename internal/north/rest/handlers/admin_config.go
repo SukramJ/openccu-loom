@@ -90,9 +90,9 @@ var consumerDefaults = map[string]any{
 	// fallback" inside the middleware.
 	"north.rest.rate_limit.requests_per_second": 10,
 	"north.rest.rate_limit.burst":               30,
-	// Matter — see internal/north/matter/* defaults. Zero values
-	// are misleading because the bridge layers fall back to the
-	// IANA test-vendor block and well-known commissioning codes
+	// Matter — see NorthMatter.WithDefaults in internal/config/config.go.
+	// Zero values are misleading because the bridge layers fall back to
+	// the IANA test-vendor block and well-known commissioning codes
 	// at runtime.
 	"north.matter.listen":                   ":5540",
 	"north.matter.vendor_id":                0xFFF1,
