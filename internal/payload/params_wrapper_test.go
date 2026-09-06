@@ -5,6 +5,8 @@ package payload
 
 import (
 	"errors"
+	"math"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -157,7 +159,19 @@ func TestParamInt32Types(t *testing.T) {
 }
 
 func TestParamInt32OverflowInt(t *testing.T) {
-	_, err := ParamInt32(map[string]any{"k": int(1 << 32)}, "k")
+	// The value is built at run time rather than written as a constant. As
+	// `int(1 << 32)` it does not compile where int is 32 bits wide — a test
+	// asserting that an oversized int is rejected, which itself could not be
+	// compiled for the platform whose int width is the whole point. That is
+	// not hypothetical: this project ships an armv7 binary, and this line was
+	// the only thing standing between the module and a 32-bit `go vet`.
+	if strconv.IntSize == 32 {
+		t.Skip("int is 32 bits here, so no int value exceeds int32 and the case under test cannot arise")
+	}
+	tooBig := int(math.MaxInt32)
+	tooBig++
+
+	_, err := ParamInt32(map[string]any{"k": tooBig}, "k")
 	if !errors.Is(err, ErrServiceInvalidParam) {
 		t.Fatalf("want ErrServiceInvalidParam for overflow int, got %v", err)
 	}

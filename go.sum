@@ -1,7 +1,7 @@
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
-github.com/SukramJ/go-fabric v0.0.0-20260906015129-c700b26365b4 h1:OtRfKIIixiWqQPXRkqKQnxy7aLLBLHDCkvNkcZebeZM=
-github.com/SukramJ/go-fabric v0.0.0-20260906015129-c700b26365b4/go.mod h1:M9xzANh5b2rw/8xdomUt8L1+BK4nMeztijNmsvkwR6s=
+github.com/SukramJ/go-fabric v0.0.0-20260906041509-4a8409b2d810 h1:tVyLa+BPJYY/5Ik8Iy/UaagT44Gt0jdhElnBm/sg+48=
+github.com/SukramJ/go-fabric v0.0.0-20260906041509-4a8409b2d810/go.mod h1:M9xzANh5b2rw/8xdomUt8L1+BK4nMeztijNmsvkwR6s=
 github.com/SukramJ/go-mqtt v1.3.0 h1:kCL4oWtxNFIRKd9GrxlsWOn6C6O/QXzBXwUntkG45MY=
 github.com/SukramJ/go-mqtt v1.3.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
 github.com/SukramJ/go-openccu-data v0.1.3 h1:5nhTomKWT7rp2zFkT1GLpkhhf+fKQfmhRSsUnqOS4cE=

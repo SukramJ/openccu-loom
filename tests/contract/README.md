@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 457.
+Guards without a doc comment: 7 of 459.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -54,6 +54,8 @@ Guards without a doc comment: 7 of 457.
 | TestCentralLinksVirtualRemoteReasonNamesTheModel | central_links_eligibility_test.go | TestCentralLinksVirtualRemoteReasonNamesTheModel pins the operator-visible reason token. |
 | TestChannelAddressBuildersAreRecorded | channel_address_builder_test.go | TestChannelAddressBuildersAreRecorded fails when a file grows a new hand-rolled "<device>:<ordinal>" concatenation. |
 | TestChannelOrdinalParsersDelegateToHmtypes | channel_ordinal_parser_test.go | TestChannelOrdinalParsersDelegateToHmtypes fails when a file grows its own "<something>:<number>" scanner. |
+| TestChiptoolPathFilterClassifiesFilesCorrectly | chiptool_path_filter_test.go | TestChiptoolPathFilterClassifiesFilesCorrectly is the behaviour half: the patterns must fire for files that can change what a commissioner sees, and stay quiet for files that cannot. |
+| TestChiptoolPathFilterPatternsAddressSomethingReal | chiptool_path_filter_test.go | TestChiptoolPathFilterPatternsAddressSomethingReal is the rot half. |
 | TestEveryTeardownCloserIsInvokedByATest | closer_return_path_test.go | TestEveryTeardownCloserIsInvokedByATest asserts, for each reviewed seam, that at least one of its test files invokes the closer the seam hands back. |
 | TestCompositionRootHandsOverEveryDeclaredField | composition_root_handover_test.go | TestCompositionRootHandsOverEveryDeclaredField pins that for each covered seam, the set the struct declares and the set the composition root fills are the same set. |
 | TestConfigFieldsHaveLabelsAndHelp | config_field_labels_test.go | TestConfigFieldsHaveLabelsAndHelp enforces the SPA contract: every config field the section editor can render (one per cfg-tagged leaf, the same list ClassifyFields feeds GET /api/v1/config/schema) MUST carry an explicit label AND an inline-help description in BOTH locales — i.e. |

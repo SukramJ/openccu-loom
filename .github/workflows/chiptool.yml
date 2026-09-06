@@ -29,8 +29,14 @@ name: chiptool
 # amd64 runner cannot pull it and QEMU emulation is too slow for the
 # PASE crypto handshake.
 #
-# Not a per-PR gate: chip-tool runs are slow (the Go suite alone
-# budgets up to 10 min). Nightly + `needs-chiptool` label + manual.
+# Not a blanket per-PR gate: chip-tool runs are slow (the Go suite alone
+# budgets up to 10 min). It runs nightly, on `workflow_dispatch`, on the
+# `needs-chiptool` label -- and, since a label is a thing a human has to
+# remember, automatically whenever a pull request touches code the suite
+# actually covers. The `changes` job below decides that; its path list is
+# the answer to "what could break commissioning", and it deliberately
+# includes go.mod, because the Matter stack lives in the go-fabric module
+# now and a bump moves wire behaviour without touching a single file here.
 
 on:
   schedule:
@@ -53,12 +59,64 @@ env:
   GO_VERSION: "1.26.6"
 
 jobs:
+  # Decides whether this pull request touches anything the chip-tool suite
+  # covers. Kept as a shell diff rather than a third-party paths-filter
+  # action: the list is short, the logic is four lines, and a pinned action
+  # would be one more supply-chain edge for a boolean.
+  #
+  # Non-pull_request events (schedule, workflow_dispatch) short-circuit to
+  # false -- they already run everything through the conditions below, and
+  # asking about a diff there would compare unrelated commits.
+  changes:
+    name: matter paths touched
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matter: ${{ steps.filter.outputs.matter }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "matter=false" >> "$GITHUB_OUTPUT"
+            echo "not a pull request -- the event's own condition decides"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+          # One pattern per reason. A file that can change what a
+          # commissioner sees belongs here; a file that cannot, does not.
+          if echo "$changed" | grep -Eq \
+            -e '^internal/north/matteradapter/' \
+            -e '^internal/store/matterendpoint/' \
+            -e '^internal/model/.*matter.*\.go$' \
+            -e '^cmd/openccu-loom/(daemon_)?matter.*\.go$' \
+            -e '^tests/chiptool/' \
+            -e '^compose/matter-smoke\.yml$' \
+            -e '^\.github/workflows/chiptool\.yml$' \
+            -e '^go\.(mod|sum)$'; then
+            echo "matter=true" >> "$GITHUB_OUTPUT"
+            echo "-> chip-tool suite runs without a label"
+          else
+            echo "matter=false" >> "$GITHUB_OUTPUT"
+            echo "-> chip-tool suite runs only if labelled"
+          fi
+
   chiptool:
     name: chip-tool capability suite
+    needs: changes
     if: |
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
+      contains(github.event.pull_request.labels.*.name, 'needs-chiptool') ||
+      needs.changes.outputs.matter == 'true' 
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -142,10 +200,12 @@ jobs:
 
   chiptool-control:
     name: chip-tool control leg (CHIP app, no bridge)
+    needs: changes
     if: |
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
+      contains(github.event.pull_request.labels.*.name, 'needs-chiptool') ||
+      needs.changes.outputs.matter == 'true' 
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     steps:
@@ -281,10 +341,12 @@ jobs:
 
   matter-smoke:
     name: matter-smoke (compose PASE)
+    needs: changes
     if: |
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
+      contains(github.event.pull_request.labels.*.name, 'needs-chiptool') ||
+      needs.changes.outputs.matter == 'true' 
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:

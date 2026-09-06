@@ -6,35 +6,52 @@ pinned here. The authoritative Matter revision is whatever
 (`revision`, `specificationVersion`, `sourceCommit`) — it moves with every
 `make sync-matter-schema`, so a number written into this page goes stale
 within a release. At the time of writing the snapshot pins revision 1.6.0.
-**Related:** 
 **Related:** [ADR 0012](../../docs/adr/0012-matter-pure-go-implementation.md),
 [go-fabric `conformance`](https://github.com/SukramJ/go-fabric/tree/main/conformance)
 
-This document collects the tests the v1.1 Matter bridge has to pass
-before every release. It mixes automated Go tests with manual smoke
-runs against real controller hardware.
+This document collects the tests that exercise the v1.1 Matter bridge:
+automated Go tests plus manual smoke runs against real controller
+hardware. Sections 1 and 2 describe what CI actually runs and when;
+section 3 is a manual checklist that no release currently gates on.
+Where a test is a gate, the section says which workflow enforces it.
 
 ---
 
 ## 1. Automated tests (CI)
 
-### 1.1 Unit + round-trip (every PR)
+The Matter stack is no longer part of this repository: it lives in the
+[go-fabric](https://github.com/SukramJ/go-fabric) module, and its tests run in
+that module's CI, not this one. The commands below say which repository each
+one belongs to, because running them here finds nothing — `internal/north/matter/`
+has not existed since the extraction, and a command naming it is not a test
+that is failing, it is a test that is absent.
 
-`go test ./internal/north/matter/...` — every unit test written in
-phases 1–9. ~700 tests today, `-race` clean.
+What stayed here is the host side: the model walk that turns CCU devices into
+endpoints (`internal/north/matteradapter/`, 17 test files), the per-device
+projections under `internal/model/`, and the chip-tool suite in
+`tests/chiptool/`. Those run in this repository's `test` job on every pull
+request, and section 2 covers the chip-tool layer separately because it is
+gated differently.
 
-### 1.2 Golden-vector conformance (every PR)
+### 1.1 Unit + round-trip (every PR, go-fabric)
 
-`go test ./internal/north/matter/conformance/... -run Vectors` — pinned
-wire bytes for the TLV codec and the application-cluster wire codecs.
-Drift in encoder ordering or decoder tolerance fails the test.
+`make race` in go-fabric — `go test -race -count=1 ./...` over the whole
+module. There is no Matter-only invocation because the module is Matter.
 
-### 1.3 Load tests (nightly)
+### 1.2 Golden-vector conformance (every PR, go-fabric)
 
-`go test ./internal/north/matter/conformance/... -run Load -timeout 5m`
-— drives the subscription manager at 600 endpoints (200 × 3
-channels). Failure modes: linearity drift in `OnAttributeChanged` /
-`Tick` sweep or mutex hot-spotting.
+`go test ./conformance/ -run TestTLVCoreVectors` in go-fabric — pinned wire
+bytes for the TLV codec. It carries no build tag, so it also runs as part of
+1.1; naming it separately is for the reader who wants to run just this one.
+Drift in encoder ordering or decoder tolerance fails it.
+
+### 1.3 Subscription fan-out under load (every PR, go-fabric)
+
+`go test ./conformance/ -run TestLoadSubscriptionFanout` in go-fabric. It
+carries no build tag either, so it runs on every pull request rather than
+nightly — the "nightly" this section used to claim was never configured
+anywhere. Failure modes: linearity drift in the attribute-change sweep, or
+mutex hot-spotting.
 
 ---
 
@@ -51,17 +68,53 @@ Prerequisites:
 - Operator has set `passcode=20202021`, `discriminator=3840` in the
   bridge config.
 
-The test is a ship blocker: no green chip-tool pairing run, no
-release. CI runs it on a Linux runner with multicast permission;
-locally a developer can skip it because the `LookPath` check makes
-chip-tool optional.
+**The suite is not a release gate.** `.github/workflows/chiptool.yml`
+runs its three jobs — `chip-tool capability suite`,
+`chip-tool control leg (CHIP app, no bridge)` and
+`matter-smoke (compose PASE)` — nightly (`cron: "47 3 * * *"`), on
+`workflow_dispatch`, on the `needs-chiptool` pull-request label, and
+automatically on any pull request whose diff matches the path list in
+that workflow's `changes` job (the matteradapter, the endpoint store,
+`*matter*.go` model and daemon files, `tests/chiptool/`, the compose
+smoke file, the workflow itself, and `go.mod` / `go.sum`).
+
+Nothing makes a release depend on it. `release.yml` is the only
+tag-triggered workflow (`on: push: tags: ["v*"]`); its jobs are
+`goreleaser` and `notify-client-repo`, and neither references chip-tool
+or waits on the chiptool workflow. No other workflow references it
+either. The release procedure's own gate is
+`make lint && make test && make contract`, which does not build the
+`chiptool` tag. So a tag can be pushed and a release published while the
+last chip-tool run is red or has never run for that commit.
+
+One thing this page cannot settle from the repository: whether a
+chiptool job is configured as a **required status check** in GitHub
+branch protection. That setting lives in repository configuration, not
+in `.github/`, and was not queried. It would gate *merging a pull
+request*, never *publishing a tag* — so even a required check there
+would not make the sentence above wrong.
+
+Locally a developer can skip the suite because the `LookPath` check
+makes chip-tool optional (`tests/chiptool/harness/skip.go`);
+`OPENCCU_LOOM_CHIPTOOL_BIN` pins the binary in CI so the job cannot
+pass by skipping.
 
 ---
 
 ## 3. Manual smoke tests (release checklist)
 
-These tests run on release day against real controller hardware. Each
-entry is recorded in `CHANGELOG.md` as `[manually verified]`.
+This is a checklist to work through against real controller hardware —
+not a record of anything that has happened. **No release has recorded a
+result of it.** `CHANGELOG.md` holds 191 release sections (`^## \[`) and
+zero occurrences of `manually verified`; a grep for equivalent markers
+(`verified`, `smoke`, the controller names) returns only prose about
+code changes, never a per-release verification stamp. There is likewise
+no manual-verification step in the release procedure, whose gate is
+`make lint && make test && make contract`.
+
+Treat the runs below as optional hardware checks a maintainer may
+perform. If one is performed and its outcome is meant to be durable, it
+has to be written down somewhere — nothing currently writes it down.
 
 ### 3.1 Home Assistant Matter Server
 

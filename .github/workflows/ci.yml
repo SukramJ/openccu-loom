@@ -335,6 +335,96 @@ jobs:
       - name: smoke
         run: ./bin/openccu-loom version
 
+  # .goreleaser.yaml ships linux/arm GOARM=7, and the CCU/OpenCCU add-on
+  # bundle (script/build_ccu_addon.sh) carries that binary — but every other
+  # leg in this pipeline runs on a 64-bit runner, so the shipped 32-bit
+  # artefact had no compile guard of any kind. 32-bit is where int-width
+  # assumptions, unaligned access and time arithmetic overflow surface, and
+  # none of that was exercised anywhere.
+  #
+  # Compile-only, and blocking on every pull request. Three decisions, each
+  # with its reason:
+  #
+  # 1. Compile, not test. Not primarily a cost argument: the test tree does
+  #    not cross-compile for GOARCH=arm at all today. `go vet` with the arm
+  #    target reports exactly one error across the module —
+  #    internal/payload/params_wrapper_test.go: "constant 4294967296
+  #    overflows int" — because that test writes int(1 << 32) to feed
+  #    ParamInt32 an out-of-range value, and on a 32-bit target that constant
+  #    does not fit in an int in the first place. It is a test about integer
+  #    width that is itself width-unsafe. Nothing under cmd/, internal/ or
+  #    pkg/ is affected, so the shipped binary was never broken by it. Once
+  #    that one constant is written width-safely, extend this job with
+  #    `go vet ./...` under the same environment: vet type-checks test files,
+  #    so it guards test code too, at roughly build cost. Running the suite
+  #    under qemu-user is the step after that, and needs its own timeout —
+  #    the emulation multiplier has not been measured here, and the Linux
+  #    race leg already had to be split across four shards to stay tolerable,
+  #    so assume it is a nightly job rather than a PR gate.
+  #
+  # 2. Every package, not a width-sensitive subset. A hand-kept list of
+  #    "packages where width matters" is a list that drifts, and an int
+  #    overflow can appear in any package that does byte-length maths or
+  #    packs an ID. `./...` needs no maintenance and costs little: a cold
+  #    cross-compile of the whole module measured ~21 s on a developer
+  #    machine, and this job pays no test, race or coverage tax.
+  #
+  # 3. Blocking, not nightly. This is the exact artefact that ships, unlike
+  #    the Windows leg in nightly.yml, which guards a target that is not
+  #    released. A break here reaches users; catching it a day later on main
+  #    is strictly worse than catching it on the pull request that caused it.
+  #
+  # CGO_ENABLED=0 comes from the workflow env above and is what makes the
+  # cross-compile work without a toolchain.
+  build-armv7:
+    name: build (linux/armv7 cross-compile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The target lives on the JOB, not on each step. With a copy per step, the
+    # negative control below carries its own GOARCH and stays green when the
+    # gate step loses one — it would validate itself rather than the step it
+    # exists to guard. One definition means a dropped or misspelled variable
+    # breaks both, which is what makes the control a control.
+    env:
+      GOOS: linux
+      GOARCH: arm
+      GOARM: "7"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: cross-compile every package for linux/armv7
+        run: go build ./...
+      # go vet type-checks the _test.go files too, which `go build` does not,
+      # and that is where the only width defect in this module actually was:
+      # a test asserting an oversized int is rejected, written as a constant
+      # that cannot be compiled where int is 32 bits. It cost roughly a build
+      # to add and covers the half of the tree the step above cannot see.
+      - name: vet every package for linux/armv7
+        run: go vet ./...
+      # Negative control for the job itself. A misspelled or dropped GOARCH
+      # would leave `go build` compiling happily for amd64 and this job would
+      # report green while guarding nothing, which is the failure mode a
+      # cross-compile gate is most prone to. Linking the two shipped binaries
+      # and asserting the ELF header says 32-bit ARM makes the check produce a
+      # different result when the cause is absent.
+      - name: shipped binaries are 32-bit ARM
+        run: |
+          set -euo pipefail
+          go build -o /tmp/armv7/ ./cmd/openccu-loom ./cmd/hmcli
+          rc=0
+          for bin in /tmp/armv7/openccu-loom /tmp/armv7/hmcli; do
+            desc=$(file -b "$bin")
+            echo "$bin: $desc"
+            case "$desc" in
+              *"ELF 32-bit"*ARM*) ;;
+              *) echo "::error::$bin is not a 32-bit ARM binary: $desc"; rc=1 ;;
+            esac
+          done
+          exit "$rc"
+
   contract:
     name: contract
     runs-on: ubuntu-latest

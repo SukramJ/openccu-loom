@@ -137,7 +137,7 @@ Each deferral has a corresponding entry in `asks.md`:
 | **G2** — `GET /config` exposes optional-settings / program-markers / sysvar-markers | Configuration surface enrichment. |
 | **H1** — streaming `/snapshot` (NDJSON or cursor pagination) | Replaces a self-DoS endpoint; touches handler + serialiser. |
 | **H2** — structured `GET /diagnostics` JSON view | Schema design decision, but the tendency (see asks.md) is in favour. |
-| **Matter broadcast payload schemas** | The 6 Matter broadcasts in wsapi.json carry no `payload` reference yet; openapi.yaml schemas are TBD pending Matter-surface stabilisation. |
+| ~~**Matter broadcast payload schemas**~~ — resolved | All six Matter broadcasts in `wsapi.json` now name a `payload` schema, and each of the six is defined in `openapi.yaml`: `MatterExposureUpdate`, `MatterCommissioningWindowResponse`, `MatterCommissioningProgressPayload`, `MatterFabric`, `MatterFabricRemovedPayload`, `MatterEndpointAssembledPayload`. The row is kept struck through rather than deleted, because a deferral that vanishes reads as one that was never made. |
 
 The deferrals are catalogued so that future maintainers (and the
 client SDK author) can see the open items at a glance without

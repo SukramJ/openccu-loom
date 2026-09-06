@@ -561,11 +561,50 @@ an empty generated subclass, so the substance held.
 | **P4.6** | Coverage floor + benchmarks for the subtree | `script/coverage_per_package.sh` names **no** `internal/north/matter/*` package and sets `FLOOR=0` for anything unlisted (`:94`); `grep -rn Benchmark internal/north/matter/` → **no match**. Note the subtree is heavily tested in absolute terms (301 test files, 95,771 test LOC vs 52,061 non-test) — this is a missing ratchet, not missing tests | M | — | P2.2 |
 | **P4.7** | Fix the two evidence-chain claims | Either start recording the manual controller runs in `CHANGELOG.md`, or delete the claims at `notes/reference/matter-conformance.md:54-55` and `:63-64` (§3.4) | S | — | — |
 | **P4.8** | Matter-specific threat model | A `notes/audits/matter-threat-model.md` exists covering PASE passcode brute-force budget, fail-safe abuse, fabric isolation and group-key handling, and each of the 16 `//nolint` directives under `internal/north/matter/secure/` carries a one-line justification a reviewer signed off. Context: `docs/SECURITY.md` is daemon-scoped (Matter is one asset row at `:20`, one danger note at `:71-72`), there is no root `SECURITY.md`, no crypto review among the 19 files under `notes/audits/`, CodeQL is explicitly non-blocking (`.github/workflows/codeql.yml:4-6`), and 130 `//nolint` sit in non-test Matter code | M | — | P2.1 |
-| **P4.9** | Go-module API-stability + deprecation policy | The 6 Matter WS broadcasts in `assets/wsapi.json` carry `payload` schema references (today recorded TBD *"pending Matter-surface stabilisation"*, `docs/adr/0020:140`), and a named deprecation window appears in the module README. Context: the **REST** surface is already pinned (`tests/contract/testdata/api_surface.json` + `TestAPISurfaceChangesCarryTheRightBump`, `tests/contract/api_surface_bump_test.go:91`, against `internal/north/rest/handlers/info.go:13-19`); ADR 0050:61-75 has the right shape but is scoped to `go-mqtt` | S | D14 ✓ — own SemVer lane | P2.1 |
+| **P4.9** | Go-module API-stability + deprecation policy | ~~The 6 Matter WS broadcasts in `assets/wsapi.json` carry `payload` schema references~~ — **done before this milestone was taken up**: all six name a schema and all six are defined in `openapi.yaml`; ADR 0020's deferral row is struck through. What remained, and is now done, is the module-side half: go-fabric states which packages are public, how a deprecation is marked and how long the window is, with two guards holding the policy to its word, and a named deprecation window appears in the module README. Context: the **REST** surface is already pinned (`tests/contract/testdata/api_surface.json` + `TestAPISurfaceChangesCarryTheRightBump`, `tests/contract/api_surface_bump_test.go:91`, against `internal/north/rest/handlers/info.go:13-19`); ADR 0050:61-75 has the right shape but is scoped to `go-mqtt` | S | D14 ✓ — own SemVer lane | P2.1 |
 | **P4.10** | Widen the CI matrix + add an upstream-freshness signal | The CI matrix builds and tests on at least one 32-bit GOARCH covering the shipped `goarm: ["7"]` target (`.goreleaser.yaml:29-31`), and a scheduled job fails when `git -C ../matter.js rev-list --count <sourceCommit>..HEAD` exceeds a declared threshold. Context: `GO_VERSION: "1.26.6"` hard-coded identically in all 10 workflow files; PR legs ubuntu + macos; Windows nightly-only and gates nothing (`nightly.yml:44-49`); armv7 is **shipped but never tested**; `tests/contract/matter_schema_sync_test.go:27-41` compares two in-repo copies and cannot detect upstream drift; the pin is **59 commits behind** | M | — | P2.2 |
 | **P4.11** | **`Test_TC_*` as conformance regression** — certification itself stays a non-goal | At least one chip `Test_TC_*` case runs green in the library's CI against the reference daemon, and the set grows per release. A `pics.properties` is written only as far as those cases need it, **not** as a certification artefact. Repo-wide today: no PICS file anywhere (`find -iname '*pics*'` matches only MQTT *topics* files) and no cert test; matter.js runs `chip-cert-tests.yml` with a 178-line `matter-js-pics.properties`. D9 kept `SPECIFICATION.md:175` intact and rescoped this row from an XL certification programme to incremental adoption | M, then S per added case | D9 ✓ | P4.1 |
 
 ---
+
+#### 4.0 Phase 4 outcome (implemented)
+
+**P4.1/P4.2** landed earlier with the reference daemon and its chip-tool leg.
+**P4.3** is met by `bridge/bridgetest` and `endpoint/endpointtest`. The rest of
+the phase is implemented on go-fabric `feat/phase4-fuzz-bench` and loom
+`feat/phase4-chiptool-paths`, and three of the rows read differently once
+measured than they did when written.
+
+**P4.4's path was gone.** The milestone asked for a `paths:` filter on
+`internal/north/matter/**`, which has not existed since Phase 2. The filter
+names today's host-side paths and includes `go.mod`, because the Matter stack
+is an external module now and a bump moves wire behaviour without touching a
+file here. Its guard reads the patterns out of the workflow and checks each one
+still addresses a real path, because the failure mode is silence: a pattern
+that stops matching turns nothing red, it just stops running the commissioner.
+
+**P4.10's premise was wrong in the interesting direction.** The armv7 build
+passes today and always would have — the shipped binary was never broken. The
+defect was one level over, in a place `go build` cannot see: a test asserting
+that an oversized `int` is rejected, written as the constant `int(1 << 32)`,
+which does not compile where `int` is 32 bits. A test about integer width that
+could not be built for the width it is about.
+
+**P4.9 was half done already.** All six Matter broadcasts already named a
+payload schema and all six were defined in `openapi.yaml`; ADR 0020's deferral
+row said otherwise. Only the module-side policy was missing.
+
+The phase's most valuable finding came from writing P4.8 rather than from any
+review: `CheckACL` answers Success for fabric index 0 (correct — that means
+PASE), and `resolveSessionFabric` returns that same 0 when the session lookup
+cannot name a fabric. A host that attached an ACL but a lookup without
+`SessionFabricResolver` had every CASE session pass the access check as though
+it were still commissioning, silently. The bridge refuses to start that way now.
+
+Two guards found their own defects through their bite proofs rather than
+through review: the chiptool path check initially passed the very rename it
+exists to catch, and the deprecation-marker check did not fire on
+`// deprecated:` at all.
 
 ## 5. Risk register
 
