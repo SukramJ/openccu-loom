@@ -61,6 +61,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter access control is applied where it previously could be skipped, and
+  a commissioning window can no longer be finished by a controller that did not
+  open it.** Both come from the bridge module and both are silent failures of
+  the kind nothing surfaces at runtime: a session whose fabric could not be
+  named was read as "still commissioning" and passed the access check, and a
+  window armed over PASE could be completed by any already-paired controller —
+  aborting the admin who opened it and committing half-installed state. This
+  daemon was never exposed to the first (it supplies the fabric resolver) and
+  is unaffected by the second's stricter check (it re-stamps the window after
+  AddNOC), but both now hold for any configuration.
+- **A Matter certificate whose validity window overflows the epoch conversion
+  is rejected.** A `NotBefore` close to the unsigned maximum wrapped to a small
+  number that every clock is past, so the window check passed; with the
+  never-expires convention nothing else caught it. Measured on an ordinary
+  clock, not a contrived one.
+
 - **An unclassified boolean data point no longer vanishes from the Matter
   surface.** Both classifiers are whitelists of parameter names, so every
   boolean the CCU grows that nobody has named yet returned
