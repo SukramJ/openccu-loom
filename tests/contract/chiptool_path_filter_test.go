@@ -169,3 +169,54 @@ func literalPrefix(pat string) string {
 	}
 	return out
 }
+
+// TestChiptoolTriggerFiresOnAFreshPullRequest pins the event list, which
+// neither test above can see: they check what the `changes` job decides,
+// and that job only runs if the workflow started at all.
+//
+// A pull request fires `opened` and nothing else when it is created. Without
+// that type the workflow does not start on the one event every pull request
+// begins with — the changes job never runs, the suite never starts, and no
+// path pattern inside it matters. `synchronize` covers it on the next push,
+// but "the next push" means the first review happens with no commissioner run
+// behind it, and a pull request that is merged as opened gets none at all.
+//
+// This is not hypothetical twice over. The automatic trigger shipped without
+// `opened` in the sibling Matter module and failed to trigger itself; the
+// same list was ported here and did the same thing on the release pull
+// request that touched the Matter assembler.
+//
+// Read textually rather than through a YAML parser: the repository has no
+// YAML dependency in its test path, and adding one to read four words would
+// cost more than it explains.
+func TestChiptoolTriggerFiresOnAFreshPullRequest(t *testing.T) {
+	t.Parallel()
+
+	root := repoRootFromTestFile(t)
+	raw, err := os.ReadFile(filepath.Join(root, chiptoolWorkflow))
+	if err != nil {
+		t.Fatalf("read %s: %v", chiptoolWorkflow, err)
+	}
+	m := regexp.MustCompile(`(?m)^\s*types:\s*\[([^\]]*)\]`).FindSubmatch(raw)
+	if m == nil {
+		t.Fatalf("%s carries no `types: [...]` list under pull_request — either it stopped "+
+			"triggering on pull requests entirely, or it was rewritten in a shape this guard "+
+			"cannot read. Both stop the commissioner from running on Matter changes",
+			chiptoolWorkflow)
+	}
+	have := strings.Split(strings.ReplaceAll(string(m[1]), " ", ""), ",")
+
+	for _, want := range []string{"opened", "labeled", "synchronize", "reopened"} {
+		found := false
+		for _, h := range have {
+			if h == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("pull_request types %v is missing %q — without it the workflow does not start "+
+				"on that event, and every path pattern inside it is moot", have, want)
+		}
+	}
+}
