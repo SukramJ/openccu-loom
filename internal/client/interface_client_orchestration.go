@@ -284,8 +284,8 @@ func (c *InterfaceClient) Reconnect( //nolint:funlen // composition/wiring: long
 
 // CommandTracker returns the command tracker attached to this client (the
 // last_value_send_tracker in Python terms). It is constructed lazily on first
-// access and stored in cfg.commandTracker (promoted via SetCommandTracker /
-// CommandTracker accessor pair).
+// access and stored on the client itself, under c.mu — there is no setter,
+// so this accessor is the only way one comes into existence.
 //
 // The tracker stamps every entry with this id, and its entries are cleared
 // by [reliability.CommandTracker.ClearForKey] from the callback path, which

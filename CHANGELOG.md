@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.74.0] - 2026-09-06
+
 ### Added
 
 - **Read/write ENUM data points reach Matter as ModeSelect, and the MP3P sound
@@ -153,6 +155,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by tests including a negative control that ordinary IM traffic is never
   filtered, and the harness reports what it absorbed, so a green run cannot be
   mistaken for the filter having been the reason.
+
+- **The commissioner never ran on a freshly opened pull request.** The
+  chip-tool workflow's automatic trigger — added so that a Matter change no
+  longer depends on someone remembering the `needs-chiptool` label — listed
+  `labeled`, `synchronize` and `reopened`, but not `opened`. A pull request
+  fires `opened` and nothing else when it is created, so the workflow did not
+  start, its `changes` job never ran, and none of its carefully checked path
+  patterns mattered. `synchronize` caught it on the next push, which means the
+  first review happened with no commissioner run behind it and a pull request
+  merged as opened got none at all. The failure is silent by construction: a
+  workflow that does not start reports nothing. Found by the trigger failing
+  to trigger itself, twice — once in the sibling Matter module, then again
+  here on the release that touched the Matter assembler. The event list is
+  pinned now, alongside the two path-filter guards that could not see it,
+  because they only run once the workflow has already started.
 
 - **The chip-tool suite called a PASE handshake a successful commissioning.**
   `PairingSuccess` accepted three markers, and read against chip-tool's own
