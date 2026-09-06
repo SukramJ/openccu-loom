@@ -203,7 +203,7 @@ out" once the substrate is in place.
 | Custom DP | Reason |
 |---|---|
 | `siren.Siren` (full acoustic + optical) | Matter has no Siren cluster richer than Boolean State + OnOff; full feature parity isn't expressible. Maps to P1 Boolean State + 0x0006 OnOff for "alarm-on/off" only. |
-| `siren.SoundPlayer` | No Speaker / audio-playback cluster in Matter 1.5.1. Stays MQTT-only. |
+| ~~`siren.SoundPlayer`~~ — **superseded** | Recorded here as having no Matter home. It does: Speaker 0x0022 mandates OnOff and LevelControl and nothing else, and the MP3P carries both — volume on LevelControl, the audible/silent axis on OnOff via DIRECTION and StopSound. Projected since the Phase 3 work; the partial eligibility that remains (soundfile, repetitions) is recorded in `notes/parity/by_design.md`. |
 | `textdisplay.TextDisplay` | No display cluster in Matter. Stays MQTT-only. |
 | `valve.Irrigation`, `valve.Modulating` | No matching cluster. Modulating valves degenerate to Level Control + OnOff if we want to expose them; Irrigation has no clean mapping. Park. |
 | `light.EffectLight`, RGBW effect-mode | Color Control 0x0300 has scenes but no general "effect playlist". Effects expose a P1 read-only attribute via Color Control's `EnhancedColorMode`; full effect dispatch is MQTT/REST-only. |
@@ -266,7 +266,7 @@ materialises as.
 | `lock.Lock` | DoorLock (0x000A) | DoorLock (0x0101), Descriptor | `IsLocked()` ↔ `LockState`; `Lock`/`Unlock` ↔ `LockDoor`/`UnlockDoor`; `Open()` ↔ `UnboltDoor` (1.3); `IsJammed()` ↔ `LockOperationError` event |
 | `siren.Siren` | OnOffPlugInUnit (0x010A) **+** vendor-specific | OnOff, BooleanState (0x0045) | `IsActive()` ↔ BooleanState `StateValue`; `TurnOn`/`TurnOff` ↔ OnOff; tone/optical selections **MQTT-only** |
 | `siren.SmokeSiren` | SmokeCOAlarm (0x0076) | SmokeCOAlarm (0x005C), Descriptor | `Status()` ↔ `SmokeState` / `ExpressedState`; `IsActive()` ↔ `SmokeState` ≠ Normal; `IsPrimaryAlarm`/`IsSecondaryAlarm` distinguish via `ExpressedState` |
-| `siren.SoundPlayer` | — (no endpoint type) | — | No Matter cluster; stays MQTT-only |
+| ~~`siren.SoundPlayer`~~ — **superseded** | Speaker `0x0022` | OnOff `0x0006`, LevelControl `0x0008` | Projected since Phase 3; see `internal/model/custom/siren/sound_matter.go` |
 | `valve.Irrigation` | — (no endpoint type) | — | No Matter cluster; stays MQTT-only |
 | `valve.Modulating` | OnOffPlugInUnit (0x010A) optional + LevelControl | OnOff, LevelControl | Degenerates to a dimmable on/off if exposed; flagged P3 |
 | `textdisplay.TextDisplay` | — | — | No Matter cluster; stays MQTT-only |

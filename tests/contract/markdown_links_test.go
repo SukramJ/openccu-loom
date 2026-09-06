@@ -82,32 +82,7 @@ func TestMarkdownLinksValid(t *testing.T) {
 	}
 	var broken []brokenLink
 
-	err = filepath.Walk(repoRoot, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		// Directory exclusions.
-		if info.IsDir() {
-			base := info.Name()
-			// `.claude` holds agent worktrees: full checkouts of other
-			// branches, whose broken links belong to those branches. Walking
-			// into them turns somebody else's work-in-progress into a
-			// blocking finding on an unrelated commit, which is exactly what
-			// happened when a docs-restructure worktree contributed 60
-			// failures to a change that touched none of them.
-			if base == "node_modules" || base == "spa_dist" || base == ".git" || base == ".claude" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".md") {
-			return nil
-		}
-
-		content, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
+	walkRepoMarkdown(t, repoRoot, func(path string, content []byte) {
 		baseDir := filepath.Dir(path)
 
 		for lineNo, rawLine := range strings.Split(string(content), "\n") {
@@ -154,11 +129,7 @@ func TestMarkdownLinksValid(t *testing.T) {
 				})
 			}
 		}
-		return nil
 	})
-	if err != nil {
-		t.Fatalf("walk %q: %v", repoRoot, err)
-	}
 
 	if len(broken) == 0 {
 		return
@@ -180,4 +151,214 @@ func TestMarkdownLinksValid(t *testing.T) {
 	sb.WriteString("the documentation graph for every reader.\n")
 
 	t.Fatal(sb.String())
+}
+
+// walkRepoMarkdown calls visit once per Markdown file in the repository,
+// applying the directory exclusions the Markdown guards in this file share.
+// The exclusion list lives here rather than in each guard so a second guard
+// cannot walk a set the first one deliberately skips — `.claude` above all,
+// which holds agent worktrees of other branches (see [TestMarkdownLinksValid]
+// for what each exclusion protects).
+func walkRepoMarkdown(t *testing.T, repoRoot string, visit func(path string, content []byte)) {
+	t.Helper()
+
+	err := filepath.Walk(repoRoot, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			base := info.Name()
+			if base == "node_modules" || base == "spa_dist" || base == ".git" || base == ".claude" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		visit(path, content)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %q: %v", repoRoot, err)
+	}
+}
+
+// goFabricURLRE matches every https://github.com/SukramJ/go-fabric reference in
+// a Markdown file, in link syntax or bare in prose. It is deliberately looser
+// than the `[text](url)` grammar [TestMarkdownLinksValid] uses: an extractor
+// that only accepts the well-formed shape never sees the malformed one, so this
+// one takes everything that starts with the repository URL and lets the parser
+// in [TestGoFabricDocLinksResolveInLocalCheckout] decide what is checkable.
+var goFabricURLRE = regexp.MustCompile("https://github\\.com/SukramJ/go-fabric(?:/[^\\s)\\]\"'`>|]*)?")
+
+// TestGoFabricDocLinksResolveInLocalCheckout checks the path component of every
+// https://github.com/SukramJ/go-fabric/{blob,tree,raw}/main/<path> reference in
+// this repository's Markdown against a local go-fabric checkout, and fails when
+// such a reference names a path that checkout does not carry.
+//
+// # Why a guard at all
+//
+// [TestMarkdownLinksValid] skips absolute URLs. That was harmless while every
+// cross-reference was a repository path: a moved file broke the link in the
+// same commit that moved it, and the guard caught it there. The Matter stack is
+// its own module now and the documentation points into it by URL, so those
+// references rot with no commit here — nothing in this repository moves when
+// go-fabric does, and the reader finds a 404 long before any test does.
+//
+// # Why not simply fetch the URL
+//
+// A fetch measures the real thing — the ref, the path and the anchor at once —
+// and would be the honest check if it could run. It cannot: a gate that needs
+// the network goes red on a proxy, a rate limit, an offline developer or a
+// GitHub outage, and a gate that fails for reasons unrelated to the change
+// stops being read. This project would rather have no gate than a flaky one.
+//
+// # What is therefore measured, and what is not
+//
+// Measured, offline: the path component. A `/blob/main/<path>` or
+// `/tree/main/<path>` URL names a file or directory in go-fabric's tree, and a
+// developer working across both repositories has that tree checked out beside
+// this one. A file renamed, moved or deleted upstream is caught.
+//
+// NOT measured, and stated rather than implied:
+//
+//   - Whether the *ref* exists. Only `main` links are checked at all, and they
+//     are checked against a working tree that may sit ahead of or behind
+//     origin/main. A link to a tag or a commit SHA is skipped: the working tree
+//     is not that ref, so resolving the path against it would answer a
+//     different question than the one the URL asks.
+//   - Whether an `#anchor` still exists. The fragment is stripped, exactly as
+//     [TestMarkdownLinksValid] strips it — validating it needs a Markdown
+//     parser and, for a Go file, a symbol resolver.
+//   - Non-path URLs (`/issues/…`, `/pull/…`, `/compare/…`, `/releases/…`) and
+//     the bare repository URL. Nothing in a local checkout answers for those.
+//
+// # Why it skips rather than fails when it cannot measure
+//
+// The checkout is not a build input: `make test` must pass for a developer who
+// has never cloned go-fabric, and CI clones only this repository. A missing —
+// or wrong — checkout therefore means "this check did not run", not "the links
+// are broken". A skip says that in the one place a reader looks; a failure
+// would say something the check has no evidence for. The skip is reported with
+// the path that was tried so it is visible rather than silent.
+func TestGoFabricDocLinksResolveInLocalCheckout(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("abs repo root: %v", err)
+	}
+
+	checkout, why := goFabricCheckout(repoRoot)
+	if checkout == "" {
+		t.Skipf("go-fabric checkout unavailable, link paths not measured: %s", why)
+	}
+
+	type badRef struct {
+		file   string
+		lineNo int
+		url    string
+		target string
+	}
+	var bad []badRef
+	checked, skipped := 0, 0
+
+	walkRepoMarkdown(t, repoRoot, func(path string, content []byte) {
+		for lineNo, rawLine := range strings.Split(string(content), "\n") {
+			for _, url := range goFabricURLRE.FindAllString(rawLine, -1) {
+				target, ok := goFabricRepoPath(url)
+				if !ok {
+					skipped++
+					continue
+				}
+				checked++
+				if _, statErr := os.Stat(filepath.Join(checkout, filepath.FromSlash(target))); statErr == nil {
+					continue
+				}
+				bad = append(bad, badRef{file: path, lineNo: lineNo + 1, url: url, target: target})
+			}
+		}
+	})
+
+	t.Logf("go-fabric references: %d path-bearing on main (checked against %s), %d not checkable offline", checked, checkout, skipped)
+
+	if len(bad) == 0 {
+		return
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "go-fabric doc links: %d reference(s) name a path the local checkout does not have:\n\n", len(bad))
+	for _, b := range bad {
+		fmt.Fprintf(&sb, "  %s:%d → %s\n    missing in %s: %s\n\n", b.file, b.lineNo, b.url, checkout, b.target)
+	}
+	sb.WriteString("The file was renamed, moved or deleted in go-fabric, or the link was\n")
+	sb.WriteString("mistyped. Point the link at the current path.\n")
+	sb.WriteString("If instead the local checkout is stale, update it and re-run — this\n")
+	sb.WriteString("check resolves against the working tree, not against origin/main.\n")
+
+	t.Fatal(sb.String())
+}
+
+// goFabricRepoPath extracts the repository-relative path a go-fabric URL names.
+// ok is false for every URL whose target a local checkout cannot answer for:
+// the bare repository URL, a non-path route (`/issues/…`, `/pull/…`), and any
+// `blob`/`tree`/`raw` reference to a ref other than `main` — see
+// [TestGoFabricDocLinksResolveInLocalCheckout] for why the ref is not guessed.
+func goFabricRepoPath(url string) (string, bool) {
+	const prefix = "https://github.com/SukramJ/go-fabric"
+	tail := strings.TrimPrefix(url, prefix)
+	// A trailing sentence period or comma belongs to the prose, not the URL.
+	tail = strings.TrimRight(tail, ".,;:")
+	if idx := strings.Index(tail, "#"); idx >= 0 {
+		tail = tail[:idx]
+	}
+	tail = strings.Trim(tail, "/")
+	if tail == "" {
+		return "", false
+	}
+	segments := strings.Split(tail, "/")
+	if len(segments) < 3 {
+		return "", false
+	}
+	switch segments[0] {
+	case "blob", "tree", "raw":
+	default:
+		return "", false
+	}
+	if segments[1] != "main" {
+		return "", false
+	}
+	return strings.Join(segments[2:], "/"), true
+}
+
+// goFabricCheckout locates the sibling go-fabric working tree. It returns an
+// empty path plus the reason when there is none to measure against, so the
+// caller can skip with something a reader can act on.
+//
+// The location is either the GO_FABRIC_DIR environment variable or the sibling
+// directory beside this repository — the layout CLAUDE.md's reference table
+// documents for every companion checkout. A directory that is not go-fabric
+// (wrong sibling, stale name) is rejected by reading its go.mod module line
+// rather than trusting the directory name: resolving paths against the wrong
+// tree would report confident failures about links that are fine.
+func goFabricCheckout(repoRoot string) (dir, why string) {
+	candidate := os.Getenv("GO_FABRIC_DIR")
+	source := "GO_FABRIC_DIR"
+	if candidate == "" {
+		candidate = filepath.Join(filepath.Dir(repoRoot), "go-fabric")
+		source = "sibling checkout"
+	}
+	gomod, err := os.ReadFile(filepath.Join(candidate, "go.mod"))
+	if err != nil {
+		return "", fmt.Sprintf("%s %q has no readable go.mod (%v)", source, candidate, err)
+	}
+	if !strings.Contains(string(gomod), "module github.com/SukramJ/go-fabric") {
+		return "", fmt.Sprintf("%s %q is not the go-fabric module", source, candidate)
+	}
+	return candidate, ""
 }
