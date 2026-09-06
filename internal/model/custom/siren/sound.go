@@ -89,8 +89,13 @@ type SoundPlayer struct {
 	// DataVersionTracker tracks the per-cluster monotonic counter (Matter
 	// §10.6.5). Bumped on every confirmed SOUNDFILE or DIRECTION state
 	// transition so DataVersionFilter evaluation correctly detects cluster
-	// changes for the SoundPlayer's Matter LevelControl mapping.
+	// changes. It is threaded into the library LevelControl server and read
+	// by the OnOff one, so both Speaker clusters share the counter.
 	hmtypes.DataVersionTracker
+
+	// matterLevel carries the two LevelControl attributes that describe
+	// the cluster rather than the device — see [speakerLevelState].
+	matterLevel speakerLevelState
 
 	key    hmtypes.DataPointKey
 	writer custom.Writer

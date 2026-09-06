@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Read/write ENUM data points reach Matter as ModeSelect, and the MP3P sound
+  player as a Speaker.** Neither had any Matter projection: an ENUM was
+  unrepresentable, and `siren.SoundPlayer` said in source that it was excluded
+  from the surface entirely. A `generic.Select` now advertises device type
+  0x0027 and serves ModeSelect 0x0050 from its own VALUE_LIST — one mode per
+  entry, label and index from the list, `ChangeToMode` routed to the data
+  point. Write-only and read-only ENUMs stay out on purpose, and the file says
+  why: a mode whose `CurrentMode` can only echo our own last write, or whose
+  mandatory `ChangeToMode` would always fail, is not honestly a ModeSelect.
+  The sound player advertises Speaker 0x0022 with volume on LevelControl and
+  the audible/silent axis on OnOff — mapped to real data points (DIRECTION,
+  and `StopSound` writing LEVEL=0) rather than to an invented mute flag, since
+  on this device muted and silent are the same state.
+
 - **The Matter behaviour corpus runs again.** The 41 scenario files under
   `notes/parity/matter/scenarios/` had no runner after the Matter stack moved
   into `github.com/SukramJ/go-fabric`: the corpus stayed here, because the

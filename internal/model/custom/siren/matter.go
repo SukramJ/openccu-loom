@@ -36,8 +36,8 @@ const matterDispatchPriority = hmenum.CommandPriorityHigh
 // — Matter 1.5.1 has no Siren-cluster covering tone/optical configuration,
 // so those features remain MQTT-only per ADR 0012 §5 ("out of Matter
 // scope" table). SmokeSiren projects onto a SmokeCOAlarm (0x0076)
-// endpoint with the SmokeCOAlarm cluster (0x005C). SoundPlayer is
-// excluded from the Matter surface entirely.
+// endpoint with the SmokeCOAlarm cluster (0x005C). SoundPlayer projects
+// onto a Speaker (0x0022) endpoint — see sound_matter.go.
 var (
 	_ interfaces.MatterEndpointSource     = (*Siren)(nil)
 	_ interfaces.MatterEndpointSource     = (*SmokeSiren)(nil)
