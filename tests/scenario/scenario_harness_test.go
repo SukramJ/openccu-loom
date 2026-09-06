@@ -135,22 +135,23 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 	if err != nil {
 		t.Fatalf("scenario: topology: %v", err)
 	}
-	// A named topology carries its own assembler and store, because only
-	// the host can project its device model into endpoint specs. The
-	// empty fixture needs no host model at all, so it takes the module's
-	// own root-plus-aggregator snapshotter rather than a local copy.
-	var (
-		snapshotter bridge.Snapshotter
-		epStore     matterendpoint.Store
-	)
+	// A named topology carries its own assembler, because only the host can
+	// project its device model into endpoint specs. The empty fixture needs
+	// no host model at all, so it takes the module's own
+	// root-plus-aggregator snapshotter rather than a local copy.
+	//
+	// No endpoint store is passed: bridge.New used to take one and never read
+	// it, so the harness held an instance solely to hand over. The topology's
+	// own store still backs its assembler; what went away is the pretence
+	// that the bridge shared it.
+	var snapshotter bridge.Snapshotter
 	if topology != nil {
-		snapshotter, epStore = topology.snapshotter, topology.store
+		snapshotter = topology.snapshotter
 	} else {
-		snapshotter, epStore = endpointtest.NewEmptySnapshotter(), endpointtest.NewFakeStore()
+		snapshotter = endpointtest.NewEmptySnapshotter()
 	}
 
 	br, err := bridge.New(
-		epStore,
 		snapshotter,
 		mdns.NewNoop(),
 		bridge.Config{

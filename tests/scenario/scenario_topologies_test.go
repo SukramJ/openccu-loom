@@ -29,15 +29,7 @@ import (
 // server registered through the assembler.
 type scenarioTopology struct {
 	snapshotter bridge.Snapshotter
-	// store is the endpoint-id store the assembler writes through. The
-	// harness hands the same instance to the bridge so both halves
-	// share one id space, which is how the daemon wires them. Each
-	// topology builds its own, so parallel scenarios never share an
-	// endpoint-id counter — two scenarios assigning the same device to
-	// different endpoint ids would otherwise make their wire
-	// expectations depend on execution order.
-	store   *endpointtest.FakeStore
-	sources map[string]*scenarioFakeNotifier
+	sources     map[string]*scenarioFakeNotifier
 }
 
 // newScenarioSnapshotter turns a fixed device fleet into the callback
@@ -149,14 +141,14 @@ func buildTwoCentralsTopology() (*scenarioTopology, error) {
 	}
 	devA := mkCentral("ccuA", "ONOFFA01", 1)
 	devB := mkCentral("ccuB", "ONOFFB01", 1)
-	snap, epStore, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
+	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
 		{CentralName: "ccuA", Devices: []*device.Device{devA}, ModelComplete: true},
 		{CentralName: "ccuB", Devices: []*device.Device{devB}, ModelComplete: true},
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &scenarioTopology{snapshotter: snap, store: epStore, sources: sources}, nil
+	return &scenarioTopology{snapshotter: snap, sources: sources}, nil
 }
 
 // scenarioFakeFabricReader is a test-only cluster server that
@@ -222,7 +214,7 @@ func buildFabricScopedReaderTopology() (*scenarioTopology, error) {
 	dev := device.New(device.Config{Address: devAddr, Name: "Fabric-Scoped"})
 	ch := dev.AddChannel(chAddr, 1, "SWITCH", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
-	snap, epStore, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
+	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
 	})
 	if err != nil {
@@ -230,7 +222,6 @@ func buildFabricScopedReaderTopology() (*scenarioTopology, error) {
 	}
 	return &scenarioTopology{
 		snapshotter: snap,
-		store:       epStore,
 		// No notifier surface — fabric scenarios drive reads, not echoes.
 		sources: map[string]*scenarioFakeNotifier{},
 	}, nil
@@ -255,13 +246,13 @@ func buildManyTempSensorsTopology() (*scenarioTopology, error) {
 		ch.AttachCalculatedDataPoint(src)
 		sources[chAddr+"/ACTUAL_TEMPERATURE"] = src
 	}
-	snap, epStore, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
+	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &scenarioTopology{snapshotter: snap, store: epStore, sources: sources}, nil
+	return &scenarioTopology{snapshotter: snap, sources: sources}, nil
 }
 
 // scenarioFakeOnOffEndpointSource is a test-only Custom-DP-style
@@ -435,7 +426,7 @@ func buildSingleOnOffEndpointSourceTopology() (*scenarioTopology, error) {
 	ch := dev.AddChannel(chAddr, 1, "SWITCH", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
 
-	snap, epStore, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
+	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
 	})
 	if err != nil {
@@ -443,7 +434,6 @@ func buildSingleOnOffEndpointSourceTopology() (*scenarioTopology, error) {
 	}
 	return &scenarioTopology{
 		snapshotter: snap,
-		store:       epStore,
 		sources: map[string]*scenarioFakeNotifier{
 			// The harness's fire_notifier_source looks up a
 			// *scenarioFakeNotifier by key; register a synthetic
@@ -497,7 +487,7 @@ func buildSingleTempSensorTopology() (*scenarioTopology, error) {
 	ch := dev.AddChannel(chAddr, 1, "WEATHER", hmenum.ParamsetKeyValues)
 	ch.AttachCalculatedDataPoint(src)
 
-	snap, epStore, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
+	snap, _, err := newScenarioSnapshotter([]matteradapter.DeviceSnapshot{
 		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
 	})
 	if err != nil {
@@ -505,7 +495,6 @@ func buildSingleTempSensorTopology() (*scenarioTopology, error) {
 	}
 	return &scenarioTopology{
 		snapshotter: snap,
-		store:       epStore,
 		sources:     map[string]*scenarioFakeNotifier{chAddr + "/ACTUAL_TEMPERATURE": src},
 	}, nil
 }

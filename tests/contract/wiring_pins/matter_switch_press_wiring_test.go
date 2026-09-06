@@ -99,7 +99,6 @@ func TestAPhysicalPressReachesTheMatterEventLog(t *testing.T) {
 		return assembler.AssembleDevices(ctx, walk(ctx))
 	}
 	bridge, err := matterbridge.New(
-		identity,
 		snapshotter,
 		mdns.NewNoop(),
 		matterbridge.Config{
