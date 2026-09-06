@@ -504,6 +504,51 @@ Implemented 2026-09-04 on `feature/matter-phase0`. Each criterion below was re-r
 | **P3.9** | Sensor-cluster fill: FlowMeasurement 0x0404, SoilMeasurement 0x0430, seven concentration clusters, BooleanStateConfiguration 0x0080 | 0 new (all under `sensor`), fidelity + breadth | For each new cluster, a parity test asserts `schema.ClusterRevision(id)` matches the snapshot and every `conformance: "M"` attribute appears in `MatterAttributes()`; bite proof: hand-edit one revision and observe the test red. Each server reuses the parameterised `concentrationServer` shape (`cluster/measurement/measurement.go:1407-1470`) | S each | — | P3.3 |
 | **P3.10** | Fidelity types: WaterLeakDetector 0x0043, WaterFreezeDetector 0x0041, DimmablePlugInUnit 0x010B, native WaterHeater 0x050F, root-endpoint optional 0x0034/0x0037/0x002B/0x002C/0x002D, Aggregator Actions 0x0025 | 0 new | Each device type is reachable only through an explicit host opt-in flag, and re-enabling 0x0043 is gated on a recorded Alexa pairing run — the ceiling written into `pkg/interfaces/matter.go:483-502` ("a single endpoint advertising 0x0043 renders the whole bridged node unresponsive") — not on a green unit test | M | D11 ✓, D12 ✓ | P3.3 |
 
+#### 3.0 Phase 3 outcome (implemented)
+
+All four milestones D18 kept are implemented: **P3.3**, **P3.4**, **P3.6**,
+**P3.7**. Library work is on go-fabric `feat/phase3-valve-modeselect`
+(4 commits), host work on loom `feat/phase3-contact-fallback` (2 commits).
+Three things diverged from the table above, each measured rather than assumed.
+
+**The `Depends on: P3.2c` column was wrong for P3.4, P3.6 and P3.7.** Mounting
+is structural: a host fills an `endpoint.Spec` whose `Source` answers
+`MatterDeviceType()` + `MatterClusterServers()` (`contract/matter.go:20-30`),
+and the dispatcher resolves a cluster by linear match on its id
+(`endpoint/dispatcher.go:379`). There is no allowlist to extend, the three
+stand-in packages have only test importers, and none of the fourteen host-side
+cluster implementations was touched. The dependency was a sequencing
+preference. P3.2a–c remain deferred and untouched.
+
+**P3.3's acceptance criterion named a device type that cannot carry the
+value.** OnOffSensor 0x0850 has only Descriptor and Identify as *server*
+clusters — OnOff is a `clientCluster` on it
+(`on-off-sensor.element.ts:12-25`) — so the endpoint would have appeared in a
+controller carrying no readable state. The fallback materialises **ContactSensor
+0x0015** with its mandatory BooleanState 0x0045 server instead, which is what
+a two-state reading is for. Device housekeeping (`UNREACH`, `STICKY_UNREACH`,
+`CONFIG_PENDING`, `UPDATE_PENDING`) still opts out by name: the SERVICE flag
+looks like the property for that and is not, because `LOWBAT` carries it while
+being deliberately classified as a battery reading, and the same `UNREACH` is
+`FLAGS=9` in the paramset-description fixture and `flags=1` in the model
+snapshot.
+
+**P3.7 required a piece of P3.2a after all**, and it is the piece that now has
+a production caller: there was no host-agnostic LevelControl *server* in the
+library, only decoders in `cluster/wire`, so Speaker 0x0022 could not have been
+built by a second host. `cluster/levelcontrol` fills that gap.
+
+What P3.3 still cannot do is stated in `endpoint/materialize.go` rather than
+left to be discovered: a registered measurement kind can be a standalone
+sensor, but not the generic switch or the battery re-entry, because both need
+the endpoint id at construction and the materialiser signature does not carry
+it.
+
+Roadmap line anchors that did not survive: `speaker.ts:64,76-79` (the file is
+68 lines; the anchors are `:53` and `:56-65`), and the claim that matter.js
+ships no valve server — `ValveConfigurationAndControlServer.ts` exists but is
+an empty generated subclass, so the substance held.
+
 ### Phase 4 — Library-grade quality
 
 | # | Milestone | Acceptance criterion | Effort | Decision | Depends on |
