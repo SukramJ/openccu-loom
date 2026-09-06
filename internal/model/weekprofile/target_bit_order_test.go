@@ -52,7 +52,8 @@ func TestTargetBitOrderIsThePositionInTheFirmwaresRelevantChannelList(t *testing
 			model: "HmIP-BSL",
 			channels: append(append(
 				receivers("SWITCH_VIRTUAL_RECEIVER", 4, 5, 6),
-				TypedChannel{No: 7, Type: "SWITCH_WEEK_PROFILE"}),
+				TypedChannel{No: 7, Type: "SWITCH_WEEK_PROFILE"},
+			),
 				append(receivers("DIMMER_VIRTUAL_RECEIVER", 8, 9, 10),
 					append([]TypedChannel{{No: 11, Type: "DIMMER_WEEK_PROFILE"}},
 						receivers("DIMMER_VIRTUAL_RECEIVER", 12, 13, 14)...)...)...),

@@ -37,7 +37,8 @@ func TestExportDefinitionEscapesRequestDeadline(t *testing.T) {
 			h := timeoutExceptStreaming(30 * time.Second)(http.HandlerFunc(
 				func(_ http.ResponseWriter, r *http.Request) {
 					_, seen = r.Context().Deadline()
-				}))
+				},
+			))
 			h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, tc.path, http.NoBody))
 			if seen != tc.wantDeadline {
 				t.Fatalf("%s: context deadline present = %v, want %v", tc.path, seen, tc.wantDeadline)

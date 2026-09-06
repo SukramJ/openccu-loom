@@ -1,14 +1,14 @@
 {
-  "generated": "8144d929",
-  "head": "8144d929",
+  "generated": "214aa057",
+  "head": "214aa057",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5620,
-    "reachable": 3578,
+    "total_exported": 5623,
+    "reachable": 3581,
     "whitelisted": 1981,
     "unreachable": 61
   },
@@ -1537,14 +1537,14 @@
       "identifier": "DecodeCall",
       "reason": "auto-whitelist:pattern=xmlrpc-extract-helper",
       "file": "internal/client/transport/xmlrpc/message.go",
-      "line": 97
+      "line": 115
     },
     {
       "package": "internal/client/transport/xmlrpc",
       "identifier": "DecodeResponse",
       "reason": "auto-whitelist:pattern=xmlrpc-extract-helper",
       "file": "internal/client/transport/xmlrpc/message.go",
-      "line": 142
+      "line": 160
     },
     {
       "package": "internal/client/transport/xmlrpc",
@@ -1565,14 +1565,14 @@
       "identifier": "EncodeResponse",
       "reason": "auto-whitelist:pattern=xmlrpc-extract-helper",
       "file": "internal/client/transport/xmlrpc/message.go",
-      "line": 69
+      "line": 77
     },
     {
       "package": "internal/client/transport/xmlrpc",
       "identifier": "MarshalBytes",
       "reason": "auto-whitelist:pattern=xmlrpc-extract-helper",
       "file": "internal/client/transport/xmlrpc/message.go",
-      "line": 349
+      "line": 419
     },
     {
       "package": "internal/client/transport/xmlrpc",
@@ -1656,7 +1656,7 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1669
+      "line": 1675
     },
     {
       "package": "internal/config",
@@ -1677,21 +1677,21 @@
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1766
+      "line": 1772
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1717
+      "line": 1723
     },
     {
       "package": "internal/config",
       "identifier": "CentralsModifiedInPlace",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 846
+      "line": 855
     },
     {
       "package": "internal/config",
@@ -1712,7 +1712,7 @@
       "identifier": "Clone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1957
+      "line": 1963
     },
     {
       "package": "internal/config",
@@ -1733,7 +1733,7 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1937
+      "line": 1943
     },
     {
       "package": "internal/config",
@@ -1817,7 +1817,7 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1908
+      "line": 1914
     },
     {
       "package": "internal/config",
@@ -1866,7 +1866,7 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1644
+      "line": 1650
     },
     {
       "package": "internal/config",
@@ -1901,7 +1901,7 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1912
+      "line": 1918
     },
     {
       "package": "internal/config",
@@ -1936,7 +1936,7 @@
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2123
+      "line": 2129
     },
     {
       "package": "internal/config",
@@ -2062,14 +2062,14 @@
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1697
+      "line": 1703
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1924
+      "line": 1930
     },
     {
       "package": "internal/config",
@@ -2125,14 +2125,14 @@
       "identifier": "RestartRequiredDiff",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 828
+      "line": 837
     },
     {
       "package": "internal/config",
       "identifier": "RestartRequiredFieldPaths",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 811
+      "line": 820
     },
     {
       "package": "internal/config",
@@ -2146,7 +2146,7 @@
       "identifier": "RestartRules",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 805
+      "line": 814
     },
     {
       "package": "internal/config",
@@ -2209,7 +2209,7 @@
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1888
+      "line": 1894
     },
     {
       "package": "internal/config",
@@ -4460,24 +4460,10 @@
     },
     {
       "package": "internal/model/weekprofile",
-      "identifier": "AllChannelKeys",
-      "reason": "auto-whitelist:pattern=weekprofile-converter",
-      "file": "internal/model/weekprofile/channel_keys.go",
-      "line": 98
-    },
-    {
-      "package": "internal/model/weekprofile",
       "identifier": "AstroOffsetLimits",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1370
-    },
-    {
-      "package": "internal/model/weekprofile",
-      "identifier": "BitmaskToChannelKey",
-      "reason": "auto-whitelist:pattern=weekprofile-converter",
-      "file": "internal/model/weekprofile/channel_keys.go",
-      "line": 119
+      "line": 1364
     },
     {
       "package": "internal/model/weekprofile",
@@ -4499,13 +4485,6 @@
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
       "line": 823
-    },
-    {
-      "package": "internal/model/weekprofile",
-      "identifier": "ChannelKeyToBitmask",
-      "reason": "auto-whitelist:pattern=weekprofile-converter",
-      "file": "internal/model/weekprofile/channel_keys.go",
-      "line": 111
     },
     {
       "package": "internal/model/weekprofile",
@@ -4582,14 +4561,14 @@
       "identifier": "CountClimateEntries",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/datapoint.go",
-      "line": 913
+      "line": 932
     },
     {
       "package": "internal/model/weekprofile",
       "identifier": "CountSimpleEntries",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/datapoint.go",
-      "line": 934
+      "line": 953
     },
     {
       "package": "internal/model/weekprofile",
@@ -4603,7 +4582,7 @@
       "identifier": "DeviceMetadata",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/datapoint.go",
-      "line": 294
+      "line": 301
     },
     {
       "package": "internal/model/weekprofile",
@@ -4631,7 +4610,7 @@
       "identifier": "FormatTimeBaseFactor",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1232
+      "line": 1226
     },
     {
       "package": "internal/model/weekprofile",
@@ -4680,7 +4659,7 @@
       "identifier": "MaxTimeBaseFactor",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1096
+      "line": 1090
     },
     {
       "package": "internal/model/weekprofile",
@@ -4729,14 +4708,14 @@
       "identifier": "NewProfileDataPoint",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/datapoint.go",
-      "line": 223
+      "line": 230
     },
     {
       "package": "internal/model/weekprofile",
       "identifier": "ParseChannelLocks",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/channel_keys.go",
-      "line": 138
+      "line": 142
     },
     {
       "package": "internal/model/weekprofile",
@@ -4764,14 +4743,14 @@
       "identifier": "ParseTimeBaseFactor",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1266
+      "line": 1260
     },
     {
       "package": "internal/model/weekprofile",
       "identifier": "PermanentDuration",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1217
+      "line": 1211
     },
     {
       "package": "internal/model/weekprofile",
@@ -4785,14 +4764,14 @@
       "identifier": "ProfileDataPoint",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/datapoint.go",
-      "line": 101
+      "line": 108
     },
     {
       "package": "internal/model/weekprofile",
       "identifier": "ProfileDataPointConfig",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/datapoint.go",
-      "line": 178
+      "line": 185
     },
     {
       "package": "internal/model/weekprofile",
@@ -4880,17 +4859,24 @@
     },
     {
       "package": "internal/model/weekprofile",
+      "identifier": "TargetBitOrder",
+      "reason": "auto-whitelist:pattern=weekprofile-converter",
+      "file": "internal/model/weekprofile/channel_keys.go",
+      "line": 87
+    },
+    {
+      "package": "internal/model/weekprofile",
       "identifier": "TargetChannelBits",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1006
+      "line": 998
     },
     {
       "package": "internal/model/weekprofile",
       "identifier": "TargetChannelBitsFrom",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1014
+      "line": 1008
     },
     {
       "package": "internal/model/weekprofile",
@@ -4904,14 +4890,14 @@
       "identifier": "TargetChannelsBitmaskToList",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1054
+      "line": 1048
     },
     {
       "package": "internal/model/weekprofile",
       "identifier": "TargetChannelsListToBitmask",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1034
+      "line": 1028
     },
     {
       "package": "internal/model/weekprofile",
@@ -4919,6 +4905,13 @@
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/slot.go",
       "line": 245
+    },
+    {
+      "package": "internal/model/weekprofile",
+      "identifier": "TypedChannel",
+      "reason": "auto-whitelist:pattern=weekprofile-converter",
+      "file": "internal/model/weekprofile/channel_keys.go",
+      "line": 16
     },
     {
       "package": "internal/model/weekprofile",
@@ -4953,7 +4946,7 @@
       "identifier": "ZeroDuration",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
       "file": "internal/model/weekprofile/rawconvert.go",
-      "line": 1196
+      "line": 1190
     },
     {
       "package": "internal/netutil",
@@ -5219,14 +5212,14 @@
       "identifier": "ErrCleanupNeedsSubscriber",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 549
+      "line": 554
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ErrSweepSlotBusy",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 537
+      "line": 542
     },
     {
       "package": "internal/north/mqtt",
@@ -5282,21 +5275,21 @@
       "identifier": "LegacyAggregateStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 158
+      "line": 163
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LegacyDataPointStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 210
+      "line": 215
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LegacySlotStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 282
+      "line": 287
     },
     {
       "package": "internal/north/mqtt",
@@ -5457,7 +5450,7 @@
       "identifier": "ProgramTriggerMirrorMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 324
+      "line": 329
     },
     {
       "package": "internal/north/mqtt",
@@ -5492,7 +5485,7 @@
       "identifier": "RawOrphanCandidateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 913
+      "line": 918
     },
     {
       "package": "internal/north/mqtt",
@@ -7256,7 +7249,7 @@
       "identifier": "GetLinkParamset",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/paramsets.go",
-      "line": 129
+      "line": 137
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8999,7 +8992,7 @@
       "identifier": "PutLinkParamset",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/paramsets.go",
-      "line": 157
+      "line": 165
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9398,21 +9391,21 @@
       "identifier": "Setup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/setup.go",
-      "line": 117
+      "line": 125
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SetupService",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/setup.go",
-      "line": 25
+      "line": 26
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SetupStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/setup.go",
-      "line": 100
+      "line": 108
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10637,28 +10630,28 @@
       "identifier": "CommandErrorLocked",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 267
+      "line": 272
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorNotFound",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 273
+      "line": 278
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorNotImplemented",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 259
+      "line": 264
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorRateLimited",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 262
+      "line": 267
     },
     {
       "package": "internal/north/rest/ws",
@@ -10666,6 +10659,13 @@
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
       "line": 250
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorUnencodableString",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 258
     },
     {
       "package": "internal/north/rest/ws",
@@ -11183,7 +11183,7 @@
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 331
+      "line": 336
     },
     {
       "package": "internal/north/rest/ws",
@@ -11309,7 +11309,7 @@
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 511
+      "line": 521
     },
     {
       "package": "internal/north/rest/ws",
@@ -11323,7 +11323,7 @@
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 311
+      "line": 316
     },
     {
       "package": "internal/north/rest/ws",

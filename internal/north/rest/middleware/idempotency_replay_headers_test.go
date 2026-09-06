@@ -21,7 +21,8 @@ func TestIdempotencyReplayDoesNotDuplicateOuterHeaders(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true}`))
-		}))))
+		}),
+	)))
 
 	do := func(reqID string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/ABC/paramsets/VALUES", http.NoBody)

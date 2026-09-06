@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 8144d929
-HEAD: 8144d929
+Generated: 214aa057
+HEAD: 214aa057
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5620 |
-| Reachable | 3578 |
+| Total Exported | 5623 |
+| Reachable | 3581 |
 | Whitelisted | 1981 |
 | **Unreachable** | **61** |
 
