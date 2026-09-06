@@ -18,8 +18,8 @@ import (
 func hmAdpAssertTargetKeysAreWritable(t *testing.T, targets map[string]weekprofile.TargetChannelInfo) {
 	t.Helper()
 	bad := make([]string, 0, len(targets))
-	for k := range targets {
-		if _, ok := weekprofile.ChannelKeyToBitmask(k); !ok {
+	for k, info := range targets {
+		if !info.BitKnown {
 			bad = append(bad, k)
 		}
 	}
@@ -30,16 +30,16 @@ func hmAdpAssertTargetKeysAreWritable(t *testing.T, targets map[string]weekprofi
 }
 
 // TestHmAdpDerivedTargetKeysAllResolveToALockBit couples the two halves of the
-// channel-lock surface: every key the adapter mints must be writable through
-// [weekprofile.ChannelKeyToBitmask]. The lock table covers an 8x3 actor×sub
-// grid keyed by the custom-DP channel groups; the firmware keys its bits
-// positionally off its own relevant-channel list instead, so a key outside
-// the grid has a firmware bit that this table has no way to name. It must
-// therefore not be published rather than be published unwritable.
+// channel-lock surface: every key the adapter mints carries the bit the
+// firmware addresses its channel with, derived from the device's own
+// schedule-relevant channel list ([weekprofile.TargetBitOrder]). A key
+// whose channel that list does not carry must not be published rather
+// than be published unwritable.
 //
 // HmIP-RGBW is the shipped case: profile IPRGBW carries PrimaryChannel 0 with
 // SecondaryChannels {1,2,3} (internal/model/custom/profile_configs.go), so a
-// group based at channel 1 has four members and the fourth mints "1_4".
+// group based at channel 1 has four members and the fourth mints "1_4" — the
+// firmware's bit 3, which a fixed 8x3 grid had no entry for.
 func TestHmAdpDerivedTargetKeysAllResolveToALockBit(t *testing.T) {
 	t.Parallel()
 
@@ -69,18 +69,16 @@ func TestHmAdpDerivedTargetKeysAllResolveToALockBit(t *testing.T) {
 	}
 }
 
-// TestHmAdpRGBWKeepsTheThreeWritableTargets records what the RGBW device is
-// left with once the unaddressable key is withheld: the three members the
-// lock table can address. The fourth member does have a firmware bit — the
-// CCU editor gives the fourth UNIVERSAL_LIGHT_RECEIVER `Math.pow(2, 3)` — but
-// no entry in an actor×sub grid corresponds to it. Naming the loss here keeps
-// it visible rather than silent.
-func TestHmAdpRGBWKeepsTheThreeWritableTargets(t *testing.T) {
+// TestHmAdpRGBWPublishesAllFourUniversalLightReceivers records that the
+// fourth UNIVERSAL_LIGHT_RECEIVER is addressable: the CCU editor gives it
+// `Math.pow(2, 3)` (position 3 in the device's list), and the derived map
+// carries exactly that bit.
+func TestHmAdpRGBWPublishesAllFourUniversalLightReceivers(t *testing.T) {
 	t.Parallel()
 
 	d := newScheduleTargetsDevice(t, "HmIP-RGBW", "0058E3C0002EC3", 5, 5, []int{1})
 	got := targetKeySummary(deriveTargetChannels(d))
-	want := []string{"1_1=ch1/primary", "1_2=ch2/secondary", "1_3=ch3/secondary"}
+	want := []string{"1_1=ch1/primary", "1_2=ch2/secondary", "1_3=ch3/secondary", "1_4=ch4/secondary"}
 	if len(got) != len(want) {
 		t.Fatalf("deriveTargetChannels = %v, want %v", got, want)
 	}
@@ -88,5 +86,9 @@ func TestHmAdpRGBWKeepsTheThreeWritableTargets(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("deriveTargetChannels = %v, want %v", got, want)
 		}
+	}
+	targets := deriveTargetChannels(d)
+	if info := targets["1_4"]; !info.BitKnown || info.Bit != 3 {
+		t.Fatalf("1_4 bit = %+v, want position 3 (HmIPWeeklyProgram.js:2926 over the four UNIVERSAL_LIGHT_RECEIVER channels)", info)
 	}
 }

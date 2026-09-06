@@ -261,10 +261,10 @@ func TestSerializeSimpleScheduleRoundTrip(t *testing.T) {
 }
 
 // astroDurationTargetBits pins a device whose two virtual receivers are its
-// own real channels 1 and 2 — bit = channel number - 1, per
-// [weekprofile.TargetChannelBitsFrom]. Not the old 3*(actor-1)+(sub-1)
-// formula: that gave "2_1" bit 3, which only a device with contiguous
-// channels 1..4 would ever resolve to.
+// own real channels 1 and 2 — the bit is the channel's position in the
+// device's schedule-relevant list, per [weekprofile.TargetBitOrder]: 0 and
+// 1. Not the old 3*(actor-1)+(sub-1) formula: that gave "2_1" bit 3, which
+// only a device with contiguous channels 1..4 would ever resolve to.
 var astroDurationTargetBits = weekprofile.TargetChannelBits{"1_1": 0, "2_1": 1}
 
 func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {

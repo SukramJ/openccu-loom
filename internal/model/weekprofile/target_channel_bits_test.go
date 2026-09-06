@@ -8,95 +8,67 @@ import (
 	"testing"
 )
 
-// TestTargetChannelBitsFollowTheDeviceNotAFormula pins the rule the CCU
-// actually applies: a target channel's bit is the device's own channel number
-// minus one.
+// TestTargetChannelBitsCarryTheDevicesPositions pins that the TARGET_CHANNELS
+// mask is built from the bit each key's channel holds in the device's own
+// schedule-relevant list — the value [TargetBitOrder] derives and
+// [TargetChannelInfo] carries — and from nothing else. A key whose channel
+// the list does not carry contributes no bit and withholds the whole field.
 //
-// The cases are the firmware's own device lists, read from its weekly-program
-// editor (www/config/easymodes/js/HmIPWeeklyProgram.js:394-418). They exist
-// because a formula stood here instead — 3*(actor-1) + (sub-1) — which is
-// right only for a device whose virtual receivers run contiguously from
-// channel 1. Every gapped device below was silently mis-addressed by it, and
-// nothing in this repository noticed for as long as it stood: no test asserted
-// a TARGET_CHANNELS value at all, in either direction.
-//
-// That is the point of this file. A round-trip through an encoder nobody
-// checks the output of proves the two halves agree, not that either is right.
-func TestTargetChannelBitsFollowTheDeviceNotAFormula(t *testing.T) {
+// The device is an HmIP-BSL on firmware 2 (receivers 4,5,6 / 8,9,10 /
+// 12,13,14; HmIPWeeklyProgram.js:401): under the firmware's positional rule
+// key 1_1 (channel 4) is bit 0 and key 2_1 (channel 8) is bit 3. Under the
+// two rules that stood here before — "channel number minus one", and the
+// 3*(actor-1)+(sub-1) grid — this case reads 1_1 as bit 3 and 2_1 as bit 7,
+// respectively bit 3 by coincidence; the mask below tells them apart.
+func TestTargetChannelBitsCarryTheDevicesPositions(t *testing.T) {
 	t.Parallel()
 
-	cases := []struct {
-		name     string
-		channels []int
-		want     []uint
-	}{
-		{
-			// The layout the old formula happened to match, kept so a
-			// regression toward it is visible as "only this case still passes".
-			name:     "contiguous from 1",
-			channels: []int{1, 2, 3},
-			want:     []uint{0, 1, 2},
-		},
-		{
-			// HmIP-BSL on firmware 2: channels 7 and 11 are not receivers, so
-			// the numbering has holes the formula cannot express.
-			name:     "HmIP-BSL fw2, gapped",
-			channels: []int{4, 5, 6, 8, 9, 10, 12, 13, 14},
-			want:     []uint{3, 4, 5, 7, 8, 9, 11, 12, 13},
-		},
-		{
-			// HmIP-WKP: odd channels only.
-			name:     "HmIP-WKP, odd only",
-			channels: []int{1, 3, 5, 7, 9, 11, 13, 15},
-			want:     []uint{0, 2, 4, 6, 8, 10, 12, 14},
-		},
-		{
-			// A window drive exposes a single receiver, and it is channel 2 —
-			// so even the one-channel case is not bit 0.
-			name:     "window drive, single non-first channel",
-			channels: []int{2},
-			want:     []uint{1},
-		},
+	order := TargetBitOrder("HmIP-BSL", []TypedChannel{
+		{No: 4, Type: "SWITCH_VIRTUAL_RECEIVER"},
+		{No: 5, Type: "SWITCH_VIRTUAL_RECEIVER"},
+		{No: 6, Type: "SWITCH_VIRTUAL_RECEIVER"},
+		{No: 7, Type: "SWITCH_WEEK_PROFILE"},
+		{No: 8, Type: "DIMMER_VIRTUAL_RECEIVER"},
+		{No: 9, Type: "DIMMER_VIRTUAL_RECEIVER"},
+		{No: 10, Type: "DIMMER_VIRTUAL_RECEIVER"},
+		{No: 11, Type: "DIMMER_WEEK_PROFILE"},
+		{No: 12, Type: "DIMMER_VIRTUAL_RECEIVER"},
+		{No: 13, Type: "DIMMER_VIRTUAL_RECEIVER"},
+		{No: 14, Type: "DIMMER_VIRTUAL_RECEIVER"},
+	})
+	info := make(map[string]TargetChannelInfo)
+	keys := []string{"1_1", "1_2", "1_3", "2_1", "2_2", "2_3", "3_1", "3_2", "3_3"}
+	for i, chNo := range []int{4, 5, 6, 8, 9, 10, 12, 13, 14} {
+		bit, ok := order[chNo]
+		info[keys[i]] = TargetChannelInfo{ChannelNo: chNo, Bit: bit, BitKnown: ok}
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			info := make(map[string]TargetChannelInfo, len(tc.channels))
-			keys := make([]string, 0, len(tc.channels))
-			for i, chNo := range tc.channels {
-				key := targetKey(i)
-				keys = append(keys, key)
-				info[key] = TargetChannelInfo{ChannelNo: chNo}
-			}
-			bits := TargetChannelBitsFrom(info)
-			if bits == nil {
-				t.Fatal("TargetChannelBitsFrom returned nil for a resolvable device")
-			}
-			for i, key := range keys {
-				if got := bits[key]; got != tc.want[i] {
-					t.Errorf("%s -> bit %d, want %d (device channel %d; the bit is the "+
-						"channel number minus one, not a position computed from the key)",
-						key, got, tc.want[i], tc.channels[i])
-				}
-			}
+	bits := TargetChannelBitsFrom(info)
+	want := TargetChannelBits{"1_1": 0, "1_2": 1, "1_3": 2, "2_1": 3, "2_2": 4, "2_3": 5, "3_1": 6, "3_2": 7, "3_3": 8}
+	if !reflect.DeepEqual(bits, want) {
+		t.Fatalf("TargetChannelBitsFrom = %v, want %v (position in the device's receiver list)", bits, want)
+	}
 
-			// The mask and the list must be two spellings of one fact.
-			mask, ok := TargetChannelsListToBitmask(keys, bits)
-			if !ok {
-				t.Fatal("encoding a fully resolvable selection was withheld")
-			}
-			var wantMask int
-			for _, b := range tc.want {
-				wantMask |= 1 << b
-			}
-			if mask != wantMask {
-				t.Errorf("mask = %#b, want %#b", mask, wantMask)
-			}
-			if got := TargetChannelsBitmaskToList(mask, bits); !reflect.DeepEqual(got, keys) {
-				t.Errorf("round trip = %v, want %v", got, keys)
-			}
-		})
+	mask, ok := TargetChannelsListToBitmask([]string{"1_1", "2_1"}, bits)
+	if !ok {
+		t.Fatal("encoding a fully resolvable selection was withheld")
+	}
+	if mask != 1<<0|1<<3 {
+		t.Errorf("mask for 1_1+2_1 = %#b, want %#b (bits 0 and 3)", mask, 1<<0|1<<3)
+	}
+	if got := TargetChannelsBitmaskToList(mask, bits); !reflect.DeepEqual(got, []string{"1_1", "2_1"}) {
+		t.Errorf("round trip = %v, want [1_1 2_1]", got)
+	}
+
+	// A key whose channel the list does not carry has no bit, and the
+	// field is withheld rather than partially written.
+	info["4_1"] = TargetChannelInfo{ChannelNo: 15}
+	bits = TargetChannelBitsFrom(info)
+	if _, has := bits["4_1"]; has {
+		t.Errorf("an unresolved channel produced a bit: %v", bits["4_1"])
+	}
+	if _, ok := TargetChannelsListToBitmask([]string{"1_1", "4_1"}, bits); ok {
+		t.Error("a selection containing an unresolvable key was encoded; the field must be withheld")
 	}
 }
 
@@ -124,16 +96,8 @@ func TestTargetChannelsAreWithheldRatherThanGuessed(t *testing.T) {
 	if bits := TargetChannelBitsFrom(map[string]TargetChannelInfo{}); bits != nil {
 		t.Errorf("an empty device map produced %v, want nil", bits)
 	}
-	// A channel number below 1 cannot be a bit position and must not become one.
-	if bits := TargetChannelBitsFrom(map[string]TargetChannelInfo{"1_1": {ChannelNo: 0}}); bits != nil {
-		t.Errorf("channel 0 produced %v, want nil", bits)
+	// A channel with no known position cannot become a bit — not even bit 0.
+	if bits := TargetChannelBitsFrom(map[string]TargetChannelInfo{"1_1": {ChannelNo: 1}}); bits != nil {
+		t.Errorf("a channel without a resolved position produced %v, want nil", bits)
 	}
-}
-
-// targetKey spells the nth resolved target channel the way the daemon keys
-// them (actor-major, three per actor). The key is only a label here: what the
-// bit is derived from is the channel number the map carries, which is the
-// whole point of the test above.
-func targetKey(i int) string {
-	return string(rune('1'+i/3)) + "_" + string(rune('1'+i%3))
 }

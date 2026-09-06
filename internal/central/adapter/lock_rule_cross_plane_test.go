@@ -28,8 +28,9 @@ import (
 
 // lockCrossPlaneBits pins the three actor_sub keys these fixtures use to the
 // real device channel numbers a lock-plus-permission device with virtual
-// receivers on channels 1, 2 and 3 would resolve (bit = channel number - 1,
-// see [weekprofile.TargetChannelBitsFrom]). Both read planes below must
+// receivers on channels 1, 2 and 3 would resolve (the bit is the channel's
+// position in that list, see [weekprofile.TargetBitOrder]). Both read planes
+// below must
 // resolve the same map for the cross-plane comparison to mean anything: the
 // REST leg takes it explicitly, the week-profile leg resolves it from the
 // channel's attached WeekProfile, mirroring production wiring.
@@ -108,9 +109,9 @@ func lockRuleCrossPlaneWeekProfileLoad(t *testing.T, raw map[string]any) *schedu
 		ProfileCount:   1,
 	})
 	wp.SetAvailableTargetChannels(map[string]weekprofile.TargetChannelInfo{
-		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary"},
-		"2_1": {ChannelNo: 2, ChannelAddress: ch.Address, ChannelType: "secondary"},
-		"1_3": {ChannelNo: 3, ChannelAddress: ch.Address, ChannelType: "secondary"},
+		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary", Bit: 0, BitKnown: true},
+		"2_1": {ChannelNo: 2, ChannelAddress: ch.Address, ChannelType: "secondary", Bit: 1, BitKnown: true},
+		"1_3": {ChannelNo: 3, ChannelAddress: ch.Address, ChannelType: "secondary", Bit: 2, BitKnown: true},
 	})
 	ch.AttachWeekProfile(wp)
 	bindDefaultScheduleIO(ch, wp, "lock")

@@ -673,9 +673,15 @@ func (t *CommandThrottle) cancelWaiter(w *waiter) {
 		}
 	}
 	// Already admitted; emulate a Release so we don't leak a permit.
+	// The guard matters: Close() and Purge() wake a waiter WITHOUT
+	// reserving an inFlight permit for it, so a cancel racing those
+	// paths must not decrement a permit that was never handed out
+	// (mirrors [CommandThrottle.Release] and releaseAdmittedSlot).
 	select {
 	case <-w.ready:
-		t.inFlight--
+		if t.inFlight > 0 {
+			t.inFlight--
+		}
 		t.wakeNextLocked()
 	default:
 	}

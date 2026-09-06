@@ -54,8 +54,24 @@ func newScheduleTargetsDevice(t *testing.T, model, address string, maxChannel, s
 		Model:        model,
 		ProductGroup: hmenum.ProductGroupHmIP,
 	})
+	// Channel types follow the device: the target-channel bit is the
+	// channel's position in the schedule-relevant list the firmware derives
+	// from CHANNEL_TYPE (see [weekprofile.TargetBitOrder]), so the fixture
+	// carries real types — the receivers a schedule can address, the schedule
+	// channel itself (not addressable), and the maintenance channel 0.
+	receiverType := "SWITCH_VIRTUAL_RECEIVER"
+	if model == "HmIP-RGBW" || model == "HmIP-LSC" {
+		receiverType = "UNIVERSAL_LIGHT_RECEIVER"
+	}
 	for i := 0; i <= maxChannel; i++ {
-		d.AddChannel(fmt.Sprintf("%s:%d", address, i), i, "T", hmenum.ParamsetKeyValues)
+		chType := receiverType
+		switch i {
+		case 0:
+			chType = "MAINTENANCE"
+		case scheduleChannel:
+			chType = "SWITCH_WEEK_PROFILE"
+		}
+		d.AddChannel(fmt.Sprintf("%s:%d", address, i), i, chType, hmenum.ParamsetKeyValues)
 	}
 	for _, no := range cdpChannels {
 		chAddr := fmt.Sprintf("%s:%d", address, no)

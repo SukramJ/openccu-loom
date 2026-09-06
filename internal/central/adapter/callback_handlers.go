@@ -391,10 +391,10 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 	// Mirrors the reference event() flow which calls
 	// last_value_send_tracker.remove_last_value_send(dpk, value) after
 	// every confirmed CCU push. Without this the tracker keeps stale
-	// in-flight entries until their TTL expires, which surfaces as
-	// false-positive `HasInFlight` results for north-bound metrics that
-	// query the tracker. Best-effort: a missing client entry or absent
-	// tracker is a no-op (test fixtures, lifecycle edges).
+	// entries until their TTL expires, and the metrics aggregator's
+	// `command_tracker` size gauge — the tracker's one reader — counts
+	// writes the CCU has long confirmed. Best-effort: a missing client
+	// entry or absent tracker is a no-op (test fixtures, lifecycle edges).
 	dpk := hmtypes.DataPointKey{
 		InterfaceID:    interfaceID,
 		ChannelAddress: channelAddress,

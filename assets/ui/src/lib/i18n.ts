@@ -1383,6 +1383,8 @@ const EN: Catalog = {
   "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Trusted proxy CIDR",
   "config.field.north.rest.auth.ha_ingress.role": "Granted role",
+  "config.field.north.rest.auth.session_idle_timeout":
+    "Session idle timeout",
   "config.field.north.rest.openapi_spec_path": "OpenAPI spec path",
   "config.field.north.rest.openapi_validate":
     "Validate requests against OpenAPI spec",
@@ -1678,6 +1680,8 @@ const EN: Catalog = {
     "Network the Ingress request's real peer must come from. Empty uses the HA Supervisor default 172.30.32.0/23. X-Forwarded-For is never trusted.",
   "config.help.north.rest.auth.ha_ingress.role":
     'Loom role granted to a trusted Ingress request: "admin" (default), "operator" or "viewer".',
+  "config.help.north.rest.auth.session_idle_timeout":
+    "Log a session out after this much inactivity, even while its absolute lifetime is still running (e.g. 30m, 2h). 0 disables the idle check and leaves only the absolute session lifetime in charge.",
   "config.help.north.rest.openapi_spec_path":
     "Override path for the OpenAPI YAML. Defaults to the copy embedded in the binary at build time. Expert: set only when hot-patching the spec during development.",
   "config.help.north.rest.openapi_validate":
@@ -5296,6 +5300,8 @@ const DE: Catalog = {
   "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Vertrauenswürdiges Proxy-CIDR",
   "config.field.north.rest.auth.ha_ingress.role": "Gewährte Rolle",
+  "config.field.north.rest.auth.session_idle_timeout":
+    "Sitzungs-Leerlauf-Timeout",
   "config.field.north.rest.openapi_spec_path": "OpenAPI-Spec-Pfad",
   "config.field.north.rest.openapi_validate":
     "Anfragen gegen OpenAPI-Spec prüfen",
@@ -5594,6 +5600,8 @@ const DE: Catalog = {
     "Netz, aus dem der echte Peer der Ingress-Anfrage stammen muss. Leer nutzt den HA-Supervisor-Standard 172.30.32.0/23. X-Forwarded-For wird nie vertraut.",
   "config.help.north.rest.auth.ha_ingress.role":
     'Loom-Rolle für eine vertrauenswürdige Ingress-Anfrage: "admin" (Standard), "operator" oder "viewer".',
+  "config.help.north.rest.auth.session_idle_timeout":
+    "Meldet eine Sitzung nach dieser Zeit ohne Aktivität ab, auch wenn ihre absolute Lebensdauer noch läuft (z. B. 30m, 2h). 0 deaktiviert die Leerlaufprüfung; dann gilt nur die absolute Lebensdauer.",
   "config.help.north.rest.openapi_spec_path":
     "Override-Pfad für die OpenAPI-YAML. Standard ist die zur Build-Zeit eingebettete Kopie. Expert: nur setzen, um die Spec während der Entwicklung ohne Neubau zu patchen.",
   "config.help.north.rest.openapi_validate":

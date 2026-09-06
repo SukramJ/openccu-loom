@@ -517,30 +517,6 @@ func TestTopicBuilderSlotConfigCustom(t *testing.T) {
 	}
 }
 
-func TestTopicBuilderSlotCommand(t *testing.T) {
-	t.Parallel()
-	tb := NewTopicBuilder("gh")
-	slot := pload.TopicSlot{Address: "0001ABCD", Channel: 1, Bucket: pload.BucketValues, Parameter: "STATE"}
-	got := tb.SlotCommand("ccu", "HmIP-RF", slot)
-	want := "gh/ccu/HmIP-RF/0001ABCD/1/values/STATE/set"
-	if got != want {
-		t.Fatalf("SlotCommand: got %q want %q", got, want)
-	}
-}
-
-func TestTopicBuilderSlotCommandCustom(t *testing.T) {
-	t.Parallel()
-	tb := NewTopicBuilder("gh")
-	slot := pload.TopicSlot{Address: "0001ABCD", Channel: 1, Bucket: pload.BucketCustom, Parameter: "climate"}
-	got := tb.SlotCommand("ccu", "HmIP-RF", slot)
-	if got == "" {
-		t.Fatal("SlotCommand for custom bucket must not be empty")
-	}
-	if got[len(got)-4:] != "/set" {
-		t.Fatalf("SlotCommand custom: missing /set suffix: %q", got)
-	}
-}
-
 func TestTopicBuilderCustomDPServiceMethod(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
@@ -1268,55 +1244,6 @@ func TestBridgeAnnounceOnlineStatusAndHealth(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Bridge.PublishSourceState
-// ---------------------------------------------------------------------------
-
-type fakeSource struct{}
-
-func (f *fakeSource) State() pload.StatePayload {
-	return map[string]any{"hvac_mode": "heat"}
-}
-
-func TestBridgePublishSourceStateRawDisabled(t *testing.T) {
-	t.Parallel()
-	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: false}, mp)
-	err := b.PublishSourceState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, &fakeSource{})
-	if err != nil {
-		t.Fatalf("PublishSourceState raw disabled: %v", err)
-	}
-	if len(mp.publications()) != 0 {
-		t.Fatal("no publishes expected when RawEnabled=false")
-	}
-}
-
-func TestBridgePublishSourceStateNilSource(t *testing.T) {
-	t.Parallel()
-	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true, CentralName: "ccu"}, mp)
-	err := b.PublishSourceState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, nil)
-	if err != nil {
-		t.Fatalf("PublishSourceState nil source: %v", err)
-	}
-	if len(mp.publications()) != 0 {
-		t.Fatal("nil source must not publish")
-	}
-}
-
-func TestBridgePublishSourceStateRawEnabled(t *testing.T) {
-	t.Parallel()
-	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true, CentralName: "ccu"}, mp)
-	err := b.PublishSourceState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, &fakeSource{})
-	if err != nil {
-		t.Fatalf("PublishSourceState: %v", err)
-	}
-	if len(mp.publications()) == 0 {
-		t.Fatal("expected a publish")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Bridge.PublishSlotState
 // ---------------------------------------------------------------------------
 
@@ -1709,7 +1636,6 @@ func TestUpdateDiscoveryCtxTopics(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"AggregatedStateTopic", ctx.AggregatedStateTopic(), "gh/ccu/HmIP-RF/0001ABCD/update"},
 		{"CustomDPStateTopic", ctx.CustomDPStateTopic(), "gh/ccu/HmIP-RF/0001ABCD/update"},
 		{"ServiceMethodCommandTopic(install)", ctx.ServiceMethodCommandTopic("install"), "gh/ccu/HmIP-RF/0001ABCD/update/set"},
 	}
@@ -1743,10 +1669,6 @@ func TestDiscoveryCtxTopicsNilSource(t *testing.T) {
 		Source:        nil, // nil source → CustomDPStateTopic returns ""
 	}
 	ctx := discoveryCtx{d: builder, ev: ev}
-	// AggregatedStateTopic delegates to CustomDPStateTopic → "" when Source is nil.
-	if got := ctx.AggregatedStateTopic(); got != "" {
-		t.Errorf("AggregatedStateTopic with nil source: got %q, want %q", got, "")
-	}
 	if got := ctx.CustomDPStateTopic(); got != "" {
 		t.Errorf("CustomDPStateTopic with nil source: got %q, want %q", got, "")
 	}
@@ -2290,28 +2212,6 @@ func TestCommandSubscriberStartSecondSubscribeError(t *testing.T) {
 	sub := NewCommandSubscriber(&nthFailSubscriber{failOn: 2}, topics, sink, nil)
 	if err := sub.Start(context.Background()); err == nil {
 		t.Fatal("expected error when second subscribe fails")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Bridge.PublishSourceState: empty state payload.
-// ---------------------------------------------------------------------------
-
-type nilStateSource struct{}
-
-func (n *nilStateSource) State() pload.StatePayload { return nil }
-
-func TestBridgePublishSourceStateNilPayload(t *testing.T) {
-	t.Parallel()
-	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true, CentralName: "ccu"}, mp)
-	// Source returns nil state → normalised to empty map.
-	err := b.PublishSourceState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, &nilStateSource{})
-	if err != nil {
-		t.Fatalf("PublishSourceState nil payload: %v", err)
-	}
-	if len(mp.publications()) == 0 {
-		t.Fatal("expected a publish even with nil state (normalised to {})")
 	}
 }
 

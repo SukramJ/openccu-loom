@@ -27,8 +27,6 @@ type stubDiscoveryCtx struct {
 
 func (s *stubDiscoveryCtx) CustomDPStateTopic() string { return s.customStateTopic }
 
-func (s *stubDiscoveryCtx) AggregatedStateTopic() string { return s.aggStateTopic }
-
 func (s *stubDiscoveryCtx) ServiceMethodCommandTopic(method string) string { return "cmd/" + method }
 
 func (s *stubDiscoveryCtx) WireParameterCommandTopic(param string) string { return "wire/cmd/" + param }

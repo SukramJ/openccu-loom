@@ -6,6 +6,107 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A weekly-program slot switched the wrong channel on every ordinary HmIP
+  device — since 0.72.2.** That release derived a target channel's bit as
+  "channel number minus one", citing the CCU editor's DALI branch. The
+  editor's rule for every other device is the channel's *position* in the
+  device's schedule-relevant channel list (`HmIPWeeklyProgram.js:2899,2926`
+  over `getWPVirtualChannels`; `iseHmIPWeeklyProgram.js:357` over
+  `getRelevantChannels`). On an HmIP-BSL a slot aimed at channel 4 therefore
+  set bit 3, which is channel 8, a signal-LED receiver; HmIP-PS/PSM, BSM,
+  SMO230, WKP and the window drive were mis-addressed the same way, and the
+  decode direction showed CCU-authored programs against the wrong channels.
+  The bit now comes from the device's own channel list
+  (`weekprofile.TargetBitOrder`), with the two families the editor treats
+  differently handled as it does: HmIP-DRG-DALI / HmIP-LSC keep "channel
+  minus one", HmIP-FWI takes the editor's `[8,16,…,1024,1,2,4]` table. The
+  guard that certified the old rule had taken the bit assignment from the
+  DALI line and the channel lists from elsewhere, so it was green on wrong
+  output; the replacement states the editor's lists as channel types and
+  derives the expectation from the editor's rule.
+- **WEEK_PROGRAM_CHANNEL_LOCKS shares the fix.** The lock bit for a channel
+  key came from a fixed 8×3 actor/sub grid, which the file itself listed as
+  wrong for HmIP-DLP (the door lock is bit 8, bit 0 is a permission
+  channel), HmIP-FWI, HmIP-DRG-DALI and HmIP-RGBW (whose fourth member had no
+  entry and could not be written). Every key now carries the bit the
+  device's list assigns its channel, and the fourth RGBW receiver is
+  addressable. Without a modelled week profile only the `1_1` fallback
+  resolves; any other key is refused rather than looked up in a grid the
+  firmware does not use.
+- **Leaving away mode on an HmIP thermostat writes what the reference
+  writes.** `DisableAway` wrote `SET_POINT_MODE=0` with `PARTY_TIME_END=now`
+  and left `PARTY_TIME_START` untouched — a still-future start with an end of
+  now is an inverted window, and no other authority ends a party that way.
+  It now submits an AWAY window that is already over (`SET_POINT_MODE=2`,
+  both dates at the firmware's initial `2000_01_01 00:00`), the shape
+  `disable_away_mode` has used in production for years.
+- **Two concurrent first-run `POST /api/v1/setup` calls both succeeded.** The
+  probe (a live user count) and the finalize (an upsert behind a bcrypt hash)
+  were not one step, so two admins could be created, or one silently
+  overwrite the other's password. The handler serialises probe and write.
+- **An idempotent replay duplicated `X-Request-ID`.** The replay re-emitted
+  every header the original response carried, including the ones outer
+  middleware had stamped, so a retry answered with two request ids and two
+  `X-Content-Type-Options`. The cache now holds only what the handler itself
+  set, and a replay sets rather than adds.
+- **The BIN-RPC callback listener served one request per connection.** A peer
+  that keeps its socket open — the CCU's own client does — got no answer to
+  the second callback on it. The listener serves every request the
+  connection carries.
+- **Critical writes could be shed by an open circuit breaker.** The
+  `InterfaceClient` write entry points entered the breaker with a hard-coded
+  low priority, so the CRITICAL-through-OPEN probe the alarm engine relies on
+  for a siren stop never fired there. The caller's priority is forwarded.
+- **A doorbell with PRESS_CONT and no PRESS_LONG_RELEASE latched the Matter
+  switch pressed** (HM-Sen-DB-PCB). A hold on such a channel is now a complete
+  gesture, as a PRESS_LONG already was.
+- **`GET /devices/{addr}/export-definition` was cut off by the 30 s request
+  deadline** on devices with many channels; it is exempt like the streams.
+- **A non-Latin-1 character in a string value failed the RPC with an opaque
+  encode error.** The CCU is ISO-8859-1 end to end, so the write is refused
+  before any RPC — now as a typed error the API answers with 400 (REST) or
+  `unencodable_string` (WebSocket) naming the value.
+- A backend that declares no ping/pong (Homegear) is probed with its
+  keepalive call instead of a `ping` it would fault on; a WebSocket closed
+  for control-plane backpressure logs the close even while a domain-event
+  overflow is open; `OPENCCU_LOOM_CALLBACK_PORT=0` / `_BIN_PORT=0` are
+  rejected at boot instead of binding an ephemeral port; the retained-orphan
+  sweep hook is installed before the south-bound bring-ups start, so a
+  central with cached descriptors no longer misses its first sweep; the
+  command throttle no longer under-counts a permit on a cancel racing
+  `Close`; `isUnsupported` matches wrapped sentinels.
+
+### Added
+
+- **`north.rest.auth.session_idle_timeout`** — the session store's idle
+  eviction, documented for a long time and never assigned. Default 0 keeps
+  the previous behaviour (sessions live for the absolute TTL); a value evicts
+  a session that has not been used for that long. Restart-required.
+
+### Changed
+
+- **Dead MQTT surface removed.** `Bridge.PublishSourceState`, the
+  `<addr>/<ch>/state` aggregate topic and `HADiscoveryContext.AggregatedStateTopic`
+  had no production caller; the boot-time retained scrub's matcher for that
+  shape stays, its comment now saying so instead of claiming the topology
+  still publishes it. `TopicBuilder.SlotCommand` built a `custom/<kind>/set`
+  topic nothing subscribed to and is gone as well.
+- **go-fabric pinned to `afd2023`**, which closes six audited defects in the
+  Matter stack: the AccessControl per-fabric cap counted the client-supplied
+  FabricIndex and could be bypassed; privacy masking covered one AES block
+  where the region is up to 20 bytes, and a unicast frame with the P bit is
+  dropped as matter.js and chip do; the AEAD nonce used a rebuilt Security
+  Flags byte and the header's Source Node ID instead of the received byte
+  and the session's peer id; PASE retransmit timeouts were decoded into 16
+  bits; two `sigma.Responder` setters wrote without the lock;
+  `subscription.Manager.Start` was not the idempotent call its doc promised.
+- Comments naming consumers of the client-side `CommandTracker` that do not
+  exist were corrected: its readers are the metrics `command_tracker` gauge
+  and the callback path that clears an echoed entry; a paramset write now
+  records its values there like a single write does.
+
 ## [0.74.0] - 2026-09-06
 
 ### Added

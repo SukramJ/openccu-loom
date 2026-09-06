@@ -132,8 +132,8 @@ type ButtonGroup struct {
 	supportsLong bool
 	// hasRelease reports whether a PRESS_LONG_RELEASE member exists.
 	// Only with a release parameter can the group hold a long-press
-	// cycle open; without one every PRESS_LONG must complete the
-	// cycle immediately (see transitionLocked).
+	// cycle open; without one every PRESS_LONG and every PRESS_CONT
+	// must complete the cycle immediately (see transitionLocked).
 	hasRelease bool
 
 	// mu guards the press-cycle state below. Events are dispatched
@@ -245,7 +245,10 @@ func (g *ButtonGroup) MatterSwitchCurrentPosition() uint8 {
 //	PRESS_CONT                    → first of a hold: InitialPress
 //	                                (LongPress is deferred to the
 //	                                release); repeats while held are
-//	                                suppressed.
+//	                                suppressed. Without a
+//	                                PRESS_LONG_RELEASE member the cycle
+//	                                completes immediately as
+//	                                InitialPress + LongPress + LongRelease.
 //	PRESS_LONG_RELEASE            → LongRelease; synthesizes the missing
 //	                                InitialPress / LongPress first when
 //	                                the hold started with PRESS_CONT or
@@ -373,6 +376,16 @@ func (g *ButtonGroup) transitionLocked(param hmenum.Parameter) []switchPressEven
 		return nil
 
 	case hmenum.ParameterPressCont:
+		if !g.hasRelease {
+			// No PRESS_LONG_RELEASE on this button (HM-Sen-DB-PCB
+			// channel 1 declares PRESS_SHORT + PRESS_CONT only): the
+			// device can never signal the hold end, so holding the
+			// cycle open would latch the group forever — no LongPress,
+			// no LongRelease, every later continuation suppressed.
+			// Each PRESS_CONT is therefore a complete gesture, exactly
+			// as the PRESS_LONG branch above resolves the same gap.
+			return []switchPressEvent{pressEventInitial, pressEventLongPress, pressEventLongRelease}
+		}
 		if g.held {
 			// BidCos repeats PRESS_CONT roughly every 300 ms while the
 			// button stays down. One physical hold is ONE Matter

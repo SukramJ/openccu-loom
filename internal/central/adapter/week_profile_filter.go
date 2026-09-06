@@ -242,38 +242,21 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 	if len(groups) == 0 {
 		return nil
 	}
+	// The bit each channel is addressed with comes from the device's own
+	// schedule-relevant channel list, the way the CCU's weekly-program
+	// editor derives it (see [weekprofile.TargetBitOrder]). A group member
+	// the list does not carry has no bit; publishing its key anyway would
+	// register a schedule switch the operator can never write — the REST
+	// lock handler's 404 gate passes because the key IS registered, and
+	// SetScheduleEnabled then fails with "unknown channel key" — while the
+	// broadcast path reported it as changed without ever setting a bit.
+	order := weekprofile.TargetBitOrder(dev.Model, typedChannelsOf(dev))
 	out := make(map[string]weekprofile.TargetChannelInfo)
 	for actorIdx, group := range groups {
 		for subIdx, member := range group.Channels {
 			key := fmt.Sprintf("%d_%d", actorIdx+1, subIdx+1)
-			// Publish only keys the WEEK_PROGRAM_CHANNEL_LOCKS table can
-			// address. The table covers an 8x3 grid; a channel group with
-			// more than three members (IPRGBW: one primary plus three
-			// secondaries, so HmIP-RGBW / HmIP-LSC mint a fourth member)
-			// runs past it. Registering such a key anyway published a
-			// schedule switch the operator can never write — the REST lock
-			// handler's 404 gate passes because the key IS registered, and
-			// SetScheduleEnabled then fails with "unknown channel key" —
-			// while the broadcast path silently reported it as changed
-			// without ever setting a bit for it.
-			//
-			// The bit is not missing from the firmware, it is missing from
-			// our table. The CCU's own weekly-program editor derives the
-			// bit positionally from the device's schedule-relevant channel
-			// list — `Math.pow(2, index)` over getRelevantChannels, whose
-			// accepted channel types include UNIVERSAL_LIGHT_RECEIVER
-			// (../OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:357
-			// and :517-555) — so an HmIP-RGBW's fourth universal-light
-			// receiver is that firmware's bit 3. What cannot be expressed
-			// is the mapping: channelKeyBitmask is a fixed actor×sub grid
-			// keyed by the custom-DP channel groups, not by the firmware's
-			// relevant-channel list, and the two lists diverge per device
-			// family (see the note on channelKeyBitmask, which carries the
-			// families and the reason the fix does not belong there). Until
-			// the key is minted from the device's own channel list, the
-			// fourth member carries no schedule switch — a target this
-			// table cannot address, not a bit nobody knows.
-			if _, ok := weekprofile.ChannelKeyToBitmask(key); !ok {
+			bit, known := order[member.ChannelNo]
+			if !known {
 				continue
 			}
 			chType := "secondary"
@@ -293,8 +276,25 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 				Name:           name,
 				NameSynthetic:  synthetic,
 				ChannelType:    chType,
+				Bit:            bit,
+				BitKnown:       true,
 			}
 		}
+	}
+	return out
+}
+
+// typedChannelsOf lists the device's real channels as (number, CHANNEL_TYPE)
+// pairs for [weekprofile.TargetBitOrder]; the device-root pseudo-channel is
+// left out, it has no CHANNEL_TYPE the editor would accept.
+func typedChannelsOf(dev *device.Device) []weekprofile.TypedChannel {
+	channels := dev.Channels()
+	out := make([]weekprofile.TypedChannel, 0, len(channels))
+	for _, ch := range channels {
+		if ch.Number == device.ChannelNumberDevice {
+			continue
+		}
+		out = append(out, weekprofile.TypedChannel{No: ch.Number, Type: ch.Type})
 	}
 	return out
 }

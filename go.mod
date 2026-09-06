@@ -36,7 +36,7 @@ require golang.org/x/term v0.45.0
 
 require filippo.io/nistec v0.0.4 // indirect
 
-require github.com/SukramJ/go-fabric v0.0.0-20260906144841-c3151056e6aa
+require github.com/SukramJ/go-fabric v0.0.0-20260906194520-afd2023e3206
 
 require (
 	github.com/SukramJ/go-mqtt v1.3.0

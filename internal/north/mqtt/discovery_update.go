@@ -33,22 +33,14 @@ type UpdateEvent struct {
 }
 
 // updateDiscoveryCtx is the bridge-side [payload.HADiscoveryContext]
-// wired for device-level update entities. It overrides
-// AggregatedStateTopic to use the dedicated update state topic and
-// ServiceMethodCommandTopic("install") to use the update install topic.
+// wired for device-level update entities. It resolves
+// CustomDPStateTopic to the dedicated device update state topic and
+// ServiceMethodCommandTopic("install") to the update install topic.
 type updateDiscoveryCtx struct {
 	topics      *TopicBuilder
 	centralName string
 	iface       string
 	address     string
-}
-
-func (c updateDiscoveryCtx) AggregatedStateTopic() string {
-	// The update entity reuses the AggregatedStateTopic slot in the
-	// HADiscoveryContext interface for its retained state topic
-	// (`<addr>/update`). It has no CustomDP slot, so
-	// CustomDPStateTopic mirrors the same value.
-	return c.topics.DeviceUpdateState(c.centralName, c.iface, c.address)
 }
 
 func (c updateDiscoveryCtx) CustomDPStateTopic() string {

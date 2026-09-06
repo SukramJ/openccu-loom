@@ -358,15 +358,15 @@ func TestChannelKeyBitmaskKnownKey(t *testing.T) {
 	}
 }
 
+// TestChannelKeyBitmaskKey2_2 — without a modelled week profile there is
+// no key→channel map (keys are minted from the custom-DP groups), so any
+// key but the "1_1" fallback is refused rather than resolved through a
+// grid that the firmware does not use.
 func TestChannelKeyBitmaskKey2_2(t *testing.T) {
 	t.Parallel()
 	s := NewSchedulesDomain(nil, nil)
-	bitmask, err := s.channelKeyBitmask(context.Background(), "DEV001", "2_2")
-	if err != nil {
-		t.Fatalf("channelKeyBitmask 2_2: %v", err)
-	}
-	if bitmask != 16 {
-		t.Errorf("bitmask 2_2 = %d, want 16", bitmask)
+	if bitmask, err := s.channelKeyBitmask(context.Background(), "DEV001", "2_2"); err == nil {
+		t.Errorf("channelKeyBitmask 2_2 on an unmodelled device = %d, want an error", bitmask)
 	}
 }
 
@@ -638,7 +638,9 @@ func TestSetScheduleEnabledWritesTheCombinedParameterOnce(t *testing.T) {
 		ScheduleType:   weekprofile.ScheduleTypeDefault,
 		ProfileCount:   1,
 	})
-	wp.RegisterChannel("1_1", true)
+	wp.SetAvailableTargetChannels(map[string]weekprofile.TargetChannelInfo{
+		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary", Bit: 0, BitKnown: true},
+	})
 	scheduleWriter := &recordingScheduleWriter{}
 	wp.AttachWriter(scheduleWriter, ch.Address)
 	ch.AttachWeekProfile(wp)

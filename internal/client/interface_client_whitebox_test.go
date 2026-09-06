@@ -72,14 +72,11 @@ func TestIsUnsupportedTrue(t *testing.T) {
 
 func TestIsUnsupportedWrapped(t *testing.T) {
 	t.Parallel()
-	// The function compares .Error() strings, so a wrapped error whose
-	// message equals the sentinel's message must also match.
+	// isUnsupported matches by sentinel, so a %w wrap still counts.
 	wrapped := fmt.Errorf("wrap: %w", backends.ErrUnsupported)
-	// wrapped.Error() != backends.ErrUnsupported.Error() — that is expected
-	// per the current implementation which does string-equality on the raw
-	// error, not errors.Is. So a wrapping error returns false here.
-	// This test documents the current behaviour.
-	_ = isUnsupported(wrapped) // either true or false — must not panic
+	if !isUnsupported(wrapped) {
+		t.Error("expected true for a wrapped backends.ErrUnsupported")
+	}
 }
 
 func TestIsUnsupportedFalse(t *testing.T) {

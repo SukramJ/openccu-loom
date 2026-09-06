@@ -423,8 +423,10 @@ func TestSetScheduleEnabledRollsBackWhenTheWireWriteFails(t *testing.T) {
 func TestSyncScheduleEnabledHoldsOnlyTheWrittenChannel(t *testing.T) {
 	t.Parallel()
 	dp := NewProfileDataPoint(ProfileDataPointConfig{ScheduleType: ScheduleTypeDefault})
-	dp.RegisterChannel("1_1", true)
-	dp.RegisterChannel("2_1", true)
+	dp.SetAvailableTargetChannels(map[string]TargetChannelInfo{
+		"1_1": {ChannelNo: 1, Bit: 0, BitKnown: true},
+		"2_1": {ChannelNo: 2, Bit: 1, BitKnown: true},
+	})
 	dp.AttachWriter(&recordingScheduleWriter{}, "DEV001:1")
 
 	if err := dp.SetScheduleEnabled(context.Background(), "1_1", false, hmenum.CommandPriorityHigh); err != nil {

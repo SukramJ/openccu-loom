@@ -170,8 +170,9 @@ func TestBindClimateScheduleIONilNoop(t *testing.T) {
 }
 
 // lockTargetChannelBits pins "1_1" (the door-lock actor) at the real
-// device's channel 1 and "2_1" (the permission actor) at channel 2 — bit =
-// channel number - 1, mirroring [weekprofile.TargetChannelBitsFrom]. Tests
+// device's channel 1 and "2_1" (the permission actor) at channel 2 — the bit
+// is the channel's position in the device's schedule-relevant list, per
+// [weekprofile.TargetBitOrder]: 0 and 1 for channels 1 and 2. Tests
 // below register the matching [weekprofile.TargetChannelInfo] on the
 // channel's WeekProfile so the loader resolves the same map the fixture was
 // encoded with.
@@ -205,7 +206,7 @@ func lockScheduleRawParamset() map[string]any {
 
 // attachLockWeekProfile registers lockTargetChannelBits' source channels on
 // ch, the way production wiring resolves TARGET_CHANNELS bit positions from
-// the device's own channel numbers (see targetChannelBits in
+// the device's own channel list (see targetChannelBits in
 // week_profile_io.go). Without this the loader's bits map is nil and every
 // TARGET_CHANNELS-derived lock field in these fixtures decodes empty.
 func attachLockWeekProfile(ch *device.Channel) *weekprofile.ProfileDataPoint {
@@ -216,8 +217,8 @@ func attachLockWeekProfile(ch *device.Channel) *weekprofile.ProfileDataPoint {
 		ProfileCount:   1,
 	})
 	wp.SetAvailableTargetChannels(map[string]weekprofile.TargetChannelInfo{
-		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary"},
-		"2_1": {ChannelNo: 2, ChannelAddress: ch.Address, ChannelType: "secondary"},
+		"1_1": {ChannelNo: 1, ChannelAddress: ch.Address, ChannelType: "primary", Bit: 0, BitKnown: true},
+		"2_1": {ChannelNo: 2, ChannelAddress: ch.Address, ChannelType: "secondary", Bit: 1, BitKnown: true},
 	})
 	ch.AttachWeekProfile(wp)
 	return wp

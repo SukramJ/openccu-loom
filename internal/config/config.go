@@ -1612,6 +1612,12 @@ type AuthConfig struct {
 	OIDC          OIDCConfig        `yaml:"oidc" json:"oidc" cfg:"basic"`
 	CCU           CCUAuthConfig     `yaml:"ccu" json:"ccu" cfg:"basic"`
 	HAIngress     HAIngressConfig   `yaml:"ha_ingress" json:"ha_ingress" cfg:"basic"`
+	// SessionIdleTimeout evicts a login session that has not been used
+	// within the window, even while its absolute lifetime is still
+	// running — it caps how long a stolen but unused session cookie stays
+	// usable. Zero (the default) disables the idle check, leaving only the
+	// absolute session lifetime in charge.
+	SessionIdleTimeout time.Duration `yaml:"session_idle_timeout,omitempty" json:"session_idle_timeout,omitempty" cfg:"expert"`
 }
 
 // BasicAuthEnabled resolves the tri-state Basic gate: nil defaults to
@@ -2144,10 +2150,16 @@ func (c *Config) Validate() error {
 	if err := c.Logging.validate(); err != nil {
 		return err
 	}
-	if c.Callback.Port < 0 || c.Callback.Port > 65535 {
+	// Port 0 is not a "pick any free port" mode here: applyDefaults has
+	// already rewritten a zero to the 8120/8129 default, so a zero reaching
+	// Validate can only come from a layer that runs after defaulting (the
+	// OPENCCU_LOOM_CALLBACK_PORT / _BIN_PORT env overlay). Left unbounded it
+	// travels to the listener, which binds an ephemeral port the CCU is never
+	// told about.
+	if c.Callback.Port < 1 || c.Callback.Port > 65535 {
 		return fmt.Errorf("config: callback.port out of range: %d", c.Callback.Port)
 	}
-	if c.Callback.BinPort < 0 || c.Callback.BinPort > 65535 {
+	if c.Callback.BinPort < 1 || c.Callback.BinPort > 65535 {
 		return fmt.Errorf("config: callback.bin_port out of range: %d", c.Callback.BinPort)
 	}
 	if c.Callback.MaxConnections < 0 {

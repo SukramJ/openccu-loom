@@ -89,6 +89,13 @@ type TargetChannelInfo struct {
 	NameSynthetic bool
 	// ChannelType is "primary" or "secondary".
 	ChannelType string
+	// Bit is the position the CCU addresses this channel with in
+	// `<n>_WP_TARGET_CHANNELS` and WEEK_PROGRAM_CHANNEL_LOCKS, as
+	// [TargetBitOrder] derived it from the device's own channel list.
+	// BitKnown is false when the channel is not in that list; such a key
+	// is never written, because a guessed bit addresses a neighbour.
+	Bit      uint
+	BitKnown bool
 }
 
 // ProfileDataPoint is the domain-level descriptor for a device's week-profile
@@ -616,7 +623,7 @@ func (dp *ProfileDataPoint) ScheduleEnabled() map[string]bool {
 // and dispatches a CCU write through the configured writer when one is
 // attached:
 //
-//   - Resolves channelKey → bitmask via [ChannelKeyToBitmask].
+//   - Resolves channelKey → bitmask via [ProfileDataPoint.ChannelKeyBit].
 //   - Renders the COMBINED_PARAMETER value as
 //     "WPTCLS=<bit>,WPTCL=<0|2>".
 //   - Writes to `<scheduleChannelAddress>.COMBINED_PARAMETER` with the
@@ -681,12 +688,12 @@ func (dp *ProfileDataPoint) SetScheduleEnabled(
 	if channelKey == "" {
 		// Aggregate write: OR of every known key.
 		for k := range dp.ScheduleEnabled() {
-			if bit, ok := ChannelKeyToBitmask(k); ok {
+			if bit, ok := dp.ChannelKeyBit(k); ok {
 				bitmask |= bit
 			}
 		}
 	} else {
-		bit, ok := ChannelKeyToBitmask(channelKey)
+		bit, ok := dp.ChannelKeyBit(channelKey)
 		if !ok {
 			dp.restoreScheduleEnabled(previousEnabled, previousHold)
 			return fmt.Errorf("weekprofile: unknown channel key %q", channelKey)
@@ -793,10 +800,7 @@ func (dp *ProfileDataPoint) SyncChannelLocksFromWire(rawValue any) {
 	if len(atc) == 0 {
 		return
 	}
-	keys := make([]string, 0, len(atc))
-	for k := range atc {
-		keys = append(keys, k)
-	}
+	bits := TargetChannelBitsFrom(atc)
 
 	var locks uint32
 	switch v := rawValue.(type) {
@@ -826,7 +830,7 @@ func (dp *ProfileDataPoint) SyncChannelLocksFromWire(rawValue any) {
 		return
 	}
 
-	state := ParseChannelLocks(locks, keys)
+	state := ParseChannelLocks(locks, bits)
 	dp.SyncScheduleEnabled(state)
 }
 
@@ -841,10 +845,10 @@ func (dp *ProfileDataPoint) AttachWriter(w ScheduleWriter, scheduleChannelAddres
 }
 
 // SetAvailableTargetChannels registers the schedule-controllable target
-// channels for this DP. Pipeline-owned. The keys correspond to
-// [AllChannelKeys]; each value carries the device channel address +
-// human label that surface as `available_target_channels` on the
-// Zeitplan sensor.
+// channels for this DP. Pipeline-owned. Keys are `<actor>_<sub>`; each
+// value carries the device channel address, the human label that surfaces
+// as `available_target_channels` on the Zeitplan sensor, and the bit the
+// CCU addresses the channel with (see [TargetBitOrder]).
 func (dp *ProfileDataPoint) SetAvailableTargetChannels(channels map[string]TargetChannelInfo) {
 	dp.mu.Lock()
 	if channels == nil {
@@ -879,6 +883,21 @@ func (dp *ProfileDataPoint) AvailableTargetChannels() map[string]TargetChannelIn
 	out := make(map[string]TargetChannelInfo, len(dp.availableTargetChannels))
 	maps.Copy(out, dp.availableTargetChannels)
 	return out
+}
+
+// ChannelKeyBit returns the WEEK_PROGRAM_CHANNEL_LOCKS / TARGET_CHANNELS
+// bit mask for a registered channel key, as [TargetBitOrder] assigned it
+// to the key's channel. Returns (0, false) for a key that is not
+// registered or whose channel the device's own list does not carry — the
+// caller refuses the write rather than addressing a neighbour.
+func (dp *ProfileDataPoint) ChannelKeyBit(key string) (uint32, bool) {
+	dp.mu.RLock()
+	info, ok := dp.availableTargetChannels[key]
+	dp.mu.RUnlock()
+	if !ok || !info.BitKnown || info.Bit > 31 {
+		return 0, false
+	}
+	return uint32(1) << info.Bit, true
 }
 
 // ScheduleChannelAddress returns the channel address used as the write

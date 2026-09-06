@@ -52,8 +52,7 @@ func (w *lockTargetLevelWriter) SetValue(_ context.Context, _ string, p hmenum.P
 // this guard reads the payload values, not the topic wiring.
 type lockTargetLevelDiscoveryCtx struct{}
 
-func (lockTargetLevelDiscoveryCtx) AggregatedStateTopic() string { return "ltl/state" }
-func (lockTargetLevelDiscoveryCtx) CustomDPStateTopic() string   { return "ltl/custom/state" }
+func (lockTargetLevelDiscoveryCtx) CustomDPStateTopic() string { return "ltl/custom/state" }
 
 func (lockTargetLevelDiscoveryCtx) ServiceMethodCommandTopic(m string) string {
 	return "ltl/svc/" + m + "/set"

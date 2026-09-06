@@ -1414,8 +1414,34 @@ var streamingPaths = map[string]struct{}{
 	"/api/v1/snapshot":                 {},
 }
 
+// unboundedSuffixes exempt whole route families whose path carries a
+// variable segment, so no exact entry in [streamingPaths] can name them.
+//
+// The definition export is not a stream but is unbounded for the same
+// reason: it issues one getParamsetDescription per (channel, paramset)
+// to the CCU, serialised, so a device with dozens of channels needs far
+// more than the router-wide write timeout. Cutting it mid-way leaves the
+// caller with nothing and the CCU with the radio cost already paid.
+var unboundedSuffixes = []string{
+	"/export-definition",
+}
+
+// isUnbounded reports whether path names a response the router-wide
+// request deadline must not bound.
+func isUnbounded(path string) bool {
+	if _, ok := streamingPaths[path]; ok {
+		return true
+	}
+	for _, suffix := range unboundedSuffixes {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 // timeoutExceptStreaming applies the router-wide request deadline everywhere
-// except the streaming routes.
+// except the routes [isUnbounded] names.
 //
 // [middleware.Timeout] puts the deadline on r.Context(), and the streaming
 // handler returns as soon as that context is done — so the blanket timeout
@@ -1429,7 +1455,7 @@ func timeoutExceptStreaming(d time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		timed := timeout(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if _, streaming := streamingPaths[r.URL.Path]; streaming {
+			if isUnbounded(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}

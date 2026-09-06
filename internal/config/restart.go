@@ -583,6 +583,15 @@ func authRestartRules() []RestartRule {
 				return !reflect.DeepEqual(b.North.REST.Auth.CCU, e.North.REST.Auth.CCU)
 			},
 		},
+		// The session store is constructed once at boot with the idle
+		// timeout it will apply (buildSessionStore in the composition root),
+		// so a new value reaches no running store.
+		{
+			Path: "north.rest.auth.session_idle_timeout",
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.Auth.SessionIdleTimeout != e.North.REST.Auth.SessionIdleTimeout
+			},
+		},
 		// The HA Ingress auth-passthrough middleware is also wired once at boot.
 		{
 			Path: "north.rest.auth.ha_ingress",

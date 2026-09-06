@@ -3,12 +3,11 @@
 
 //go:build bench
 
-// Package bench — aggregated-state publish micro-benchmark.
+// Package bench — source-backed publish micro-benchmark.
 //
-// ADR 0008 follow-up: measure the cost the aggregated-state topic
-// adds to PublishState compared to the per-parameter raw publish
-// alone. Release-gate threshold is +5 % p50 latency vs. the
-// non-aggregated baseline.
+// Measures the cost an Event.Source adds to PublishState compared to
+// the per-parameter raw publish alone. Release-gate threshold is
+// +5 % p50 latency vs. the source-less baseline.
 package bench
 
 import (
@@ -47,7 +46,7 @@ func (benchSource) Invoke(_ context.Context, _ string, _ map[string]any, _ hmenu
 }
 
 // BenchmarkPublishStateBaseline is the per-parameter raw publish
-// without an Event.Source — the pre-ADR-0007 cost.
+// without an Event.Source — the source-less cost.
 func BenchmarkPublishStateBaseline(b *testing.B) {
 	br := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base:        "gh",
@@ -71,9 +70,9 @@ func BenchmarkPublishStateBaseline(b *testing.B) {
 }
 
 // BenchmarkPublishStateWithSource is PublishState with Event.Source
-// set — exercises both the per-parameter publish AND the aggregated
-// state publish in one call. The ratio vs. the baseline is the
-// release gate (target: < +5 % p50).
+// set — exercises the per-parameter publish plus the source-derived
+// slot work in one call. The ratio vs. the baseline is the release
+// gate (target: < +5 % p50).
 func BenchmarkPublishStateWithSource(b *testing.B) {
 	br := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base:        "gh",
@@ -95,24 +94,5 @@ func BenchmarkPublishStateWithSource(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = br.PublishState(ctx, ev)
-	}
-}
-
-// BenchmarkPublishSourceStateOnly isolates the aggregated publish
-// path so a regression in `PublishSourceState` shows up directly,
-// independent of the per-parameter publish cost.
-func BenchmarkPublishSourceStateOnly(b *testing.B) {
-	br := mqtt.NewBridge(mqtt.BridgeConfig{
-		Base:        "gh",
-		CentralName: "ccu",
-		RawEnabled:  true,
-	}, benchPublisher{})
-
-	src := benchSource{}
-	ctx := context.Background()
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = br.PublishSourceState(ctx, "ccu", "HmIP-RF", "BWTH001", 1, src)
 	}
 }

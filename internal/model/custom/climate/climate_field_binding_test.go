@@ -54,8 +54,7 @@ func (w *recordingWriter) target() (address string, parameter hmenum.Parameter, 
 // "declared under the channel the parameter is published on".
 type bindingDiscoveryCtx struct{ channelAddress string }
 
-func (bindingDiscoveryCtx) AggregatedStateTopic() string { return "test/state" }
-func (bindingDiscoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (bindingDiscoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
 func (bindingDiscoveryCtx) ServiceMethodCommandTopic(method string) string {
 	return "test/svc/" + method + "/set"
 }

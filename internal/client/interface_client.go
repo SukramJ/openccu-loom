@@ -1016,6 +1016,15 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 	// successful probe. "ping" itself is still on the bypass list so
 	// other call sites (detection, init) keep their unconditional
 	// path.
+	// A backend that declares no ping/pong (Homegear — see
+	// [backends.CapabilityFor]) has no ping RPC at all; probing it with one
+	// yields a fault, not a connectivity verdict. Use the same call its
+	// keepalive uses: clientServerInitialized(interface_id), mirroring
+	// [backends.HomegearBackend.Ping].
+	probeMethod := "ping"
+	if !c.cfg.Capabilities.PingPong {
+		probeMethod = "clientServerInitialized"
+	}
 	var callErr error
 	err := c.cfg.Circuit.Do(ctx, "check_connection", func(ctx context.Context) error {
 		// Record the pending ping inside the breaker's admission, and
@@ -1027,7 +1036,7 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 		if token != "" {
 			c.RecordPing(token)
 		}
-		_, callErr = c.cfg.Caller.Call(ctx, "ping", []any{callerID})
+		_, callErr = c.cfg.Caller.Call(ctx, probeMethod, []any{callerID})
 		return callErr
 	})
 	return err == nil && callErr == nil

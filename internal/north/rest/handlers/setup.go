@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -44,6 +45,13 @@ type SetupService struct {
 	// database with zero users would send the operator hunting for an
 	// account that does not exist. Nil means allowed.
 	FirstRunAllowed func() bool
+
+	// mu serialises the first-run probe and the finalize that follows it.
+	// The probe is a live user count and finalize is an upsert behind a
+	// bcrypt hash (cost 12, hundreds of milliseconds); without the lock two
+	// concurrent first-run POSTs both pass the probe and both land — two
+	// admins, or one silently overwriting the other's password.
+	mu sync.Mutex
 }
 
 // setupStatusResponse is the body of GET /api/v1/setup/status.
@@ -132,6 +140,9 @@ func Setup(s *SetupService) http.HandlerFunc {
 		}
 		// Single-shot guarantee: refuse once any auth source exists. This is the
 		// security gate — the endpoint is otherwise open to anyone on the network.
+		// Held through finalizeSetup so the probe and the write are one step.
+		s.mu.Lock()
+		defer s.mu.Unlock()
 		if !setupRequired(r.Context(), s) {
 			problem.Write(w, http.StatusConflict,
 				problem.New(problem.TypeConflict, r, "Setup already completed", "an authentication source already exists"))

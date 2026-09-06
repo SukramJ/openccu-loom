@@ -68,9 +68,25 @@ type SessionStore struct {
 	logger  *slog.Logger
 }
 
+// SessionStoreOptions carries the tunables a composition root passes to a
+// session store. The zero value reproduces the historical behaviour, so a
+// caller that has nothing to configure keeps using the plain constructors.
+type SessionStoreOptions struct {
+	// IdleTTL is the inactivity window after which a session is evicted on
+	// its next lookup. Zero disables the idle check. Mirrors
+	// north.rest.auth.session_idle_timeout.
+	IdleTTL time.Duration
+}
+
 // NewSessionStore constructs an in-memory store with no durable backing.
 func NewSessionStore() *SessionStore {
-	return &SessionStore{TTL: SessionTTL, now: time.Now, items: make(map[string]*Session)}
+	return NewSessionStoreWithOptions(SessionStoreOptions{})
+}
+
+// NewSessionStoreWithOptions is [NewSessionStore] with the tunables of opts
+// applied.
+func NewSessionStoreWithOptions(opts SessionStoreOptions) *SessionStore {
+	return &SessionStore{TTL: SessionTTL, IdleTTL: opts.IdleTTL, now: time.Now, items: make(map[string]*Session)}
 }
 
 // NewPersistentSessionStore constructs a save-through session store
@@ -80,8 +96,15 @@ func NewSessionStore() *SessionStore {
 // construction step); subsequent persist failures during Issue/Revoke/
 // purge are best-effort and logged, never propagated.
 func NewPersistentSessionStore(persist SessionPersistence, logger *slog.Logger) (*SessionStore, error) {
+	return NewPersistentSessionStoreWithOptions(persist, logger, SessionStoreOptions{})
+}
+
+// NewPersistentSessionStoreWithOptions is [NewPersistentSessionStore] with the
+// tunables of opts applied.
+func NewPersistentSessionStoreWithOptions(persist SessionPersistence, logger *slog.Logger, opts SessionStoreOptions) (*SessionStore, error) {
 	s := &SessionStore{
 		TTL:     SessionTTL,
+		IdleTTL: opts.IdleTTL,
 		now:     time.Now,
 		items:   make(map[string]*Session),
 		persist: persist,

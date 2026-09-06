@@ -255,6 +255,7 @@ func (w *ValueWriter) PutParamsetWithOptions(
 	b, bOK := w.backends[ppKey]
 	ic := w.icSetters[ppKey]
 	resolved := resolveBus(w.busResolver, centralName)
+	ctFn := w.commandTracker
 	w.mu.RUnlock()
 	if !bOK {
 		return fmt.Errorf("%w: central=%s interface=%s", ErrNoBackend, centralName, interfaceID)
@@ -283,6 +284,16 @@ func (w *ValueWriter) PutParamsetWithOptions(
 		}
 	} else if err := b.PutParamset(ctx, channelAddress, paramsetKey, values, opts.Priority, opts.RxMode); err != nil {
 		return err
+	}
+	// Record every sent value in the IC's CommandTracker, as the SetValue
+	// path does — the reference records a paramset write the same way
+	// (add_put_paramset). Skipping it here left a paramset write with no
+	// tracker entry: nothing for the CCU's echo to clear, nothing in the
+	// command_tracker gauge.
+	if ctFn != nil {
+		for name, v := range values {
+			ctFn(interfaceID, channelAddress, hmenum.Parameter(name), paramsetKey, v)
+		}
 	}
 	if opts.WaitForCallback && resolved != nil {
 		// Build a DPKValue per paramset entry. The CCU echoes one

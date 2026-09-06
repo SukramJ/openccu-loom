@@ -69,6 +69,8 @@ func TestScheduleSwitchLabelReadsNameSynthetic(t *testing.T) {
 					Name:           "Channel 5",
 					NameSynthetic:  tc.synthetic,
 					ChannelType:    "primary",
+					Bit:            0,
+					BitKnown:       true,
 				},
 			})
 

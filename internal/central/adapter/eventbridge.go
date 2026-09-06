@@ -61,7 +61,10 @@ type EventBridge struct {
 
 	// postSnapshotHook, when set, runs synchronously after a central's
 	// snapshot pass published (see [SetPostCentralSnapshotHook]). Installed
-	// once during daemon wiring, before Start — not guarded by a mutex.
+	// during daemon wiring; guarded by hookMu because the fan-out worker
+	// may already be publishing a fast central's snapshot when the hook
+	// lands.
+	hookMu           sync.Mutex
 	postSnapshotHook func(ctx context.Context, centralName string)
 
 	// translations + locale localize the discovery entity names the bridge
@@ -703,7 +706,9 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 // declared / rawTopics bookkeeping reflects the current model; running them
 // earlier classifies every legitimate topic as an orphan.
 func (b *EventBridge) SetPostCentralSnapshotHook(fn func(ctx context.Context, centralName string)) {
+	b.hookMu.Lock()
 	b.postSnapshotHook = fn
+	b.hookMu.Unlock()
 }
 
 // PublishCentralSnapshot publishes the device snapshot for a single central,
@@ -770,8 +775,11 @@ func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Uni
 			slog.String("detail", "broker rejected at least one publish; retained-orphan sweeps not armed for this pass"))
 		return
 	}
-	if b.postSnapshotHook != nil {
-		b.postSnapshotHook(ctx, centralName)
+	b.hookMu.Lock()
+	hook := b.postSnapshotHook
+	b.hookMu.Unlock()
+	if hook != nil {
+		hook(ctx, centralName)
 	}
 }
 

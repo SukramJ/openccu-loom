@@ -43,6 +43,14 @@ func EncodeCall(w io.Writer, mc *MethodCall) error {
 	if mc.Method == "" {
 		return errors.New("xmlrpc: EncodeCall: Method is empty")
 	}
+	if err := checkEncodable(mc.Method); err != nil {
+		return err
+	}
+	for _, p := range mc.Params {
+		if err := checkValueEncodable(p); err != nil {
+			return err
+		}
+	}
 	ew := charmap.ISO8859_1.NewEncoder().Writer(w)
 	if _, err := io.WriteString(ew, xmlPreamble); err != nil {
 		return err
@@ -69,6 +77,16 @@ func EncodeCall(w io.Writer, mc *MethodCall) error {
 func EncodeResponse(w io.Writer, mr *MethodResponse) error {
 	if mr == nil {
 		return errors.New("xmlrpc: EncodeResponse: nil MethodResponse")
+	}
+	if mr.Fault != nil {
+		if err := checkEncodable(mr.Fault.Message); err != nil {
+			return err
+		}
+	}
+	for _, p := range mr.Params {
+		if err := checkValueEncodable(p); err != nil {
+			return err
+		}
 	}
 	ew := charmap.ISO8859_1.NewEncoder().Writer(w)
 	if _, err := io.WriteString(ew, xmlPreamble); err != nil {
@@ -175,6 +193,58 @@ func DecodeResponse(r io.Reader) (*MethodResponse, error) {
 			return &out, nil
 		}
 	}
+}
+
+// maxUnencodableEcho bounds how much of an offending string the error
+// echoes back: enough to identify the value, short enough for a log line.
+const maxUnencodableEcho = 32
+
+// checkEncodable refuses a string carrying a rune outside ISO-8859-1.
+// The CCU is Latin-1 end to end and its XML parser resolves only the five
+// named XML entities, so there is no faithful transliteration — refusing is
+// correct, but the refusal has to be a sentinel the caller can match
+// (a raw charmap failure surfaces as an opaque "encode call" error).
+func checkEncodable(s string) error {
+	for _, r := range s {
+		if r > 0xFF {
+			return fmt.Errorf("%w: %q", hmerr.ErrUnencodableString, truncateRunes(s, maxUnencodableEcho))
+		}
+	}
+	return nil
+}
+
+// truncateRunes shortens s to at most n runes without splitting one.
+func truncateRunes(s string, n int) string {
+	rs := []rune(s)
+	if len(rs) <= n {
+		return s
+	}
+	return string(rs[:n])
+}
+
+// checkValueEncodable walks a value's string carriers — including struct
+// member names and nested arrays — and applies [checkEncodable] to each.
+func checkValueEncodable(v Value) error {
+	switch t := v.(type) {
+	case StringValue:
+		return checkEncodable(string(t))
+	case StructValue:
+		for _, m := range t.Members {
+			if err := checkEncodable(m.Name); err != nil {
+				return err
+			}
+			if err := checkValueEncodable(m.Value); err != nil {
+				return err
+			}
+		}
+	case ArrayValue:
+		for _, item := range t {
+			if err := checkValueEncodable(item); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------

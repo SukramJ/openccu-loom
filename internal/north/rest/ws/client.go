@@ -102,6 +102,13 @@ type client struct {
 	// produces one warning and one resync frame per dropped event.
 	gapSignalled atomic.Bool
 
+	// ctrlCloseSignalled is the control plane's own one-shot flag. It is
+	// deliberately separate from gapSignalled: a domain-event overflow
+	// episode is exactly what precedes a control-queue overflow, and
+	// sharing the flag made the close that ends the connection log
+	// nothing in that correlated case.
+	ctrlCloseSignalled atomic.Bool
+
 	// born anchors the monotonic reading the heartbeat echo carries. Using
 	// an elapsed duration rather than a wall-clock stamp keeps the round-trip
 	// immune to an NTP step landing inside the 30s window.
@@ -370,7 +377,7 @@ func (c *client) enqueueCtrl(op byte, payload []byte) {
 		// dropping one desynchronises the client silently, so this plane
 		// keeps the strict policy. Warn once; close() is idempotent but
 		// the log line is not.
-		if c.gapSignalled.CompareAndSwap(false, true) {
+		if c.ctrlCloseSignalled.CompareAndSwap(false, true) {
 			c.logger.Warn("ws.backpressure",
 				slog.String("kind", "control"),
 				slog.String("action", "connection closed; control frames cannot be dropped"))

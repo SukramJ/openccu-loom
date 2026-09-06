@@ -127,13 +127,14 @@ func TestStatusWriterHijackOnNonHijackerReturnsError(t *testing.T) {
 	}
 }
 
-// --- recorder.Header ---
+// --- recorder snapshot ---
 
-func TestRecorderHeaderMergesIntoUnderlying(t *testing.T) {
+func TestRecorderSnapshotKeepsOnlyHandlerHeaders(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	r := &recorder{ResponseWriter: rec, header: http.Header{}, status: 200}
+	rec.Header().Set("X-Request-ID", "outer")
+	r := newRecorder(rec)
 
 	// Header() must return the underlying header so writes go to both.
 	h := r.Header()
@@ -141,6 +142,13 @@ func TestRecorderHeaderMergesIntoUnderlying(t *testing.T) {
 
 	if rec.Header().Get("X-Custom") != "test-value" {
 		t.Errorf("underlying header missing X-Custom: %q", rec.Header().Get("X-Custom"))
+	}
+	snap := r.snapshot()
+	if got := snap.header.Get("X-Custom"); got != "test-value" {
+		t.Errorf("snapshot X-Custom = %q, want test-value", got)
+	}
+	if _, ok := snap.header["X-Request-Id"]; ok {
+		t.Errorf("snapshot must not capture the pre-existing X-Request-ID: %v", snap.header)
 	}
 }
 

@@ -125,12 +125,13 @@ func insecureIconTransport() *http.Transport {
 // transient CCU outage costs the artwork for minutes, not for the rest
 // of the daemon's lifetime.
 //
-// The route is unauthenticated (an <img> tag cannot carry auth), so an
-// unknown address must NEVER create a cache entry: otherwise a caller
-// could grow the cache without bound — and probe which addresses exist —
-// by requesting random addresses in a loop. Only addresses that resolve
-// to a real device are cached, which naturally bounds the map to the
-// device fleet.
+// The route sits behind AuthRequire (the SPA's <img> carries the
+// same-origin session cookie; see the router's mount comment), so an
+// anonymous caller cannot reach it — but an authenticated one still must
+// not grow the cache without bound by requesting random addresses in a
+// loop. An unknown address therefore NEVER creates a cache entry: only
+// addresses that resolve to a real device are cached, which naturally
+// bounds the map to the device fleet.
 func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte, contentType string, ok bool) {
 	if p == nil || p.locate == nil || address == "" {
 		return nil, "", false

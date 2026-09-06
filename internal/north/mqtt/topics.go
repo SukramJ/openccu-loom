@@ -141,13 +141,6 @@ func (b *TopicBuilder) ChannelDeviceError(centralName, iface, address string, ch
 	return pd.MQTTChannelDeviceError(b.Base, centralName)
 }
 
-// AggregatedState is the retained per-Source state topic introduced
-// by ADR 0007. Delegates to [naming.PathData.MQTTChannelAggregateState].
-func (b *TopicBuilder) AggregatedState(centralName, iface, address string, channel int) string {
-	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
-	return pd.MQTTChannelAggregateState(b.Base, centralName)
-}
-
 // --- Slot helpers (delegate to ParameterState for non-custom buckets) ---
 
 // SlotState resolves to the per-parameter
@@ -168,21 +161,6 @@ func (b *TopicBuilder) SlotConfig(centralName, iface string, slot payload.TopicS
 		return pd.MQTTCustomDPConfig(b.Base, centralName)
 	}
 	return b.ParameterConfig(centralName, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
-}
-
-// SlotCommand resolves to the matching `set` topic. Custom-DP slots
-// expose a single `set` topic (per-method shape via
-// [TopicBuilder.CustomDPServiceMethod]).
-func (b *TopicBuilder) SlotCommand(centralName, iface string, slot payload.TopicSlot) string {
-	if slot.Bucket == payload.BucketCustom {
-		pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
-		state := pd.MQTTCustomDPState(b.Base, centralName)
-		if state == "" {
-			return ""
-		}
-		return state + "/set"
-	}
-	return b.ParameterCommand(centralName, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
 }
 
 // CustomDPServiceMethod returns the per-method command topic for a

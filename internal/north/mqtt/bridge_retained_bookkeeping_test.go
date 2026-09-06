@@ -14,11 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// stateSource is the narrow read side [Bridge.PublishSourceState] takes.
-type stateSource struct{ state pload.StatePayload }
-
-func (s stateSource) State() pload.StatePayload { return s.state }
-
 // TestRetractRawStateForDeviceClearsEveryDeviceScopedPublisher pins that
 // every retained raw-plane topic a device can own is cleared when the device
 // disappears.
@@ -91,17 +86,6 @@ func TestRetractRawStateForDeviceClearsEveryDeviceScopedPublisher(t *testing.T) 
 					t.Fatalf("PublishScheduleSwitchState: %v", err)
 				}
 				return b.topics.ScheduleSwitchState(central, iface, addr, 1, "p1")
-			},
-		},
-		{
-			name: "aggregated_source",
-			publish: func(t *testing.T, b *Bridge) string {
-				t.Helper()
-				src := stateSource{state: pload.StatePayload(map[string]any{"hvac_mode": "heat"})}
-				if err := b.PublishSourceState(ctx, central, iface, addr, 1, src); err != nil {
-					t.Fatalf("PublishSourceState: %v", err)
-				}
-				return b.topics.AggregatedState(central, iface, addr, 1)
 			},
 		},
 		{

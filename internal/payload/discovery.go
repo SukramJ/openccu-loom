@@ -45,24 +45,12 @@ type HADiscoveryContext interface {
 	// HA-Discovery `*_state_topic` references with a
 	// `value_template: "{{ value_json.<field> }}"` filter.
 	//
-	// Replaces the older [AggregatedStateTopic] form
-	// (`<addr>/<ch>/state`); both used to coexist and carry
-	// identical content, which doubled broker traffic and split
-	// state and config across two sub-trees. The slot-style topic
-	// puts state and `…/config` companion under the same `/custom/
-	// <kind>/` prefix.
+	// Replaces the retired `<addr>/<ch>/state` channel-aggregate
+	// form; both used to coexist and carry identical content, which
+	// doubled broker traffic and split state and config across two
+	// sub-trees. The slot-style topic puts state and its `…/config`
+	// companion under the same `/custom/<kind>/` prefix.
 	CustomDPStateTopic() string
-
-	// AggregatedStateTopic is the older channel-aggregate state
-	// topic (`<addr>/<ch>/state`). Retained as a thin alias so
-	// callers in transition compile; new code SHOULD prefer
-	// [CustomDPStateTopic]. The bridge no longer publishes content
-	// to this topic — subscribers will see the retained payload
-	// from the previous build until the boot-time stale-cleanup
-	// pass evicts it.
-	//
-	// Deprecated: use CustomDPStateTopic.
-	AggregatedStateTopic() string
 
 	// ServiceMethodCommandTopic returns the topic HA should write to
 	// in order to invoke `method` on the channel's custom DP.

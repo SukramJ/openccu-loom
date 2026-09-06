@@ -5,144 +5,144 @@ package weekprofile
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// channelKeyBitmask maps the `<actor>_<sub>` channel key to its
-// WEEK_PROGRAM_CHANNEL_LOCKS bit (8 actors × 3 sub-channels =
-// 24 bits, each a distinct power of two).
-//
-// Inverted bit semantics: a SET bit means the channel is LOCKED
-// (schedule disabled); a CLEAR bit means the channel is ENABLED.
-// [ParseChannelLocks] handles the inversion.
-//
-// The firmware does establish the mapping, and this grid is not it. The CCU's
-// own weekly-program editor derives the bit POSITIONALLY from the channel's
-// place in the device's schedule-relevant channel list — every
-// `*_VIRTUAL_RECEIVER` plus the access-control channel types, in channel order
-// (`getRelevantChannels`,
-// ../OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:517-555)
-// — and takes the bit as `Math.pow(2, index)` over that list (:357).
-//
-// Two firmware facts do back the shape below. The semantics are inverted (a
-// set bit selects Manu, i.e. schedule off — :239-241), and the stride is 3:
-// the non-expert view seeds `tmpVal = 1` and shifts `tmpVal << 3` per actor
-// (:361-364) and reads back every third bit (:614). So "actor N, sub S → bit
-// 3(N-1)+(S-1)" is the firmware's own scheme for an ordinary multi-actor
-// virtual-receiver device, and it is right for HmIP-BSM / PS / FSM and for
-// HmIP-BSL, whose own firmware override `[4, 5, 6, 8, 9, 10, 12, 13, 14]`
-// (:48-54) lands on positions 0..8 exactly as keys 1_1..3_3 do here.
-//
-// Where it is wrong, because the firmware overrides the list per family and
-// this table cannot express an override:
-//
-//   - HmIP-DLP: the editor puts DOOR_LOCK_TRANSCEIVER :12 at bit 8 (value
-//     256) and AUTO_RELOCK_TRANSCEIVER :13 at bit 9 (512), with bits 0..7
-//     taken by the eight PERMISSION_TRANSCEIVER channels
-//     (iseHmIPWeeklyProgram_AccessReceiver.js:300-313). A registry that
-//     schedules only the door-lock group mints key 1_1 and writes bit 0 —
-//     a permission channel.
-//   - HmIP-FWI (Wiegand): the editor drops the derived list for the hard-coded
-//     `[1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12]` (iseHmIPWeeklyProgram.js:230) and
-//     remaps the index — 0..7 to bits 3..10, 8..10 to bits 0..2 (:327-345 and
-//     :462-479). The firmware names what those two runs are where it folds the
-//     mask back for the non-expert view: "3 virtual switch actor channels" and
-//     "8 access control channels" (:619-621, counting bits from 1). So the
-//     eight ACCESS_TRANSCEIVER channels take bits 3..10 and the three switch
-//     receivers keep bits 0..2.
-//   - HmIP-DRG-DALI: the bit is the channel number minus one over 48 channels
-//     (iseHmIPWeeklyProgram.js:351), which is neither this stride nor 24 bits
-//     wide.
-//   - HmIP-RGBW: the universal-light group carries a fourth member, which
-//     mints key `1_4` — no entry here, so [ChannelKeyToBitmask] rejects it and
-//     the write fails rather than addressing the firmware's bit 3.
-//
-// Deriving the bit from the device's own channel list is the fix, and it
-// cannot be made here: the keys are minted from the custom-DP channel groups
-// upstream of this package, and for the families above that list is not the
-// firmware's relevant-channel list. The 24-bit mask measured on live hardware
-// is a property of the devices it was measured on, not of the scheme —
-// HmIP-DRG-DALI carries a 48-bit value.
-var channelKeyBitmask = map[string]uint32{
-	"1_1": 1 << 0,  // 1
-	"1_2": 1 << 1,  // 2
-	"1_3": 1 << 2,  // 4
-	"2_1": 1 << 3,  // 8
-	"2_2": 1 << 4,  // 16
-	"2_3": 1 << 5,  // 32
-	"3_1": 1 << 6,  // 64
-	"3_2": 1 << 7,  // 128
-	"3_3": 1 << 8,  // 256
-	"4_1": 1 << 9,  // 512
-	"4_2": 1 << 10, // 1024
-	"4_3": 1 << 11, // 2048
-	"5_1": 1 << 12, // 4096
-	"5_2": 1 << 13, // 8192
-	"5_3": 1 << 14, // 16384
-	"6_1": 1 << 15, // 32768
-	"6_2": 1 << 16, // 65536
-	"6_3": 1 << 17, // 131072
-	"7_1": 1 << 18, // 262144
-	"7_2": 1 << 19, // 524288
-	"7_3": 1 << 20, // 1048576
-	"8_1": 1 << 21, // 2097152
-	"8_2": 1 << 22, // 4194304
-	"8_3": 1 << 23, // 8388608
+// TypedChannel is one channel of a device as the CCU's weekly-program
+// editor sees it: its number and its CHANNEL_TYPE.
+type TypedChannel struct {
+	No   int
+	Type string
 }
 
-// AllChannelKeys returns the canonical ordering of every supported
-// schedule channel key (actor 1..8 × sub 1..3). The slice is freshly
-// allocated; callers may mutate freely.
-func AllChannelKeys() []string {
-	out := make([]string, 0, 24)
-	for actor := 1; actor <= 8; actor++ {
-		for sub := 1; sub <= 3; sub++ {
-			out = append(out, fmt.Sprintf("%d_%d", actor, sub))
+// scheduleRelevantChannelTypeTokens are the CHANNEL_TYPE substrings the
+// CCU's weekly-program editor accepts into a device's schedule-relevant
+// channel list. Both firmware editors carry the same set:
+// ../OpenCCU-Base/src/webui/www_source/ise/js/iseHmIPWeeklyProgram.js:517-555
+// (getRelevantChannels) and
+// ../OpenCCU-Base/www/config/easymodes/js/HmIPWeeklyProgram.js:200-236
+// (getWPVirtualChannels); the first also lists UNIVERSAL_LIGHT_RECEIVER,
+// which the second reaches through a per-device override.
+var scheduleRelevantChannelTypeTokens = []string{
+	"_VIRTUAL_RECEIVER",
+	"ACCESS_RECEIVER",
+	"ACCESS_TRANSCEIVER",
+	"DOOR_LOCK_STATE_TRANSMITTER",
+	"OPTICAL_SIGNAL_RECEIVER",
+	"UNIVERSAL_LIGHT_RECEIVER",
+	"PERMISSION_TRANSCEIVER",
+	"SWITCH_TRANSCEIVER",
+	"AUTO_RELOCK_TRANSCEIVER",
+	"DOOR_LOCK_TRANSCEIVER",
+}
+
+// TargetBitOrder returns, for every schedule-relevant channel of a device,
+// the bit the CCU addresses it with in `<n>_WP_TARGET_CHANNELS` and in
+// WEEK_PROGRAM_CHANNEL_LOCKS (the two share one assignment, see
+// iseHmIPWeeklyProgram.js:357 rendering the lock table over the same list).
+// The map is keyed by channel number.
+//
+// The rule is the firmware's own, read from its weekly-program editor
+// rather than from any device: the bit is the channel's POSITION in the
+// device's schedule-relevant channel list, taken in channel order —
+//
+//	valCheckBox = Math.pow(2, index)
+//	    HmIPWeeklyProgram.js:2899 (expert view) and :2926, over
+//	    getWPVirtualChannels (:200-236); iseHmIPWeeklyProgram.js:357 over
+//	    getRelevantChannels (:517-555); the read-back at
+//	    HmIPWeeklyProgram.js:360-366 tests isBitSet(val, index) over the same
+//	    list.
+//
+// The list is every channel whose CHANNEL_TYPE carries one of
+// [scheduleRelevantChannelTypeTokens], ascending by channel number. The
+// per-family lists the device-page editor spells out by hand (HmIP-BSL
+// `[4,5,6,8,9,10,12,13,14]`, HmIP-WKP `[1,3,5,...,15]`, HmIP-SMO230
+// `[10,11,12]`, a window drive `[2]`, HmIP-WGS `[7,9,10,11]`, :394-418) are
+// that derivation written out, which is why the WebUI editor, which
+// derives the list, and the device-page editor, which lists it, address
+// the same bits. A set bit in WEEK_PROGRAM_CHANNEL_LOCKS means LOCKED
+// (schedule disabled) — [ParseChannelLocks] carries the inversion.
+//
+// Two families are not positional, and the editor says so:
+//
+//   - HmIP-DRG-DALI: the bit is the channel number minus one
+//     (HmIPWeeklyProgram.js:2918, iseHmIPWeeklyProgram.js:351) — its list is
+//     sparse (the DALI channels 33..48 follow the physical ones, :459-472),
+//     so a position would not survive a device with fewer lamps. The
+//     device-page editor folds HmIP-LSC into the same branch (:292-295).
+//   - HmIP-FWI: positions 0..7 (the eight access-control channels) take bits
+//     3..10 and positions 8..10 (the three switch receivers) take bits 0..2
+//     — `valHmIP_FWI = [8,16,...,1024,1,2,4]` at HmIPWeeklyProgram.js:2893
+//     and the index remap at iseHmIPWeeklyProgram.js:327-345.
+//
+// "Channel number minus one" was applied to every device here once, and
+// was wrong for every ordinary one: an HmIP-BSL slot aimed at channel 4
+// set bit 3, which is channel 8 — a signal-LED receiver — and the CCU's
+// own editor showed the mistake as a different checkbox. The rule the
+// firmware applies is not derivable from a channel number; it needs the
+// list, so callers hand the device's channels in and take the map out.
+func TargetBitOrder(model string, channels []TypedChannel) map[int]uint {
+	relevant := make([]TypedChannel, 0, len(channels))
+	for _, ch := range channels {
+		if ch.No < 1 || !isScheduleRelevantChannelType(ch.Type) {
+			continue
+		}
+		relevant = append(relevant, ch)
+	}
+	if len(relevant) == 0 {
+		return nil
+	}
+	sort.Slice(relevant, func(i, j int) bool { return relevant[i].No < relevant[j].No })
+
+	out := make(map[int]uint, len(relevant))
+	switch {
+	case isDALIUniversalLightModel(model):
+		for _, ch := range relevant {
+			out[ch.No] = uint(ch.No - 1) //nolint:gosec // ch.No >= 1 by the filter above
+		}
+	case model == "HmIP-FWI":
+		for index, ch := range relevant {
+			if index <= 7 {
+				out[ch.No] = uint(index + 3) //nolint:gosec // 3..10
+			} else {
+				out[ch.No] = uint(index - 8) //nolint:gosec // index >= 8 here
+			}
+		}
+	default:
+		for index, ch := range relevant {
+			out[ch.No] = uint(index) //nolint:gosec // slice index
 		}
 	}
 	return out
 }
 
-// ChannelKeyToBitmask returns the WEEK_PROGRAM_CHANNEL_LOCKS bit for
-// key. Returns (0, false) when key is not a recognised <actor>_<sub>
-// pair.
-func ChannelKeyToBitmask(key string) (uint32, bool) {
-	v, ok := channelKeyBitmask[key]
-	return v, ok
-}
-
-// BitmaskToChannelKey reverses [ChannelKeyToBitmask]: returns the key
-// for an exact-match bitmask (a single bit). Returns ("", false) when
-// bitmask is zero, has multiple bits set, or matches no known channel.
-func BitmaskToChannelKey(bitmask uint32) (string, bool) {
-	if bitmask == 0 || bitmask&(bitmask-1) != 0 {
-		// Zero or multi-bit — not a single channel.
-		return "", false
-	}
-	for key, bit := range channelKeyBitmask {
-		if bit == bitmask {
-			return key, true
+func isScheduleRelevantChannelType(channelType string) bool {
+	for _, token := range scheduleRelevantChannelTypeTokens {
+		if strings.Contains(channelType, token) {
+			return true
 		}
 	}
-	return "", false
+	return false
+}
+
+func isDALIUniversalLightModel(model string) bool {
+	return model == "HmIP-DRG-DALI" || model == "HmIP-LSC"
 }
 
 // ParseChannelLocks decodes the raw WEEK_PROGRAM_CHANNEL_LOCKS integer
-// value into a per-key enabled/disabled map. Only keys in the
-// `availableKeys` slice are populated.
+// value into a per-key enabled/disabled map. Only keys carried by
+// `known` — each with the bit [TargetBitOrder] assigned its channel —
+// are populated.
 //
 // Inverted bit logic: a SET bit means LOCKED (returned as `false`);
 // a CLEAR bit means ENABLED (returned as `true`).
-func ParseChannelLocks(locksValue uint32, availableKeys []string) map[string]bool {
-	out := make(map[string]bool, len(availableKeys))
-	for _, key := range availableKeys {
-		bit, ok := channelKeyBitmask[key]
-		if !ok {
-			continue
-		}
-		out[key] = locksValue&bit == 0
+func ParseChannelLocks(locksValue uint32, known TargetChannelBits) map[string]bool {
+	out := make(map[string]bool, len(known))
+	for key, bit := range known {
+		out[key] = locksValue&(1<<bit) == 0
 	}
 	return out
 }

@@ -251,6 +251,11 @@ const (
 	// CommandErrorForbidden is returned when a write is rejected by a
 	// policy gate, e.g. the visibility gate for hidden parameters.
 	CommandErrorForbidden = "forbidden"
+	// CommandErrorUnencodableString is returned when a string argument
+	// carries a character the CCU cannot store: the firmware's paramsets
+	// are ISO-8859-1, so a rune outside that set is a client-side input
+	// error, not a backend failure.
+	CommandErrorUnencodableString = "unencodable_string"
 	// CommandErrorNotImplemented is returned by registered stubs that
 	// know their domain wiring has not yet landed. Distinct from
 	// CommandErrorUnknownCommand (which means the router has no entry
@@ -441,6 +446,11 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 		// callers can branch without string-matching.
 		if errors.Is(err, hmerr.ErrParameterHidden) {
 			res := Result{Error: NewCommandError(CommandErrorForbidden, err.Error())}
+			r.logOutcome(ctx, command, res, time.Since(start))
+			return res
+		}
+		if errors.Is(err, hmerr.ErrUnencodableString) {
+			res := Result{Error: NewCommandError(CommandErrorUnencodableString, err.Error())}
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}

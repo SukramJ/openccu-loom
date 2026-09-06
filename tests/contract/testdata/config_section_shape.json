@@ -73,6 +73,7 @@
   "north.rest.auth.oidc.issuer": "string",
   "north.rest.auth.oidc.redirect_url": "string",
   "north.rest.auth.oidc.role_claim": "string",
+  "north.rest.auth.session_idle_timeout": "time.Duration,omitempty",
   "north.rest.auth.tokens": "map[string]string",
   "north.rest.auth.users": "map[string]string",
   "north.rest.cors": "[]string",

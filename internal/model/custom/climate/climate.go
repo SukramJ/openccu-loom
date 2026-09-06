@@ -1379,11 +1379,22 @@ func (c *Climate) DisableAway(ctx context.Context, priority hmenum.CommandPriori
 		if c.writer == nil {
 			return ErrModeNotSupported
 		}
-		// SET_POINT_MODE = 0 (AUTO) and zero out PARTY_TIME_END so the CCU
-		// re-evaluates immediately.
+		// Leave away mode the way the reference does: submit an AWAY window
+		// that already lies in the past. SET_POINT_MODE stays AWAY (2) and
+		// both PARTY_TIME_START and PARTY_TIME_END are the firmware's own
+		// initial date, "2000_01_01 00:00" — the value the two parameters
+		// carry as DEFAULT in the HmIP-eTRV VALUES paramset — so the device
+		// evaluates an expired window and returns to its schedule at once.
+		// Writing SET_POINT_MODE=0 with PARTY_TIME_END=now while leaving
+		// PARTY_TIME_START untouched was a path no other authority takes:
+		// the reference (disable_away_mode) and the WebUI end a party
+		// through an expired window or CONTROL_MODE, never through
+		// SET_POINT_MODE alone, and a still-future start with an end of
+		// "now" is an inverted window whose firmware handling is unknown.
 		params := map[hmenum.Parameter]any{
-			hmenum.ParameterPartyTimeEnd: encodePartyTime(time.Now()),
-			hmenum.ParameterSetPointMode: int32(0),
+			hmenum.ParameterPartyTimeStart: partyInitDate,
+			hmenum.ParameterPartyTimeEnd:   partyInitDate,
+			hmenum.ParameterSetPointMode:   int32(setPointModeAway),
 		}
 		if err := custom.PutOrSet(ctx, c.writer, c.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 			return fmt.Errorf("climate: DisableAway IP: %w", err)
@@ -1440,6 +1451,17 @@ func (c *Climate) AwayUntil() (time.Time, bool) {
 // end that was one UTC offset earlier than requested — and, past the
 // offset, earlier than the start, which the CCU rejects as an inverted
 // window without reporting anything back.
+// partyInitDate is the firmware's initial value of PARTY_TIME_START and
+// PARTY_TIME_END (their DEFAULT in the HmIP-eTRV VALUES paramset). A window
+// at this date is already over, which is how the reference stack ends an
+// away period.
+const partyInitDate = "2000_01_01 00:00"
+
+// setPointModeAway is the HmIP SET_POINT_MODE value for an away/party
+// window (0 = AUTO, 1 = MANU, 2 = AWAY), as the reference stack numbers
+// _ModeHmIP.AWAY.
+const setPointModeAway = 2
+
 func encodePartyTime(t time.Time) string {
 	return t.Local().Format("2006_01_02 15:04")
 }
