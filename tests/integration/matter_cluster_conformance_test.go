@@ -32,8 +32,9 @@ import (
 // wires HomeKit characteristics from the command lists, so a gap here does not
 // degrade gracefully — it costs the pairing or the control surface.
 //
-// The oracle is the matter.js HEAD snapshot embedded by internal/north/matter/
-// parity, unmarshalled here into the shapes these checks need. Only plain "M"
+// The oracle is the matter.js HEAD snapshot embedded by go-fabric's parity
+// package (parity.SchemaJSON()), unmarshalled here into the shapes these
+// checks need. Only plain "M"
 // and bare feature-name conformances are evaluated: the conformance grammar
 // also has expressions ("PIN | RID", "[ALIRO]", "O.a+") whose evaluation this
 // does not implement, and a half-implemented grammar would produce confident

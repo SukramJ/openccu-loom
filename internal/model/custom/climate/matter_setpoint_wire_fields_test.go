@@ -17,7 +17,7 @@ import (
 // context-tag-keyed map[uint8]any whose unsigned integer values land as
 // uint64 and whose signed integer values (Amount is a signed int8 on the
 // wire) land as int64 — see decodeGenericTagMap in
-// internal/north/matter/bridge/fields_reader.go. Tag 0 is Mode, tag 1 is
+// go-fabric bridge/fields_reader.go. Tag 0 is Mode, tag 1 is
 // Amount. The prior extractor only accepted a string-keyed map, so every
 // real Apple/Google "raise the setpoint" reached the server as an error.
 // mode=0 (Both), amount=+15 (0.1°C units, +1.5°C) matches the magnitude
@@ -63,9 +63,9 @@ func TestThermostatSetpointRaiseLowerWireFieldsLowers(t *testing.T) {
 // TestThermostatOccupiedHeatingSetpointWriteAcceptsWireInt drives a direct
 // attribute Write of OccupiedHeatingSetpoint (0x0012) with the wire value
 // shape the bridge's TLV decoder produces: a signed setpoint lands as int64,
-// not int16 (see internal/north/matter/cluster/coerce.go, whose doc-comment
-// spells out that a strict value.(int16) rejects it and the whole Write fails
-// with IM status Failure). 2100 centi-°C = 21.0 °C must reach the CCU writer.
+// not int16 (see go-fabric cluster/coerce.go, whose file comment spells out
+// that a strict narrow type assertion rejects the decoded value and the whole
+// Write fails with IM status Failure). 2100 centi-°C = 21.0 °C must reach the CCU writer.
 func TestThermostatOccupiedHeatingSetpointWriteAcceptsWireInt(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{

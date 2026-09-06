@@ -106,7 +106,7 @@ Persistence is SQLite via `modernc.org/sqlite` — pure Go, no CGo. The default 
 
 ## Matter bridge
 
-The Matter side under `internal/north/matter/` is a semantic port of matter.js HEAD. Its binding contract and standing parity guards are described in the [Matter parity contract](../matter-parity-contract.md); the user-facing view is [Matter](../user/matter.md).
+The Matter wire stack is not part of this repository. It lives in the [go-fabric](https://github.com/SukramJ/go-fabric) module — a semantic port of matter.js HEAD covering the TLV codec, the Interaction Model, PASE / CASE, MRP over IPv6 UDP, DNS-SD advertisement, the cluster servers and the endpoint assembler — which the daemon embeds as a library. What stays here is the host side: `internal/north/matteradapter/` walks the device model and produces the flat endpoint specs go-fabric turns into a topology, `internal/store/matterendpoint/` backs go-fabric's endpoint store with the persisted source → endpoint-id mapping and the operator's exposure allowlist, and each device profile projects itself in `internal/model/custom/<dp>/matter.go`. The binding contract and standing parity guards are described in the [Matter parity contract](../matter-parity-contract.md); the user-facing view is [Matter](../user/matter.md).
 
 ## Where to read deeper
 

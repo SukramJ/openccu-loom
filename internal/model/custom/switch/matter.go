@@ -42,15 +42,12 @@ var (
 
 // Matter Device Type IDs and OnOff cluster IDs follow the Matter 1.5.1
 // Application Cluster Specification. The command ids come from
-// internal/north/matter/cluster/wire, which owns the wire contract; the
+// go-fabric's cluster/wire, which owns the wire contract; the
 // device type, the cluster id, the LT attribute ids, the LT feature bit
 // and the cluster revision are declared here next to the projection that
 // advertises them, and every one of them is pinned against the matter.js
 // snapshot by TestHmLgtSwitchOnOffMatchesMatterJS — the ids are not
 // reviewed by eye against a second hand-written list.
-//
-// (There is no internal/north/matter/cluster/onoff package; an earlier
-// note here pointed at one.)
 const (
 	matterDeviceTypeOnOffPlugInUnit uint16 = 0x010A
 
@@ -80,7 +77,7 @@ const (
 
 	// The six OnOff command IDs are the wire contract, so they are read
 	// from the package that owns it —
-	// internal/north/matter/cluster/wire/onoff.go — instead of being
+	// go-fabric cluster/wire/onoff.go — instead of being
 	// transcribed a second time here. matter.js
 	// packages/model/src/standard/elements/on-off.element.ts marks Off "M",
 	// On and Toggle "!OFFONLY", and the three 0x4x commands "LT": all six

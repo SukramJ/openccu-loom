@@ -68,7 +68,7 @@ var measurementClasses = []interfaces.MatterMeasurementClass{
 //
 // What an entry does NOT assert is that the seam suppresses the standalone
 // endpoint. That is what TestMeteringPlugProjectsOneElectricalSensorEndpoint
-// in internal/north/matter/endpoint observes, on an assembled topology.
+// in internal/north/matteradapter observes, on an assembled topology.
 var hostRiddenMeasurementClasses = map[interfaces.MatterMeasurementClass]string{
 	interfaces.MatterMeasurementPower: "folded into a generic.ElectricalGroup by the assembler, which projects one " +
 		"ElectricalSensor (0x0510) endpoint per channel; the per-parameter class never builds an endpoint",

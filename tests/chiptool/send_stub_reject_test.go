@@ -31,7 +31,7 @@ func TestNegative_Groups(t *testing.T) {
 
 	// WRITE — NameSupport is the cluster's only attribute. wire.Groups
 	// rejects the write with an error message containing "read-only",
-	// which internal/north/matter/endpoint/dispatcher.go's
+	// which go-fabric endpoint/dispatcher.go's
 	// writeErrorStatus heuristic maps to StatusUnsupportedWrite (0x88).
 	t.Run("write/name-support", func(t *testing.T) {
 		out, _ := b.SharedCtl.WriteAttr(ctx, t, "groups", "name-support", "1", ep)
@@ -85,7 +85,7 @@ func TestNegative_ScenesManagement(t *testing.T) {
 
 // TestNegative_MeasurementWrite pins the generic read-only-cluster
 // contract shared by every measurement server in
-// internal/north/matter/cluster/measurement — TemperatureMeasurement
+// go-fabric cluster/measurement — TemperatureMeasurement
 // here as the representative. These clusters project a Source-driven
 // value onto the wire and never accept a controller-originated write;
 // MatterWrite always returns errReadOnly ("cluster is read-only at the

@@ -85,9 +85,9 @@ func (c *Climate) OnMatterValueChanged(cb func()) func() {
 // §2.3 (TemperatureMeasurement) and §2.6 (RelativeHumidityMeasurement).
 // Cluster revisions and attribute IDs mirror
 // packages/model/src/standard/elements/ in matter.js HEAD.
-// They live here next to the projection;
-// internal/north/matter/cluster/{thermostat,thermostatui,tempmeasurement,humiditymeasurement}/
-// may later import them.
+// They live here next to the projection, unexported: the generic
+// cluster servers in go-fabric (cluster/thermo, cluster/measurement)
+// carry their own copies across the module boundary.
 const (
 	matterDeviceTypeThermostat uint16 = 0x0301
 
@@ -177,7 +177,7 @@ func (e climateSystemModeUnsupportedError) Error() string { return e.msg }
 
 // MatterStatusCode implements [im.StatusCodeError] so the dispatcher
 // encodes ConstraintError instead of falling back to the generic
-// StatusFailure — see internal/north/matter/endpoint/dispatcher.go
+// StatusFailure — see go-fabric endpoint/dispatcher.go
 // writeErrorStatus.
 func (climateSystemModeUnsupportedError) MatterStatusCode() im.StatusCode {
 	return im.StatusConstraintError
@@ -620,7 +620,7 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 	switch attrID {
 	case matterAttrThermOccupiedHeatSp:
 		// The bridge's TLV decoder surfaces a signed setpoint as int64, not
-		// int16 (see internal/north/matter/cluster/coerce.go). Coerce rather
+		// int16 (see go-fabric cluster/coerce.go). Coerce rather
 		// than assert one exact Go type — a strict value.(int16) rejected the
 		// wire value and every Apple/Google setpoint write failed with IM
 		// status Failure.
@@ -808,7 +808,7 @@ func (s climateThermostatUIServer) MatterAttributes() []uint32 {
 // context tag 1 (int8). SetpointRaiseLower has no typed decoder in the
 // bridge, so the real wire path lands here as the tag-keyed map[uint8]any
 // that decodeGenericTagMap produces — unsigned ints as uint64, signed
-// ints as int64 (see internal/north/matter/bridge/fields_reader.go). The
+// ints as int64 (see go-fabric bridge/fields_reader.go). The
 // string-keyed shape is kept for the in-package tests.
 func extractSetpointRaiseLower(fields any) (mode uint8, amount int8, err error) {
 	switch v := fields.(type) {

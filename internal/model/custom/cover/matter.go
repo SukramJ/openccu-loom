@@ -104,8 +104,9 @@ func (g *Garage) OnMatterValueChanged(cb func()) func() {
 
 // Matter Device Type IDs and WindowCovering cluster IDs follow the
 // Matter 1.5.1 Application Cluster Specification. They live here next
-// to the projection; internal/north/matter/cluster/windowcovering/
-// may later import them. Cluster revision verified against the Matter
+// to the projection, unexported: the generic WindowCovering server in
+// go-fabric's cluster/cover package carries its own copies across the
+// module boundary. Cluster revision verified against the Matter
 // cluster sweep (matter.js HEAD packages/model/src/standard/elements/).
 const (
 	matterDeviceTypeWindowCovering uint16 = 0x0202
@@ -830,7 +831,7 @@ func (s blindWCServer) MatterGeneratedCommands() []uint32 { return nil }
 // GoToTiltPercentage request. GoTo*Percentage has no typed decoder in
 // the bridge, so the real wire path lands here as the tag-keyed
 // map[uint8]any that decodeGenericTagMap produces (unsigned ints as
-// uint64) — see internal/north/matter/bridge/fields_reader.go. The
+// uint64) — see go-fabric bridge/fields_reader.go. The
 // bare-uint16 and string-keyed shapes are kept for the in-package
 // tests.
 //

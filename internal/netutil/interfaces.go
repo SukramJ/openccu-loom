@@ -38,7 +38,7 @@ var virtualIfacePrefixes = []string{
 // IsVirtualInterfaceName reports whether name looks like a container /
 // virtualisation bridge whose addresses are not routable from peers.
 //
-// loom:reachable:reason="statically called by the client-discovery and Matter mDNS advertisers (internal/north/discovery/mdns, internal/north/matter/mdns); those advertiser paths sit behind the daemon wiring the RTA entry-point analysis already tolerates as unreachable for the caller packages"
+// loom:reachable:reason="statically called by the client-discovery mDNS advertiser (internal/north/discovery/mdns); that advertiser path sits behind the daemon wiring the RTA entry-point analysis already tolerates as unreachable for the caller package"
 func IsVirtualInterfaceName(name string) bool {
 	n := strings.ToLower(name)
 	for _, p := range virtualIfacePrefixes {

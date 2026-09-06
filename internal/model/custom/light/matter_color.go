@@ -898,7 +898,7 @@ func colorTagU8(m map[uint8]any, tag uint8) uint8 {
 // tag 0) out of a MoveToColorTemperature request. The bridge decodes
 // this command to a typed [wire.MoveToColorTemperatureRequest] (see
 // decodeMoveToColorTemperatureFields in
-// internal/north/matter/bridge/fields_reader.go), so that is the real
+// go-fabric bridge/fields_reader.go), so that is the real
 // wire shape; the map[uint8]any / uint16 / string-keyed cases keep the
 // helper usable from the generic-decode fallback and the in-package
 // tests.

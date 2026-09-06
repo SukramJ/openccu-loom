@@ -16,7 +16,7 @@ import (
 // exact payload shape the bridge's commandFieldsReader produces for a
 // command with no typed decoder: a context-tag-keyed map[uint8]any whose
 // unsigned integer values land as uint64 (see decodeGenericTagMap in
-// internal/north/matter/bridge/fields_reader.go). Tag 0 is StepMode, tag
+// go-fabric bridge/fields_reader.go). Tag 0 is StepMode, tag
 // 1 is StepSize. The prior extractor only accepted a string-keyed map,
 // so every real Apple/Google "brighten by N" reached the server as an
 // error. The magnitude matches TestLevelInvokeStepUpAndDown's

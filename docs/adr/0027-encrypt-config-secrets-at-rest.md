@@ -1,5 +1,14 @@
 # ADR 0027 — Encrypt config secrets at rest
 
+> **Historical paths.** Since 0.74.0 the Matter stack is a dependency, not a
+> subtree: it lives in the [go-fabric](https://github.com/SukramJ/go-fabric)
+> module and `internal/north/matter/` no longer exists in this repository. The
+> paths below are left as they were when the decision was made — a record
+> rewritten to match today's tree stops being a record. For where each piece
+> lives now, see
+> [`SPECIFICATION.md`](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md)
+> §6.
+
 - **Status**: accepted
 - **Date**: 2026-06-05
 - **Related**:

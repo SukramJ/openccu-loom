@@ -50,7 +50,7 @@ func (b *Bridge) fetchExposable(t *testing.T) ([]exposureItem, error) {
 // CCU-side ground truth. It reads
 // BridgedDeviceBasicInformation.SerialNumber off the wire — the
 // bridge stamps SerialNumber with the source device's address (see
-// internal/north/matter/endpoint/materialize.go) — then
+// go-fabric endpoint/materialize.go) — then
 // cross-references GET /api/v1/matter/exposable for the enabled row
 // whose device_address AND cluster match, returning that row's
 // channel address plus dp_key.

@@ -52,7 +52,7 @@ When you change model code (data-point creation, visibility marks, custom-DP com
 
 ## Matter parity
 
-Matter-side changes carry their own parity tests under `internal/north/matter/.../parity_matterjs_test.go`, plus the chip-tool smoke target:
+The Matter wire stack lives in the [go-fabric](https://github.com/SukramJ/go-fabric) module, and its parity tests run there — the `*_parity_matterjs_test.go` files under `cluster/`, `tlv/`, `im/`, `mdns/` and `secure/`. What this repository still holds is the host half: `internal/north/matteradapter/parity_matterjs_test.go`, the schema pin in `tests/contract/matter_schema_sync_test.go`, the cluster-conformance guards under `tests/integration/`, and the chip-tool smoke target:
 
 ```sh
 make matter-smoke

@@ -7,7 +7,7 @@ package main
 // Enhanced Commissioning Window path that builds a PASE acceptor from a
 // commissioner-supplied Matter §3.10.5 PAKE passcode verifier (w0 || L)
 // instead of a locally-known passcode. The spake2 verifier/prover round
-// trip itself is covered by internal/north/matter/secure/spake2; this test
+// trip itself is covered by go-fabric's secure/spake2 package; this test
 // only exercises the wiring: does a valid 97-byte verifier build an
 // adapter, and is a malformed-length verifier rejected before it reaches
 // spake2.NewVerifierFromValue.

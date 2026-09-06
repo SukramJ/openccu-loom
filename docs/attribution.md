@@ -127,11 +127,17 @@ binary are addressed separately by ADR 0003 and the `NOTICE.md` of the
   the Connectivity Standards Alliance organisation (`project-chip`, which
   still redirects) and now lives in its own `matter-js` organisation. It is
   not a CSA project and is not certified by the Alliance.
-- Used as: the gold standard for the entire Matter side. Everything under
-  `internal/north/matter/` is a semantic port of matter.js HEAD — cluster IDs,
-  revisions, attribute IDs, constraints, defaults and wire shape are mirrored
-  from it, and 170+ Go files cite the matter.js `path:function` they mirror.
-  See CLAUDE.md §"matter.js as the Matter Gold Standard".
+- Used as: the gold standard for the entire Matter side. The Matter stack is
+  not part of this repository — it lives in the
+  [go-fabric](https://github.com/SukramJ/go-fabric) module, which OpenCCU-Loom
+  embeds as a library, and which is a semantic port of matter.js HEAD: cluster
+  IDs, revisions, attribute IDs, constraints, defaults and wire shape are
+  mirrored from it, and 270+ Go files there cite the matter.js
+  `path:function` they mirror. The host side that stays here
+  (`internal/north/matteradapter/`, `internal/store/matterendpoint/`, the
+  per-device projections under `internal/model/custom/`) mirrors matter.js
+  only where it names a Matter constant. See CLAUDE.md §"matter.js HEAD is the
+  Matter gold standard".
 
 Compliance: Apache-2.0 is MIT-compatible. No matter.js source is reproduced
 verbatim; the Go code is written from scratch. The Apache-2.0 license text is
