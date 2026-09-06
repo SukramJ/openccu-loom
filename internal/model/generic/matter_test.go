@@ -597,3 +597,64 @@ func TestInteger_OnMatterValueChanged_NilCallbackSafe(t *testing.T) {
 	// OnEvent must not panic when callback is nil (no subscriber stored).
 	i.OnEvent(30)
 }
+
+// TestBinarySensorUnclassifiedParameterFallsBackToContact pins the
+// fallback that keeps an unclassified boolean on the Matter surface.
+//
+// Both classifier tables are whitelists of parameter names, so a boolean
+// the CCU grows that nobody has named yet used to return
+// MatterMeasurementNone and be dropped by the assembler — silently, and
+// indistinguishably from a device that has no such state. The endpoint
+// it produces now is ContactSensor 0x0015, whose mandatory BooleanState
+// 0x0045 server is exactly a two-state reading.
+func TestBinarySensorUnclassifiedParameterFallsBackToContact(t *testing.T) {
+	for _, p := range []hmenum.Parameter{
+		"SOME_FUTURE_BOOLEAN",
+		"VENDOR_SPECIFIC_FLAG",
+	} {
+		b := NewBinarySensor(baseCfg(p, hmenum.ParameterTypeBool, hmenum.OperationsRead|hmenum.OperationsEvent))
+		if got := b.MatterMeasurementClass(); got != interfaces.MatterMeasurementContact {
+			t.Errorf("%s: got %v, want MatterMeasurementContact — an unclassified boolean must "+
+				"still reach the Matter surface, not vanish from it", p, got)
+		}
+	}
+}
+
+// TestBinarySensorFallbackDoesNotOverrideAKnownClass is the negative
+// control on that fallback: it must be the last resort, never a
+// replacement for a classification that was actually established.
+// Occupancy and Leak in particular assert what a reading MEANS, and the
+// fallback asserts only that it has two states.
+func TestBinarySensorFallbackDoesNotOverrideAKnownClass(t *testing.T) {
+	for _, tc := range []struct {
+		param hmenum.Parameter
+		want  interfaces.MatterMeasurementClass
+	}{
+		{hmenum.ParameterMotion, interfaces.MatterMeasurementOccupancy},
+		{hmenum.ParameterMotionDetectionActive, interfaces.MatterMeasurementOccupancy},
+		{hmenum.ParameterMoistureDetected, interfaces.MatterMeasurementLeak},
+		{hmenum.ParameterWaterLevelDetected, interfaces.MatterMeasurementLeak},
+		{hmenum.ParameterLowBat, interfaces.MatterMeasurementBattery},
+		{hmenum.ParameterState, interfaces.MatterMeasurementContact},
+		{hmenum.ParameterSabotage, interfaces.MatterMeasurementContact},
+	} {
+		b := NewBinarySensor(baseCfg(tc.param, hmenum.ParameterTypeBool, hmenum.OperationsRead|hmenum.OperationsEvent))
+		if got := b.MatterMeasurementClass(); got != tc.want {
+			t.Errorf("%s: got %v, want %v — the fallback swallowed an established classification",
+				tc.param, got, tc.want)
+		}
+	}
+}
+
+// TestNonBooleanSensorStillOptsOut keeps the fallback from widening into
+// the opt-out it sits next to. MatterMeasurementNone is also the
+// deliberate exclusion for readings with no Matter cluster — opaque
+// strings, weather data — and those do not arrive as BinarySensor, so
+// they must be untouched by this change.
+func TestNonBooleanSensorStillOptsOut(t *testing.T) {
+	s := NewStringSensor(baseCfg("SOME_OPAQUE_STRING", hmenum.ParameterTypeString, hmenum.OperationsRead|hmenum.OperationsEvent))
+	if got := s.MatterMeasurementClass(); got != interfaces.MatterMeasurementNone {
+		t.Errorf("opaque string sensor: got %v, want MatterMeasurementNone — the contact fallback "+
+			"must not reach anything that is not boolean", got)
+	}
+}

@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Read/write ENUM data points reach Matter as ModeSelect, and the MP3P sound
+  player as a Speaker.** Neither had any Matter projection: an ENUM was
+  unrepresentable, and `siren.SoundPlayer` said in source that it was excluded
+  from the surface entirely. A `generic.Select` now advertises device type
+  0x0027 and serves ModeSelect 0x0050 from its own VALUE_LIST — one mode per
+  entry, label and index from the list, `ChangeToMode` routed to the data
+  point. Write-only and read-only ENUMs stay out on purpose, and the file says
+  why: a mode whose `CurrentMode` can only echo our own last write, or whose
+  mandatory `ChangeToMode` would always fail, is not honestly a ModeSelect.
+  The sound player advertises Speaker 0x0022 with volume on LevelControl and
+  the audible/silent axis on OnOff — mapped to real data points (DIRECTION,
+  and `StopSound` writing LEVEL=0) rather than to an invented mute flag, since
+  on this device muted and silent are the same state.
+
 - **The Matter behaviour corpus runs again.** The 41 scenario files under
   `notes/parity/matter/scenarios/` had no runner after the Matter stack moved
   into `github.com/SukramJ/go-fabric`: the corpus stayed here, because the
@@ -46,6 +60,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it from the module, and the pinned bytes are unchanged by the move.
 
 ### Fixed
+
+- **An unclassified boolean data point no longer vanishes from the Matter
+  surface.** Both classifiers are whitelists of parameter names, so every
+  boolean the CCU grows that nobody has named yet returned
+  `MeasurementNone` and was dropped while assembling endpoints — not
+  refused, not logged, and indistinguishable from a device that has no such
+  state. A `BinarySensor` is boolean by construction, so it now falls back to
+  ContactSensor 0x0015, whose mandatory BooleanState 0x0045 server is exactly
+  a two-state reading. Naming it Contact claims only what is known; an
+  unknown parameter never reaches Occupancy or Leak, which assert what a
+  reading *means*. Device housekeeping keeps opting out by name — UNREACH and
+  STICKY_UNREACH already reach a controller as
+  BridgedDeviceBasicInformation.Reachable, and the two pending flags have no
+  reading behind them. (The roadmap named OnOffSensor 0x0850 for this. That
+  device type has only Descriptor and Identify as *server* clusters — OnOff is
+  a client cluster there — so the endpoint could not have carried the value.)
 
 - **The reachability analyzer replaced three measurements with conventions,
   and 1058 of its 1119 findings were artefacts of them.** A package-level var
