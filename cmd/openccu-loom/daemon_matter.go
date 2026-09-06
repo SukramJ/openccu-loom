@@ -273,7 +273,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 	snap := matterTopologySnapshotter(assembler, walk)
 
-	bridge, err := matterbridge.New(identity, snap, advertiser, matterbridge.Config{
+	bridge, err := matterbridge.New(snap, advertiser, matterbridge.Config{
 		Listen:        mc.Listen,
 		PreferIPv4:    mc.PreferIPv4,
 		VendorID:      mc.VendorID,
