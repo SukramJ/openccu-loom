@@ -26,6 +26,8 @@
     emptyIcon = "mdi:format-list-bulleted",
     cell,
     rowClass,
+    onRowClick,
+    selectedKey = null,
   }: {
     rows: Row[];
     columns: DataColumn<Row>[];
@@ -41,6 +43,15 @@
     emptyIcon?: IconName;
     cell?: Snippet<[Row, DataColumn<Row>]>;
     rowClass?: (row: Row) => string;
+    // When set, every row becomes activatable: clicking it (or pressing
+    // Enter/Space on it) calls this. The row keeps its cells' own interactive
+    // elements working — a click that originated inside a button, link or
+    // form control is left to that control and never reaches the row.
+    onRowClick?: (row: Row) => void;
+    // `rowKey` of the row that is currently selected, or null for none. Marks
+    // it `aria-selected` and tints it, which is what turns a table into a
+    // selector for an editor rendered beside or below it.
+    selectedKey?: string | null;
   } = $props();
 
   type Persisted = { sortKey: string; sortAsc: boolean; query: string };
@@ -90,10 +101,38 @@
     }
   }
 
-  function alignClass(align?: string): string {
+  function alignClass(col: DataColumn<Row>): string {
+    const align = col.align ?? (col.numeric ? "right" : "left");
     if (align === "right") return "text-right";
     if (align === "center") return "text-center";
     return "text-left";
+  }
+
+  // A numeric column renders in tabular figures so digits line up in a column.
+  function numericClass(col: DataColumn<Row>): string {
+    return col.numeric ? "tabular-nums" : "";
+  }
+
+  // A click that started inside an interactive element belongs to that
+  // element: a rename button or a link in a cell must not also select the row.
+  function rowClickHandler(row: Row) {
+    return (event: MouseEvent) => {
+      if (!onRowClick) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("button, a, input, select, textarea, label")) return;
+      onRowClick(row);
+    };
+  }
+
+  function rowKeyHandler(row: Row) {
+    return (event: KeyboardEvent) => {
+      if (!onRowClick) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("button, a, input, select, textarea")) return;
+      event.preventDefault();
+      onRowClick(row);
+    };
   }
 
   function compare(a: unknown, b: unknown): number {
@@ -158,7 +197,7 @@
         <tr>
           {#each columns as col (col.key)}
             <th
-              class="px-3 py-2 {alignClass(col.align)} {col.headClass ?? ''}"
+              class="px-3 py-2 {alignClass(col)} {col.headClass ?? ''}"
               aria-sort={ariaSort(col)}
               scope="col"
             >
@@ -183,13 +222,21 @@
       <tbody>
         {#each processed as row (rowKey(row))}
           <tr
-            class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)] dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] {rowClass?.(
-              row,
-            ) ?? ''}"
+            class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)] dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] {onRowClick
+              ? 'cursor-pointer'
+              : ''} {selectedKey !== null && rowKey(row) === selectedKey
+              ? 'bg-slate-100 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_65%,transparent)]'
+              : ''} {rowClass?.(row) ?? ''}"
+            aria-selected={selectedKey === null
+              ? undefined
+              : rowKey(row) === selectedKey}
+            tabindex={onRowClick ? 0 : undefined}
+            onclick={onRowClick ? rowClickHandler(row) : undefined}
+            onkeydown={onRowClick ? rowKeyHandler(row) : undefined}
           >
             {#each columns as col (col.key)}
               <td
-                class="px-3 py-2 {alignClass(col.align)} {col.title
+                class="px-3 py-2 {alignClass(col)} {numericClass(col)} {col.title
                   ? 'reflow-title'
                   : ''} {col.cellClass ?? ''}"
                 data-label={col.label}

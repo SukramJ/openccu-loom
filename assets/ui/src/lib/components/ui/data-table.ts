@@ -22,6 +22,11 @@ export type DataColumn<Row> = {
   title?: boolean;
   // Extra classes applied to this column's <td> cells.
   cellClass?: string;
+  // Marks a column whose values are numbers. Cells and the header get
+  // `tabular-nums` and right alignment (unless `align` overrides it), so a
+  // column of channel numbers or counts lines up on its digits instead of
+  // ragging against proportional glyph widths.
+  numeric?: boolean;
   // Extra classes applied to this column's <th> header cell. Use together
   // with cellClass (e.g. the shared `hide-narrow` utility) to collapse a
   // whole column away on narrow viewports without leaving a dangling header.
