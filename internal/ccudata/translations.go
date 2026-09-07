@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -41,6 +42,11 @@ type Translations struct {
 	// Used as the last-resort fallback in ParameterValue when no parameter-specific
 	// translation is found.
 	valueIndices map[string]map[string]string // locale → value_lower → label (shortest)
+	// channelTypedParams is the derived set of parameters the table keys by
+	// channel type at least once. It is the table's own statement that such a
+	// parameter's meaning differs per channel type, which is what
+	// [Translations.ParameterValueByIndex] needs to know.
+	channelTypedParams map[string]map[string]struct{} // locale → param_lower → present
 }
 
 // ErrNoArchive is returned when the translation archive path is empty.
@@ -410,14 +416,16 @@ func (t *Translations) ParameterValueSimple(locale, parameter, value string) str
 	return t.ParameterValue(locale, "", parameter, value)
 }
 
-// rebuildValueIndices re-derives the value-only reverse index from the
-// current ParameterValues tables. Every writer of ParameterValues has to
-// call it, otherwise the index keeps serving the pre-write contents.
-func (t *Translations) rebuildValueIndices() {
+// rebuildDerivedIndices re-derives everything computed from the
+// ParameterValues tables: the value-only reverse index and the set of
+// channel-typed parameters. Every writer of ParameterValues has to call
+// it, otherwise the derivations keep serving the pre-write contents.
+func (t *Translations) rebuildDerivedIndices() {
 	if t == nil {
 		return
 	}
 	t.valueIndices = buildValueIndices(t.ParameterValues)
+	t.channelTypedParams = buildChannelTypedParams(t.ParameterValues)
 }
 
 // valueIndexLookup returns the shortest label for valueLower from the
@@ -438,7 +446,15 @@ func (t *Translations) valueIndexLookup(locale, valueLower string) string {
 // buildValueIndices constructs the value-only reverse index for every
 // locale's parameter_values table. For each entry "param=value → label" the
 // entry keyed only on "value" is kept when it is the shortest label seen for
-// that value so far (ties are broken in iteration order).
+// that value.
+//
+// Ties are broken by the label itself, not by iteration order. The
+// reference implementation leaves them to whichever entry the map yields
+// first, which in Go means a coin flip per process start: the value "off"
+// carries both "Aus" and "aus" at three characters, so the enum label an
+// operator saw — in the SPA, in a REST DTO, in an MQTT discovery payload —
+// changed across restarts with nothing in the data having changed.
+// Measured over 40 loads of the embedded extract: 29 "Aus", 11 "aus".
 //
 // for k, v in self._data[pv_key].items(): if "=" not in k: continue val =
 // k.rsplit("=", maxsplit=1)[1] if val not in value_index or len(v) <
@@ -455,13 +471,114 @@ func buildValueIndices(parameterValues map[string]map[string]string) map[string]
 				continue
 			}
 			val := k[eqIdx+1:]
-			if existing, ok := idx[val]; !ok || len(label) < len(existing) {
+			existing, ok := idx[val]
+			if !ok || len(label) < len(existing) || (len(label) == len(existing) && label < existing) {
 				idx[val] = label
 			}
 		}
 		out[locale] = idx
 	}
 	return out
+}
+
+// buildChannelTypedParams derives, per locale, the set of parameters the
+// table keys by channel type at least once — every key of the form
+// `<channel_type>|<parameter>=<value>` contributes its parameter.
+//
+// The set is the table telling us which parameters it considers
+// channel-type-dependent. Measured against the embedded v0.1.3 extract it
+// holds 7 parameters that also carry unqualified index keys:
+// channel_operation_mode, data_transmission_condition, level_status,
+// msg_for_pos_a / _b / _c and voltage_status.
+func buildChannelTypedParams(parameterValues map[string]map[string]string) map[string]map[string]struct{} {
+	out := make(map[string]map[string]struct{}, len(parameterValues))
+	for locale, table := range parameterValues {
+		params := make(map[string]struct{})
+		for k := range table {
+			pipe := strings.IndexByte(k, '|')
+			if pipe < 0 {
+				continue
+			}
+			eq := strings.LastIndexByte(k, '=')
+			if eq <= pipe {
+				continue
+			}
+			params[k[pipe+1:eq]] = struct{}{}
+		}
+		out[locale] = params
+	}
+	return out
+}
+
+// ParameterValueByIndex resolves the label for the index-th entry of an
+// ENUM's VALUE_LIST, for the case where the extract stored the enum by
+// position rather than by token (the easymode TCL source does that when
+// the VALUE_LIST strings are not available at extraction time). It reports
+// whether an entry existed that may be attributed to this enum.
+//
+// "May be attributed" is deliberately narrow, and the narrowness is the
+// whole point: an index is a position inside one specific enum, so a table
+// entry only answers for it when the entry is known to describe that same
+// enum.
+//
+//   - `<channel_type>|<parameter>=<index>` always qualifies — it names both.
+//   - `<parameter>=<index>` qualifies only while the table never keys that
+//     parameter by channel type. Once it does anywhere, the table is saying
+//     the parameter's enum differs per channel type, and an entry naming no
+//     channel type cannot be attributed to this one.
+//   - the value-only reverse index never qualifies. It answers "the shortest
+//     label any parameter carries for this VALUE", and an index is not a
+//     value: asking it for index 3 of an HmIP-DLP door lock returned "RGB".
+//
+// The token lookup in [Translations.ParameterValue] keeps all four of its
+// stages — a token is a value, so the value-only index is a legitimate last
+// resort there.
+func (t *Translations) ParameterValueByIndex(locale, channelType, parameter string, index int) (string, bool) {
+	if t == nil || parameter == "" {
+		return "", false
+	}
+	table := t.ParameterValues[locale]
+	if table == nil {
+		return "", false
+	}
+	paramL := strings.ToLower(parameter)
+	idx := strconv.Itoa(index)
+	if ctL := strings.ToLower(channelType); ctL != "" {
+		if v, ok := table[ctL+"|"+paramL+"="+idx]; ok {
+			return v, true
+		}
+		if stripped, ok := stripLinkPrefix(parameter); ok {
+			if v, ok := table[ctL+"|"+strings.ToLower(stripped)+"="+idx]; ok {
+				return v, true
+			}
+		}
+	}
+	if t.isChannelTypedParam(locale, paramL) {
+		return "", false
+	}
+	if v, ok := table[paramL+"="+idx]; ok {
+		return v, true
+	}
+	if stripped, ok := stripLinkPrefix(parameter); ok {
+		base := strings.ToLower(stripped)
+		if t.isChannelTypedParam(locale, base) {
+			return "", false
+		}
+		if v, ok := table[base+"="+idx]; ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// isChannelTypedParam reports whether the table keys paramLower by channel
+// type anywhere in this locale.
+func (t *Translations) isChannelTypedParam(locale, paramLower string) bool {
+	if t.channelTypedParams == nil {
+		return false
+	}
+	_, ok := t.channelTypedParams[locale][paramLower]
+	return ok
 }
 
 // ParameterHelpText returns the translated help text or the empty string when
@@ -558,7 +675,7 @@ func translationsFromRaw(raw map[string]map[string]string) *Translations {
 		}
 	}
 	// Build the value-only reverse index for stage-4 ParameterValue fallback.
-	out.valueIndices = buildValueIndices(out.ParameterValues)
+	out.rebuildDerivedIndices()
 	return out
 }
 

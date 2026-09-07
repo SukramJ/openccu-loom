@@ -28,6 +28,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so every address was resolved through its own `Device.listAllDetail`; a
   13-channel device cost 14 full listings. The set is resolved in one call
   now.
+- **An enum label could change across restarts with nothing in the data
+  changing.** The value-only reverse index keeps the shortest label a value
+  carries anywhere in the translation table, and a tie was left to Go's
+  randomised map iteration — "off" carries both "Aus" and "aus" at three
+  characters, so the SPA, the REST DTOs and the MQTT discovery payload
+  disagreed between runs. Ties are broken by the label now.
+- **Enum values a translation table does not know borrowed another
+  device's labels.** When a VALUE_LIST token is unknown the lookup retries
+  by index, and that retry was allowed to answer from entries describing a
+  different enum — including the value-only reverse index, which knows
+  nothing but the digit. The HmIP-DLP's door-lock operation modes came out
+  as "Inaktiv / Aktiv / Ein / RGB". An index entry is only used now when it
+  can be attributed to the enum it was taken from: one naming the channel
+  type always, one naming only the parameter as long as the table never
+  keys that parameter by channel type. An unknown token renders as the
+  humanised token rather than a borrowed label.
 
 ## [0.75.0] - 2026-09-07
 
