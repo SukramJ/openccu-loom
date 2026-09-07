@@ -347,6 +347,13 @@ export interface paths {
          *     202 response carries no body. On failure the daemon surfaces
          *     the upstream error as 502 problem+json with `code: upstream_unavailable`.
          *
+         *     `LINK` is accepted in the path only for reads. A write keyed with
+         *     the literal `LINK` is refused with 400 `validation_error`: a LINK
+         *     paramset exists once per peer and is addressed by the peer's
+         *     channel address (`PUT /devices/{addr}/paramsets/link/{peer}`);
+         *     passing the literal to the CCU would commit a configuration
+         *     write for a non-existent peer over the air.
+         *
          *     Headers:
          *       - `Idempotency-Key` (optional): client-supplied UUID. The
          *         daemon caches the response per `(method, path, key)` for
@@ -11710,6 +11717,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description No hub could be resolved for the mutation — on a multi-CCU daemon the target central must be named. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -11893,6 +11909,7 @@ export interface operations {
                     "application/json": components["schemas"]["InstallModeSearchResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
@@ -12817,8 +12834,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to / on success */
-            302: {
+            /** @description Redirect to the SPA — to / on success, to the login route with an `error` query parameter when the exchange fails. */
+            303: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13429,7 +13446,10 @@ export interface operations {
     importChannelConfig: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Edit-lock token for a MASTER or LINK snapshot. Importing one is a configuration write and passes the same per-resource edit lock as PUT /devices/{addr}/paramsets/{key}: open an edit session (`POST /sessions/edit` with key `channel:{addr}:{no}:{paramset_key}`) and present the returned token here, else the import is rejected 423 Locked before any CCU call. A VALUES snapshot is ungated and ignores this header. */
+                "X-Edit-Token"?: string;
+            };
             path: {
                 addr: string;
                 no: number;
@@ -13450,6 +13470,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            423: components["responses"]["Locked"];
             /** @description Apply failed (CCU write error) */
             500: {
                 headers: {
@@ -17748,6 +17769,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            /** @description The zone has no finished incident to acknowledge. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     silenceAllAlarmZones: {
@@ -18270,6 +18300,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             /** @description Refused — smoke-detector sounders cannot be live-tested via this endpoint. */
             409: {
@@ -18280,6 +18311,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            502: components["responses"]["BadGateway"];
         };
     };
     listAlarmCodes: {

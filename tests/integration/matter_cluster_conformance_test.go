@@ -96,9 +96,25 @@ var commandsWithoutAServer = map[string]string{
 		"table), so closing this means the bridge keeping a group table of its own, not finding a CCU " +
 		"feature to bind to. The empty AcceptedCommandList is at least honest about it today",
 	"0x0004/0x05": "Groups.AddGroupIfIdentifying — same stub, same fix as 0x0004/0x04",
+	// The four request commands below share their id with a response
+	// (AddGroup 0x00 / AddGroupResponse 0x00, …). The previous schema
+	// extraction keyed commands by id and kept only the response, so the
+	// guard never saw them; the re-extracted snapshot carries both
+	// directions. The stub never accepted them — nothing changed on the
+	// wire, only the measurement.
+	"0x0004/0x00": "Groups.AddGroup — same stub, same fix as 0x0004/0x04",
+	"0x0004/0x01": "Groups.ViewGroup — same stub, same fix as 0x0004/0x04",
+	"0x0004/0x02": "Groups.GetGroupMembership — same stub, same fix as 0x0004/0x04",
+	"0x0004/0x03": "Groups.RemoveGroup — same stub, same fix as 0x0004/0x04",
 	"0x0062/0x05": "ScenesManagement.RecallScene — wire.ScenesManagement is a stub for the same reason: " +
 		"the cluster is conformance M on the light and plug device types, and scene storage is a node " +
 		"concept the bridge would have to keep itself",
+	"0x0062/0x00": "ScenesManagement.AddScene — same stub, same fix as 0x0062/0x05 (id shared with AddSceneResponse; visible since the snapshot carries both directions)",
+	"0x0062/0x01": "ScenesManagement.ViewScene — same stub, same fix as 0x0062/0x05",
+	"0x0062/0x02": "ScenesManagement.RemoveScene — same stub, same fix as 0x0062/0x05",
+	"0x0062/0x03": "ScenesManagement.RemoveAllScenes — same stub, same fix as 0x0062/0x05",
+	"0x0062/0x04": "ScenesManagement.StoreScene — same stub, same fix as 0x0062/0x05",
+	"0x0062/0x06": "ScenesManagement.GetSceneMembership — same stub, same fix as 0x0062/0x05",
 }
 
 // loadConformanceClusters returns the snapshot's cluster definitions by ID.
