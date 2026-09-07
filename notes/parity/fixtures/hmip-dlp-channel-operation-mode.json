@@ -551,5 +551,30 @@
   "_finding": "The help text the daemon renders for CHANNEL_OPERATION_MODE on every one of these channels is a radiator-thermostat text: 'Durch den Flüsterbetrieb fahren die Heizkörperthermostate langsamer und damit leiser.' That is where the reported 'Flüsterbetrieb' came from — it was never a value label.",
   "_cause": "Translations.ParameterHelp is keyed by parameter name alone. Measured on the embedded v0.1.3 extract: 167 help entries for locale de, of which 0 are channel-type-qualified. The daemon therefore cannot attribute a help text to a channel type at all.",
   "_owner_decision_2026-09-07": "Belongs upstream in openccu-data / go-openccu-data, not in the daemon."
+ },
+ "_resolution": {
+  "_status": "resolved 2026-09-07 in two independent halves; the ui_schema rows above are kept as the original capture and are NOT updated — they record what the daemon rendered before the fix.",
+  "code": "openccu-loom #723: the index retry no longer answers from entries that cannot be attributed to the enum the index came from. Unknown tokens render as the humanised token.",
+  "data": "openccu-data #33 → extract snapshot 2026.9.0 → go-openccu-data v0.1.4: curated, channel-type-qualified labels for all three channels, plus the Tüschlossantrieb → Türschlossantrieb correction.",
+  "rendered_now_de": {
+   "DOOR_LOCK_TRANSCEIVER": [
+    "Türzustand ignorieren",
+    "Haltezeit beim Öffnen überspringen",
+    "Wartezeit vor Auto Relock überspringen",
+    "Haltezeit und Auto-Relock-Wartezeit überspringen"
+   ],
+   "ACCELERATION_TRANSCEIVER": [
+    "Aus",
+    "Neigungserkennung",
+    "Bewegungserkennung",
+    "Neigungs- und Bewegungserkennung"
+   ],
+   "DOOR_STATE_TRANSCEIVER": [
+    "Aus",
+    "Ein",
+    "Ein mit Autokalibrierung"
+   ]
+  },
+  "still_open": "The help text defect below is unchanged: the parameter help table carries no channel-type dimension, so the door lock still shows a radiator-thermostat text."
  }
 }
