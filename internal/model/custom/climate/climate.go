@@ -174,8 +174,10 @@ type Climate struct {
 	setpoint          *generic.Float
 	actualTemperature *generic.Sensor[float64]
 	humidity          *generic.Sensor[float64]
-	// humidityInt covers HmIP thermostats, whose HUMIDITY parameter is
-	// INTEGER-typed on the wire (BidCos wall thermostats ship FLOAT).
+	// humidityInt is the slot every known thermostat resolves into: all
+	// 47 HUMIDITY descriptions in the reference fixtures (HmIP and
+	// BidCos alike) type the parameter INTEGER. The float slot above
+	// stays for a description that declares it FLOAT; none is known.
 	humidityInt        *generic.Sensor[int32]
 	temperatureMinimum *generic.Float // TEMPERATURE_MINIMUM operator override
 	temperatureMaximum *generic.Float // TEMPERATURE_MAXIMUM operator override
@@ -482,9 +484,9 @@ func (c *Climate) Profile() (Profile, bool) {
 	return c.profile, c.hasProfile
 }
 
-// Humidity returns the last observed HUMIDITY. HmIP thermostats type
-// the parameter INTEGER on the wire, BidCos wall thermostats FLOAT —
-// whichever slot resolved is read.
+// Humidity returns the last observed HUMIDITY from whichever slot
+// resolved — INTEGER for every known thermostat, FLOAT should a
+// description ever declare it so.
 func (c *Climate) Humidity() (float64, bool) {
 	if c.humidity != nil {
 		return c.humidity.Value()

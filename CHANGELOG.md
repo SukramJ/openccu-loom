@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.75.0] - 2026-09-07
+
 ### Fixed
 
 - **Matter multi-admin was dead: the AdministratorCommissioning cluster
