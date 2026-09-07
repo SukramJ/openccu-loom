@@ -22,6 +22,11 @@ type serviceBundle struct {
 
 	createBackupFn func(ctx context.Context) ([]byte, error)
 	renameDeviceFn func(ctx context.Context, address, name string) error
+	// renameDeviceBatchFn persists a device rename together with its
+	// channel renames in one go. Optional: without it every address is
+	// handed to renameDeviceFn on its own, which is correct but makes the
+	// backend resolve the CCU's whole inventory once per address.
+	renameDeviceBatchFn func(ctx context.Context, rename DeviceRename) error
 	// deviceIngestFn materialises announced device descriptions into the
 	// domain model (channels, data points, custom data points, values).
 	// Both paths that turn an announcement into a device use it: the

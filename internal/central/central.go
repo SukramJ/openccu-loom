@@ -1073,38 +1073,108 @@ func (u *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name stri
 	u.services.mu.Unlock()
 }
 
+// Rename is one address→name pair of a persisted rename.
+type Rename struct {
+	Address string
+	Name    string
+}
+
+// DeviceRename is a device rename together with the channel renames that
+// follow from it. The two are separate fields rather than one list
+// because their failure handling differs: a device the CCU refuses to
+// rename gets no channel renames, while a single failing channel does not
+// stop the others.
+type DeviceRename struct {
+	Device   Rename
+	Channels []Rename
+}
+
+// SetRenameDeviceBatchFn wires the handler that persists a device rename
+// together with its channel renames. Pass nil to detach, in which case
+// [Unit.RenameDeviceWithChannels] falls back to the per-address
+// [Unit.SetRenameDeviceFn] hook.
+//
+// The batch hook exists for one reason: the CCU has no address→ise-id
+// method, so each address is resolved by fetching the whole inventory
+// (Device.listAllDetail). Resolving the set in one call turns a rename of
+// a 13-channel device from 14 full listings into one.
+func (u *Unit) SetRenameDeviceBatchFn(fn func(ctx context.Context, rename DeviceRename) error) {
+	u.services.mu.Lock()
+	u.services.renameDeviceBatchFn = fn
+	u.services.mu.Unlock()
+}
+
 // RenameDeviceWithChannels renames a device and, when includeChannels
 // is true, renames every channel using the pattern "{name}:{no}" (the
-// colon-separated channel-number suffix the CCU WebUI applies). Each
-// channel rename is delegated to the same persistent `RenameDeviceFn`
-// hook so the store stays consistent.
+// colon-separated channel-number suffix the CCU WebUI applies). The
+// renames are persisted through the batch hook when one is wired, and
+// otherwise one address at a time through the same `RenameDeviceFn` hook
+// the single-device rename uses, so the store stays consistent either
+// way.
 //
 // When includeChannels is false this is equivalent to [RenameDevice].
 func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name string, includeChannels bool) error {
+	if address == "" {
+		return errors.New("central: RenameDevice: empty address")
+	}
+	u.services.mu.RLock()
+	batchFn := u.services.renameDeviceBatchFn
+	fn := u.services.renameDeviceFn
+	u.services.mu.RUnlock()
+
+	// The in-memory rename is always applied, so the UI reflects the
+	// change even when no persistent backend is wired (e.g. tests).
+	var dev *device.Device
+	if u.ModelRegistry != nil {
+		if d, ok := u.ModelRegistry.Get(address); ok && d != nil {
+			dev = d
+			d.SetName(name)
+		}
+	}
+	staged := DeviceRename{Device: Rename{Address: address, Name: name}}
+	if dev != nil && includeChannels {
+		for _, ch := range dev.Channels() {
+			chName := name + ":" + strconv.Itoa(ch.Number)
+			ch.SetName(chName)
+			staged.Channels = append(staged.Channels, Rename{Address: ch.Address, Name: chName})
+		}
+	}
+
+	err := u.persistRename(ctx, batchFn, fn, staged)
 	// The metadata event is deliberately withheld until every channel has
 	// its new name. Publishing it up front let the north-bound re-snapshot
 	// run concurrently with the per-channel CCU round trips and stamp the
 	// old channel labels into MQTT discovery; nothing publishes again
 	// afterwards, so those labels then survived until a broker reconnect.
-	dev, err := u.renameDeviceQuietly(ctx, address, name)
-	if err != nil || !includeChannels || dev == nil {
-		u.PublishDeviceMetadataChanged(dev)
+	u.PublishDeviceMetadataChanged(dev)
+	return err
+}
+
+// persistRename hands a staged rename to whichever persistence hook is
+// wired. The batch hook owns the whole set; the per-address fallback
+// keeps the ordering contract [DeviceRename] documents — the device
+// first, and its channels only once it succeeded.
+func (u *Unit) persistRename(
+	ctx context.Context,
+	batchFn func(ctx context.Context, rename DeviceRename) error,
+	fn func(ctx context.Context, address, name string) error,
+	staged DeviceRename,
+) error {
+	if batchFn != nil {
+		return batchFn(ctx, staged)
+	}
+	if fn == nil {
+		return nil
+	}
+	if err := fn(ctx, staged.Device.Address, staged.Device.Name); err != nil {
 		return err
 	}
-	u.services.mu.RLock()
-	fn := u.services.renameDeviceFn
-	u.services.mu.RUnlock()
 	var firstErr error
-	for _, ch := range dev.Channels() {
-		chName := name + ":" + strconv.Itoa(ch.Number)
-		ch.SetName(chName)
-		if fn != nil {
-			if err := fn(ctx, ch.Address, chName); err != nil && firstErr == nil {
-				firstErr = err
-			}
+	for _, ch := range staged.Channels {
+		if err := fn(ctx, ch.Address, ch.Name); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
-	u.PublishDeviceMetadataChanged(dev)
 	return firstErr
 }
 

@@ -906,19 +906,35 @@ func wireInterface(
 			if err != nil {
 				return fmt.Errorf("rename: resolve ise-id for %s: %w", address, err)
 			}
-			if iseID <= 0 {
-				return fmt.Errorf("rename: address %s not found on CCU", address)
+			return dispatchRename(ctx, renameBackend, address, iseID, name)
+		})
+		// A device rename that carries its channels resolves the whole set
+		// in one Device.listAllDetail instead of one listing per address —
+		// the CCU has no address→ise-id method, so every resolve fetches
+		// the complete inventory.
+		unit.SetRenameDeviceBatchFn(func(ctx context.Context, rename central.DeviceRename) error {
+			addresses := make([]string, 0, len(rename.Channels)+1)
+			addresses = append(addresses, rename.Device.Address)
+			for _, ch := range rename.Channels {
+				addresses = append(addresses, ch.Address)
 			}
-			if strings.Contains(address, ":") {
-				if _, err := renameBackend.RenameChannel(ctx, iseID, name); err != nil {
-					return fmt.Errorf("rename channel %s: %w", address, err)
+			ids, err := renameBackend.GetIseIDsByAddresses(ctx, addresses)
+			if err != nil {
+				return fmt.Errorf("rename: resolve ise-ids for %s: %w", rename.Device.Address, err)
+			}
+			// The device goes first and short-circuits: renaming the
+			// channels around a device name the CCU rejected would leave
+			// the two out of step.
+			if err := dispatchRename(ctx, renameBackend, rename.Device.Address, ids[rename.Device.Address], rename.Device.Name); err != nil {
+				return err
+			}
+			var firstErr error
+			for _, ch := range rename.Channels {
+				if err := dispatchRename(ctx, renameBackend, ch.Address, ids[ch.Address], ch.Name); err != nil && firstErr == nil {
+					firstErr = err
 				}
-				return nil
 			}
-			if _, err := renameBackend.RenameDevice(ctx, iseID, name); err != nil {
-				return fmt.Errorf("rename device %s: %w", address, err)
-			}
-			return nil
+			return firstErr
 		})
 	}
 
@@ -1399,6 +1415,32 @@ func wireInterface(
 		}
 	}
 	return closer, ingested, nil
+}
+
+// dispatchRename sends one resolved rename to the CCU: Channel.setName
+// for a channel address (one carrying a ":" suffix), Device.setName
+// otherwise. Both hooks share it so the two paths cannot drift apart on
+// which object type an address maps to.
+//
+// A non-positive ise-id means the CCU does not list the address, which is
+// refused rather than dispatched: setName against object 0 renames
+// nothing and answers success.
+func dispatchRename(
+	ctx context.Context, backend *backends.CcuBackend, address string, iseID int, name string,
+) error {
+	if iseID <= 0 {
+		return fmt.Errorf("rename: address %s not found on CCU", address)
+	}
+	if strings.Contains(address, ":") {
+		if _, err := backend.RenameChannel(ctx, iseID, name); err != nil {
+			return fmt.Errorf("rename channel %s: %w", address, err)
+		}
+		return nil
+	}
+	if _, err := backend.RenameDevice(ctx, iseID, name); err != nil {
+		return fmt.Errorf("rename device %s: %w", address, err)
+	}
+	return nil
 }
 
 // runXMLRPCActivation drives activate through the boot-time retry schedule for
