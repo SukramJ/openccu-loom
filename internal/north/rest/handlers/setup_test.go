@@ -7,6 +7,7 @@ import (
 	"context"
 	gosql "database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -535,5 +536,50 @@ func TestSetup_NilUsers_503(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("got %d, want 503", w.Code)
+	}
+}
+
+// failingCentralAdmin refuses every Put, standing in for a CCU step that
+// cannot be adopted (unreachable host, refused plaintext secret).
+type failingCentralAdmin struct {
+	CentralAdminService
+	err error
+}
+
+func (f *failingCentralAdmin) Put(context.Context, sqlite.CentralRow) error { return f.err }
+
+// TestSetup_FailedCCUStepLeavesNoAdminBehind pins the atomicity of the
+// first-run finalize: the admin user is the write that flips
+// `setupRequired` to false and closes the endpoint. When a later step
+// fails, that write must not have landed — otherwise the wizard's retry
+// answers 409 "already completed" while the operator has an account, no
+// CCU and no way to learn which steps were lost.
+func TestSetup_FailedCCUStepLeavesNoAdminBehind(t *testing.T) {
+	users, _, sections := openSetupStores(t)
+	svc := &SetupService{
+		Users:    users,
+		Centrals: &failingCentralAdmin{err: errors.New("ccu adopt: connection refused")},
+		Sections: sections,
+		Required: func(context.Context) bool { return true },
+	}
+
+	body := strings.NewReader(`{
+		"admin":  {"username":"admin","password":"password123"},
+		"locale": {"locale":"de","theme":"system"},
+		"ccu":    {"name":"ccu1","host":"192.168.1.1","username":"Admin","password":"ccu-secret","interfaces":["HmIP-RF"]}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup", body)
+	w := httptest.NewRecorder()
+	Setup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d body=%s, want 500", w.Code, w.Body.String())
+	}
+	n, err := users.Count(context.Background())
+	if err != nil {
+		t.Fatalf("Users.Count: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("admin user persisted although finalize failed: user count = %d, want 0 so the wizard can retry", n)
 	}
 }

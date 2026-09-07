@@ -273,3 +273,50 @@ func TestParamsetCopy_RegistersWhenReaderAndWriterPresent(t *testing.T) {
 		t.Error("paramset.copy should be registered")
 	}
 }
+
+// TestParamsetCopy_MASTERTargetRequiresTheEditLock pins that paramset.copy
+// writes the target's MASTER paramset through the same strict edit-lock
+// gate paramset.put enforces: without the token that holds
+// `channel:{target}:MASTER` the write is refused with `locked` and never
+// reaches the CCU, so a copy cannot clobber a human editor's open session.
+// VALUES copies stay ungated — they are device control, not configuration.
+func TestParamsetCopy_MASTERTargetRequiresTheEditLock(t *testing.T) {
+	rw := &stubParamsetReaderWriter{readValues: map[string]any{"CTRL_MODE": 1}}
+	r := NewRouter()
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{
+		Paramsets:      rw,
+		ParamsetReader: rw,
+		EditLocks:      fakeEditLocks{key: "channel:ABC0001:2:MASTER", token: "good-token"},
+	})
+	dispatch := func(token, psKey string) Result {
+		args := map[string]any{
+			"source_channel_address": "ABC0001:1",
+			"target_channel_address": "ABC0001:2",
+			"paramset_key":           psKey,
+		}
+		if token != "" {
+			args["edit_token"] = token
+		}
+		raw, _ := json.Marshal(args)
+		return r.Dispatch(opCtx(), "paramset.copy", raw)
+	}
+
+	if res := dispatch("", "MASTER"); res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("MASTER copy without edit_token: want code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if res := dispatch("wrong-token", "MASTER"); res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("MASTER copy with a foreign edit_token: want code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if len(rw.writeCalls) != 0 {
+		t.Fatalf("locked MASTER copies must not reach the writer; got %d writes", len(rw.writeCalls))
+	}
+	if res := dispatch("good-token", "MASTER"); res.Error != nil {
+		t.Fatalf("MASTER copy with the holding token: unexpected error %+v", res.Error)
+	}
+	if res := dispatch("", "VALUES"); res.Error != nil {
+		t.Fatalf("VALUES copy must stay ungated: unexpected error %+v", res.Error)
+	}
+	if len(rw.writeCalls) != 2 {
+		t.Fatalf("expected the two permitted copies to reach the writer, got %d", len(rw.writeCalls))
+	}
+}

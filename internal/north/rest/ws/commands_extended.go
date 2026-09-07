@@ -6,7 +6,9 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -241,7 +243,8 @@ type ExtendedCommandsConfig struct {
 	Paramsets ParamsetWriter
 	// EditLocks enforces the strict per-resource edit lock on the
 	// commands that write a configuration paramset — `paramset.put`,
-	// which carries the MASTER and LINK keys alike.
+	// which carries the MASTER and LINK keys alike, and `paramset.copy`,
+	// whose MASTER target is the same configuration write.
 	// Nil disables enforcement (test-only); production wires the shared
 	// REST edit-session registry so REST and WS share one lock namespace.
 	EditLocks     EditLockVerifier
@@ -461,7 +464,7 @@ func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 		// channels of matching type. Reads the VALUES or MASTER paramset
 		// from the source channel and writes the writable subset to the
 		// target. Mirrors Python `ws_copy_paramset` (websocket_api.py:916).
-		router.Register("paramset.copy", paramsetCopyHandler(cfg.ParamsetReader, cfg.Paramsets))
+		router.Register("paramset.copy", paramsetCopyHandler(cfg.ParamsetReader, cfg.Paramsets, cfg.EditLocks))
 	} else {
 		router.Register("paramset.copy", stubHandler("ws: paramset.copy: paramset-reader provider not configured in this deployment"))
 	}
@@ -611,8 +614,23 @@ func deviceTestHandler(d DeviceWriter) CommandHandler {
 		if p.Address == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
 		}
+		started := time.Now()
 		result, err := d.TestDeviceCommunication(ctx, p.Address)
-		if err != nil {
+		switch {
+		case err == nil:
+		case errors.Is(err, context.DeadlineExceeded):
+			// The budget elapsed with the device still silent — which is
+			// what the test exists to detect. wsapi.json declares that as
+			// the `timed_out` result, so reporting it as an error frame
+			// would make the documented outcome unreachable. Only a
+			// deadline maps this way: a cancelled connection falls through
+			// as an error, because nobody is waiting for the answer.
+			result = hmapi.CommunicationTestResult{
+				StartedAt:  started,
+				DurationMs: time.Since(started).Milliseconds(),
+				TimedOut:   true,
+			}
+		default:
 			return nil, fmt.Errorf("device.test: %w", err)
 		}
 		return result, nil
@@ -1089,12 +1107,15 @@ func groupsListHandler(q GroupsQuery) CommandHandler {
 //
 // }
 // Response: { "copied": int, "source": str, "target": str }
-func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter) CommandHandler {
+func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter, locks EditLockVerifier) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			SourceChannel string `json:"source_channel_address"`
 			TargetChannel string `json:"target_channel_address"`
 			ParamsetKey   string `json:"paramset_key"`
+			// EditToken carries the edit-lock token for the MASTER copy
+			// under strict enforcement. Ignored for VALUES.
+			EditToken string `json:"edit_token"`
 		}
 		if err := decodeOrEmpty(raw, &p); err != nil {
 			return nil, err
@@ -1104,6 +1125,18 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter) CommandHandler {
 		}
 		if p.ParamsetKey == "" {
 			p.ParamsetKey = string(hmenum.ParamsetKeyMaster)
+		}
+		// A copy lands a MASTER paramset on the target exactly like
+		// `paramset.put` does, so it passes the same strict gate: without
+		// the token holding the target channel's lock the copy is refused
+		// before the source is even read, and an open editor's session
+		// cannot be clobbered by an imported snapshot. VALUES copies are
+		// device control and stay ungated.
+		if locks != nil && hmenum.ParamsetKey(p.ParamsetKey) == hmenum.ParamsetKeyMaster {
+			if !locks.Verify("channel:"+p.TargetChannel+":"+p.ParamsetKey, p.EditToken) {
+				return nil, NewCommandError(CommandErrorLocked,
+					"edit lock required for "+p.ParamsetKey+" copy; open an edit session on the target channel and pass edit_token")
+			}
 		}
 		srcKey := configui.SessionKey{
 			ChannelAddress: p.SourceChannel,

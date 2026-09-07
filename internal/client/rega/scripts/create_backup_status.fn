@@ -48,9 +48,12 @@ if (sResult.Trim() == "YES") {
     system.Exec("cat /usr/local/tmp/backup.pid", &sResult);
     sPid = sResult.Trim();
 
-    !# Check if process is still running
+    !# Check if process is still running. -w matches the PID as a whole
+    !# word: an unanchored match would accept any PID that merely contains
+    !# these digits (312 in 3120, 1312, 13124), so a stale backup.pid from a
+    !# killed backup would report "running" for as long as such a PID exists.
     sResult = "";
-    system.Exec("/bin/sh -c 'ps -o pid | grep " # sPid # " > /dev/null 2>&1 && echo YES || echo NO'", &sResult);
+    system.Exec("/bin/sh -c 'ps -o pid | grep -w " # sPid # " > /dev/null 2>&1 && echo YES || echo NO'", &sResult);
     if (sResult.Trim() == "YES") {
         bProcessRunning = true;
     }

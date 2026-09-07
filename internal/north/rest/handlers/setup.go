@@ -234,20 +234,26 @@ func validateSetup(req *setupRequest) string {
 	return ""
 }
 
-// finalizeSetup commits the validated onboarding payload to SQLite: admin
-// user first (required), then the locale section, the optional MQTT section,
-// and the optional CCU last. The CCU comes last because it is the only step
-// with an effect beyond persistence — [CentralAdminService] also brings the
-// central up live — so it is the only one that can fail for a reason the
-// preceding steps do not share. Ordering it last keeps such a failure from
-// swallowing settings the operator already got right. The persisted shape is
-// unchanged.
+// finalizeSetup commits the validated onboarding payload to SQLite: the
+// locale section, the optional MQTT section, the optional CCU, and the
+// admin user last.
+//
+// The four writes are four independent transactions, so the order is the
+// only atomicity this endpoint has. The admin user is the write that
+// flips the first-run probe (`Required` counts local users) and closes
+// the endpoint behind a 409, so it must be the last one: committed
+// first, any later failure answers 500 while the wizard's retry is
+// already refused as "setup already completed", stranding the operator
+// with an account and none of the settings — and no way to learn which
+// steps landed. Written last, a failed run leaves the endpoint open and
+// the retry re-commits every section idempotently.
+//
+// The CCU sits immediately before it for the same reason it used to sit
+// last: it is the only step with an effect beyond persistence
+// ([CentralAdminService] also brings the central up live), so it is the
+// most likely to fail. The persisted shape is unchanged.
 func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) error {
 	actor := req.Admin.Username
-
-	if err := s.Users.Put(ctx, actor, req.Admin.Password, auth.RoleAdmin); err != nil {
-		return err
-	}
 
 	localeSec, err := json.Marshal(map[string]string{
 		"locale": req.Locale.Locale,
@@ -307,5 +313,6 @@ func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) erro
 		}
 	}
 
-	return nil
+	// Last: this is the write that closes the endpoint.
+	return s.Users.Put(ctx, actor, req.Admin.Password, auth.RoleAdmin)
 }

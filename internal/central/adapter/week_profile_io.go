@@ -82,18 +82,22 @@ func (s *climateChannelSaver) Save(ctx context.Context, c *schedule.Climate) err
 	return nil
 }
 
-// bindClimateScheduleIO constructs and attaches a fully-wired
+// bindClimateScheduleIO constructs and attaches a
 // [weekprofile.ClimateProfile] (a `Profile[*schedule.Climate]`) to wp,
-// using ch's installed refresher / writer. Subsequent
-// `wp.Climate().Load(ctx)` and `wp.Climate().Save(ctx, sched)` calls
-// then route directly through ch without going through SchedulesDomain.
+// using ch's installed refresher / writer, so `wp.Climate().Load(ctx)`
+// routes directly through ch without going through SchedulesDomain.
+//
+// Only the read half is taken today: the auto-refresh pass is the sole
+// production caller and it calls Load. Nothing in production calls
+// `wp.Climate().Save`, and until something does, the schedule write
+// path is [SchedulesDomain.PutClimateSchedule] — which the saver below
+// is NOT equivalent to, because it emits the P<n>_-prefixed key form
+// unconditionally and applies neither the bare-schema branch nor the
+// destination descriptor filter that path relies on. Wiring a caller to
+// Save therefore needs that gap closed first.
 //
 // Idempotent: replaces a previously attached profile, so a daemon
-// restart cycle (re-hydration) updates the wiring cleanly. The two
-// pathways (this DP-bound profile + the SchedulesDomain) remain
-// independent for now; SchedulesDomain still keeps its own cache,
-// but new code that prefers the DP-centric API can use the bound
-// profile directly.
+// restart cycle (re-hydration) updates the wiring cleanly.
 func bindClimateScheduleIO(ch *device.Channel, wp *weekprofile.ProfileDataPoint) {
 	if ch == nil || wp == nil {
 		return
@@ -254,11 +258,14 @@ func (sv *defaultChannelSaver) declaredGroups(ctx context.Context) int {
 	return weekprofile.HighestSimpleGroup(values)
 }
 
-// bindDefaultScheduleIO attaches a fully-wired
-// [weekprofile.DefaultProfile] (a `Profile[*schedule.Simple]`) to wp,
-// using ch's installed refresher / writer. After this call,
-// `wp.Simple().Load(ctx)` and `wp.Simple().Save(ctx, sched)` route
-// directly through ch.
+// bindDefaultScheduleIO attaches a [weekprofile.DefaultProfile] (a
+// `Profile[*schedule.Simple]`) to wp, using ch's installed refresher /
+// writer, so `wp.Simple().Load(ctx)` routes directly through ch.
+//
+// As with [bindClimateScheduleIO], only Load has a production caller.
+// The saver below skips the supported-field filter and the lock
+// encoding the REST write path applies, so it is not yet an equivalent
+// write route.
 //
 // domain is the resolved schedule bucket (see [resolveScheduleDomain]); the
 // loader uses it to decode lock-specific fields on the read path.

@@ -78,6 +78,43 @@ func Load(dataDir string, getenv func(string) string, logger *slog.Logger) (*Cip
 	return newCipher(key)
 }
 
+// LoadExisting resolves the master key the way [Load] does but never
+// creates one: the environment variable, else an existing
+// <dataDir>/secret.key, else [ErrNoKey]. Command-line paths that seal or
+// open an archive use it — a `backup create` run from a shell without the
+// daemon's OPENCCU_LOOM_SECRET_KEY used to mint a fresh secret.key and seal
+// the archive under it, while the operator preserved the environment value
+// they had provisioned; the only key that opened the archive was the file
+// nobody knew had been created.
+func LoadExisting(dataDir string, getenv func(string) string) (*Cipher, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if raw := strings.TrimSpace(getenv(EnvKeyVar)); raw != "" {
+		key, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil || len(key) != keySize {
+			return nil, fmt.Errorf("secret: %s must be base64-encoded %d bytes", EnvKeyVar, keySize)
+		}
+		return newCipher(key)
+	}
+	path := filepath.Join(dataDir, KeyFileName)
+	raw, err := os.ReadFile(path) //nolint:gosec // dataDir is operator-controlled
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: neither %s nor %s", ErrNoKey, EnvKeyVar, path)
+		}
+		return nil, fmt.Errorf("secret: read %s: %w", path, err)
+	}
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw)))
+	if err != nil || len(key) != keySize {
+		return nil, fmt.Errorf("secret: %s must hold a base64-encoded %d-byte key", path, keySize)
+	}
+	return newCipher(key)
+}
+
+// ErrNoKey is returned by [LoadExisting] when no master key is provisioned.
+var ErrNoKey = errors.New("secret: no master key provisioned")
+
 func newCipher(key []byte) (*Cipher, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {

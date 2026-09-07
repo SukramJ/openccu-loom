@@ -528,6 +528,9 @@ func (m *Manager) fireSmokeSounder(ctx context.Context, inst *instance, incident
 	m.armStopWatchdog(inst, incidentID, d, m.smokeStopper(inst))
 	if err := dev.TurnOn(ctx, hmenum.CommandPriorityHigh); err != nil {
 		m.cancelWatchdog(inst.row.ID)
+		// The demand was taken before the write (the watchdog has to
+		// exist first); nothing is sounding, so it has to be given back.
+		m.dropDemand(inst.row.ID)
 		return err
 	}
 	return nil

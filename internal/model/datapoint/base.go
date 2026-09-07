@@ -120,10 +120,13 @@ type BaseDataPointFields struct {
 	// aggregate multiple CCU parameters can track each slot independently.
 	//
 	// Set by [WriteUnconfirmedValueForKey]; cleared for the matching key
-	// by [ConfirmUnconfirmedValueForKey]. North-bound adapters (REST
-	// state, MQTT retained payload) surface these optimistic values while
-	// the round-trip is in flight so the UI does not flicker back to the
-	// last-confirmed value during the latency window.
+	// by [ConfirmUnconfirmedValueForKey]; read by [UnconfirmedValueForKey].
+	// No production code path currently writes or reads this map: the live
+	// optimistic-value surface is the per-data-point window in
+	// generic.DataPoint (WriteUnconfirmedValue / Value), which the cover
+	// family uses. This per-key map is kept as the base-layer seam for
+	// composite DPs that need slot-level tracking; wiring it into a
+	// north-bound reader is a deliberate step, not an existing one.
 	//
 	// Guarded by mu (the same lock that protects all other mutable base
 	// fields). Lazy-allocated — nil until the first write.
@@ -412,11 +415,12 @@ func (b *BaseDataPointFields) PublishUpdate(ctx context.Context, value any) {
 // (model/data_point.py:430-458).
 //
 // The base-layer implementation routes through the installed
-// [EventPublisher] using a structured [UpdatedPayload] so
-// north-bound adapters (MQTT, WS) can surface old→new transitions in
-// their event payloads without an extra lookup. Pass nil for either
-// argument when the value is unknown (e.g. initial load where there
-// is no prior confirmed value).
+// [EventPublisher] using a structured [UpdatedPayload]. No data-point
+// family calls this method today, so no north-bound adapter receives an
+// [UpdatedPayload]; the north-bound planes derive old→new transitions
+// from their own last-seen state. Pass nil for either argument when the
+// value is unknown (e.g. initial load where there is no prior confirmed
+// value).
 //
 // When no publisher is installed (nil) this is a silent no-op.
 func (b *BaseDataPointFields) PublishDataPointUpdatedEvent(ctx context.Context, oldValue, newValue any) {
@@ -437,8 +441,9 @@ func (b *BaseDataPointFields) PublishDataPointUpdatedEvent(ctx context.Context, 
 
 // UpdatedPayload is the structured value delivered to
 // [EventPublisher.PublishUpdate] by [PublishDataPointUpdatedEvent]. It
-// carries both the previous and the new value so MQTT / WS bridges can
-// include the full transition in their event payloads.
+// carries both the previous and the new value; a publisher that wants
+// the full transition type-switches on it. Currently exercised by tests
+// only, because [PublishDataPointUpdatedEvent] has no production caller.
 type UpdatedPayload struct {
 	OldValue any
 	NewValue any
@@ -468,17 +473,20 @@ func (b *BaseDataPointFields) PublishedEventRecently() bool {
 	return time.Since(t) < publishedEventWindow
 }
 
-// MarkRegistered flags this data point as registered with the platform (e.g.
-// Home Assistant or the internal event subscription table). Used by the
-// cleanup path to detect DPs that need to be de-registered on removal.
+// MarkRegistered flags this data point as registered with a north-bound
+// platform. The flag is read back through [IsRegistered] by the
+// `registered` filter of device.Channel.GetFilteredEvents and
+// device.Device.GetDataPoints; no production path sets it today (only
+// tests do), so every data point reports unregistered until a plane
+// adopts the flag.
 func (b *BaseDataPointFields) MarkRegistered() {
 	b.mu.Lock()
 	b.registered = true
 	b.mu.Unlock()
 }
 
-// UnmarkRegistered clears the registered flag set by [MarkRegistered]. Called
-// during entity lifecycle cleanup.
+// UnmarkRegistered clears the registered flag set by [MarkRegistered].
+// Like its counterpart it has no production caller yet.
 func (b *BaseDataPointFields) UnmarkRegistered() {
 	b.mu.Lock()
 	b.registered = false
@@ -486,9 +494,9 @@ func (b *BaseDataPointFields) UnmarkRegistered() {
 }
 
 // IsRegistered reports whether [MarkRegistered] has been called and
-// [UnmarkRegistered] has not subsequently cleared it. Used by the north-bound
-// cleanup path to decide whether a DP needs a platform-level de-registration
-// call.
+// [UnmarkRegistered] has not subsequently cleared it. Its readers are the
+// optional `registered` filter of device.Channel.GetFilteredEvents and
+// device.Device.GetDataPoints.
 func (b *BaseDataPointFields) IsRegistered() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -781,9 +789,10 @@ func (b *BaseDataPointFields) DecInFlightCommands() {
 // ─── Unconfirmed last-value map ────────────────────────────────────────
 
 // WriteUnconfirmedValueForKey stores value as the pending optimistic write for
-// the given sub-parameter key. North-bound adapters surface this value in place
-// of the last CCU-confirmed value until [ConfirmUnconfirmedValueForKey] clears
-// it. The map is lazy-allocated on the first call.
+// the given sub-parameter key until [ConfirmUnconfirmedValueForKey] clears it;
+// [UnconfirmedValueForKey] is the only reader. No production caller exists
+// today (see the unconfirmedLastValueSend field comment). The map is
+// lazy-allocated on the first call.
 //
 // Thread-safe via the embedded mu lock.
 func (b *BaseDataPointFields) WriteUnconfirmedValueForKey(key hmtypes.DataPointKey, value any) {

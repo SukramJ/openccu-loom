@@ -542,6 +542,32 @@ func (d *ParameterDecider) IsUnIgnoredForCentral(central, model, channelType str
 	return d.matchesUnIgnoreLocked(central, model, channelNoUnknown, paramset, p)
 }
 
+// IsUnIgnoredOnChannel is [ParameterDecider.IsUnIgnored] for a caller that
+// knows the channel number the data point sits on.
+//
+// The channel is load-bearing: an entry parsed from
+// `PARAMETER:PARAMSET@MODEL:CHANNEL` carries a concrete channel number, and
+// [entryChannelMatch] treats the unknown-channel sentinel as a match for any
+// entry. Querying without the number therefore promotes the parameter on
+// every channel of the model instead of the one the operator selected.
+// Mirrors `_check_parameter_is_un_ignored`, which keys every search point on
+// `channel.no` (parameter_decider.py).
+func (d *ParameterDecider) IsUnIgnoredOnChannel(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+	return d.matchesUnIgnore("", model, channelNo, paramset, p)
+}
+
+// IsUnIgnoredOnChannelWithBuiltIns is [ParameterDecider.IsUnIgnoredOnChannel]
+// plus the built-in device un-ignores (`unIgnoreParametersByDevice`, which
+// have no channel dimension) — the customOnly=false query of
+// [ParameterDecider.IsUnIgnoredCustomOnly] for a caller that knows the
+// channel number.
+func (d *ParameterDecider) IsUnIgnoredOnChannelWithBuiltIns(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
+	if deviceUnIgnoresByPrefix(model, p) {
+		return true
+	}
+	return d.matchesUnIgnore("", model, channelNo, paramset, p)
+}
+
 // IsUnIgnoredCustomOnly reports whether p is explicitly un-ignored,
 // considering only user-provided rules when customOnly is true, or all rules
 // (including built-in device rules) when customOnly is false.

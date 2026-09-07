@@ -278,3 +278,24 @@ func TestBackupScriptsAgreeOnTheirMarkerFiles(t *testing.T) {
 		t.Fatal("create_backup_status no longer removes the archive it just described")
 	}
 }
+
+// TestBackupStatusPidCheckIsWordAnchored pins the liveness probe in
+// create_backup_status: the PID read from backup.pid must be matched as a
+// whole word against the `ps` output. An unanchored `grep <pid>` matches any
+// PID that merely contains those digits (312 matches 3120, 1312, 13124), so a
+// stale backup.pid left behind by a killed backup reports "running" forever
+// and the finished archive is never reported or removed.
+//
+// Like TestBackupScriptsAgreeOnTheirMarkerFiles this is a text check: nothing
+// in this repository evaluates a ReGa body, so the runtime behaviour is
+// verified against a real CCU.
+func TestBackupStatusPidCheckIsWordAnchored(t *testing.T) {
+	t.Parallel()
+	status, err := loadScript(hmenum.RegaScriptCreateBackupStatus)
+	if err != nil {
+		t.Fatalf("status script: %v", err)
+	}
+	if !strings.Contains(status, "ps -o pid | grep -w ") {
+		t.Fatal("create_backup_status matches the backup PID unanchored; a substring match reports a dead backup as running")
+	}
+}

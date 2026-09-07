@@ -5,6 +5,7 @@ package backends
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -98,15 +99,14 @@ func TestHmBkCreateSystemVariableEnumJoinsValueListWithSemicolon(t *testing.T) {
 	}
 }
 
-// TestHmBkGetAllDeviceDataKeyGrammarIsUniform pins the one output grammar of
+// TestHmBkGetAllDeviceDataKeyGrammarIsUniform pins the output grammar of
 // [CcuBackend.GetAllDeviceData]: channelAddress → parameter → value, which is
-// the contract its caller documents and the shape the JSON-RPC fallback has
-// always produced.
+// the contract its caller documents.
 //
 // The ReGa branch used to return the script's flat, still-escaped DP name as
-// the outer key with a single literal "value" sub-key, so the two branches of
-// one method answered the same question in two grammars and only one of them
-// matched the documented contract.
+// the outer key with a single literal "value" sub-key, which did not match the
+// documented contract. Without a ScriptRunner the method is unsupported: the
+// CCU's JSON-RPC method table has no bulk-value call.
 func TestHmBkGetAllDeviceDataKeyGrammarIsUniform(t *testing.T) {
 	t.Parallel()
 
@@ -133,19 +133,12 @@ func TestHmBkGetAllDeviceDataKeyGrammarIsUniform(t *testing.T) {
 		hmBkAssertDeviceData(t, got, want)
 	})
 
-	t.Run("jsonrpc", func(t *testing.T) {
+	t.Run("without a script runner", func(t *testing.T) {
 		t.Parallel()
-		x := &fakeCaller{reply: map[string]any{
-			"00021BE9957782:4": map[string]any{"LEVEL": 0.5},
-			"0001ABCD:1":       map[string]any{"STATE": true},
-		}}
-		b := NewCcuBackend(nil, x, nil)
-
-		got, err := b.GetAllDeviceData(context.Background())
-		if err != nil {
-			t.Fatalf("GetAllDeviceData: %v", err)
+		b := NewCcuBackend(nil, &fakeCaller{}, nil)
+		if _, err := b.GetAllDeviceData(context.Background()); !errors.Is(err, ErrUnsupported) {
+			t.Fatalf("GetAllDeviceData without ScriptRunner: err = %v, want ErrUnsupported", err)
 		}
-		hmBkAssertDeviceData(t, got, want)
 	})
 }
 

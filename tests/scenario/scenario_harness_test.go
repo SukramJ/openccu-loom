@@ -931,10 +931,14 @@ func (h *scenarioHarness) sendStatusResponse(ctx string, st scenarioStep) {
 		return
 	}
 	_, _, spec := h.activeSub(st.SubscriptionIdx)
-	// A StatusResponse on a bridge-opened exchange (an ongoing report)
-	// carries I=0; the peer only keeps I=1 on exchanges it opened
-	// itself, which is the drain case handled by sendStatusResponseOn.
-	h.sendStatusResponseOn(spec, exch, status, false)
+	// The initiator bit follows the exchange's origin, as it does on a
+	// real peer: a StatusResponse on the exchange the peer opened with
+	// its SubscribeRequest keeps I=1, one on a bridge-opened exchange (an
+	// ongoing report) carries I=0. The bridge keys its per-chunk wait on
+	// that bit — a Subscribe-Initial answered with I=0 is never matched,
+	// and the bridge abandons the Subscribe instead of shipping the
+	// SubscribeResponse.
+	h.sendStatusResponseOn(spec, exch, status, exch == spec.PeerSubscribeExchangeID)
 }
 
 // sendStatusResponseOn is the exchange-explicit form used by both the

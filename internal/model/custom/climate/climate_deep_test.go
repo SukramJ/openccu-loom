@@ -180,9 +180,10 @@ func TestSimpleRFThermostatDoesNotSupportAutoMode(t *testing.T) {
 	}
 }
 
-// TestSimpleRFThermostatHeatModeForwardsTemperature verifies that
-// SetMode(HEAT) on KindSimpleRF calls SetTemperature(MaxTemperature).
-func TestSimpleRFThermostatHeatModeForwardsTemperature(t *testing.T) {
+// TestSimpleRFThermostatHeatModeIsNoOp verifies that SetMode(HEAT) on
+// KindSimpleRF succeeds without writing anything: HEAT is the family's
+// only mode and the regulator channel carries no mode parameter.
+func TestSimpleRFThermostatHeatModeIsNoOp(t *testing.T) {
 	t.Parallel()
 
 	w := &stubWriter{}
@@ -194,9 +195,8 @@ func TestSimpleRFThermostatHeatModeForwardsTemperature(t *testing.T) {
 	if err := r.climate.SetMode(context.Background(), ModeHeat, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
-	got := w.last()
-	if got.value.(float64) != 30.5 {
-		t.Errorf("SimpleRF HEAT mode wrote %v, want MaxTemperature=30.5", got.value)
+	if n := callCount(w); n != 0 {
+		t.Errorf("SimpleRF HEAT mode wrote %d values, want none", n)
 	}
 }
 

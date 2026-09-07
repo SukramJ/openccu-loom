@@ -129,6 +129,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"SysVar.setFloat":           true,
 
 		// JSON-RPC — Program
+		"Program.get":              true,
 		"Program.getAll":           true,
 		"Program.setActive":        true,
 		"Program.execute":          true,

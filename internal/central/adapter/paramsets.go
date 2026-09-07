@@ -87,6 +87,19 @@ func (p *ParamsetsDomain) SetVisibilityGate(g VisibilityGate) *ParamsetsDomain {
 // registered backend for the device's interface.
 var ErrNoParamsetBackend = errors.New("paramsets: no backend for device")
 
+// ErrLinkParamsetNotAddressable is returned when a paramset write is
+// keyed with the literal "LINK".
+//
+// A LINK paramset exists once per peer and the CCU addresses it by the
+// peer's channel address in putParamset's paramset argument; "LINK"
+// itself is only a getParamsetDescription key. Passing the literal is
+// not merely rejected: on a BidCos channel that carries a LINK set, the
+// firmware parses it as a peer address, ignores the parse failure and
+// commits a configuration write for the non-existent peer 0xFFFFFF:0xFF
+// over the air while reporting success. [ParamsetsDomain.PutLinkParamset]
+// is the addressable route.
+var ErrLinkParamsetNotAddressable = hmerr.ErrLinkParamsetNotAddressable
+
 // GetParamset implements handlers.ParamsetService.
 //
 // For VALUES the channel event stream keeps data points fresh; we
@@ -171,6 +184,13 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 func (p *ParamsetsDomain) PutParamsetOn(
 	ctx context.Context, centralName, deviceAddress string, key hmenum.ParamsetKey, values map[string]any,
 ) error {
+	// A LINK-keyed write is unaddressable and, on some channels, harmful —
+	// see [ErrLinkParamsetNotAddressable]. Refuse before anything is read,
+	// locked or audited.
+	if key == hmenum.ParamsetKeyLink {
+		return fmt.Errorf("%w: use the per-peer link route for %s",
+			ErrLinkParamsetNotAddressable, deviceAddress)
+	}
 	// VisibilityGate runs first — before the channel is touched.
 	if err := p.checkVisibilityOn(centralName, deviceAddress, key, values); err != nil {
 		return err
@@ -183,15 +203,6 @@ func (p *ParamsetsDomain) PutParamsetOn(
 	before, _ := b.GetParamset(ctx, deviceAddress, key)
 
 	ch := p.resolveChannelOn(centralName, deviceAddress)
-	if key == hmenum.ParamsetKeyLink {
-		// A LINK paramset exists per peer and has no channel-level data
-		// point, so the model's parameter lookup resolves nothing and
-		// SetMany rejects every LINK write with ErrUnknownParameter — even
-		// though this route accepts LINK as a paramset key and locks it for
-		// editing. Send it down the backend path, exactly as a channel the
-		// model does not hold is sent.
-		ch = nil
-	}
 	if ch != nil {
 		// Route through the model: Channel.SetMany validates + dispatches.
 		paramValues, convErr := anyMapToParamValues(ch, key, values)

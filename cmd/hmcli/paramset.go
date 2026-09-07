@@ -95,8 +95,10 @@ func cmdParamsetSet(args []string, stdout, stderr io.Writer) error {
 		return errors.New("paramset set: usage: set <addr> <KEY> <param> <value>")
 	}
 	addr, key, param, rawVal := rest[0], rest[1], rest[2], rest[3]
-	if !validParamsetKeys[key] {
-		return fmt.Errorf("paramset set: invalid KEY %q (must be VALUES, MASTER, or LINK)", key)
+	if !validParamsetKeys[key] || key == "LINK" {
+		// LINK is addressed by the peer channel, never by the literal key —
+		// the daemon refuses it with 400; say so before the round trip.
+		return fmt.Errorf("paramset set: invalid KEY %q (must be VALUES or MASTER; LINK is written per peer via the link paramset route)", key)
 	}
 
 	client, err := f.client(stderr)

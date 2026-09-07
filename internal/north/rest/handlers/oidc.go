@@ -312,16 +312,18 @@ func writeOIDCStateCookie(w http.ResponseWriter, state string, secure bool) {
 }
 
 // clearOIDCStateCookie invalidates the state cookie once the callback has
-// read it (single use). Secure=true (mirroring ClearSessionCookie) so an
-// active reverse-proxy terminator strips it correctly across redirects.
+// read it (single use). Secure is deliberately absent, as on
+// auth.ClearSessionCookie: a deletion cookie is matched by name/domain/path,
+// so this one form clears the cookie from a secure origin and from the
+// plain-HTTP add-on/LAN deployment alike — with Secure set, a plain-HTTP
+// browser rejected the deletion and the spent state cookie lived on.
 func clearOIDCStateCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // deletion cookie, empty value; see the doc comment
 		Name:     oidcStateCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 }

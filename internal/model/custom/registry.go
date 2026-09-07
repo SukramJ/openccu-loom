@@ -421,9 +421,12 @@ func (r *Registry) GetConfigs(model string) []Profile {
 		if exactFound {
 			continue
 		}
-		// Priority 2: prefix match — first-match-wins.
-		// We need a stable ordering of keys to make "first" deterministic;
-		// sort keys by DeviceType length descending (longer = more specific).
+		// Priority 2: prefix match — the longest registered prefix wins,
+		// and every profile registered under that device type in this
+		// category is returned (a device type can carry several profiles
+		// per category, e.g. "hmip-dld" holds IPButtonLock and IPLock).
+		// Sort keys by DeviceType length descending (longer = more
+		// specific) so the pick is deterministic.
 		type kv struct {
 			key   registryKey
 			value Profile
@@ -441,10 +444,14 @@ func (r *Registry) GetConfigs(model string) []Profile {
 			}
 			return catKVs[i].key.DeviceType < catKVs[j].key.DeviceType // tiebreak
 		})
+		matched := ""
 		for i := range catKVs {
+			if matched != "" && catKVs[i].key.DeviceType != matched {
+				break // longest matching prefix collected in full
+			}
 			if strings.HasPrefix(normalized, catKVs[i].key.DeviceType) {
 				out = append(out, catKVs[i].value)
-				break // first-match-wins per category
+				matched = catKVs[i].key.DeviceType
 			}
 		}
 	}

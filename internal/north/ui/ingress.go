@@ -27,6 +27,15 @@ func ingressPrefix(r *http.Request) string {
 	if strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
 		return ""
 	}
+	// Control bytes, backslashes and query/fragment separators never belong
+	// in a mount prefix; a "/<TAB>/evil.example" would otherwise reach a
+	// Location header that browsers fold into a cross-origin redirect. Same
+	// rule as safeIngressPrefix in internal/north/rest.
+	for i := range len(p) {
+		if c := p[i]; c <= ' ' || c == 0x7f || c == '\\' || c == '?' || c == '#' {
+			return ""
+		}
+	}
 	return strings.TrimRight(p, "/")
 }
 

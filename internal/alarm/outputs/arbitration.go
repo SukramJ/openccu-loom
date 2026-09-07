@@ -41,6 +41,17 @@ func (m *Manager) noteDemand(inst *instance) {
 	m.mu.Unlock()
 }
 
+// dropDemand releases the row's claim on its channel without asking
+// whether another zone still holds one. It is the failure counterpart
+// of noteDemand: a claim recorded before an activation write must be
+// given back when that write fails, or another zone's stop of the same
+// channel is silently skipped.
+func (m *Manager) dropDemand(rowID string) {
+	m.mu.Lock()
+	delete(m.demands, rowID)
+	m.mu.Unlock()
+}
+
 // releaseDemandForeignRemains drops the row's own demand and reports
 // whether another zone still demands the same channel. Callers skip
 // the device OFF write (and its verify chain — read-back would keep

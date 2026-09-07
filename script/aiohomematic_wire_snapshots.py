@@ -1028,8 +1028,12 @@ def _gen_sound_player_stop_sound() -> None:
 
 def _gen_sound_player_led_turn_on() -> None:
     """
-    SoundPlayerLED TurnOn: aiohomematic sends PutParamset with COLOR, LEVEL, ON_TIME,
-    ON_TIME_LIST_1 (flash interval), RAMP_TIME, REPETITIONS.
+    SoundPlayerLED TurnOn: aiohomematic sends PutParamset with LEVEL, COLOR,
+    ON_TIME_LIST_1 (flash interval), REPETITIONS, and the two timers in the
+    value/unit shape the HmIP-MP3P LED channel declares — CombinedTimerField
+    (light.py CustomDpSoundPlayerLed) writes DURATION_VALUE/DURATION_UNIT for
+    on_time and RAMP_TIME_VALUE/RAMP_TIME_UNIT for ramp_time, both defaulting
+    to 0 s. The channel carries no bare ON_TIME / RAMP_TIME.
     Equivalent to Loom (brightness=128/255 ≈ 0.5020, flash=500ms, rep=3).
     """
     inputs = [{
@@ -1040,10 +1044,12 @@ def _gen_sound_player_led_turn_on() -> None:
             "paramset_key": "VALUES",
             "put_values": {
                 "COLOR": "WHITE",
+                "DURATION_UNIT": 0,
+                "DURATION_VALUE": 0,
                 "LEVEL": 0.5019607843137255,
-                "ON_TIME": 0,
                 "ON_TIME_LIST_1": "500MS",
-                "RAMP_TIME": 0,
+                "RAMP_TIME_UNIT": 0,
+                "RAMP_TIME_VALUE": 0,
                 "REPETITIONS": "REPETITIONS_003",
             },
         }],
@@ -1053,10 +1059,9 @@ def _gen_sound_player_led_turn_on() -> None:
 
 def _gen_sound_player_led_turn_off() -> None:
     """
-    SoundPlayerLED TurnOff: SoundPlayerLED is a Loom-specific type with no
-    aiohomematic equivalent. The reference is derived from the Go implementation
-    which sends PutParamset {COLOR="BLACK", ON_TIME=0} to atomically clear
-    the timer and colour state.
+    SoundPlayerLED TurnOff: CustomDpSoundPlayerLed.turn_off (light.py) sends
+    LEVEL=0.0, COLOR=BLACK and on_time 0.0 through CombinedTimerField, i.e.
+    DURATION_VALUE=0 with DURATION_UNIT seconds — no ramp.
     """
     inputs = [{
         "label": "priority=normal",
@@ -1066,7 +1071,9 @@ def _gen_sound_player_led_turn_off() -> None:
             "paramset_key": "VALUES",
             "put_values": {
                 "COLOR": "BLACK",
-                "ON_TIME": 0,
+                "DURATION_UNIT": 0,
+                "DURATION_VALUE": 0,
+                "LEVEL": 0.0,
             },
         }],
     }]

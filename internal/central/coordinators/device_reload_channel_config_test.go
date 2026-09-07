@@ -21,7 +21,6 @@ type channelParamsetFetcherStub struct {
 	valueCalls  []hmenum.ParamsetKey
 	descReturns map[hmenum.ParamsetKey]map[string]hmproto.ParameterData
 	descErr     map[hmenum.ParamsetKey]error
-	valueErr    error
 }
 
 func (s *channelParamsetFetcherStub) GetParamsetDescription(
@@ -43,9 +42,6 @@ func (s *channelParamsetFetcherStub) GetParamset(
 	_ context.Context, _ string, key hmenum.ParamsetKey,
 ) (map[string]any, error) {
 	s.valueCalls = append(s.valueCalls, key)
-	if s.valueErr != nil {
-		return nil, s.valueErr
-	}
 	return map[string]any{}, nil
 }
 
@@ -76,9 +72,10 @@ func TestReloadChannelConfigPullsAllParamsetKindsAndStores(t *testing.T) {
 	if len(fetcher.descCalls) != 3 {
 		t.Fatalf("expected 3 description reads, got %v", fetcher.descCalls)
 	}
-	// MASTER values are re-read once.
-	if len(fetcher.valueCalls) != 1 || fetcher.valueCalls[0] != hmenum.ParamsetKeyMaster {
-		t.Fatalf("expected one MASTER value read, got %v", fetcher.valueCalls)
+	// No MASTER value round trip: nothing in the coordinator keeps the
+	// answer, so a read would be pure CCU load.
+	if len(fetcher.valueCalls) != 0 {
+		t.Fatalf("expected no paramset value read, got %v", fetcher.valueCalls)
 	}
 	// The re-pulled MASTER description was stored in the registry.
 	stored, ok := ps.Get(wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", hmenum.ParamsetKeyMaster)
@@ -122,25 +119,5 @@ func TestReloadChannelConfigAllDescriptionsFailReturnsError(t *testing.T) {
 		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", "",
 	); err == nil {
 		t.Fatal("expected error when every paramset description fetch fails")
-	}
-}
-
-func TestReloadChannelConfigMasterValueErrorIsNonFatal(t *testing.T) {
-	dc, ps := newReloadChannelCoordinator()
-	fetcher := &channelParamsetFetcherStub{
-		descReturns: map[hmenum.ParamsetKey]map[string]hmproto.ParameterData{
-			hmenum.ParamsetKeyMaster: {"TEMPERATURE": {Type: "FLOAT"}},
-		},
-		valueErr: errors.New("master read failed"),
-	}
-	// A MASTER value-read failure must not abort: the descriptions were
-	// already refreshed and stored.
-	if err := dc.ReloadChannelConfig(
-		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", "",
-	); err != nil {
-		t.Fatalf("MASTER value read error should be non-fatal, got %v", err)
-	}
-	if _, ok := ps.Get(wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", hmenum.ParamsetKeyMaster); !ok {
-		t.Fatal("descriptions should be stored even when MASTER value read fails")
 	}
 }

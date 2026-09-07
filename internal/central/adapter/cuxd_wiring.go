@@ -340,6 +340,16 @@ func announceCUxDCallback(
 	logger *slog.Logger,
 ) {
 	if callbackURL == "" {
+		// No BIN-RPC listener to announce (it failed to bind): CUxD still
+		// answers reads and writes over the same socket, it only pushes no
+		// events. Say so in the client state — left in CREATED, every
+		// gated hub job of the central stayed frozen and check_connection
+		// reported the interface lost every 30 s (see the XML-RPC twin).
+		logger.Warn("wire.init.skipped_no_callback",
+			slog.String("central", centralName),
+			slog.String("interface", initID),
+			slog.String("effect", "read-through mode: no push events until the BIN-RPC listener binds"))
+		ensureConnectedClientState(ic, logger)
 		return
 	}
 	// Pre-Init Deinit: tell CUxD to forget any registration made for this

@@ -113,7 +113,6 @@ func seamEffectWriterStack(t *testing.T) (*central.Registry, *clientpkg.ValueWri
 	}
 
 	writer := clientpkg.NewValueWriter()
-	writer.RegisterIC(centralName, hmtypes.WireInterfaceID(ifaceID), ic)
 	writer.Register(centralName, hmtypes.WireInterfaceID(ifaceID), seamEffectBackend{})
 	return reg, writer, ic
 }

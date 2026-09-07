@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"strings"
 	"sync"
 	"testing"
@@ -45,6 +46,50 @@ func (p *refusingPublisher) accept() {
 	p.mu.Lock()
 	p.reject = nil
 	p.mu.Unlock()
+}
+
+// quiesce waits until the publisher stops writing.
+//
+// [SecurityMQTTPublisher] performs every broker publish on its worker
+// goroutine, so a reconcile triggered by a bus event finishes after the
+// call that triggered it returned. A negative assertion has to observe a
+// finished pass rather than one that has not started yet.
+func (p *refusingPublisher) quiesce(t *testing.T) {
+	t.Helper()
+	const (
+		quiet    = 60 * time.Millisecond
+		deadline = 5 * time.Second
+		step     = 5 * time.Millisecond
+	)
+	start := time.Now()
+	last := -1
+	stable := time.Now()
+	for time.Since(start) < deadline {
+		p.mu.Lock()
+		n := len(p.sent)
+		p.mu.Unlock()
+		if n != last {
+			last = n
+			stable = time.Now()
+		} else if time.Since(stable) >= quiet {
+			return
+		}
+		time.Sleep(step)
+	}
+}
+
+// awaitSecurity polls cond until it holds, so a positive assertion can
+// wait for the worker goroutine instead of racing it.
+func awaitSecurity(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
 }
 
 func (p *refusingPublisher) count(topic string) int {
@@ -103,6 +148,7 @@ func TestSecurityDiscoveryRetriesConfigsTheBrokerRefused(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
+	pub.quiesce(t)
 	if n := pub.count(classConfig); n != 0 {
 		t.Fatalf("the refused class config must not reach the recorder; got %d", n)
 	}
@@ -115,6 +161,9 @@ func TestSecurityDiscoveryRetriesConfigsTheBrokerRefused(t *testing.T) {
 	pub.accept()
 	events.Publish(bus, hmevent.SecurityClassChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 
+	awaitSecurity(t, "the refused configs to be retried", func() bool {
+		return pub.count(classConfig) == 1 && pub.count(zoneConfig) == 1
+	})
 	if n := pub.count(classConfig); n != 1 {
 		t.Fatalf("class config publishes after recovery=%d, want 1", n)
 	}
@@ -129,6 +178,7 @@ func TestSecurityDiscoveryRetriesConfigsTheBrokerRefused(t *testing.T) {
 	// the bridge's payload dedup carries that, and losing it would put a
 	// full discovery pass on every security event.
 	events.Publish(bus, hmevent.SecurityClassChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	pub.quiesce(t)
 	if n := pub.count(classConfig); n != 1 {
 		t.Fatalf("unchanged class config re-published %d times, want 1", n)
 	}
@@ -154,6 +204,16 @@ func TestSecurityZoneDiscoveryFollowsARename(t *testing.T) {
 
 	src.rename("cellar", "Basement")
 	events.Publish(bus, hmevent.SecurityZoneChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	awaitSecurity(t, "the renamed zone config", func() bool {
+		pub.mu.Lock()
+		defer pub.mu.Unlock()
+		for _, rec := range pub.sent {
+			if rec.topic == zoneConfig && strings.Contains(rec.payload, "Basement") {
+				return true
+			}
+		}
+		return false
+	})
 
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
@@ -184,12 +244,18 @@ func (s *mutableSecuritySnapshot) Snapshot() security.Snapshot {
 	return s.snap
 }
 
+// rename replaces the zone map rather than mutating it in place: the
+// snapshot the publisher's worker is reading shares the same map header,
+// and the worker runs concurrently with the test goroutine.
 func (s *mutableSecuritySnapshot) rename(slug, name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	z := s.snap.Zones[slug]
+	zones := make(map[string]security.ZoneState, len(s.snap.Zones))
+	maps.Copy(zones, s.snap.Zones)
+	z := zones[slug]
 	z.Name = name
-	s.snap.Zones[slug] = z
+	zones[slug] = z
+	s.snap.Zones = zones
 }
 
 // set replaces the whole snapshot, mirroring the domain's own transition
@@ -225,6 +291,7 @@ func TestSecurityPlaneDoesNotDeclareBeforeTheIndexIsBuilt(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
+	pub.quiesce(t)
 	if bridge.planeDeclared(securityDiscoveryNodeID) {
 		t.Fatal("the security plane declared on the empty pre-index snapshot; " +
 			"the orphan sweep would clear every class and zone config the broker still holds")
@@ -234,6 +301,9 @@ func TestSecurityPlaneDoesNotDeclareBeforeTheIndexIsBuilt(t *testing.T) {
 	// drives the reconcile that declares for real.
 	src.set(smokeClassSnapshot())
 	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	awaitSecurity(t, "the plane to declare", func() bool {
+		return bridge.planeDeclared(securityDiscoveryNodeID)
+	})
 
 	if !bridge.planeDeclared(securityDiscoveryNodeID) {
 		t.Fatal("the security plane never declared after the index was built; its orphans could never be swept")
@@ -267,6 +337,7 @@ func TestSecurityPlaneDeclaresWhenTheInstallationIsGenuinelyEmpty(t *testing.T) 
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
+	pub.quiesce(t)
 	if bridge.planeDeclared(securityDiscoveryNodeID) {
 		t.Fatal("the plane declared before the domain reported anything")
 	}
@@ -274,6 +345,9 @@ func TestSecurityPlaneDeclaresWhenTheInstallationIsGenuinelyEmpty(t *testing.T) 
 	// The domain finished its start: index built, state announced — and
 	// the installation really has neither a class nor a zone.
 	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	awaitSecurity(t, "the plane to declare", func() bool {
+		return bridge.planeDeclared(securityDiscoveryNodeID)
+	})
 
 	if !bridge.planeDeclared(securityDiscoveryNodeID) {
 		t.Fatal("an installation with no classes and no zones never declares, " +

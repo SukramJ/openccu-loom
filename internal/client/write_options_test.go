@@ -377,26 +377,3 @@ func TestPutParamsetWithOptions_WaitForCallbackAcrossKeys(t *testing.T) {
 		t.Fatalf("PutParamsetWithOptions: %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// WriteOptions.SkipRetry zero-value and set behaviour
-// ---------------------------------------------------------------------------
-
-// TestWriteOptionsSkipRetryDefaultFalse verifies zero-value WriteOptions
-// has SkipRetry=false.
-func TestWriteOptionsSkipRetryDefaultFalse(t *testing.T) {
-	t.Parallel()
-	var opts WriteOptions
-	if opts.SkipRetry {
-		t.Error("WriteOptions{}.SkipRetry should default to false")
-	}
-}
-
-// TestWriteOptionsSkipRetryCanBeSet verifies SkipRetry can be set to true.
-func TestWriteOptionsSkipRetryCanBeSet(t *testing.T) {
-	t.Parallel()
-	opts := WriteOptions{SkipRetry: true}
-	if !opts.SkipRetry {
-		t.Error("WriteOptions{SkipRetry: true}.SkipRetry should be true")
-	}
-}

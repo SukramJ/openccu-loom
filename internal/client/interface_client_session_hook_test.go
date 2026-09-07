@@ -71,7 +71,7 @@ func TestSessionRecorderHookCalledOnSetValue(t *testing.T) {
 	if err := ic.SetValue(
 		context.Background(), b,
 		"MEQ0123456:1", hmenum.ParameterLevel, 0.5,
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false,
+		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
 	); err != nil {
 		t.Fatalf("SetValue: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestSessionRecorderHookCalledOnPutParamset(t *testing.T) {
 		context.Background(), b,
 		"MEQ0123456:1", "MASTER",
 		map[string]any{"CYCLIC_INFO_MSG_DIS": false},
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false,
+		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
 	); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestSessionRecorderHookNotCalledWhenNil(t *testing.T) {
 	if err := ic.SetValue(
 		context.Background(), b,
 		"MEQ0123456:1", hmenum.ParameterLevel, 1.0,
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false,
+		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
 	); err != nil {
 		t.Fatalf("SetValue (nil hook): %v", err)
 	}
@@ -145,7 +145,7 @@ func TestSessionRecorderHookNotCalledWhenNil(t *testing.T) {
 		context.Background(), b,
 		"MEQ0123456:1", "MASTER",
 		map[string]any{"K": "V"},
-		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false,
+		hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
 	); err != nil {
 		t.Fatalf("PutParamset (nil hook): %v", err)
 	}
@@ -180,9 +180,9 @@ func TestSessionRecorderHookLabelsTheTransport(t *testing.T) {
 			b := &orchBackend{}
 
 			_ = ic.SetValue(context.Background(), b, "A:1", hmenum.ParameterLevel, 1.0,
-				hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false)
+				hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset)
 			_ = ic.PutParamset(context.Background(), b, "A:1", "MASTER",
-				map[string]any{}, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false)
+				map[string]any{}, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset)
 
 			if len(seenTypes) != 2 {
 				t.Fatalf("hook called %d times, want 2", len(seenTypes))

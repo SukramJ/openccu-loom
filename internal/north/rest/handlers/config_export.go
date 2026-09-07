@@ -13,6 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ConfigExportService is the narrow facade the config-export / import
@@ -117,8 +118,11 @@ func ExportChannelConfig(svc ConfigExportService, meta ChannelInfoReader) http.H
 // It parses the JSON body as an [configui.ExportedConfiguration], runs
 // validation and applies it to the CCU.  The URL-derived channel
 // address is checked against the payload's ChannelAddress — a mismatch
-// is rejected with 400 to prevent accidental cross-channel writes.
-func ImportChannelConfig(svc ConfigExportService) http.HandlerFunc {
+// is rejected with 400 to prevent accidental cross-channel writes. A
+// MASTER or LINK snapshot is a configuration write and passes the same
+// strict edit-lock gate PUT /devices/{addr}/paramsets/{key} enforces;
+// `locks` may be nil only in tests.
+func ImportChannelConfig(svc ConfigExportService, locks *EditSessions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -165,6 +169,19 @@ func ImportChannelConfig(svc ConfigExportService) http.HandlerFunc {
 					"Channel address mismatch",
 					"payload channel_address "+cfg.ChannelAddress+" does not match URL channel "+channelAddr))
 			return
+		}
+
+		// An imported snapshot lands a MASTER/LINK paramset on the CCU
+		// exactly like PUT /devices/{addr}/paramsets/{key} does, so it
+		// passes the same strict gate: without the token holding this
+		// channel's lock the import is refused 423 before any CCU call.
+		// Otherwise an import silently overwrites the values a human
+		// editor holds open — the lost update the lock exists to prevent.
+		// VALUES snapshots are device control and stay ungated.
+		if key := hmenum.ParamsetKey(cfg.ParamsetKey); key == hmenum.ParamsetKeyMaster || key == hmenum.ParamsetKeyLink {
+			if !enforceEditLock(w, r, locks, "channel:"+channelAddr+":"+cfg.ParamsetKey) {
+				return
+			}
 		}
 
 		writer := &configExportAdapter{svc: svc, centralName: cfg.CentralName}

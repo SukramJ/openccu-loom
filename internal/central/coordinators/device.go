@@ -346,6 +346,63 @@ func (c *DeviceCoordinator) SweepParkedNotIn(ctx context.Context, iface hmtypes.
 	return len(stale)
 }
 
+// DropPending forgets everything the deferred-creation queue holds for
+// one address — the parked decision, the withheld descriptions, the
+// awaiting-release hold and the persisted row — and reports whether any
+// of it existed.
+//
+// [SweepParkedNotIn] does the same reconciliation for a whole interface,
+// but it only runs inside the boot pull. A device the CCU deletes while
+// the daemon is running never reaches that sweep, so without this the
+// address stayed on the inbox surface until the next restart, naming a
+// device that no longer exists.
+func (c *DeviceCoordinator) DropPending(ctx context.Context, iface hmtypes.WireInterfaceID, address string) bool {
+	ifaceID := string(iface)
+	c.mu.Lock()
+	dropped := false
+	if set, ok := c.parked[ifaceID]; ok {
+		if _, held := set[address]; held {
+			dropped = true
+			delete(set, address)
+		}
+		if len(set) == 0 {
+			delete(c.parked, ifaceID)
+		}
+	}
+	if set, ok := c.unreleased[ifaceID]; ok {
+		if _, held := set[address]; held {
+			dropped = true
+			delete(set, address)
+		}
+		if len(set) == 0 {
+			delete(c.unreleased, ifaceID)
+		}
+	}
+	if byAddress, ok := c.delayedDescs[ifaceID]; ok {
+		if _, held := byAddress[address]; held {
+			dropped = true
+			delete(byAddress, address)
+		}
+		if len(byAddress) == 0 {
+			delete(c.delayedDescs, ifaceID)
+		}
+	}
+	sink := c.pending
+	c.mu.Unlock()
+	if !dropped {
+		return false
+	}
+	if sink != nil {
+		if err := sink.Remove(ctx, ifaceID, address); err != nil {
+			c.logger.Warn("device_coordinator.pending.remove_failed",
+				slog.String("central", c.centralName),
+				slog.String("address", address),
+				slog.String("err", err.Error()))
+		}
+	}
+	return true
+}
+
 // SetRecorder rewires the observability recorder. Returns the receiver
 // for chaining.
 func (c *DeviceCoordinator) SetRecorder(rec observability.Recorder) *DeviceCoordinator {
@@ -446,16 +503,26 @@ func (c *DeviceCoordinator) applyPull(iface hmtypes.WireInterfaceID, snapshot []
 	// Anything the registry has but the snapshot drops is gone on the
 	// CCU side — propagate the deletion through the same path
 	// HandleDeleteDevices uses.
+	rep.Removed += c.dropAbsent(iface, seen)
+}
+
+// dropAbsent removes every description, paramset and device-registry row
+// of iface whose address is missing from present, publishing one
+// DeviceRemovedEvent per device-level entry it removes. Returns the
+// number of devices removed (channels are dropped silently — they are
+// part of their device's footprint, not entities of their own).
+func (c *DeviceCoordinator) dropAbsent(iface hmtypes.WireInterfaceID, present map[string]struct{}) int {
+	removed := 0
 	allPrev := c.descs.All(iface)
 	for i := range allPrev {
 		addr := allPrev[i].Address
-		if _, ok := seen[addr]; ok {
+		if _, ok := present[addr]; ok {
 			continue
 		}
 		c.paramsets.DeleteChannel(iface, addr)
 		c.descs.Delete(iface, addr)
 		if c.devices.Remove(iface, addr) {
-			rep.Removed++
+			removed++
 			events.Publish(c.bus, hmevent.DeviceRemovedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
@@ -464,6 +531,37 @@ func (c *DeviceCoordinator) applyPull(iface hmtypes.WireInterfaceID, snapshot []
 			})
 		}
 	}
+	return removed
+}
+
+// ReconcileAgainstSnapshot drops every cached description and registry
+// row of iface that the live snapshot omits, and reports how many
+// devices it removed.
+//
+// The boot pull is otherwise add-only, while the persisted description
+// cache is restored in full before it runs. A device unpaired while the
+// daemon was down therefore came back as a ghost: its rows were
+// re-registered from the cache, and a re-pair at the same serial then
+// read as an already-known device, so no DeviceCreatedEvent was
+// published and no north-bound plane learned of it until the next
+// restart. Reconciling the cache against what the CCU actually reports
+// is the only place that knows the difference.
+//
+// present must list every address the pull returned, channels included,
+// and must be taken before any parked device is withheld — a held-back
+// device is still a device the CCU reports.
+//
+// An empty snapshot is ignored rather than treated as "everything is
+// gone": a CCU that answers a pull with no devices at all is far more
+// likely mid-boot than freshly wiped, and acting on it would discard the
+// whole cache.
+func (c *DeviceCoordinator) ReconcileAgainstSnapshot(
+	iface hmtypes.WireInterfaceID, present map[string]struct{},
+) int {
+	if len(present) == 0 {
+		return 0
+	}
+	return c.dropAbsent(iface, present)
 }
 
 // RefreshAfterPair re-pulls the snapshot after a fresh pair so the
@@ -976,8 +1074,6 @@ type ChannelParamsetFetcher interface {
 	// GetParamsetDescription reads the descriptor for one paramset on the
 	// given channel (VALUES / MASTER / LINK).
 	GetParamsetDescription(ctx context.Context, channelAddress string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
-	// GetParamset reads the current values of one paramset on the channel.
-	GetParamset(ctx context.Context, channelAddress string, key hmenum.ParamsetKey) (map[string]any, error)
 }
 
 // channelReloadParamsetKeys lists the paramset descriptions re-pulled for a
@@ -1041,14 +1137,10 @@ func (c *DeviceCoordinator) ReloadChannelConfig(
 		return fmt.Errorf("device_coordinator: reload_channel_config: no paramset descriptions for %s", channelAddress)
 	}
 
-	// Re-read the current MASTER values so a follow-up data-point refresh
-	// observes fresh master state. A read failure here is non-fatal — the
-	// descriptions were already refreshed.
-	if _, err := fetcher.GetParamset(ctx, channelAddress, hmenum.ParamsetKeyMaster); err != nil {
-		c.logger.Debug("reload_channel_config: master values read skipped",
-			"channel", channelAddress,
-			"error", err)
-	}
+	// No MASTER value read here: the coordinator has no channel model to
+	// seed with the result, so a read would be a CCU round trip whose
+	// answer nobody keeps. MASTER values reach the data points through
+	// the master-refresh path the channel already owns.
 	return nil
 }
 

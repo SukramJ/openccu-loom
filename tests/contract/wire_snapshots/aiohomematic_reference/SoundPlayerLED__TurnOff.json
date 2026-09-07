@@ -13,7 +13,9 @@
           "paramset_key": "VALUES",
           "put_values": {
             "COLOR": "BLACK",
-            "ON_TIME": 0
+            "DURATION_UNIT": 0,
+            "DURATION_VALUE": 0,
+            "LEVEL": 0.0
           }
         }
       ]

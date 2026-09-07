@@ -81,24 +81,17 @@ func (s *SchedulesDomain) MaxProfilesForDevice(
 		if !ok {
 			continue
 		}
-		// Walk every channel and probe for the profile-pointer DPs.
-		for _, ch := range dev.Channels() {
-			// IP path: ACTIVE_PROFILE is a 1-based INTEGER (Min=1, Max=N).
-			if dp := ch.Parameter(hmenum.ParameterActiveProfile); dp != nil {
-				pd := dp.ParameterData()
-				if n, ok := rawJSONInt(pd.Max); ok && n >= 1 && n <= defaultProfileCap {
-					return n, nil
-				}
-			}
-			// RF path: WEEK_PROGRAM_POINTER is a 0-based INTEGER (Min=0, Max=N-1).
-			if dp := ch.Parameter(hmenum.ParameterWeekProgramPointer); dp != nil {
-				pd := dp.ParameterData()
-				if n, ok := rawJSONInt(pd.Max); ok && n >= 0 && n < defaultProfileCap {
-					return n + 1, nil
-				}
+		// The pointer lookup covers both paramsets and the device-root
+		// pseudo-channel: classic RF wall thermostats declare
+		// WEEK_PROGRAM_POINTER only in the device-level MASTER, so a
+		// VALUES-only walk over the real channels reported the
+		// six-profile fallback for every one of them.
+		if ptr, ok := findProfilePointer(dev); ok {
+			if n := ptr.profileCount(); n >= 1 && n <= defaultProfileCap {
+				return n, nil
 			}
 		}
-		// Device found but neither DP present (e.g. simple cover schedule).
+		// Device found but no pointer present (e.g. simple cover schedule).
 		return defaultProfileCap, nil
 	}
 	// Device not in any registry → safe default, not an error.

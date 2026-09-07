@@ -601,11 +601,15 @@ func restampDeviceDetails(unit *central.Unit, logger *slog.Logger) int {
 			dev.SetName(name)
 			devChanged = true
 		}
-		if rooms := unit.DeviceDetails.GetDeviceRooms(dev.Address); len(rooms) > 0 && !slices.Equal(rooms, dev.Rooms()) {
+		// An emptied assignment is a change too: a device removed from its
+		// last room or function must drop the stale set, so the set is
+		// compared without a non-empty pre-guard. The name keeps its guard
+		// — the cache never carries "" as a rename, only as "not yet read".
+		if rooms := unit.DeviceDetails.GetDeviceRooms(dev.Address); !slices.Equal(rooms, dev.Rooms()) {
 			dev.SetRooms(rooms)
 			devChanged = true
 		}
-		if functions := unit.DeviceDetails.GetFunctions(dev.Address); len(functions) > 0 && !slices.Equal(functions, dev.Functions()) {
+		if functions := unit.DeviceDetails.GetFunctions(dev.Address); !slices.Equal(functions, dev.Functions()) {
 			dev.SetFunctions(functions)
 			devChanged = true
 		}
@@ -614,11 +618,11 @@ func restampDeviceDetails(unit *central.Unit, logger *slog.Logger) int {
 				ch.SetName(name)
 				devChanged = true
 			}
-			if rooms := unit.DeviceDetails.GetChannelRooms(ch.Address); len(rooms) > 0 && !slices.Equal(rooms, ch.Rooms()) {
+			if rooms := unit.DeviceDetails.GetChannelRooms(ch.Address); !slices.Equal(rooms, ch.Rooms()) {
 				ch.SetRooms(rooms)
 				devChanged = true
 			}
-			if functions := unit.DeviceDetails.GetFunctions(ch.Address); len(functions) > 0 && !slices.Equal(functions, ch.Functions()) {
+			if functions := unit.DeviceDetails.GetFunctions(ch.Address); !slices.Equal(functions, ch.Functions()) {
 				ch.SetFunctions(functions)
 				devChanged = true
 			}

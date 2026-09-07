@@ -106,3 +106,46 @@ func TestListAudit_ReevaluatesTheCallersIdentityPerRequest(t *testing.T) {
 		t.Fatalf("list_audit answered the connection's identity instead of the caller's: %+v", res.StructuredContent)
 	}
 }
+
+// TestWriteToolsRecordTheCallersIdentity pins that the audit rows the two
+// MCP write tools record carry the resolved per-request identity as User.
+// The mount resolves it before the tool runs (callerHasRole reads it for
+// list_audit), so an empty User here is the producer dropping the actor —
+// and "who changed this?" becomes unanswerable for assistant-driven writes.
+func TestWriteToolsRecordTheCallersIdentity(t *testing.T) {
+	buf := audit.NewBuffer(10)
+	devs, _, _ := makeDeviceFixture()
+	h, _ := makeHubWithProgram("ccu1", "prog-42")
+	hubs := newFakeHubs()
+	hubs.add("ccu1", h)
+
+	cs := serveMCPAs(t, auth.Identity{Subject: "assistant-op", Role: auth.RoleOperator, Scheme: auth.SchemeBearer}, mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		Writer:      &fakeWriter{},
+		Hubs:        hubs,
+		Audit:       buf,
+		AllowWrites: true,
+	})
+
+	if res := callTool(t, cs, "set_datapoint", map[string]any{
+		"central_name": "ccu1", "address": "ADDR001", "parameter": "STATE", "value": true,
+	}); res.IsError {
+		t.Fatalf("set_datapoint: %v", res.Content)
+	}
+	if res := callTool(t, cs, "trigger_program", map[string]any{
+		"central_name": "ccu1", "program_id": "prog-42",
+	}); res.IsError {
+		t.Fatalf("trigger_program: %v", res.Content)
+	}
+
+	entries := buf.List(10)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 audit rows, got %d", len(entries))
+	}
+	for _, e := range entries {
+		if e.User != "assistant-op" {
+			t.Errorf("audit row %s: User=%q, want the resolved caller %q", e.Action, e.User, "assistant-op")
+		}
+	}
+}

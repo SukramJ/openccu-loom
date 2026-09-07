@@ -198,9 +198,15 @@ func PutCCUPosition(svc CCUPositionPort, rec audit.Recorder) http.HandlerFunc {
 				problem.New(problem.TypeValidation, r, "Missing central", "central path parameter is required"))
 			return
 		}
+		// The same 1 MiB ceiling DecodeJSON applies, capped here rather
+		// than through that helper because this route accepts unknown
+		// members. The OpenAPI validator caps the body too, but it is not
+		// mounted when `openapi_validate` is off or the spec file is
+		// unresolvable, and an unbounded decode is then a heap the caller
+		// chooses.
 		var req ccuPositionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)).Decode(&req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON body", err.Error()))
 			return
 		}

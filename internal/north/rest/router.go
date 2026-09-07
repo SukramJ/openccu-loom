@@ -618,9 +618,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	if d.CSRFEnabled {
 		r.Use(auth.CSRFMiddleware(d.CSRFSecure))
 	}
-	if d.RateLimit != nil {
-		r.Use(middleware.RateLimit(*d.RateLimit))
-	}
 
 	// Mount the SPA before the NotFound handler so an unknown /app/*
 	// path falls through to SPAHandler's index.html (client-side
@@ -697,6 +694,19 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		// only failures charge.
 		if d.LoginRateLimit != nil {
 			r.Use(auth.GuardBasicAuth(d.LoginRateLimit))
+		}
+		// The per-identity request limiter is scoped to /api/v1 for the
+		// reason spelled out above: every unauthenticated caller shares
+		// one "anonymous" bucket, and on the whole mux that bucket also
+		// covers the SPA mount and the no-JS /health probe. One source
+		// sweeping any path at more than the configured rate would then
+		// turn other users' login-page assets — dozens of requests per
+		// page load — and the documented external health probe into 429s,
+		// which is an availability hit no rate limit is meant to buy.
+		// Mounted after Resolve so an authenticated caller draws from
+		// their own bucket rather than the shared one.
+		if d.RateLimit != nil {
+			r.Use(middleware.RateLimit(*d.RateLimit))
 		}
 
 		// OpenAPI request validation runs only inside the /api/v1
@@ -892,7 +902,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/devices/{addr}/channels/{no}/config/export",
 				handlers.ExportChannelConfig(d.ConfigExport, d.ConfigChannelMeta))
 			pr.With(op).Post("/devices/{addr}/channels/{no}/config/import",
-				handlers.ImportChannelConfig(d.ConfigExport))
+				handlers.ImportChannelConfig(d.ConfigExport, d.EditSessions))
 			// A nil DefinitionExport makes the handler return 503 via its
 			// internal nil-guard.
 			pr.Get("/devices/{addr}/export-definition",
@@ -1469,6 +1479,11 @@ func timeoutExceptStreaming(d time.Duration) func(http.Handler) http.Handler {
 // header is absent or not a local absolute path. It rejects scheme-relative
 // ("//host") and backslash ("/\") forms so the value can be used to build a
 // redirect target without becoming an open redirect to a foreign origin.
+// The byte loop is the same guard the remote proxy applies (ingressBase in
+// internal/remoteproxy/proxy.go): a browser removes TAB, CR and LF from a
+// URL before resolving it, so "/<TAB>/host" is "//host" again, and the raw
+// header value reaches the Location header unparsed because url.Parse
+// rejects control bytes and the redirect then skips its own cleaning.
 func safeIngressPrefix(r *http.Request) string {
 	p := r.Header.Get("X-Ingress-Path")
 	if p == "" || !strings.HasPrefix(p, "/") {
@@ -1476,6 +1491,11 @@ func safeIngressPrefix(r *http.Request) string {
 	}
 	if strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
 		return ""
+	}
+	for i := range len(p) {
+		if c := p[i]; c <= ' ' || c == 0x7f || c == '\\' || c == '?' || c == '#' {
+			return ""
+		}
 	}
 	return strings.TrimRight(p, "/")
 }

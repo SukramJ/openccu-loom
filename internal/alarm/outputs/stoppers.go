@@ -81,3 +81,40 @@ func (m *Manager) smokeStopper(inst *instance) stopper {
 		},
 	}
 }
+
+// soundStopper stops an MP3 sound player through its own port. The
+// port offers no read-back, so the verify half reports stopped: a
+// chirp is a bounded one-shot emission, and re-writing a stop every
+// verify interval would only burn radio budget.
+func (m *Manager) soundStopper(inst *instance) stopper {
+	return stopper{
+		stop: func(ctx context.Context) error {
+			dev, err := m.resolver.Sound(inst.row.CentralName, inst.row.ChannelAddress)
+			if err != nil {
+				return err
+			}
+			return dev.Stop(ctx, hmenum.CommandPriorityCritical)
+		},
+		verify: func() bool { return true },
+	}
+}
+
+// chirpStopper stops a chirp output with the mechanism its target
+// actually offers. The class covers both an ASIR confirmation tone and
+// an MP3 sound player, and a sound player is not a siren: stopping it
+// through the siren port made every silence, disarm and incident end a
+// phantom output failure that degraded alarm health permanently (S7).
+// The target is re-resolved per call — a device may appear or change
+// class while the row stays enrolled.
+func (m *Manager) chirpStopper(inst *instance) stopper {
+	pick := func() stopper {
+		if _, err := m.resolver.Siren(inst.row.CentralName, inst.row.ChannelAddress); err == nil {
+			return m.sirenStopper(inst, true)
+		}
+		return m.soundStopper(inst)
+	}
+	return stopper{
+		stop:   func(ctx context.Context) error { return pick().stop(ctx) },
+		verify: func() bool { return pick().verify() },
+	}
+}

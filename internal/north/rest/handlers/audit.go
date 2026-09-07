@@ -248,10 +248,33 @@ func writeAuditCSV(w http.ResponseWriter, entries []AuditEntryDTO) {
 			channel = strconv.Itoa(e.ChannelNo)
 		}
 		_ = cw.Write([]string{
-			e.Timestamp.UTC().Format(time.RFC3339), e.User, string(e.Action),
-			e.Central, e.DeviceAddress, channel, e.Paramset, e.Peer,
-			e.Parameter, e.Note, changes,
+			e.Timestamp.UTC().Format(time.RFC3339), csvCell(e.User), string(e.Action),
+			csvCell(e.Central), csvCell(e.DeviceAddress), channel, csvCell(e.Paramset), csvCell(e.Peer),
+			csvCell(e.Parameter), csvCell(e.Note), csvCell(changes),
 		})
 	}
 	cw.Flush()
+}
+
+// csvCell neutralises a cell a spreadsheet would otherwise evaluate as a
+// formula on open. Excel and LibreOffice key on the first character:
+// `=`, `+`, `-`, `@` and the two whitespace forms that lead into them all
+// start a formula. Audit cells carry text this daemon never authored — a
+// link name an operator supplies reaches the note verbatim, device and
+// room names come from the CCU — and the export is downloaded by an
+// admin, so an unescaped cell executes on the one workstation that holds
+// every credential. The leading apostrophe is the OWASP-recommended
+// escape: spreadsheets treat the rest of the cell as literal text and
+// strip the quote on display, and a CSV reader sees one extra character
+// rather than a different field structure.
+func csvCell(v string) string {
+	if v == "" {
+		return v
+	}
+	switch v[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + v
+	default:
+		return v
+	}
 }

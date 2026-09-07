@@ -8,6 +8,107 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter multi-admin was dead: the AdministratorCommissioning cluster
+  never received its window controller.** The controller was attached only
+  if the commissioning window already existed when the root clusters were
+  built, and the window is constructed later — so every cluster-driven
+  OpenCommissioningWindow / RevokeCommissioning answered BUSY and
+  WindowStatus read Closed while a REST-opened window was live. Both are
+  wired together now. Alongside: a multi-admin AddNOC issued over an
+  existing admin's CASE session no longer re-labels that session onto the
+  new fabric (only a PASE session is adopted, as matter.js does); a removed
+  fabric is forgotten by the Sigma1 destination resolver at once instead of
+  answering CASE with a deleted NOC; a degraded bridge (root clusters failed
+  to build) no longer panics on the first OpenWindow.
+- **An interface whose callback endpoint could not be announced at boot
+  stayed CREATED for the daemon's life** — every gated hub job (programs,
+  sysvars, inbox, service messages, firmware, metrics) returned without
+  running and the central reported ConnectionLost every 30 s, although the
+  interface served every read and write. Callback-less bring-up now lands
+  in CONNECTED (read-through mode) and says so in the log.
+- **HmIP-DLD-A/-S and HmIP-DLP-A/-AS/-WS got one random profile per boot.**
+  The profile registry's prefix path returned a single same-category entry
+  instead of the whole set the reference returns, so the door lock came up
+  either without its lock entity or without its button lock. The prefix hit
+  now carries every profile registered under the prefix.
+- **HM-CC-TC "heat" drove the setpoint to 30 °C**, and no thermostat ever
+  reported "off": the SimpleRF mode switch is the reference's no-op now, and
+  Mode() derives OFF from a setpoint at or below 4.5 °C as climate.py does —
+  which also makes SetMode(Heat) out of OFF a real write again.
+- **The HmIP-MP3P LED wrote timers the channel does not carry** (bare
+  RAMP_TIME / ON_TIME); it writes DURATION_VALUE/UNIT and
+  RAMP_TIME_VALUE/UNIT like the reference, and TurnOff sends the reference's
+  LEVEL=0 + COLOR=BLACK + DURATION=0. The hand-authored wire references had
+  pinned the old, wrong keys.
+- **Alarm outputs:** a chirp or test fire for zone B on a siren channel zone
+  A was sounding on no longer rewrites the device's paramset with a 1 s tone
+  (shared-channel demands are honoured); an HmIP-MP3P enrolled as a chirp
+  output no longer turns every silence/disarm into a phantom output failure
+  that degraded alarm health for good; a failed smoke-sounder fire releases
+  its channel demand so the other zone can still stop it; Siren.TurnOn /
+  TurnOff no longer stamp ACOUSTIC/OPTICAL_ALARM_ACTIVE optimistically — the
+  device's report is the only source, which is what the stop-verify reads.
+- **MCP `set_datapoint` bypassed the operator channel lock and the
+  writability gate**; the direct data-point writer (MCP and the inbound
+  webhook) now goes through the channel's Set like REST, WS and the MQTT
+  sink. MCP audit rows carry the caller's identity.
+- **A hot MQTT reload with an unchanged `client_id` fought itself over the
+  broker session**, leaving the new generation without command subscriptions
+  behind an open breaker; with a shared id the old stack is stopped before
+  the new one connects. Localised siren-tone / light-effect labels reach the
+  live discovery payload, not only the boot snapshot.
+- **Persisted device descriptions are reconciled against the live
+  listDevices at bring-up**, so a device unpaired while the daemon was down
+  is no longer a permanent ghost and a re-pair at the same address is
+  announced north-bound. A rename publishes its metadata event after the
+  channels are renamed; the deferred-creation queue forgets a device the CCU
+  deleted; `PUT …/paramsets/LINK` no longer reaches the CCU as an invalid
+  paramset key.
+- **Schedules:** the active profile of an RF multi-program thermostat
+  (HM-TC-IT-WM-W-EU) is switched and read back through WEEK_PROGRAM_POINTER
+  in the device-root MASTER instead of a VALUES parameter the device does
+  not carry; device-root schedule detection works on hydrated devices; the
+  RF profile cap is read from the right paramset; CopySchedule refuses to
+  truncate a 6-profile source onto a 3-profile destination silently.
+- **REST/WS:** WS `device.test` can yield `timed_out`; WS
+  `devices.export_definition` has a budget that fits a many-channel device;
+  `POST …/config/import` and WS `paramset.copy` honour the strict MASTER
+  edit lock; the anonymous rate-limit bucket no longer covers `/app/*` and
+  `/health`; three lenient handlers cap request bodies at 1 MiB; the audit
+  CSV escapes formula-leading cells; first-run setup commits the admin last;
+  the CSRF cookie's Secure flag follows the session cookie's rule; deletion
+  cookies (session, OIDC state) are accepted on plain-HTTP deployments; the
+  OpenAPI declares the status codes handlers emit (oidcCallback is 303).
+- **Security/config:** the TLS certificate is reloaded on file change as
+  documented, and certificate+key are installed atomically; the ingress
+  prefix rejects control bytes on both the REST and the no-JS surface; a
+  restart no longer evicts idle sessions that were active a second before
+  it; `backup create`/`restore` never mint a master key silently.
+- **Visibility:** MASTER un-ignore patterns reach the data point; a
+  channel-scoped VALUES un-ignore applies to that channel only; a device
+  removed from every room/function drops its stale assignment.
+- **Reload:** `delay_new_device_creation` is applied from the effective
+  (DB-overlaid) config on a YAML reload, not from the file tier.
+- **Client:** the dead SkipRetry/RegisterIC write path (a self-deadlocking
+  double reliability stack) is removed; `Interface.getInstallMode` carries
+  its `interface` argument; rooms/functions read `channelIds` (ISE ids, as
+  documented now); fifteen JSON-RPC wrappers naming methods the CCU does not
+  have are gone; the backup-status ReGa script matches the PID exactly.
+- **REST `APIVersion` 11.0.0 → 11.1.0** (additive per oasdiff): the response
+  codes above are declared, `POST …/config/import` documents its
+  `X-Edit-Token` header and 423, `oidcCallback` is a 303, and the WS
+  subscribe ACK is documented as unconditional.
+- **go-fabric pinned to `f06fc1c`** (second audit, 26 findings): the
+  commissioner's implicit Administer grant survives AddNOC (keyed on the
+  PASE auth mode, not on fabric index 0 — the daemon wires the resolver, so
+  the ACL write Apple sends right after AddNOC is no longer denied), event
+  reports on a bridge-initiated exchange, Sigma1 NoSharedTrustRoots, CASE
+  adapter gate, certificate validity per matter.js, NOC/ICAC structural
+  predicates, VID-less test PAA, ClosureControl.MoveTo, WindowCovering /
+  Thermostat / Identify / GroupKeyMap / DiagnosticLogs, subscription
+  address/StatusResponse/bounds, mDNS, and the schema snapshot re-extracted
+  from matter.js HEAD.
+
 - **A weekly-program slot switched the wrong channel on every ordinary HmIP
   device — since 0.72.2.** That release derived a target channel's bit as
   "channel number minus one", citing the CCU editor's DALI branch. The

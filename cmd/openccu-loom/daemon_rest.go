@@ -275,9 +275,7 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	// TLS — directly (TLSEnabled) or behind a proxy the operator has
 	// declared via CSRFSecure or an https public_url. Without this the
 	// cookie rides plaintext requests and a downgraded request can leak it.
-	secureCookie := cfg.North.REST.TLSEnabled() ||
-		cfg.North.REST.CSRFSecure ||
-		strings.HasPrefix(strings.ToLower(cfg.North.REST.PublicURL), "https://")
+	secureCookie := cookiesSecure(cfg)
 	// The token create/revoke entries go through the durable recorder, not
 	// the raw ring: with a database present the audit read path serves
 	// exclusively from SQL, so a buffer-only entry is invisible on
@@ -350,4 +348,16 @@ func serialForSeed(reg *central.Registry, centralName string) string {
 		return ""
 	}
 	return u.SystemInformation().Serial
+}
+
+// cookiesSecure reports whether the daemon's cookies carry the Secure flag:
+// the deployment terminates TLS itself (TLSEnabled), or the operator declared
+// a terminating proxy via csrf_secure, or public_url is https. One rule for
+// the session cookie and the CSRF double-submit cookie — the CSRF cookie used
+// to follow csrf_secure alone, so a TLS-terminating daemon with the knob
+// unset sent it without Secure while the session cookie next to it had it.
+func cookiesSecure(cfg *config.Config) bool {
+	return cfg.North.REST.TLSEnabled() ||
+		cfg.North.REST.CSRFSecure ||
+		strings.HasPrefix(strings.ToLower(cfg.North.REST.PublicURL), "https://")
 }

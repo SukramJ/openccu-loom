@@ -76,8 +76,13 @@ type SecurityMQTTPublisher struct {
 
 	unsubs []func()
 	msgCh  chan securityMsg
-	stopCh chan struct{}
-	doneCh chan struct{}
+	// reconcileCh coalesces reconcile requests. A handler raises the flag
+	// and returns; the worker performs the snapshot read and every broker
+	// publish the reconcile implies, so a broker that withholds its
+	// acknowledgement can never stall the domain's bus goroutine.
+	reconcileCh chan struct{}
+	stopCh      chan struct{}
+	doneCh      chan struct{}
 }
 
 // NewSecurityMQTTPublisher binds a publisher to the domain and the MQTT
@@ -95,6 +100,7 @@ func NewSecurityMQTTPublisher(src SecuritySnapshotSource, wiring *Wiring, locale
 		knownClasses: map[hmenum.SecurityClass]bool{},
 		knownZones:   map[string]bool{},
 		msgCh:        make(chan securityMsg, 128),
+		reconcileCh:  make(chan struct{}, 1),
 		stopCh:       make(chan struct{}),
 		doneCh:       make(chan struct{}),
 	}
@@ -125,7 +131,7 @@ func (p *SecurityMQTTPublisher) Start(bus *events.Bus) {
 	p.mu.Unlock()
 
 	go p.run()
-	p.reconcile()
+	p.signalReconcile()
 }
 
 // Stop drops the subscriptions and the worker.
@@ -166,6 +172,8 @@ func (p *SecurityMQTTPublisher) run() {
 		select {
 		case <-p.stopCh:
 			return
+		case <-p.reconcileCh:
+			p.reconcile()
 		case m := <-p.msgCh:
 			p.publish(ctx, m)
 		}
@@ -219,6 +227,17 @@ func (p *SecurityMQTTPublisher) enqueue(m securityMsg) {
 	}
 }
 
+// signalReconcile asks the worker for a reconcile without blocking the
+// caller. Requests coalesce: a reconcile always republishes from a fresh
+// snapshot, so a pass that has not started yet subsumes every request
+// raised before it.
+func (p *SecurityMQTTPublisher) signalReconcile() {
+	select {
+	case p.reconcileCh <- struct{}{}:
+	default:
+	}
+}
+
 // markDomainReported records that the domain has spoken on its bus.
 //
 // The publisher starts before the domain does and reconciles once on its
@@ -247,17 +266,17 @@ func (p *SecurityMQTTPublisher) domainReported() bool {
 
 func (p *SecurityMQTTPublisher) onStateChanged(hmevent.SecurityStateChangedEvent) {
 	p.markDomainReported()
-	p.reconcile()
+	p.signalReconcile()
 }
 
 func (p *SecurityMQTTPublisher) onClassChanged(hmevent.SecurityClassChangedEvent) {
 	p.markDomainReported()
-	p.reconcile()
+	p.signalReconcile()
 }
 
 func (p *SecurityMQTTPublisher) onZoneChanged(hmevent.SecurityZoneChangedEvent) {
 	p.markDomainReported()
-	p.reconcile()
+	p.signalReconcile()
 }
 
 // onFaultChanged republishes the retained half.
@@ -279,7 +298,7 @@ func (p *SecurityMQTTPublisher) onZoneChanged(hmevent.SecurityZoneChangedEvent) 
 // which is what a consumer's automation would act on a second time.
 func (p *SecurityMQTTPublisher) onFaultChanged(hmevent.SecurityFaultChangedEvent) {
 	p.markDomainReported()
-	p.reconcile()
+	p.signalReconcile()
 }
 
 // onNotification publishes the rendered report.
@@ -347,5 +366,5 @@ func (p *SecurityMQTTPublisher) OnBrokerConnect() {
 	if p == nil {
 		return
 	}
-	p.reconcile()
+	p.signalReconcile()
 }

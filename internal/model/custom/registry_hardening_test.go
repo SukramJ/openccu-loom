@@ -398,3 +398,59 @@ func TestRegisterHbPrefixNormalized(t *testing.T) {
 		t.Errorf("stored DeviceType=%q, want hm-uni-sensor1 (normalized)", p.DeviceType)
 	}
 }
+
+// TestGetConfigsPrefixMatchKeepsEverySameCategoryProfile pins that a
+// prefix hit returns every profile registered under the matched device
+// type in that category, not just one of them. The reference registry
+// extends the whole config tuple on a prefix hit
+// (the reference registry's GetConfigs, priority 2), and the lock family
+// depends on it: "hmip-dld" carries an IPButtonLock (ch 0) and an IPLock
+// (ch 1) in the same category, while the CCU reports the variants
+// HmIP-DLD-A / HmIP-DLD-S / HmIP-DLP-A / HmIP-DLP-AS / HmIP-DLP-WS.
+// The loop runs over fresh registries because the defect was a
+// map-order-dependent pick of a single entry.
+func TestGetConfigsPrefixMatchKeepsEverySameCategoryProfile(t *testing.T) {
+	t.Parallel()
+	variants := []string{"HmIP-DLD-A", "HmIP-DLD-S", "HmIP-DLP-A", "HmIP-DLP-AS", "HmIP-DLP-WS"}
+	for i := range 200 {
+		r := NewRegistry()
+		RegisterProfiles(r)
+		for _, model := range variants {
+			got := r.GetConfigs(model)
+			var lockNames []string
+			for _, p := range got {
+				if p.Category == hmenum.DataPointCategoryLock {
+					lockNames = append(lockNames, string(p.Name))
+				}
+			}
+			if len(lockNames) != 2 || lockNames[0] != "IPButtonLock" || lockNames[1] != "IPLock" {
+				t.Fatalf("run %d: GetConfigs(%s) lock profiles = %v, want [IPButtonLock IPLock]", i, model, lockNames)
+			}
+		}
+	}
+}
+
+// TestGetConfigsPrefixMatchStillPrefersLongestPrefix pins that keeping
+// every same-category profile of the matched key does not regress the
+// specificity rule: a longer registered prefix still shadows a shorter one.
+func TestGetConfigsPrefixMatchStillPrefersLongestPrefix(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	for _, p := range []Profile{
+		makeProfile("ShortA", hmenum.DataPointCategorySwitch, "hmip-x"),
+		makeProfile("ShortB", hmenum.DataPointCategorySwitch, "hmip-x"),
+		makeProfile("Long", hmenum.DataPointCategorySwitch, "hmip-xy"),
+	} {
+		if err := r.Register(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := r.GetConfigs("HmIP-XY-1")
+	if len(got) != 1 || got[0].Name != "Long" {
+		t.Fatalf("GetConfigs(HmIP-XY-1) = %v, want only Long", got)
+	}
+	got = r.GetConfigs("HmIP-X-1")
+	if len(got) != 2 {
+		t.Fatalf("GetConfigs(HmIP-X-1) len=%d, want 2 (both short-prefix profiles)", len(got))
+	}
+}

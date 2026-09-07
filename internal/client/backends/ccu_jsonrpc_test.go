@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ---------------------------------------------------------------------------
@@ -68,50 +70,42 @@ func TestCcuGetAllProgramsJSONError(t *testing.T) {
 
 func TestCcuSetProgramStateNoJSON(t *testing.T) {
 	t.Parallel()
-	b := NewCcuBackend(&fakeCaller{}, nil, nil)
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil) // no ScriptRunner
 	err := b.SetProgramState(context.Background(), "42", true)
 	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }
 
+// TestCcuSetProgramStateDispatch pins the ReGa route: the CCU's JSON-RPC
+// method table has no program enable/disable call, so the backend runs the
+// set_program_state script with the id and a 0/1 state.
 func TestCcuSetProgramStateDispatch(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: nil}
-	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	r := &fakeScriptRunner{}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(r)
 	if err := b.SetProgramState(context.Background(), "42", true); err != nil {
 		t.Fatalf("SetProgramState: %v", err)
 	}
-	method, args, ok := loadArgs(j)
-	if !ok || method != "Program.setActive" {
-		t.Fatalf("method=%s", method)
+	if r.lastScript != hmenum.RegaScriptSetProgramState {
+		t.Fatalf("script=%s", r.lastScript)
 	}
-	if len(args) != 1 {
-		t.Fatalf("arg count=%d, want 1", len(args))
-	}
-	params, ok2 := args[0].(map[string]any)
-	if !ok2 {
-		t.Fatalf("args[0] not map: %v", args[0])
-	}
-	if params["id"] != "42" || params["active"] != true {
-		t.Fatalf("params=%v", params)
+	if r.lastParams["id"] != "42" || r.lastParams["state"] != "1" {
+		t.Fatalf("params=%v", r.lastParams)
 	}
 }
 
 func TestCcuSetProgramStateFalse(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: nil}
-	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	r := &fakeScriptRunner{}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(r)
 	if err := b.SetProgramState(context.Background(), "7", false); err != nil {
 		t.Fatalf("SetProgramState: %v", err)
 	}
-	_, args, ok := loadArgs(j)
-	if !ok {
-		t.Fatal("no args stored")
-	}
-	params := args[0].(map[string]any)
-	if params["active"] != false {
-		t.Fatalf("active=%v, want false", params["active"])
+	if r.lastParams["state"] != "0" {
+		t.Fatalf("state=%v, want 0", r.lastParams["state"])
 	}
 }
 

@@ -4,7 +4,7 @@
     "specificationVersion": 17170432,
     "interactionModelRevision": 12,
     "dataModelRevision": 21,
-    "sourceCommit": "c6b188fe00bc7d1b97fe22c63cd3a553ad8efd8f"
+    "sourceCommit": "f07365a8d62fbfb8b03e5c65386dc0b72b4fe782"
   },
   "deviceTypes": [
     {
@@ -386,6 +386,12 @@
           "name": "TimeSynchronization",
           "element": "clientCluster",
           "conformance": "TimeSyncWithClientCond, O"
+        },
+        {
+          "id": 56,
+          "name": "TimeSynchronization",
+          "element": "serverCluster",
+          "conformance": "TimeSyncCond, TimeSyncWithClientCond, TimeSyncWithNTPCCond, TimeSyncWithTZCond, TLSClientCond, TLSCertificatesCond, O"
         },
         {
           "id": 60,
@@ -1300,6 +1306,12 @@
           "name": "FlowMeasurement",
           "element": "clientCluster",
           "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
         }
       ]
     },
@@ -1361,6 +1373,12 @@
           "id": 1028,
           "name": "FlowMeasurement",
           "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "serverCluster",
           "conformance": "O"
         }
       ]
@@ -2256,6 +2274,12 @@
           "conformance": "M"
         },
         {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
           "id": 4,
           "name": "Groups",
           "element": "clientCluster",
@@ -2290,6 +2314,12 @@
           "id": 3,
           "name": "Identify",
           "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
           "conformance": "M"
         },
         {
@@ -2333,6 +2363,12 @@
           "id": 3,
           "name": "Identify",
           "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
           "conformance": "M"
         },
         {
@@ -2801,9 +2837,21 @@
           "conformance": "M"
         },
         {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
           "id": 1364,
           "name": "WebRtcTransportRequestor",
           "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "serverCluster",
           "conformance": "M"
         },
         {
@@ -2850,10 +2898,22 @@
           "conformance": "O"
         },
         {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
           "id": 1364,
           "name": "WebRtcTransportRequestor",
           "element": "clientCluster",
           "conformance": "M"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "serverCluster",
+          "conformance": "O"
         },
         {
           "id": 1365,
@@ -2921,6 +2981,18 @@
           "name": "WebRtcTransportProvider",
           "element": "clientCluster",
           "conformance": "O"
+        },
+        {
+          "id": 1363,
+          "name": "WebRtcTransportProvider",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 1364,
+          "name": "WebRtcTransportRequestor",
+          "element": "clientCluster",
+          "conformance": "M"
         },
         {
           "id": 1364,
@@ -3226,6 +3298,12 @@
           "conformance": "O"
         },
         {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
           "id": 4,
           "name": "Groups",
           "element": "clientCluster",
@@ -3519,15 +3597,33 @@
           "conformance": "O"
         },
         {
+          "id": 1026,
+          "name": "TemperatureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
           "id": 1027,
           "name": "PressureMeasurement",
           "element": "clientCluster",
           "conformance": "O"
         },
         {
+          "id": 1027,
+          "name": "PressureMeasurement",
+          "element": "serverCluster",
+          "conformance": "O"
+        },
+        {
           "id": 1028,
           "name": "FlowMeasurement",
           "element": "clientCluster",
+          "conformance": "O"
+        },
+        {
+          "id": 1028,
+          "name": "FlowMeasurement",
+          "element": "serverCluster",
           "conformance": "O"
         },
         {
@@ -3549,6 +3645,12 @@
           "name": "Identify",
           "element": "clientCluster",
           "conformance": "O"
+        },
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
         },
         {
           "id": 4,
@@ -4123,6 +4225,12 @@
           "conformance": "M"
         },
         {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
+          "conformance": "M"
+        },
+        {
           "id": 4,
           "name": "Groups",
           "element": "clientCluster",
@@ -4181,6 +4289,12 @@
           "id": 3,
           "name": "Identify",
           "element": "clientCluster",
+          "conformance": "M"
+        },
+        {
+          "id": 3,
+          "name": "Identify",
+          "element": "serverCluster",
           "conformance": "M"
         },
         {
@@ -4300,9 +4414,23 @@
       "commands": [
         {
           "id": 0,
+          "name": "AddGroup",
+          "direction": "request",
+          "conformance": "M",
+          "response": "AddGroupResponse"
+        },
+        {
+          "id": 0,
           "name": "AddGroupResponse",
           "direction": "response",
           "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "ViewGroup",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ViewGroupResponse"
         },
         {
           "id": 1,
@@ -4312,9 +4440,23 @@
         },
         {
           "id": 2,
+          "name": "GetGroupMembership",
+          "direction": "request",
+          "conformance": "M",
+          "response": "GetGroupMembershipResponse"
+        },
+        {
+          "id": 2,
           "name": "GetGroupMembershipResponse",
           "direction": "response",
           "conformance": "M"
+        },
+        {
+          "id": 3,
+          "name": "RemoveGroup",
+          "direction": "request",
+          "conformance": "M",
+          "response": "RemoveGroupResponse"
         },
         {
           "id": 3,
@@ -7957,13 +8099,13 @@
         {
           "id": 2,
           "name": "Leave",
-          "priority": "critical",
+          "priority": "info",
           "conformance": "O"
         },
         {
           "id": 3,
           "name": "ReachableChanged",
-          "priority": "critical",
+          "priority": "info",
           "conformance": "M"
         },
         {
@@ -10382,9 +10524,23 @@
       "commands": [
         {
           "id": 0,
+          "name": "AddScene",
+          "direction": "request",
+          "conformance": "M",
+          "response": "AddSceneResponse"
+        },
+        {
+          "id": 0,
           "name": "AddSceneResponse",
           "direction": "response",
           "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "ViewScene",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ViewSceneResponse"
         },
         {
           "id": 1,
@@ -10394,15 +10550,36 @@
         },
         {
           "id": 2,
+          "name": "RemoveScene",
+          "direction": "request",
+          "conformance": "M",
+          "response": "RemoveSceneResponse"
+        },
+        {
+          "id": 2,
           "name": "RemoveSceneResponse",
           "direction": "response",
           "conformance": "M"
         },
         {
           "id": 3,
+          "name": "RemoveAllScenes",
+          "direction": "request",
+          "conformance": "M",
+          "response": "RemoveAllScenesResponse"
+        },
+        {
+          "id": 3,
           "name": "RemoveAllScenesResponse",
           "direction": "response",
           "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "StoreScene",
+          "direction": "request",
+          "conformance": "M",
+          "response": "StoreSceneResponse"
         },
         {
           "id": 4,
@@ -10419,9 +10596,23 @@
         },
         {
           "id": 6,
+          "name": "GetSceneMembership",
+          "direction": "request",
+          "conformance": "M",
+          "response": "GetSceneMembershipResponse"
+        },
+        {
+          "id": 6,
           "name": "GetSceneMembershipResponse",
           "direction": "response",
           "conformance": "M"
+        },
+        {
+          "id": 64,
+          "name": "CopyScene",
+          "direction": "request",
+          "conformance": "O",
+          "response": "CopySceneResponse"
         },
         {
           "id": 64,
@@ -13114,7 +13305,7 @@
           "type": "bool",
           "conformance": "O",
           "access": "RW VM",
-          "default": true
+          "default": false
         },
         {
           "id": 42,
@@ -13122,7 +13313,7 @@
           "type": "bool",
           "conformance": "O",
           "access": "RW VM",
-          "default": true
+          "default": false
         },
         {
           "id": 43,
@@ -13130,7 +13321,7 @@
           "type": "bool",
           "conformance": "O",
           "access": "RW VM",
-          "default": true
+          "default": false
         },
         {
           "id": 44,
@@ -13162,7 +13353,7 @@
           "type": "bool",
           "conformance": "[!USR & PIN]",
           "access": "R[W] VA",
-          "default": true
+          "default": false
         },
         {
           "id": 51,
@@ -13314,6 +13505,13 @@
         },
         {
           "id": 12,
+          "name": "GetWeekDaySchedule",
+          "direction": "request",
+          "conformance": "WDSCH",
+          "response": "GetWeekDayScheduleResponse"
+        },
+        {
+          "id": 12,
           "name": "GetWeekDayScheduleResponse",
           "direction": "response",
           "conformance": "WDSCH"
@@ -13334,6 +13532,13 @@
         },
         {
           "id": 15,
+          "name": "GetYearDaySchedule",
+          "direction": "request",
+          "conformance": "YDSCH",
+          "response": "GetYearDayScheduleResponse"
+        },
+        {
+          "id": 15,
           "name": "GetYearDayScheduleResponse",
           "direction": "response",
           "conformance": "YDSCH"
@@ -13351,6 +13556,13 @@
           "direction": "request",
           "conformance": "HDSCH",
           "response": "status"
+        },
+        {
+          "id": 18,
+          "name": "GetHolidaySchedule",
+          "direction": "request",
+          "conformance": "HDSCH",
+          "response": "GetHolidayScheduleResponse"
         },
         {
           "id": 18,
@@ -13959,7 +14171,7 @@
           "quality": "F",
           "default": {
             "type": "percent",
-            "value": 0
+            "value": 0.01
           }
         },
         {
@@ -13972,7 +14184,7 @@
           "quality": "F",
           "default": {
             "type": "percent",
-            "value": 0
+            "value": 0.01
           }
         },
         {
@@ -14965,7 +15177,7 @@
           "quality": "N",
           "default": {
             "type": "celsius",
-            "value": 25
+            "value": 25.5
           }
         },
         {
@@ -16248,9 +16460,8 @@
           "type": "temperature",
           "conformance": "M",
           "access": "R V",
-          "constraint": "-27315 to maxMeasuredValue - 1",
-          "quality": "X F",
-          "default": -27315
+          "constraint": "-27315 to 32766",
+          "quality": "X F"
         },
         {
           "id": 2,
@@ -16258,9 +16469,8 @@
           "type": "temperature",
           "conformance": "M",
           "access": "R V",
-          "constraint": "minMeasuredValue + 1 to 32767",
-          "quality": "X F",
-          "default": 32767
+          "constraint": "min minMeasuredValue + 1",
+          "quality": "X F"
         },
         {
           "id": 3,
@@ -20183,7 +20393,7 @@
           "type": "bool",
           "conformance": "O",
           "access": "R V",
-          "default": true
+          "default": false
         },
         {
           "id": 22,
@@ -20300,7 +20510,7 @@
           "conformance": "[ICTL].b+",
           "access": "RW M",
           "quality": "N",
-          "default": true
+          "default": false
         },
         {
           "id": 36,
@@ -20309,7 +20519,7 @@
           "conformance": "[ICTL].b+",
           "access": "RW M",
           "quality": "N",
-          "default": true
+          "default": false
         },
         {
           "id": 37,
@@ -21192,9 +21402,23 @@
       "commands": [
         {
           "id": 0,
+          "name": "GetTariffComponent",
+          "direction": "request",
+          "conformance": "M",
+          "response": "GetTariffComponentResponse"
+        },
+        {
+          "id": 0,
           "name": "GetTariffComponentResponse",
           "direction": "response",
           "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "GetDayEntry",
+          "direction": "request",
+          "conformance": "M",
+          "response": "GetDayEntryResponse"
         },
         {
           "id": 1,

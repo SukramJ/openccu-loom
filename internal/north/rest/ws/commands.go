@@ -454,6 +454,13 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}
+		if errors.Is(err, hmerr.ErrLinkParamsetNotAddressable) {
+			// The literal LINK key never reaches the CCU; the caller's
+			// request is malformed, not the upstream.
+			res := Result{Error: NewCommandError(CommandErrorBadRequest, err.Error())}
+			r.logOutcome(ctx, command, res, time.Since(start))
+			return res
+		}
 		// A handler that returns a raw (non-CommandError) error — most of
 		// the cdp.*/calc_dp.* lookups do — still deserves the not-found vs.
 		// internal-error distinction; classify it the same way

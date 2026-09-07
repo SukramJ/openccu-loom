@@ -523,8 +523,8 @@ func (c *InterfaceClient) GetAlarmMessages(ctx context.Context, b backends.Opera
 	return b.GetAlarmMessages(ctx)
 }
 
-// GetAllRooms returns all CCU rooms. Returns nil when the capability is not
-// available.
+// GetAllRooms returns all CCU rooms as roomName → channel ISE-IDs (see
+// [backends.Operations]). Returns nil when the capability is not available.
 func (c *InterfaceClient) GetAllRooms(ctx context.Context, b backends.Operations) (map[string][]string, error) {
 	if !b.Capabilities().Rooms {
 		return nil, nil
@@ -532,7 +532,8 @@ func (c *InterfaceClient) GetAllRooms(ctx context.Context, b backends.Operations
 	return b.GetAllRooms(ctx)
 }
 
-// GetAllFunctions returns all CCU functions (Gewerke). Returns nil when the
+// GetAllFunctions returns all CCU functions (Gewerke) as functionName →
+// channel ISE-IDs (see [backends.Operations]). Returns nil when the
 // capability is not available.
 func (c *InterfaceClient) GetAllFunctions(ctx context.Context, b backends.Operations) (map[string][]string, error) {
 	if !b.Capabilities().Functions {
@@ -719,10 +720,6 @@ func (c *InterfaceClient) GetParamsetDescriptionOnDemand(
 // Unlike the Python version this method does not implement wait_for_callback
 // (that is a coordinator concern) nor check_against_pd validation (wire the
 // parameter package for that). It is the minimal reliable dispatch layer.
-//
-// When skipRetry is true the call bypasses the backoff/retry tracking and
-// executes the backend operation exactly once (single-shot). This.
-// (e.g. virtual key presses) where a retry would cause a duplicate action.
 func (c *InterfaceClient) SetValue(
 	ctx context.Context,
 	b backends.Operations,
@@ -731,7 +728,6 @@ func (c *InterfaceClient) SetValue(
 	value any,
 	priority hmenum.CommandPriority,
 	rxMode hmenum.CommandRxMode,
-	skipRetry bool,
 ) error {
 	throttle := c.cfg.WriteThrottle
 	dpKey := hmtypes.DataPointKey{ChannelAddress: channelAddress, Parameter: string(parameter)}
@@ -751,9 +747,6 @@ func (c *InterfaceClient) SetValue(
 	// must be attempted as a single probe through an OPEN breaker, which
 	// only DoWithPriority grants.
 	err := c.cfg.Circuit.DoWithPriority(ctx, "setValue", priority, func(ctx context.Context) error {
-		if skipRetry {
-			return c.cfg.Retrier.DoOnce(ctx, writeOnce)
-		}
 		return c.cfg.Retrier.DoForKey(ctx, dpKey, writeOnce)
 	})
 	if err != nil {
@@ -790,9 +783,6 @@ func rpcTypeLabel(k backends.Kind) string {
 // or a peer channel address for LINK paramsets. The method dispatches to
 // PutLinkParamset when paramsetKeyOrLinkAddress matches
 // [hmtypes.IsChannelAddress], otherwise to PutParamset.
-//
-// When skipRetry is true the call is executed exactly once without backoff or
-// retry tracking.
 func (c *InterfaceClient) PutParamset(
 	ctx context.Context,
 	b backends.Operations,
@@ -801,7 +791,6 @@ func (c *InterfaceClient) PutParamset(
 	values map[string]any,
 	priority hmenum.CommandPriority,
 	rxMode hmenum.CommandRxMode,
-	skipRetry bool,
 ) error {
 	throttle := c.cfg.WriteThrottle
 	dpKey := hmtypes.DataPointKey{ChannelAddress: channelAddress, Parameter: paramsetKeyOrLinkAddress}
@@ -823,9 +812,6 @@ func (c *InterfaceClient) PutParamset(
 	}
 	// Forward the caller's priority (see [InterfaceClient.SetValue]).
 	err := c.cfg.Circuit.DoWithPriority(ctx, "putParamset", priority, func(ctx context.Context) error {
-		if skipRetry {
-			return c.cfg.Retrier.DoOnce(ctx, putOnce)
-		}
 		return c.cfg.Retrier.DoForKey(ctx, dpKey, putOnce)
 	})
 	if err != nil {

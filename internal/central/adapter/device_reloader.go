@@ -76,12 +76,18 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 }
 
 // ReloadChannelConfig re-pulls the paramset descriptions (VALUES, MASTER,
-// LINK) and current MASTER values for a single channel, then re-materialises
-// the channel's data points so description changes (e.g. patched MIN/MAX)
-// propagate. It locates the channel's device by address across all
-// registered centrals, resolves the backend, re-pulls the channel's paramset
-// config via DeviceCoordinator.ReloadChannelConfig, and recreates the
-// channel's data points via the device-level refresh path.
+// LINK) for a single channel into the description registries and creates
+// any channel or data point the model is missing. It locates the channel's
+// device by address across all registered centrals, resolves the backend,
+// re-pulls the channel's paramset config via
+// DeviceCoordinator.ReloadChannelConfig, and runs the device-level
+// refresh path for the owning device.
+//
+// A data point that already exists keeps the descriptor it was built with:
+// the pipeline returns an existing device untouched on re-ingest, and
+// replacing live data points in place would change their identity under
+// every north-bound subscriber. A patched MIN/MAX therefore reaches an
+// existing data point on the next hydration (restart), not on this call.
 //
 // Mirrors Channel.reload_channel_config (model/device.py:1448 →
 // on_config_changed), scoped to one channel.
@@ -113,11 +119,9 @@ func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channel
 		if err := unit.Devices.ReloadChannelConfig(ctx, b, iface, channelAddress, dev.Model); err != nil {
 			return err
 		}
-		// Re-materialise the channel's data points so the refreshed
-		// descriptions take effect. The single-channel materialisation
-		// path is not yet factored out of the device pipeline, so we run
-		// the device-level refresh for the channel's owning device — the
-		// observable result for the target channel is identical.
+		// Create whatever channel or data point the model is missing for
+		// the owning device. Existing data points are not rebuilt — see
+		// the method comment.
 		fetcher := &backendDescFetcher{ops: b}
 		return unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, iface)
 	}

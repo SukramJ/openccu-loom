@@ -307,7 +307,11 @@ func ApplyUnIgnoredMarks(dev *device.Device, decider *ParameterDecider) {
 			// flag. Built-in un-ignore rules are honoured by the
 			// suppression / hidden / internal passes via the decider
 			// directly so the DP-level mark stays snapshot-symmetric.
-			if decider.IsUnIgnored(dev.Model, ch.Type, hmenum.ParamsetKeyValues, dp.Parameter()) {
+			//
+			// The query carries the channel number: a pattern scoped to
+			// one channel must not promote the parameter on the model's
+			// other channels.
+			if decider.IsUnIgnoredOnChannel(dev.Model, ch.Number, hmenum.ParamsetKeyValues, dp.Parameter()) {
 				m.MarkUnIgnored()
 				continue
 			}
@@ -315,6 +319,7 @@ func ApplyUnIgnoredMarks(dev *device.Device, decider *ParameterDecider) {
 			reapplyValuesSuppression(dev, ch, dp, decider)
 			withdrawn = true
 		}
+		applyMasterUnIgnoredMarks(dev, ch, decider)
 	}
 	if withdrawn {
 		// The fourth pass that honours the mark is device-scoped, so it
@@ -328,6 +333,39 @@ func ApplyUnIgnoredMarks(dev *device.Device, decider *ParameterDecider) {
 		// Idempotent and cheap: it re-derives the same verdict for every
 		// data point whose mark did not change.
 		custom.SuppressUndefinedGenericDataPoints(dev)
+	}
+}
+
+// applyMasterUnIgnoredMarks is the MASTER-paramset half of
+// [ApplyUnIgnoredMarks].
+//
+// The DP-level mark is the only thing that can re-promote a MASTER
+// parameter: [markIfHidden] force-ignores every member of the hidden set
+// unless the data point carries it, and it deliberately does not consult the
+// decider. Without this pass a MASTER un-ignore pattern is inert — the whole
+// climate MASTER set the candidate picker offers stays `usage=ignored`
+// however the operator configures it. Mirrors `parameter_is_hidden`, which
+// returns False for an un-ignored parameter in every paramset
+// (parameter_decider.py).
+func applyMasterUnIgnoredMarks(dev *device.Device, ch *device.Channel, decider *ParameterDecider) {
+	for _, dp := range ch.MasterDataPoints() {
+		m, ok := dp.(unIgnoredMarker)
+		if !ok {
+			continue
+		}
+		if decider.IsUnIgnoredOnChannel(dev.Model, ch.Number, hmenum.ParamsetKeyMaster, dp.Parameter()) {
+			m.MarkUnIgnored()
+			continue
+		}
+		if r, ok := dp.(unIgnoredReader); ok && !r.IsUnIgnored() {
+			continue
+		}
+		// Withdrawing the mark alone leaves the parameter visible: the
+		// hidden pass ran at boot and skipped it, so it never received the
+		// force-ignore. Re-derive that verdict here, the way
+		// reapplyValuesSuppression does for VALUES.
+		m.ClearUnIgnored()
+		markIfHidden(dp)
 	}
 }
 

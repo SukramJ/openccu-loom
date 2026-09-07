@@ -1009,24 +1009,41 @@ func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
 // Updates both the in-memory model and persists the new name through
 // the configured `RenameDeviceFn` hook.
 func (u *Unit) RenameDevice(ctx context.Context, address, name string) error {
+	dev, err := u.renameDeviceQuietly(ctx, address, name)
+	u.PublishDeviceMetadataChanged(dev)
+	return err
+}
+
+// renameDeviceQuietly performs the device-level rename without publishing
+// the metadata event, and returns the renamed model device (nil when the
+// address is unknown or no model registry is attached) so the caller
+// decides when the north-bound re-snapshot is allowed to run.
+//
+// Split out because the event is what makes north-bound adapters re-read
+// the *whole* device footprint, channel names included — so a caller that
+// still has channels to rename must publish after that work, not before.
+func (u *Unit) renameDeviceQuietly(
+	ctx context.Context, address, name string,
+) (*device.Device, error) {
 	if address == "" {
-		return errors.New("central: RenameDevice: empty address")
+		return nil, errors.New("central: RenameDevice: empty address")
 	}
 	u.services.mu.RLock()
 	fn := u.services.renameDeviceFn
 	u.services.mu.RUnlock()
 	// In-memory rename — always applied so the UI reflects the change
 	// even when no persistent backend is wired (e.g. tests).
+	var renamed *device.Device
 	if u.ModelRegistry != nil {
 		if dev, ok := u.ModelRegistry.Get(address); ok && dev != nil {
 			dev.SetName(name)
-			u.PublishDeviceMetadataChanged(dev)
+			renamed = dev
 		}
 	}
 	if fn == nil {
-		return nil
+		return renamed, nil
 	}
-	return fn(ctx, address, name)
+	return renamed, fn(ctx, address, name)
 }
 
 // PublishDeviceMetadataChanged notifies north-bound adapters (MQTT,
@@ -1064,18 +1081,15 @@ func (u *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name stri
 //
 // When includeChannels is false this is equivalent to [RenameDevice].
 func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name string, includeChannels bool) error {
-	if err := u.RenameDevice(ctx, address, name); err != nil {
+	// The metadata event is deliberately withheld until every channel has
+	// its new name. Publishing it up front let the north-bound re-snapshot
+	// run concurrently with the per-channel CCU round trips and stamp the
+	// old channel labels into MQTT discovery; nothing publishes again
+	// afterwards, so those labels then survived until a broker reconnect.
+	dev, err := u.renameDeviceQuietly(ctx, address, name)
+	if err != nil || !includeChannels || dev == nil {
+		u.PublishDeviceMetadataChanged(dev)
 		return err
-	}
-	if !includeChannels {
-		return nil
-	}
-	if u.ModelRegistry == nil {
-		return nil
-	}
-	dev, ok := u.ModelRegistry.Get(address)
-	if !ok || dev == nil {
-		return nil
 	}
 	u.services.mu.RLock()
 	fn := u.services.renameDeviceFn
@@ -1090,6 +1104,7 @@ func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name strin
 			}
 		}
 	}
+	u.PublishDeviceMetadataChanged(dev)
 	return firstErr
 }
 

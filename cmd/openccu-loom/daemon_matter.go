@@ -158,6 +158,11 @@ type matterBridgeBundle struct {
 	// boundary and are reached through here.
 	assembler *matteradapter.Assembler
 	opMgr     *operational.Manager
+	// sessionLookup is the adapter the bridge resolves inbound session
+	// ids through. Carried so a wiring pin can ask the attached adapter
+	// — not a freshly built one — whether it resolves fabric, subject and
+	// PASE auth mode for the sessions opMgr holds.
+	sessionLookup *matterbridge.OperationalSessionLookup
 	// subMgr is the IM subscription manager. Carried so the REST
 	// diagnostics surface can report how many subscriptions ride on each
 	// session — a commissioned controller holding none looks identical
@@ -601,6 +606,18 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			return 0, nil, false
 		}
 		return entry.Session.PeerNodeID(), entry.Session.PeerCATs(), true
+	}).WithPASEResolver(func(id uint16) (bool, bool) {
+		// AddNOC adopts the commissioner's PASE session onto the new
+		// fabric, so FabricIndex alone no longer tells the bridge the
+		// request still rides the commissioning channel. The auth mode
+		// keeps its implicit Administer grant (matter.js
+		// FabricAccessControl.ts:189-191); without this resolver the
+		// ACL write Apple sends right after AddNOC is denied.
+		entry, err := opMgr.Get(id)
+		if err != nil || entry == nil {
+			return false, false
+		}
+		return entry.IsPASE(), true
 	}).WithRetransmitIntervalResolver(func(id uint16, now time.Time) (time.Duration, bool) {
 		// Resolves the peer-appropriate MRP base interval so outbound
 		// retransmissions honour the peer's advertised session
@@ -697,7 +714,30 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// chain) leaves the operational session and ongoing subscription
 	// alive — the next pair retry collides on session-id 1 with
 	// `aesccm: authentication failed` and Apple gives up.
-	fabricTeardown := matterFabricTeardown(bridge, rootRefs.BasicInformation, rootRefs.AccessControl, opMgr, subMgr, store, logger)
+	// The Sigma1 destination resolver must forget a removed fabric at
+	// once: until it does, the unpaired controller's Sigma1 still
+	// resolves, Sigma2 is signed with the deleted NOC and a session is
+	// installed on a phantom fabric index (ACL then denies every IM
+	// operation, but the handshake succeeds and the slot is held until
+	// idle-reaped). matter.js drops the fabric from FabricManager, which
+	// findFabricFromDestinationId consults, in the same step.
+	forgetCASEFabric := func(fabricIndex uint8) {
+		caseIdentityMu.Lock()
+		defer caseIdentityMu.Unlock()
+		delete(caseFabrics, fabricIndex)
+		if caseFabricIndex != fabricIndex {
+			return
+		}
+		// The baseline identity pointed at the removed fabric; move it to
+		// any surviving one so a resolver miss cannot fall back to a
+		// deleted NOC. With no fabric left the baseline stays and only
+		// ever answers a Sigma1 that the resolver refuses first.
+		for idx, e := range caseFabrics {
+			caseIdentity, caseVerifier, caseFabricIndex = e.identity, e.verifier, idx
+			return
+		}
+	}
+	fabricTeardown := matterFabricTeardown(bridge, rootRefs.BasicInformation, rootRefs.AccessControl, opMgr, subMgr, store, forgetCASEFabric, logger)
 	if opCreds != nil {
 		opCreds.SetOnFabricRemoved(func(_ context.Context, fabricIndex uint8) {
 			fabricTeardown(context.Background(), fabricIndex) //nolint:contextcheck // the teardown outlives the invoking exchange by design; see matterFabricTeardown
@@ -1102,6 +1142,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		identity:       identity,
 		assembler:      assembler,
 		opMgr:          opMgr,
+		sessionLookup:  sessionLookup,
 		subMgr:         subMgr,
 		advertiser:     advertiser,
 		opCreds:        opCreds,
@@ -1153,9 +1194,13 @@ func matterFabricTeardown(
 	opMgr *operational.Manager,
 	subMgr *subscription.Manager,
 	store *matterstore.Store,
+	forgetCASEFabric func(fabricIndex uint8),
 	logger *slog.Logger,
 ) func(ctx context.Context, fabricIndex uint8) {
 	return func(_ context.Context, fabricIndex uint8) {
+		if forgetCASEFabric != nil {
+			forgetCASEFabric(fabricIndex)
+		}
 		if bridge != nil {
 			bridge.EmitFabricRemoved(fabricIndex)
 		}
@@ -1759,6 +1804,31 @@ type rootClusterRefs struct {
 	GeneralDiagnostics   *mattercore.GeneralDiagnostics
 	GeneralCommissioning *mattercore.GeneralCommissioning
 	AccessControl        *mattercore.AccessControl
+	// AdministratorCommissioning is handed its WindowController by
+	// wireCommissioningWindow once the window exists — buildRootClusters
+	// runs before the window is constructed, so it cannot attach one.
+	AdministratorCommissioning *matterwire.AdministratorCommissioning
+}
+
+// wireCommissioningWindow parks the window on the bridge and hands it to
+// the AdministratorCommissioning cluster server as its WindowController.
+//
+// The two attachments belong together: [matterbridge.Bridge.AttachCommissioningWindow]
+// propagates nothing (its doc says so), and buildRootClusters runs before
+// the window exists, so a SetController gated on
+// `bridge.CommissioningWindow() != nil` inside buildRootClusters never
+// fired in production order — every cluster-driven OpenCommissioningWindow
+// / OpenBasicCommissioningWindow / RevokeCommissioning answered BUSY and
+// WindowStatus read Closed while a REST-opened window was live, which is
+// the whole of Matter multi-admin (sharing the bridge with a second
+// ecosystem) refusing to work. Mirrors matter.js, where the
+// AdministratorCommissioningServer and the commissioning window are one
+// behavior (AdministratorCommissioningServer.ts openCommissioningWindow).
+func wireCommissioningWindow(mb *matterbridge.Bridge, refs rootClusterRefs, window *matterbridge.CommissioningWindow) {
+	mb.AttachCommissioningWindow(window)
+	if refs.AdministratorCommissioning != nil {
+		refs.AdministratorCommissioning.SetController(window)
+	}
 }
 
 // resolveBridgeUniqueID returns the root node's stable BasicInformation
@@ -2137,6 +2207,7 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 	// Mirrors chip CommissioningWindowManager + AdministratorCommissioningCluster
 	// VerifyOrExit(IsFailSafeFullyDisarmed, ...).
 	admComm.SetIsFailSafeArmed(gc.FailSafeArmed)
+	refs.AdministratorCommissioning = admComm
 	out = append(out, admComm)
 
 	if store != nil {
@@ -3676,14 +3747,21 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// PASE acceptor; it tracks the window state and emits
 		// QR + manual codes for the caller (REST handler).
 		window := matterbridge.NewCommissioningWindow()
-		mb.AttachCommissioningWindow(window)
+		wireCommissioningWindow(mb, bundle.rootRefs, window)
 		// Wire FailSafeArmer and PaseSessionCloser hooks so CommissioningWindow
 		// can arm the Matter fail-safe after opening a window (Matter §11.19.6)
 		// and evict open PASE sessions when the window is revoked
 		// (Matter §11.19.7.3 step 1). Both adapters delegate to their
 		// respective production paths — see [failSafeArmerAdapter] and
 		// [paseSessionCloserAdapter].
-		window.SetFailSafeChecker(bundle.rootRefs.GeneralCommissioning)
+		if gc := bundle.rootRefs.GeneralCommissioning; gc != nil {
+			// A nil *GeneralCommissioning (buildRootClusters failed and the
+			// bridge runs degraded) boxed into the interface is non-nil to
+			// the window's `checker != nil` guard and panics on the first
+			// OpenWindow; leave the checker unset instead, as the armer
+			// adapter below already tolerates a nil gc.
+			window.SetFailSafeChecker(gc)
+		}
 		window.SetFailSafeArmer(&failSafeArmerAdapter{
 			gc:     bundle.rootRefs.GeneralCommissioning,
 			logger: logger,

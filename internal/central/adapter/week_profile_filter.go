@@ -528,28 +528,15 @@ func deriveWeekProfileMetadata(d *device.Device, _ *device.Channel) weekprofile.
 				}
 			}
 		}
-		// HmIP: ACTIVE_PROFILE is 1-based, MAX == profile count.
-		if dp := ch.Parameter(hmenum.ParameterActiveProfile); dp != nil {
-			pd := dp.ParameterData()
-			if pd.Max != nil {
-				if v, ok := parseFloat(pd.Max); ok && int(v) >= 1 {
-					meta.ProfileCount = int(v)
-				}
-			}
-		}
-		// Classic HM: WEEK_PROGRAM_POINTER is 0-based, count == MAX+1.
-		// Only consult this when ACTIVE_PROFILE did not yield a value
-		// to avoid double-counting on devices that carry both.
-		if meta.ProfileCount == 0 {
-			if dp := ch.Parameter(hmenum.ParameterWeekProgramPointer); dp != nil {
-				pd := dp.ParameterData()
-				if pd.Max != nil {
-					if v, ok := parseFloat(pd.Max); ok && int(v) >= 0 {
-						meta.ProfileCount = int(v) + 1
-					}
-				}
-			}
-		}
+	}
+	// The profile cap comes from whichever pointer the device declares —
+	// ACTIVE_PROFILE (HmIP, 1-based) or WEEK_PROGRAM_POINTER (classic
+	// RF, 0-based). [findProfilePointer] searches VALUES and MASTER on
+	// every channel plus the device root, because the classic RF family
+	// carries the pointer only in the device-level MASTER paramset, so a
+	// VALUES-only walk left every such device advertising P1..P6.
+	if ptr, ok := findProfilePointer(d); ok {
+		meta.ProfileCount = ptr.profileCount()
 	}
 	return meta
 }
@@ -572,35 +559,29 @@ func subscribeProfilePointer(d *device.Device, wp *weekprofile.ProfileDataPoint)
 	if d == nil || wp == nil {
 		return
 	}
-	for _, ch := range d.Channels() {
-		// Try ACTIVE_PROFILE first (HmIP). Fall back to
-		// WEEK_PROGRAM_POINTER (RF). If both exist, ACTIVE_PROFILE
-		// wins — same precedence as deriveWeekProfileMetadata.
-		for _, p := range []hmenum.Parameter{
-			hmenum.ParameterActiveProfile,
-			hmenum.ParameterWeekProgramPointer,
-		} {
-			dp := ch.Parameter(p)
-			if dp == nil {
-				continue
-			}
-			// Pass the parameter along: ACTIVE_PROFILE is declared 1-based
-			// and WEEK_PROGRAM_POINTER 0-based, so the same number means
-			// different profiles. The parameter-less form guesses from the
-			// Go type — a string is read as the RF pointer, everything else
-			// as ACTIVE_PROFILE — so an RF pointer arriving as an integer,
-			// which is its ordinary shape, resolved one profile too low.
-			dp.OnAnyUpdate(func(_, next any) {
-				_ = wp.SyncProfilePointerFor(p, next)
-			})
-			// Seed once with the current value so the descriptor's
-			// CurrentProfile reflects the live state right after
-			// boot, not just after the next push event.
-			if v, observed := dp.RawValue(); observed {
-				_ = wp.SyncProfilePointerFor(p, v)
-			}
-			return
-		}
+	// ACTIVE_PROFILE wins over WEEK_PROGRAM_POINTER, and the search
+	// covers MASTER and the device root — the classic RF family declares
+	// its pointer nowhere else, which left CurrentProfile permanently
+	// empty on every one of those thermostats.
+	ptr, ok := findProfilePointer(d)
+	if !ok {
+		return
+	}
+	// Pass the parameter along: ACTIVE_PROFILE is declared 1-based
+	// and WEEK_PROGRAM_POINTER 0-based, so the same number means
+	// different profiles. The parameter-less form guesses from the
+	// Go type — a string is read as the RF pointer, everything else
+	// as ACTIVE_PROFILE — so an RF pointer arriving as an integer,
+	// which is its ordinary shape, resolved one profile too low.
+	param := ptr.parameter
+	ptr.dataPoint.OnAnyUpdate(func(_, next any) {
+		_ = wp.SyncProfilePointerFor(param, next)
+	})
+	// Seed once with the current value so the descriptor's
+	// CurrentProfile reflects the live state right after
+	// boot, not just after the next push event.
+	if v, observed := ptr.dataPoint.RawValue(); observed {
+		_ = wp.SyncProfilePointerFor(param, v)
 	}
 }
 

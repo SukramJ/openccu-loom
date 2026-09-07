@@ -510,6 +510,30 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 		return nil
 	}
 
+	// MQTT allows one session per ClientID (MQTT-3.1.4-2: a connect with
+	// an id in use takes the session over and the broker closes the old
+	// socket). With the new stack connecting while the old one is still up
+	// — the order that gives a rollback on connect failure — an unchanged
+	// client_id turned the swap into a takeover fight: the old lifecycle
+	// saw its socket drop, reconnected at once under the same id and
+	// kicked the new client while its subscribers were being built, so
+	// the new generation ended with no command subscriptions and an open
+	// breaker. When the id is shared the old stack has to be gone before
+	// the new one connects; the rollback is then a reconnect through the
+	// supervisor's retry loop rather than the predecessor staying live.
+	if oldSwap != nil && newCfg.North.MQTT.ClientID != "" && newCfg.North.MQTT.ClientID == oldSwap.cfg.ClientID {
+		s.logger.Info("mqtt.supervisor.swap.same_client_id",
+			slog.String("client_id", newCfg.North.MQTT.ClientID),
+			slog.String("effect", "old stack stopped before the new one connects"))
+		s.teardown(ctx, oldSwap)
+		s.mu.Lock()
+		if s.current == oldSwap {
+			s.current = nil
+		}
+		s.mu.Unlock()
+		oldSwap = nil
+	}
+
 	newSwap, err := s.buildSwap(ctx, newCfg)
 	if err != nil {
 		return fmt.Errorf("mqtt.supervisor.swap: build new stack: %w", err)

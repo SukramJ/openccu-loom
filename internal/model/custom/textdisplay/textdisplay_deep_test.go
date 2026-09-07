@@ -151,7 +151,7 @@ func TestTextDisplayWriteWithSoundIncludesSoundParams(t *testing.T) {
 	err := d.WriteWithSound(
 		context.Background(),
 		Row{ID: 1, Text: "Alert"},
-		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_3", Interval: "500MS"},
+		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_3", Interval: "5"},
 		hmenum.CommandPriorityHigh,
 	)
 	if err != nil {

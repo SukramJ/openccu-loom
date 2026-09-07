@@ -22,6 +22,7 @@ var wiringFuncsWithoutSeam = map[string]string{
 	"registerStandardJobs":              "installs the attach for the seam its caller declares; a second declaration would collide on the name",
 	"registerStandardJobsFor":           "runs once per central, from the boot walk and the live-adopt path alike; the manifest records daemon-level seams, and a name declared per central would collide",
 	"wireAddonUpdate":                   "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
+	"wireCommissioningWindow":           "installs the window controller on the AdministratorCommissioning cluster that startMatterBridge already built; the handover the manifest tracks is the bridge's, and the effect is pinned by TestMatterCommissioningWindowReachesTheAdminCommissioningCluster",
 	"wireAlarmService":                  "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireAuditPersistenceWithDB":        "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",
 	"wireBINRPCCallback":                "constructs a value and returns it; the caller decides where it goes, so there is no handover here to declare",

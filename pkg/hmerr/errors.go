@@ -73,6 +73,14 @@ var (
 	// "unencodable_string" and name the offending value.
 	ErrUnencodableString = errors.New("string contains a character the CCU cannot store (ISO-8859-1 only)")
 
+	// ErrLinkParamsetNotAddressable signals a paramset write keyed with the
+	// literal "LINK". A LINK paramset exists once per peer and is addressed
+	// by the peer's channel address; the literal is only a description key,
+	// and a BidCos channel would parse it as a peer address and commit a
+	// configuration write for a non-existent peer over the air. Callers
+	// answer with HTTP 400 / WS code "link_paramset_not_addressable".
+	ErrLinkParamsetNotAddressable = errors.New("the LINK paramset is addressed by the peer channel address, not by the key \"LINK\"")
+
 	// ErrParameterHidden signals that a write was rejected because the
 	// visibility gate determined the parameter is hidden (e.g.
 	// builtInGlobalHides or a model-level hide rule). Callers should
