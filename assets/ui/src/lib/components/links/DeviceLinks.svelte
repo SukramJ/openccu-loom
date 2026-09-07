@@ -28,8 +28,38 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let adding = $state(false);
-  // The link currently being edited (or null for list view).
-  let editing = $state<Link | null>(null);
+
+  // The open link editor is held as a key plus an immutable snapshot of
+  // the strings it renders, not as the Link object itself.
+  //
+  // LinkConfigPanel's props feed ChannelPanel, whose save() reads them
+  // again after `await api.putLinkParamset(...)`. With the Link object as
+  // the prop, closing the editor while that PUT was in flight nulled the
+  // holder underneath the running save and it died on
+  // `link.sender_address` — the CCU had taken the write, and the UI still
+  // reported "channel.save_failed". The key drives the {#if}; the
+  // snapshot is never cleared, so a late read always finds strings.
+  type LinkEditorTarget = {
+    senderAddress: string;
+    receiverAddress: string;
+    name: string;
+    senderDeviceLabel: string;
+    senderChannelLabel: string;
+    receiverDeviceLabel: string;
+    receiverChannelLabel: string;
+  };
+  const noEditorTarget: LinkEditorTarget = {
+    senderAddress: "",
+    receiverAddress: "",
+    name: "",
+    senderDeviceLabel: "",
+    senderChannelLabel: "",
+    receiverDeviceLabel: "",
+    receiverChannelLabel: "",
+  };
+  // "<sender>-><receiver>" while an editor is open, null for list view.
+  let editingKey = $state<string | null>(null);
+  let editingTarget = $state<LinkEditorTarget>(noEditorTarget);
   // The link whose name/description is being renamed (or null). Opening
   // the rename form prefills these draft fields from the link.
   let renaming = $state<Link | null>(null);
@@ -191,6 +221,21 @@
     await load();
   }
 
+  function startEditing(link: Link) {
+    editingTarget = {
+      senderAddress: link.sender_address,
+      receiverAddress: link.receiver_address,
+      name: link.name ?? "",
+      senderDeviceLabel: link.sender_device_name || link.sender_address,
+      senderChannelLabel:
+        link.sender_channel_type_label || link.sender_channel_type || "",
+      receiverDeviceLabel: link.receiver_device_name || link.receiver_address,
+      receiverChannelLabel:
+        link.receiver_channel_type_label || link.receiver_channel_type || "",
+    };
+    editingKey = `${link.sender_address}->${link.receiver_address}`;
+  }
+
   function startRename(link: Link) {
     adding = false;
     renaming = link;
@@ -251,11 +296,17 @@
   }
 </script>
 
-{#if editing}
+{#if editingKey}
   <LinkConfigPanel
-    link={editing}
+    senderAddress={editingTarget.senderAddress}
+    receiverAddress={editingTarget.receiverAddress}
+    name={editingTarget.name}
+    senderDeviceLabel={editingTarget.senderDeviceLabel}
+    senderChannelLabel={editingTarget.senderChannelLabel}
+    receiverDeviceLabel={editingTarget.receiverDeviceLabel}
+    receiverChannelLabel={editingTarget.receiverChannelLabel}
     {locale}
-    onBack={() => (editing = null)}
+    onBack={() => (editingKey = null)}
   />
 {:else}
   <Card class="p-4">
@@ -459,7 +510,7 @@
                 type="button"
                 variant="outline"
                 size="sm"
-                onclick={() => (editing = link)}
+                onclick={() => startEditing(link)}
               >
                 {t("links.configure")}
               </Button>
