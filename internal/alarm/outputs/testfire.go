@@ -25,6 +25,9 @@ var (
 	// activation costs irreplaceable battery life and likely fans out
 	// to the whole smoke-detector group.
 	ErrTestFireUnsupported = errors.New("outputs: test fire not supported for this output class")
+	// ErrChirpSoundfileMissing reports a sound-player chirp output with
+	// no soundfile configured: there is nothing the device could play.
+	ErrChirpSoundfileMissing = errors.New("outputs: chirp output has no soundfile index configured")
 )
 
 // TestFire runs one short, bounded test activation of a single
@@ -65,6 +68,17 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 	case hmenum.AlarmOutputClassAcousticSiren, hmenum.AlarmOutputClassOpticalSiren, hmenum.AlarmOutputClassChirp:
 		dev, err := m.resolver.Siren(inst.row.CentralName, inst.row.ChannelAddress)
 		if err != nil {
+			// The chirp class covers both an ASIR confirmation tone and
+			// an MP3 sound player; only the former resolves as a siren.
+			// Reporting the sound player as a device fault put a
+			// permanent degradation on a healthy output.
+			if inst.row.Class == hmenum.AlarmOutputClassChirp {
+				if serr := m.testFireSound(ctx, inst); serr != nil {
+					return testFailed(serr)
+				}
+				journalTest()
+				return nil
+			}
 			return testFailed(err)
 		}
 		on := sirencdp.OnConfig{Duration: testFireDuration}
@@ -110,4 +124,20 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 		// a false fault on the one signal an operator trusts.
 		return ErrTestFireUnsupported
 	}
+}
+
+// testFireSound runs the test emission of an MP3-player chirp output.
+// The sound player terminates its own playback (the adapter writes a
+// duration with the soundfile), so unlike the smoke sounder this class
+// needs no stop watchdog — arming one would only add a radio write per
+// test.
+func (m *Manager) testFireSound(ctx context.Context, inst *instance) error {
+	if inst.cfg.SoundfileIndex <= 0 {
+		return ErrChirpSoundfileMissing
+	}
+	dev, err := m.resolver.Sound(inst.row.CentralName, inst.row.ChannelAddress)
+	if err != nil {
+		return err
+	}
+	return dev.PlayChirp(ctx, inst.cfg.SoundfileIndex, chirpVolume(inst), hmenum.CommandPriorityLow)
 }

@@ -1143,7 +1143,7 @@ func TestSoundPlayerLEDAvailableOnTimesAndRepetitions(t *testing.T) {
 }
 
 // TestSoundPlayerLEDTurnOffDispatchesPutParamset verifies TurnOff bundles
-// COLOR=BLACK + ON_TIME=0 into one atomic call.
+// COLOR=BLACK + DURATION_VALUE=0 into one atomic call.
 func TestSoundPlayerLEDTurnOffDispatchesPutParamset(t *testing.T) {
 	w := &putWriter{}
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "LED0001"})
@@ -1162,8 +1162,12 @@ func TestSoundPlayerLEDTurnOffDispatchesPutParamset(t *testing.T) {
 	if params[string(hmenum.ParameterColor)] != "BLACK" {
 		t.Errorf("COLOR=%v, want BLACK", params[string(hmenum.ParameterColor)])
 	}
-	if params[string(hmenum.ParameterOnTime)] != 0.0 {
-		t.Errorf("ON_TIME=%v, want 0", params[string(hmenum.ParameterOnTime)])
+	// The MP3P LED channel has no ON_TIME; the reset is DURATION_VALUE=0.
+	if params[string(hmenum.ParameterDurationValue)] != int32(0) {
+		t.Errorf("DURATION_VALUE=%v, want 0", params[string(hmenum.ParameterDurationValue)])
+	}
+	if _, bare := params[string(hmenum.ParameterOnTime)]; bare {
+		t.Errorf("TurnOff sent a bare ON_TIME the channel does not declare")
 	}
 }
 
@@ -1277,8 +1281,8 @@ func TestSoundPlayerLEDTurnOnWithDeferredTimer(t *testing.T) {
 		t.Fatal("expected put_paramset")
 	}
 	params := w.puts[len(w.puts)-1]
-	if params[string(hmenum.ParameterOnTime)] == nil {
-		t.Error("ON_TIME must be present when deferred timer was set")
+	if params[string(hmenum.ParameterDurationValue)] != int32(3) {
+		t.Errorf("DURATION_VALUE=%v, want 3 when a 3 s deferred timer was set", params[string(hmenum.ParameterDurationValue)])
 	}
 }
 

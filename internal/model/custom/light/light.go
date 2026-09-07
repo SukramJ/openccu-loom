@@ -126,6 +126,12 @@ type Light struct {
 	onTimeValueParam hmenum.Parameter
 	onTimeUnitParam  hmenum.Parameter
 
+	// rampTimeValueParam / rampTimeUnitParam are the wire parameter(s) a
+	// ramped command writes, resolved once at construction from the
+	// channel's own paramset. See [resolveRampTimeParams].
+	rampTimeValueParam hmenum.Parameter
+	rampTimeUnitParam  hmenum.Parameter
+
 	// resetsOnTimeOnTurnOn gates whether a plain TurnOn (no explicit
 	// on-time/timer) emits the [custom.TimerNotUsed] sentinel on a channel
 	// that carries
@@ -146,6 +152,7 @@ type Light struct {
 func New(cfg Config) *Light {
 	level := custom.FloatField(custom.ResolveSlotOr(cfg.Channel, cfg.Group, hmenum.FieldLevel, hmenum.ParameterLevel))
 	onTimeValueParam, onTimeUnitParam := resolveOnTimeParams(cfg.Channel)
+	rampTimeValueParam, rampTimeUnitParam := resolveRampTimeParams(cfg.Channel)
 	hasOnTimeUnit := onTimeUnitParam != ""
 	l := &Light{
 		Float:                level,
@@ -153,6 +160,8 @@ func New(cfg Config) *Light {
 		hasOnTimeUnit:        hasOnTimeUnit,
 		onTimeValueParam:     onTimeValueParam,
 		onTimeUnitParam:      onTimeUnitParam,
+		rampTimeValueParam:   rampTimeValueParam,
+		rampTimeUnitParam:    rampTimeUnitParam,
 		enableLastBrightness: deviceLightLastBrightness(cfg.Channel),
 	}
 	// GlobalSceneControl (Matter OnOff attribute 0x4000) defaults to
@@ -743,7 +752,10 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 		l.stageOnTimeParam(params, time.Duration(custom.TimerNotUsed*float64(time.Second)))
 	}
 	if cfg.RampTime != nil {
-		params[hmenum.ParameterRampTime] = cfg.RampTime.Seconds()
+		// Same rule for the ramp: a bare RAMP_TIME on the plain dimmer
+		// families, RAMP_TIME_VALUE/RAMP_TIME_UNIT on the HmIP value/unit
+		// families (see resolveRampTimeParams).
+		l.stageRampTimeParam(params, *cfg.RampTime)
 	}
 	l.recordLastSent(level)
 	if err = custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority); err != nil {
@@ -780,11 +792,15 @@ func (l *Light) TurnOffWithRamp(ctx context.Context, ramp time.Duration, priorit
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
 	l.recordLastSent(0.0)
-	err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, map[hmenum.Parameter]any{
-		hmenum.ParameterOnTime:   custom.TimerNotUsed,
-		hmenum.ParameterRampTime: ramp.Seconds(),
-		hmenum.ParameterLevel:    0.0,
-	}, priority)
+	// Both timers take the shape the channel describes (see
+	// resolveOnTimeParams / resolveRampTimeParams); a bare ON_TIME or
+	// RAMP_TIME on a value/unit channel faults the whole putParamset.
+	params := map[hmenum.Parameter]any{
+		hmenum.ParameterLevel: 0.0,
+	}
+	l.stageOnTimeParam(params, time.Duration(custom.TimerNotUsed*float64(time.Second)))
+	l.stageRampTimeParam(params, ramp)
+	err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority)
 	// Anything staged on the collector only reaches the wire in the
 	// flush, so its error is part of this command's result.
 	if err = generic.FlushCollector(ctx, coll, err); err != nil {
@@ -853,6 +869,22 @@ func resolveOnTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Param
 	// parameters were not materialised — disabling the timer far more widely
 	// than any device warrants.
 	return hmenum.ParameterOnTime, ""
+}
+
+// resolveRampTimeParams is the ramp-time counterpart of
+// [resolveOnTimeParams]: the HmIP value/unit families (HmIP-BSL:8/12,
+// HmIP-RGBW:1, HmIP-DRG-DALI:1, HmIP-MP3P:6) describe the ramp as
+// RAMP_TIME_VALUE/RAMP_TIME_UNIT and carry no bare RAMP_TIME; the plain
+// dimmer families carry only the bare RAMP_TIME in seconds, which stays
+// the fallback for the same reason ON_TIME does above.
+func resolveRampTimeParams(ch *device.Channel) (valueParam, unitParam hmenum.Parameter) {
+	if ch == nil {
+		return hmenum.ParameterRampTime, ""
+	}
+	if ch.Parameter(hmenum.ParameterRampTimeValue) != nil && ch.Parameter(hmenum.ParameterRampTimeUnit) != nil {
+		return hmenum.ParameterRampTimeValue, hmenum.ParameterRampTimeUnit
+	}
+	return hmenum.ParameterRampTime, ""
 }
 
 // SetOnTime sets the light's on-time timer, encoding the duration into
@@ -1053,6 +1085,18 @@ func (l *Light) commandedColorTempKelvin() (uint16, bool) { _ = l; return 0, fal
 func (l *Light) commandedEffect() (string, bool)          { _ = l; return "", false }
 func (l *Light) commandedOnTime() (float64, bool)         { _ = l; return 0, false }
 func (l *Light) commandedRampTime() (float64, bool)       { _ = l; return 0, false }
+
+// stageRampTimeParam writes d into params using the ramp-time shape this
+// light's channel describes (see [resolveRampTimeParams]).
+func (l *Light) stageRampTimeParam(params map[hmenum.Parameter]any, d time.Duration) {
+	if l.rampTimeUnitParam == "" {
+		params[l.rampTimeValueParam] = d.Seconds()
+		return
+	}
+	value, unit := custom.EncodeTimerDuration(d)
+	params[l.rampTimeValueParam] = value
+	params[l.rampTimeUnitParam] = unit
+}
 
 // stageOnTimeParam writes d into params using the on-time shape this light's
 // channel describes, and writes nothing when it describes none.

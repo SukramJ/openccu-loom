@@ -404,6 +404,18 @@ func scheduleChannelByType(dev *device.Device) (*device.Channel, string, bool) {
 	if root := dev.RootChannel(); rootChannelCarriesSchedule(root) {
 		return root, "climate", true
 	}
+	// The attached week-profile descriptor is the pipeline's own record
+	// of which channel carries the schedule, and it is the only signal
+	// that survives hydration: the slot parameters themselves are
+	// dropped, and [DevicePipeline.normalizeClimateWeekProfiles] then
+	// relocates the descriptor onto the canonical schedule channel.
+	// Consulting it is what keeps a device whose schedule lives on
+	// neither a WEEK_PROFILE channel nor a CLIMATECONTROL_* one
+	// (HM-TC-IT-WM-W-EU: THERMALCONTROL_TRANSMIT only) in the listing
+	// instead of silently absent from it.
+	if ch := existingClimateWeekProfileChannel(dev); ch != nil {
+		return ch, "climate", true
+	}
 	for _, ch := range dev.Channels() {
 		if _, isClimate := climateScheduleChannelTypes[ch.Type]; isClimate {
 			return ch, "climate", true
@@ -416,6 +428,12 @@ func scheduleChannelByType(dev *device.Device) (*device.Channel, string, bool) {
 // MASTER data points include at least one week-profile slot key
 // (P<n>_ENDTIME_*/TEMPERATURE_* or the bare ENDTIME_/TEMPERATURE_ form).
 // nil-safe: a device with no device-root channel returns false.
+//
+// Note that this cannot fire on a pipeline-hydrated device: hydration
+// diverts every slot parameter into the channel's week-profile
+// descriptor before a data point is built. The attached descriptor is
+// the signal [scheduleChannelByType] uses instead; this scan remains as
+// the fallback for a root populated by something other than the pipeline.
 func rootChannelCarriesSchedule(root *device.Channel) bool {
 	if root == nil {
 		return false
@@ -440,6 +458,20 @@ func (s *SchedulesDomain) CopySchedule(
 ) error {
 	if srcDeviceAddress == dstDeviceAddress {
 		return ErrScheduleCopyNoOp
+	}
+	// Verify the destination can hold as many week programs as the source
+	// exposes, before anything is read or written. Without this the
+	// destination's descriptor filter ([filterClimateScheduleByDescKeys])
+	// quietly drops every profile key the destination does not declare:
+	// a six-profile source copied onto a three-profile thermostat wrote
+	// P1..P3, returned success and recorded a full copy in the audit log
+	// while P4..P6 were lost. The typed sibling [CopyScheduleTo] rejects
+	// the same mismatch, and so does the reference's `copy_schedule`.
+	srcCap, srcErr := s.MaxProfilesForDevice(ctx, srcDeviceAddress)
+	dstCap, dstErr := s.MaxProfilesForDevice(ctx, dstDeviceAddress)
+	if srcErr == nil && dstErr == nil && srcCap != dstCap {
+		return fmt.Errorf("%w: source %s has %d profiles, destination %s has %d",
+			ErrProfileCountMismatch, srcDeviceAddress, srcCap, dstDeviceAddress, dstCap)
 	}
 	src, err := s.GetClimateScheduleAuto(ctx, srcDeviceAddress)
 	if err != nil {
@@ -480,8 +512,9 @@ func (s *SchedulesDomain) GetClimateSchedule(
 		}
 		dto.Kind = "climate"
 		dto.Channel = chRef
-		// ACTIVE_PROFILE lives as a VALUES data point. Best-effort.
-		if active, idx, ok := s.readActiveProfile(ctx, backend, channelAddr); ok {
+		// The active-profile pointer lives outside the schedule
+		// paramset — see [SchedulesDomain.readActiveProfile]. Best-effort.
+		if active, idx, ok := s.readActiveProfile(ctx, backend, deviceAddress, channelAddr); ok {
 			dto.ActiveProfile = active
 			dto.ActiveProfileIndex = &idx
 		}
@@ -1101,10 +1134,24 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	return corrections, nil
 }
 
-// SetActiveProfile writes the ACTIVE_PROFILE data point. Most
-// thermostats expose it on the climate channel itself; we find the
-// writable channel by asking the backend for the paramset
-// description.
+// SetActiveProfile selects the device's active week program.
+//
+// Which parameter carries the selection, and where, is a property of the
+// device, not of this call — see [findProfilePointer]. HmIP thermostats
+// take a 1-based ACTIVE_PROFILE integer in the climate channel's VALUES
+// paramset; classic RF wall thermostats (HM-TC-IT-WM-W-EU, HM-CC-VG-1)
+// take a WEEK_PROGRAM_POINTER ENUM label in the *device-root* MASTER
+// paramset and declare no ACTIVE_PROFILE at all, so the unconditional
+// VALUES write this used to do was rejected by rfd with "Unknown
+// paramset" (-3) and the operator's profile switch never landed.
+//
+// Mirrors the split the custom-DP climate path already makes
+// (internal/model/custom/climate/climate.go, `set_profile`
+// in the reference's model/custom/climate.py).
+//
+// The `channelNo` argument still addresses the fallback write for a
+// device whose pointer is not modelled (not yet hydrated, or a schedule
+// carrier that declares no pointer at all).
 func (s *SchedulesDomain) SetActiveProfile(
 	ctx context.Context, deviceAddress string, channelNo int, profile string,
 ) error {
@@ -1124,10 +1171,19 @@ func (s *SchedulesDomain) SetActiveProfile(
 	if err != nil {
 		return err
 	}
-	// Profile index is stored as 1..6 in ACTIVE_PROFILE.
+	// Profile keys are 1-based ("P1".."P6"); the pointer's own descriptor
+	// decides whether the wire wants that as an index or an ENUM label.
 	idx, _ := strconv.Atoi(strings.TrimPrefix(profile, "P"))
-	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyValues, map[string]any{
-		"ACTIVE_PROFILE": idx,
+	writeAddr, paramsetKey := channelAddr, hmenum.ParamsetKeyValues
+	param, value := string(hmenum.ParameterActiveProfile), any(idx)
+	if ptr, ok := s.profilePointerFor(deviceAddress); ok {
+		writeAddr = ptr.channelAddress
+		paramsetKey = ptr.paramsetKey
+		param = string(ptr.parameter)
+		value = ptr.wireValue(idx - 1)
+	}
+	if err := backend.PutParamset(ctx, writeAddr, paramsetKey, map[string]any{
+		param: value,
 	}, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		return err
 	}
@@ -1140,27 +1196,71 @@ func (s *SchedulesDomain) SetActiveProfile(
 	return nil
 }
 
-// readActiveProfile is best-effort: a missing ACTIVE_PROFILE DP is
-// silently swallowed because non-HmIP thermostats do not expose it.
+// readActiveProfile is best-effort: a device that exposes no profile
+// pointer at all yields ok == false and the caller leaves the schedule's
+// active-profile fields unset.
+//
+// It reads the pointer where the device declares it, which is the same
+// asymmetry [SetActiveProfile] writes through: ACTIVE_PROFILE in the
+// climate channel's VALUES on HmIP, WEEK_PROGRAM_POINTER in the
+// device-root MASTER on classic RF. Reading only VALUES/ACTIVE_PROFILE
+// meant no RF thermostat ever reported an active profile, so the SPA
+// offered the "set active" button on every render.
+//
 // The returned index is the 0-based profile index matching
-// [hmapi.ClimateSchedule.ActiveProfileIndex]'s documented contract — the
-// CCU's own ACTIVE_PROFILE value is the 1-based P<n> slot number.
+// [hmapi.ClimateSchedule.ActiveProfileIndex]'s documented contract; both
+// wire forms are normalised to it — ACTIVE_PROFILE is 1-based, and
+// WEEK_PROGRAM_POINTER is 0-based (an option type the CCU hands out as
+// its ordinal on the read path).
 func (s *SchedulesDomain) readActiveProfile(
-	ctx context.Context, backend paramsetBackend, channelAddr string,
+	ctx context.Context, backend paramsetBackend, deviceAddress, channelAddr string,
 ) (profileID string, index int, ok bool) {
-	values, err := backend.GetParamset(ctx, channelAddr, hmenum.ParamsetKeyValues)
+	readAddr, paramsetKey := channelAddr, hmenum.ParamsetKeyValues
+	param, offset := string(hmenum.ParameterActiveProfile), 1
+	if ptr, found := s.profilePointerFor(deviceAddress); found {
+		readAddr = ptr.channelAddress
+		paramsetKey = ptr.paramsetKey
+		param = string(ptr.parameter)
+		if ptr.parameter == hmenum.ParameterWeekProgramPointer {
+			offset = 0
+		}
+	}
+	values, err := backend.GetParamset(ctx, readAddr, paramsetKey)
 	if err != nil {
 		return "", 0, false
 	}
-	raw, ok := values["ACTIVE_PROFILE"]
-	if !ok {
+	raw, present := values[param]
+	if !present {
 		return "", 0, false
 	}
 	idx, ok := coerceInt(raw)
-	if !ok || !weekprofile.ValidProfileIndex(idx) {
+	if !ok {
 		return "", 0, false
 	}
-	return fmt.Sprintf("P%d", idx), idx - 1, true
+	// Normalise to the 1-based P<n> slot number before validating, so an
+	// out-of-range pointer is rejected rather than folded into P1.
+	slot := idx + (1 - offset)
+	if !weekprofile.ValidProfileIndex(slot) {
+		return "", 0, false
+	}
+	return fmt.Sprintf("P%d", slot), slot - 1, true
+}
+
+// profilePointerFor resolves the device's week-program pointer through
+// the model registry. Returns false when the device is unknown or has no
+// pointer data point hydrated yet.
+func (s *SchedulesDomain) profilePointerFor(deviceAddress string) (profilePointer, bool) {
+	if s.registry == nil {
+		return profilePointer{}, false
+	}
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
+		if !ok {
+			continue
+		}
+		return findProfilePointer(dev)
+	}
+	return profilePointer{}, false
 }
 
 // resolve locates the backend and returns the fully-qualified channel

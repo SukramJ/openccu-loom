@@ -64,7 +64,7 @@ func TestSetValueForwardsCriticalPriorityThroughAnOpenBreaker(t *testing.T) {
 	b := &countingWriteBackend{orchBackend: &orchBackend{}}
 
 	err := ic.SetValue(context.Background(), b, "ABC0001:1", hmenum.ParameterState, false,
-		hmenum.CommandPriorityCritical, hmenum.CommandRxModeUnset, true)
+		hmenum.CommandPriorityCritical, hmenum.CommandRxModeUnset)
 	if err != nil {
 		t.Fatalf("critical SetValue through open breaker: err = %v, want nil", err)
 	}
@@ -79,7 +79,7 @@ func TestSetValueLowPriorityIsShedByAnOpenBreaker(t *testing.T) {
 	b := &countingWriteBackend{orchBackend: &orchBackend{}}
 
 	err := ic.SetValue(context.Background(), b, "ABC0001:1", hmenum.ParameterState, false,
-		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset, true)
+		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset)
 	if !errors.Is(err, hmerr.ErrCircuitBreakerOpen) {
 		t.Fatalf("low-priority SetValue: err = %v, want ErrCircuitBreakerOpen", err)
 	}
@@ -94,7 +94,7 @@ func TestPutParamsetForwardsCriticalPriorityThroughAnOpenBreaker(t *testing.T) {
 	b := &countingWriteBackend{orchBackend: &orchBackend{}}
 
 	err := ic.PutParamset(context.Background(), b, "ABC0001:1", string(hmenum.ParamsetKeyValues),
-		map[string]any{"STATE": false}, hmenum.CommandPriorityCritical, hmenum.CommandRxModeUnset, true)
+		map[string]any{"STATE": false}, hmenum.CommandPriorityCritical, hmenum.CommandRxModeUnset)
 	if err != nil {
 		t.Fatalf("critical PutParamset through open breaker: err = %v, want nil", err)
 	}
@@ -109,7 +109,7 @@ func TestPutParamsetLowPriorityIsShedByAnOpenBreaker(t *testing.T) {
 	b := &countingWriteBackend{orchBackend: &orchBackend{}}
 
 	err := ic.PutParamset(context.Background(), b, "ABC0001:1", string(hmenum.ParamsetKeyValues),
-		map[string]any{"STATE": false}, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset, true)
+		map[string]any{"STATE": false}, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset)
 	if !errors.Is(err, hmerr.ErrCircuitBreakerOpen) {
 		t.Fatalf("low-priority PutParamset: err = %v, want ErrCircuitBreakerOpen", err)
 	}

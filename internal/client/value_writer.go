@@ -14,44 +14,19 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// icSetterLike is the narrow contract ValueWriter needs from an
-// InterfaceClient to route writes through the full reliability stack
-// (throttle + circuit breaker + retrier) when [WriteOptions.SkipRetry]
-// is set. Storing this as an interface keeps value_writer.go decoupled
-// from the concrete *InterfaceClient type.
-//
-// Both methods mirror the corresponding InterfaceClient signatures.
-type icSetterLike interface {
-	// SetValue routes a single-parameter write through the IC's
-	// reliability stack. skipRetry=true calls Retrier.DoOnce instead
-	// of Retrier.Do.
-	SetValue(ctx context.Context, b backends.Operations, channelAddress string, parameter hmenum.Parameter, value any, priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode, skipRetry bool) error
-	// PutParamset routes a paramset write through the IC's reliability
-	// stack. skipRetry=true calls Retrier.DoOnce instead of Retrier.Do.
-	PutParamset(ctx context.Context, b backends.Operations, channelAddress, paramsetKeyOrLinkAddress string, values map[string]any, priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode, skipRetry bool) error
-}
-
 // ValueWriter dispatches SetValue calls to the right backend.
 // Coordinators register (centralName, interfaceID) → backend pairs;
 // the north-bound adapters call [ValueWriter.SetValue] without
 // needing to know which transport backs the interface.
 //
-// SetValueWithOptions / PutParamsetWithOptions also need:
-//
-// - a [BusResolver] that yields the central event bus to subscribe to
+// SetValueWithOptions / PutParamsetWithOptions also need a
+// [BusResolver] that yields the central event bus to subscribe to
 // DataPointValueChangedEvent when [WriteOptions.WaitForCallback] is
-// true;
-// - an [icSetterLike] (the [InterfaceClient]) to route writes through
-// the full reliability stack when [WriteOptions.SkipRetry] is true.
-//
-// Both are wired after the central + reliability stack have been
-// constructed. Nil is the safe default — WaitForCallback returns
-// immediately and SkipRetry falls through to the direct backend path
-// (no retry anyway since the backend bypasses the Retrier).
+// true. It is wired after the central has been constructed; nil is the
+// safe default — WaitForCallback then returns immediately.
 type ValueWriter struct {
 	mu             sync.RWMutex
 	backends       map[valueWriterKey]backends.Operations
-	icSetters      map[valueWriterKey]icSetterLike
 	busResolver    BusResolver
 	commandTracker CommandTrackerFn
 	inFlight       *reliability.InFlightTracker
@@ -102,9 +77,8 @@ func keyFor(centralName, interfaceID string) valueWriterKey {
 // NewValueWriter returns an empty registry.
 func NewValueWriter() *ValueWriter {
 	return &ValueWriter{
-		backends:  make(map[valueWriterKey]backends.Operations),
-		icSetters: make(map[valueWriterKey]icSetterLike),
-		inFlight:  reliability.NewInFlightTracker(),
+		backends: make(map[valueWriterKey]backends.Operations),
+		inFlight: reliability.NewInFlightTracker(),
 	}
 }
 
@@ -118,33 +92,11 @@ func (w *ValueWriter) Register(centralName string, interfaceID hmtypes.WireInter
 	w.mu.Unlock()
 }
 
-// RegisterIC binds an [icSetterLike] (the [InterfaceClient]) for
-// (central, interface). When non-nil, [SetValueWithOptions] and
-// [PutParamsetWithOptions] route through the IC's full reliability
-// stack whenever [WriteOptions.SkipRetry] is set, so the Retrier uses
-// DoOnce instead of Do. Call after [Register] — the backend must
-// always be registered first.
-//
-// Passing nil removes the IC binding; subsequent calls with
-// [WriteOptions.SkipRetry] fall through to the direct backend path
-// (no retrier is involved either way).
-func (w *ValueWriter) RegisterIC(centralName string, interfaceID hmtypes.WireInterfaceID, ic icSetterLike) {
-	key := valueWriterKey{Central: centralName, Interface: interfaceID}
-	w.mu.Lock()
-	if ic == nil {
-		delete(w.icSetters, key)
-	} else {
-		w.icSetters[key] = ic
-	}
-	w.mu.Unlock()
-}
-
-// Deregister drops the binding for both the backend and the IC.
+// Deregister drops the backend binding.
 func (w *ValueWriter) Deregister(centralName string, interfaceID hmtypes.WireInterfaceID) {
 	key := valueWriterKey{Central: centralName, Interface: interfaceID}
 	w.mu.Lock()
 	delete(w.backends, key)
-	delete(w.icSetters, key)
 	w.mu.Unlock()
 }
 

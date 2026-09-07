@@ -104,7 +104,23 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 		// toggle off left every already-held device withheld from the
 		// ecosystems with nothing to explain why.
 		if mgr := deps.BringUpManager(); mgr != nil {
-			if n := mgr.ApplyDeferredCreationBehavior(context.Background(), next); n > 0 {
+			// Apply the EFFECTIVE config, not the file's view of it: the
+			// centrals table (a DB-tier section the SPA saves into) carries
+			// Behavior.DelayNewDeviceCreation and wins at boot, so reading
+			// `next` — the YAML+env tier the watcher loaded — reverted a
+			// gate the operator had enabled in the SPA on any unrelated YAML
+			// edit, and newly paired devices were published without the
+			// operator's acceptance while the SPA still showed the gate on.
+			// Same reason the MQTT branch below re-assembles.
+			effective, fresh := deps.AssembleConfig(context.Background())
+			if effective == nil {
+				effective = next
+			}
+			if !fresh {
+				logger.Warn("daemon.reload.deferred_creation_config_not_reassembled",
+					slog.String("effect", "applying the file tier; a DB-tier delay_new_device_creation may be reverted"))
+			}
+			if n := mgr.ApplyDeferredCreationBehavior(context.Background(), effective); n > 0 {
 				logger.Info("daemon.reload.deferred_creation_applied", slog.Int("centrals", n))
 				applied++
 			}

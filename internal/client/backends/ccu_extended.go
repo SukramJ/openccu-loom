@@ -53,11 +53,18 @@ func readLimitedResponse(r io.Reader, limit int64) ([]byte, error) {
 
 // GetInstallMode implements Operations. Returns the remaining seconds
 // the CCU is in install (pairing) mode via JSON-RPC.
+//
+// Wire: Interface.getInstallMode, params: {interface: <this backend's
+// interface>}. The `interface` argument is mandatory — the firmware
+// declares ARGUMENTS {_session_id_ interface} and rejects a call without
+// it as jsonrpc_error 402 "missing argument".
 func (b *CcuBackend) GetInstallMode(ctx context.Context) (int, error) {
 	if b.json == nil {
 		return 0, ErrUnsupported
 	}
-	raw, err := b.json.Call(ctx, "Interface.getInstallMode")
+	raw, err := b.json.Call(ctx, "Interface.getInstallMode", map[string]any{
+		"interface": string(b.ifaceType),
+	})
 	if err != nil {
 		return 0, err
 	}
@@ -277,22 +284,7 @@ func (b *CcuBackend) GetServiceMessages(ctx context.Context, messageType string)
 		}
 		return out, nil
 	}
-	if b.json == nil {
-		return nil, ErrUnsupported
-	}
-	// wire:inline reason=rega-preferred-fallback: "Message.getAll" is used only
-	// when no ScriptRunner is wired; the canonical path is the ReGa script above.
-	var raw any
-	var err error
-	if messageType != "" {
-		raw, err = b.json.Call(ctx, "Message.getAll", map[string]any{"type": messageType})
-	} else {
-		raw, err = b.json.Call(ctx, "Message.getAll")
-	}
-	if err != nil {
-		return nil, err
-	}
-	return toSliceOfMaps(raw, "GetServiceMessages")
+	return nil, ErrUnsupported
 }
 
 // SuppressServiceMessage implements Operations. Suppresses or
@@ -375,7 +367,7 @@ func (b *CcuBackend) ListBidcosInterfaces(ctx context.Context, iface string) ([]
 // --- rooms / functions --------------------------------------------------
 
 // GetAllRooms implements Operations. Returns a map of roomName →
-// []channelAddress via JSON-RPC.
+// []channelISEID via JSON-RPC (Room.getAll).
 func (b *CcuBackend) GetAllRooms(ctx context.Context) (map[string][]string, error) {
 	if b.json == nil {
 		return nil, ErrUnsupported
@@ -388,7 +380,7 @@ func (b *CcuBackend) GetAllRooms(ctx context.Context) (map[string][]string, erro
 }
 
 // GetAllFunctions implements Operations. Returns a map of functionName →
-// []channelAddress via JSON-RPC.
+// []channelISEID via JSON-RPC (Subsection.getAll).
 func (b *CcuBackend) GetAllFunctions(ctx context.Context) (map[string][]string, error) {
 	if b.json == nil {
 		return nil, ErrUnsupported
@@ -401,7 +393,13 @@ func (b *CcuBackend) GetAllFunctions(ctx context.Context) (map[string][]string, 
 }
 
 // extractGroupMap converts the CCU's Room/Subsection response into a
-// map of name → channelAddresses.
+// map of name → channel ISE-IDs.
+//
+// The firmware emits the member channels under "channelIds" and the entries
+// are ReGa ISE-IDs, not channel addresses (room/getall.tcl and
+// subsection/getall.tcl both build `"channelIds":[…]` from the room's
+// channel objects). Mapping an ISE-ID to an address needs a second ReGa
+// lookup, so this function returns what the CCU gives.
 func extractGroupMap(raw any, method string) (map[string][]string, error) {
 	list, err := toSliceOfMaps(raw, method)
 	if err != nil {
@@ -413,10 +411,10 @@ func extractGroupMap(raw any, method string) (map[string][]string, error) {
 		if name == "" {
 			continue
 		}
-		if channels, ok := item["channels"].([]any); ok {
+		if channels, ok := item["channelIds"].([]any); ok {
 			for _, ch := range channels {
-				if addr, ok := ch.(string); ok && addr != "" {
-					out[name] = append(out[name], addr)
+				if id, ok := ch.(string); ok && id != "" {
+					out[name] = append(out[name], id)
 				}
 			}
 		}
@@ -475,15 +473,7 @@ func (b *CcuBackend) AcceptDeviceInInbox(ctx context.Context, deviceAddress stri
 		}
 		return resp.Success, nil
 	}
-	if b.json == nil {
-		return false, ErrUnsupported
-	}
-	// wire:inline reason=rega-preferred-fallback: "Interface.acceptDevice" is used only
-	// when no ScriptRunner is wired; the canonical path is the ReGa script above.
-	_, err := b.json.Call(ctx, "Interface.acceptDevice", map[string]any{
-		"address": deviceAddress,
-	})
-	return err == nil, err
+	return false, ErrUnsupported
 }
 
 // --- programs -----------------------------------------------------------
@@ -608,26 +598,7 @@ func (b *CcuBackend) GetAllDeviceData(ctx context.Context) (map[string]map[strin
 		}
 		return out, nil
 	}
-	if b.json == nil {
-		return nil, ErrUnsupported
-	}
-	// wire:inline reason=rega-preferred-fallback: "Interface.getAllDeviceData" is used only
-	// when no ScriptRunner is wired; the canonical path is the ReGa script above.
-	raw, err := b.json.Call(ctx, "Interface.getAllDeviceData")
-	if err != nil {
-		return nil, err
-	}
-	outer, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetAllDeviceData: unexpected type %T", raw)
-	}
-	out := make(map[string]map[string]any, len(outer))
-	for addr, inner := range outer {
-		if m, ok := inner.(map[string]any); ok {
-			out[addr] = m
-		}
-	}
-	return out, nil
+	return nil, ErrUnsupported
 }
 
 // GetDeviceDetails implements Operations. Returns name / ISE-ID /
@@ -802,13 +773,7 @@ func (b *CcuBackend) TriggerFirmwareUpdate(ctx context.Context) (bool, error) {
 		}
 		return resp.Success, nil
 	}
-	if b.json == nil {
-		return false, ErrUnsupported
-	}
-	// wire:inline reason=rega-preferred-fallback: "System.runFirmwareUpdate" is used only
-	// when no ScriptRunner is wired; the canonical path is the ReGa script above.
-	_, err := b.json.Call(ctx, "System.runFirmwareUpdate")
-	return err == nil, err
+	return false, ErrUnsupported
 }
 
 // --- reboot CCU --------------------------------------------------------
@@ -1098,11 +1063,15 @@ func (b *CcuBackend) GetSuppressedServiceMessages(ctx context.Context, iface, ch
 
 // HasProgramIDs implements Operations. Reports whether the CCU program
 // identified by iseID exists via JSON-RPC.
+//
+// Wire: Program.get, params: {id}. That is the firmware's per-program
+// getter (ARGUMENTS {_session_id_ id}); the CCU's method table has no
+// per-id variant under any other name.
 func (b *CcuBackend) HasProgramIDs(ctx context.Context, iseID string) (bool, error) {
 	if b.json == nil {
 		return false, ErrUnsupported
 	}
-	raw, err := b.json.Call(ctx, "Program.getByID", map[string]any{"id": iseID})
+	raw, err := b.json.Call(ctx, "Program.get", map[string]any{"id": iseID})
 	if err != nil {
 		return false, nil //nolint:nilerr // not found → false, nil
 	}

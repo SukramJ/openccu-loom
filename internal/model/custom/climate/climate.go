@@ -453,8 +453,23 @@ func (c *Climate) Setpoint() (float64, bool) {
 	return c.setpoint.Value()
 }
 
-// Mode returns the last observed mode.
+// Mode returns the current operation mode.
+//
+// The simple RF family (HM-CC-TC) has no mode parameter at all, so its
+// mode is always HEAT (climate.py BaseCustomDpClimate.mode). For the RF
+// and IP families the OFF sentinel wins over the wire mode: a target
+// temperature at or below [offTemperature] means the thermostat is off,
+// whatever CONTROL_MODE / SET_POINT_MODE echoed (climate.py
+// CustomDpRfThermostat.mode, CustomDpIpThermostat.mode). Without this
+// rule an OFF write followed by the CCU's MANU echo would report HEAT,
+// and SetMode(HEAT) would then be swallowed by [Climate.IsStateChange].
 func (c *Climate) Mode() (Mode, bool) {
+	if c.Kind == KindSimpleRF {
+		return ModeHeat, true
+	}
+	if sp, ok := c.Setpoint(); ok && sp <= offTemperature {
+		return ModeOff, true
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.mode, c.hasMode
@@ -1598,14 +1613,14 @@ func (c *Climate) setRFMode(ctx context.Context, m Mode, priority hmenum.Command
 	}
 }
 
-func (c *Climate) setSimpleRFMode(ctx context.Context, m Mode, priority hmenum.CommandPriority) error {
-	switch m {
-	case ModeHeat:
-		return c.SetTemperature(ctx, c.Capabilities.MaxTemperature, priority)
-	case ModeOff:
-		return c.SetTemperature(ctx, c.Capabilities.MinTemperature, priority)
-	case ModeAuto, ModeCool:
-		return ErrModeNotSupported
+// setSimpleRFMode mirrors the reference's empty set_mode for the HM-CC-TC
+// family (climate.py BaseCustomDpClimate.set_mode): the regulator channel
+// carries only SETPOINT, so there is no mode to enter and HEAT is a no-op.
+// Every other mode is not advertised by [simpleRfCapabilities] and is
+// rejected rather than translated into a setpoint jump.
+func (c *Climate) setSimpleRFMode(_ context.Context, m Mode, _ hmenum.CommandPriority) error {
+	if m == ModeHeat {
+		return nil
 	}
 	return ErrModeNotSupported
 }
@@ -1628,8 +1643,8 @@ func (c *Climate) setSimpleRFMode(ctx context.Context, m Mode, priority hmenum.C
 //	"BOOST-MODE" AUTO BOOST
 //
 // The OFF mode check (setpoint ≤ 4.5 °C) is intentionally NOT applied
-// here — that guard lives in StatePayload / Mode() and requires the
-// setpoint value, which is a separate generic DP updated independently.
+// here — [Climate.Mode] derives it from the setpoint DP, which is a
+// separate generic DP updated independently.
 func (c *Climate) OnControlMode(wireValue any) {
 	// Accept both the numeric index (int / int32 from the wire) and the
 	// string label (sent as ENUM label by some CCU firmware revisions).
@@ -1708,9 +1723,8 @@ func rfControlModeLabel(idx int) string {
 //	2 = AWAY → ModeAuto, ProfileAway
 //
 // The OFF mode check (setpoint ≤ 4.5 °C) is intentionally NOT applied
-// here — that guard lives in StatePayload / Mode() and requires the
-// setpoint value. The BOOST_MODE path is handled separately via the
-// BOOST_MODE parameter subscription.
+// here — [Climate.Mode] derives it from the setpoint DP. The BOOST_MODE
+// path is handled separately via the BOOST_MODE parameter subscription.
 func (c *Climate) OnSetPointMode(wireValue any) {
 	idx, ok := toInt(wireValue)
 	if !ok {

@@ -639,6 +639,27 @@ func (p *DevicePipeline) IngestFromBackend(
 	if err != nil {
 		return fmt.Errorf("pipeline: ListDevices: %w", err)
 	}
+	// Reconcile the restored description cache against what the CCU
+	// actually reports, before anything reads it: [Ingest] only adds, and
+	// CheckAndCreateDevicesFromCache below walks the cache and re-registers
+	// whatever it finds, so a device unpaired while the daemon was down
+	// would otherwise be resurrected as a ghost and its re-pair at the same
+	// address would never be announced. Taken from the full pull, so a
+	// parked device — which the CCU does report — is not swept here.
+	if p.unit != nil && p.unit.Devices != nil {
+		present := make(map[string]struct{}, len(descs))
+		for i := range descs {
+			present[descs[i].Address] = struct{}{}
+		}
+		if gone := p.unit.Devices.ReconcileAgainstSnapshot(
+			hmtypes.ParseWireInterfaceID(interfaceID), present,
+		); gone > 0 && logger != nil {
+			logger.Info("pipeline.descriptions.reconciled",
+				slog.String("interface", interfaceID),
+				slog.Int("devices", gone),
+				slog.String("detail", "cached devices the CCU no longer reports"))
+		}
+	}
 	descs, held := p.withholdParked(ctx, interfaceID, descs, logger)
 	if err := p.Ingest(ctx, interfaceID, iface, descs); err != nil {
 		return err
@@ -2058,8 +2079,11 @@ func (p *DevicePipeline) hydrateParamset(
 			// customOnly=false → consult both user-provided and
 			// built-in `unIgnoreParametersByDevice` rules
 			// (e.g. HM-Sec-Key ERROR / HmIP-DLD ERROR_JAMMED).
-			parameterIsUnIgnored = p.visibility.Parameter().IsUnIgnoredCustomOnly(
-				ch.Device().Model, ch.Type, key, hmenum.Parameter(name), false,
+			// The query names the channel: an operator pattern scoped to
+			// one channel must not un-ignore the parameter on the model's
+			// other channels.
+			parameterIsUnIgnored = p.visibility.Parameter().IsUnIgnoredOnChannelWithBuiltIns(
+				ch.Device().Model, ch.Number, key, hmenum.Parameter(name),
 			)
 		}
 		dp := resolveDataPointWithUnIgnore(cfg, parameterIsUnIgnored)

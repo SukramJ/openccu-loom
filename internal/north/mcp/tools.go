@@ -372,6 +372,21 @@ func callerHasRole(ctx context.Context, want auth.Role) bool {
 	return ok && id.HasRole(want)
 }
 
+// callerSubject is the actor an audit row records for a write driven
+// through this surface: the identity the mount's resolve chain attached
+// to the request, the same one [callerHasRole] judges. Without it the
+// change-log answers "who changed this?" with an empty cell for every
+// assistant-driven write, which is the one question the log exists for.
+// Empty only when no identity was resolved — a tool set mounted without
+// authentication.
+func callerSubject(ctx context.Context) string {
+	id, ok := auth.IdentityFrom(ctx)
+	if !ok {
+		return ""
+	}
+	return id.Subject
+}
+
 func registerListAudit(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_audit",
@@ -678,6 +693,7 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 		if d.Audit != nil {
 			d.Audit.Record(audit.Entry{
 				Timestamp:     time.Now().UTC(),
+				User:          callerSubject(ctx),
 				Action:        audit.ActionDataPointWrite,
 				DeviceAddress: address,
 				Parameter:     parameter,
@@ -892,6 +908,7 @@ func registerTriggerProgram(s *mcpsdk.Server, d Deps) {
 		if d.Audit != nil {
 			d.Audit.Record(audit.Entry{
 				Timestamp: time.Now().UTC(),
+				User:      callerSubject(ctx),
 				Action:    audit.ActionProgramExecute,
 				Note:      "program=" + programID + " via mcp",
 			})

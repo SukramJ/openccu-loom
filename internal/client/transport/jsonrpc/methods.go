@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -154,104 +153,6 @@ func (c *Client) SuppressServiceMessage(ctx context.Context, iface, channelAddre
 	}, nil)
 }
 
-// SetInstallModeBidCos enters or leaves BidCos pairing mode on the given
-// interface. duration is the pairing window in seconds (0 to exit
-// immediately). mode selects the learning mode (0 = normal, 1 = set, 2 =
-// unset).
-//
-// Wire: Interface.setInstallMode,
-//
-// params: {interface, on, duration, mode}.
-func (c *Client) SetInstallModeBidCos(ctx context.Context, iface string, on bool, duration, mode int) error {
-	return c.Call(ctx, "Interface.setInstallMode", map[string]any{
-		"interface": iface,
-		"on":        on,
-		"duration":  duration,
-		"mode":      mode,
-	}, nil)
-}
-
-// AssignProgramIDs assigns one or more program ISE-IDs to a channel.
-//
-// Wire: Program.assignProgramIDs, params: {id: iseID, channelId: channelID}.
-func (c *Client) AssignProgramIDs(ctx context.Context, iseID, channelID string) error {
-	return c.Call(ctx, "Program.assignProgramIDs", map[string]any{
-		"id":        iseID,
-		"channelId": channelID,
-	}, nil)
-}
-
-// DeleteProgramID removes the CCU program identified by iseID.
-//
-// Wire: Program.deleteProgramID, params: {id: iseID}.
-func (c *Client) DeleteProgramID(ctx context.Context, iseID string) error {
-	return c.Call(ctx, "Program.deleteProgramID", map[string]any{
-		"id": iseID,
-	}, nil)
-}
-
-// ReadProgram reads the script/logic body of the CCU program identified by
-// iseID. The raw JSON result is returned as-is for the caller to decode.
-//
-// Wire: Program.readProgram, params: {id: iseID}.
-func (c *Client) ReadProgram(ctx context.Context, iseID string) (map[string]any, error) {
-	var result map[string]any
-	if err := c.Call(ctx, "Program.readProgram", map[string]any{
-		"id": iseID,
-	}, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// UpdateProgram updates the script/logic body of the CCU program identified
-// by iseID. body contains the program fields to overwrite.
-//
-// Wire: Program.updateProgram, params: body ∪ {id: iseID}.
-func (c *Client) UpdateProgram(ctx context.Context, iseID string, body map[string]any) error {
-	params := make(map[string]any, len(body)+1)
-	maps.Copy(params, body)
-	params["id"] = iseID
-	return c.Call(ctx, "Program.updateProgram", params, nil)
-}
-
-// SetMetadata stores an arbitrary metadata value for the object identified by
-// objectID.
-//
-// Wire: Metadata.setMetadata, params: {objectId, dataId, value}.
-func (c *Client) SetMetadata(ctx context.Context, objectID, dataID string, value any) error {
-	return c.Call(ctx, "Metadata.setMetadata", map[string]any{
-		"objectId": objectID,
-		"dataId":   dataID,
-		"value":    value,
-	}, nil)
-}
-
-// GetMetadata retrieves the metadata value stored under dataID for objectID.
-// The raw value is returned for the caller to type-assert.
-//
-// Wire: Metadata.getMetadata, params: {objectId, dataId}.
-func (c *Client) GetMetadata(ctx context.Context, objectID, dataID string) (any, error) {
-	var result any
-	if err := c.Call(ctx, "Metadata.getMetadata", map[string]any{
-		"objectId": objectID,
-		"dataId":   dataID,
-	}, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// DeleteMetadata removes the metadata entry stored under dataID for objectID.
-//
-// Wire: Metadata.deleteMetadata, params: {objectId, dataId}.
-func (c *Client) DeleteMetadata(ctx context.Context, objectID, dataID string) error {
-	return c.Call(ctx, "Metadata.deleteMetadata", map[string]any{
-		"objectId": objectID,
-		"dataId":   dataID,
-	}, nil)
-}
-
 // InterfaceGetLinks returns the direct-link list for the channel identified
 // by channelAddress on the given interface.
 //
@@ -281,30 +182,6 @@ func (c *Client) ExecuteProgram(ctx context.Context, iseID string) error {
 	return c.Call(ctx, "Program.execute", map[string]any{
 		"id": iseID,
 	}, nil)
-}
-
-// GetAllChannelISEIDsRoom returns a map from room ISE-ID to the list of
-// channel ISE-IDs assigned to that room.
-//
-// Wire: Room.getChannelIDs (no params).
-func (c *Client) GetAllChannelISEIDsRoom(ctx context.Context) (map[string][]string, error) {
-	var result map[string][]string
-	if err := c.Call(ctx, "Room.getChannelIDs", nil, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// GetAllChannelISEIDsFunction returns a map from function (trade-group)
-// ISE-ID to the list of channel ISE-IDs assigned to that function.
-//
-// Wire: Function.getChannelIDs (no params).
-func (c *Client) GetAllChannelISEIDsFunction(ctx context.Context) (map[string][]string, error) {
-	var result map[string][]string
-	if err := c.Call(ctx, "Function.getChannelIDs", nil, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 // RoomEntry is the typed shape returned by [Client.GetAllRoomsRaw].
@@ -348,20 +225,6 @@ func (c *Client) GetAllFunctionsRaw(ctx context.Context) ([]SubsectionEntry, err
 	var result []SubsectionEntry
 	if err := c.Call(ctx, "Subsection.getAll", nil, &result); err != nil {
 		return nil, err
-	}
-	return result, nil
-}
-
-// GetIseIDByAddress resolves a device or channel address to its internal CCU
-// ISE-ID. Returns the ISE-ID as a string.
-//
-// Wire: Device.getIseIDByAddress, params: {address: address}.
-func (c *Client) GetIseIDByAddress(ctx context.Context, address string) (string, error) {
-	var result string
-	if err := c.Call(ctx, "Device.getIseIDByAddress", map[string]any{
-		"address": address,
-	}, &result); err != nil {
-		return "", err
 	}
 	return result, nil
 }
@@ -532,46 +395,6 @@ func (c *Client) SetSystemVariable(ctx context.Context, name string, value any) 
 		// should go through rega.Runner.SetSystemVariable instead.
 		return fmt.Errorf("jsonrpc.SetSystemVariable: unsupported value type %T for sysvar %q: %w", value, name, hmerr.ErrUnsupported)
 	}
-}
-
-// SetProgramState enables or disables the CCU automation program identified
-// by iseID. state=true activates the program; state=false deactivates it.
-//
-// Wire: Program.setActive, params: {id: iseID, active: state}.
-func (c *Client) SetProgramState(ctx context.Context, iseID string, state bool) error {
-	return c.Call(ctx, "Program.setActive", map[string]any{
-		"id":     iseID,
-		"active": state,
-	}, nil)
-}
-
-// AcceptDeviceInInbox accepts a pairing-inbox device into the CCU.
-//
-// Wire: Interface.acceptNewDevice, params: {interface, address}.
-func (c *Client) AcceptDeviceInInbox(ctx context.Context, iface, address string) error {
-	return c.Call(ctx, "Interface.acceptNewDevice", map[string]any{
-		"interface": iface,
-		"address":   address,
-	}, nil)
-}
-
-// AcknowledgeMessage acknowledges an alarm or service message by its CCU
-// message-ID. After acknowledgement the CCU marks the message as read and
-// removes it from the active-alarms list.
-//
-// Wire: Alarm.acknowledge, params: {id: messageID}.
-func (c *Client) AcknowledgeMessage(ctx context.Context, messageID string) error {
-	return c.Call(ctx, "Alarm.acknowledge", map[string]any{
-		"id": messageID,
-	}, nil)
-}
-
-// TriggerFirmwareUpdate triggers a CCU-initiated firmware update for all
-// devices that have a pending update.
-//
-// Wire: Interface.triggerFirmwareUpdate (no params).
-func (c *Client) TriggerFirmwareUpdate(ctx context.Context) error {
-	return c.Call(ctx, "Interface.triggerFirmwareUpdate", nil, nil)
 }
 
 // GetInstallMode returns the current pairing mode for the given interface (0

@@ -288,9 +288,18 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:goco
 	// Resolve the at-rest cipher. When a master key is available the whole
 	// archive is sealed with AES-256-GCM; the DB carries live session tokens,
 	// Matter PSKs, and CCU passwords, so a plaintext archive would leak them.
-	cipher, err := secret.Load(dataDir, nil, nil)
-	if err != nil {
+	// Never mint a key from the CLI: a `backup create` run in a shell
+	// without the daemon's OPENCCU_LOOM_SECRET_KEY used to create a fresh
+	// secret.key and seal the archive under it — a key nobody knew existed
+	// — while the operator preserved the environment value they had
+	// provisioned. Without a provisioned key the archive is written in the
+	// degraded plaintext mode below, which says so loudly.
+	cipher, err := secret.LoadExisting(dataDir, nil)
+	if err != nil && !errors.Is(err, secret.ErrNoKey) {
 		return fmt.Errorf("backup create: load master key: %w", err)
+	}
+	if cipher == nil {
+		cipher = &secret.Cipher{}
 	}
 	encrypted := cipher.Available()
 
@@ -760,9 +769,12 @@ func openBackupBody(f *os.File, dataDir string, stderr io.Writer) (io.Reader, bo
 		return nil, false, fmt.Errorf("backup restore: read header: %w", err)
 	}
 	if n == len(backupMagicV1) && bytes.Equal(magic, backupMagicV1) {
-		cipher, cerr := secret.Load(dataDir, nil, nil)
+		// The archive is sealed under a provisioned key; restoring into an
+		// empty data dir must not mint a new one (it could never open the
+		// archive and would shadow the key the operator meant to supply).
+		cipher, cerr := secret.LoadExisting(dataDir, nil)
 		if cerr != nil {
-			return nil, true, fmt.Errorf("backup restore: load master key: %w", cerr)
+			return nil, true, fmt.Errorf("backup restore: load master key (set %s or place the daemon's secret.key in the data dir): %w", secret.EnvKeyVar, cerr)
 		}
 		if !cipher.Available() {
 			return nil, true, errors.New("backup restore: archive is encrypted but no master key is " +

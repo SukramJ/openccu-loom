@@ -102,7 +102,7 @@ func TestTextDisplayWriteWithSoundAtomicPutParamset(t *testing.T) {
 	if err := d.WriteWithSound(
 		context.Background(),
 		Row{ID: 1, Text: "Alarm"},
-		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_5", Interval: "1S"},
+		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_5", Interval: "1"},
 		hmenum.CommandPriorityHigh,
 	); err != nil {
 		t.Fatal(err)
@@ -117,7 +117,8 @@ func TestTextDisplayWriteWithSoundAtomicPutParamset(t *testing.T) {
 	if got[string(hmenum.ParameterRepetitions)] != "REPETITIONS_5" {
 		t.Errorf("REPETITIONS=%v", got[string(hmenum.ParameterRepetitions)])
 	}
-	if got[string(hmenum.ParameterInterval)] != "1S" {
+	// INTERVAL is an INTEGER on the wire, never a unit label.
+	if got[string(hmenum.ParameterInterval)] != int32(1) {
 		t.Errorf("INTERVAL=%v", got[string(hmenum.ParameterInterval)])
 	}
 }
@@ -646,7 +647,7 @@ func TestTextDisplayServiceWriteWithSound(t *testing.T) {
 		"text":        "Sound",
 		"sound":       "SOUND_SHORT",
 		"repetitions": "REPETITIONS_3",
-		"interval":    "500MS",
+		"interval":    "5",
 	}
 	if err := d.Invoke(context.Background(), "write_with_sound", params, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("write_with_sound service: %v", err)
@@ -732,7 +733,7 @@ func TestWriteAndWriteWithSoundEmitTheSameRowFields(t *testing.T) {
 	if err := New("VCU3756007:3", withSound).WriteWithSound(
 		context.Background(),
 		row(),
-		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_5", Interval: "1S"},
+		SoundOptions{Sound: "SOUND_SHORT", Repetitions: "REPETITIONS_5", Interval: "1"},
 		hmenum.CommandPriorityHigh,
 	); err != nil {
 		t.Fatal(err)

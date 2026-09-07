@@ -66,7 +66,7 @@ type Config struct {
 
 	// ResponseLimit bounds the response body in bytes. Zero selects
 	// [DefaultResponseLimit]. Operators with very large installations whose
-	// bulk fetch (Interface.getAllDeviceData / Device.listAllDetail) exceeds
+	// bulk fetch (Device.listAllDetail / the ReGa bulk-value script) exceeds
 	// the default may raise this.
 	ResponseLimit int64
 }
@@ -74,8 +74,8 @@ type Config struct {
 // DefaultResponseLimit bounds how many bytes we accept from a CCU JSON-RPC
 // response before rejecting it, guarding against an oversized/hostile body
 // exhausting daemon memory. Set far above the xmlrpc transport's 10 MiB
-// because the JSON-RPC-only bulk calls (Interface.getAllDeviceData and
-// Device.listAllDetail) return every current value for every device in one
+// because the bulk calls (Device.listAllDetail and the ReGa bulk-value
+// script behind it) return every current value for every device in one
 // response: on a large installation (thousands of devices) that legitimately
 // runs to tens of MiB, and rejecting it would break the cold-boot value-cache
 // warm-up. 128 MiB comfortably covers any real CCU — which is itself

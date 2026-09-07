@@ -249,45 +249,14 @@ func TestCcuGetServiceMessagesNoJSON(t *testing.T) {
 	}
 }
 
-func TestCcuGetServiceMessagesWithType(t *testing.T) {
+// TestCcuGetServiceMessagesWithoutScriptRunner pins that the service-message
+// read is a ReGa-script operation. The CCU's JSON-RPC method table has no
+// Message.getAll, so without a ScriptRunner there is nothing to fall back to.
+func TestCcuGetServiceMessagesWithoutScriptRunner(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: []any{map[string]any{"msg": "low battery"}}}
-	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	out, err := b.GetServiceMessages(context.Background(), "LOWBAT")
-	if err != nil {
-		t.Fatalf("GetServiceMessages: %v", err)
-	}
-	if len(out) != 1 {
-		t.Fatalf("len=%d, want 1", len(out))
-	}
-	method, args, ok := loadArgs(j)
-	if !ok || method != "Message.getAll" {
-		t.Fatalf("method=%s", method)
-	}
-	params := args[0].(map[string]any)
-	if params["type"] != "LOWBAT" {
-		t.Fatalf("type=%v", params["type"])
-	}
-}
-
-func TestCcuGetServiceMessagesWithoutType(t *testing.T) {
-	t.Parallel()
-	j := &fakeCaller{reply: []any{}}
-	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	out, err := b.GetServiceMessages(context.Background(), "")
-	if err != nil {
-		t.Fatalf("GetServiceMessages empty type: %v", err)
-	}
-	if len(out) != 0 {
-		t.Fatalf("len=%d, want 0", len(out))
-	}
-	method, args, ok := loadArgs(j)
-	if !ok || method != "Message.getAll" {
-		t.Fatalf("method=%s", method)
-	}
-	// Without a type the method is called without params.
-	if len(args) != 0 {
-		t.Fatalf("expected no args, got %v", args)
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	if _, err := b.GetServiceMessages(context.Background(), "LOWBAT"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }
 
@@ -425,8 +394,8 @@ func TestCcuGetAllRoomsDispatch(t *testing.T) {
 	t.Parallel()
 	j := &fakeCaller{reply: []any{
 		map[string]any{
-			"name":     "Wohnzimmer",
-			"channels": []any{"AABBCCDD:1", "AABBCCDD:2"},
+			"name":       "Wohnzimmer",
+			"channelIds": []any{"1234", "1235"},
 		},
 	}}
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
@@ -449,8 +418,8 @@ func TestCcuGetAllRoomsDispatch(t *testing.T) {
 func TestCcuGetAllRoomsSkipsEmptyName(t *testing.T) {
 	t.Parallel()
 	j := &fakeCaller{reply: []any{
-		map[string]any{"name": "", "channels": []any{"ADDR:1"}},
-		map[string]any{"name": "Küche", "channels": []any{"ADDR:2"}},
+		map[string]any{"name": "", "channelIds": []any{"1234"}},
+		map[string]any{"name": "Küche", "channelIds": []any{"1235"}},
 	}}
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
 	rooms, err := b.GetAllRooms(context.Background())
@@ -482,8 +451,8 @@ func TestCcuGetAllFunctionsDispatch(t *testing.T) {
 	t.Parallel()
 	j := &fakeCaller{reply: []any{
 		map[string]any{
-			"name":     "Heizung",
-			"channels": []any{"DDEEFF:1"},
+			"name":       "Heizung",
+			"channelIds": []any{"4711"},
 		},
 	}}
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
@@ -491,7 +460,7 @@ func TestCcuGetAllFunctionsDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllFunctions: %v", err)
 	}
-	if fns["Heizung"][0] != "DDEEFF:1" {
+	if fns["Heizung"][0] != "4711" {
 		t.Fatalf("functions=%v", fns)
 	}
 	method, _, ok := loadArgs(j)
@@ -595,24 +564,14 @@ func TestCcuAcceptDeviceInInboxNoJSON(t *testing.T) {
 	}
 }
 
-func TestCcuAcceptDeviceInInboxDispatch(t *testing.T) {
+// TestCcuAcceptDeviceInInboxWithoutScriptRunner pins that accepting an inbox
+// device is a ReGa-script operation: the CCU's method table carries no
+// Interface.acceptDevice, so there is no JSON-RPC fallback.
+func TestCcuAcceptDeviceInInboxWithoutScriptRunner(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: nil}
-	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	ok2, err := b.AcceptDeviceInInbox(context.Background(), "AABBCCDD")
-	if err != nil {
-		t.Fatalf("AcceptDeviceInInbox: %v", err)
-	}
-	if !ok2 {
-		t.Fatal("ok should be true on success")
-	}
-	method, args, ok := loadArgs(j)
-	if !ok || method != "Interface.acceptDevice" {
-		t.Fatalf("method=%s", method)
-	}
-	params := args[0].(map[string]any)
-	if params["address"] != "AABBCCDD" {
-		t.Fatalf("address=%v", params["address"])
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	if _, err := b.AcceptDeviceInInbox(context.Background(), "AABBCCDD"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }
 
@@ -729,25 +688,14 @@ func TestCcuGetAllDeviceDataNoJSON(t *testing.T) {
 	}
 }
 
-func TestCcuGetAllDeviceDataDispatch(t *testing.T) {
+// TestCcuGetAllDeviceDataWithoutScriptRunner pins that the bulk value read is
+// a ReGa-script operation: the CCU's method table carries no
+// Interface.getAllDeviceData.
+func TestCcuGetAllDeviceDataWithoutScriptRunner(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: map[string]any{
-		"AABBCCDD:1": map[string]any{"STATE": true},
-	}}
-	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	data, err := b.GetAllDeviceData(context.Background())
-	if err != nil {
-		t.Fatalf("GetAllDeviceData: %v", err)
-	}
-	if len(data) != 1 {
-		t.Fatalf("data len=%d, want 1", len(data))
-	}
-	if data["AABBCCDD:1"]["STATE"] != true {
-		t.Fatalf("STATE=%v", data["AABBCCDD:1"]["STATE"])
-	}
-	method, _, ok := loadArgs(j)
-	if !ok || method != "Interface.getAllDeviceData" {
-		t.Fatalf("method=%s", method)
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	if _, err := b.GetAllDeviceData(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }
 
@@ -1113,20 +1061,14 @@ func TestCcuTriggerFirmwareUpdateNoJSON(t *testing.T) {
 	}
 }
 
-func TestCcuTriggerFirmwareUpdateDispatch(t *testing.T) {
+// TestCcuTriggerFirmwareUpdateWithoutScriptRunner pins that the firmware
+// trigger is a ReGa-script operation: the CCU's method table carries no
+// System.runFirmwareUpdate.
+func TestCcuTriggerFirmwareUpdateWithoutScriptRunner(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{reply: nil}
-	b := NewCcuBackend(&fakeCaller{}, j, nil)
-	ok2, err := b.TriggerFirmwareUpdate(context.Background())
-	if err != nil {
-		t.Fatalf("TriggerFirmwareUpdate: %v", err)
-	}
-	if !ok2 {
-		t.Fatal("ok should be true on success")
-	}
-	method, _, ok := loadArgs(j)
-	if !ok || method != "System.runFirmwareUpdate" {
-		t.Fatalf("method=%s", method)
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	if _, err := b.TriggerFirmwareUpdate(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }
 
@@ -1608,7 +1550,7 @@ func TestCcuHasProgramIDsFound(t *testing.T) {
 		t.Fatal("expected found=true for non-nil reply")
 	}
 	method, args, ok := loadArgs(j)
-	if !ok || method != "Program.getByID" {
+	if !ok || method != "Program.get" {
 		t.Fatalf("method=%s", method)
 	}
 	params := args[0].(map[string]any)

@@ -606,7 +606,7 @@ const newDevicesIngestTimeout = 2 * time.Minute
 // persistence sinks keep in SQLite: the next boot rehydrated them and
 // materialised a device the CCU no longer reports, complete with its creation
 // event.
-func (h *CallbackHandlers) DeleteDevices(_ context.Context, interfaceID string, addresses []string) error {
+func (h *CallbackHandlers) DeleteDevices(ctx context.Context, interfaceID string, addresses []string) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.delete_devices",
 		slog.String("interface", interfaceID),
@@ -615,7 +615,7 @@ func (h *CallbackHandlers) DeleteDevices(_ context.Context, interfaceID string, 
 		return nil
 	}
 	for _, addr := range addresses {
-		h.dropDevice(hmtypes.ParseWireInterfaceID(interfaceID), addr)
+		h.dropDevice(ctx, hmtypes.ParseWireInterfaceID(interfaceID), addr)
 	}
 	return nil
 }
@@ -626,7 +626,7 @@ func (h *CallbackHandlers) DeleteDevices(_ context.Context, interfaceID string, 
 // The device's own stamped interface id wins over the callback's when the
 // device is known: the registries are keyed by the canonical `<central>-<iface>`
 // wire id the ingest stamped, and a mismatch there deletes nothing.
-func (h *CallbackHandlers) dropDevice(iface hmtypes.WireInterfaceID, address string) {
+func (h *CallbackHandlers) dropDevice(ctx context.Context, iface hmtypes.WireInterfaceID, address string) {
 	// Snapshot the channels before RemoveDevice tears them down — the
 	// description and paramset registries carry one entry per CHANNEL, not one
 	// per device, so the device address alone matches only the root entry.
@@ -644,6 +644,14 @@ func (h *CallbackHandlers) dropDevice(iface hmtypes.WireInterfaceID, address str
 	for _, ch := range channels {
 		h.unit.DescRegistry.Delete(iface, ch.Address)
 		h.unit.ParamsetReg.DeleteChannel(iface, ch.Address)
+	}
+	// The deferred-creation queue mirrors the same device and is not part
+	// of the model, so clearing the registries alone left a parked device
+	// on the inbox surface after the CCU had already deleted it. Only the
+	// boot pull sweeps those rows, so a running daemon never recovered.
+	if h.unit.Devices != nil && h.unit.Devices.DropPending(ctx, iface, address) {
+		PublishPendingDevices(h.unit)
+		PublishAwaitingRelease(h.unit)
 	}
 }
 

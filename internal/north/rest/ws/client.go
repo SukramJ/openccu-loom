@@ -949,7 +949,7 @@ func (c *client) handleCommand(msg inboundMessage) {
 		if id := c.Identity(); id.Subject != "" {
 			base = auth.ContextWithIdentity(base, id)
 		}
-		ctx, cancel := context.WithTimeout(base, commandTimeout)
+		ctx, cancel := context.WithTimeout(base, commandBudget(msg.Command))
 		defer cancel()
 		result := c.hub.router.Dispatch(ctx, msg.Command, msg.Args)
 		if result.Error != nil {
@@ -970,5 +970,37 @@ func (c *client) handleCommand(msg inboundMessage) {
 // rough ceiling Home Assistant applies (10 s) — most CCU operations
 // finish in <1 s; anything slower likely warrants async progress
 // reporting via a separate event topic instead of blocking the
-// connection.
+// connection. The commands in [commandBudgets] are the exceptions
+// whose duration is set by the CCU, not by the daemon.
 const commandTimeout = 10 * time.Second
+
+// commandBudgets names the commands whose budget must exceed
+// [commandTimeout], mirroring the REST twins the router-wide deadline
+// exempts or sizes for them.
+//
+//   - device.test blocks on the CCU's own communication-test poll window
+//     (30 s by default); cut at 10 s, the documented `timed_out` result
+//     is unreachable and every device that answers late — or not at all,
+//     the case the test exists to detect — yields internal_error instead.
+//     The budget leaves the handler its margin to turn the elapsed window
+//     into that result (see deviceTestHandler).
+//   - devices.export_definition issues one getParamsetDescription per
+//     (channel, paramset), serialised, so a device with dozens of
+//     channels needs far more than the default budget; the REST route is
+//     exempt from the router deadline for the same reason (router.go,
+//     unboundedSuffixes). Cutting it mid-way leaves the caller with a
+//     silently truncated archive and the CCU with the radio cost already
+//     paid. The socket keeps a ceiling rather than going unbounded
+//     because the command context is detached from the connection.
+var commandBudgets = map[string]time.Duration{
+	"device.test":               45 * time.Second,
+	"devices.export_definition": 10 * time.Minute,
+}
+
+// commandBudget reports how long the dispatcher lets command run.
+func commandBudget(command string) time.Duration {
+	if d, ok := commandBudgets[command]; ok {
+		return d
+	}
+	return commandTimeout
+}

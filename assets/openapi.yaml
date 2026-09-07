@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 11.0.0
+  version: 11.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -541,6 +541,13 @@ paths:
         The CCU does not return per-parameter status on success; the
         202 response carries no body. On failure the daemon surfaces
         the upstream error as 502 problem+json with `code: upstream_unavailable`.
+
+        `LINK` is accepted in the path only for reads. A write keyed with
+        the literal `LINK` is refused with 400 `validation_error`: a LINK
+        paramset exists once per peer and is addressed by the peer's
+        channel address (`PUT /devices/{addr}/paramsets/link/{peer}`);
+        passing the literal to the CCU would commit a configuration
+        write for a non-existent peer over the air.
 
         Headers:
           - `Idempotency-Key` (optional): client-supplied UUID. The
@@ -1254,6 +1261,13 @@ paths:
         - openIdConnect: [operator]
       responses:
         "202": { description: Scheduled }
+        "400":
+          description: >-
+            No hub could be resolved for the mutation — on a multi-CCU
+            daemon the target central must be named.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -1400,6 +1414,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InstallModeSearchResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -2321,8 +2336,10 @@ paths:
         - { in: query, name: code, required: true, schema: { type: string } }
         - { in: query, name: state, required: true, schema: { type: string } }
       responses:
-        "302":
-          description: Redirect to / on success
+        "303":
+          description: >-
+            Redirect to the SPA — to / on success, to the login route with
+            an `error` query parameter when the exchange fails.
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2947,6 +2964,18 @@ paths:
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: no, required: true, schema: { type: integer, minimum: 0 } }
+        - name: X-Edit-Token
+          in: header
+          required: false
+          schema: { type: string }
+          description: >-
+            Edit-lock token for a MASTER or LINK snapshot. Importing one is a
+            configuration write and passes the same per-resource edit lock as
+            PUT /devices/{addr}/paramsets/{key}: open an edit session (`POST
+            /sessions/edit` with key `channel:{addr}:{no}:{paramset_key}`) and
+            present the returned token here, else the import is rejected 423
+            Locked before any CCU call. A VALUES snapshot is ungated and
+            ignores this header.
       requestBody:
         required: true
         content:
@@ -2957,6 +2986,8 @@ paths:
           description: Import applied successfully
         "400":
           $ref: "#/components/responses/BadRequest"
+        "423":
+          $ref: "#/components/responses/Locked"
         "500":
           description: Apply failed (CCU write error)
           content:
@@ -6839,6 +6870,11 @@ paths:
             schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
       responses:
         "204": { description: Acknowledged }
+        "409":
+          description: The zone has no finished incident to acknowledge.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -7396,7 +7432,9 @@ paths:
             schema: { $ref: "#/components/schemas/AlarmOutputTestRequest" }
       responses:
         "204": { description: Test fired }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "409":
           description: Refused — smoke-detector sounders cannot be live-tested via this endpoint.
           content:

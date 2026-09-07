@@ -76,7 +76,7 @@ func TestPutParamsetDispatchesOnChannelAddressGrammar(t *testing.T) {
 				context.Background(), b,
 				"ABC0123456:2", tc.second,
 				map[string]any{"K": "V"},
-				hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset, false,
+				hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset,
 			); err != nil {
 				t.Fatalf("PutParamset: %v", err)
 			}

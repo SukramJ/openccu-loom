@@ -591,11 +591,22 @@ type StateChangeArgs struct {
 // to short-circuit out-of-bounds writes.
 //
 // Mirrors the Python `is_state_change(**kwargs)` overrides on
-// `CustomDpCover` (cover.py:181-189). The base Cover only consults the
-// position-axis (Open / Close / Position); Blind and Garage extend the
-// override with their own axes (TiltOpen / TiltClose / TiltPosition for
-// Blind, Vent for Garage).
+// `CustomDpCover` (cover.py CustomDpCover.is_state_change). The base
+// Cover only consults the position-axis (Open / Close / Position);
+// Blind and Garage extend the override with their own axes (TiltOpen /
+// TiltClose / TiltPosition for Blind, Vent for Garage).
 func (c *Cover) IsStateChangeArgs(args StateChangeArgs) bool {
+	// While the cover moves, the last confirmed level is not where the
+	// cover actually is: classic actuators re-report the old level when
+	// they start working and only report the new one once the movement
+	// has finished. Comparing against it would drop a command that
+	// reverses the movement back to the position the cover came from —
+	// DIRECTION is the only signal left at that point, because the echo
+	// has already cleared the optimistic value. Checked ahead of every
+	// axis, as in the reference.
+	if c.IsOpening() || c.IsClosing() {
+		return true
+	}
 	// Only consult the position axis when at least one
 	// position-axis kwarg was passed. A pure tilt-axis call
 	// (TiltPosition / TiltOpen / TiltClose) must not be forced

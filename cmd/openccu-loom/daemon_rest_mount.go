@@ -534,7 +534,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		WiringManifest:        d.reg.Manifest(),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
-		CSRFSecure:            cfg.North.REST.CSRFSecure,
+		CSRFSecure:            cookiesSecure(cfg),
 	}
 	// Fail fast if the composition root ever stops wiring the auth chain:
 	// the router's role shims fall through to an open pass-through when

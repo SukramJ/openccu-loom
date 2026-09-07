@@ -296,8 +296,10 @@ func (m *Manager) stopAndVerify(ctx context.Context, inst *instance, incidentID 
 // boolean is false for classes without a device stop path.
 func (m *Manager) stopperFor(inst *instance) (stopper, bool) {
 	switch inst.row.Class {
-	case hmenum.AlarmOutputClassAcousticSiren, hmenum.AlarmOutputClassOpticalSiren, hmenum.AlarmOutputClassChirp:
+	case hmenum.AlarmOutputClassAcousticSiren, hmenum.AlarmOutputClassOpticalSiren:
 		return m.sirenStopper(inst, inst.row.Class == hmenum.AlarmOutputClassAcousticSiren), true
+	case hmenum.AlarmOutputClassChirp:
+		return m.chirpStopper(inst), true
 	case hmenum.AlarmOutputClassSwitchedSiren, hmenum.AlarmOutputClassAlarmLight:
 		return m.actuatorStopper(inst), true
 	case hmenum.AlarmOutputClassSmokeSounder:

@@ -5,7 +5,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -215,11 +214,14 @@ func ListGroupTypes(svc GroupsWriter) http.HandlerFunc {
 
 // --- helpers ----------------------------------------------------------------
 
+// decodeGroupBody parses the request body through [DecodeJSON], so the
+// shared 1 MiB ceiling applies here too: the OpenAPI request validator
+// caps bodies as well, but it is absent whenever `openapi_validate` is
+// off or the spec file cannot be resolved, and an unbounded decode is
+// then a heap the caller chooses.
 func decodeGroupBody(w http.ResponseWriter, r *http.Request, dst any) bool {
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		problem.Write(w, http.StatusBadRequest,
+	if err := DecodeJSON(r, dst); err != nil {
+		problem.Write(w, DecodeJSONStatus(err),
 			problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
 		return false
 	}

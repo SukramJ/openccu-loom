@@ -239,6 +239,29 @@ func (a *DataPointWriterAdapter) SetValue(
 	if dev == nil {
 		return fmt.Errorf("adapter: device %s not found", deviceAddr)
 	}
+	// A modelled channel is written through [device.Channel.Set], the gate
+	// REST, WS and the MQTT sink all pass: the operator channel lock
+	// (ErrChannelOperationLocked), validation against the parameter
+	// descriptor and writability. This adapter is what MCP set_datapoint
+	// and the inbound webhook write through; going straight to the
+	// backend let an assistant actuate a locked channel and send a value
+	// to a read-only parameter. A channel the model does not carry keeps
+	// the raw path — there is nothing to validate against.
+	if ch := dev.Channel(channelAddress); ch != nil && ch.Writer() != nil && ch.Parameter(parameter) != nil {
+		pv, ok := value.(hmtypes.ParamValue)
+		if !ok {
+			var err error
+			if pv, err = hmtypes.NewParamValue(value); err != nil {
+				return fmt.Errorf("adapter: %s: %w", parameter, err)
+			}
+		}
+		return ch.Set(ctx, hmenum.ParamsetKeyValues, parameter, pv, device.SetOptions{
+			Validate:   true,
+			Optimistic: true,
+			Priority:   priority,
+			Source:     "adapter:DataPointWriterAdapter",
+		})
+	}
 	return a.writer.SetValue(ctx, centralName, dev.InterfaceID, channelAddress, parameter, value, priority)
 }
 

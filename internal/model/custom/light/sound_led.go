@@ -10,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -195,7 +196,7 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 // LEVEL only, which leaves COLOR at BLACK — the LED stays dark — and lets
 // a previously commanded flash pattern (ON_TIME_LIST_1 / REPETITIONS)
 // survive a turn-off. [SoundPlayerLED.TurnOn] / [SoundPlayerLED.TurnOff]
-// bundle COLOR, ON_TIME_LIST_1, REPETITIONS and ON_TIME into one
+// bundle COLOR, ON_TIME_LIST_1, REPETITIONS and the DURATION timer into one
 // put_paramset instead.
 //
 // OverrideService rather than RegisterService: the whole embedded chain
@@ -307,9 +308,12 @@ func (l *SoundPlayerLED) AvailableRepetitions() []string {
 	return append([]string(nil), l.availableRepetitions...)
 }
 
-// TurnOff stops the LED. The CCU expects COLOR=BLACK + ON_TIME=0 in a single
-// put_paramset so the ON_TIME timer that may still be running is cleared
-// atomically with the colour change.
+// TurnOff stops the LED. The CCU expects COLOR=BLACK plus a zero on-time
+// in a single put_paramset so the timer that may still be running is
+// cleared atomically with the colour change. The HmIP-MP3P LED channel
+// describes its on-time as DURATION_VALUE/DURATION_UNIT (it carries no
+// ON_TIME), mirroring CustomDpSoundPlayerLed's CombinedTimerField in
+// light.py.
 func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr string, priority hmenum.CommandPriority) error {
 	if w == nil {
 		return errors.New("soundplayer-led: writer required")
@@ -320,10 +324,34 @@ func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr stri
 	// Anything staged on the collector only reaches the wire in the
 	// flush, so its error is part of this command's result.
 	return generic.FlushCollector(ctx, coll,
-		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, map[hmenum.Parameter]any{
-			hmenum.ParameterColor:  fixedColorNames[FixedColorBlack],
-			hmenum.ParameterOnTime: 0.0,
-		}, priority))
+		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, withSoundLEDOnTime(map[hmenum.Parameter]any{
+			hmenum.ParameterLevel: 0.0,
+			hmenum.ParameterColor: fixedColorNames[FixedColorBlack],
+		}, 0), priority))
+}
+
+// withSoundLEDTimers stages the LED channel's two timers into params in
+// the value/unit shape the HmIP-MP3P declares: DURATION_VALUE/DURATION_UNIT
+// for the on-time and RAMP_TIME_VALUE/RAMP_TIME_UNIT for the ramp
+// (CustomDpSoundPlayerLed in light.py binds the same four fields). Both
+// are always sent, even at 0 — a zero resets a timer still running on
+// the device, while a missing key leaves it active.
+func withSoundLEDTimers(params map[hmenum.Parameter]any, onTimeSecs, rampTimeSecs float64) map[hmenum.Parameter]any {
+	rampValue, rampUnit := custom.EncodeTimerDuration(time.Duration(rampTimeSecs * float64(time.Second)))
+	params[hmenum.ParameterRampTimeValue] = rampValue
+	params[hmenum.ParameterRampTimeUnit] = rampUnit
+	return withSoundLEDOnTime(params, onTimeSecs)
+}
+
+// withSoundLEDOnTime stages only the on-time pair. TurnOff sends it with
+// LEVEL=0 and COLOR=BLACK and nothing else — the shape the reference's
+// turn_off (light.py CustomDpSoundPlayerLed) puts on the wire; a ramp on
+// the way off is not part of it.
+func withSoundLEDOnTime(params map[hmenum.Parameter]any, onTimeSecs float64) map[hmenum.Parameter]any {
+	onValue, onUnit := custom.EncodeTimerDuration(time.Duration(onTimeSecs * float64(time.Second)))
+	params[hmenum.ParameterDurationValue] = onValue
+	params[hmenum.ParameterDurationUnit] = onUnit
+	return params
 }
 
 // TurnOn turns on the LED with optional colour, brightness, flash
@@ -389,17 +417,12 @@ func (l *SoundPlayerLED) TurnOn(ctx context.Context, cfg LedOnConfig, w custom.W
 	}
 
 	colorLabel := fixedColorNames[color]
-	// RAMP_TIME and ON_TIME are always sent, even when 0. Sending 0 resets any
-	// previously active timer on the device — skipping the fields leaves the old
-	// timer running.
-	params := map[hmenum.Parameter]any{
+	params := withSoundLEDTimers(map[hmenum.Parameter]any{
 		hmenum.ParameterLevel:       brightness,
 		hmenum.ParameterColor:       colorLabel,
 		hmenum.ParameterOnTimeList1: flashValue,
 		hmenum.ParameterRepetitions: repValue,
-		hmenum.ParameterRampTime:    cfg.RampTime,
-		hmenum.ParameterOnTime:      onTime,
-	}
+	}, onTime, cfg.RampTime)
 
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)

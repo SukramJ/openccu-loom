@@ -220,7 +220,7 @@ func TestImportChannelConfig_HappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(svc).ServeHTTP(w, req)
+	ImportChannelConfig(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -243,7 +243,7 @@ func TestImportChannelConfig_ServiceNil_Returns503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(validExportPayload("0001ABCD:1")))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(nil).ServeHTTP(w, req)
+	ImportChannelConfig(nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
@@ -259,7 +259,7 @@ func TestImportChannelConfig_InvalidJSON_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not json at all"))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(svc).ServeHTTP(w, req)
+	ImportChannelConfig(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -286,7 +286,7 @@ func TestImportChannelConfig_VersionMismatch_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(payload))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(svc).ServeHTTP(w, req)
+	ImportChannelConfig(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 (version mismatch), got %d body=%s", w.Code, w.Body.String())
@@ -304,7 +304,7 @@ func TestImportChannelConfig_ChannelMismatch_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "2"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(svc).ServeHTTP(w, req)
+	ImportChannelConfig(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
@@ -320,7 +320,7 @@ func TestImportChannelConfig_WriteError_Returns500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(validExportPayload("0001ABCD:1")))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(svc).ServeHTTP(w, req)
+	ImportChannelConfig(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
@@ -341,7 +341,7 @@ func TestImportChannelConfig_OversizedBody_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(svc).ServeHTTP(w, req)
+	ImportChannelConfig(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for oversized body, got %d body=%s", w.Code, w.Body.String())
@@ -372,7 +372,7 @@ func TestImportChannelConfig_MultiCCUScope(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "BEEF1234", "no": "1"}))
 	w := httptest.NewRecorder()
-	ImportChannelConfig(svc).ServeHTTP(w, req)
+	ImportChannelConfig(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -382,5 +382,51 @@ func TestImportChannelConfig_MultiCCUScope(t *testing.T) {
 	}
 	if svc.capturedChannel != "BEEF1234:1" {
 		t.Errorf("writer channel=%q want BEEF1234:1", svc.capturedChannel)
+	}
+}
+
+// TestImportChannelConfig_MASTERRequiresTheEditLock pins that the import
+// route lands a MASTER paramset on the CCU only through the same strict
+// edit-lock gate PUT /devices/{addr}/paramsets/MASTER enforces: without
+// the X-Edit-Token that holds `channel:{addr}:{no}:MASTER` the request is
+// refused 423 Locked before any CCU write, so an imported snapshot cannot
+// clobber a human editor's open session. With the holding token the
+// import proceeds.
+func TestImportChannelConfig_MASTERRequiresTheEditLock(t *testing.T) {
+	t.Parallel()
+
+	locks := NewEditSessions()
+	lock, ok := locks.Open("channel:0001ABCD:1:MASTER", "alice")
+	if !ok {
+		t.Fatal("open edit session")
+	}
+	svc := &stubConfigExportService{}
+	payload := validExportPayload("0001ABCD:1")
+
+	post := func(token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
+		if token != "" {
+			req.Header.Set(EditTokenHeader, token)
+		}
+		req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
+		w := httptest.NewRecorder()
+		ImportChannelConfig(svc, locks).ServeHTTP(w, req)
+		return w
+	}
+
+	if w := post(""); w.Code != http.StatusLocked {
+		t.Fatalf("MASTER import without %s: expected 423, got %d body=%s", EditTokenHeader, w.Code, w.Body.String())
+	}
+	if w := post("foreign-token"); w.Code != http.StatusLocked {
+		t.Fatalf("MASTER import with a foreign token: expected 423, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.capturedChannel != "" {
+		t.Fatalf("locked import must not reach the writer; wrote channel %q", svc.capturedChannel)
+	}
+	if w := post(lock.Token); w.Code != http.StatusOK {
+		t.Fatalf("MASTER import with the holding token: expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.capturedChannel != "0001ABCD:1" {
+		t.Fatalf("writer channel=%q want 0001ABCD:1", svc.capturedChannel)
 	}
 }

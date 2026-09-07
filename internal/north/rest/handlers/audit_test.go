@@ -634,3 +634,58 @@ func TestListAudit_EveryEntryCarriesAUniqueID(t *testing.T) {
 		})
 	}
 }
+
+// TestListAudit_CSV_NeutralisesFormulaCells pins the spreadsheet-safety
+// of the CSV export: a cell whose first character is one of `=`, `+`,
+// `-`, `@` (or a tab / carriage return) is what Excel and LibreOffice
+// evaluate as a formula on open. Notes carry operator-supplied text — a
+// link name reaches the audit note verbatim — so every string cell is
+// prefixed with a single quote when it starts with such a character, per
+// the OWASP CSV-injection guidance. Cells that do not start with one stay
+// untouched.
+func TestListAudit_CSV_NeutralisesFormulaCells(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditService{
+		entries: []audit.Entry{
+			{
+				Action:        audit.ActionParamsetWrite,
+				DeviceAddress: "DEV001",
+				User:          "@alice",
+				Note:          `=HYPERLINK("http://evil.example","click")`,
+				Parameter:     "+LEVEL",
+				Peer:          "-PEER",
+				Timestamp:     time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit?format=csv", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, nil).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	records, err := csv.NewReader(w.Body).ReadAll()
+	if err != nil {
+		t.Fatalf("csv parse: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("expected header + 1 data row, got %d rows", len(records))
+	}
+	col := map[string]int{}
+	for i, h := range records[0] {
+		col[h] = i
+	}
+	row := records[1]
+	for name, want := range map[string]string{
+		"user":           "'@alice",
+		"note":           `'=HYPERLINK("http://evil.example","click")`,
+		"parameter":      "'+LEVEL",
+		"peer":           "'-PEER",
+		"device_address": "DEV001",
+	} {
+		if got := row[col[name]]; got != want {
+			t.Errorf("column %s = %q, want %q", name, got, want)
+		}
+	}
+}

@@ -464,14 +464,23 @@ func (b *CcuBackend) GetAllPrograms(ctx context.Context) ([]map[string]any, erro
 	return toSliceOfMaps(raw, "GetAllPrograms")
 }
 
-// SetProgramState implements Operations via JSON-RPC.
+// SetProgramState implements Operations via the ReGa script engine.
+//
+// The CCU's JSON-RPC method table exposes no program enable/disable call
+// (only Program.getAll / get / execute / deleteProgramByName), so the
+// set_program_state script is the only route. Returns ErrUnsupported when no
+// ScriptRunner has been wired in.
 func (b *CcuBackend) SetProgramState(ctx context.Context, iseID string, state bool) error {
-	if b.json == nil {
+	if b.rega == nil {
 		return ErrUnsupported
 	}
-	_, err := b.json.Call(ctx, "Program.setActive", map[string]any{
-		"id":     iseID,
-		"active": state,
+	value := "0"
+	if state {
+		value = "1"
+	}
+	_, err := b.rega.Run(ctx, hmenum.RegaScriptSetProgramState, map[string]string{
+		"id":    iseID,
+		"state": value,
 	})
 	return err
 }
@@ -671,20 +680,32 @@ func (b *CcuBackend) DetermineParameter(ctx context.Context, channelAddress, par
 	return b.xml.Call(ctx, "determineParameter", channelAddress, parameter)
 }
 
-// --- message acknowledgement (JSON-RPC fallback) ----------------------------
+// --- message acknowledgement (ReGa script) ---------------------------------
 
 // AcknowledgeMessage acknowledges a CCU service or alarm message
 // identified by messageID (the ReGa ISE-ID). Implements the optional
-// [client.MessageAcknowledger] interface so [InterfaceClient] can fall
-// back to the JSON-RPC layer when no ReGa runner is wired.
+// [client.MessageAcknowledger] interface so [InterfaceClient] can fall back
+// to this backend when no ReGa runner is wired on the client itself.
+//
+// The CCU's JSON-RPC method table carries no acknowledge call, so this runs
+// the acknowledge_message script — the same one rega.Runner uses. Returns
+// ErrUnsupported when no ScriptRunner has been wired in.
 func (b *CcuBackend) AcknowledgeMessage(ctx context.Context, messageID string) (bool, error) {
-	if b.json == nil {
+	if b.rega == nil {
 		return false, ErrUnsupported
 	}
-	_, err := b.json.Call(ctx, "Message.acknowledge", map[string]any{
-		"id": messageID,
-	})
-	return err == nil, err
+	var resp struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error"`
+	}
+	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptAcknowledgeMessage,
+		map[string]string{"message_id": messageID}, &resp); err != nil {
+		return false, err
+	}
+	if !resp.Success && resp.Error != "" {
+		return false, fmt.Errorf("ccu.AcknowledgeMessage(%s): %s", messageID, resp.Error)
+	}
+	return resp.Success, nil
 }
 
 // --- device metadata --------------------------------------------------------

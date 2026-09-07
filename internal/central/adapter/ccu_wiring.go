@@ -1335,6 +1335,23 @@ func wireInterface(
 				// "CanReconnect returned false".
 				ensureConnectedClientState(ic, logger)
 			}
+		} else {
+			// No callback endpoint to announce (callback host not
+			// resolvable at this instant, or no callback server): the
+			// interface still serves every read and write, it only gets no
+			// push events. The client state has to say so — left in
+			// CREATED, hasConnectionIssue() reported an outage for the
+			// daemon's life: every gated hub job (programs, sysvars, inbox,
+			// service messages, firmware, metrics) returned without
+			// running, the central was evaluated DEGRADED/FAILED and
+			// check_connection published ConnectionLost every 30 s — the
+			// opposite of the "still works, just without push events" this
+			// path promises.
+			logger.Warn("wire.init.skipped_no_callback",
+				slog.String("central", cc.Name),
+				slog.String("interface", wireID),
+				slog.String("effect", "read-through mode: no push events until the callback endpoint can be announced"))
+			ensureConnectedClientState(ic, logger)
 		}
 		return nil
 	}

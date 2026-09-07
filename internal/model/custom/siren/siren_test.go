@@ -567,9 +567,12 @@ func TestSirenRegisterServiceTurnOff(t *testing.T) {
 	if err := r.siren.Invoke(context.Background(), "turn_off", nil, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("turn_off service: %v", err)
 	}
-	active, _ := r.siren.IsActive()
-	if active {
-		t.Error("IsActive must be false after turn_off service call")
+	if active, _ := r.siren.IsActive(); !active {
+		t.Error("IsActive must still be true after turn_off until the device reports")
+	}
+	r.acousticActiveDP.OnEvent(false)
+	if active, _ := r.siren.IsActive(); active {
+		t.Error("IsActive must be false once the device reported the alarm inactive")
 	}
 }
 
@@ -1448,9 +1451,15 @@ func TestSirenStopForwardsStopCommand(t *testing.T) {
 	if _, ok := w.has(hmenum.ParameterOpticalAlarmSelection); !ok {
 		t.Errorf("optical stop: OPTICAL_ALARM_SELECTION must be written by TurnOff")
 	}
-	active, _ := r.siren.IsActive()
-	if active {
-		t.Error("IsActive must be false after TurnOff")
+	// TurnOff stamps nothing optimistically: the device's own report is
+	// the only source, which is what the stop-verify reads.
+	if active, _ := r.siren.IsActive(); !active {
+		t.Error("IsActive must still be true after TurnOff until the device reports")
+	}
+	r.acousticActiveDP.OnEvent(false)
+	r.opticalActiveDP.OnEvent(false)
+	if active, _ := r.siren.IsActive(); active {
+		t.Error("IsActive must be false once the device reported both alarms inactive")
 	}
 }
 

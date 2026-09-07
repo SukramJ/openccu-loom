@@ -136,20 +136,20 @@ func TestLightSetLevelPayloadIsSingleSourced(t *testing.T) {
 			name:       "LED state ON",
 			led:        true,
 			params:     map[string]any{"state": "ON"},
-			wantParams: []string{"COLOR", "LEVEL", "ON_TIME", "ON_TIME_LIST_1", "RAMP_TIME", "REPETITIONS"},
+			wantParams: []string{"COLOR", "DURATION_UNIT", "DURATION_VALUE", "LEVEL", "ON_TIME_LIST_1", "RAMP_TIME_UNIT", "RAMP_TIME_VALUE", "REPETITIONS"},
 		},
 		{
 			name:       "LED state OFF",
 			led:        true,
 			seedLevel:  0.8,
 			params:     map[string]any{"state": "OFF"},
-			wantParams: []string{"COLOR", "ON_TIME"},
+			wantParams: []string{"COLOR", "DURATION_UNIT", "DURATION_VALUE", "LEVEL"},
 		},
 		{
 			name:       "LED state ON with colour",
 			led:        true,
 			params:     map[string]any{"state": "ON", "color": map[string]any{"h": 120.0, "s": 80.0}},
-			wantParams: []string{"COLOR", "LEVEL", "ON_TIME", "ON_TIME_LIST_1", "RAMP_TIME", "REPETITIONS"},
+			wantParams: []string{"COLOR", "DURATION_UNIT", "DURATION_VALUE", "LEVEL", "ON_TIME_LIST_1", "RAMP_TIME_UNIT", "RAMP_TIME_VALUE", "REPETITIONS"},
 		},
 	}
 

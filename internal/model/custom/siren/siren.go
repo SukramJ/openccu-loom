@@ -401,15 +401,22 @@ func (s *Siren) TurnOn(ctx context.Context, cfg OnConfig, priority hmenum.Comman
 	if err := custom.PutOrSet(ctx, s.writer, s.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 		return fmt.Errorf("siren: TurnOn: %w", err)
 	}
+	// Only the commanded selection is recorded locally — that parameter is
+	// write-only (OPERATIONS=2), so the recorded label is the sole source
+	// for the next selection-less TurnOn. ACOUSTIC/OPTICAL_ALARM_ACTIVE are
+	// device-reported sensors and are deliberately NOT stamped here: a
+	// selection-less TurnOn on a never-commanded siren resolves to the
+	// declared DISABLE_* default, so the device stays silent and sends no
+	// event, and a local stamp would report a silent siren as on until the
+	// next command. The reference derives is_on from those sensors alone
+	// (siren.py CustomDpIpSiren.is_on / turn_on).
 	if s.Capabilities.SupportsAcoustic {
 		if sel, ok := params[hmenum.ParameterAcousticAlarmSelection].(string); ok {
-			writeBool(s.acousticActive, true)
 			recordSelection(s.acousticIdx, sel)
 		}
 	}
 	if s.Capabilities.SupportsOptical {
 		if sel, ok := params[hmenum.ParameterOpticalAlarmSelection].(string); ok {
-			writeBool(s.opticalActive, true)
 			recordSelection(s.opticalIdx, sel)
 		}
 	}
@@ -452,12 +459,15 @@ func (s *Siren) TurnOff(ctx context.Context, priority hmenum.CommandPriority) (e
 	if err := custom.PutOrSet(ctx, s.writer, s.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 		return fmt.Errorf("siren: TurnOff: %w", err)
 	}
+	// The ACOUSTIC/OPTICAL_ALARM_ACTIVE sensors are the device's report,
+	// never stamped here: a siren that fails to silence would otherwise
+	// read as off while it keeps sounding — the one state the alarm
+	// engine's stop-verify exists to catch. The reference never writes
+	// them either (siren.py turn_off sends the paramset and nothing else).
 	if s.Capabilities.SupportsAcoustic {
-		writeBool(s.acousticActive, false)
 		recordSelection(s.acousticIdx, sirenSelectionDefaultString(s.acousticIdx))
 	}
 	if s.Capabilities.SupportsOptical {
-		writeBool(s.opticalActive, false)
 		recordSelection(s.opticalIdx, sirenSelectionDefaultString(s.opticalIdx))
 	}
 	return nil
@@ -487,13 +497,6 @@ func readBool(dp *generic.BinarySensor) (value, observed bool) {
 		return false, false
 	}
 	return dp.Value()
-}
-
-func writeBool(dp *generic.BinarySensor, v bool) {
-	if dp == nil {
-		return
-	}
-	dp.OnEvent(v)
 }
 
 func readSelection(dp *generic.ActionSelect) (string, bool) {

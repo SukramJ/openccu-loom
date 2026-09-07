@@ -11,7 +11,9 @@
           "address": "MP3P0001:6",
           "put_values": {
             "COLOR": "BLACK",
-            "ON_TIME": 0
+            "DURATION_UNIT": 0,
+            "DURATION_VALUE": 0,
+            "LEVEL": 0
           }
         }
       ]

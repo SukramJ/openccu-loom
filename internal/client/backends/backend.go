@@ -379,13 +379,15 @@ type SystemOps interface {
 	// --- rooms / functions -------------------------------------------------
 
 	// GetAllRooms returns all CCU rooms as a map of roomName →
-	// set{channelAddress, …}. Returns [ErrUnsupported] when [Capabilities.Rooms]
-	// is false.
+	// set{channelISEID, …} — the ReGa ISE-IDs the CCU lists under
+	// "channelIds", not channel addresses. Returns [ErrUnsupported] when
+	// [Capabilities.Rooms] is false.
 	GetAllRooms(ctx context.Context) (map[string][]string, error)
 
 	// GetAllFunctions returns all CCU functions (Gewerke) as a map of
-	// functionName → set{channelAddress, …}. Returns [ErrUnsupported] when
-	// [Capabilities.Functions] is false.
+	// functionName → set{channelISEID, …} — the ReGa ISE-IDs the CCU lists
+	// under "channelIds", not channel addresses. Returns [ErrUnsupported]
+	// when [Capabilities.Functions] is false.
 	GetAllFunctions(ctx context.Context) (map[string][]string, error)
 
 	// --- programs ---------------------------------------------------------

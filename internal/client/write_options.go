@@ -81,15 +81,6 @@ type WriteOptions struct {
 	// WaitForCallbackTimeout bounds the wait. Zero falls back to 60 s
 	// Ignored when WaitForCallback is false.
 	WaitForCallbackTimeout time.Duration
-
-	// SkipRetry, when true, bypasses the per-key retry tracking in the
-	// [reliability.Retrier]. The command is still attempted once through the
-	// circuit breaker; it is simply not registered for automatic re-sending on
-	// transient failures.
-	//
-	// Typical use: one-shot fire-and-forget commands (e.g. virtual key presses)
-	// where a retry would cause a duplicate action.
-	SkipRetry bool
 }
 
 // ErrMissingDescriptor is returned by SetValueWithOptions
@@ -138,7 +129,6 @@ func (w *ValueWriter) SetValueWithOptions(
 	w.mu.RLock()
 	key := keyFor(centralName, interfaceID)
 	b, bOK := w.backends[key]
-	ic := w.icSetters[key]
 	resolved := resolveBus(w.busResolver, centralName)
 	ctFn := w.commandTracker
 	w.mu.RUnlock()
@@ -154,14 +144,7 @@ func (w *ValueWriter) SetValueWithOptions(
 		defer w.inFlight.Clear(flightKey)
 	}
 
-	// SkipRetry propagation: when an IC is registered and SkipRetry is set,
-	// route the write through the IC's reliability stack so the Retrier uses
-	// DoOnce instead of Do.
-	if opts.SkipRetry && ic != nil {
-		if err := ic.SetValue(ctx, b, channelAddress, parameter, value, opts.Priority, opts.RxMode, true); err != nil {
-			return err
-		}
-	} else if err := b.SetValue(ctx, channelAddress, parameter, value, opts.Priority, opts.RxMode); err != nil {
+	if err := b.SetValue(ctx, channelAddress, parameter, value, opts.Priority, opts.RxMode); err != nil {
 		return err
 	}
 
@@ -253,7 +236,6 @@ func (w *ValueWriter) PutParamsetWithOptions(
 	w.mu.RLock()
 	ppKey := keyFor(centralName, interfaceID)
 	b, bOK := w.backends[ppKey]
-	ic := w.icSetters[ppKey]
 	resolved := resolveBus(w.busResolver, centralName)
 	ctFn := w.commandTracker
 	w.mu.RUnlock()
@@ -275,14 +257,7 @@ func (w *ValueWriter) PutParamsetWithOptions(
 		}
 	}
 
-	// SkipRetry propagation: route through IC's reliability stack
-	// (Retrier.DoOnce) when both SkipRetry and an IC are set. Without an IC the
-	// direct backend path has no retry to skip.
-	if opts.SkipRetry && ic != nil {
-		if err := ic.PutParamset(ctx, b, channelAddress, string(paramsetKey), values, opts.Priority, opts.RxMode, true); err != nil {
-			return err
-		}
-	} else if err := b.PutParamset(ctx, channelAddress, paramsetKey, values, opts.Priority, opts.RxMode); err != nil {
+	if err := b.PutParamset(ctx, channelAddress, paramsetKey, values, opts.Priority, opts.RxMode); err != nil {
 		return err
 	}
 	// Record every sent value in the IC's CommandTracker, as the SetValue

@@ -5,6 +5,7 @@ package climate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -648,21 +649,22 @@ func TestClimateSetModeSimpleRFHeat(t *testing.T) {
 	if err := r.climate.SetMode(context.Background(), ModeHeat, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("SimpleRF SetMode HEAT: %v", err)
 	}
-	// SimpleRF HEAT: SetTemperature(MaxTemperature).
-	if got := w.last(); got.param != hmenum.ParameterSetTemperature {
-		t.Errorf("SimpleRF HEAT wrote param=%v, want SET_TEMPERATURE", got.param)
+	// SimpleRF HEAT is the family's only mode and set_mode is a no-op in
+	// the reference: nothing may reach the wire.
+	if n := callCount(w); n != 0 {
+		t.Errorf("SimpleRF HEAT wrote %d values, want none", n)
 	}
 }
 
 func TestClimateSetModeSimpleRFOff(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "x", KindSimpleRF, w, custom.ClimateCapabilities{MinTemperature: 6.0, MaxTemperature: 30.0})
-	if err := r.climate.SetMode(context.Background(), ModeOff, hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("SimpleRF SetMode OFF: %v", err)
+	if err := r.climate.SetMode(context.Background(), ModeOff, hmenum.CommandPriorityHigh); !errors.Is(err, ErrModeNotSupported) {
+		t.Fatalf("SimpleRF SetMode OFF = %v, want ErrModeNotSupported", err)
 	}
-	// SimpleRF OFF: SetTemperature(MinTemperature).
-	if got := w.last(); got.param != hmenum.ParameterSetTemperature {
-		t.Errorf("SimpleRF OFF wrote param=%v, want SET_TEMPERATURE", got.param)
+	// HM-CC-TC has no OFF; the old translation into SETPOINT=min is gone.
+	if n := callCount(w); n != 0 {
+		t.Errorf("SimpleRF OFF wrote %d values, want none", n)
 	}
 }
 

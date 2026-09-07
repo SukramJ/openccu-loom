@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -156,8 +157,9 @@ func TestDispatchDRGDaliLight_SetEffect(t *testing.T) {
 // FixedColorLight's plain Light.TurnOn/TurnOff, which write LEVEL only. The
 // LED stays dark at its power-on COLOR=BLACK default even though LEVEL
 // reports "on" — a plain turn_on must write COLOR (not just LEVEL), and
-// turn_off must write COLOR=BLACK atomically with ON_TIME=0 to also clear
-// any running flash timer.
+// turn_off must write COLOR=BLACK atomically with the DURATION timer
+// cleared (DURATION_VALUE=0 — the channel carries no bare ON_TIME) to also
+// end any running flash.
 func TestDispatchSoundPlayerLED_TurnOnOff(t *testing.T) {
 	t.Parallel()
 	w := &dispatchWriter{}
@@ -191,8 +193,11 @@ func TestDispatchSoundPlayerLED_TurnOnOff(t *testing.T) {
 	if got := offPut.values["COLOR"]; got != "BLACK" {
 		t.Fatalf("turn_off COLOR = %v, want BLACK", got)
 	}
-	if got := offPut.values["ON_TIME"]; got != 0.0 {
-		t.Fatalf("turn_off ON_TIME = %v, want 0.0 (must clear a running flash timer)", got)
+	if got, ok := offPut.values["DURATION_VALUE"]; !ok || fmt.Sprint(got) != "0" {
+		t.Fatalf("turn_off DURATION_VALUE = %v (present=%v), want 0 (must clear a running flash timer)", got, ok)
+	}
+	if _, ok := offPut.values["ON_TIME"]; ok {
+		t.Fatalf("turn_off wrote ON_TIME, a parameter the MP3P LED channel does not carry: %v", offPut.values)
 	}
 }
 

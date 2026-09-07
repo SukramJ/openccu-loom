@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -56,8 +58,8 @@ var ErrInvalidTextColor = errors.New("textdisplay: invalid text color value")
 // device's available alignment list.
 var ErrInvalidAlignment = errors.New("textdisplay: invalid alignment value")
 
-// ErrInvalidInterval is returned when SoundOptions.Interval is not in the
-// device's available interval list.
+// ErrInvalidInterval is returned when SoundOptions.Interval is not a
+// decimal integer inside the descriptor range the channel declares.
 var ErrInvalidInterval = errors.New("textdisplay: invalid interval value")
 
 // maxDisplayID is the maximum DISPLAY_DATA_ID slot index (1-based), and
@@ -227,8 +229,10 @@ type TextDisplay struct {
 	// captured at construction time.
 	availableTextColors []string
 
-	// availableIntervals holds the INTERVAL VALUE_LIST captured at
-	// construction time. Used to validate SoundOptions.Interval in [WriteWithSound].
+	// availableIntervals is a caller-supplied, display-only list surfaced
+	// in the state payload. It has no wire source (INTERVAL is an INTEGER
+	// with no VALUE_LIST) and does not gate [WriteWithSound], which
+	// validates against the descriptor range instead.
 	availableIntervals []string
 
 	// burstLimitWarningDP is the optional BURST_LIMIT_WARNING binary-sensor
@@ -248,8 +252,10 @@ type SoundOptions struct {
 	// Repetitions is the REPETITIONS label ("NO_REP", "REPETITIONS_2",
 	// "INFINITE", …).
 	Repetitions string
-	// Interval is the INTERVAL label ("100MS", "1S", …) controlling
-	// the time between repetitions.
+	// Interval is the INTERVAL value controlling the time between
+	// repetitions, as the decimal string of an integer 1..15 — the
+	// channel declares INTERVAL as an INTEGER with no VALUE_LIST, so a
+	// unit label is not a valid value. Empty means "leave at default".
 	Interval string
 }
 
@@ -377,14 +383,15 @@ func (t *TextDisplay) AvailableTextColors() []string {
 // capability lists this one has no wire source: INTERVAL is an INTEGER
 // parameter with no VALUE_LIST, so the profile-registry constructor
 // cannot fill it and the list stays empty unless a caller supplies one.
-// [TextDisplay.validateInterval] accepts anything while it is empty.
+// The list is display-only: [TextDisplay.WriteWithSound] validates the
+// interval against the descriptor range, not against this list.
 func (t *TextDisplay) SetAvailableIntervals(intervals []string) {
 	if len(intervals) > 0 {
 		t.availableIntervals = append([]string(nil), intervals...)
 	}
 }
 
-// AvailableIntervals returns a copy of the interval labels list.
+// AvailableIntervals returns a copy of the caller-supplied interval list.
 func (t *TextDisplay) AvailableIntervals() []string {
 	if t == nil || t.availableIntervals == nil {
 		return nil
@@ -487,16 +494,29 @@ func (t *TextDisplay) validateAlignment(a *string) error {
 	return fmt.Errorf("%w: %q", ErrInvalidAlignment, *a)
 }
 
-// validateInterval checks that the interval label appears in availableIntervals
-// when the list is populated. Empty interval string is always accepted.
-func (t *TextDisplay) validateInterval(interval string) error {
-	if interval == "" || len(t.availableIntervals) == 0 {
-		return nil
+// minInterval / maxInterval are the descriptor bounds of the HmIP-WRCD's
+// INTERVAL parameter (VCU4243444:3 VALUES.INTERVAL: TYPE INTEGER, MIN 1,
+// MAX 15), mirroring text_display.py's _MIN_INTERVAL / _MAX_INTERVAL.
+const (
+	minInterval = 1
+	maxInterval = 15
+)
+
+// parseInterval converts the caller-supplied interval into the wire value
+// the channel declares. INTERVAL is an INTEGER with no VALUE_LIST, so the
+// only valid inputs are the decimal numbers 1..15 — a unit label such as
+// "1S" is not a value this parameter accepts, and sending one would put a
+// <string> on an INTEGER member. The empty string means "leave at
+// default" and yields ok=false so no INTERVAL member is staged at all.
+func (t *TextDisplay) parseInterval(interval string) (value int32, ok bool, err error) {
+	if interval == "" {
+		return 0, false, nil
 	}
-	if slices.Contains(t.availableIntervals, interval) {
-		return nil
+	n, convErr := strconv.ParseInt(strings.TrimSpace(interval), 10, 32)
+	if convErr != nil || n < minInterval || n > maxInterval {
+		return 0, false, fmt.Errorf("%w: %q (must be an integer %d..%d)", ErrInvalidInterval, interval, minInterval, maxInterval)
 	}
-	return fmt.Errorf("%w: %q", ErrInvalidInterval, interval)
+	return int32(n), true, nil
 }
 
 // Default string values for optional Row fields. These match the Python
@@ -665,7 +685,8 @@ func (t *TextDisplay) WriteWithSound(
 	if err := t.validateSound(opts.Sound); err != nil {
 		return err
 	}
-	if err := t.validateInterval(opts.Interval); err != nil {
+	intervalValue, hasInterval, err := t.parseInterval(opts.Interval)
+	if err != nil {
 		return err
 	}
 	t.checkBurstLimit()
@@ -693,8 +714,8 @@ func (t *TextDisplay) WriteWithSound(
 		if opts.Repetitions != "" {
 			values[string(hmenum.ParameterRepetitions)] = opts.Repetitions
 		}
-		if opts.Interval != "" {
-			values[string(hmenum.ParameterInterval)] = opts.Interval
+		if hasInterval {
+			values[string(hmenum.ParameterInterval)] = intervalValue
 		}
 		return pw.PutParamset(ctx, t.Address, hmenum.ParamsetKeyValues, values, priority)
 	}
@@ -711,8 +732,8 @@ func (t *TextDisplay) WriteWithSound(
 			return fmt.Errorf("textdisplay: REPETITIONS: %w", err)
 		}
 	}
-	if opts.Interval != "" {
-		if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterInterval, opts.Interval, priority); err != nil {
+	if hasInterval {
+		if err := t.Writer.SetValue(ctx, t.Address, hmenum.ParameterInterval, intervalValue, priority); err != nil {
 			return fmt.Errorf("textdisplay: INTERVAL: %w", err)
 		}
 	}

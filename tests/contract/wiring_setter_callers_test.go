@@ -39,7 +39,6 @@ var wiringSettersWithoutCaller = map[string]string{
 
 	// Verified: an alternative production path carries the same duty.
 	"github.com/SukramJ/openccu-loom/internal/client.InterfaceClient.SetClearJSONRPCSessionHook": "the JSON-RPC client invalidates its own session in transport/jsonrpc/client.go; nothing ever invokes the hook this stores either, so both ends of the path are dead",
-	"github.com/SukramJ/openccu-loom/internal/client.ValueWriter.RegisterIC":                     "the branch it feeds runs only when WriteOptions.SkipRetry is set, and no production caller sets it; ordinary writes go through the backend",
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile.Profile.SetPublishHook":          "the profile-change push flows through Profile.OnChange, which the event bridge subscribes to; this is an unused parallel API",
 
 	// Verified: the seam is a test-only affordance and says so.

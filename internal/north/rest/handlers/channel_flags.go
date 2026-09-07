@@ -61,9 +61,15 @@ func PutChannelFlags(idx DeviceIndex, store ChannelFlagsWriter, overlay *channel
 			problem.WriteFromError(w, r, err)
 			return
 		}
+		// The same 1 MiB ceiling DecodeJSON applies, capped here rather
+		// than through that helper because this route accepts unknown
+		// members. The OpenAPI validator caps the body too, but it is not
+		// mounted when `openapi_validate` is off or the spec file is
+		// unresolvable, and an unbounded decode is then a heap the caller
+		// chooses.
 		var req channelFlagsRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)).Decode(&req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", ""))
 			return
 		}

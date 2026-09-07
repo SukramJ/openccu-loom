@@ -70,11 +70,7 @@ func (m *Manager) emitChirp(ctx context.Context, inst *instance, kind engine.Chi
 		if err != nil {
 			return err
 		}
-		vol := 0.5
-		if inst.cfg.Volume != nil {
-			vol = *inst.cfg.Volume
-		}
-		return dev.PlayChirp(ctx, inst.cfg.SoundfileIndex, vol, hmenum.CommandPriorityLow)
+		return dev.PlayChirp(ctx, inst.cfg.SoundfileIndex, chirpVolume(inst), hmenum.CommandPriorityLow)
 	}
 	tone := m.chirpTone(inst, kind)
 	if tone == "" {
@@ -90,6 +86,15 @@ func (m *Manager) emitChirp(ctx context.Context, inst *instance, kind engine.Chi
 	return dev.TurnOn(ctx, sirencdp.OnConfig{
 		Duration: chirpDuration, AcousticSelection: &tone, AcousticTone: tone,
 	}, hmenum.CommandPriorityLow)
+}
+
+// chirpVolume resolves the configured MP3 chirp volume, defaulting to
+// half scale when the output leaves it unset.
+func chirpVolume(inst *instance) float64 {
+	if inst.cfg.Volume != nil {
+		return *inst.cfg.Volume
+	}
+	return 0.5
 }
 
 // chirpTone resolves the configured tone label for a chirp kind.

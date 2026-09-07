@@ -27,8 +27,9 @@ type Session struct {
 	Expires  time.Time
 
 	// lastSeen tracks the most recent successful Lookup for the idle
-	// timeout. It is in-memory only (not persisted) — a restart resets the
-	// idle clock to the absolute Expires window, which is acceptable.
+	// timeout. It is in-memory only (not persisted) — hydration seeds it
+	// with the boot time, so a restart resets the idle clock and the
+	// absolute Expires window remains the bound, which is acceptable.
 	lastSeen time.Time
 }
 
@@ -112,9 +113,17 @@ func NewPersistentSessionStoreWithOptions(persist SessionPersistence, logger *sl
 		if err != nil {
 			return nil, err
 		}
+		// The idle clock measures inactivity, and a restart observes
+		// none: seeding lastSeen with Created evicted every persisted
+		// session older than the idle window on its first post-restart
+		// lookup — including one used a second before the restart —
+		// which defeats the persistence entirely. Hydration time is the
+		// honest seed; the absolute Expires window still bounds the
+		// session.
+		hydratedAt := s.now()
 		for _, sess := range active {
 			if sess.lastSeen.IsZero() {
-				sess.lastSeen = sess.Created
+				sess.lastSeen = hydratedAt
 			}
 			s.items[sess.ID] = sess
 		}
@@ -319,16 +328,20 @@ func WriteSessionCookie(w http.ResponseWriter, sess *Session, secure bool) {
 }
 
 // ClearSessionCookie invalidates the cookie on w. The empty MaxAge<0
-// cookie carries SameSite=Lax + Secure=true so an active reverse-proxy
-// terminator strips it correctly across the redirect chain.
+// cookie is written WITHOUT Secure: a browser ignores a Set-Cookie
+// carrying Secure when it arrives from an insecure origin (RFC 6265bis,
+// "Leave Secure Cookies Alone"), so a hard-coded Secure left the
+// revoked cookie in place on every plain-HTTP deployment. From a secure
+// origin a non-Secure deletion still overwrites the Secure cookie —
+// name, domain and path are the cookie's identity — so one form works
+// for both, and the value it carries is empty either way.
 func ClearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // deletion cookie: Secure is deliberately absent so a plain-HTTP origin can clear it (see the doc comment); the value is empty
 		Name:     SessionCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 }

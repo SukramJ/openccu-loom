@@ -103,7 +103,6 @@ func TestW2CliCommandTrackerRecordsAfterTheRetryWindow(t *testing.T) {
 		context.Background(), b,
 		"VCU0000001:1", hmenum.ParameterLevel, 0.5,
 		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset,
-		false,
 	); err != nil {
 		t.Fatalf("SetValue after two DUTY_CYCLE faults: %v", err)
 	}
@@ -140,7 +139,6 @@ func TestW2CliCommandTrackerRecordsNothingForAFailedWrite(t *testing.T) {
 		context.Background(), b,
 		"VCU0000002:1", hmenum.ParameterLevel, 0.5,
 		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset,
-		false,
 	)
 	if err == nil {
 		t.Fatal("SetValue with a permanently duty-cycle-blocked backend returned nil, want the fault")

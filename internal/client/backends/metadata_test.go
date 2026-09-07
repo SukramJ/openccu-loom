@@ -9,6 +9,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ---------------------------------------------------------------------------
@@ -98,22 +100,26 @@ func TestHomegearBackendSetMetadataDelegates(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CcuBackend.AcknowledgeMessage via JSON-RPC
+// CcuBackend.AcknowledgeMessage via the ReGa script engine
 // ---------------------------------------------------------------------------
 
-func TestCcuBackendAcknowledgeMessageRequiresJSON(t *testing.T) {
+func TestCcuBackendAcknowledgeMessageRequiresScriptRunner(t *testing.T) {
 	t.Parallel()
-	b := NewCcuBackend(&fakeCaller{}, nil, nil) // no JSON caller
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil) // no ScriptRunner
 	_, err := b.AcknowledgeMessage(context.Background(), "42")
 	if !errors.Is(err, ErrUnsupported) {
-		t.Errorf("CcuBackend.AcknowledgeMessage without JSON: want ErrUnsupported, got %v", err)
+		t.Errorf("CcuBackend.AcknowledgeMessage without a ScriptRunner: want ErrUnsupported, got %v", err)
 	}
 }
 
-func TestCcuBackendAcknowledgeMessageCallsJSON(t *testing.T) {
+// TestCcuBackendAcknowledgeMessageRunsScript pins the ReGa route: the CCU's
+// JSON-RPC method table has no acknowledge call, so the backend runs the
+// acknowledge_message script with the message ISE-ID.
+func TestCcuBackendAcknowledgeMessageRunsScript(t *testing.T) {
 	t.Parallel()
-	j := &fakeCaller{}
-	b := NewCcuBackend(nil, j, nil)
+	r := &fakeScriptRunner{rawJSON: `{"success":true}`}
+	b := NewCcuBackend(nil, nil, nil)
+	b.SetScriptRunner(r)
 	ok, err := b.AcknowledgeMessage(context.Background(), "42")
 	if err != nil {
 		t.Fatalf("AcknowledgeMessage: %v", err)
@@ -121,7 +127,7 @@ func TestCcuBackendAcknowledgeMessageCallsJSON(t *testing.T) {
 	if !ok {
 		t.Error("expected ok=true on success")
 	}
-	if j.called.Load() != 1 {
-		t.Fatalf("json.Call not invoked (calls=%d)", j.called.Load())
+	if r.lastScript != hmenum.RegaScriptAcknowledgeMessage || r.lastParams["message_id"] != "42" {
+		t.Fatalf("script=%s params=%v", r.lastScript, r.lastParams)
 	}
 }

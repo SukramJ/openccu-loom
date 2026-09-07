@@ -1882,6 +1882,11 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 			}
 			if src, ok := cdp.(payload.Source); ok && src != nil && !hidden {
 				ev.Source = src
+				// The live path carries the same localised selection
+				// labels (siren tones, light effects) as the boot
+				// snapshot; without them a re-published discovery
+				// payload falls back to raw enum names.
+				ev.SelectionLabels = b.selectionLabelsFor(ch, src)
 			}
 		}
 		// Mark calculated DPs so the discovery builder can route

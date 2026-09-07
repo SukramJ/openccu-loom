@@ -13,10 +13,12 @@
           "paramset_key": "VALUES",
           "put_values": {
             "COLOR": "WHITE",
+            "DURATION_UNIT": 0,
+            "DURATION_VALUE": 0,
             "LEVEL": 0.5019607843137255,
-            "ON_TIME": 0,
             "ON_TIME_LIST_1": "500MS",
-            "RAMP_TIME": 0,
+            "RAMP_TIME_UNIT": 0,
+            "RAMP_TIME_VALUE": 0,
             "REPETITIONS": "REPETITIONS_003"
           }
         }

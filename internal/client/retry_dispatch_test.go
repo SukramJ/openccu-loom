@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// skip_retry_test.go — skipRetry behaviour:
-// IC.SetValue with skipRetry=true must call the backend exactly once even
-// when the backend returns a transient error that would normally trigger
-// retry. With skipRetry=false and maxAttempts=3 the backend is called up
-// to 3 times on a persistent transient error.
+// retry_dispatch_test.go — IC.SetValue retry behaviour: with maxAttempts=3
+// the backend is called up to 3 times on a persistent transient error.
 
 package client
 
@@ -277,33 +274,8 @@ func newCountingIC(t *testing.T, setErr error) (*InterfaceClient, *countingBacke
 	return ic, b
 }
 
-// TestSetValueSkipRetryCallsBackendOnce verifies that when skipRetry=true
-// a failing backend is called exactly once — the Retrier's DoOnce path —
-// regardless of the MaxAttempts setting.
-func TestSetValueSkipRetryCallsBackendOnce(t *testing.T) {
-	t.Parallel()
-
-	transientErr := errors.New("transient network error")
-	ic, b := newCountingIC(t, transientErr)
-
-	err := ic.SetValue(
-		context.Background(), b,
-		"VCU001:1", hmenum.ParameterLevel, 0.5,
-		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset,
-		true, // skipRetry
-	)
-	if err == nil {
-		t.Fatal("expected error from backend, got nil")
-	}
-	if count := b.SetCallCount(); count != 1 {
-		t.Errorf("skipRetry=true: backend.SetValue called %d times, want exactly 1", count)
-	}
-}
-
-// TestSetValueWithRetryCallsBackendMultipleTimes verifies that with the
-// default skipRetry=false the retrier does retry on transient errors (up to
-// maxAttempts). This is the baseline confirming that DoOnce is NOT the
-// default code path.
+// TestSetValueWithRetryCallsBackendMultipleTimes verifies that the retrier
+// retries transient errors, up to maxAttempts.
 func TestSetValueWithRetryCallsBackendMultipleTimes(t *testing.T) {
 	t.Parallel()
 
@@ -314,9 +286,8 @@ func TestSetValueWithRetryCallsBackendMultipleTimes(t *testing.T) {
 		context.Background(), b,
 		"VCU001:1", hmenum.ParameterLevel, 0.5,
 		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset,
-		false, // skipRetry — use normal retry
 	)
 	if count := b.SetCallCount(); count <= 1 {
-		t.Errorf("skipRetry=false: backend.SetValue called %d times, want >1 (retried)", count)
+		t.Errorf("backend.SetValue called %d times, want >1 (retried)", count)
 	}
 }
