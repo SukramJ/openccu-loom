@@ -1,9 +1,11 @@
 # Implementation plan — tabular, model-driven device configuration
 
-**Status:** in execution — see the [Execution log](#execution-log) for what
-has landed and where this plan turned out to be wrong. Owner decisions taken
-on 2026-09-07 are recorded under [Decisions](#decisions). Each cut below is
-its own branch and PR and needs the owner's go before it starts.
+**Status:** in execution — cuts 1–3 are merged, cut 4 is next. See
+[Where this stands](#where-this-stands--read-this-first) for the current
+state, the machine-local prerequisites, and where this plan turned out to
+be wrong. Owner decisions taken on 2026-09-07 are recorded under
+[Decisions](#decisions) and in the execution log. Each cut below is its own
+branch and PR and needs the owner's go before it starts.
 **Audience:** a fresh agent with no access to the concept conversation.
 Everything needed is inline; every "measured" claim carries the
 `file:line` it was read from at `main @ d3e741db` (0.75.0). Re-verify a
@@ -14,17 +16,92 @@ half of it.
 
 ---
 
-## Execution log
+## Where this stands — read this first
 
-Kept here because the plan is what a later agent reads first, and two of
-its instructions turned out to be wrong against the real data. Status as
-of 2026-09-07.
+Status as of 2026-09-07, written so the work can be picked up on another
+machine. Everything below is either merged or an open PR; nothing needed
+lives only on the machine this was written on.
 
 | Cut | State |
 |---|---|
-| 1 — inbox accept renames channels | **done**, [#721](https://github.com/SukramJ/openccu-loom/pull/721) merged |
-| 2 — door-lock operation-mode labels | **code half done**, [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723); data half prepared upstream, waiting on the owner's release |
-| 3–6 | not started |
+| 1 — inbox accept renames channels | **merged**, [#721](https://github.com/SukramJ/openccu-loom/pull/721) |
+| 2 — door-lock operation-mode labels | **merged**, code half [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723), data half [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33) → go-openccu-data v0.1.4, module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726) *(open)* |
+| 3 — link editor null link | **merged**, [#725](https://github.com/SukramJ/openccu-loom/pull/725) |
+| 4 — channel table | **next**, not started |
+| 5 — parameter table | not started |
+| 6 — device table | not started |
+
+The plan itself is [#724](https://github.com/SukramJ/openccu-loom/pull/724).
+
+### Picking it up elsewhere
+
+1. `git pull` on `main`. If [#726](https://github.com/SukramJ/openccu-loom/pull/726) is
+   still open, that branch carries the module bump to v0.1.4 and the
+   guards that go with it; land it before cut 4 so the door-lock labels
+   and the reshaped borrowing guard are in.
+2. `make setup` (Go tooling + the pre-commit hook), then `make ui-install`
+   and `cd assets/ui && npx playwright install chromium` — the SPA e2e
+   suite needs the browser, and the Playwright baselines are per platform
+   (`*-darwin.png` locally, `*-linux.png` only in the pinned container).
+3. The sibling checkouts this plan cites — `../openccu-data`,
+   `../go-openccu-data`, `../OpenCCU`, `../OpenCCU-Base`, `../aiohomematic`
+   and friends — are read alongside the repo, not vendored. Cut 2 needed
+   all of them; cuts 4–6 need none.
+4. `./.ccu_cred` (gitignored, read-only account) is what the CCU probes in
+   cut 2 used. **Cuts 4–6 need no CCU access at all** — every remaining
+   cut is hermetic.
+
+### Owner decisions taken during execution
+
+Recorded because they are not derivable from the code, and a later agent
+would otherwise re-open them:
+
+| Question | Decision |
+|---|---|
+| Model stamp for rooms / functions on accept | Stamp the model too, in the same cut |
+| ISE-id batching for channel renames | Do it in the same cut, not as a follow-up |
+| How to restrict the index fallback | The measured rule (refuse the unqualified index for a channel-typed parameter), not the plan's stage-1-only rule |
+| The borrowed help text | Belongs upstream in openccu-data, not in the daemon |
+| Wording for the door-lock tokens | Curate from the CCU's own vocabulary, after reading the CCU first |
+| The non-deterministic tie-break | Its own PR, ahead of the label work |
+
+### Still open, deliberately
+
+- **The help text is still wrong on the door lock.** It reads "Durch den
+  Flüsterbetrieb fahren die Heizkörperthermostate langsamer" — a radiator
+  thermostat's text — because the parameter-help table is keyed by
+  parameter name alone (167 entries for `de`, none channel-type-qualified).
+  The daemon cannot attribute a help text to a channel type at all. Owner's
+  decision: fix belongs upstream. Captured in
+  `notes/parity/fixtures/hmip-dlp-channel-operation-mode.json` under
+  `daemon_help_text_defect`.
+- The Python client fan-out for cut 4's `ChannelSummary` fields
+  (`../openccu-loom-client/wire/`) — a separate PR in that repo, noted in
+  cut 4 and out of scope here.
+
+### What cut 4 needs before it starts
+
+It is the first cut with a backend half, and the first that touches the
+API contract, so it carries obligations the three bug-fix cuts did not:
+
+- `assets/openapi.yaml` first, then the handler, then
+  `make export-schemas && make ui-types` in the same commit
+- `APIVersion` in `internal/north/rest/handlers/info.go` bumped alongside;
+  verify with `bash script/check_api_version_bump.sh origin/main`
+- the MCP surface (`internal/north/mcp/tools_hub.go`) carries its own
+  `channelSummary` — extend it or record why not
+- Playwright baselines for the device page will move; refresh `-darwin`
+  locally and `-linux` only inside the pinned container
+
+---
+
+## How this plan was wrong, and how that was found
+
+Two of cut 2's instructions did not survive contact with the data, and
+cut 3's root cause — which the plan left open — turned out to be
+reproducible only in one of the two ways it proposed. Everything here is
+load-bearing for anyone reading the cuts below; the measurements behind
+each claim are in the PRs the state table links.
 
 **Cut 1 grew two items during execution, both owner-approved:**
 
@@ -79,6 +156,29 @@ verified read-only against `stringtable_de.txt`, the WebUI language files,
 family. The curated wording is a formulation derived from the CCU's terms
 for the neighbouring settings, and is labelled as such in the upstream
 commit.
+
+**Cut 3's root cause, which the plan listed as not reproduced.**
+`ChannelPanel.save()` reads its props again after `await
+api.putLinkParamset(...)`, to reload what it just wrote. `LinkConfigPanel`
+derived those props from the `Link` object in `DeviceLinks`' nullable
+`editing` holder, so leaving the editor while the PUT was in flight nulled
+the holder underneath the running save. The editor takes primitives now,
+snapshotted when it opens.
+
+Two things that cost time there and are worth knowing before repeating the
+exercise:
+
+- **A hand-written approximation of the pre-fix source did not bite.**
+  Rebuilding the old shape as `const senderAddress =
+  $derived(link.sender_address)` kept the test green: a `$derived` answers
+  from cache once its effect is destroyed, while a direct property read in
+  the template recomputes. The regression has to be restored from git, not
+  re-typed.
+- **The browser cannot express the race.** A Playwright test that closes
+  the editor during a delayed PUT is green before *and* after the fix,
+  because by the time the response lands the teardown has fully settled.
+  That version was written, measured as unable to bite, and replaced with
+  one that pins what a browser can prove.
 
 ---
 
@@ -256,8 +356,14 @@ then the full gate.
 
 ## Cut 2 — HmIP-DLP `CHANNEL_OPERATION_MODE` shows "RGB"
 
-> **Read the [Execution log](#execution-log) first — step 2's rule and the
-> repository named in the Files table were both corrected during execution.**
+> **Done** — code [#723](https://github.com/SukramJ/openccu-loom/pull/723)
+> (with [#722](https://github.com/SukramJ/openccu-loom/pull/722) ahead of it),
+> data [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33),
+> module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726).
+
+> **Read [How this plan was wrong](#how-this-plan-was-wrong-and-how-that-was-found)
+> first — step 2's rule and the repository named in the Files table were
+> both corrected during execution.**
 
 **Branch:** `fix/door-lock-operation-mode-labels`
 **Symptom (owner):** the lock's operation-mode enum shows "RGB" where
@@ -353,6 +459,10 @@ then the full gate.
 
 ## Cut 3 — link editor: "Cannot read properties of null (reading 'sender_address')"
 
+> **Done** — [#725](https://github.com/SukramJ/openccu-loom/pull/725). The
+> root cause the plan left open is reproduced below in "How this plan was
+> wrong"; the browser could not express the race, only vitest could.
+
 **Branch:** `fix/link-editor-null-link`
 **Symptom (owner):** changing a direct link fails with
 `channel.save_failed` and that message.
@@ -417,6 +527,9 @@ then the full gate.
 ---
 
 ## Cut 4 — channel table and channel header
+
+> **Next.** Not started. First cut with a backend half and an API-contract
+> obligation — see [Where this stands](#where-this-stands--read-this-first).
 
 **Branch:** `feat/channel-table`
 **Goal:** the chip strip becomes a sortable table; the selected channel's
