@@ -121,7 +121,7 @@ func readEmbeddedGzipJSON(name string) (map[string]map[string]string, error) {
 // in [Translations.ParameterValue], which is exactly the gap the curated
 // folder exists to close.
 func overlayCustomTranslations(t *Translations) error {
-	defer t.rebuildValueIndices()
+	defer t.rebuildDerivedIndices()
 
 	names, err := openccudata.ReadDir("translation_custom")
 	if err != nil {

@@ -1,0 +1,555 @@
+{
+ "_source": "Read-only capture, 2026-09-07. Device HmIP-DLP 005325A98B2611 on CCU 172.18.4.29 (HmIP-RF). ui_schema rows come from the daemon (GET /api/v1/devices/{addr}/channels/{n}/ui-schema?paramset=MASTER&locale=..&expert=true); paramset_description from the CCU's JSON-RPC Interface.getParamsetDescription(paramsetKey=MASTER).",
+ "_purpose": "Fixture for the value-label regression: the daemon labels index 3 of every CHANNEL_OPERATION_MODE below as 'RGB'. See notes/plans/device-config-tables.md, cut 2.",
+ "device": {
+  "address": "005325A98B2611",
+  "model": "HmIP-DLP",
+  "name": "Türschloss NE"
+ },
+ "channels": [
+  {
+   "number": 0,
+   "type": "MAINTENANCE",
+   "type_label": "Wartungskanal",
+   "name": "Türschloss NE"
+  },
+  {
+   "number": 1,
+   "type": "KEY_TRANSCEIVER",
+   "type_label": "Taster",
+   "name": "Türschloss NE Taster"
+  },
+  {
+   "number": 2,
+   "type": "ACCELERATION_TRANSCEIVER",
+   "type_label": "Lage-/Beschleunigungssensor",
+   "name": "HmIP-DLP 005325A98B2611:2"
+  },
+  {
+   "number": 3,
+   "type": "DOOR_STATE_TRANSCEIVER",
+   "type_label": "Türzustandssensor",
+   "name": "Türschloss NE Türzustand"
+  },
+  {
+   "number": 4,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:4"
+  },
+  {
+   "number": 5,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:5"
+  },
+  {
+   "number": 6,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:6"
+  },
+  {
+   "number": 7,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:7"
+  },
+  {
+   "number": 8,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:8"
+  },
+  {
+   "number": 9,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:9"
+  },
+  {
+   "number": 10,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:10"
+  },
+  {
+   "number": 11,
+   "type": "PERMISSION_TRANSCEIVER",
+   "type_label": "Berechtigung",
+   "name": "HmIP-DLP 005325A98B2611:11"
+  },
+  {
+   "number": 12,
+   "type": "DOOR_LOCK_TRANSCEIVER",
+   "type_label": "Tüschlossantrieb",
+   "name": "Türschloss NE Türschlossantrieb"
+  },
+  {
+   "number": 13,
+   "type": "AUTO_RELOCK_TRANSCEIVER",
+   "type_label": "Auto Relock",
+   "name": "Türschloss NE Auto Relock"
+  },
+  {
+   "number": 14,
+   "type": "SWITCH_WEEK_PROFILE",
+   "type_label": "Wochenprogramm",
+   "name": "Türschloss NE Wochenprogramm"
+  },
+  {
+   "number": 15,
+   "type": "ALARM_COND_SWITCH_TRANSMITTER",
+   "type_label": "Verknüpfungspartner Backup Alarmsirene",
+   "name": "HmIP-DLP 005325A98B2611:15"
+  }
+ ],
+ "ui_schema": [
+  {
+   "channel": 2,
+   "locale": "de",
+   "parameter": {
+    "name": "CHANNEL_OPERATION_MODE",
+    "label": "Kanal-Betriebsmodus",
+    "help": "Durch den Flüsterbetrieb fahren die Heizkörperthermostate langsamer und damit leiser.\n\nDiese Funktion bewirkt einen 15-20 Prozent höheren Stromverbrauch des jeweiligen Geräts.",
+    "type": "ENUM",
+    "min": "OFF",
+    "max": "TILT_AND_MOTION_DETECTION",
+    "default": "TILT_AND_MOTION_DETECTION",
+    "value_list": [
+     {
+      "value": 0,
+      "key": "OFF",
+      "label": "Aus"
+     },
+     {
+      "value": 1,
+      "key": "TILT_DETECTION",
+      "label": "Aktiv"
+     },
+     {
+      "value": 2,
+      "key": "ANY_MOTION",
+      "label": "Ein"
+     },
+     {
+      "value": 3,
+      "key": "TILT_AND_MOTION_DETECTION",
+      "label": "RGB"
+     }
+    ],
+    "operations": {
+     "read": true,
+     "write": true,
+     "event": false
+    },
+    "flags": {
+     "visible": true,
+     "internal": false,
+     "service": false
+    },
+    "value": 3,
+    "observed": true,
+    "modified_at": "2026-09-07T16:45:45.335Z",
+    "preset": "_INLINE_ACCELERATION_TRANSCEIVER_CHANNEL_OPERATION_MODE",
+    "presets": [
+     {
+      "label": "Erschütterung",
+      "value": 1
+     },
+     {
+      "label": "Lageänderung",
+      "value": 2
+     },
+     {
+      "label": "Neigungsänderung",
+      "value": 3
+     }
+    ]
+   }
+  },
+  {
+   "channel": 2,
+   "locale": "en",
+   "parameter": {
+    "name": "CHANNEL_OPERATION_MODE",
+    "label": "Channel Operation Mode",
+    "help": "The radiator thermostats operate slower and therefore more quietly in whisper mode.\n\nThis function results in 15-20 percent higher power consumption for the respective device.",
+    "type": "ENUM",
+    "min": "OFF",
+    "max": "TILT_AND_MOTION_DETECTION",
+    "default": "TILT_AND_MOTION_DETECTION",
+    "value_list": [
+     {
+      "value": 0,
+      "key": "OFF",
+      "label": "Off"
+     },
+     {
+      "value": 1,
+      "key": "TILT_DETECTION",
+      "label": "Active"
+     },
+     {
+      "value": 2,
+      "key": "ANY_MOTION",
+      "label": "On"
+     },
+     {
+      "value": 3,
+      "key": "TILT_AND_MOTION_DETECTION",
+      "label": "RGB"
+     }
+    ],
+    "operations": {
+     "read": true,
+     "write": true,
+     "event": false
+    },
+    "flags": {
+     "visible": true,
+     "internal": false,
+     "service": false
+    },
+    "value": 3,
+    "observed": true,
+    "modified_at": "2026-09-07T16:45:45.335Z",
+    "preset": "_INLINE_ACCELERATION_TRANSCEIVER_CHANNEL_OPERATION_MODE",
+    "presets": [
+     {
+      "label": "Vibration",
+      "value": 1
+     },
+     {
+      "label": "Position change",
+      "value": 2
+     },
+     {
+      "label": "motionDetectorChannelOperationModeTilt",
+      "value": 3
+     }
+    ]
+   }
+  },
+  {
+   "channel": 3,
+   "locale": "de",
+   "parameter": {
+    "name": "CHANNEL_OPERATION_MODE",
+    "label": "Kanal-Betriebsmodus",
+    "help": "Durch den Flüsterbetrieb fahren die Heizkörperthermostate langsamer und damit leiser.\n\nDiese Funktion bewirkt einen 15-20 Prozent höheren Stromverbrauch des jeweiligen Geräts.",
+    "type": "ENUM",
+    "min": "OFF",
+    "max": "ON_AUTO_CALIBRATION",
+    "default": "ON",
+    "value_list": [
+     {
+      "value": 0,
+      "key": "OFF",
+      "label": "Aus"
+     },
+     {
+      "value": 1,
+      "key": "ON",
+      "label": "ein"
+     },
+     {
+      "value": 2,
+      "key": "ON_AUTO_CALIBRATION",
+      "label": "Ein"
+     }
+    ],
+    "operations": {
+     "read": true,
+     "write": true,
+     "event": false
+    },
+    "flags": {
+     "visible": true,
+     "internal": false,
+     "service": false
+    },
+    "value": 1,
+    "observed": true,
+    "modified_at": "2026-09-07T16:45:45.337Z",
+    "preset": "_INLINE_DOOR_STATE_TRANSCEIVER_CHANNEL_OPERATION_MODE",
+    "presets": [
+     {
+      "label": "Nicht aktiv",
+      "value": 0
+     },
+     {
+      "label": "Aktiv",
+      "value": 1
+     },
+     {
+      "label": "Aktiv mit Kalibrierung nach Schlosslast-Erkennung",
+      "value": 2
+     }
+    ]
+   }
+  },
+  {
+   "channel": 3,
+   "locale": "en",
+   "parameter": {
+    "name": "CHANNEL_OPERATION_MODE",
+    "label": "Channel Operation Mode",
+    "help": "The radiator thermostats operate slower and therefore more quietly in whisper mode.\n\nThis function results in 15-20 percent higher power consumption for the respective device.",
+    "type": "ENUM",
+    "min": "OFF",
+    "max": "ON_AUTO_CALIBRATION",
+    "default": "ON",
+    "value_list": [
+     {
+      "value": 0,
+      "key": "OFF",
+      "label": "Off"
+     },
+     {
+      "value": 1,
+      "key": "ON",
+      "label": "On"
+     },
+     {
+      "value": 2,
+      "key": "ON_AUTO_CALIBRATION",
+      "label": "On"
+     }
+    ],
+    "operations": {
+     "read": true,
+     "write": true,
+     "event": false
+    },
+    "flags": {
+     "visible": true,
+     "internal": false,
+     "service": false
+    },
+    "value": 1,
+    "observed": true,
+    "modified_at": "2026-09-07T16:45:45.337Z",
+    "preset": "_INLINE_DOOR_STATE_TRANSCEIVER_CHANNEL_OPERATION_MODE",
+    "presets": [
+     {
+      "label": "Inactive",
+      "value": 0
+     },
+     {
+      "label": "Active",
+      "value": 1
+     },
+     {
+      "label": "Active with calibration after pre-load detection",
+      "value": 2
+     }
+    ]
+   }
+  },
+  {
+   "channel": 12,
+   "locale": "de",
+   "parameter": {
+    "name": "CHANNEL_OPERATION_MODE",
+    "label": "Kanal-Betriebsmodus",
+    "help": "Durch den Flüsterbetrieb fahren die Heizkörperthermostate langsamer und damit leiser.\n\nDiese Funktion bewirkt einen 15-20 Prozent höheren Stromverbrauch des jeweiligen Geräts.",
+    "type": "ENUM",
+    "min": "IGNORE_DOOR_OPEN",
+    "max": "SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING",
+    "default": "IGNORE_DOOR_OPEN",
+    "value_list": [
+     {
+      "value": 0,
+      "key": "IGNORE_DOOR_OPEN",
+      "label": "Inaktiv"
+     },
+     {
+      "value": 1,
+      "key": "SKIP_HOLD_TIME_OPENING",
+      "label": "Aktiv"
+     },
+     {
+      "value": 2,
+      "key": "SKIP_RELOCK_DELAY_CLOSING",
+      "label": "Ein"
+     },
+     {
+      "value": 3,
+      "key": "SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING",
+      "label": "RGB"
+     }
+    ],
+    "operations": {
+     "read": true,
+     "write": true,
+     "event": false
+    },
+    "flags": {
+     "visible": true,
+     "internal": false,
+     "service": false
+    },
+    "value": 0,
+    "observed": true,
+    "modified_at": "2026-09-07T16:45:45.268Z",
+    "group_id": "group_3",
+    "preset": "_INLINE_DOOR_LOCK_TRANSCEIVER_CHANNEL_OPERATION_MODE",
+    "presets": [
+     {
+      "label": "Türzustand ignorieren",
+      "value": 0
+     },
+     {
+      "label": "Fallen-Haltezeit überspringen",
+      "value": 1
+     },
+     {
+      "label": "Auto-Relock-Delay überspringen",
+      "value": 2
+     },
+     {
+      "label": "Fallen-Haltezeit und Auto-Relock-Delay überspringen",
+      "value": 3
+     }
+    ]
+   }
+  },
+  {
+   "channel": 12,
+   "locale": "en",
+   "parameter": {
+    "name": "CHANNEL_OPERATION_MODE",
+    "label": "Channel Operation Mode",
+    "help": "The radiator thermostats operate slower and therefore more quietly in whisper mode.\n\nThis function results in 15-20 percent higher power consumption for the respective device.",
+    "type": "ENUM",
+    "min": "IGNORE_DOOR_OPEN",
+    "max": "SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING",
+    "default": "IGNORE_DOOR_OPEN",
+    "value_list": [
+     {
+      "value": 0,
+      "key": "IGNORE_DOOR_OPEN",
+      "label": "Inactive"
+     },
+     {
+      "value": 1,
+      "key": "SKIP_HOLD_TIME_OPENING",
+      "label": "Active"
+     },
+     {
+      "value": 2,
+      "key": "SKIP_RELOCK_DELAY_CLOSING",
+      "label": "On"
+     },
+     {
+      "value": 3,
+      "key": "SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING",
+      "label": "RGB"
+     }
+    ],
+    "operations": {
+     "read": true,
+     "write": true,
+     "event": false
+    },
+    "flags": {
+     "visible": true,
+     "internal": false,
+     "service": false
+    },
+    "value": 0,
+    "observed": true,
+    "modified_at": "2026-09-07T16:45:45.268Z",
+    "group_id": "group_3",
+    "preset": "_INLINE_DOOR_LOCK_TRANSCEIVER_CHANNEL_OPERATION_MODE",
+    "presets": [
+     {
+      "label": "Ignore door status",
+      "value": 0
+     },
+     {
+      "label": "Skip door latch hold time",
+      "value": 1
+     },
+     {
+      "label": "Skip Auto-Relock Delay",
+      "value": 2
+     },
+     {
+      "label": "Skip door latch hold time and Auto-Relock Delay",
+      "value": 3
+     }
+    ]
+   }
+  }
+ ],
+ "paramset_description": {
+  "address": "005325A98B2611:12",
+  "CHANNEL_OPERATION_MODE": {
+   "NAME": "CHANNEL_OPERATION_MODE",
+   "DEFAULT": "IGNORE_DOOR_OPEN",
+   "FLAGS": "1",
+   "ID": "CHANNEL_OPERATION_MODE",
+   "MAX": "SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING",
+   "MIN": "IGNORE_DOOR_OPEN",
+   "OPERATIONS": "3",
+   "TYPE": "ENUM",
+   "VALUE_LIST": "IGNORE_DOOR_OPEN SKIP_HOLD_TIME_OPENING SKIP_RELOCK_DELAY_CLOSING SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING"
+  }
+ },
+ "ccu_webui_labels": {
+  "_status": "measured 2026-09-07 (read-only): the CCU carries NO label for the DOOR_LOCK_TRANSCEIVER CHANNEL_OPERATION_MODE tokens.",
+  "_method": "GET https://172.18.4.29/config/stringtable_de.txt and /webui/js/lang/{de,en}/translate.lang.stringtable.js",
+  "stringtable_channel_operation_mode_entries": [
+   "ACCELERATION_TRANSCEIVER|CHANNEL_OPERATION_MODE",
+   "ACCELERATION_TRANSCEIVER|CHANNEL_OPERATION_MODE=OFF",
+   "ACCELERATION_TRANSCEIVER|CHANNEL_OPERATION_MODE=ANY_MOTION",
+   "ACCELERATION_TRANSCEIVER|CHANNEL_OPERATION_MODE=FLAT_DECT",
+   "KEY_TRANSCEIVER|CHANNEL_OPERATION_MODE",
+   "KEY_TRANSCEIVER|CHANNEL_OPERATION_MODE=INACTIVE",
+   "KEY_TRANSCEIVER|CHANNEL_OPERATION_MODE=KEY_BEHAVIOR",
+   "KEY_TRANSCEIVER|CHANNEL_OPERATION_MODE=SWITCH_BEHAVIOR",
+   "KEY_TRANSCEIVER|CHANNEL_OPERATION_MODE=BINARY_BEHAVIOR",
+   "PASSAGE_DETECTOR_COUNTER_TRANSMITTER|CHANNEL_OPERATION_MODE"
+  ],
+  "_note_no_door_lock_entry": "No DOOR_LOCK_TRANSCEIVER|CHANNEL_OPERATION_MODE key exists, qualified or not, and none of IGNORE_DOOR_OPEN / SKIP_HOLD_TIME_OPENING / SKIP_RELOCK_DELAY_CLOSING / SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING appears anywhere in the string table or the language files. The ACCELERATION_TRANSCEIVER entries name FLAT_DECT, not the TILT_DETECTION / TILT_AND_MOTION_DETECTION the device reports, so channel 2 is uncovered too.",
+  "_note_stringtable_keys_unresolvable": "The stringtable_de.txt values are ${stringTable...} placeholders, and the four CHANNEL_OPERATION_MODE ones (…ChannelOperationModeOff / …AnyMotion / …Flat, stringTableKeyTransceiverChannelOperationMode) are absent from translate.lang.stringtable.js in both locales — so even the covered tokens have no resolvable wording on this firmware.",
+  "ccu_vocabulary_for_the_concepts": {
+   "_purpose": "The CCU has no label for these four tokens, but it does carry its own wording for the concepts they name. A curated overlay entry can be built from these rather than invented.",
+   "stringTableDoorLockHoldTime": {
+    "de": "Haltezeit beim Öffnen",
+    "en": "Holding time when opening"
+   },
+   "stringTableKeyMaticHoldTime": {
+    "de": "Haltezeit Tür öffnen",
+    "en": "Hold time open door"
+   },
+   "stringTableKeyMaticRelockDelay": {
+    "de": "Automatisch verriegeln nach Zeit",
+    "en": "Lock automatically after"
+   },
+   "stringTableKeyMaticRelockDelayNotUsed": {
+    "de": "Nicht automatisch verriegeln",
+    "en": "Do not lock automatically"
+   },
+   "stringTableAutoRelockDelay": {
+    "de": "Wartezeit vor Auto Relock",
+    "en": "Delay time before Auto Relock"
+   },
+   "stringTableAutoRelockTransceiverTitle": {
+    "de": "Auto-Relock",
+    "en": "Auto-Relock"
+   },
+   "stringTableDoorLockStateTransmitterLockTargetLevelOpen": {
+    "de": "Türschloss öffnen",
+    "en": "Open the door lock"
+   }
+  }
+ },
+ "daemon_help_text_defect": {
+  "_finding": "The help text the daemon renders for CHANNEL_OPERATION_MODE on every one of these channels is a radiator-thermostat text: 'Durch den Flüsterbetrieb fahren die Heizkörperthermostate langsamer und damit leiser.' That is where the reported 'Flüsterbetrieb' came from — it was never a value label.",
+  "_cause": "Translations.ParameterHelp is keyed by parameter name alone. Measured on the embedded v0.1.3 extract: 167 help entries for locale de, of which 0 are channel-type-qualified. The daemon therefore cannot attribute a help text to a channel type at all.",
+  "_owner_decision_2026-09-07": "Belongs upstream in openccu-data / go-openccu-data, not in the daemon."
+ }
+}

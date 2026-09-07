@@ -4,8 +4,6 @@
 package adapter
 
 import (
-	"strconv"
-
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 )
@@ -27,7 +25,9 @@ var _ mqtt.ValueListLabeler = (*MqttParameterLabelAdapter)(nil)
 //     (`<channel-type>|<parameter>=<value>`, then `<parameter>=<value>`,
 //     then value-only), via [ccudata.Translations.ParameterValue];
 //  2. the index-keyed translation — easymode TCL stores `parameter=N`
-//     when the VALUE_LIST strings are not available at extraction time;
+//     when the VALUE_LIST strings are not available at extraction time —
+//     but only where the entry can be attributed to this very enum, which
+//     [ccudata.Translations.ParameterValueByIndex] decides;
 //  3. humanisation of the raw token ("HIGH_PRIORITY" → "High Priority"),
 //     so the result is always presentable.
 //
@@ -45,8 +45,14 @@ func ValueListLabel(
 		if got := t.ParameterValue(locale, channelType, parameter, value); got != value {
 			return got
 		}
-		idx := strconv.Itoa(index)
-		if got := t.ParameterValue(locale, channelType, parameter, idx); got != idx {
+		// The index retry may not walk the same stages the token lookup
+		// does. An index is a position inside one enum, so an entry that
+		// does not describe that enum answers a different question: the
+		// HmIP-DLP's door-lock modes rendered as [Inaktiv Aktiv Ein RGB],
+		// the first two from another device's CHANNEL_OPERATION_MODE and
+		// the last two from the value-only index, which knows nothing but
+		// the digit. ParameterValueByIndex carries that reasoning.
+		if got, ok := t.ParameterValueByIndex(locale, channelType, parameter, index); ok {
 			return got
 		}
 	}
