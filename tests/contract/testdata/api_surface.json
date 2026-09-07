@@ -1,5 +1,5 @@
 {
- "api_version": "11.1.0",
+ "api_version": "11.2.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -776,6 +776,8 @@
    "is_custom_dp_primary:boolean",
    "is_group_master:boolean",
    "is_in_multi_group:boolean",
+   "link_source_roles:array\u003cstring\u003e",
+   "link_target_roles:array\u003cstring\u003e",
    "locked:boolean",
    "name:string",
    "number:integer",
