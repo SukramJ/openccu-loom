@@ -78,6 +78,33 @@ func TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring(t *testing.T) {
 	)
 }
 
+// TestPin_CcuBackend_SetRenameDeviceBatchFn_WiredInCCUWiring pins that
+// ccu_wiring.go wires the batched rename hook. Without it the central
+// falls back to the per-address hook — correct, but every address makes
+// the backend fetch the CCU's whole inventory again (the CCU exposes no
+// address→ise-id method), so renaming a 13-channel device along with its
+// channels costs 14 full Device.listAllDetail listings instead of one.
+// The fallback keeps working, which is exactly why nothing else notices.
+func TestPin_CcuBackend_SetRenameDeviceBatchFn_WiredInCCUWiring(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"unit", "SetRenameDeviceBatchFn",
+	)
+}
+
+// TestPin_CcuBackend_GetIseIDsByAddresses_UsedInCCUWiring pins that the
+// batched hook resolves the whole rename set in one call. Resolving each
+// address through the single lookup instead would leave the batch hook in
+// place and give back none of what it exists for.
+func TestPin_CcuBackend_GetIseIDsByAddresses_UsedInCCUWiring(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"renameBackend", "GetIseIDsByAddresses",
+	)
+}
+
 // TestPin_wireCUxDInterface_CalledInCCUWiring pins that ccu_wiring.go calls
 // wireCUxDInterface for CUxD interfaces.  Removing this call would silently
 // fall through to the XML-RPC path, violating the CUxD-must-use-BIN-RPC

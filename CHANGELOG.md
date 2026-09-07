@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Accepting a paired device with "rename channels too" renamed only the
+  device.** The first-time configuration ran before the deferred device was
+  materialised, so the channel rename found no device in the model and
+  returned after renaming the device alone. The accept now materialises
+  first and configures afterwards, and the room / function assignments it
+  writes are stamped on the live model too, so a freshly accepted device
+  no longer renders without them until the five-minute device-details
+  refresh catches up.
+- **A device rename that carried its channels fetched the CCU's whole
+  inventory once per channel.** The CCU exposes no address→ise-id method,
+  so every address was resolved through its own `Device.listAllDetail`; a
+  13-channel device cost 14 full listings. The set is resolved in one call
+  now.
+
 ## [0.75.0] - 2026-09-07
 
 ### Fixed

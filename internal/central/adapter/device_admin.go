@@ -269,17 +269,30 @@ func (a *DeviceAdminDomain) ReleaseDevice(ctx context.Context, address string) e
 }
 
 // finishAccept runs the two steps that follow a successful promotion on
-// the accepting central: the optional first-time configuration and the
-// materialisation of a deferred device. The materialisation runs even
-// when the configuration failed — the device was accepted either way,
-// and leaving it parked would strand it — but a configuration failure is
-// still reported so the operator re-applies it.
+// the accepting central: the materialisation of a deferred device and
+// the optional first-time configuration.
+//
+// The materialisation goes first because the configuration reads the
+// model. [central.Unit.RenameDeviceWithChannels] renames the channels off
+// the model device and returns before its channel loop when the registry
+// does not hold the address, so configuring a device that was still
+// parked renamed the device on the CCU and left every channel with its
+// old name — the operator ticked "rename channels too" and no channel
+// was renamed at all.
+//
+// The configuration is attempted even when the materialisation failed:
+// the CCU accepted the device either way, and the rename and the
+// rooms / functions writes address it on the CCU directly. A
+// materialisation failure is the error that surfaces, because the device
+// stays parked and retryable; a configuration failure alone is wrapped
+// so the caller can tell the device WAS accepted.
 func (a *DeviceAdminDomain) finishAccept(
 	ctx context.Context, u *central.Unit, address string, opts interfaces.AcceptInboxOptions,
 ) error {
+	_, acceptErr := AcceptPendingDevice(ctx, u, address)
 	configErr := applyInitialConfig(ctx, u, address, opts)
-	if _, err := AcceptPendingDevice(ctx, u, address); err != nil {
-		return err
+	if acceptErr != nil {
+		return acceptErr
 	}
 	if configErr != nil {
 		return fmt.Errorf("%w: %w", interfaces.ErrAcceptConfigIncomplete, configErr)
@@ -294,9 +307,9 @@ func (a *DeviceAdminDomain) finishAccept(
 // partial failure is neither hidden nor short-circuits the remaining
 // steps. The rooms / functions writes go straight to the hub remotes
 // (Rega `set_device_rooms` / `set_device_functions`) rather than the
-// [DeviceAdminDomain.SetRooms] wrapper: a freshly accepted device may
-// not have materialised in the model registry yet, and the Rega scripts
-// address the device on the CCU directly.
+// [DeviceAdminDomain.SetRooms] wrapper: the CCU owns those assignments,
+// and addressing the device there keeps them working even when the
+// materialisation this runs after did not build a model device.
 func applyInitialConfig(
 	ctx context.Context, u *central.Unit, address string, opts interfaces.AcceptInboxOptions,
 ) error {
@@ -306,15 +319,41 @@ func applyInitialConfig(
 			errs = append(errs, fmt.Errorf("rename: %w", err))
 		}
 	}
+	// The hub remotes write to the CCU alone, and the materialisation this
+	// runs after read the CCU before those writes landed — so the model is
+	// stamped here too. Without it a freshly accepted device renders
+	// without its room and its function until the periodic device-details
+	// restamp catches up, up to five minutes later.
+	var dev *device.Device
+	if u.ModelRegistry != nil {
+		if d, ok := u.ModelRegistry.Get(address); ok && d != nil {
+			dev = d
+		}
+	}
+	var stamped bool
 	if opts.Rooms != nil && u.HubModel != nil {
-		if err := u.HubModel.SetDeviceRoomsRemote(ctx, address, opts.Rooms); err != nil {
+		switch err := u.HubModel.SetDeviceRoomsRemote(ctx, address, opts.Rooms); {
+		case err != nil:
 			errs = append(errs, fmt.Errorf("rooms: %w", err))
+		case dev != nil:
+			dev.SetRooms(opts.Rooms)
+			stamped = true
 		}
 	}
 	if opts.Functions != nil && u.HubModel != nil {
-		if err := u.HubModel.SetDeviceFunctionsRemote(ctx, address, opts.Functions); err != nil {
+		switch err := u.HubModel.SetDeviceFunctionsRemote(ctx, address, opts.Functions); {
+		case err != nil:
 			errs = append(errs, fmt.Errorf("functions: %w", err))
+		case dev != nil:
+			dev.SetFunctions(opts.Functions)
+			stamped = true
 		}
+	}
+	// One event for both assignments: it makes every north-bound adapter
+	// re-materialise the device's whole footprint, so a second one would
+	// only republish what the first already carried.
+	if stamped {
+		u.PublishDeviceMetadataChanged(dev)
 	}
 	return errors.Join(errs...)
 }

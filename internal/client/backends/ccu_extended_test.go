@@ -1319,6 +1319,84 @@ func TestCcuGetIseIDByAddressUnexpectedResultErrors(t *testing.T) {
 	}
 }
 
+// TestCcuGetIseIDsByAddressesUsesOneRoundTripForEveryAddress is the cost
+// guard behind the batched rename. Device.listAllDetail returns the whole
+// CCU inventory, so resolving the addresses one by one refetched it once
+// per address — a device rename that carries its channels along cost one
+// full listing per channel.
+func TestCcuGetIseIDsByAddressesUsesOneRoundTripForEveryAddress(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: decodeCCUResult(t, iseDetailEnvelope)}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	ids, err := b.GetIseIDsByAddresses(context.Background(), []string{
+		"00245A49949662", "00245A49949662:0", "00245A49949662:1",
+	})
+	if err != nil {
+		t.Fatalf("GetIseIDsByAddresses: %v", err)
+	}
+	want := map[string]int{
+		"00245A49949662":   18470,
+		"00245A49949662:0": 18471,
+		"00245A49949662:1": 18499,
+	}
+	for address, wantID := range want {
+		if ids[address] != wantID {
+			t.Errorf("ise id for %s = %d, want %d", address, ids[address], wantID)
+		}
+	}
+	if calls := j.called.Load(); calls != 1 {
+		t.Fatalf("Device.listAllDetail was called %d time(s) for 3 addresses, want exactly 1 — "+
+			"the whole CCU inventory is fetched per address again", calls)
+	}
+}
+
+// TestCcuGetIseIDsByAddressesOmitsUnknownAddresses pins the difference
+// between "the CCU does not list this address" and "the CCU answered 0":
+// an unknown address has no entry at all, so the caller can refuse the
+// rename instead of dispatching setName against object 0.
+func TestCcuGetIseIDsByAddressesOmitsUnknownAddresses(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: decodeCCUResult(t, iseDetailEnvelope)}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	ids, err := b.GetIseIDsByAddresses(context.Background(), []string{"00245A49949662", "NOSUCH:1"})
+	if err != nil {
+		t.Fatalf("GetIseIDsByAddresses: %v", err)
+	}
+	if _, present := ids["NOSUCH:1"]; present {
+		t.Errorf("unknown address is in the map as %d, want absent", ids["NOSUCH:1"])
+	}
+	if ids["00245A49949662"] != 18470 {
+		t.Errorf("known address resolved to %d, want 18470", ids["00245A49949662"])
+	}
+}
+
+// TestCcuGetIseIDsByAddressesEmptyInputMakesNoCall pins that an empty
+// rename set costs the CCU nothing.
+func TestCcuGetIseIDsByAddressesEmptyInputMakesNoCall(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: decodeCCUResult(t, iseDetailEnvelope)}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	ids, err := b.GetIseIDsByAddresses(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("GetIseIDsByAddresses: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("ids = %v, want empty", ids)
+	}
+	if calls := j.called.Load(); calls != 0 {
+		t.Errorf("the CCU was called %d time(s) for an empty address set", calls)
+	}
+}
+
+func TestCcuGetIseIDsByAddressesNoJSON(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(&fakeCaller{}, nil, nil)
+	_, err := b.GetIseIDsByAddresses(context.Background(), []string{"ADDR"})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // GetLinkInfo
 // ---------------------------------------------------------------------------

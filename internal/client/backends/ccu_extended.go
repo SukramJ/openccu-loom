@@ -907,37 +907,74 @@ func (b *CcuBackend) DeleteSystemVariable(ctx context.Context, name string) (boo
 //
 // Wire: Device.listAllDetail, no params.
 func (b *CcuBackend) GetIseIDByAddress(ctx context.Context, address string) (int, error) {
+	ids, err := b.GetIseIDsByAddresses(ctx, []string{address})
+	if err != nil {
+		return 0, fmt.Errorf("resolve ise id for %s: %w", address, err)
+	}
+	return ids[address], nil
+}
+
+// GetIseIDsByAddresses resolves several device and / or channel addresses
+// to their ReGa ISE-IDs in a single Device.listAllDetail round trip.
+//
+// The listing is the whole CCU inventory and carries every address in it,
+// so resolving n addresses one at a time means fetching that same
+// inventory n times. Renaming a device along with its channels is exactly
+// that shape: a 13-channel device cost 14 full listings.
+//
+// Addresses the CCU does not list are absent from the map rather than
+// present with a zero id, so the caller tells "unknown address" from "the
+// CCU answered 0" without a second convention.
+//
+// Wire: Device.listAllDetail, no params.
+func (b *CcuBackend) GetIseIDsByAddresses(ctx context.Context, addresses []string) (map[string]int, error) {
 	if b.json == nil {
-		return 0, ErrUnsupported
+		return nil, ErrUnsupported
+	}
+	out := make(map[string]int, len(addresses))
+	if len(addresses) == 0 {
+		return out, nil
+	}
+	wanted := make(map[string]struct{}, len(addresses))
+	for _, address := range addresses {
+		wanted[address] = struct{}{}
 	}
 	raw, err := b.json.Call(ctx, "Device.listAllDetail")
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	devices, ok := raw.([]any)
 	if !ok {
-		return 0, fmt.Errorf("resolve ise id for %s: unexpected result type %T", address, raw)
+		return nil, fmt.Errorf("list device details: unexpected result type %T", raw)
 	}
 	for _, entry := range devices {
 		device, isMap := entry.(map[string]any)
 		if !isMap {
 			continue
 		}
-		if id, found := detailEntryISEID(device, address); found {
-			return id, nil
-		}
+		collectDetailEntryISEID(device, wanted, out)
 		channels, _ := device["channels"].([]any)
 		for _, channelEntry := range channels {
 			channel, isMap := channelEntry.(map[string]any)
 			if !isMap {
 				continue
 			}
-			if id, found := detailEntryISEID(channel, address); found {
-				return id, nil
-			}
+			collectDetailEntryISEID(channel, wanted, out)
 		}
 	}
-	return 0, nil
+	return out, nil
+}
+
+// collectDetailEntryISEID records one Device.listAllDetail entry's id in
+// out when its address is one of the wanted ones.
+func collectDetailEntryISEID(entry map[string]any, wanted map[string]struct{}, out map[string]int) {
+	address, _ := entry["address"].(string)
+	if _, want := wanted[address]; !want {
+		return
+	}
+	if id, found := detailEntryISEID(entry, address); found {
+		out[address] = id
+	}
 }
 
 // detailEntryISEID reports the numeric id of one Device.listAllDetail entry
