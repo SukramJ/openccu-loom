@@ -4,6 +4,35 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.75.0
+
+Fixed: two repo-wide defect audits, every finding closed. The ones you may
+have felt: Matter multi-admin never worked (the AdministratorCommissioning
+cluster had no window controller, so a second controller was always told
+BUSY; a controller keeps its admin rights after commissioning now). A CCU
+whose callback endpoint could not be announced at boot stayed "connecting"
+forever while every read and write worked; it now comes up in read-through
+mode and says so. HmIP-DLD/DLP door locks got one random profile per boot.
+HM-CC-TC "heat" drove the setpoint to 30 °C, and no thermostat ever reported
+"off". The MP3P LED wrote timer parameters the channel does not carry. A
+weekly-program slot switched the wrong channel on ordinary HmIP devices, and
+the channel-lock editor with it. Leaving away mode writes what the CCU
+expects. A device unpaired while the daemon was down is no longer a ghost
+after restart. Alarm chirps on a shared siren channel no longer cut a live
+alarm; an MP3P chirp output no longer degrades alarm health. MCP writes
+honour the channel lock. A hot MQTT reload with an unchanged client id no
+longer fights itself. TLS certificates reload on file change. Backup never
+mints a master key silently. Non-Latin-1 text in a value is refused with a
+clear message instead of an opaque RPC error.
+
+Added: `north.rest.auth.session_idle_timeout` — sessions idle longer than
+this are dropped even while the absolute lifetime has room. Empty keeps the
+previous single-lifetime behaviour.
+
+Changed: REST API version 11.1.0 (additive). Config import and paramset copy
+now pass the same edit lock as a direct MASTER write; `PUT …/paramsets/LINK`
+is refused (LINK is written per peer); the OIDC callback redirects with 303.
+
 # 0.74.0
 
 Added: read/write selection lists and the MP3P sound player now appear in the

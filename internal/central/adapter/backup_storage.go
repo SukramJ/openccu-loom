@@ -132,8 +132,9 @@ func NewFilesystemBackupStorage(dir string) (*FilesystemBackupStorage, error) {
 // writeNoBackupTag drops [NoBackupTagName] into dir. It is best-effort by
 // design: a directory that rejects the marker (read-only mount, foreign
 // ownership) can still serve every archive already in it, and failing
-// construction would take the whole backup surface down over a file whose
-// only reader is tar on a different machine.
+// construction would take the whole backup surface down over a marker
+// whose readers — the CCU's tar and the daemon's own backup walk — treat
+// its absence as "nothing to skip".
 func writeNoBackupTag(dir string) {
 	path := filepath.Join(dir, NoBackupTagName)
 	if _, err := os.Stat(path); err == nil {

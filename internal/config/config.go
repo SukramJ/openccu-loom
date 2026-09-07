@@ -2270,14 +2270,14 @@ func validateCentralNames(centrals []CentralConfig) error {
 // URLs. The TCP port has its own config field.
 //
 // This is the authority for what centrals[].host may contain, and it is
-// deliberately permissive: underscores
-// are accepted here (see [centralHostLabel]) because home LANs hand them
-// out, while the public helper applies the strict DNS grammar and a
-// 63-octet label cap. The public helper has no production caller today,
-// so nothing observes the difference — but a future surface that reaches
-// for the obvious public helper would reject a host this validator
-// accepts on purpose. Unify the two only by deciding which grammar
-// centrals[].host is supposed to have, not by matching one to the other.
+// deliberately permissive: underscores are accepted (see
+// [centralHostLabel]) because home LANs hand them out, and no 63-octet
+// label cap is enforced. The strict DNS grammar (RFC 1123 labels, no
+// underscore) is not applied anywhere in the repository today. A future
+// surface that adds a strict validator must not be matched to this one
+// blindly: decide which grammar centrals[].host is supposed to have first,
+// or the stricter surface will reject a host this validator accepts on
+// purpose.
 func validateCentralHost(idx int, host string) error {
 	// IP literal, bare or bracketed (IPv6 URL form).
 	candidate := host

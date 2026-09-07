@@ -577,8 +577,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// Every Matter bridge lifecycle starts with the operational
 	// session manager + MRP ack tracker — both feed the receive
 	// pipeline regardless of whether commissioning is active. PASE
-	// is conditional on a configured passcode; CASE wiring is
-	// deferred until fabric-identity persistence is plumbed.
+	// is conditional on a configured passcode; the CASE provider is
+	// wired unconditionally further down (see the note there).
 	opMgr := operational.NewManager(store)
 	opMgrSlot = opMgr // late-bind into the AdoptFabric closure above
 	sessionLookup := matterbridge.NewOperationalSessionLookup(
@@ -621,7 +621,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}).WithRetransmitIntervalResolver(func(id uint16, now time.Time) (time.Duration, bool) {
 		// Resolves the peer-appropriate MRP base interval so outbound
 		// retransmissions honour the peer's advertised session
-		// parameters (matter.js MRP.ts:129 retransmissionIntervalOf).
+		// parameters (matter.js MRP.ts:162 retransmissionIntervalOf).
 		entry, err := opMgr.Get(id)
 		if err != nil || entry == nil {
 			return 0, false
@@ -778,7 +778,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				// persisted NOC (new NodeID included) and announce the
 				// new operational instance. The stale instance was
 				// already withdrawn by the cluster's OnFabricWithdraw.
-				// Mirrors matter.js DeviceAdvertiser.ts:65-76 (fabric
+				// Mirrors matter.js DeviceAdvertiser.ts:79-106 (fabric
 				// update → close old advertisement, re-advertise).
 				if fab, ferr := store.GetFabric(ctx, fabricIndex); ferr == nil {
 					caseRefresh(ctx, fabricIndex, fab.FabricID, fab.NodeID, fab.RootPublicKey)
@@ -1036,7 +1036,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				}
 				// Carry the initiator's Sigma1 MRP hints onto the session
 				// so outbound retransmissions honour the peer's intervals
-				// (matter.js MRP.ts:129).
+				// (matter.js MRP.ts:162).
 				if resp := adapter.SnapshotResponder(); resp != nil {
 					if sp, ok := resp.PeerSessionParameters(); ok {
 						entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
@@ -1308,7 +1308,7 @@ func buildCaseAdapter(ctx context.Context, cfg config.NorthMatterCASE, mgr *oper
 		}
 		// Carry the initiator's Sigma1 MRP hints onto the session so
 		// outbound retransmissions honour the peer's intervals
-		// (matter.js MRP.ts:129).
+		// (matter.js MRP.ts:162).
 		if resp := caseAdapter.SnapshotResponder(); resp != nil {
 			if sp, ok := resp.PeerSessionParameters(); ok {
 				entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
@@ -1628,7 +1628,7 @@ func (r caseDestinationResolver) ResolveSigma1Destination(destinationID [32]byte
 // (there is no Sigma3 / DestinationID on resume), so the lookup is a
 // plain map hit. A miss means the fabric was removed after the record
 // was written; the responder then falls through to Full Sigma.
-// Mirrors matter.js CaseServer.ts:151 taking `fabric` from the record.
+// Mirrors matter.js CaseServer.ts:153 taking `fabric` from the record.
 func (r caseDestinationResolver) ResolveFabricIndex(fabricIndex uint8) (*sigma.Identity, sigma.PeerVerifier, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -1782,7 +1782,7 @@ func (a caseResumptionStoreAdapter) GetByID(resumptionID []byte) (*sigma.Resumpt
 	}
 	// Hand the full record through: the resume path has no Sigma3, so
 	// FabricIndex / PeerNodeID / CATs are authoritative from persistence
-	// alone (matter.js CaseServer.ts:151 destructures fabric, peerNodeId
+	// alone (matter.js CaseServer.ts:153 destructures fabric, peerNodeId
 	// and caseAuthenticatedTags straight from the record).
 	return &sigma.ResumptionRecord{
 		ResumptionID: rec.ResumptionID,
@@ -2054,7 +2054,7 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 	refs.GeneralCommissioning = gc
 
 	// NetworkCommissioning (0x0031) is MANDATORY on RootEndpoint per
-	// matter.js HEAD `packages/model/src/standard/elements/root-node.element.ts:34`
+	// matter.js HEAD `packages/model/src/standard/elements/root-node.element.ts:40`
 	// (`conformance: "!CustomNetworkConfig"` = mandatory unless the
 	// device exposes its own CustomNetworkConfig feature, which a
 	// stationary Matter bridge never does). Without it Apple Home's
@@ -2071,7 +2071,7 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 	out = append(out, netComm)
 
 	// DiagnosticLogs (0x0032) is optional on RootEndpoint
-	// (matter.js root-node.element.ts:35 `conformance: "O"`). Not
+	// (matter.js root-node.element.ts:41 `conformance: "O"`). Not
 	// mounted here — the bridge has no diagnostic-log surface yet.
 	gd := mattercore.NewGeneralDiagnostics(mattercore.BootReasonPowerOnReboot)
 	out = append(out, gd)
@@ -2282,7 +2282,7 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 			OnFabricWithdraw: func(ctx context.Context, compressedID [8]byte, nodeID uint64) {
 				// Retire the operational instance of a removed fabric (or
 				// the old-NodeID instance after UpdateNOC). Mirrors
-				// matter.js DeviceAdvertiser.ts:76-86.
+				// matter.js DeviceAdvertiser.ts:110-112.
 				bridge.WithdrawFabric(ctx, compressedID, nodeID)
 			},
 			OnFabricInstalled: func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte) {

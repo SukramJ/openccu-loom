@@ -57,11 +57,12 @@ type CentralNameLister interface {
 // switching; when nil, the subscriber drops profile commands with a
 // debug breadcrumb.
 //
-// The interface deliberately mirrors the REST `ScheduleService.SetActiveProfile`
-// shape so a single implementation backs both surfaces. `central`,
-// `iface`, and the addr+channel split are extracted from the MQTT
-// topic; `profileKey` is one of "P1".."PN" — the implementation
-// validates the key against the channel's [AvailableProfiles].
+// The interface carries the REST `ScheduleService.SetActiveProfile`
+// arguments (address, channel, profile key) plus the central, interface
+// and priority the MQTT topic supplies and REST resolves itself, so one
+// implementation backs both surfaces behind a thin adapter. `profileKey`
+// is one of "P1".."PN" — the implementation validates the key against
+// the channel's [AvailableProfiles].
 type WeekProfileSink interface {
 	SetActiveProfile(ctx context.Context,
 		centralName, interfaceID, deviceAddress string, channel int,

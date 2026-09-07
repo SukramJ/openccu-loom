@@ -9497,8 +9497,8 @@ func TestExpandPresets_MarshalError(t *testing.T) {
 			},
 		},
 	}
-	// No registry, writer, translations or profiles needed — expandPresets
-	// only reads a.easymode.
+	// No registry, writer or profiles needed — expandPresets reads
+	// a.easymode, and resolvePresetLabel tolerates a nil translations.
 	a := NewUISchemaAdapter(nil, nil, nil, em, nil)
 
 	// Call expandPresets directly (same package).
