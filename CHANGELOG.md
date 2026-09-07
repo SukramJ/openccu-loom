@@ -21,6 +21,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so every address was resolved through its own `Device.listAllDetail`; a
   13-channel device cost 14 full listings. The set is resolved in one call
   now.
+- **An enum label could change across restarts with nothing in the data
+  changing.** The value-only reverse index keeps the shortest label a value
+  carries anywhere in the translation table, and a tie was left to Go's
+  randomised map iteration — "off" carries both "Aus" and "aus" at three
+  characters, so the SPA, the REST DTOs and the MQTT discovery payload
+  disagreed between runs. Ties are broken by the label now.
 
 ## [0.75.0] - 2026-09-07
 
