@@ -30,7 +30,7 @@ require (
 
 require github.com/rogpeppe/go-internal v1.16.0
 
-require github.com/SukramJ/go-openccu-data v0.1.3
+require github.com/SukramJ/go-openccu-data v0.1.4
 
 require golang.org/x/term v0.45.0
 

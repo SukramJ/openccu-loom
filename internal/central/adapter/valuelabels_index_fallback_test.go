@@ -31,32 +31,43 @@ var doorLockOperationModes = []struct {
 // VALUE_LIST token no table knows renders as the humanised token, never as
 // a label lifted from a different enum.
 //
-// The door lock's operation modes came out as "Inaktiv Aktiv Ein RGB". The
-// tokens are unknown, so the lookup retried with the *index* — and an index
-// retry that is allowed to fall through the unqualified stages answers from
-// somewhere else entirely: "channel_operation_mode=0/1" was extracted from a
-// device whose enum starts Inaktiv/Aktiv, and indices 2 and 3 reached the
-// value-only reverse index, which returns "the shortest label any parameter
-// has for the VALUE 2 / 3" — hence a colour on a door lock.
+// The HmIP-DLP's door-lock operation modes came out as "Inaktiv Aktiv Ein
+// RGB". The tokens were unknown, so the lookup retried with the *index* —
+// and an index retry allowed to fall through the unqualified stages
+// answers from somewhere else entirely: "channel_operation_mode=0/1" was
+// extracted from a device whose enum starts Inaktiv/Aktiv, and indices 2
+// and 3 reached the value-only reverse index, which returns "the shortest
+// label any parameter has for the VALUE 2 / 3" — hence a colour on a door
+// lock.
+//
+// The three channels that reported the defect are curated now
+// (curated overlay, extract snapshot 2026.9.0), so they can no longer show
+// it: their tokens resolve on the first stage and the index retry never
+// runs. The channel types below carry the same parameter with no curated
+// entry, which is what keeps this measuring the lookup rather than the
+// data — with the shipped-before index retry restored, each renders
+// [Inaktiv Aktiv Ein RGB].
 func TestValueListLabelsDoNotBorrowAnotherEnumsLabelsByIndex(t *testing.T) {
 	t.Parallel()
 	tr, err := ccudata.LoadTranslationsEmbedded()
 	if err != nil {
 		t.Fatalf("LoadTranslationsEmbedded: %v", err)
 	}
-	// Labels the extract holds for a different enum under the same
-	// parameter name, plus the value-only index answers for "2" and "3".
-	borrowed := map[string]bool{
-		"Inaktiv": true, "Aktiv": true, "RGB": true,
-		"Inactive": true, "Active": true,
-	}
-	for _, tc := range doorLockOperationModes {
+	// Four tokens no table carries, on channel types the curated overlay
+	// does not name for this parameter.
+	unknown := []string{"MODE_A", "MODE_B", "MODE_C", "MODE_D"}
+	for _, channelType := range []string{
+		"PASSAGE_DETECTOR_COUNTER_TRANSMITTER",
+		"ROTARY_HANDLE_TRANSCEIVER",
+		"KEY_TRANSCEIVER",
+	} {
 		for _, locale := range []string{"de", "en"} {
-			got := ValueListLabels(tr, locale, tc.channelType, "CHANNEL_OPERATION_MODE", tc.values)
+			got := ValueListLabels(tr, locale, channelType, "CHANNEL_OPERATION_MODE", unknown)
 			for i, label := range got {
-				if borrowed[label] {
-					t.Errorf("channel %d (%s) %s: value %q rendered as %q — that label belongs to a different enum",
-						tc.channel, tc.channelType, locale, tc.values[i], label)
+				if want := humanizeRaw(unknown[i]); label != want {
+					t.Errorf("%s %s: value %q rendered as %q, want %q — "+
+						"that label belongs to a different enum",
+						channelType, locale, unknown[i], label, want)
 				}
 			}
 		}
@@ -65,11 +76,15 @@ func TestValueListLabelsDoNotBorrowAnotherEnumsLabelsByIndex(t *testing.T) {
 
 // TestValueListLabelsOfTheDoorLockOperationMode records what the three
 // channels render as, so a later change to the lookup chain or to the
-// embedded extract has to state its effect rather than drift silently.
+// embedded extract has to state its effect rather than drift silently. It
+// did its job once already: the curated labels below replaced humanised
+// tokens when the curated overlay of extract snapshot 2026.9.0 landed,
+// and this was the test that reported the change.
 //
-// "Aus" / "Ein" are not borrowed: those come from the *token* lookup, which
-// keeps all four of its stages — the tokens OFF and ON are values the
-// tables genuinely carry. Only the index retry is restricted.
+// Every label here now comes from a channel-type-qualified curated entry,
+// resolved by the token lookup's first stage — the index retry is not
+// involved at all. The counterweight tests below are what keep the
+// restriction itself measured.
 func TestValueListLabelsOfTheDoorLockOperationMode(t *testing.T) {
 	t.Parallel()
 	tr, err := ccudata.LoadTranslationsEmbedded()
@@ -84,19 +99,23 @@ func TestValueListLabelsOfTheDoorLockOperationMode(t *testing.T) {
 		{
 			"ACCELERATION_TRANSCEIVER",
 			doorLockOperationModes[0].values,
-			[]string{"Aus", "Tilt Detection", "Any Motion", "Tilt And Motion Detection"},
+			[]string{
+				"Aus", "Neigungserkennung", "Bewegungserkennung",
+				"Neigungs- und Bewegungserkennung",
+			},
 		},
 		{
 			"DOOR_STATE_TRANSCEIVER",
 			doorLockOperationModes[1].values,
-			[]string{"Aus", "Ein", "On Auto Calibration"},
+			[]string{"Aus", "Ein", "Ein mit Autokalibrierung"},
 		},
 		{
 			"DOOR_LOCK_TRANSCEIVER",
 			doorLockOperationModes[2].values,
 			[]string{
-				"Ignore Door Open", "Skip Hold Time Opening",
-				"Skip Relock Delay Closing", "Skip Hold Time Opening Relock Delay Closing",
+				"Türzustand ignorieren", "Haltezeit beim Öffnen überspringen",
+				"Wartezeit vor Auto Relock überspringen",
+				"Haltezeit und Auto-Relock-Wartezeit überspringen",
 			},
 		},
 	} {

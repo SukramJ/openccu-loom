@@ -8,6 +8,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The HmIP door lock's operation modes are named now.** The curated
+  translation overlay gained channel-type-qualified labels for
+  `CHANNEL_OPERATION_MODE` on the door-lock drive, the acceleration sensor
+  and the door-state sensor — three channel types that carry the same
+  parameter with a different value list each, and none of which any source
+  had a label for. The CCU's own channel-type label for the door-lock drive
+  ("Tüschlossantrieb", a typo upstream) is corrected to
+  "Türschlossantrieb".
 - **Saving a direct link could report a failure the CCU never returned.**
   Leaving the link editor while its LINK write was still on the wire nulled
   the Link object the editor's props were derived from, and the save path

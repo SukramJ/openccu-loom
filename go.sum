@@ -4,8 +4,8 @@ github.com/SukramJ/go-fabric v0.0.0-20260907130242-f06fc1cb3756 h1:VB/NzDP9MXdP5
 github.com/SukramJ/go-fabric v0.0.0-20260907130242-f06fc1cb3756/go.mod h1:M9xzANh5b2rw/8xdomUt8L1+BK4nMeztijNmsvkwR6s=
 github.com/SukramJ/go-mqtt v1.3.0 h1:kCL4oWtxNFIRKd9GrxlsWOn6C6O/QXzBXwUntkG45MY=
 github.com/SukramJ/go-mqtt v1.3.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
-github.com/SukramJ/go-openccu-data v0.1.3 h1:5nhTomKWT7rp2zFkT1GLpkhhf+fKQfmhRSsUnqOS4cE=
-github.com/SukramJ/go-openccu-data v0.1.3/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
+github.com/SukramJ/go-openccu-data v0.1.4 h1:Z+oIPWQgq7Z/gpR7LXU7HC3b+AWzrdsYVt+csm0uCpI=
+github.com/SukramJ/go-openccu-data v0.1.4/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
 github.com/SukramJ/godevccu v0.2.2 h1:kkxpRxf/s2neaEoPUiOOKyF9X/+6Bx+HincYw/HqvE8=
 github.com/SukramJ/godevccu v0.2.2/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
