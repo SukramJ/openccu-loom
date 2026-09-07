@@ -8,6 +8,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Saving a direct link could report a failure the CCU never returned.**
+  Leaving the link editor while its LINK write was still on the wire nulled
+  the Link object the editor's props were derived from, and the save path
+  reads those props again after the write returns — so a write the CCU had
+  accepted surfaced as "Save failed: Cannot read properties of null
+  (reading 'sender_address')". The editor is fed the addresses and labels
+  as plain strings now, snapshotted when it opens.
 - **Accepting a paired device with "rename channels too" renamed only the
   device.** The first-time configuration ran before the deferred device was
   materialised, so the channel rename found no device in the model and

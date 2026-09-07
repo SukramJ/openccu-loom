@@ -1,17 +1,44 @@
 <script lang="ts">
-  import type { Link } from "$lib/api/types";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import { t } from "$lib/i18n";
 
+  // Primitives rather than the Link object, and deliberately so.
+  //
+  // The panel used to take the Link straight from the parent's nullable
+  // `editing` holder. ChannelPanel.save() reads its props again after
+  // `await api.putLinkParamset(...)` — its `peer` is the sender address
+  // this component derives — so an operator who left the editor while
+  // the PUT was in flight nulled that holder underneath a running save.
+  // The CCU had accepted the write; the UI reported "channel.save_failed:
+  // Cannot read properties of null (reading 'sender_address')".
+  //
+  // A string prop cannot be dereferenced, so no read after any await can
+  // fail however the parent's own state moves on.
   type Props = {
-    link: Link;
+    senderAddress: string;
+    receiverAddress: string;
+    name: string;
+    senderDeviceLabel: string;
+    senderChannelLabel: string;
+    receiverDeviceLabel: string;
+    receiverChannelLabel: string;
     locale: string;
     onBack: () => void;
   };
 
-  let { link, locale, onBack }: Props = $props();
+  let {
+    senderAddress,
+    receiverAddress,
+    name,
+    senderDeviceLabel,
+    senderChannelLabel,
+    receiverDeviceLabel,
+    receiverChannelLabel,
+    locale,
+    onBack,
+  }: Props = $props();
 
   // A direct link carries a LINK paramset on BOTH ends, each keyed by
   // the opposite channel: the receiver side holds the actuator
@@ -23,14 +50,12 @@
   // unconditionally and the sender side only when its channel reports a
   // non-empty paramset. Mirrors config-panel link-config.ts:66-91,
   // which fetches both schemas and treats the sender side as optional.
-  const receiverDevice = $derived(link.receiver_address.split(":")[0]);
+  const receiverDevice = $derived(receiverAddress.split(":")[0]);
   const receiverChannelNo = $derived(
-    Number(link.receiver_address.split(":")[1] ?? 0),
+    Number(receiverAddress.split(":")[1] ?? 0),
   );
-  const senderDevice = $derived(link.sender_address.split(":")[0]);
-  const senderChannelNo = $derived(
-    Number(link.sender_address.split(":")[1] ?? 0),
-  );
+  const senderDevice = $derived(senderAddress.split(":")[0]);
+  const senderChannelNo = $derived(Number(senderAddress.split(":")[1] ?? 0));
 
   // -1 = not yet probed, 0 = no sender-side paramset (section hidden),
   // >0 = sender carries parameters (section shown).
@@ -48,13 +73,13 @@
         ← {t("links.config.back_to_list")}
       </button>
       <h2 class="mt-2 text-lg font-semibold">
-        {link.name || `${link.sender_address} → ${link.receiver_address}`}
+        {name || `${senderAddress} → ${receiverAddress}`}
       </h2>
       <p class="text-xs text-[var(--ha-secondary-text-color)]">
-        {link.sender_device_name || link.sender_address}
-        · {link.sender_channel_type_label || link.sender_channel_type}
-        → {link.receiver_device_name || link.receiver_address}
-        · {link.receiver_channel_type_label || link.receiver_channel_type}
+        {senderDeviceLabel}
+        · {senderChannelLabel}
+        → {receiverDeviceLabel}
+        · {receiverChannelLabel}
       </p>
     </div>
     <Button type="button" variant="outline" size="sm" onclick={onBack}>
@@ -72,7 +97,7 @@
       address={receiverDevice}
       channel={receiverChannelNo}
       paramset="LINK"
-      peer={link.sender_address}
+      peer={senderAddress}
       {locale}
     />
   </section>
@@ -96,7 +121,7 @@
       address={senderDevice}
       channel={senderChannelNo}
       paramset="LINK"
-      peer={link.receiver_address}
+      peer={receiverAddress}
       {locale}
       onLoaded={(info) => (senderParamCount = info.error ? 0 : info.count)}
     />
