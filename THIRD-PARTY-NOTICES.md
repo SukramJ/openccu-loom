@@ -128,10 +128,14 @@ the matter.js `path:function` they mirror.
   [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt).
 - No matter.js source code is reproduced verbatim. What does ship inside every
   binary is the parity schema snapshot — the matter.js element model extracted
-  from HEAD — embedded from `internal/north/matter/parity/schema.json`
-  (516,843 bytes) by the `//go:embed` in
-  `internal/north/matter/parity/parity.go`. The master copy it is kept in sync
-  with lives at `notes/parity/matter/matter-schema-snapshot.json`.
+  from HEAD. Since the Matter wire stack moved out in 0.74.0 it is embedded by
+  the [go-fabric](https://github.com/SukramJ/go-fabric) module rather than by
+  this repository: `parity/schema.json` (522,654 bytes), embedded by the
+  `//go:embed` in go-fabric's `parity/parity.go` and reaching every binary
+  built here through the module dependency in `go.mod`.
+  The master copy it is kept in sync with stays in this repository, at
+  `notes/parity/matter/matter-schema-snapshot.json`, because the licence pin
+  travels with it; the two are byte-identical (verified 2026-09-08).
 
 ### home-assistant-matter-bridge — Apache-2.0
 

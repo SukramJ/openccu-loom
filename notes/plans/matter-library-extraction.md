@@ -384,10 +384,23 @@ A request command and a response command sharing an ID therefore collapse (last 
 * **Neither project implements §10.6.9 device-side subscription resumption** — a grep for `subscriptionResumption|resumeSubscription|persistedSubscription` over `../matter.js/packages/{protocol,node}/src` returns nothing.
 * Of matter.js's 135 `*Server.ts` files, **82 carry the regeneration marker and only 53 are hand-written** — consistent with the partition in §3.3.
 
-**The real deficit is conformance *evidence*, not protocol depth**, and two evidence-chain claims are refuted by measurement:
+**The real deficit is conformance *evidence*, not protocol depth.** Two
+evidence-chain claims were refuted by measurement here; both are **closed**,
+because the document carrying them moved to
+[go-fabric `notes/reference/matter-conformance.md`](https://github.com/SukramJ/go-fabric/blob/main/notes/reference/matter-conformance.md)
+and was rewritten in the move rather than copied. Verified 2026-09-08 against
+that copy: neither "manually verified" nor "ship blocker" appears in it any
+more. What the claims had said, and why they were wrong, is kept here because
+the measurement is the reason they went:
 
-* `notes/reference/matter-conformance.md:63-64` states each manual controller run *"is recorded in `CHANGELOG.md` as `[manually verified]`"* — `grep -c "manually verified" CHANGELOG.md` → **0**.
-* The same file at `:54-55` calls chip-tool *"a ship blocker: no green chip-tool pairing run, no release"*, yet `.claude/skills/release/SKILL.md:53` gates on `make lint && make test && make contract` and the skill contains zero occurrences of "matter" or "chiptool", while `.github/workflows/chiptool.yml:58-61` gates all three jobs on schedule / `workflow_dispatch` / the `needs-chiptool` label.
+* It stated each manual controller run *"is recorded in `CHANGELOG.md` as
+  `[manually verified]`"* — `grep -c "manually verified" CHANGELOG.md` → **0**,
+  in this repository and in go-fabric.
+* It called chip-tool *"a ship blocker: no green chip-tool pairing run, no
+  release"*, yet `.claude/skills/release/SKILL.md:53` gates on
+  `make lint && make test && make contract` and contains zero occurrences of
+  "matter" or "chiptool", while the chip-tool workflow gates its jobs on
+  schedule / `workflow_dispatch` / a label.
 
 ---
 
@@ -559,7 +572,7 @@ an empty generated subclass, so the substance held.
 | **P4.4** | Path-filter the chiptool trigger on `internal/north/matter/**` | `.github/workflows/chiptool.yml:58-61` carries a `paths:` filter on `internal/north/matter/**`; bite proof: a one-line change under that path opens a PR **without** the `needs-chiptool` label and the chiptool job runs | M | — | — |
 | **P4.5** | Close the fuzz gap | `Makefile:365` lists `./internal/north/matter/tlv/...` but `grep -rn Fuzz internal/north/matter/tlv/` → **no match** (reproduced), so that leg silently runs nothing. Add TLV, `transport/message`, `secure/channel`, `secure/mattercert` (535 lines of DER), `secure/setup` — the last two parse attacker-supplied bytes. Commit seed corpora. Today the only Matter fuzz targets are four in `im/fuzz_invoke_test.go:18,33,45,56` | M | — | — |
 | **P4.6** | Coverage floor + benchmarks for the subtree | `script/coverage_per_package.sh` names **no** `internal/north/matter/*` package and sets `FLOOR=0` for anything unlisted (`:94`); `grep -rn Benchmark internal/north/matter/` → **no match**. Note the subtree is heavily tested in absolute terms (301 test files, 95,771 test LOC vs 52,061 non-test) — this is a missing ratchet, not missing tests | M | — | P2.2 |
-| **P4.7** | Fix the two evidence-chain claims | Either start recording the manual controller runs in `CHANGELOG.md`, or delete the claims at `notes/reference/matter-conformance.md:54-55` and `:63-64` (§3.4) | S | — | — |
+| **P4.7** | ~~Fix the two evidence-chain claims~~ | **Done** — the second option was taken, elsewhere: the document moved to go-fabric and was rewritten in the move, so neither claim survives. Verified 2026-09-08 against the go-fabric copy. §3.4 records what they had said | S | — | — |
 | **P4.8** | Matter-specific threat model | A `notes/audits/matter-threat-model.md` exists covering PASE passcode brute-force budget, fail-safe abuse, fabric isolation and group-key handling, and each of the 16 `//nolint` directives under `internal/north/matter/secure/` carries a one-line justification a reviewer signed off. Context: `docs/SECURITY.md` is daemon-scoped (Matter is one asset row at `:20`, one danger note at `:71-72`), there is no root `SECURITY.md`, no crypto review among the 19 files under `notes/audits/`, CodeQL is explicitly non-blocking (`.github/workflows/codeql.yml:4-6`), and 130 `//nolint` sit in non-test Matter code | M | — | P2.1 |
 | **P4.9** | Go-module API-stability + deprecation policy | ~~The 6 Matter WS broadcasts in `assets/wsapi.json` carry `payload` schema references~~ — **done before this milestone was taken up**: all six name a schema and all six are defined in `openapi.yaml`; ADR 0020's deferral row is struck through. What remained, and is now done, is the module-side half: go-fabric states which packages are public, how a deprecation is marked and how long the window is, with two guards holding the policy to its word, and a named deprecation window appears in the module README. Context: the **REST** surface is already pinned (`tests/contract/testdata/api_surface.json` + `TestAPISurfaceChangesCarryTheRightBump`, `tests/contract/api_surface_bump_test.go:91`, against `internal/north/rest/handlers/info.go:13-19`); ADR 0050:61-75 has the right shape but is scoped to `go-mqtt` | S | D14 ✓ — own SemVer lane | P2.1 |
 | **P4.10** | Widen the CI matrix + add an upstream-freshness signal | The CI matrix builds and tests on at least one 32-bit GOARCH covering the shipped `goarm: ["7"]` target (`.goreleaser.yaml:29-31`), and a scheduled job fails when `git -C ../matter.js rev-list --count <sourceCommit>..HEAD` exceeds a declared threshold. Context: `GO_VERSION: "1.26.6"` hard-coded identically in all 10 workflow files; PR legs ubuntu + macos; Windows nightly-only and gates nothing (`nightly.yml:44-49`); armv7 is **shipped but never tested**; `tests/contract/matter_schema_sync_test.go:27-41` compares two in-repo copies and cannot detect upstream drift; the pin is **59 commits behind** | M | — | P2.2 |

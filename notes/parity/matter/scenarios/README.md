@@ -6,9 +6,12 @@ a real `*Bridge` instance with a real CASE session pair on UDP
 loopback. New scenarios drop in as data files — no Go code change
 required.
 
-Scenarios live alongside the matter.js parity fixtures
-(`im-wire-fixtures.json`) so the same audit walk covers both single-
-message wire shape **and** multi-message conversation behavior.
+Scenarios cover multi-message conversation behaviour. Their counterpart —
+the single-message wire shapes (`im-wire-fixtures.json`,
+`tlv-wire-fixtures.json`) — moved to
+[go-fabric `notes/parity/matter/`](https://github.com/SukramJ/go-fabric/tree/main/notes/parity/matter)
+with the wire stack, so an audit that wants both halves now walks two
+repositories.
 
 ## Test entrypoint
 

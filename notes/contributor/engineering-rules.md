@@ -203,9 +203,12 @@ rules mechanically.
 
 - ✅ Permanent docs: `CLAUDE.md`, `SPECIFICATION.md`,
   `docs/adr/*.md` (ADRs are immutable once landed),
-  `notes/parity/by_design.md`, `notes/reference/matter-conformance.md`,
-  `notes/concepts/matter-ui-concept.md`, and the matter.js / chip source-file
-  references (`packages/.../X.ts:line`, `src/.../Y.cpp:line`).
+  `notes/parity/by_design.md`, `notes/concepts/matter-ui-concept.md`, and the
+  matter.js / chip source-file references (`packages/.../X.ts:line`,
+  `src/.../Y.cpp:line`). The Matter wire-stack documents moved to go-fabric
+  with the code they describe — cite those from go-fabric's own comments, not
+  from here, because the guard resolves a cited path against this repository's
+  disk and a cross-repo path would silently never be checked.
 
 Do NOT cite transient audit-trail files in code comments: audit-run
 reports, hand-off memories, todo files, ad-hoc parity sweeps. The

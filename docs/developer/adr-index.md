@@ -5,7 +5,7 @@ Architecture Decision Records (ADRs) capture the consequential design choices be
 !!! info "Who this page is for"
     Contributors and developers who need the rationale behind a design choice. ADRs are immutable once landed: a superseded decision gets a new ADR rather than an edit to the old one.
 
-The table below catalogues every ADR. Each entry links to the record itself.
+The table below catalogues every ADR. Each entry links to the record itself — except the Matter wire-stack decisions, which moved to [go-fabric](https://github.com/SukramJ/go-fabric) with the code they describe. Their numbers are kept here as forwarding pages so existing links and bookmarks keep resolving, and those numbers are never reused: the next ADR continues from the highest number in this table.
 
 | # | Title | Summary |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ The table below catalogues every ADR. Each entry links to the record itself.
 | [0010](../adr/0010-discovery-payload-from-model.md) | Discovery payload from the model | HA-Discovery payload construction moves into the model. |
 | [0011](../adr/0011-mqtt-topic-and-payload-architecture.md) | MQTT topic & payload architecture | The topic and payload structure for the MQTT plane. |
 | [0012](../adr/0012-matter-pure-go-implementation.md) | Matter bridge: pure-Go | The Matter bridge is implemented in pure Go, no CGo SDK. |
-| [0013](../adr/0013-matter-commissioning-bring-up.md) | Matter wire-protocol design rules | Wire-protocol rules learned from chip-tool commissioning bring-up. |
+| [0013](../adr/0013-matter-commissioning-bring-up.md) | Matter wire-protocol design rules | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0001](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0001-matter-commissioning-bring-up.md). This page forwards. |
 | [0014](../adr/0014-parameter-ignore-unignore-mechanics.md) | Parameter ignore / un-ignore mechanics | How parameters are ignored and un-ignored. |
 | [0015](../adr/0015-datapoint-usage-ignored.md) | Split Ignored from NoCreate | Separates `Ignored` from `NoCreate` in `DataPointUsage`. |
 | [0016](../adr/0016-custom-dp-aware-ui-rendering.md) | Custom-DP-aware UI rendering | UI rendering is aware of custom data points. |
@@ -39,15 +39,15 @@ The table below catalogues every ADR. Each entry links to the record itself.
 | [0028](../adr/0028-contract-digest-and-version-guard.md) | Contract digest & version guard | A contract digest and version guard couple API-schema changes to the types-repo release. |
 | [0029](../adr/0029-tier-model-stop-teardown.md) | Tier-model teardown for `Unit.Stop` | `Unit.Stop` tears down subsystems in tiered order. |
 | [0030](../adr/0030-eventbus-dispatch-striping-rejected.md) | Event-bus dispatch striping: rejected | Per-central isolation already meets the goal; dispatch striping is rejected. |
-| [0031](../adr/0031-im-opcode-dispatch-seam.md) | IM opcode dispatch seam | A testable gate and per-opcode seam are extracted from `handleIMOpcode`. |
-| [0032](../adr/0032-sigma-resume-extraction.md) | Sigma resumption extraction | Sigma-resumption extraction is already satisfied; the finding is corrected. |
-| [0033](../adr/0033-groups-cluster-stays-stub.md) | Groups cluster stays a stub | The minimal Groups-cluster stub is a deliberate, matter.js-conformant divergence. |
+| [0031](../adr/0031-im-opcode-dispatch-seam.md) | IM opcode dispatch seam | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0002](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0002-im-opcode-dispatch-seam.md). This page forwards. |
+| [0032](../adr/0032-sigma-resume-extraction.md) | Sigma resumption extraction | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0003](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0003-sigma-resume-extraction.md). This page forwards. |
+| [0033](../adr/0033-groups-cluster-stays-stub.md) | Groups cluster stays a stub | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0004](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0004-groups-cluster-stays-stub.md). This page forwards. |
 | [0034](../adr/0034-adapter-package-taxonomy.md) | Adapter package taxonomy | `internal/central/adapter` stays one package with a documented taxonomy. |
 | [0035](../adr/0035-hub-refresh-set-extraction.md) | Hub refresh-set extraction | The refresh-coordination sub-component is extracted from `HubCoordinator`. |
-| [0036](../adr/0036-bridge-decomposition.md) | Matter `Bridge` decomposition | The `CommissioningSession`/`IMEngine` facade split is deferred. |
+| [0036](../adr/0036-bridge-decomposition.md) | Matter `Bridge` decomposition | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0005](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0005-bridge-decomposition.md). This page forwards. |
 | [0037](../adr/0037-otlp-span-exporter.md) | OTLP span exporter | A pluggable span exporter ships a lean OTLP/HTTP exporter, not the OTel-gRPC SDK. |
 | [0038](../adr/0038-cross-stack-ci-gate.md) | Cross-stack CI gate | The cross-stack model-snapshot parity gate runs in nightly CI. |
-| [0039](../adr/0039-subscribe-dispatch-seam.md) | Subscribe dispatch seam | Cohesive sub-helpers are extracted from `handleSubscribeRequest`. |
+| [0039](../adr/0039-subscribe-dispatch-seam.md) | Subscribe dispatch seam | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0006](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0006-subscribe-dispatch-seam.md). This page forwards. |
 | [0040](../adr/0040-measurement-history.md) | Measurement history | Measurement history is stored in embedded SQLite with an opt-in push exporter. |
 | [0041](../adr/0041-persist-auth-sessions.md) | Persist auth sessions | Auth sessions persist in SQLite as a save-through cache. |
 | [0042](../adr/0042-clear-ccu-cache-and-repull.md) | Clear CCU cache and re-pull | Clearing CCU-derivable caches and re-pulling is a first-class operation. |
@@ -56,7 +56,7 @@ The table below catalogues every ADR. Each entry links to the record itself.
 | [0045](../adr/0045-login-and-onboarding-into-spa.md) | Login + onboarding into the SPA | Login and first-run onboarding live in the Svelte SPA. |
 | [0046](../adr/0046-ssdp-ccu-discovery.md) | SSDP CCU discovery | CCUs are discovered on the LAN via active SSDP/UPnP. |
 | [0047](../adr/0047-northbound-bridge-registry.md) | North-bound bridge registry | North-bound bridges are `Service`s owned by a `Registry`. |
-| [0048](../adr/0048-chiptool-godevccu-send-receive-matrix.md) | chip-tool ↔ godevccu send/receive matrix | A hermetic per-DP-type Matter send/receive suite runs chip-tool against godevccu. |
+| [0048](../adr/0048-chiptool-godevccu-send-receive-matrix.md) | chip-tool ↔ godevccu send/receive matrix | **Moved to go-fabric** — the record is maintained as [go-fabric ADR 0007](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0007-chiptool-send-receive-matrix.md). This page forwards. |
 | [0049](../adr/0049-matter-one-endpoint-per-device.md) | Matter one endpoint per device | Matter exposes one endpoint per physical device by default. |
 | [0050](../adr/0050-mqtt-transport-shared-module.md) | MQTT transport → shared go-mqtt module | The in-tree MQTT transport is extracted into the external shared `go-mqtt` module. |
 | [0051](../adr/0051-northbound-authorization-model.md) | North-bound authorization model | Role-based MinRole gating unified across REST + WS, plus backup-at-rest sealing. |
@@ -82,4 +82,4 @@ The table below catalogues every ADR. Each entry links to the record itself.
 ## Related reading
 
 - [Architecture](architecture.md) — how these decisions show up in the package layout.
-- [Matter parity contract](../matter-parity-contract.md) — the binding rules for the Matter-side ADRs (0012, 0013, 0031, 0033, 0036, 0039, 0048, 0049).
+- [Matter parity contract](../matter-parity-contract.md) — the host-side boundary. The projection decisions that stayed here are 0012 (cluster subset), 0021 (the daemon's own mDNS), 0049 (one endpoint per device) and 0064 (garage as Closure); the wire-side rules live in go-fabric.
