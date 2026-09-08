@@ -26,7 +26,12 @@ type configInputs struct {
 	// range is the configuration that actually reaches the binder, and
 	// it retries within the window instead of failing on a collision.
 	CallbackPortRange string
-	// BinPort is the BIN-RPC listener; 0 is genuinely dynamic there.
+	// BinPort is the BIN-RPC listener. It must be an explicit, per-daemon
+	// port: 0 is NOT a dynamic mode there — applyDefaults rewrites it to 8129
+	// — and BIN-RPC has no port_range equivalent, so every parallel harness
+	// would collide on that one port. Before this was set, the second and
+	// every later daemon in a parallel run came up with no BIN-RPC listener
+	// at all, reporting itself healthy while no CUxD event could arrive.
 	BinPort    int
 	AuthMode   AuthMode
 	MQTTBroker string // "tcp://127.0.0.1:<port>" or ""

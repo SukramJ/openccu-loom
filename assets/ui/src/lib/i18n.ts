@@ -983,6 +983,7 @@ const EN: Catalog = {
   "health.note.breaker_open": "Breaker open",
   "health.note.breaker_open_escalated": "Breaker open (escalated)",
   "health.note.recovery_started": "Recovery started",
+  "health.note.callback_listeners_bound": "Callback listeners bound",
   "health.note.recovery_completed": "Recovery completed",
   "health.note.recovery_failed_escalated": "Recovery failed (escalated)",
   "diagnostics.last_ok": "Last OK",
@@ -4919,6 +4920,7 @@ const DE: Catalog = {
   "health.note.breaker_open": "Sicherung offen",
   "health.note.breaker_open_escalated": "Sicherung offen (eskaliert)",
   "health.note.recovery_started": "Wiederherstellung gestartet",
+  "health.note.callback_listeners_bound": "Callback-Listener gebunden",
   "health.note.recovery_completed": "Wiederherstellung abgeschlossen",
   "health.note.recovery_failed_escalated":
     "Wiederherstellung fehlgeschlagen (eskaliert)",

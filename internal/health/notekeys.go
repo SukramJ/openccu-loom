@@ -24,6 +24,7 @@ var NoteKeys = map[string]string{
 	"breaker open":                "health.note.breaker_open",
 	"recovery started":            "health.note.recovery_started",
 	"recovery completed":          "health.note.recovery_completed",
+	"callback listeners bound":    "health.note.callback_listeners_bound",
 }
 
 // NoteKeyFor returns the i18n key for a static health note, or "" for an
