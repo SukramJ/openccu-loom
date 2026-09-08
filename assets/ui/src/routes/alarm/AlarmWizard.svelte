@@ -40,6 +40,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
+  import Select from "$lib/components/ui/Select.svelte";
   // Setup wizard (docs/alarm-concept.md §12.3), skeleton pattern borrowed
   // from routes/Setup.svelte: step dots + Back/Skip/Next footer, one atomic
   // write on the last step. Steps ②/③ used to be bare links into the
@@ -377,55 +378,49 @@
         <div class="min-w-40 flex-1">
           <Input type="search" placeholder={t("common.search")} bind:value={sensorSearch} />
         </div>
-        <select
+        <Select
+          class="w-auto"
           value={sensorRoom}
-          onchange={(e) => (sensorRoom = e.currentTarget.value)}
-          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-          title={t("alarm.sensors.filter.room")}
-          aria-label={t("alarm.sensors.filter.room")}
-        >
-          <option value="">{t("alarm.sensors.filter.all")}</option>
-          {#each sensorRoomOptions as r (r)}
-            <option value={r}>{r}</option>
-          {/each}
-        </select>
-        <select
+          ariaLabel={t("alarm.sensors.filter.room")}
+          onValueChange={(v) => (sensorRoom = v)}
+          options={[
+            { value: "", label: t("alarm.sensors.filter.all") },
+            ...sensorRoomOptions.map((r) => ({ value: r, label: r })),
+          ]}
+        />
+        <Select
+          class="w-auto"
           value={sensorFunc}
-          onchange={(e) => (sensorFunc = e.currentTarget.value)}
-          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-          title={t("alarm.sensors.filter.function")}
-          aria-label={t("alarm.sensors.filter.function")}
-        >
-          <option value="">{t("alarm.sensors.filter.all")}</option>
-          {#each sensorFuncOptions as f (f)}
-            <option value={f}>{f}</option>
-          {/each}
-        </select>
+          ariaLabel={t("alarm.sensors.filter.function")}
+          onValueChange={(v) => (sensorFunc = v)}
+          options={[
+            { value: "", label: t("alarm.sensors.filter.all") },
+            ...sensorFuncOptions.map((f) => ({ value: f, label: f })),
+          ]}
+        />
         {#if areasStore.areas.length > 0}
-          <select
+          <Select
+            class="w-auto"
             value={sensorArea}
-            onchange={(e) => (sensorArea = e.currentTarget.value)}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("alarm.sensors.filter.area")}
-            aria-label={t("alarm.sensors.filter.area")}
-          >
-            <option value="">{t("alarm.sensors.filter.all")}</option>
-            {#each areasStore.areas as a (a.id)}
-              <option value={a.id}>{a.name}</option>
-            {/each}
-          </select>
+            ariaLabel={t("alarm.sensors.filter.area")}
+            onValueChange={(v) => (sensorArea = v)}
+            options={[
+              { value: "", label: t("alarm.sensors.filter.all") },
+              ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+          />
         {/if}
-        <select
+        <Select
+          class="w-auto"
           value={sensorSort}
-          onchange={(e) => (sensorSort = e.currentTarget.value as PickerSortField)}
-          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-          title={t("common.sort")}
-          aria-label={t("common.sort")}
-        >
-          <option value="name">{t("alarm.wizard.sort.name")}</option>
-          <option value="room">{t("alarm.wizard.sort.room")}</option>
-          <option value="model">{t("alarm.wizard.sort.model")}</option>
-        </select>
+          ariaLabel={t("common.sort")}
+          onValueChange={(v) => (sensorSort = v as PickerSortField)}
+          options={[
+            { value: "name", label: t("alarm.wizard.sort.name") },
+            { value: "room", label: t("alarm.wizard.sort.room") },
+            { value: "model", label: t("alarm.wizard.sort.model") },
+          ]}
+        />
         <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
           <input type="checkbox" bind:checked={sensorShowAll} />
           {t("alarm.sensors.add.show_all")}
@@ -491,55 +486,49 @@
           <div class="min-w-40 flex-1">
             <Input type="search" placeholder={t("common.search")} bind:value={outputSearch} />
           </div>
-          <select
+          <Select
+            class="w-auto"
             value={outputRoom}
-            onchange={(e) => (outputRoom = e.currentTarget.value)}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("alarm.sensors.filter.room")}
-            aria-label={t("alarm.sensors.filter.room")}
-          >
-            <option value="">{t("alarm.sensors.filter.all")}</option>
-            {#each outputRoomOptions as r (r)}
-              <option value={r}>{r}</option>
-            {/each}
-          </select>
-          <select
+            ariaLabel={t("alarm.sensors.filter.room")}
+            onValueChange={(v) => (outputRoom = v)}
+            options={[
+              { value: "", label: t("alarm.sensors.filter.all") },
+              ...outputRoomOptions.map((r) => ({ value: r, label: r })),
+            ]}
+          />
+          <Select
+            class="w-auto"
             value={outputFunc}
-            onchange={(e) => (outputFunc = e.currentTarget.value)}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("alarm.sensors.filter.function")}
-            aria-label={t("alarm.sensors.filter.function")}
-          >
-            <option value="">{t("alarm.sensors.filter.all")}</option>
-            {#each outputFuncOptions as f (f)}
-              <option value={f}>{f}</option>
-            {/each}
-          </select>
+            ariaLabel={t("alarm.sensors.filter.function")}
+            onValueChange={(v) => (outputFunc = v)}
+            options={[
+              { value: "", label: t("alarm.sensors.filter.all") },
+              ...outputFuncOptions.map((f) => ({ value: f, label: f })),
+            ]}
+          />
           {#if areasStore.areas.length > 0}
-            <select
+            <Select
+              class="w-auto"
               value={outputArea}
-              onchange={(e) => (outputArea = e.currentTarget.value)}
-              class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-              title={t("alarm.sensors.filter.area")}
-              aria-label={t("alarm.sensors.filter.area")}
-            >
-              <option value="">{t("alarm.sensors.filter.all")}</option>
-              {#each areasStore.areas as a (a.id)}
-                <option value={a.id}>{a.name}</option>
-              {/each}
-            </select>
+              ariaLabel={t("alarm.sensors.filter.area")}
+              onValueChange={(v) => (outputArea = v)}
+              options={[
+                { value: "", label: t("alarm.sensors.filter.all") },
+                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
           {/if}
-          <select
+          <Select
+            class="w-auto"
             value={outputSort}
-            onchange={(e) => (outputSort = e.currentTarget.value as PickerSortField)}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("common.sort")}
-            aria-label={t("common.sort")}
-          >
-            <option value="name">{t("alarm.wizard.sort.name")}</option>
-            <option value="room">{t("alarm.wizard.sort.room")}</option>
-            <option value="model">{t("alarm.wizard.sort.model")}</option>
-          </select>
+            ariaLabel={t("common.sort")}
+            onValueChange={(v) => (outputSort = v as PickerSortField)}
+            options={[
+              { value: "name", label: t("alarm.wizard.sort.name") },
+              { value: "room", label: t("alarm.wizard.sort.room") },
+              { value: "model", label: t("alarm.wizard.sort.model") },
+            ]}
+          />
         </div>
         <p class="mb-2 text-xs text-[var(--ha-secondary-text-color)]">
           {t("alarm.sensors.selected", { count: store.selectedOutputs.length })}

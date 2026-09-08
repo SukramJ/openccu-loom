@@ -20,6 +20,7 @@
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import {
     prefs,
     setLocale,
@@ -539,65 +540,67 @@
           <div>
             <h2 class="mb-3 text-base font-semibold">{t("settings.interface")}</h2>
             <div class="space-y-3">
-              <label class="flex items-center gap-3 text-sm">
+              <span class="flex items-center gap-3 text-sm">
                 <span class="min-w-24">{t("settings.language")}</span>
-                <select
-                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                <Select
+                  class="w-auto"
                   value={prefs.locale}
-                  onchange={(e) =>
-                    setLocale((e.target as HTMLSelectElement).value === "de" ? "de" : "en")}
-                >
-                  <option value="de">Deutsch</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
+                  ariaLabel={t("settings.language")}
+                  onValueChange={(v) => setLocale(v === "de" ? "de" : "en")}
+                  options={[
+                    { value: "de", label: "Deutsch" },
+                    { value: "en", label: "English" },
+                  ]}
+                />
+              </span>
 
-              <label class="flex items-center gap-3 text-sm">
+              <span class="flex items-center gap-3 text-sm">
                 <span class="min-w-24">{t("settings.theme")}</span>
-                <select
-                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                <Select
+                  class="w-auto"
                   value={prefs.theme}
-                  onchange={(e) =>
-                    setTheme((e.target as HTMLSelectElement).value as Theme)}
-                >
-                  <option value="light">{t("settings.theme.light")}</option>
-                  <option value="dark">{t("settings.theme.dark")}</option>
-                  <option value="system">{t("settings.theme.system")}</option>
-                </select>
-              </label>
+                  ariaLabel={t("settings.theme")}
+                  onValueChange={(v) => setTheme(v as Theme)}
+                  options={[
+                    { value: "light", label: t("settings.theme.light") },
+                    { value: "dark", label: t("settings.theme.dark") },
+                    { value: "system", label: t("settings.theme.system") },
+                  ]}
+                />
+              </span>
 
-              <label class="flex items-center gap-3 text-sm">
+              <span class="flex items-center gap-3 text-sm">
                 <span class="min-w-24">{t("settings.start_route")}</span>
-                <select
-                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                <Select
+                  class="w-auto"
                   value={startRouteValue}
-                  onchange={(e) =>
-                    void saveStartRoute((e.target as HTMLSelectElement).value)}
-                >
-                  <option value="">{t("settings.start_route.default")}</option>
-                  {#each startRouteOptions as opt (opt.href)}
-                    <option value={opt.href}>{opt.label}</option>
-                  {/each}
-                </select>
-              </label>
+                  ariaLabel={t("settings.start_route")}
+                  onValueChange={(v) => void saveStartRoute(v)}
+                  options={[
+                    { value: "", label: t("settings.start_route.default") },
+                    ...startRouteOptions.map((opt) => ({ value: opt.href, label: opt.label })),
+                  ]}
+                />
+              </span>
               <p class="-mt-1 text-xs text-[var(--ha-secondary-text-color)]">
                 {t("settings.start_route.help")}
               </p>
 
               <div class="flex items-start gap-3">
-                <label class="flex items-center gap-3 text-sm">
+                <span class="flex items-center gap-3 text-sm">
                   <span class="min-w-24">{t("settings.appearance.design")}</span>
-                  <select
-                    class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+                  <Select
+                    class="w-auto"
                     value={prefs.skin}
+                    ariaLabel={t("settings.appearance.design")}
+                    onValueChange={(v) => setSkin(v as Skin)}
                     disabled={isEmbedded()}
-                    onchange={(e) =>
-                      setSkin((e.target as HTMLSelectElement).value as Skin)}
-                  >
-                    <option value="loom">{t("settings.appearance.design.loom")}</option>
-                    <option value="ha">{t("settings.appearance.design.ha")}</option>
-                  </select>
-                </label>
+                    options={[
+                      { value: "loom", label: t("settings.appearance.design.loom") },
+                      { value: "ha", label: t("settings.appearance.design.ha") },
+                    ]}
+                  />
+                </span>
                 <p class="pt-1.5 text-xs text-[var(--ha-secondary-text-color)]">
                   {isEmbedded()
                     ? t("settings.appearance.design.embedded_hint")
@@ -642,20 +645,19 @@
               </div>
 
               <div>
-                <label class="flex items-center gap-3 text-sm">
+                <span class="flex items-center gap-3 text-sm">
                   <span class="min-w-24">{t("settings.prefs.param_density")}</span>
-                  <select
-                    class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-1.5 text-sm"
+                  <Select
+                    class="w-auto"
                     value={prefs.paramDensity}
-                    onchange={(e) =>
-                      setParamDensity(
-                        (e.target as HTMLSelectElement).value as "compact" | "comfortable",
-                      )}
-                  >
-                    <option value="compact">{t("settings.prefs.density.compact")}</option>
-                    <option value="comfortable">{t("settings.prefs.density.comfortable")}</option>
-                  </select>
-                </label>
+                    ariaLabel={t("settings.prefs.param_density")}
+                    onValueChange={(v) => setParamDensity(v as "compact" | "comfortable")}
+                    options={[
+                      { value: "compact", label: t("settings.prefs.density.compact") },
+                      { value: "comfortable", label: t("settings.prefs.density.comfortable") },
+                    ]}
+                  />
+                </span>
               </div>
             </div>
           </div>

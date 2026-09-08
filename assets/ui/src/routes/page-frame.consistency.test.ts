@@ -86,3 +86,18 @@ describe("tab strips", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("form controls", () => {
+  it("no view drops to a raw <select>; Select owns it", () => {
+    // A raw select is ~38px tall next to a 40px button, carries its own copy
+    // of a long class chain, and can only be named by a `title` tooltip.
+    // Scoped to routes/: the shared table's filter row is deliberately native
+    // and compact, and the device-control widgets under lib/ are their own
+    // question.
+    const offenders: string[] = [];
+    for (const rel of [...topLevelRoutes(), ...subViews()]) {
+      if (read(rel).includes("<select")) offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
