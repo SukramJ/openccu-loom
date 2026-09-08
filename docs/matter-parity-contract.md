@@ -1,134 +1,60 @@
-# Matter Behavioral-Parity Contract
+# Matter Parity — the host side
 
 !!! info "Who this page is for"
     Contributors and AI agents working on the Matter bridge. End users
     and administrators do not need this page — see [Matter](user/matter.md)
-    for the operator-facing guide. What the ecosystems themselves do with the
-    result is collected in
-    [Matter Ecosystem Observations](developer/matter-ecosystem-observations.md).
+    for the operator-facing guide.
 
-OpenCCU-Loom's Matter side is a deliberate, behaviour-level port of
-[matter.js](https://github.com/matter-js/matter.js) HEAD. The Matter stack
-itself is no longer part of this repository: the wire format — TLV codec,
+The Matter wire stack is no longer part of this repository. The TLV codec, the
 Interaction Model, PASE / CASE, MRP, DNS-SD, the cluster servers and the
-endpoint assembler — lives in the
+endpoint assembler live in the
 [go-fabric](https://github.com/SukramJ/go-fabric) module, which this daemon
-embeds. What stays here is the host side: the model walk in
+embeds — and so does the contract that governs them:
+
+> **[go-fabric — Matter Behavioural-Parity Contract](https://github.com/SukramJ/go-fabric/blob/main/docs/matter-parity-contract.md)**
+>
+> Read it before your first Matter-side change, in either repository. It
+> defines what parity means, why *behaviour* parity (not just schema parity)
+> is the bar, and which standing guards enforce it.
+
+What stays here is the **host half of a bridge**: the model walk in
 `internal/north/matteradapter/`, the endpoint store in
 `internal/store/matterendpoint/`, and the per-device projections under
-`internal/model/custom/<dp>/matter.go`. This page defines what "parity" means
-in practice and which standing guards keep the port honest, so that a change
-which merely *looks* right but drifts from the gold standard cannot land
-unnoticed.
-
-**Audience:** every contributor and AI agent that touches Matter-side code in
-OpenCCU-Loom or in go-fabric. This is a standing contract, not an audit you run
-once. Read it before your first Matter change and treat it as binding.
-
-It complements the [`matter.js HEAD is the Matter gold standard`](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md#matterjs-head-is-the-matter-gold-standard)
-section of this repository's `CLAUDE.md` and the fuller
-[`matter.js is the gold standard`](https://github.com/SukramJ/go-fabric/blob/main/CLAUDE.md#matterjs-is-the-gold-standard)
-section of go-fabric's: those tell you matter.js HEAD is the gold standard and
-how to regenerate the schema; this document tells you what *parity* means, why
-**behaviour** parity (not just schema parity) is the bar, and which standing
-guards enforce it.
+`internal/model/custom/<dp>/matter.go`. That half has its own gold standard and
+its own guards, and they are listed below.
 
 ---
 
-## 1. The principle
+## The boundary
 
-> **Think for yourself, and always verify against matter.js / connectedhomeip.
-> Mirror behaviour, not just shape.**
+go-fabric's `contract/` package is the seam. Everything on its far side mirrors
+matter.js and is covered by that module's contract. Everything on this side —
+**which** data point becomes **which** cluster attribute, which product maps to
+which device type, how many endpoints a physical device gets — is this
+repository's decision.
 
-Two halves, both mandatory:
+The `internal/model/custom/<dp>/matter.go` files are where the two meet: the
+left side of each file mirrors `aiohomematic` (the CCU-side gold standard), the
+right side mirrors matter.js. A projection defect produces a device that pairs
+successfully and then misbehaves — the same class of failure go-fabric's
+contract is about, and one its guards cannot see.
 
-1. **Reason about the change.** Understand the cluster, the command, the state
-   machine, the failure modes. Do not cargo-cult.
-2. **Verify against the gold standard.** Before you write a Matter-side fix or
-   feature, read the corresponding matter.js source (and connectedhomeip for
-   wire-truth). Your implementation mirrors theirs — same defaults, same
-   constraints, same status codes, same order, same wire shape — unless a
-   divergence is deliberate and recorded.
-
-A change that "looks right" but was never checked against matter.js is not
-acceptable, no matter how reasonable it seems. The protocol's edge cases were
-encoded into matter.js through real interop testing against Apple Home, Google
-Home, and Alexa; we mirror that hard-won behaviour rather than re-deriving it.
-
-## 2. Why matter.js / chip, and why *behaviour*
-
-matter.js HEAD is a certified, production-tested, continuously-evolving Matter
-stack. connectedhomeip (chip) is the CSA reference. Together they are the
-authority for:
-
-- cluster IDs, revisions, attribute / command / event IDs (schema), **and**
-- defaults, constraint enforcement on writes, command semantics, status codes,
-  conformance gating, subscribe / report cadence, commissioning and CASE state
-  machines (**behaviour**), **and**
-- the byte-level wire shape (TLV, IM messages, sigma).
-
-**Schema parity is necessary but not sufficient.** It is easy to advertise the
-right attribute IDs and revisions and still get the behaviour wrong — accept a
-write matter.js rejects, return the wrong status, skip a constraint, drop a
-session that must survive. Those defects pass every schema test and surface as
-silent Apple / Google pair-aborts or mis-behaving devices that take days to
-attribute back. Behaviour parity is the bar.
-
-This is not hypothetical: a parity sweep found a whole class of write-constraint
-and command-semantics defects (wrong setpoint limits, an unenforced
-percent-max, a `SupportedOperatingModes` bitmap that marked a mandatory mode
-unsupported, a `MoveToColorTemperature` that never moved, an `UpdateNOC` that
-tore down its own response session) — every one of which a schema test would
-have waved through.
-
-## 3. The workflow for every Matter-side change
-
-1. **Read the matter.js source first.** Likely paths:
-   - schema constant / revision / id → `../matter.js/packages/model/src/standard/elements/<name>.element.ts`
-   - cluster behaviour (defaults, mandatory attrs, conformance, write
-     constraints, command logic) → `../matter.js/packages/node/src/behaviors/<name>/<Name>Server.ts`
-   - device type → `../matter.js/packages/node/src/devices/<name>.ts`
-   - wire codec / IM / sigma → `../matter.js/packages/types/src/tlv/`, `../matter.js/packages/protocol/src/`
-   - wire-truth cross-check → `../connectedhomeip/src/app/...`, `../connectedhomeip/src/messaging/...`
-2. **Mirror the behaviour** in Go idiom (struct-with-methods, `context.Context`,
-   goroutines for TS decorators / mixins / `Promise<T>`). Keep the same
-   defaults, constraints, status codes, and order.
-3. **Cite the source in the Go code:**
-   `// Mirrors matter.js packages/node/src/behaviors/.../FooServer.ts:bar`
-   (or the chip path). Provenance must survive drift. `TestDocPurity` permits
-   matter.js / chip `path:line` references in comments; it forbids legacy-CCU
-   project names and audit-tracking codes.
-4. **Add a parity test — behaviour, not just schema.** A new constraint adds a
-   row to the negative-write parity table (§4). A new cluster server adds a
-   schema parity case. A wire change adds / updates a TLV fixture. PRs without
-   parity coverage are rejected.
-5. **Record deliberate divergences** in [`notes/parity/by_design.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md)
-   (the living catalogue). A non-trivial divergence also gets an ADR. Valid
-   divergences are TypeScript-only optimisations that fight Go's GC, or
-   decorator patterns with no Go equivalent. Invalid divergences are
-   hand-coding cluster revisions, attribute IDs, constraint defaults, status
-   codes, or Apple-required tag patterns — those go verbatim from matter.js.
-
-## 4. The standing guards (enforcement)
-
-Parity is held by build- and test-time guards, **not** by periodically
-regenerated audit reports. These are the mechanism; keep them green and extend
-them with every change:
+## Host-side standing guards
 
 | Guard | Location | Locks |
 | --- | --- | --- |
-| **Schema parity** | the `*parity_matterjs_test.go` files in the go-fabric module (extract + generator live there); this repo pins the same bytes at `notes/parity/matter/matter-schema-snapshot.json`, held by `TestMatterSchemaSnapshotInSync` and refreshed with `make sync-matter-schema` | cluster / device-type IDs, revisions, attribute / command / event IDs vs matter.js HEAD |
-| **Behavioural negative-write parity** | go-fabric [`cluster/matter_negative_write_parity_test.go`](https://github.com/SukramJ/go-fabric/blob/main/cluster/matter_negative_write_parity_test.go) | a write/invoke matter.js *rejects* is rejected with the matching IM status (ConstraintError 0x87 / InvalidCommand 0x85), plus boundary positive controls against over-rejection. Add one row per new constraint. |
-| **Wire-codec parity** | go-fabric [`tlv/parity_matterjs_test.go`](https://github.com/SukramJ/go-fabric/blob/main/tlv/parity_matterjs_test.go) and [`im/wire_fixtures_parity_test.go`](https://github.com/SukramJ/go-fabric/blob/main/im/wire_fixtures_parity_test.go), each embedding its own `testdata/` copy of the fixtures; the generators and the pinned originals stay here at `notes/parity/matter/{tlv,im}-wire-fixtures.json` | byte-level TLV / IM shape |
-| **Wiring-capability pins** | `tests/contract/wiring_pins/dormant_capability_wiring_test.go` | every capability gate / setter is actually wired on the production path — fails the build the moment a wiring is removed, even though the capability keeps passing its own unit test (the "implemented but never wired" bug class) |
-| **Reference-controller validation** | `tests/chiptool/` (`//go:build chiptool`) here; go-fabric [`conformance/`](https://github.com/SukramJ/go-fabric/tree/main/conformance) | end-to-end behaviour against the real `chip-tool` commissioner |
-| **Divergence catalogue** | [`notes/parity/by_design.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md) | every intentional deviation, with rationale |
+| **Schema pin** | `TestMatterSchemaSnapshotInSync` (`tests/contract/`) against `notes/parity/matter/matter-schema-snapshot.json`, refreshed with `make sync-matter-schema` | that a Matter schema change cannot arrive unnoticed inside a go-fabric version bump |
+| **Scenario corpus** | `tests/scenario/` over `notes/parity/matter/scenarios/`, with `tests/contract/matter_scenario_gate_test.go` as the coverage gate | end-to-end behaviour of a real projection against a live bridge; every custom-DP type with a `matter.go` must have at least one tagged scenario |
+| **Wiring-capability pins** | `tests/contract/wiring_pins/dormant_capability_wiring_test.go` | every capability gate / setter is actually wired on the production path — the "implemented but never wired" bug class |
+| **Reference-controller validation** | `tests/chiptool/` (`//go:build chiptool`) | end-to-end behaviour of this daemon against the real `chip-tool` commissioner |
+| **Projection divergences** | [`notes/parity/by_design.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md), `## Matter / matter.js Divergences` | every intentional deviation in how the model projects onto Matter |
 
-When a parity sweep is genuinely warranted, prefer extending these guards over
-producing a throw-away report: a guard catches the *next* regression, a report
-catches only today's.
+Wire-level divergences — anything about the codec, the IM, sessions or the
+cluster servers themselves — are recorded in
+[go-fabric's `by_design.md`](https://github.com/SukramJ/go-fabric/blob/main/notes/parity/by_design.md),
+not here.
 
-## 5. The aiohomematic relationship — different, on purpose
+## The aiohomematic relationship — different, on purpose
 
 The CCU side and the Matter side have **different** gold standards and
 **different** lifecycles:
@@ -140,37 +66,15 @@ The CCU side and the Matter side have **different** gold standards and
   steady state), and is already a **superset in scope**: the standalone-daemon
   surface — MQTT, REST, WebSocket, the config UI, the Matter bridge — has no
   aiohomematic counterpart. aiohomematic is therefore consulted as **reference
-  prior-art** when a specific CCU-semantics question arises ("how does
-  aiohomematic do X?"), not swept wholesale as an ongoing audit target. Where
-  Loom deliberately advances beyond it, `by_design.md` records the divergence.
-  OpenCCU-Loom is a real evolution, not a port frozen to its source.
+  prior-art** when a specific CCU-semantics question arises, not swept
+  wholesale as an ongoing audit target. Where Loom deliberately advances beyond
+  it, `by_design.md` records the divergence.
 
-- **matter.js / chip** is the gold standard for the **Matter side**, and it is a
-  **living, certified, evolving** standard. matter.js HEAD bumps cluster and
-  device-type revisions; the wire shape is interop-critical. Parity here is a
-  **permanent discipline**, re-verified on every Matter change and whenever the
-  matter.js pin is advanced — not a one-time audit. This contract exists because
-  that asymmetry is real: the CCU port converges, the Matter mirror never
+- **matter.js / chip** is the gold standard for the **Matter side**, and it is
+  a **living, evolving** standard: matter.js HEAD bumps cluster and device-type
+  revisions, and the wire shape is interop-critical. A port of a CCU stack
+  converges, because its source stands still; the Matter mirror never
   "finishes".
 
 The two reference layers do not overlap. CCU wire knowledge stays in
-aiohomematic; Matter wire knowledge stays in matter.js. When a single bridge
-feature spans both (a HmIP DataPoint mapped onto a Matter cluster) the boundary
-is the `internal/model/custom/<dp>/matter.go` file — left side mirrors
-aiohomematic, right side mirrors matter.js.
-
-## 6. The non-negotiable checklist
-
-Before you open a Matter-side PR:
-
-- [ ] I read the matter.js (and, for wire-truth, chip) source for this
-      cluster / behaviour / device-type.
-- [ ] My implementation mirrors its defaults, constraints, status codes, and
-      order — or the divergence is recorded in `by_design.md` (+ ADR if
-      non-trivial).
-- [ ] I cited the matter.js / chip `path:line` in the Go code.
-- [ ] I added or extended a **behaviour** parity test (a constraint row, a
-      command-semantics case, a wire fixture) — not only a schema assertion.
-- [ ] The standing guards in §4 are green.
-
-If you cannot check every box, the change is not ready.
+aiohomematic; Matter wire knowledge stays in matter.js.
