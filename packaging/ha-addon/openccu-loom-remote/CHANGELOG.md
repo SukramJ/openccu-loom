@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.76.0
+
+No changes to the proxy itself — the version follows the daemon so the two
+add-ons stay in step. What 0.76.0 changes is the Config UI this add-on gives
+you access to: the device list and the channel view became sortable, filterable
+tables, and MASTER/LINK writes are now shown for review before they are sent.
+The main add-on's changelog describes those in full.
+
 # 0.75.0
 
 Fixed: two repo-wide defect audits, every finding closed. The ones you may

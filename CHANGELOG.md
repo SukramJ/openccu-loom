@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.76.0] - 2026-09-08
+
 ### Added
 
 - **A callback listener that cannot bind is visible now.** Both callback

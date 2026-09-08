@@ -1,5 +1,40 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.76.0
+
+Changed: the device pages are tables now. The device list drops the card grid
+for a single sortable table — each column has its own filter, and expanding a
+row shows that device's channels, from where you can jump straight into a
+channel's editor. If you used the card view, it is gone; the layout toggle went
+with it. On a device, the channel strip became a table too, with the channel
+number, the direct-link role (sender, receiver or both), the data-point count
+and a link count, and the selected channel's editor follows underneath.
+
+Added: configuration writes are shown before they are sent. Saving a MASTER or
+LINK paramset opens a summary of every value it will change — from and to, in
+the units the form shows — together with the exact request. It is on by
+default and can be switched off under Settings; ordinary control actions
+(switching a light, setting a temperature) are never delayed by it. Afterwards
+the device is read back and any value it did not keep is flagged on the row,
+because the CCU's two backends disagree here: one silently clamps an
+out-of-range value, the other stores it rejected. Until now a plain "Saved"
+could follow either.
+
+Added: the parameter editor lists parameters as rows instead of cards, each
+showing its permitted range and default next to the field, so a value is
+refused before you send it rather than after.
+
+Fixed: accepting a paired device with "rename channels too" renamed only the
+device. Fixed: saving a direct link could report a failure the CCU had actually
+accepted. Fixed: HmIP door-lock operation modes are named instead of showing
+raw tokens, and an enum label no longer changes between restarts or borrows
+another parameter's wording.
+
+Fixed: a daemon whose callback listener could not start — a port already in
+use, or a second daemon on the same host — reported itself healthy while no
+CCU event could ever reach it. That now shows as "degraded" on the health
+page, naming the listener that is down.
+
 ## 0.75.0
 
 Fixed: two repo-wide defect audits, every finding closed. The ones you may
