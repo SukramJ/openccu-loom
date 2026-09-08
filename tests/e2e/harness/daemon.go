@@ -337,8 +337,11 @@ func locateDaemonBinary(t *testing.T) string {
 // conclusion nobody notices.
 func assertBinaryNotStale(t *testing.T, bin string, builtAt time.Time, repoRoot string) {
 	t.Helper()
-	// An explicitly supplied binary is the caller's responsibility — CI
-	// builds one into a temp path and points the suite at it.
+	// An explicitly supplied binary is the caller's responsibility: whoever
+	// sets the variable has said which binary they mean. CI does NOT set it —
+	// .github/workflows/e2e.yml runs `make build-all` and then `go test`, so
+	// the check applies there too, and passes because the build follows the
+	// checkout.
 	if os.Getenv("OPENCCU_LOOM_E2E_BINARY") != "" {
 		return
 	}

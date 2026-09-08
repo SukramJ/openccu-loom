@@ -27,9 +27,10 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
 
-  // Filter/sort state is seeded from a module store and synced back to
-  // it, so the search term and filters survive opening a device and
-  // navigating back. (View mode is the durable preference above.)
+  // Filter state is seeded from a module store and synced back to it, so the
+  // search term and filters survive opening a device and navigating back.
+  // Sort is not here: the DataTable owns the column order and persists it
+  // under its own key.
   let filter = $state(saved.filter);
   let availability = $state<"all" | "available" | "unavailable">(saved.availability);
   let updateOnly = $state(saved.updateOnly);
