@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.77.0] - 2026-09-08
+
 ### Changed
 
 - **Every view sits in the same page frame.** Each route used to carry its own
@@ -32,6 +34,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Links and schedules are tables.** Both were card lists that a real CCU
   fills into the hundreds: searchable, never sortable, and with every card
   aligning its own contents so nothing lined up down the page.
+- **Two more tab strips joined the shared one.** The message list and the
+  channel editor's keypress sections underlined their own tabs, a little
+  shorter than every other strip, and the keypress one lost its active colour
+  in dark mode. The pre-release sweep found them: they carried no ARIA tab
+  role, which is what the consistency guard had been reading — it reads the
+  underline itself now.
 - **Column filters and remembered sorting reach the rest of the lists.**
   Filtering a single column existed only in the device list. It now covers
   the lists whose columns are a fixed set — a sysvar's value type, a
