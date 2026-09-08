@@ -342,6 +342,10 @@
   });
 </script>
 
+<!-- Expanded device row: the channel table from the device page, in its
+     compact form. Selecting a channel goes straight to that channel's editor,
+     so the list doubles as a channel index without the operator opening each
+     device first. -->
 {#snippet deviceChannels(device: DeviceSummary)}
   {@const channels = channelsByAddress.get(device.address)}
   {#if channelsFailed.has(device.address)}
@@ -364,6 +368,8 @@
     />
   {/if}
 {/snippet}
+<!-- Per-row cell renderer. Both the grouped tables and the ungrouped one
+     render through it, so a cell looks the same either way. -->
 {#snippet deviceCell(device: DeviceSummary, col: DataColumn<DeviceSummary>)}
   {#if col.key === "select"}
     <input
@@ -565,13 +571,6 @@
       {t("devicelist.group_by_interface")}
     </label>
   </div>
-
-  <!-- Expanded device row: the channel table from the device page, in its
-       compact form. Selecting a channel goes straight to that channel's
-       editor, so the list doubles as a channel index without the operator
-       opening each device first. -->
-
-  <!-- Per-row cell renderer shared by every device DataTable. -->
 
   {#if deviceStore.loading && deviceStore.items.length === 0}
     <LoadingState message={t("devices.loading")} />

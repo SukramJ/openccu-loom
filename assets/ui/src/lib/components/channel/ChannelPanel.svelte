@@ -55,6 +55,7 @@
   import type { DataPointChangedEvent } from "$lib/api/types";
   import { dirty } from "$lib/stores/dirty.svelte";
   import SessionTimeoutWarning from "$lib/components/ui/SessionTimeoutWarning.svelte";
+  import Tabs from "$lib/components/ui/Tabs.svelte";
   import type { EditSessionResponse } from "$lib/api/types";
   import { t } from "$lib/i18n";
 
@@ -1158,22 +1159,16 @@
            groups. Matches homematicip-local-frontend's link-config
            view where the three sections are UX-sibling tabs rather
            than stacked. -->
-      <nav class="mb-4 flex gap-1 border-b border-slate-200 dark:border-slate-800">
-        {#each keypressGroups as group (group.id)}
-          {@const tabKey = group.id.split(".")[1] as KeypressTab}
-          {@const active = activeKeypressTab === tabKey}
-          <button
-            type="button"
-            class="border-b-2 px-3 py-2 text-sm transition {active
-              ? 'border-brand-500 text-brand-700'
-              : 'border-transparent text-[var(--ha-secondary-text-color)] hover:text-brand-700'}"
-            onclick={() => (activeKeypressTab = tabKey)}
-          >
-            {keypressTabLabel(group.id)}
-            <Badge variant="muted">{group.parameters.length}</Badge>
-          </button>
-        {/each}
-      </nav>
+      <Tabs
+        class="mb-4"
+        active={activeKeypressTab}
+        onSelect={(key) => (activeKeypressTab = key as KeypressTab)}
+        items={keypressGroups.map((group) => ({
+          key: group.id.split(".")[1],
+          label: keypressTabLabel(group.id),
+          badge: group.parameters.length,
+        }))}
+      />
       {@const activeGroup = keypressGroups.find(
         (g) => g.id === `keypress.${activeKeypressTab}`,
       )}

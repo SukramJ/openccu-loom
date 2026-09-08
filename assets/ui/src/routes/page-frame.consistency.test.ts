@@ -85,6 +85,18 @@ describe("tab strips", () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it("no view hand-rolls the underline strip either", () => {
+    // Checking for role="tablist" alone missed two strips that never carried
+    // the role — a <nav> of buttons, each with border-b-2 for the underline.
+    // The visual marker is what makes it a tab strip to an operator, so that
+    // is what the guard reads.
+    const offenders: string[] = [];
+    for (const rel of [...topLevelRoutes(), ...subViews()]) {
+      if (read(rel).includes("border-b-2")) offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("form controls", () => {
