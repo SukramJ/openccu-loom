@@ -66,7 +66,6 @@ async function setTheme(page: import('@playwright/test').Page, theme: 'light' | 
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     },

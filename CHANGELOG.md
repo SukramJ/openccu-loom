@@ -8,6 +8,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The device list is one table, with column filters and expandable rows.**
+  The card grid is gone, and with it the grid/table toggle and its
+  preference — one layout means one set of behaviours to learn. Each column
+  carries its own filter (a choice list where the values are a fixed set,
+  such as reachability), filters combine and persist alongside sort and
+  search, and expanding a row shows that device's channels in the same table
+  the device page uses. Selecting a channel there goes straight to its
+  editor, so the list doubles as a channel index.
 - **Configuration writes are previewed before they leave.** A MASTER or LINK
   save now opens a dialog listing every parameter it will change — from and
   to, in the same display units the form showed — alongside the exact request

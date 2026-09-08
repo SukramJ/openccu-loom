@@ -108,6 +108,26 @@ describe("i18n catalogue coverage", () => {
     }
   });
 
+  // The device-list table's filter row and expandable channel rows.
+  it("resolves the device-table keys in both locales", () => {
+    prefs.locale = "en";
+    const keys = [
+      "datatable.filter_by",
+      "datatable.filter_all",
+      "datatable.expand",
+      "datatable.collapse",
+      "datatable.details",
+      "devicelist.channels_failed",
+      "devicelist.status_reachable",
+      "devicelist.status_unreachable",
+    ];
+    for (const key of keys) {
+      expect(t(key)).not.toBe(key);
+      expect(de.has(key), `${key} missing in de`).toBe(true);
+      expect(en.has(key), `${key} missing in en`).toBe(true);
+    }
+  });
+
   // Every user-visible string ships in both locales (CLAUDE.md, SPA
   // operating concept). A key added to one catalogue only degrades to the
   // other language on screen instead of failing anywhere, so nothing but

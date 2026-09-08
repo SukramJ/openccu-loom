@@ -27,7 +27,6 @@ function haPrefs(theme: 'light' | 'dark'): string {
     locale: 'en',
     navCollapsed: false,
     expertMode: false,
-    deviceView: 'grid',
   });
 }
 

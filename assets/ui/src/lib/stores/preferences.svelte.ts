@@ -25,9 +25,6 @@ type Prefs = {
   // toggle). Persisted alongside the other preferences so the
   // operator's choice survives navigation and reloads.
   expertMode: boolean;
-  // deviceView toggles the device-list layout between a multi-column
-  // card grid and a single-column list (HA-config-panel style).
-  deviceView: "grid" | "list";
   // writePreview shows what a MASTER or LINK save will write, and to which
   // request, before it goes out. On by default: those paramsets are device
   // configuration an operator cannot inspect from the device itself, and the
@@ -59,7 +56,6 @@ function load(): Prefs {
       const skin: Skin = parsed.skin === "ha" ? "ha" : "loom";
       const navCollapsed = parsed.navCollapsed === true;
       const expertMode = parsed.expertMode === true;
-      const deviceView: "grid" | "list" = parsed.deviceView === "list" ? "list" : "grid";
       // Default-on: an absent key must mean "preview", not "write silently".
       const writePreview = parsed.writePreview !== false;
       const paramDensity: "compact" | "comfortable" =
@@ -70,7 +66,6 @@ function load(): Prefs {
         skin,
         navCollapsed,
         expertMode,
-        deviceView,
         writePreview,
         paramDensity,
       };
@@ -84,7 +79,6 @@ function load(): Prefs {
     skin: "loom",
     navCollapsed: false,
     expertMode: false,
-    deviceView: "grid",
     writePreview: true,
     paramDensity: "compact",
   };
@@ -106,7 +100,6 @@ export const prefs = $state<Prefs>({
   skin: initial.skin,
   navCollapsed: initial.navCollapsed,
   expertMode: initial.expertMode,
-  deviceView: initial.deviceView,
   writePreview: initial.writePreview,
   paramDensity: initial.paramDensity,
 });
@@ -163,11 +156,6 @@ export function setNavCollapsed(collapsed: boolean): void {
 
 export function setExpertMode(on: boolean): void {
   prefs.expertMode = on;
-  persist({ ...prefs });
-}
-
-export function setDeviceView(view: "grid" | "list"): void {
-  prefs.deviceView = view;
   persist({ ...prefs });
 }
 

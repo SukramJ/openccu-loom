@@ -242,7 +242,6 @@ test.describe('Documentation screenshots (light mode)', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });

@@ -1,6 +1,6 @@
 # Implementation plan — tabular, model-driven device configuration
 
-**Status:** in execution — cuts 1–3 are merged, cut 4 is next. See
+**Status:** in execution — cuts 1–5 are merged, cut 6 is in review. See
 [Where this stands](#where-this-stands--read-this-first) for the current
 state, the machine-local prerequisites, and where this plan turned out to
 be wrong. Owner decisions taken on 2026-09-07 are recorded under
@@ -28,8 +28,8 @@ lives only on the machine this was written on.
 | 2 — door-lock operation-mode labels | **merged**, code half [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723), data half [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33) → go-openccu-data v0.1.4, module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726) *(open)* |
 | 3 — link editor null link | **merged**, [#725](https://github.com/SukramJ/openccu-loom/pull/725) |
 | 4 — channel table | **merged**, [#728](https://github.com/SukramJ/openccu-loom/pull/728) |
-| 5 — parameter table | **in review**, branch `feat/parameter-table` |
-| 6 — device table | not started |
+| 5 — parameter table | **merged**, [#729](https://github.com/SukramJ/openccu-loom/pull/729) |
+| 6 — device table | **in review**, branch `feat/device-table` |
 
 The plan itself is [#724](https://github.com/SukramJ/openccu-loom/pull/724).
 
@@ -820,6 +820,50 @@ cd assets/ui && npm run check && npx vitest run src/routes/DeviceList src/lib/co
 ```
 
 then the full gate.
+
+### What cut 6 measured
+
+1. **`ChannelTable`'s `compact` mode had no consumer until now.** Cut 4 built
+   and tested it for exactly this cut, and nothing used it in between — the
+   shape `CLAUDE.md` calls a dead feature that looks identical to a live one.
+   The expanded device row is what makes it live.
+2. **An expansion that loads lazily needs a signal the snippet cannot give.**
+   The `expand` snippet renders only while a row is open, so it has no moment
+   of its own to start a fetch from. `DataTable` gained `onExpand`, fired on
+   open and not on close; without it the row would either fetch on every
+   render or fetch for every device up front.
+3. **Two filter defects the code shape produced, both caught by looking at
+   the rendered page rather than at a test.** The selection-checkbox column
+   carries `get: () => ""` — a stub so the table's search does not choke on a
+   column with none — which made the generic "filterable if it has a `get`"
+   rule offer a text box for a checkbox. And `status` sorts as 1/0, so its
+   text filter asked the operator to type a number they never see. The first
+   opts out with `filter: false`; the second is a `select` over Reachable /
+   Unreachable.
+4. **Sort lived in two places and now lives in one.** `deviceListFilters`
+   persisted `sortColumn` / `sortAsc` for the card mode while `DataTable`
+   persisted its own under `persistKey`; with the cards gone the store's copy
+   could only ever disagree, so it is deleted along with `DeviceSortColumn`.
+   The grouped tables take a `persistKey` per interface, so a sort chosen in
+   one interface's table does not silently reorder another's.
+5. **Only the two `device-list` baselines moved**, as the plan predicted, and
+   they moved twice — once for the table, once after the filter fixes. Every
+   other visual baseline was untouched. `deviceView: 'grid'` had been seeded
+   into 21 e2e spec fixtures; with the preference gone those lines are stale
+   claims about a layout that no longer exists, so they were removed too.
+
+Guards added, each proved to bite by removing the named production line:
+
+| Guard | Line removed | Message when red |
+|---|---|---|
+| `DataTable filters > narrows the rows by a text filter` | the filter loop in `processed` | 3 rows instead of 1 |
+| `DataTable filters > persists filters` | `filters: parsed.filters ?? {}` on restore | 3 rows instead of 1 |
+| `DataTable expand > spans every column` | `colspan={columns.length + 1}` | `expected '2' to be '3'` |
+| `DataTable expand > empty chevron cell` | the unconditional chevron `<td>` | `expected 2 to be 3` |
+| `DeviceList > narrows through a column filter` | `columnFilters` on the table | the filter control is not in the DOM |
+| `DeviceList > fetches only when expanded` | the `onExpand` wiring | `listChannels` never called |
+| `DeviceList > does not re-fetch` | the `channelsByAddress.has` guard | called twice instead of once |
+| `DeviceList > leaves out :0` | the channel filter in `loadChannels` | the maintenance channel appears |
 
 ---
 

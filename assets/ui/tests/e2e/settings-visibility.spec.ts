@@ -23,7 +23,6 @@ const PREFS = (theme: 'light' | 'dark') =>
     locale: 'en',
     navCollapsed: false,
     expertMode: false,
-    deviceView: 'grid',
   });
 
 test.describe('Settings — hidden parameters', () => {

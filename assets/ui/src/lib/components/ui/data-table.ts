@@ -27,6 +27,15 @@ export type DataColumn<Row> = {
   // column of channel numbers or counts lines up on its digits instead of
   // ragging against proportional glyph widths.
   numeric?: boolean;
+  // Per-column filter control rendered in the filter row under the header,
+  // when the table has `columnFilters` on. "text" is a substring match through
+  // `get()`; "select" offers `filterOptions` and matches exactly; false (the
+  // default for a column with no `get`) leaves the cell empty, because a
+  // column the table cannot read cannot be filtered.
+  filter?: "text" | "select" | false;
+  // Options for a "select" filter. `value` is compared against `get()`'s
+  // string form; `label` is what the operator picks.
+  filterOptions?: { value: string; label: string }[];
   // Extra classes applied to this column's <th> header cell. Use together
   // with cellClass (e.g. the shared `hide-narrow` utility) to collapse a
   // whole column away on narrow viewports without leaving a dangling header.

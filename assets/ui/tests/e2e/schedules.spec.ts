@@ -83,7 +83,6 @@ test.describe('Schedules overview', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });

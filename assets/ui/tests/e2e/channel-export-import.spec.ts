@@ -132,7 +132,7 @@ test.describe('Channel editor — export / import snapshot', () => {
     await page.addInitScript(() => {
       localStorage.setItem(
         'openccu-loom.prefs.v1',
-        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false }),
       );
     });
   });
