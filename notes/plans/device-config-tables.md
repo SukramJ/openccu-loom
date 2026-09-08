@@ -1,6 +1,6 @@
 # Implementation plan — tabular, model-driven device configuration
 
-**Status:** in execution — cuts 1–5 are merged, cut 6 is in review. See
+**Status:** **complete** — all six cuts are merged (2026-09-08). See
 [Where this stands](#where-this-stands--read-this-first) for the current
 state, the machine-local prerequisites, and where this plan turned out to
 be wrong. Owner decisions taken on 2026-09-07 are recorded under
@@ -18,38 +18,42 @@ half of it.
 
 ## Where this stands — read this first
 
-Status as of 2026-09-07, written so the work can be picked up on another
-machine. Everything below is either merged or an open PR; nothing needed
-lives only on the machine this was written on.
+Status as of 2026-09-08. Every cut has landed; the section is kept because
+the execution notes under each cut record what the plan got wrong, which is
+the part worth reading after the fact.
 
 | Cut | State |
 |---|---|
 | 1 — inbox accept renames channels | **merged**, [#721](https://github.com/SukramJ/openccu-loom/pull/721) |
-| 2 — door-lock operation-mode labels | **merged**, code half [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723), data half [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33) → go-openccu-data v0.1.4, module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726) *(open)* |
+| 2 — door-lock operation-mode labels | **merged**, code half [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723), data half [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33) → go-openccu-data v0.1.4, module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726) |
 | 3 — link editor null link | **merged**, [#725](https://github.com/SukramJ/openccu-loom/pull/725) |
 | 4 — channel table | **merged**, [#728](https://github.com/SukramJ/openccu-loom/pull/728) |
 | 5 — parameter table | **merged**, [#729](https://github.com/SukramJ/openccu-loom/pull/729) |
-| 6 — device table | **in review**, branch `feat/device-table` |
+| 6 — device table | **merged**, [#730](https://github.com/SukramJ/openccu-loom/pull/730) |
 
 The plan itself is [#724](https://github.com/SukramJ/openccu-loom/pull/724).
 
-### Picking it up elsewhere
+### Working in this area later
 
-1. `git pull` on `main`. If [#726](https://github.com/SukramJ/openccu-loom/pull/726) is
-   still open, that branch carries the module bump to v0.1.4 and the
-   guards that go with it; land it before cut 4 so the door-lock labels
-   and the reshaped borrowing guard are in.
-2. `make setup` (Go tooling + the pre-commit hook), then `make ui-install`
+The cut-by-cut pickup instructions this section carried are spent — every cut
+has landed. What stays useful is the environment the work needed, because the
+next change to the device pages needs the same:
+
+1. `make setup` (Go tooling + the pre-commit hook), then `make ui-install`
    and `cd assets/ui && npx playwright install chromium` — the SPA e2e
    suite needs the browser, and the Playwright baselines are per platform
    (`*-darwin.png` locally, `*-linux.png` only in the pinned container).
-3. The sibling checkouts this plan cites — `../openccu-data`,
+2. The sibling checkouts this plan cites — `../openccu-data`,
    `../go-openccu-data`, `../OpenCCU`, `../OpenCCU-Base`, `../aiohomematic`
-   and friends — are read alongside the repo, not vendored. Cut 2 needed
-   all of them; cuts 4–6 need none.
-4. `./.ccu_cred` (gitignored, read-only account) is what the CCU probes in
-   cut 2 used. **Cuts 4–6 need no CCU access at all** — every remaining
-   cut is hermetic.
+   and friends — are read alongside the repo, not vendored. Only cut 2, the
+   translation work, needed them; the three table cuts needed none.
+3. `./.ccu_cred` (gitignored, read-only account) is what cut 2's CCU probes
+   used. The table cuts needed no CCU access at all — they are hermetic, and
+   a change to these pages should stay that way.
+4. The e2e suite starts the prebuilt `./bin/openccu-loom`, so `make build`
+   before running it. Since [#733](https://github.com/SukramJ/openccu-loom/pull/733)
+   the harness refuses a binary older than the sources rather than silently
+   testing one.
 
 ### Owner decisions taken during execution
 
@@ -877,13 +881,23 @@ Guards added, each proved to bite by removing the named production line:
 - The Python client fan-out for the `ChannelSummary` fields.
 - Any change to `internal/model/custom/` profiles.
 
-## Owner inputs still needed
+## Owner inputs — all supplied
 
-1. Cut 2: the label wording (de and en) for the four channel-12 tokens
-   `IGNORE_DOOR_OPEN`, `SKIP_HOLD_TIME_OPENING`, `SKIP_RELOCK_DELAY_CLOSING`,
-   `SKIP_HOLD_TIME_OPENING_RELOCK_DELAY_CLOSING`; optionally for channel 2
-   and 3 as well. The captures themselves are done (fixture in
-   `notes/parity/fixtures/`).
-2. Cut 3, only if neither reproducer goes red: a DevTools stack trace of
-   the failing save from the real instance.
-3. Cut 2: the go-openccu-data release after the overlay commit.
+Kept as a record of what the plan could not answer for itself. All three are
+closed; verified 2026-09-08.
+
+1. **Cut 2's label wording.** Supplied and shipped. The curated overlay carries
+   all four channel-12 tokens, channel-type-qualified and lowercased —
+   `door_lock_transceiver|channel_operation_mode=ignore_door_open` →
+   "Türzustand ignorieren", and the three siblings — plus the acceleration and
+   door-state channel types that share the parameter. Read back from
+   go-openccu-data v0.1.4's `translation_custom/parameter_values_de.json`.
+   (A search for the upper-case CCU token finds nothing: the overlay keys are
+   lowercase, which is worth knowing before concluding the labels are absent.)
+2. **Cut 3's DevTools stack trace.** Not needed — the condition was reproduced
+   in the repository. `ChannelPanel.save()` re-reads its props after the PUT
+   returns, and the editor's props were `$derived` from a nullable holder; the
+   root cause and the two failed reproduction attempts are under cut 3.
+3. **The go-openccu-data release.** Done: v0.1.4, taken here by
+   [#726](https://github.com/SukramJ/openccu-loom/pull/726) and pinned in
+   `go.mod`.
