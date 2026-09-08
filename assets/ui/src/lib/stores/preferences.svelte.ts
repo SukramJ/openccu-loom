@@ -28,6 +28,15 @@ type Prefs = {
   // deviceView toggles the device-list layout between a multi-column
   // card grid and a single-column list (HA-config-panel style).
   deviceView: "grid" | "list";
+  // writePreview shows what a MASTER or LINK save will write, and to which
+  // request, before it goes out. On by default: those paramsets are device
+  // configuration an operator cannot inspect from the device itself, and the
+  // CCU's two backends disagree on what a refused value does. VALUES writes
+  // never take this path — they are immediate control actions whose effect is
+  // the point.
+  writePreview: boolean;
+  // paramDensity picks the parameter editor's row height.
+  paramDensity: "compact" | "comfortable";
 };
 
 function detectLocale(): "de" | "en" {
@@ -51,12 +60,34 @@ function load(): Prefs {
       const navCollapsed = parsed.navCollapsed === true;
       const expertMode = parsed.expertMode === true;
       const deviceView: "grid" | "list" = parsed.deviceView === "list" ? "list" : "grid";
-      return { locale, theme, skin, navCollapsed, expertMode, deviceView };
+      // Default-on: an absent key must mean "preview", not "write silently".
+      const writePreview = parsed.writePreview !== false;
+      const paramDensity: "compact" | "comfortable" =
+        parsed.paramDensity === "comfortable" ? "comfortable" : "compact";
+      return {
+        locale,
+        theme,
+        skin,
+        navCollapsed,
+        expertMode,
+        deviceView,
+        writePreview,
+        paramDensity,
+      };
     }
   } catch {
     // ignore
   }
-  return { locale: detectLocale(), theme: "system", skin: "loom", navCollapsed: false, expertMode: false, deviceView: "grid" };
+  return {
+    locale: detectLocale(),
+    theme: "system",
+    skin: "loom",
+    navCollapsed: false,
+    expertMode: false,
+    deviceView: "grid",
+    writePreview: true,
+    paramDensity: "compact",
+  };
 }
 
 function persist(p: Prefs): void {
@@ -76,6 +107,8 @@ export const prefs = $state<Prefs>({
   navCollapsed: initial.navCollapsed,
   expertMode: initial.expertMode,
   deviceView: initial.deviceView,
+  writePreview: initial.writePreview,
+  paramDensity: initial.paramDensity,
 });
 
 // Keep <html> in sync with the resolved theme. Listens to
@@ -111,6 +144,16 @@ export function setSkin(skin: Skin): void {
   prefs.skin = skin;
   persist({ ...prefs });
   applyTheme();
+}
+
+export function setWritePreview(enabled: boolean): void {
+  prefs.writePreview = enabled;
+  persist({ ...prefs });
+}
+
+export function setParamDensity(density: "compact" | "comfortable"): void {
+  prefs.paramDensity = density;
+  persist({ ...prefs });
 }
 
 export function setNavCollapsed(collapsed: boolean): void {

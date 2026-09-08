@@ -140,6 +140,23 @@ async function dirtyAndSave(container: HTMLElement) {
   );
   expect(saveButtons.length).toBeGreaterThan(0);
   await fireEvent.click(saveButtons[0]);
+  await confirmWritePreview();
+}
+
+/**
+ * A LINK save opens the write preview first (the preference is on by
+ * default), so every test that expects the write to reach the API has to
+ * click through it. Silently absent when the preference is off.
+ */
+async function confirmWritePreview() {
+  const write = await waitFor(() => {
+    const el = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "channel.preview.write",
+    );
+    expect(el).toBeTruthy();
+    return el as HTMLButtonElement;
+  });
+  await fireEvent.click(write);
 }
 
 beforeEach(() => {
@@ -264,6 +281,8 @@ describe("ChannelPanel — LINK save wakeup hint", () => {
       (b) => b.textContent?.trim() === "channel.save_n",
     );
     await fireEvent.click(saveButtons[0]);
+    // MASTER is a configuration paramset too, so it goes through the preview.
+    await confirmWritePreview();
 
     await waitFor(() => {
       expect(mockPutParamset).toHaveBeenCalled();

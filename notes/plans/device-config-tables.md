@@ -27,8 +27,8 @@ lives only on the machine this was written on.
 | 1 — inbox accept renames channels | **merged**, [#721](https://github.com/SukramJ/openccu-loom/pull/721) |
 | 2 — door-lock operation-mode labels | **merged**, code half [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723), data half [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33) → go-openccu-data v0.1.4, module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726) *(open)* |
 | 3 — link editor null link | **merged**, [#725](https://github.com/SukramJ/openccu-loom/pull/725) |
-| 4 — channel table | **in review**, branch `feat/channel-table` |
-| 5 — parameter table | not started |
+| 4 — channel table | **merged**, [#728](https://github.com/SukramJ/openccu-loom/pull/728) |
+| 5 — parameter table | **in progress**, branch `feat/parameter-table` |
 | 6 — device table | not started |
 
 The plan itself is [#724](https://github.com/SukramJ/openccu-loom/pull/724).
@@ -528,9 +528,9 @@ then the full gate.
 
 ## Cut 4 — channel table and channel header
 
-> **In review** on `feat/channel-table`. Both halves are implemented and the
-> full gate is green; what the plan got wrong or left ambiguous is recorded
-> under [What cut 4 measured](#what-cut-4-measured) below.
+> **Merged** as [#728](https://github.com/SukramJ/openccu-loom/pull/728).
+> What the plan got wrong or left ambiguous is recorded under
+> [What cut 4 measured](#what-cut-4-measured) below.
 
 **Branch:** `feat/channel-table`
 **Goal:** the chip strip becomes a sortable table; the selected channel's

@@ -19,6 +19,12 @@
     values: ParamValues;
     dirty: Set<string>;
     errors: Record<string, string>;
+    /**
+     * Parameter name → the display value the device reported after the last
+     * write, for the parameters where that differed from what was sent. The
+     * row shows it as a chip until the parameter is edited again.
+     */
+    readBack?: Map<string, string>;
     locale: string;
     /** Parameter names locked by a profile apply; rendered read-only. */
     locked?: Set<string>;
@@ -44,6 +50,7 @@
     values,
     dirty,
     errors,
+    readBack,
     locale,
     locked,
     brightnessSource = null,
@@ -196,7 +203,7 @@
   </div>
 {/if}
 
-<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+<div class="divide-y divide-[var(--ha-divider-color)]">
   {#each pairs as pair (pair.prefix)}
     <ParameterTimePair
       {pair}
@@ -219,6 +226,7 @@
         value={currentValue(p)}
         dirty={dirty.has(p.name)}
         error={errors[p.name] ?? null}
+        readBack={readBack?.get(p.name) ?? null}
         forceDisabled={locked?.has(p.name) ?? false}
         brightnessHelper={brightnessHelperFor(p)}
         onChange={(v) => onParamChange(p.name, v)}
@@ -237,7 +245,7 @@
         <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
           {g.label}
         </h4>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="divide-y divide-[var(--ha-divider-color)]">
           {#each g.params as p (p.name)}
             {@const dis = groupDisambiguation.get(p.name)}
             <ParameterField
@@ -246,6 +254,7 @@
               value={currentValue(p)}
               dirty={dirty.has(p.name)}
               error={errors[p.name] ?? null}
+              readBack={readBack?.get(p.name) ?? null}
               forceDisabled={locked?.has(p.name) ?? false}
               brightnessHelper={brightnessHelperFor(p)}
               onChange={(v) => onParamChange(p.name, v)}

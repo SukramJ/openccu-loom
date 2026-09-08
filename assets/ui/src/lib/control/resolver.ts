@@ -88,3 +88,68 @@ export function slot(
 ): DataPointSummary | undefined {
   return resolved.slots[suffix];
 }
+
+// ─── Widget selection from CONTROL ──────────────────────────────────
+
+/**
+ * Which widget the parameter editor should render for one parameter.
+ * `"auto"` means "no CONTROL-derived answer" and hands the decision back
+ * to ParameterField's own type/range heuristics.
+ */
+export type WidgetKind = "switch" | "level" | "trigger" | "auto";
+
+/**
+ * Decide a parameter's widget from its CCU `CONTROL` hint.
+ *
+ * The rules below are the slot-semantics table of
+ * `notes/reference/control-inventory.md`, narrowed to the three widget
+ * families the editor renders differently from its own heuristics. The
+ * suffix is what carries the render hint — the family disambiguates
+ * meaning, not shape — so this switches on the slot and consults the
+ * family only where the inventory says the same suffix means two things.
+ *
+ * Two of those disambiguations are load-bearing here:
+ *
+ *   - `LEVEL` is a position for `DIMMER` / `BLIND` / `JALOUSIE` but an
+ *     enumerated handle position for `WIN_SC`. Rather than naming the
+ *     families, this reads the parameter's own `value_list`: a parameter
+ *     the CCU describes with choices is a selector whatever its slot is
+ *     called, and that is a property the DTO carries rather than one this
+ *     table would have to keep in sync with the firmware.
+ *   - `STATE` is a toggle only where it is writable and BOOL. On
+ *     `DOOR_SENSOR`, `DANGER` or `SMOKE_DETECTOR` the same slot is a
+ *     read-only status, and rendering a switch for it would offer a write
+ *     the CCU refuses.
+ */
+export function widgetFor(param: {
+  type: string;
+  control?: string;
+  value_list?: unknown[];
+  operations?: { write?: boolean };
+}): WidgetKind {
+  // An ACTION parameter has no value to display — it is a pulse the
+  // operator sends. That holds regardless of what CONTROL says, and for
+  // parameters carrying no CONTROL at all.
+  if (param.type === "ACTION") return "trigger";
+
+  const parsed = parseControl(param.control);
+  if (!parsed) return "auto";
+
+  // A parameter the CCU describes with choices is a selector, whatever
+  // its slot suffix suggests.
+  if (param.value_list && param.value_list.length > 0) return "auto";
+
+  const writable = param.operations?.write !== false;
+  const { slot: suffix } = parsed;
+
+  if (suffix === "STATE") {
+    return param.type === "BOOL" && writable ? "switch" : "auto";
+  }
+  if (suffix === "LEVEL" || suffix.startsWith("LEVEL_")) {
+    return writable ? "level" : "auto";
+  }
+  // BUTTON.SHORT / BUTTON.LONG are event pulses the device sends, not
+  // commands the operator issues, so they are not triggers here — an
+  // ACTION-typed parameter already took that branch above.
+  return "auto";
+}

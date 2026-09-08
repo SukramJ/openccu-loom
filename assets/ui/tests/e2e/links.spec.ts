@@ -213,6 +213,12 @@ test.describe('Device link editor', () => {
       (r) => r.method() === 'PUT' && r.url().includes('/link-ps/'),
     );
     await page.getByRole('button', { name: /Save/i }).first().click();
+    // A LINK save is previewed before it leaves; its request line names the
+    // per-peer endpoint the write actually uses.
+    const dialog = page.getByRole('dialog', { name: 'Review this write' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(`/link-ps/${SENDER}`)).toBeVisible();
+    await dialog.getByRole('button', { name: 'Write', exact: true }).click();
     const request = await putBody;
     // The peer in the path is the sender address the snapshot carries.
     expect(decodeURIComponent(request.url())).toContain(`/link-ps/${SENDER}`);

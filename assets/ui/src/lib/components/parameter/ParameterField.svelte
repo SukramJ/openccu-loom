@@ -9,6 +9,8 @@
   import Icon from "$lib/components/ui/Icon.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
   import { t } from "$lib/i18n";
+  import { prefs } from "$lib/stores/preferences.svelte";
+  import { formatDisplayValue } from "$lib/parameter/display-value";
 
   type Props = {
     parameter: UISchemaParameter;
@@ -23,6 +25,14 @@
     value: unknown;
     dirty: boolean;
     error: string | null;
+    /**
+     * The display value the device reported after the last write, when it
+     * differed from what was sent. Shown as a chip on the row so a clamped
+     * or rejected value is visible where the operator set it, not only in
+     * the toast that has since gone. Null when the last write landed as
+     * sent, or when there has been none.
+     */
+    readBack?: string | null;
     /**
      * When true the field is disabled on top of the parameter's own
      * writability. Used to lock values that a profile has fixed.
@@ -65,6 +75,7 @@
     value,
     dirty,
     error,
+    readBack = null,
     forceDisabled = false,
     onChange,
     onAction,
@@ -72,6 +83,36 @@
     brightnessHelper = null,
     onDetermine,
   }: Props = $props();
+
+  // Row height follows the operator's density preference: a MASTER paramset
+  // can run to eighty parameters, where the comfortable spacing that suits a
+  // six-field link editor turns into a page of scrolling.
+  const rowPad = $derived(
+    prefs.paramDensity === "comfortable" ? "py-3" : "py-1.5",
+  );
+
+  // Third column of the row: the constraints the operator would otherwise
+  // have to discover by being refused. Empty when the parameter carries
+  // neither a numeric range nor a default, so the column collapses rather
+  // than rendering a lone separator.
+  const rangeSummary = $derived.by(() => {
+    const parts: string[] = [];
+    if (
+      displayMin !== null &&
+      displayMax !== null &&
+      Number.isFinite(displayMin) &&
+      Number.isFinite(displayMax)
+    ) {
+      const unit = parameter.unit ? ` ${parameter.unit}` : "";
+      parts.push(`${displayMin} … ${displayMax}${unit}`);
+    }
+    if (parameter.default !== undefined && parameter.default !== null) {
+      parts.push(
+        `${t("parameter.default")}: ${formatDisplayValue(parameter, parameter.default)}`,
+      );
+    }
+    return parts.join(" · ");
+  });
 
   // Spinner state for an in-flight determine round-trip. Local to the
   // field so each button shows its own progress independently.
@@ -275,22 +316,31 @@
     {onChange}
   />
 {:else}
-<div class="flex flex-col gap-1">
-  <div class="flex flex-wrap items-baseline gap-2">
+<!-- One parameter row. The three columns line up across a whole section:
+     label (with the raw CCU name beneath it), the widget, and the range /
+     default the CCU will hold the write to. Below `md` the columns stack,
+     which is the old card shape and the right one on a phone. -->
+<div class="grid grid-cols-1 gap-x-4 gap-y-1 {rowPad} md:grid-cols-[minmax(14rem,1fr)_minmax(12rem,2fr)_auto] md:items-start">
+  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 md:flex-col md:items-start md:gap-y-0.5">
     <span class="min-w-0 break-words text-sm font-medium text-slate-700 dark:text-slate-300">
       {parameter.label || parameter.name}
-      {#if parameter.label && parameter.name !== parameter.label}
-        {#if nameBadge}
-          <Badge variant="muted" class="ml-1 align-middle font-mono">{parameter.name}</Badge>
-        {:else}
-          <span class="ml-1 font-mono text-[10px] text-[var(--ha-secondary-text-color)]">
-            {parameter.name}
-          </span>
-        {/if}
+      {#if parameter.unit}
+        <span class="ml-1 text-xs font-normal text-[var(--ha-secondary-text-color)]">
+          {parameter.unit}
+        </span>
       {/if}
     </span>
-    {#if parameter.unit}
-      <span class="text-xs text-[var(--ha-secondary-text-color)]">{parameter.unit}</span>
+    <!-- The raw CCU name goes on its own line under the label: it is what the
+         operator matches against the device documentation and against any
+         other tool, and inline it competes with the label for the same row. -->
+    {#if parameter.label && parameter.name !== parameter.label}
+      {#if nameBadge}
+        <Badge variant="muted" class="align-middle font-mono">{parameter.name}</Badge>
+      {:else}
+        <span class="font-mono text-[10px] text-[var(--ha-secondary-text-color)]">
+          {parameter.name}
+        </span>
+      {/if}
     {/if}
     {#if parameter.help && !helpInline}
       <button
@@ -304,13 +354,23 @@
         <Icon name="mdi:information-outline" size={14} />
       </button>
     {/if}
-    {#if dirty}<Badge variant="warning">{t("parameter.modified")}</Badge>{/if}
-    {#if isLocked}
-      <Badge variant="muted">{t("parameter.profile_badge")}</Badge>
-    {:else if isReadOnly}
-      <Badge variant="muted">{t("parameter.read_only")}</Badge>
-    {/if}
+    <span class="flex flex-wrap items-center gap-1">
+      {#if dirty}<Badge variant="warning">{t("parameter.modified")}</Badge>{/if}
+      {#if isLocked}
+        <Badge variant="muted">{t("parameter.profile_badge")}</Badge>
+      {:else if isReadOnly}
+        <Badge variant="muted">{t("parameter.read_only")}</Badge>
+      {/if}
+      {#if readBack}
+        <!-- The device kept a different value than the one written. Shown
+             here rather than only in the toast, which is gone by the time
+             the operator looks at the row again. -->
+        <Badge variant="warning">{t("channel.readback.chip", { value: readBack })}</Badge>
+      {/if}
+    </span>
   </div>
+
+  <div class="flex min-w-0 flex-col gap-1">
 
   {#if parameter.help && !helpInline && helpExpanded}
     <!-- Popover-style help box: anchored under the label, looks like
@@ -546,6 +606,13 @@
   {/if}
   {#if error}
     <p class="text-xs text-red-600 dark:text-red-400">{error}</p>
+  {/if}
+  </div>
+
+  {#if rangeSummary}
+    <div class="whitespace-nowrap text-xs tabular-nums text-[var(--ha-secondary-text-color)] md:pt-1.5 md:text-right">
+      {rangeSummary}
+    </div>
   {/if}
 </div>
 {/if}

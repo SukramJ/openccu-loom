@@ -158,6 +158,17 @@ describe("LinkConfigPanel — the editor closes while a LINK save is in flight",
     );
     expect(saveButton).toBeTruthy();
     await fireEvent.click(saveButton as HTMLButtonElement);
+    // A LINK save is a configuration write, so it is previewed first (the
+    // write-preview preference, on by default). The race this test is about
+    // starts once the PUT is actually on the wire.
+    const writeButton = await waitFor(() => {
+      const el = Array.from(document.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "channel.preview.write",
+      );
+      expect(el).toBeTruthy();
+      return el as HTMLButtonElement;
+    });
+    await fireEvent.click(writeButton);
     await waitFor(() => expect(mockPutLinkParamset).toHaveBeenCalled());
 
     // …and leave the editor while the PUT is still pending. This is the

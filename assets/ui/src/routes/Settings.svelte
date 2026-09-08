@@ -22,6 +22,8 @@
     prefs,
     setLocale,
     setExpertMode,
+    setWritePreview,
+    setParamDensity,
     setTheme,
     setSkin,
     type Theme,
@@ -612,6 +614,41 @@
                 <p class="text-xs text-[var(--ha-secondary-text-color)]">
                   {t("settings.expert_mode_hint")}
                 </p>
+              </div>
+
+              <div class="flex items-start gap-3">
+                <div class="min-w-24 pt-0.5">
+                  <label class="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={prefs.writePreview}
+                      onchange={(e) =>
+                        setWritePreview((e.target as HTMLInputElement).checked)}
+                      class="h-4 w-4"
+                    />
+                    <span>{t("settings.prefs.write_preview")}</span>
+                  </label>
+                </div>
+                <p class="text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("settings.prefs.write_preview_help")}
+                </p>
+              </div>
+
+              <div>
+                <label class="flex items-center gap-3 text-sm">
+                  <span class="min-w-24">{t("settings.prefs.param_density")}</span>
+                  <select
+                    class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-1.5 text-sm"
+                    value={prefs.paramDensity}
+                    onchange={(e) =>
+                      setParamDensity(
+                        (e.target as HTMLSelectElement).value as "compact" | "comfortable",
+                      )}
+                  >
+                    <option value="compact">{t("settings.prefs.density.compact")}</option>
+                    <option value="comfortable">{t("settings.prefs.density.comfortable")}</option>
+                  </select>
+                </label>
               </div>
             </div>
           </div>
