@@ -6,6 +6,44 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Every view sits in the same page frame.** Each route used to carry its own
+  container, and they had drifted apart: most constrained the content to
+  `max-w-6xl`, three ran full width, two picked their own width, and eight
+  used a taller vertical padding than the rest — so moving between views
+  shifted the content sideways and up. A shared page shell now owns that
+  frame and names the intent, with full width reserved for the surfaces that
+  genuinely need it (the device table, the overview tiles, the fleet cards).
+  Login and the first-run wizard keep their own full-screen layout.
+- **One page title, one tab strip.** Six views rendered their heading
+  themselves, all of them a lighter weight than the shared header, so the
+  title changed appearance as you navigated. They use the shared header now —
+  including the device page, whose breadcrumb, inline rename and metadata
+  line it learned to carry. The five hand-rolled tab strips likewise become
+  one component: they had disagreed on height, alignment and even on which
+  shade marked the active tab.
+- **The last hand-rolled tables join the shared one.** The alarm journal, the
+  walk-test checklist, the matter session list and the matter exposure list
+  scrolled sideways on a phone while every other table reflowed into cards,
+  and none of them could sort. They all sort now, the walk test by status —
+  which sensors are still pending — and the exposure list keeps its
+  per-device sections, because the shared table can group its rows.
+- **Links and schedules are tables.** Both were card lists that a real CCU
+  fills into the hundreds: searchable, never sortable, and with every card
+  aligning its own contents so nothing lined up down the page.
+- **Column filters and remembered sorting reach the rest of the lists.**
+  Filtering a single column existed only in the device list. It now covers
+  the lists whose columns are a fixed set — a sysvar's value type, a
+  program's active state, a security source's relevance and activity — each
+  as a choice list. Nine tables that forgot the sort you picked as soon as
+  you left now remember it.
+- **Filter controls match the buttons beside them.** The remaining raw
+  dropdowns were 38px tall next to 40px buttons and carried a copy of the
+  same 200-character style chain; they are the shared select now, and are
+  named for screen readers instead of relying on a tooltip. Cards that sit
+  side by side also align their labels and values on one line.
+
 ## [0.76.0] - 2026-09-08
 
 ### Added

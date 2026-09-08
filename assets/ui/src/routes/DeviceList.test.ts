@@ -107,6 +107,13 @@ vi.mock("$lib/i18n", () => ({
 }));
 
 import type { DeviceSummary } from "$lib/api/types";
+// The real Select wraps bits-ui's floating-portal listbox, which happy-dom
+// cannot drive (see SelectStub.svelte).
+vi.mock("$lib/components/ui/Select.svelte", async () => {
+  const mod = await import("./__testutils__/SelectStub.svelte");
+  return { default: mod.default };
+});
+
 import DeviceList from "./DeviceList.svelte";
 
 function makeDevice(overrides: Partial<DeviceSummary> = {}): DeviceSummary {
@@ -267,12 +274,11 @@ describe("DeviceList — availability filter", () => {
 
   it("renders the availability select with the correct options", () => {
     mockItems = [];
-    const { getByTitle } = render(DeviceList);
-    const select = getByTitle("devicelist.availability") as HTMLSelectElement;
-    const opts = Array.from(select.options).map((o) => o.value);
-    expect(opts).toContain("all");
-    expect(opts).toContain("available");
-    expect(opts).toContain("unavailable");
+    const { getAllByRole } = render(DeviceList);
+    const labels = getAllByRole("option").map((o) => o.textContent?.trim());
+    expect(labels).toContain("devicelist.all");
+    expect(labels).toContain("devicelist.available");
+    expect(labels).toContain("devicelist.unavailable");
   });
 });
 
@@ -306,16 +312,17 @@ describe("DeviceList — update-only filter", () => {
 describe("DeviceList — area filter", () => {
   it("hides the area select entirely when no areas are defined", () => {
     mockAreas = [];
-    const { queryByTitle } = render(DeviceList);
-    expect(queryByTitle("devicelist.area")).toBeNull();
+    const { queryAllByRole } = render(DeviceList);
+    const labels = queryAllByRole("option").map((o) => o.textContent?.trim());
+    expect(labels).not.toContain("devicelist.all_areas");
   });
 
   it("shows the area select once areas exist, with an 'all areas' option", () => {
     mockAreas = [{ id: "a1", name: "Upstairs" }];
-    const { getByTitle } = render(DeviceList);
-    const select = getByTitle("devicelist.area") as HTMLSelectElement;
-    const opts = Array.from(select.options).map((o) => o.value);
-    expect(opts).toEqual(["", "a1"]);
+    const { getAllByRole } = render(DeviceList);
+    const labels = getAllByRole("option").map((o) => o.textContent?.trim());
+    expect(labels).toContain("devicelist.all_areas");
+    expect(labels).toContain("Upstairs");
   });
 
   // The DeviceList component seeds its local `areaFilter` $state from the

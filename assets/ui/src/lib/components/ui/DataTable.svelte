@@ -12,7 +12,8 @@
   // Sorting is by clicking the column header (asc ↔ desc, keyboard-operable);
   // the responsive `table-reflow` layout collapses to cards on phones. Cell
   // content is supplied by the `cell` snippet (parent), falling back to the
-  // column's `get()` text when no snippet is given.
+  // column's `get()` text when no snippet is given. `groupBy` splits the rows
+  // into labelled sections without giving up sort, filters or the reflow.
   let {
     rows,
     columns,
@@ -32,6 +33,8 @@
     expand,
     expandable,
     onExpand,
+    groupBy,
+    groupHeader,
   }: {
     rows: Row[];
     columns: DataColumn<Row>[];
@@ -71,6 +74,13 @@
     // lazily loaded expansion possible: the snippet renders only while the
     // row is open, so it has no moment of its own to start a fetch from.
     onExpand?: (row: Row) => void;
+    // Splits the rows into labelled sections — one <tbody> each, with a
+    // header row spanning every column. Grouping applies AFTER filtering and
+    // sorting, and sections appear in the order their first row does, so the
+    // operator's sort still governs what comes first. Without `groupHeader`
+    // the key renders as plain text.
+    groupBy?: (row: Row) => string;
+    groupHeader?: Snippet<[string, Row[]]>;
   } = $props();
 
   type Persisted = {
@@ -261,6 +271,21 @@
     return list;
   });
 
+  const groups = $derived.by(() => {
+    if (!groupBy) return null;
+    const out = new Map<string, Row[]>();
+    for (const row of processed) {
+      const key = groupBy(row);
+      const bucket = out.get(key);
+      if (bucket) bucket.push(row);
+      else out.set(key, [row]);
+    }
+    return Array.from(out, ([key, rows]) => ({ key, rows }));
+  });
+
+  // Every column plus the chevron cell, for the header rows that span them.
+  const spanAll = $derived(columns.length + (canExpand ? 1 : 0));
+
   function ariaSort(col: DataColumn<Row>): "ascending" | "descending" | "none" {
     if (!col.sortable || sortKey !== col.key) return "none";
     return sortAsc ? "ascending" : "descending";
@@ -349,59 +374,80 @@
           </tr>
         {/if}
       </thead>
-      <tbody>
-        {#each processed as row (rowKey(row))}
-          <tr
-            class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)] dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] {onRowClick
-              ? 'cursor-pointer'
-              : ''} {selectedKey !== null && rowKey(row) === selectedKey
-              ? 'bg-slate-100 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_65%,transparent)]'
-              : ''} {rowClass?.(row) ?? ''}"
-            aria-selected={selectedKey === null
-              ? undefined
-              : rowKey(row) === selectedKey}
-            tabindex={onRowClick ? 0 : undefined}
-            onclick={onRowClick ? rowClickHandler(row) : undefined}
-            onkeydown={onRowClick ? rowKeyHandler(row) : undefined}
-          >
-            {#if canExpand}
-              <td class="w-8 px-2 py-2">
-                {#if rowExpandable(row)}
-                  {@const isOpen = expandedKeys.has(rowKey(row))}
-                  <button
-                    type="button"
-                    class="inline-flex h-5 w-5 items-center justify-center rounded text-[var(--ha-secondary-text-color)] transition hover:bg-black/5 dark:hover:bg-white/5"
-                    aria-expanded={isOpen}
-                    aria-label={isOpen ? t("datatable.collapse") : t("datatable.expand")}
-                    onclick={() => toggleExpand(row)}
-                  >
-                    <span aria-hidden="true" class="text-[10px]">{isOpen ? "▼" : "▶"}</span>
-                  </button>
-                {/if}
-              </td>
-            {/if}
-            {#each columns as col (col.key)}
-              <td
-                class="px-3 py-2 {alignClass(col)} {numericClass(col)} {col.title
-                  ? 'reflow-title'
-                  : ''} {col.cellClass ?? ''}"
-                data-label={col.label}
-              >
-                {#if cell}{@render cell(row, col)}{:else}{col.get?.(row) ?? "—"}{/if}
-              </td>
-            {/each}
-          </tr>
-          {#if canExpand && expandedKeys.has(rowKey(row))}
-            <!-- The expansion spans every column, chevron cell included, so
-                 nested content is not squeezed into one column's width. -->
-            <tr class="border-b border-slate-100 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)]">
-              <td colspan={columns.length + 1} class="px-3 py-3">
-                {@render expand?.(row)}
-              </td>
-            </tr>
+      {#snippet bodyRow(row: Row)}
+        <tr
+          class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)] dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] {onRowClick
+            ? 'cursor-pointer'
+            : ''} {selectedKey !== null && rowKey(row) === selectedKey
+            ? 'bg-slate-100 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_65%,transparent)]'
+            : ''} {rowClass?.(row) ?? ''}"
+          aria-selected={selectedKey === null
+            ? undefined
+            : rowKey(row) === selectedKey}
+          tabindex={onRowClick ? 0 : undefined}
+          onclick={onRowClick ? rowClickHandler(row) : undefined}
+          onkeydown={onRowClick ? rowKeyHandler(row) : undefined}
+        >
+          {#if canExpand}
+            <td class="w-8 px-2 py-2">
+              {#if rowExpandable(row)}
+                {@const isOpen = expandedKeys.has(rowKey(row))}
+                <button
+                  type="button"
+                  class="inline-flex h-5 w-5 items-center justify-center rounded text-[var(--ha-secondary-text-color)] transition hover:bg-black/5 dark:hover:bg-white/5"
+                  aria-expanded={isOpen}
+                  aria-label={isOpen ? t("datatable.collapse") : t("datatable.expand")}
+                  onclick={() => toggleExpand(row)}
+                >
+                  <span aria-hidden="true" class="text-[10px]">{isOpen ? "▼" : "▶"}</span>
+                </button>
+              {/if}
+            </td>
           {/if}
+          {#each columns as col (col.key)}
+            <td
+              class="px-3 py-2 {alignClass(col)} {numericClass(col)} {col.title
+                ? 'reflow-title'
+                : ''} {col.cellClass ?? ''}"
+              data-label={col.label}
+            >
+              {#if cell}{@render cell(row, col)}{:else}{col.get?.(row) ?? "—"}{/if}
+            </td>
+          {/each}
+        </tr>
+        {#if canExpand && expandedKeys.has(rowKey(row))}
+          <!-- The expansion spans every column, chevron cell included, so
+               nested content is not squeezed into one column's width. -->
+          <tr class="border-b border-slate-100 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)]">
+            <td colspan={columns.length + 1} class="px-3 py-3">
+              {@render expand?.(row)}
+            </td>
+          </tr>
+        {/if}
+      {/snippet}
+
+      {#if groups}
+        <!-- One <tbody> per group: a section header spanning the full width,
+             then that section's rows. -->
+        {#each groups as group (group.key)}
+          <tbody>
+            <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)]">
+              <th colspan={spanAll} scope="colgroup" class="px-3 py-2 text-left font-normal">
+                {#if groupHeader}{@render groupHeader(group.key, group.rows)}{:else}{group.key}{/if}
+              </th>
+            </tr>
+            {#each group.rows as row (rowKey(row))}
+              {@render bodyRow(row)}
+            {/each}
+          </tbody>
         {/each}
-      </tbody>
+      {:else}
+        <tbody>
+          {#each processed as row (rowKey(row))}
+            {@render bodyRow(row)}
+          {/each}
+        </tbody>
+      {/if}
     </table>
   </div>
 {/if}

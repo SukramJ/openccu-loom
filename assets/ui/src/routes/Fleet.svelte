@@ -25,6 +25,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
 
   let ccus = $state<SystemCCUEntry[]>([]);
@@ -86,7 +87,7 @@
   <title>{t("page.title.fleet")}</title>
 </svelte:head>
 
-<section class="w-full px-4 py-8 sm:px-6">
+<PageShell width="wide">
   <PageHeader title={t("fleet.title")} subtitle={t("fleet.subtitle")} />
 
   {#if loading}
@@ -110,7 +111,7 @@
             <CentralStatusBadge available={ccu.available} readiness={ccu.readiness} />
           </div>
 
-          <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+          <dl class="kv-grid gap-x-3 gap-y-1 text-sm" style="--kv-label: 8rem">
             <dt class="text-[var(--ha-secondary-text-color)]">{t("fleet.field.host")}</dt>
             <dd class="min-w-0 truncate font-mono text-xs text-[var(--ha-primary-text-color)]">
               {ccu.host}{ccu.hostname && ccu.hostname !== ccu.host ? ` (${ccu.hostname})` : ""}
@@ -220,4 +221,4 @@
       {/each}
     </div>
   {/if}
-</section>
+</PageShell>

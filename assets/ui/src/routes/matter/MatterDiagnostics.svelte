@@ -8,6 +8,8 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import type {
     MatterCompatibility,
     MatterDiagnosticEvent,
@@ -72,7 +74,64 @@
   const errorFindings = $derived((mdns?.findings ?? []).filter((f) => f.severity === "error"));
   const warningFindings = $derived((mdns?.findings ?? []).filter((f) => f.severity === "warning"));
   const bridgedEndpoints = $derived(endpoints.filter((e) => e.endpoint_id > 1));
+
+  const sessionColumns: DataColumn<MatterSession>[] = $derived([
+    {
+      key: "session_id",
+      label: t("matter.diag.col_session"),
+      sortable: true,
+      // Digits line up, but the leading identity column stays left-aligned:
+      // right-aligning the first column pulls it away from the table edge.
+      numeric: true,
+      align: "left",
+      get: (s) => s.session_id,
+    },
+    {
+      key: "fabric_index",
+      label: t("matter.diag.col_fabric"),
+      sortable: true,
+      numeric: true,
+      get: (s) => s.fabric_index,
+    },
+    {
+      key: "peer_idle",
+      label: t("matter.diag.col_peer_idle"),
+      sortable: true,
+      // Sort on the raw seconds, not the formatted age string, so the
+      // ordering follows time rather than the rendered unit ("m" vs "h").
+      get: (s) => s.peer_idle_seconds,
+    },
+    {
+      key: "subscriptions",
+      label: t("matter.diag.col_subscriptions"),
+      sortable: true,
+      numeric: true,
+      get: (s) => s.subscriptions,
+    },
+  ]);
 </script>
+
+{#snippet sessionCell(s: MatterSession, col: DataColumn<MatterSession>)}
+  {#if col.key === "session_id"}
+    {s.session_id}
+    {#if s.is_pase}
+      <Badge variant="muted">{t("matter.diag.pase")}</Badge>
+    {/if}
+  {:else if col.key === "fabric_index"}
+    {s.fabric_index}
+  {:else if col.key === "peer_idle"}
+    <Badge variant={peerVariant(s.peer_idle_seconds)}>
+      {age(s.peer_idle_seconds)}
+    </Badge>
+  {:else if col.key === "subscriptions"}
+    {s.subscriptions}
+    {#if s.subscriptions === 0 && !s.is_pase}
+      <span class="ml-2 text-xs text-amber-600 dark:text-amber-400">
+        {t("matter.diag.no_subscriptions")}
+      </span>
+    {/if}
+  {/if}
+{/snippet}
 
 <div class="space-y-6">
   <div class="flex items-center justify-between">
@@ -152,50 +211,17 @@
           })}
         </p>
       {/if}
-      {#if sessions.length === 0}
-        <div class="mt-3">
-          <EmptyState message={t("matter.diag.no_sessions")} />
-        </div>
-      {:else}
-        <div class="mt-3 overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                <th class="py-2 pr-4">{t("matter.diag.col_session")}</th>
-                <th class="py-2 pr-4">{t("matter.diag.col_fabric")}</th>
-                <th class="py-2 pr-4">{t("matter.diag.col_peer_idle")}</th>
-                <th class="py-2 pr-4">{t("matter.diag.col_subscriptions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each sessions as s (s.session_id)}
-                <tr class="border-t border-slate-100 dark:border-slate-800">
-                  <td class="py-2 pr-4 font-mono text-slate-700 dark:text-slate-300">
-                    {s.session_id}
-                    {#if s.is_pase}
-                      <Badge variant="muted">{t("matter.diag.pase")}</Badge>
-                    {/if}
-                  </td>
-                  <td class="py-2 pr-4 text-slate-700 dark:text-slate-300">{s.fabric_index}</td>
-                  <td class="py-2 pr-4">
-                    <Badge variant={peerVariant(s.peer_idle_seconds)}>
-                      {age(s.peer_idle_seconds)}
-                    </Badge>
-                  </td>
-                  <td class="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                    {s.subscriptions}
-                    {#if s.subscriptions === 0 && !s.is_pase}
-                      <span class="ml-2 text-xs text-amber-600 dark:text-amber-400">
-                        {t("matter.diag.no_subscriptions")}
-                      </span>
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      {/if}
+      <div class="mt-3">
+        <DataTable
+          rows={sessions}
+          columns={sessionColumns}
+          rowKey={(s) => String(s.session_id)}
+          cell={sessionCell}
+          persistKey="matter-sessions"
+          initialSort={{ key: "session_id", asc: true }}
+          emptyMessage={t("matter.diag.no_sessions")}
+        />
+      </div>
     </Card>
 
     <!-- Ecosystem compatibility -->

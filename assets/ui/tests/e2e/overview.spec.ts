@@ -56,7 +56,10 @@ test.describe('Overview', () => {
 
     await expect(page.getByText('Office · ccu2')).toBeVisible();
 
-    await page.getByTitle('CCU').selectOption('ccu1');
+    // The CCU filter is the shared Select: a trigger button plus a
+    // portalled role="option" listbox (see energy.spec.ts).
+    await page.getByRole('button', { name: 'Filter by CCU' }).click();
+    await page.getByRole('option', { name: 'ccu1', exact: true }).click();
 
     await expect(page.getByText('Office · ccu2')).toHaveCount(0);
     await expect(page.getByText('Kitchen · ccu1')).toBeVisible();

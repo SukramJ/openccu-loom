@@ -5,7 +5,10 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LogLevelsPanel from "$lib/components/settings/LogLevelsPanel.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -318,15 +321,10 @@
   <title>{t("page.title.logs")}</title>
 </svelte:head>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <!-- Header -->
-  <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("logs.title")}</h1>
-      <p class="text-sm" style="color: var(--ha-secondary-text-color);">
-        {t("logs.subtitle")}
-      </p>
-    </div>
+  <PageHeader title={t("logs.title")} subtitle={t("logs.subtitle")}>
+    {#snippet actions()}
     <!-- SSE connection badge -->
     <div class="flex items-center gap-2">
       <span class="flex items-center gap-1 text-xs">
@@ -346,7 +344,8 @@
         </span>
       </span>
     </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   <!-- Toolbar -->
   <div
@@ -377,16 +376,13 @@
       <span class="text-xs" style="color: var(--ha-secondary-text-color);"
         >{t("logs.default_level")}:</span
       >
-      <select
+      <Select
+        class="w-auto"
         value={defaultLevel}
-        onchange={(e) => void onLevelChange((e.target as HTMLSelectElement).value)}
-        class="rounded border px-2 py-1 text-xs"
-        style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
-      >
-        {#each ["debug", "info", "warn", "error"] as lvl (lvl)}
-          <option value={lvl}>{lvl}</option>
-        {/each}
-      </select>
+        onValueChange={(v) => void onLevelChange(v)}
+        ariaLabel={t("logs.default_level")}
+        options={["debug", "info", "warn", "error"].map((lvl) => ({ value: lvl, label: lvl }))}
+      />
     </div>
 
     <!-- Text filter -->
@@ -414,15 +410,16 @@
         <span class="text-xs" style="color: var(--ha-secondary-text-color);"
           >{t("logs.download")}:</span
         >
-        <select
-          bind:value={downloadLimit}
-          class="rounded border px-1 py-1 text-xs"
-          style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
-        >
-          {#each [100, 200, 500, 1000, 2000, 5000] as n (n)}
-            <option value={n}>{t("logs.download_last", { count: n })}</option>
-          {/each}
-        </select>
+        <Select
+          class="w-auto"
+          value={String(downloadLimit)}
+          onValueChange={(v) => (downloadLimit = Number(v))}
+          ariaLabel={t("logs.download")}
+          options={[100, 200, 500, 1000, 2000, 5000].map((n) => ({
+            value: String(n),
+            label: t("logs.download_last", { count: n }),
+          }))}
+        />
         <a
           href={api.logsDownloadUrl({ limit: downloadLimit, minLevel: defaultLevel })}
           download
@@ -588,4 +585,4 @@
       {/if}
     </p>
   {/if}
-</section>
+</PageShell>

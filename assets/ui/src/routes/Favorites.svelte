@@ -12,6 +12,8 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import { t } from "$lib/i18n";
   import { sysvarWidget, sysvarNumberStep } from "$lib/sysvar-widget";
   import ChannelTiles from "$lib/cdp/ChannelTiles.svelte";
@@ -187,13 +189,8 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-  <header class="mb-4">
-    <h1 class="text-2xl font-semibold">{t("favorites.title")}</h1>
-    <p class="text-sm text-slate-500 dark:text-slate-400">
-      {t("favorites.subtitle")}
-    </p>
-  </header>
+<PageShell>
+  <PageHeader title={t("favorites.title")} subtitle={t("favorites.subtitle")} />
 
   {#if !favoritesStore.loaded}
     <LoadingState />
@@ -337,4 +334,4 @@
       {/each}
     </ul>
   {/if}
-</section>
+</PageShell>

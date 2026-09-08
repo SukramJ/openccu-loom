@@ -20,7 +20,23 @@ hand-rolling them:
   deletes.
 - **Primitives** → `Button` / `Input` / `Select` / `Card` / `Badge`
   over raw elements; every colour utility carries a `dark:` variant (or
-  uses the theme-aware `--ha-*` CSS tokens, which already invert).
+  uses the theme-aware `--ha-*` CSS tokens, which already invert). A raw
+  `<select>` in a toolbar is 38px next to a 40px button — use `Select`,
+  and give it an `ariaLabel` where no visible label names it.
+- **Page frame** → `PageShell` (never a hand-rolled root `<section>` with
+  its own `max-w-*` / `px-*` / `py-*`) and `PageHeader` (never a
+  hand-rolled `<h1>`; it takes `above` / `titleContent` / `children`
+  snippets for a rich header). The exception is a full-screen centred
+  flow that owns its viewport — login, the first-run wizard.
+- **Tab strips** → `Tabs`, `underline` for the page-level strip and
+  `segmented` for a second level nested under it.
+- **Tabular data** → `DataTable`, which brings sorting, per-column
+  filters, persisted sort, `groupBy` sections and the phone reflow. A
+  hand-rolled `<table>` in an `overflow-x-auto` wrapper scrolls sideways
+  on a phone while every shared table reflows into cards.
+- **Label/value pairs in cards that sit side by side** → the `.kv-grid`
+  utility, not `grid-cols-[auto_1fr]`: `auto` sizes the label column per
+  card, so neighbouring cards put their values at different positions.
 - Strings stay localized via `t(...)` (de + en in `lib/i18n.ts`).
 
 **Full i18n and full theme support are mandatory for every SPA change

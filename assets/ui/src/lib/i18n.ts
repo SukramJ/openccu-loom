@@ -434,6 +434,8 @@ const EN: Catalog = {
   "alarm.walktest.progress": "{seen}/{total} sensors verified",
   "alarm.walktest.tested": "verified",
   "alarm.walktest.untested": "pending",
+  "alarm.walktest.col.sensor": "Sensor",
+  "alarm.walktest.col.status": "Status",
   "alarm.walktest.empty": "No sensors in this zone.",
   // Setup wizard (§12.3).
   "alarm.wizard.launch": "Setup wizard",
@@ -2504,6 +2506,11 @@ const EN: Catalog = {
   "schedules.search": "Search by name, address or model…",
   "schedules.kind.climate": "Thermostat",
   "schedules.kind.week_profile": "Week profile",
+  "schedules.col.name": "Name",
+  "schedules.col.channel": "Channel",
+  "schedules.col.model": "Model",
+  "schedules.col.kind": "Kind",
+  "schedules.col.central": "CCU",
   "schedules.editor_hidden":
     "The schedule editor is hidden in this profile (Settings → Navigation & views). The overview stays; its entries do not link.",
   "surface.desc.nav.schedules":
@@ -2525,6 +2532,13 @@ const EN: Catalog = {
   "links.edit_on_device": "Edit on device",
   "links.editor_hidden":
     "The link editor is hidden in this profile (Settings → Navigation & views). The overview stays; its entries do not link.",
+  "links.col.sender": "Sender",
+  "links.col.receiver": "Receiver",
+  "links.col.name": "Name",
+  "links.col.description": "Description",
+  "links.col.interface": "Interface",
+  "links.col.central": "CCU",
+  "links.col.actions": "Actions",
   "profile.test.short": "Test (short press)",
   "profile.test.long": "Test (long press)",
   "links.test.ok": "Link triggered on the device.",
@@ -3058,6 +3072,8 @@ const EN: Catalog = {
     "Your edit session has expired — reopen the paramset editor to get a new lock.",
   // --- Matter bridge ---
   "nav.matter": "Matter",
+  "matter.subtitle":
+    "Expose channels to Apple Home, Google Home and other Matter controllers.",
   "sidebar.cluster.bridges": "Bridges",
   "matter.tab.expose": "Expose",
   "matter.tab.fabrics": "Fabrics",
@@ -3371,6 +3387,7 @@ const EN: Catalog = {
   "climate.stat.humidity": "Humidity",
   "climate.stat.valve": "Valve",
   "climate.stat.window": "Window",
+  "filter.central_aria": "Filter by CCU",
   "common.all_ccus": "All CCUs",
   "common.max": "Max",
   "common.min": "Min",
@@ -3578,7 +3595,7 @@ const EN: Catalog = {
   "diagnostics.reliability.title": "Reliability",
   "diagnostics.reliability.help":
     "Circuit-breaker and connection state per (central, interface) pair.",
-  "diagnostics.reliability.col.central": "Central",
+  "diagnostics.reliability.col.central": "CCU",
   "diagnostics.reliability.col.interface": "Interface",
   "diagnostics.reliability.col.circuit": "Circuit",
   "diagnostics.reliability.col.state": "State",
@@ -4375,6 +4392,8 @@ const DE: Catalog = {
   "alarm.walktest.progress": "{seen}/{total} Sensoren geprüft",
   "alarm.walktest.tested": "geprüft",
   "alarm.walktest.untested": "ausstehend",
+  "alarm.walktest.col.sensor": "Sensor",
+  "alarm.walktest.col.status": "Status",
   "alarm.walktest.empty": "Keine Sensoren in dieser Zone.",
   // Einrichtungsassistent (§12.3).
   "alarm.wizard.launch": "Einrichtungsassistent",
@@ -6479,6 +6498,11 @@ const DE: Catalog = {
   "schedules.search": "Suche nach Name, Adresse oder Typ…",
   "schedules.kind.climate": "Thermostat",
   "schedules.kind.week_profile": "Wochenprofil",
+  "schedules.col.name": "Name",
+  "schedules.col.channel": "Kanal",
+  "schedules.col.model": "Modell",
+  "schedules.col.kind": "Art",
+  "schedules.col.central": "CCU",
   "schedules.editor_hidden":
     "Der Zeitplan-Editor ist in diesem Profil ausgeblendet (Einstellungen → Navigation & Ansichten). Die Übersicht bleibt, ihre Einträge verlinken nicht.",
   "surface.desc.nav.schedules":
@@ -6500,6 +6524,13 @@ const DE: Catalog = {
   "links.edit_on_device": "Am Gerät bearbeiten",
   "links.editor_hidden":
     "Der Verknüpfungs-Editor ist in diesem Profil ausgeblendet (Einstellungen → Navigation & Ansichten). Die Übersicht bleibt, ihre Einträge verlinken nicht.",
+  "links.col.sender": "Sender",
+  "links.col.receiver": "Empfänger",
+  "links.col.name": "Name",
+  "links.col.description": "Beschreibung",
+  "links.col.interface": "Interface",
+  "links.col.central": "CCU",
+  "links.col.actions": "Aktionen",
   "profile.test.short": "Test (kurzer Tastendruck)",
   "profile.test.long": "Test (langer Tastendruck)",
   "links.test.ok": "Verknüpfung am Gerät ausgelöst.",
@@ -7040,6 +7071,8 @@ const DE: Catalog = {
     "Deine Editiersitzung ist abgelaufen — öffne den Parameter-Editor erneut, um eine neue Sperre zu erhalten.",
   // --- Matter-Bridge ---
   "nav.matter": "Matter",
+  "matter.subtitle":
+    "Kanäle für Apple Home, Google Home und andere Matter-Controller bereitstellen.",
   "sidebar.cluster.bridges": "Bridges",
   "matter.tab.expose": "Verfügbar machen",
   "matter.tab.fabrics": "Fabrics",
@@ -7322,6 +7355,7 @@ const DE: Catalog = {
   "climate.stat.humidity": "Luftfeuchte",
   "climate.stat.valve": "Ventil",
   "climate.stat.window": "Fenster",
+  "filter.central_aria": "Nach CCU filtern",
   "common.all_ccus": "Alle CCUs",
   "common.max": "Max",
   "common.min": "Min",
@@ -7533,7 +7567,7 @@ const DE: Catalog = {
   "diagnostics.reliability.title": "Zuverlässigkeit",
   "diagnostics.reliability.help":
     "Circuit-Breaker- und Verbindungsstatus je (Zentrale, Interface)-Paar.",
-  "diagnostics.reliability.col.central": "Zentrale",
+  "diagnostics.reliability.col.central": "CCU",
   "diagnostics.reliability.col.interface": "Interface",
   "diagnostics.reliability.col.circuit": "Circuit",
   "diagnostics.reliability.col.state": "Status",

@@ -321,6 +321,22 @@ html[data-skin="ha"] {
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * `.kv-grid` — a label/value grid with a FIXED label column.
+ *
+ * `grid-cols-[auto_1fr]` sizes the label column from the longest label in
+ * THAT grid, so cards sitting side by side in a card grid each put their
+ * values at a different x-position — the values never line up across a row.
+ * A fixed width fixes them to one line. The width is per-use because the
+ * longest label differs by view and by locale ("Virtuelles Gerät" is a lot
+ * wider than "Type"); a label longer than the column wraps rather than
+ * pushing the value out.
+ * ────────────────────────────────────────────────────────────────── */
+.kv-grid {
+  display: grid;
+  grid-template-columns: var(--kv-label, 7rem) 1fr;
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * Responsive "table → cards" reflow. A wide data table tagged
  * `.table-reflow` keeps its normal tabular layout from sm upward, and on
  * phones (<640px, matching Tailwind's sm breakpoint) collapses each row

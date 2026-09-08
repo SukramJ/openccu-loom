@@ -36,6 +36,9 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import Tabs from "$lib/components/ui/Tabs.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
 
   type Props = {
@@ -793,7 +796,7 @@
 
 <svelte:window onkeydown={onDeleteDialogKey} />
 
-<section class="@container mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell class="@container">
   {#if error}
     <div class="mb-4">
       <ErrorState message={error} onRetry={() => void load(address)} />
@@ -806,249 +809,239 @@
     <!-- Header: breadcrumb + title row + secondary metadata + actions.
          Mirrors HA device-detail (icon, name, model line, copy-able
          address, action chips on the right). -->
-    <header class="mb-6">
-      <Breadcrumb
-        items={[
-          { label: t("nav.devices"), href: "#/devices" },
-          { label: detail.name || detail.address },
-        ]}
-        class="mb-2"
-      />
-      <div
-        class="flex flex-col gap-3 @3xl:flex-row @3xl:flex-wrap @3xl:items-start @3xl:justify-between"
-      >
-        <div class="min-w-0 flex-1">
-          {#if renaming}
-            <div class="flex flex-col gap-2">
-              <div class="flex flex-wrap items-center gap-2">
-                <div class="w-full sm:w-64">
-                  <Input
-                    type="text"
-                    aria-label={t("device.rename")}
-                    bind:value={renameValue}
-                    onkeydown={(e) => {
-                      if (e.key === "Enter") void commitRename();
-                      else if (e.key === "Escape") renaming = false;
-                    }}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onclick={() => void commitRename()}
-                  disabled={renameBusy}
-                >
-                  {t("common.save")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onclick={() => (renaming = false)}
-                  disabled={renameBusy}
-                >
-                  {t("common.cancel")}
-                </Button>
-              </div>
-              <label
-                for="rename-include-channels"
-                class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
-              >
-                <Switch
-                  id="rename-include-channels"
-                  bind:checked={renameIncludeChannels}
-                  disabled={renameBusy}
-                />
-                <span>{t("device.rename_include_channels")}</span>
-              </label>
-            </div>
-          {:else}
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-              {detail.name || detail.address}
-            </h1>
-          {/if}
-          <p class="mt-1 text-sm flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
-            <span class="font-mono">{detail.model}</span>
-            {#if detail.model_label && detail.model_label !== detail.model}
-              <span>·</span>
-              <span>{detail.model_label}</span>
-            {/if}
-            <span aria-hidden="true">·</span>
-            <span>{detail.interface}</span>
-            <span aria-hidden="true">·</span>
-            <span class="font-mono">{detail.address}</span>
-            {#if !detail.available}
-              <Badge variant="warning">{t("device.offline")}</Badge>
-            {/if}
-            {#if detail.update_available}
-              <Badge variant="default">{t("device.update_available")}</Badge>
-            {/if}
-            {#if detail.master_pushes_config_pending && maintenanceStore.isPending(detail.address)}
-              <Badge variant="warning" class="inline-flex items-center gap-1">
-                <Icon name="mdi:calendar-clock" size={12} />
-                {t("device.config_pending")}
-              </Badge>
-            {/if}
-          </p>
-          <div class="mt-1 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-            <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
-            <RoomFunctionSelect
-              id="device-rooms"
-              ariaLabel={t("device.rooms")}
-              selected={detail.rooms ?? []}
-              options={roomOptions}
-              onChange={(next) => void updateRooms(next)}
-              onCreate={createRoomEntry}
-              placeholder={t("roomfn.placeholder.room")}
-              createLabel={(v) => t("roomfn.create.room", { name: v })}
-              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-            />
-            <span class="pt-2 font-semibold">{t("device.functions")}:</span>
-            <RoomFunctionSelect
-              id="device-functions"
-              ariaLabel={t("device.functions")}
-              selected={detail.functions ?? []}
-              options={functionOptions}
-              onChange={(next) => void updateFunctions(next)}
-              onCreate={createFunctionEntry}
-              placeholder={t("roomfn.placeholder.function")}
-              createLabel={(v) => t("roomfn.create.function", { name: v })}
-              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-            />
-          </div>
-        </div>
-        {#if !renaming}
+    <!-- The rename editor replaces the title in place; a snippet is a value in
+         Svelte 5, so it is handed to the header only while renaming. -->
+    {#snippet renameTitle()}
+        <div class="flex flex-col gap-2">
           <div class="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onclick={startRename}
-            >
-              <Icon name="mdi:pencil" size={14} />
-              {t("device.rename")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onclick={() => void togglePin(detail?.name || address)}
-              title={favoritesStore.isPinned("device", address)
-                ? t("favorites.unpin")
-                : t("favorites.pin")}
-            >
-              <Icon
-                name={favoritesStore.isPinned("device", address)
-                  ? "mdi:star"
-                  : "mdi:star-outline"}
-                size={14}
+            <div class="w-full sm:w-64">
+              <Input
+                type="text"
+                aria-label={t("device.rename")}
+                bind:value={renameValue}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") void commitRename();
+                  else if (e.key === "Escape") renaming = false;
+                }}
               />
-              {favoritesStore.isPinned("device", address)
-                ? t("favorites.pinned")
-                : t("favorites.pin")}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onclick={() => void commitRename()}
+              disabled={renameBusy}
+            >
+              {t("common.save")}
             </Button>
-            {#if detail.update_available}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => void onUpdateFirmware()}
-                disabled={updatingFw}
-                title={t("device.firmware_update.tooltip", {
-                  current: detail.firmware?.Current ?? "?",
-                  available: detail.firmware?.Available ?? "?",
-                })}
-              >
-                <Icon name="mdi:download" size={14} />
-                {updatingFw ? "…" : t("device.firmware_update")}
-              </Button>
-            {/if}
-            {#if detail.config_restore_supported}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => void onRestoreConfig()}
-                disabled={restoringConfig}
-                title={t("device.restore_config.tooltip")}
-              >
-                <Icon name="mdi:backup-restore" size={14} />
-                {restoringConfig ? "…" : t("device.restore_config")}
-              </Button>
-            {/if}
-            {#if detail.communication_test_supported}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => void onTestCommunication()}
-                disabled={testingComm}
-                title={t("device.communication_test.tooltip")}
-              >
-                <Icon name="mdi:radio-tower" size={14} />
-                {testingComm
-                  ? t("device.communication_test_running")
-                  : t("device.communication_test")}
-              </Button>
-              {#if commTestResult}
-                <Badge variant={commTestResult.passed ? "success" : "warning"}>
-                  {commTestResult.passed
-                    ? t("device.communication_test_passed")
-                    : t("device.communication_test_failed")}
-                </Badge>
-              {/if}
-            {/if}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onclick={() => void exportDefinition()}
-              disabled={exportingDef}
+              onclick={() => (renaming = false)}
+              disabled={renameBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+          </div>
+          <label
+            for="rename-include-channels"
+            class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
+          >
+            <Switch
+              id="rename-include-channels"
+              bind:checked={renameIncludeChannels}
+              disabled={renameBusy}
+            />
+            <span>{t("device.rename_include_channels")}</span>
+          </label>
+        </div>
+    {/snippet}
+
+    <PageHeader
+      title={detail.name || detail.address}
+      titleContent={renaming ? renameTitle : undefined}
+      class="mb-6"
+    >
+      {#snippet above()}
+        {@const device = detail!}
+        <Breadcrumb
+          items={[
+            { label: t("nav.devices"), href: "#/devices" },
+            { label: device.name || device.address },
+          ]}
+          class="mb-2"
+        />
+      {/snippet}
+      {#snippet children()}
+        {@const device = detail!}
+        <p class="mt-1 text-sm flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
+          <span class="font-mono">{device.model}</span>
+          {#if device.model_label && device.model_label !== device.model}
+            <span>·</span>
+            <span>{device.model_label}</span>
+          {/if}
+          <span aria-hidden="true">·</span>
+          <span>{device.interface}</span>
+          <span aria-hidden="true">·</span>
+          <span class="font-mono">{device.address}</span>
+          {#if !device.available}
+            <Badge variant="warning">{t("device.offline")}</Badge>
+          {/if}
+          {#if device.update_available}
+            <Badge variant="default">{t("device.update_available")}</Badge>
+          {/if}
+          {#if device.master_pushes_config_pending && maintenanceStore.isPending(device.address)}
+            <Badge variant="warning" class="inline-flex items-center gap-1">
+              <Icon name="mdi:calendar-clock" size={12} />
+              {t("device.config_pending")}
+            </Badge>
+          {/if}
+        </p>
+        <div class="mt-1 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+          <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
+          <RoomFunctionSelect
+            id="device-rooms"
+            ariaLabel={t("device.rooms")}
+            selected={device.rooms ?? []}
+            options={roomOptions}
+            onChange={(next) => void updateRooms(next)}
+            onCreate={createRoomEntry}
+            placeholder={t("roomfn.placeholder.room")}
+            createLabel={(v) => t("roomfn.create.room", { name: v })}
+            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+          />
+          <span class="pt-2 font-semibold">{t("device.functions")}:</span>
+          <RoomFunctionSelect
+            id="device-functions"
+            ariaLabel={t("device.functions")}
+            selected={device.functions ?? []}
+            options={functionOptions}
+            onChange={(next) => void updateFunctions(next)}
+            onCreate={createFunctionEntry}
+            placeholder={t("roomfn.placeholder.function")}
+            createLabel={(v) => t("roomfn.create.function", { name: v })}
+            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+          />
+        </div>
+      {/snippet}
+      {#snippet actions()}
+        {@const device = detail!}
+        {#if !renaming}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={startRename}
+          >
+            <Icon name="mdi:pencil" size={14} />
+            {t("device.rename")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => void togglePin(device?.name || address)}
+            title={favoritesStore.isPinned("device", address)
+              ? t("favorites.unpin")
+              : t("favorites.pin")}
+          >
+            <Icon
+              name={favoritesStore.isPinned("device", address)
+                ? "mdi:star"
+                : "mdi:star-outline"}
+              size={14}
+            />
+            {favoritesStore.isPinned("device", address)
+              ? t("favorites.pinned")
+              : t("favorites.pin")}
+          </Button>
+          {#if device.update_available}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => void onUpdateFirmware()}
+              disabled={updatingFw}
+              title={t("device.firmware_update.tooltip", {
+                current: device.firmware?.Current ?? "?",
+                available: device.firmware?.Available ?? "?",
+              })}
             >
               <Icon name="mdi:download" size={14} />
-              {exportingDef ? "…" : t("device.export_definition")}
+              {updatingFw ? "…" : t("device.firmware_update")}
             </Button>
+          {/if}
+          {#if device.config_restore_supported}
             <Button
               type="button"
-              variant="outline-destructive"
+              variant="outline"
               size="sm"
-              onclick={onDelete}
-              disabled={deleting}
+              onclick={() => void onRestoreConfig()}
+              disabled={restoringConfig}
+              title={t("device.restore_config.tooltip")}
             >
-              <Icon name="mdi:trash-can" size={14} />
-              {t("device.remove")}
+              <Icon name="mdi:backup-restore" size={14} />
+              {restoringConfig ? "…" : t("device.restore_config")}
             </Button>
-          </div>
+          {/if}
+          {#if device.communication_test_supported}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => void onTestCommunication()}
+              disabled={testingComm}
+              title={t("device.communication_test.tooltip")}
+            >
+              <Icon name="mdi:radio-tower" size={14} />
+              {testingComm
+                ? t("device.communication_test_running")
+                : t("device.communication_test")}
+            </Button>
+            {#if commTestResult}
+              <Badge variant={commTestResult.passed ? "success" : "warning"}>
+                {commTestResult.passed
+                  ? t("device.communication_test_passed")
+                  : t("device.communication_test_failed")}
+              </Badge>
+            {/if}
+          {/if}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => void exportDefinition()}
+            disabled={exportingDef}
+          >
+            <Icon name="mdi:download" size={14} />
+            {exportingDef ? "…" : t("device.export_definition")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline-destructive"
+            size="sm"
+            onclick={onDelete}
+            disabled={deleting}
+          >
+            <Icon name="mdi:trash-can" size={14} />
+            {t("device.remove")}
+          </Button>
         {/if}
-      </div>
-    </header>
+      {/snippet}
+    </PageHeader>
 
     {#if detail.channels.length > 0}
-      <!-- Top-level tab strip — Bedienen / Status / Konfigurieren / Verlauf.
-           Sticks to icon + label, HA-style. -->
-      <div
-        class="mb-4 flex gap-0 border-b border-slate-200 dark:border-slate-700"
-        role="tablist"
-        aria-label={t("device.aria.top_tabs")}
-      >
-        {#each topTabs as tab (tab.key)}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={topTab === tab.key}
-            class="-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition {topTab === tab.key
-              ? 'border-brand-500 text-brand-700 dark:text-brand-300'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}"
-            onclick={() => {
-              topTab = tab.key;
-              if (tab.key === "history") onHistoryTabClick();
-            }}
-          >
-            <Icon name={tab.icon} size={16} />
-            {tab.label}
-          </button>
-        {/each}
-      </div>
+      <!-- Top-level tab strip — Bedienen / Status / Konfigurieren / Verlauf. -->
+      <Tabs
+        class="mb-4"
+        active={topTab}
+        items={topTabs}
+        ariaLabel={t("device.aria.top_tabs")}
+        onSelect={(key) => {
+          topTab = key as TopTab;
+          if (key === "history") onHistoryTabClick();
+        }}
+      />
 
       {#if topTab === "overview"}
         <!-- Übersicht: maintenance grid (`:0` health) plus the
@@ -1060,29 +1053,16 @@
           <CdpTilesPanel {detail} />
         </div>
       {:else if topTab === "configure"}
-        <!-- Sub-tab strip: Geräte-Konfiguration / Kanäle / Verknüpfungen / Zeitplan.
-             Rendered as a quiet segmented control (recessed track + raised active
-             card) so the brand-underlined top-level tab stays the only branded
-             navigation marker and this second level does not compete with it. -->
-        <div
-          class="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800"
-          role="tablist"
-          aria-label={t("device.aria.configure_sub_tabs")}
-        >
-          {#each configSubs as sub (sub.key)}
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeConfigSub === sub.key}
-              class="rounded-md px-3 py-1.5 text-sm font-medium transition {activeConfigSub === sub.key
-                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}"
-              onclick={() => (configSub = sub.key)}
-            >
-              {sub.label}
-            </button>
-          {/each}
-        </div>
+        <!-- Sub-tab strip: a quiet segmented control, so the brand-underlined
+             top-level tab stays the only branded navigation marker. -->
+        <Tabs
+          class="mb-4"
+          variant="segmented"
+          active={activeConfigSub}
+          items={configSubs}
+          ariaLabel={t("device.aria.configure_sub_tabs")}
+          onSelect={(key) => (configSub = key as ConfigSub)}
+        />
 
         {#if activeConfigSub === "device-config"}
           {#if deviceChannel}
@@ -1495,4 +1475,4 @@
       </div>
     {/if}
   {/if}
-</section>
+</PageShell>

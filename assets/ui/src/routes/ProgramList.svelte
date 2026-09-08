@@ -13,6 +13,7 @@
   import Select from "$lib/components/ui/Select.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
   import { favoritesStore } from "$lib/stores/favorites.svelte";
   import { loadLS, saveLS } from "$lib/utils";
@@ -167,7 +168,19 @@
 
   const columns: DataColumn<ProgramEntry>[] = $derived([
     { key: "name", label: t("programs.col.name"), sortable: true, title: true, get: (p) => p.name },
-    { key: "status", label: t("programs.col.status"), sortable: true, get: (p) => (p.active === true ? 1 : p.active === false ? 0 : -1) },
+    {
+      key: "status",
+      label: t("programs.col.status"),
+      sortable: true,
+      // Sorted as a number so the two states cluster; filtered as a choice,
+      // because nobody would type the underlying 1/0 into a text box.
+      get: (p) => (p.active === true ? 1 : p.active === false ? 0 : -1),
+      filter: "select",
+      filterOptions: [
+        { value: "1", label: t("programs.active") },
+        { value: "0", label: t("programs.inactive") },
+      ],
+    },
     {
       key: "condition",
       label: t("programs.col.condition"),
@@ -192,7 +205,7 @@
   ]);
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader
     title={t("programs.title")}
     subtitle={loading ? t("common.loading") : t("programs.count", { count: programs.length })}
@@ -241,6 +254,7 @@
         search
         searchPlaceholder={t("common.search")}
         persistKey="programs"
+        columnFilters
         initialSort={{ key: "name", asc: true }}
         emptyMessage={t("programs.empty")}
         emptyIcon="mdi:play"
@@ -341,4 +355,4 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>

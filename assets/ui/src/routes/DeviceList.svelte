@@ -27,6 +27,8 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
 
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   // Filter state is seeded from a module store and synced back to it, so the
   // search term and filters survive opening a device and navigating back.
   // Sort is not here: the DataTable owns the column order and persists it
@@ -340,7 +342,71 @@
   });
 </script>
 
-<section class="w-full px-4 py-8 sm:px-6">
+{#snippet deviceChannels(device: DeviceSummary)}
+  {@const channels = channelsByAddress.get(device.address)}
+  {#if channelsFailed.has(device.address)}
+    <ErrorState
+      message={t("devicelist.channels_failed")}
+      onRetry={() => void loadChannels(device.address)}
+    />
+  {:else if !channels}
+    <LoadingState message={t("common.loading")} />
+  {:else if channels.length === 0}
+    <EmptyState message={t("device.no_channels")} />
+  {:else}
+    <ChannelTable
+      {channels}
+      selected={null}
+      compact
+      onSelect={(ch) => {
+        location.hash = `#/devices/${encodeURIComponent(device.address)}/channels/${ch.number}`;
+      }}
+    />
+  {/if}
+{/snippet}
+{#snippet deviceCell(device: DeviceSummary, col: DataColumn<DeviceSummary>)}
+  {#if col.key === "select"}
+    <input
+      type="checkbox"
+      class="h-4 w-4 cursor-pointer accent-[var(--ha-primary-color)]"
+      checked={selected.has(device.address)}
+      onchange={(e) => toggleSelect(device.address, e.currentTarget.checked)}
+      aria-label={device.name || device.address}
+    />
+  {:else if col.key === "name"}
+    <a
+      href="#/devices/{encodeURIComponent(device.address)}"
+      class="font-medium text-[var(--ha-primary-color)] hover:underline"
+    >{device.name || device.address}</a>
+    <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{device.address}</span>
+  {:else if col.key === "model"}
+    <span>{device.model_label || device.model}</span>
+  {:else if col.key === "interface"}
+    <span class="font-mono text-xs">{device.interface_id || device.interface}</span>
+    {#if centrals.length > 1 && device.central}
+      <span class="block text-xs text-[var(--ha-secondary-text-color)]">{device.central}</span>
+    {/if}
+  {:else if col.key === "rooms"}
+    {#if device.rooms && device.rooms.length > 0}
+      <span class="text-xs">{device.rooms.join(", ")}</span>
+    {:else}
+      <span class="text-[var(--ha-secondary-text-color)]">—</span>
+    {/if}
+  {:else if col.key === "status"}
+    <span class="inline-flex flex-wrap items-center justify-end gap-1.5">
+      {#if device.available}
+        <Badge variant="success">{t("device.list.reachable")}</Badge>
+      {:else}
+        <Badge variant="danger">{t("device.list.unreachable")}</Badge>
+      {/if}
+      {#if device.update_available}
+        <Badge variant="warning">{t("firmware.update")}</Badge>
+      {/if}
+    </span>
+  {/if}
+{/snippet}
+
+<PageShell width="wide">
   <PageHeader
     title={t("devices.title")}
     subtitle={deviceStore.lastLoaded
@@ -358,50 +424,48 @@
           bind:value={filter}
           class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-base text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none focus:ring-1 focus:ring-[var(--ha-primary-color)] sm:w-72 sm:text-sm"
         />
-        <select
+        <Select
+          class="w-auto"
           bind:value={availability}
-          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-          title={t("devicelist.availability")}
-        >
-          <option value="all">{t("devicelist.all")}</option>
-          <option value="available">{t("devicelist.available")}</option>
-          <option value="unavailable">{t("devicelist.unavailable")}</option>
-        </select>
+          ariaLabel={t("devicelist.availability")}
+          options={[
+            { value: "all", label: t("devicelist.all") },
+            { value: "available", label: t("devicelist.available") },
+            { value: "unavailable", label: t("devicelist.unavailable") },
+          ]}
+        />
         {#if rooms.length > 0}
-          <select
+          <Select
+            class="w-auto"
             bind:value={roomFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("devicelist.room")}
-          >
-            <option value="">{t("devicelist.all_rooms")}</option>
-            {#each rooms as r (r)}
-              <option value={r}>{r}</option>
-            {/each}
-          </select>
+            ariaLabel={t("devicelist.room")}
+            options={[
+              { value: "", label: t("devicelist.all_rooms") },
+              ...rooms.map((r) => ({ value: r, label: r })),
+            ]}
+          />
         {/if}
         {#if centrals.length > 1}
-          <select
+          <Select
+            class="w-auto"
             bind:value={centralFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title="CCU"
-          >
-            <option value="">{t("common.all_ccus")}</option>
-            {#each centrals as c (c)}
-              <option value={c}>{c}</option>
-            {/each}
-          </select>
+            ariaLabel={t("filter.central_aria")}
+            options={[
+              { value: "", label: t("common.all_ccus") },
+              ...centrals.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         {/if}
         {#if areas.length > 0}
-          <select
+          <Select
+            class="w-auto"
             bind:value={areaFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("devicelist.area")}
-          >
-            <option value="">{t("devicelist.all_areas")}</option>
-            {#each areas as a (a.id)}
-              <option value={a.id}>{a.name}</option>
-            {/each}
-          </select>
+            ariaLabel={t("devicelist.area")}
+            options={[
+              { value: "", label: t("devicelist.all_areas") },
+              ...areas.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+          />
         {/if}
         <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
           <input type="checkbox" bind:checked={updateOnly} />
@@ -506,71 +570,8 @@
        compact form. Selecting a channel goes straight to that channel's
        editor, so the list doubles as a channel index without the operator
        opening each device first. -->
-  {#snippet deviceChannels(device: DeviceSummary)}
-    {@const channels = channelsByAddress.get(device.address)}
-    {#if channelsFailed.has(device.address)}
-      <ErrorState
-        message={t("devicelist.channels_failed")}
-        onRetry={() => void loadChannels(device.address)}
-      />
-    {:else if !channels}
-      <LoadingState message={t("common.loading")} />
-    {:else if channels.length === 0}
-      <EmptyState message={t("device.no_channels")} />
-    {:else}
-      <ChannelTable
-        {channels}
-        selected={null}
-        compact
-        onSelect={(ch) => {
-          location.hash = `#/devices/${encodeURIComponent(device.address)}/channels/${ch.number}`;
-        }}
-      />
-    {/if}
-  {/snippet}
 
   <!-- Per-row cell renderer shared by every device DataTable. -->
-  {#snippet deviceCell(device: DeviceSummary, col: DataColumn<DeviceSummary>)}
-    {#if col.key === "select"}
-      <input
-        type="checkbox"
-        class="h-4 w-4 cursor-pointer accent-[var(--ha-primary-color)]"
-        checked={selected.has(device.address)}
-        onchange={(e) => toggleSelect(device.address, e.currentTarget.checked)}
-        aria-label={device.name || device.address}
-      />
-    {:else if col.key === "name"}
-      <a
-        href="#/devices/{encodeURIComponent(device.address)}"
-        class="font-medium text-[var(--ha-primary-color)] hover:underline"
-      >{device.name || device.address}</a>
-      <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{device.address}</span>
-    {:else if col.key === "model"}
-      <span>{device.model_label || device.model}</span>
-    {:else if col.key === "interface"}
-      <span class="font-mono text-xs">{device.interface_id || device.interface}</span>
-      {#if centrals.length > 1 && device.central}
-        <span class="block text-xs text-[var(--ha-secondary-text-color)]">{device.central}</span>
-      {/if}
-    {:else if col.key === "rooms"}
-      {#if device.rooms && device.rooms.length > 0}
-        <span class="text-xs">{device.rooms.join(", ")}</span>
-      {:else}
-        <span class="text-[var(--ha-secondary-text-color)]">—</span>
-      {/if}
-    {:else if col.key === "status"}
-      <span class="inline-flex flex-wrap items-center justify-end gap-1.5">
-        {#if device.available}
-          <Badge variant="success">{t("device.list.reachable")}</Badge>
-        {:else}
-          <Badge variant="danger">{t("device.list.unreachable")}</Badge>
-        {/if}
-        {#if device.update_available}
-          <Badge variant="warning">{t("firmware.update")}</Badge>
-        {/if}
-      </span>
-    {/if}
-  {/snippet}
 
   {#if deviceStore.loading && deviceStore.items.length === 0}
     <LoadingState message={t("devices.loading")} />
@@ -637,4 +638,4 @@
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {/if}
-</section>
+</PageShell>

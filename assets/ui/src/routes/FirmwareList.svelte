@@ -12,6 +12,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -277,7 +278,7 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader title={t("firmware.title")} subtitle={t("firmware.subtitle")}>
     {#snippet actions()}
       <Button
@@ -353,6 +354,7 @@
         search
         searchPlaceholder={t("common.search")}
         persistKey="firmware"
+        columnFilters
         initialSort={{ key: "device", asc: true }}
         emptyMessage={filterMode === "updatable" ? t("firmware.no_updates") : t("devices.empty")}
         emptyIcon="mdi:upload"
@@ -445,4 +447,4 @@
       {t("firmware.count", { count: filtered.length, total: allDevices.length })}
     </p>
   {/if}
-</section>
+</PageShell>

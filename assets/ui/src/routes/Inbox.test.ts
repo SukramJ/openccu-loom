@@ -59,6 +59,13 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: (...args: unknown[]) => mockConfirmAsk(...args) },
 }));
 
+// The real Select wraps bits-ui's floating-portal listbox, which happy-dom
+// cannot drive (see SelectStub.svelte).
+vi.mock("$lib/components/ui/Select.svelte", async () => {
+  const mod = await import("./__testutils__/SelectStub.svelte");
+  return { default: mod.default };
+});
+
 vi.mock("$lib/i18n", () => ({
   t: (key: string, params?: Record<string, unknown>) => {
     if (params) {
@@ -523,12 +530,13 @@ describe("Inbox — GR05 group assignment on accept", () => {
     });
 
     await openDialog();
-    const sel = (await waitFor(() => {
-      const el = document.getElementById("inbox-group");
-      if (!el) throw new Error("group picker not shown");
-      return el as HTMLSelectElement;
-    }));
-    await fireEvent.change(sel, { target: { value: "5" } });
+    const list = await waitFor(() => {
+      const el = screen.getByText("inbox.accept_dialog.group_label").parentElement;
+      const listbox = el?.querySelector('[role="listbox"]');
+      if (!listbox) throw new Error("group picker not shown");
+      return listbox as HTMLElement;
+    });
+    await fireEvent.click(within(list).getByRole("option", { name: "Heating" }));
     await fireEvent.click(submitButton());
 
     await waitFor(() => {
