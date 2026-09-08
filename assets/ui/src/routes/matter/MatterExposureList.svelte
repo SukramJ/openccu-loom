@@ -11,6 +11,9 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import type { DataColumn } from "$lib/components/ui/data-table";
+  import Select from "$lib/components/ui/Select.svelte";
   import type { MatterExposure, MatterMappability } from "$lib/api/matter-types";
 
   onMount(async () => {
@@ -123,6 +126,30 @@
     out.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
     return out;
   });
+
+  // The table takes one flat list: the grouping above only establishes the
+  // order (device name, then channel, then parameter), and DataTable derives
+  // the sections from `groupBy` — so sorting a column reorders the sections
+  // instead of fighting them.
+  const tableRows = $derived(groups.flatMap((g) => g.rows));
+  const groupName = $derived(
+    new Map(groups.map((g) => [g.address, g.name] as const)),
+  );
+
+  const columns: DataColumn<MatterExposure>[] = $derived([
+    { key: "select", label: "", get: () => "", filter: false },
+    { key: "state", label: t("matter.expose.col_state"), align: "center", get: (i) => stateInfo(i).label },
+    { key: "channel", label: t("matter.expose.col_channel"), sortable: true, numeric: true, align: "left", get: (i) => i.channel_no },
+    {
+      key: "parameter",
+      label: t("matter.expose.col_parameter"),
+      sortable: true,
+      title: true,
+      get: (i) => i.parameter_label || i.dp_key,
+    },
+    { key: "kind", label: t("matter.expose.filter_kind"), sortable: true, get: (i) => t(`matter.expose.kind.${i.dp_kind}`) },
+    { key: "class", label: t("matter.expose.filter_class"), sortable: true, get: (i) => i.device_type_label || "—" },
+  ]);
 
   // State descriptor for the status icon. Mirrors the four operator-facing
   // states with an icon + colour + localized label (used both in the table
@@ -255,6 +282,62 @@
   });
 </script>
 
+{#snippet deviceHeader(address: string, rows: MatterExposure[])}
+  <div class="flex flex-wrap items-center gap-2">
+    <span class="font-semibold text-slate-900 dark:text-slate-100">
+      {groupName.get(address) ?? address}
+    </span>
+    <span class="font-mono text-[11px] text-slate-500 dark:text-slate-400">{address}</span>
+    <span
+      class="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-[10px] tabular-nums text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+      aria-label={t("matter.expose.group_count", { count: String(rows.length) })}
+    >{rows.length}</span>
+  </div>
+{/snippet}
+
+{#snippet exposureCell(item: MatterExposure, col: DataColumn<MatterExposure>)}
+  {@const key = matterStore.exposureKey(item)}
+  {#if col.key === "select"}
+    {@const bulkable = isBulkable(item)}
+    <label class="flex items-center justify-center">
+      <input
+        type="checkbox"
+        checked={selectedKeys.has(key)}
+        disabled={!bulkable}
+        title={bulkable ? undefined : t("matter.expose.unmappable_checkbox_title")}
+        onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
+        class="h-5 w-5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label={t("matter.expose.select_row")}
+      />
+    </label>
+  {:else if col.key === "state"}
+    {@const si = stateInfo(item)}
+    <span class="inline-flex justify-center">
+      <Icon name={si.icon} size={18} class={si.color} aria-label={si.label} title={si.label} />
+    </span>
+  {:else if col.key === "channel"}
+    <span class="text-slate-500 dark:text-slate-400">{item.channel_no}</span>
+  {:else if col.key === "parameter"}
+    <button type="button" class="text-left hover:underline" onclick={() => openDrawer(item)}>
+      {#if item.parameter_label}
+        <span class="text-slate-700 dark:text-slate-200">{item.parameter_label}</span>
+        <span class="ml-1 font-mono text-[10px] opacity-60">{item.dp_key}</span>
+      {:else}
+        <span class="font-mono text-xs text-slate-600 dark:text-slate-300">{item.dp_key}</span>
+      {/if}
+      {#if matterStore.pendingUpdates.has(key)}
+        <span class="ml-1 text-xs text-brand-600 dark:text-brand-400">{t("common.modified")}</span>
+      {/if}
+    </button>
+  {:else if col.key === "kind"}
+    <span class="text-slate-500 dark:text-slate-400">
+      {t(`matter.expose.kind.${item.dp_kind}`) ?? item.dp_kind}
+    </span>
+  {:else if col.key === "class"}
+    <span class="text-slate-500 dark:text-slate-400">{item.device_type_label || "—"}</span>
+  {/if}
+{/snippet}
+
 <div>
   <!-- Toolbar -->
   <div class="flex flex-col gap-2 mb-3">
@@ -265,17 +348,15 @@
         bind:value={searchText}
         class="w-full sm:w-64"
       />
-      <select
-        class="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 text-base sm:text-sm sm:h-9"
+      <Select
+        class="w-auto min-w-[10rem]"
         bind:value={filterKind}
-        aria-label={t("matter.expose.filter_kind")}
-      >
-        {#each kindOptions as k}
-          <option value={k}>
-            {k === "all" ? t("matter.expose.filter_kind") : t(`matter.expose.kind.${k}`)}
-          </option>
-        {/each}
-      </select>
+        ariaLabel={t("matter.expose.filter_kind")}
+        options={kindOptions.map((k) => ({
+          value: k,
+          label: k === "all" ? t("matter.expose.filter_kind") : t(`matter.expose.kind.${k}`),
+        }))}
+      />
     </div>
     <!-- Row 2: bulk actions + save/discard -->
     <div class="flex flex-wrap items-center gap-2">
@@ -345,94 +426,18 @@
         {/each}
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead
-            class="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)] dark:border-slate-800"
-          >
-            <tr>
-              <th class="px-3 py-2 w-10" scope="col">
-                <span class="sr-only">{t("matter.expose.col_select")}</span>
-              </th>
-              <th class="px-3 py-2 w-10 text-center" scope="col">{t("matter.expose.col_state")}</th>
-              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.col_channel")}</th>
-              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.col_parameter")}</th>
-              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.filter_kind")}</th>
-              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.filter_class")}</th>
-            </tr>
-          </thead>
-          {#each groups as group (group.address)}
-            <tbody>
-              <!-- Group header: device name + address + row count. -->
-              <tr class="bg-slate-50 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] border-b border-slate-200 dark:border-slate-800">
-                <th colspan="6" scope="colgroup" class="px-3 py-2 text-left font-normal">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-semibold text-slate-900 dark:text-slate-100">{group.name}</span>
-                    <span class="font-mono text-[11px] text-slate-500 dark:text-slate-400">{group.address}</span>
-                    <span
-                      class="ml-auto text-[10px] tabular-nums rounded-full px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                      aria-label={t("matter.expose.group_count", { count: String(group.rows.length) })}
-                    >{group.rows.length}</span>
-                  </div>
-                </th>
-              </tr>
-              {#each group.rows as item (matterStore.exposureKey(item))}
-                {@const key = matterStore.exposureKey(item)}
-                {@const selected = selectedKeys.has(key)}
-                {@const bulkable = isBulkable(item)}
-                {@const pending = matterStore.pendingUpdates.has(key)}
-                {@const si = stateInfo(item)}
-                <tr
-                  class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)] dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] {selected ? 'bg-black/5 dark:bg-white/5' : ''}"
-                >
-                  <td class="px-3 py-2 w-10">
-                    <label class="flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        disabled={!bulkable}
-                        title={bulkable ? undefined : t("matter.expose.unmappable_checkbox_title")}
-                        onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
-                        class="cursor-pointer h-5 w-5 disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label={t("matter.expose.select_row")}
-                      />
-                    </label>
-                  </td>
-                  <td class="px-3 py-2 w-10 text-center">
-                    <span class="inline-flex justify-center">
-                      <Icon name={si.icon} size={18} class={si.color} aria-label={si.label} title={si.label} />
-                    </span>
-                  </td>
-                  <td class="px-3 py-2 text-slate-500 dark:text-slate-400">{item.channel_no}</td>
-                  <td class="px-3 py-2">
-                    <button
-                      type="button"
-                      class="text-left hover:underline"
-                      onclick={() => openDrawer(item)}
-                    >
-                      {#if item.parameter_label}
-                        <span class="text-slate-700 dark:text-slate-200">{item.parameter_label}</span>
-                        <span class="ml-1 font-mono text-[10px] opacity-60">{item.dp_key}</span>
-                      {:else}
-                        <span class="font-mono text-xs text-slate-600 dark:text-slate-300">{item.dp_key}</span>
-                      {/if}
-                      {#if pending}
-                        <span class="ml-1 text-xs text-brand-600 dark:text-brand-400">{t("common.modified")}</span>
-                      {/if}
-                    </button>
-                  </td>
-                  <td class="px-3 py-2 text-slate-500 dark:text-slate-400">
-                    {t(`matter.expose.kind.${item.dp_kind}`) ?? item.dp_kind}
-                  </td>
-                  <td class="px-3 py-2 text-slate-500 dark:text-slate-400">
-                    {item.device_type_label || "—"}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          {/each}
-        </table>
-      </div>
+      <DataTable
+        rows={tableRows}
+        {columns}
+        rowKey={(i) => matterStore.exposureKey(i)}
+        cell={exposureCell}
+        groupBy={(i) => i.device_address}
+        groupHeader={deviceHeader}
+        rowClass={(i) =>
+          selectedKeys.has(matterStore.exposureKey(i)) ? "bg-black/5 dark:bg-white/5" : ""}
+        persistKey="matter-exposures"
+        emptyMessage={t("matter.expose.empty")}
+      />
     </Card>
   {/if}
 </div>
