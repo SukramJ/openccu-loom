@@ -142,6 +142,13 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/links*', (route) =>
     route.fulfill({ json: fixture('links.json') }),
   );
+  // Per-device link listing. The device page's channel table asks for it to
+  // fill its link-count column the first time the channels sub-tab opens, so
+  // every device-page spec needs it mocked even when the spec itself is about
+  // something else entirely.
+  await page.route('**/api/v1/devices/*/links*', (route) =>
+    route.fulfill({ json: [] }),
+  );
 
   await page.route('**/api/v1/schedules', (route) =>
     route.fulfill({ json: fixture('schedules.json') }),

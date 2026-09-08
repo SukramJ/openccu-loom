@@ -42,6 +42,40 @@ describe("i18n catalogue coverage", () => {
     expect(de.has("programs.running")).toBe(true);
   });
 
+  // ChannelTable.svelte's column headers, role labels and status chips, plus
+  // the channel-editor heading channel-roles.ts composes. The table renders
+  // every one of these on a device page, so a key missing from one catalogue
+  // shows as a dotted literal in a column header.
+  it("resolves the channel-table keys in both locales", () => {
+    prefs.locale = "en";
+    const keys = [
+      "device.channels.col.number",
+      "device.channels.col.name",
+      "device.channels.col.description",
+      "device.channels.col.type",
+      "device.channels.col.role",
+      "device.channels.col.datapoints",
+      "device.channels.col.links",
+      "device.channels.col.status",
+      "device.channels.search",
+      "device.channel.role.sender",
+      "device.channel.role.receiver",
+      "device.channel.role.both",
+      "device.channel.role.none",
+      "device.channel.header",
+      "device.channel.chip.hidden",
+      "device.channel.chip.locked",
+      "device.channel.chip.virtual",
+      "device.channel.chip.week_profile",
+      "device.channel.chip.group",
+    ];
+    for (const key of keys) {
+      expect(t(key)).not.toBe(key);
+      expect(de.has(key), `${key} missing in de`).toBe(true);
+      expect(en.has(key), `${key} missing in en`).toBe(true);
+    }
+  });
+
   // Every user-visible string ships in both locales (CLAUDE.md, SPA
   // operating concept). A key added to one catalogue only degrades to the
   // other language on screen instead of failing anywhere, so nothing but

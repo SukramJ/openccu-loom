@@ -260,6 +260,13 @@ type ChannelSummary struct {
 	// it at the kinds its author wrote down. Omitted when the channel has no
 	// event sources.
 	EventGroups []EventGroupSummary `json:"event_groups,omitempty"`
+	// LinkSourceRoles / LinkTargetRoles are the raw CCU LINK_SOURCE_ROLES /
+	// LINK_TARGET_ROLES tokens. Empty when the channel cannot take part in a
+	// direct link on that side. A consumer that wants to show whether a
+	// channel is a sender, a receiver or both otherwise has to fetch the
+	// link surface just to answer a per-channel question.
+	LinkSourceRoles []string `json:"link_source_roles,omitempty"`
+	LinkTargetRoles []string `json:"link_target_roles,omitempty"`
 }
 
 // DataPointSummary is one entry in `GET .../data-points`.
@@ -775,6 +782,8 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler, serialSuffix 
 	// operation surfaces (data-point list, MQTT, Matter).
 	s.Hidden = ch.IsHidden()
 	s.Locked = ch.IsLocked()
+	s.LinkSourceRoles = ch.LinkSourceRoles()
+	s.LinkTargetRoles = ch.LinkTargetRoles()
 	return s
 }
 

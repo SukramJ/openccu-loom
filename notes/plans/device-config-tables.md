@@ -27,7 +27,7 @@ lives only on the machine this was written on.
 | 1 — inbox accept renames channels | **merged**, [#721](https://github.com/SukramJ/openccu-loom/pull/721) |
 | 2 — door-lock operation-mode labels | **merged**, code half [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723), data half [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33) → go-openccu-data v0.1.4, module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726) *(open)* |
 | 3 — link editor null link | **merged**, [#725](https://github.com/SukramJ/openccu-loom/pull/725) |
-| 4 — channel table | **next**, not started |
+| 4 — channel table | **in review**, branch `feat/channel-table` |
 | 5 — parameter table | not started |
 | 6 — device table | not started |
 
@@ -528,8 +528,9 @@ then the full gate.
 
 ## Cut 4 — channel table and channel header
 
-> **Next.** Not started. First cut with a backend half and an API-contract
-> obligation — see [Where this stands](#where-this-stands--read-this-first).
+> **In review** on `feat/channel-table`. Both halves are implemented and the
+> full gate is green; what the plan got wrong or left ambiguous is recorded
+> under [What cut 4 measured](#what-cut-4-measured) below.
 
 **Branch:** `feat/channel-table`
 **Goal:** the chip strip becomes a sortable table; the selected channel's
@@ -617,6 +618,57 @@ go test ./internal/north/rest/handlers/ -run Channel -count=1 && make test
 ```
 
 then the full gate, then `bash script/check_api_version_bump.sh origin/main`.
+
+### What cut 4 measured
+
+Five corrections to the instructions above, all found while executing them.
+
+1. **The two halves of this plan disagree on the header's middle segment.**
+   The Decisions table says `Türschlossantrieb (HmIP-DLP, Kanal 12)` — the
+   raw model — while the frontend section spells the format as
+   `{model_label || model}`. Rendered, the label half is a sentence
+   ("Wall Thermostat with Humidity Sensor"), which pushes the heading past
+   the width the example implies. Implemented as the Decisions table reads:
+   `model || model_label`. Likewise the leading half is the channel *type*
+   label, not the operator's channel name — the name is already in the Name
+   column and in the rename field beside the heading, whereas the type stops
+   being visible anywhere once a channel is renamed.
+2. **No e2e spec located a channel by chip text.** The instruction to rewrite
+   chip locators as row locators had no occurrences: every device-page spec
+   relies on the first channel being auto-selected. What did break was the
+   opposite — the new lazy `listLinks` call escaped the mock layer, and
+   `fixtures.ts` fails any test that reaches the dev-server proxy. The route
+   belongs in the shared `tests/e2e/helpers/mock-api.ts`, not per spec.
+3. **No visual baseline moved.** `device-list-{light,dark}` renders the card
+   grid (`deviceView: 'grid'`) and cut 4 does not touch the device list; the
+   new `DataTable` props are all opt-in, so every existing caller renders
+   byte-identically. The full 161-test Playwright suite passed against the
+   committed baselines unchanged. What *did* need refreshing is
+   `docs/user/img/web-ui-device-detail.png` and `web-ui-channel-config.png`,
+   which `doc-screenshots.spec.ts` writes rather than compares.
+4. **A test asserting the rendered row order does not test the table.**
+   `DeviceDetail` already sorts `visibleChannels` numerically, so a
+   `DeviceDetail` test of "rows are ordered 1, 2, 10" stays green with the
+   table's own `initialSort` deleted — it measures the upstream sort. The
+   table's ordering is pinned in `ChannelTable.test.ts` instead, where
+   removing `initialSort` turns it red.
+5. **Selection lives in the URL, so a vitest click cannot move it.** The
+   channel number is a prop the router supplies; a row click sets
+   `location.hash` and nothing re-renders the component under test. The two
+   halves are pinned separately: the click produces the deep link, and a
+   component rendered with `channel: 2` marks that row `aria-selected` and
+   heads its editor accordingly.
+
+Guards added, each proved to bite by removing the named production line:
+
+| Guard | Line removed | Message when red |
+|---|---|---|
+| `TestListChannels_LinkRoles` | the two `s.Link*Roles = ch.Link*Roles()` assignments | `link_source_roles = [], want [SWITCH]` |
+| `ChannelTable > sorts out-of-order channels` | `initialSort` on the `DataTable` | rows read 10, 2, 1 |
+| `ChannelTable > hands the clicked channel to onSelect` | the row `onclick` in `DataTable` | `onSelect` called 0 times |
+| `DeviceDetail > marks the routed channel's row` | `aria-selected` on the `DataTable` row | `expected null to be 'false'` |
+| `DeviceDetail > counts a channel's links` | the lazy link-count `$effect` | `listLinks` never called |
+| `channel-roles > reports both sides` | the `both` branch of `roleOf` | `expected 'sender' to be 'both'` |
 
 ---
 

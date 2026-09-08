@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -2100,5 +2101,71 @@ func TestListDevicesCarriesFirmwareAndAvailability(t *testing.T) {
 	}
 	if fw.Current != "1.2.4" || fw.Available != "1.4.0" || !fw.Updatable {
 		t.Errorf("detail firmware = %+v, want the seeded values", fw)
+	}
+}
+
+// TestListChannels_LinkRoles pins the raw CCU LINK_SOURCE_ROLES /
+// LINK_TARGET_ROLES tokens onto the wire of `GET .../channels`. The SPA's
+// channel table answers "Sender / Empfänger / beides" per row from these two
+// arrays; without them on this response it would have to fetch the whole link
+// surface to render a column. Asserted through the handler rather than through
+// toChannelSummary, because the omitempty behaviour a consumer depends on —
+// the keys being absent for a channel that cannot be linked — only exists once
+// the summary has been encoded.
+func TestListChannels_LinkRoles(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("0001ABCD", "HmIP-BSM")
+	linked := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	linked.SetLinkRoles([]string{"SWITCH"}, []string{"REMOTECONTROL_RECEIVER"})
+	// No SetLinkRoles call: a channel the CCU reports without link roles.
+	d.AddChannel("0001ABCD:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD/channels", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+	w := httptest.NewRecorder()
+	ListChannels(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []ChannelSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	byAddress := make(map[string]ChannelSummary, len(body))
+	for _, ch := range body {
+		byAddress[ch.Address] = ch
+	}
+
+	got, ok := byAddress["0001ABCD:1"]
+	if !ok {
+		t.Fatalf("channel 0001ABCD:1 missing from %s", w.Body.String())
+	}
+	if !slices.Equal(got.LinkSourceRoles, []string{"SWITCH"}) {
+		t.Errorf("link_source_roles = %v, want [SWITCH]", got.LinkSourceRoles)
+	}
+	if !slices.Equal(got.LinkTargetRoles, []string{"REMOTECONTROL_RECEIVER"}) {
+		t.Errorf("link_target_roles = %v, want [REMOTECONTROL_RECEIVER]", got.LinkTargetRoles)
+	}
+
+	// A channel with no roles must omit both keys entirely, so a consumer can
+	// tell "cannot be linked on this side" from "empty list".
+	var raw []map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	for _, entry := range raw {
+		var addr string
+		_ = json.Unmarshal(entry["address"], &addr)
+		if addr != "0001ABCD:0" {
+			continue
+		}
+		if _, present := entry["link_source_roles"]; present {
+			t.Error("channel 0001ABCD:0 has no link roles, link_source_roles must be omitted")
+		}
+		if _, present := entry["link_target_roles"]; present {
+			t.Error("channel 0001ABCD:0 has no link roles, link_target_roles must be omitted")
+		}
 	}
 }

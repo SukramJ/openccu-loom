@@ -6192,6 +6192,20 @@ export interface components {
              *     common case; only trigger-capable channels grow the payload.
              */
             event_groups?: components["schemas"]["EventGroupSummary"][];
+            /**
+             * @description Raw CCU `LINK_SOURCE_ROLES` tokens — what this channel can act
+             *     as the source (sender) of in a direct link. Omitted when the
+             *     channel cannot take part in a direct link on that side, so a
+             *     consumer answers "sender / receiver / both" per channel without
+             *     fetching the link surface.
+             */
+            link_source_roles?: string[];
+            /**
+             * @description Raw CCU `LINK_TARGET_ROLES` tokens — what this channel can act
+             *     as the target (receiver) of in a direct link. Omitted when the
+             *     channel cannot take part in a direct link on that side.
+             */
+            link_target_roles?: string[];
         };
         MQTTReloadResponse: {
             /** @description Always true on success; the 503 path returns a problem+json document instead. */

@@ -20,6 +20,11 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Breadcrumb from "$lib/components/ui/Breadcrumb.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import ChannelTable from "$lib/components/channel/ChannelTable.svelte";
+  import {
+    channelHeader,
+    isWeekProfileChannel,
+  } from "$lib/channel/channel-roles";
   import type { IconName } from "$lib/icons";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
@@ -338,14 +343,6 @@
       (c) => c.address.includes(":") && !c.address.endsWith(":0"),
     ),
   );
-
-  function isVirtualChannel(no: number): boolean {
-    return no >= 50;
-  }
-
-  function isWeekProfileChannel(type: string | undefined): boolean {
-    return (type ?? "").toUpperCase().endsWith("WEEK_PROFILE");
-  }
 
   function startRename() {
     renameValue = detail?.name ?? "";
@@ -760,6 +757,38 @@
   const activeConfigSub = $derived(
     configSubs.some((s) => s.key === configSub) ? configSub : configSubs[0]?.key,
   );
+
+  // Link count per channel address, for the channel table's "Verkn." column.
+  // Loaded once, the first time the channels sub-tab is opened: the device
+  // page must not pay for the link listing on every visit, and the count is
+  // decoration rather than a thing the editor depends on. A failure leaves
+  // the map empty, so the column reads "—" — the links sub-tab owns
+  // reporting link errors, and a toast here would fire for a column nobody
+  // asked for.
+  let channelLinkCounts = $state<Map<string, number>>(new Map());
+  let linkCountsLoadedFor = $state<string | null>(null);
+
+  $effect(() => {
+    if (activeConfigSub !== "channels") return;
+    const address = detail?.address;
+    if (!address || linkCountsLoadedFor === address) return;
+    linkCountsLoadedFor = address;
+    void (async () => {
+      try {
+        const links = await api.listLinks(address, locale);
+        const counts = new Map<string, number>();
+        for (const link of links) {
+          for (const end of [link.sender_address, link.receiver_address]) {
+            if (!end.startsWith(address + ":")) continue;
+            counts.set(end, (counts.get(end) ?? 0) + 1);
+          }
+        }
+        channelLinkCounts = counts;
+      } catch {
+        // Column stays "—"; the links sub-tab reports link failures.
+      }
+    })();
+  });
 </script>
 
 <svelte:window onkeydown={onDeleteDialogKey} />
@@ -1093,42 +1122,17 @@
             <EmptyState message={t("device.no_device_config")} />
           {/if}
         {:else if activeConfigSub === "channels"}
-          <!-- Channel selector strip. Each chip carries channel name +
-               number badge, virtual marker (≥50), and a click that
-               either selects the channel for editing or — for week-
-               profile channels — switches to the Schedule sub-tab. -->
-          <div
-            class="mb-4 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700"
-            role="tablist"
-            aria-label={t("device.subtab.channels")}
-          >
-            {#each userChannels as ch (ch.address)}
-              {@const isVirt = isVirtualChannel(ch.number)}
-              {@const isWeek = isWeekProfileChannel(ch.type)}
-              <button
-                type="button"
-                role="tab"
-                aria-selected={ch.number === selectedChannel}
-                onclick={() => clickChannelInStrip(ch)}
-                class="-mb-px border-b-2 px-3 py-2 text-xs transition {ch.number === selectedChannel
-                  ? 'border-slate-500 font-semibold text-slate-900 dark:border-slate-400 dark:text-white'
-                  : 'border-transparent font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'} {isVirt ? '[border-style:dashed]' : ''}"
-                title={ch.type_label ? `${ch.address} · ${ch.type_label}` : ch.address}
-              >
-                {ch.name?.trim() || ch.type_label || t("device.channel_n", { n: ch.number })}
-                {#if isWeek}
-                  <span class="ml-1">
-                    <Icon name="mdi:calendar-clock" size={12} />
-                  </span>
-                {/if}
-                {#if isVirt}
-                  <Badge variant="muted" class="ml-1">{t("device.virtual")}</Badge>
-                {/if}
-                <span class="ml-1 text-xs text-slate-400 dark:text-slate-500">
-                  ({ch.data_points_count})
-                </span>
-              </button>
-            {/each}
+          <!-- Channel selector. Selecting a row opens that channel's editor
+               below the table; a week-profile row routes to the Schedule
+               sub-tab instead, because those channels hold a weekly program
+               rather than parameters. -->
+          <div class="mb-4">
+            <ChannelTable
+              channels={userChannels}
+              selected={selectedChannel}
+              linkCounts={channelLinkCounts}
+              onSelect={clickChannelInStrip}
+            />
           </div>
 
           {#if userChannels.length === 0}
@@ -1192,10 +1196,11 @@
                   </Button>
                 {:else}
                   <h3 class="font-medium text-slate-900 dark:text-white">
-                    {ch.name?.trim() ||
-                      ch.type_label ||
-                      t("device.channel_n", { n: ch.number })}
+                    {channelHeader(ch, detail.model || detail.model_label || "")}
                   </h3>
+                  <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">
+                    {ch.address}
+                  </span>
                   <Button
                     type="button"
                     variant="ghost"

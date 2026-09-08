@@ -1013,3 +1013,162 @@ describe("DeviceDetail — configure sub-tab deep link", () => {
     });
   });
 });
+
+// The channel selector is a table since API 11.2.0: the chip strip it
+// replaced could show a name and a data-point count and nothing else, and a
+// device with thirty channels had no order but the one the CCU sent. These
+// pin what the table has to keep doing — ordering, selection, the
+// week-profile detour and the lazily loaded link column — through the real
+// DeviceDetail, because ChannelTable on its own cannot prove the page wires
+// its selection to the editor below.
+describe("DeviceDetail — channel table", () => {
+  function deviceWithChannels(channels: Record<string, unknown>[]) {
+    return baseDevice({ channels, channels_count: channels.length });
+  }
+
+  // The channel table is the first table on the page; the editor below it
+  // renders tables of its own, so every row query is scoped to this one.
+  function channelRows() {
+    const table = screen.getAllByRole("table")[0];
+    return within(table).getAllByRole("row").slice(1);
+  }
+
+  async function openChannels(
+    device: Record<string, unknown>,
+    props: Record<string, unknown> = {},
+  ) {
+    mockGetDevice.mockResolvedValue(device);
+    render(DeviceDetail, {
+      props: { address: "0001ABCD", locale: "en", ...props },
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "device.toptab.configure" }));
+    await waitFor(() => {
+      expect(channelRows().length).toBeGreaterThan(0);
+    });
+  }
+
+  it("orders rows by channel number even when the CCU sends them out of order", async () => {
+    await openChannels(
+      deviceWithChannels([
+        { address: "0001ABCD:10", number: 10, type: "SWITCH", name: "Ten", data_points_count: 1 },
+        { address: "0001ABCD:2", number: 2, type: "SWITCH", name: "Two", data_points_count: 1 },
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "One", data_points_count: 1 },
+      ]),
+    );
+
+    // A string sort would put 10 between 1 and 2.
+    const addresses = channelRows().map(
+      (row) => within(row).getByText(/^0001ABCD:/).textContent,
+    );
+    expect(addresses).toEqual(["0001ABCD:1", "0001ABCD:2", "0001ABCD:10"]);
+  });
+
+  // Selection lives in the URL, not in the component: the channel number is a
+  // prop the router supplies, so what a row click has to produce is the deep
+  // link. Pinning the hash is what proves the table stayed a selector rather
+  // than growing a second, private notion of "the selected channel".
+  it("navigates to the clicked channel's deep link", async () => {
+    await openChannels(
+      deviceWithChannels([
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "One", data_points_count: 1 },
+        { address: "0001ABCD:2", number: 2, type: "SWITCH", name: "Two", data_points_count: 1 },
+      ]),
+    );
+
+    location.hash = "";
+    await fireEvent.click(channelRows()[1]);
+    expect(location.hash).toBe("#/devices/0001ABCD/channels/2");
+  });
+
+  it("marks the routed channel's row aria-selected and heads its editor", async () => {
+    await openChannels(
+      deviceWithChannels([
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "One", data_points_count: 1 },
+        { address: "0001ABCD:2", number: 2, type: "SWITCH", name: "Two", data_points_count: 1 },
+      ]),
+      { channel: 2 },
+    );
+
+    const rows = channelRows();
+    expect(rows[0].getAttribute("aria-selected")).toBe("false");
+    expect(rows[1].getAttribute("aria-selected")).toBe("true");
+
+    // …and the editor below the table is channel 2's, not the first one's.
+    await fireEvent.click(screen.getByRole("button", { name: "channel.rename" }));
+    await waitFor(() => {
+      const input = screen.getByLabelText("channel.rename") as HTMLInputElement;
+      expect(input.value).toBe("Two");
+    });
+  });
+
+  it("routes a week-profile row to the schedule sub-tab instead of the editor", async () => {
+    mockGetDeviceSchedule.mockResolvedValue({ channels: [] });
+    await openChannels(
+      deviceWithChannels([
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "One", data_points_count: 1 },
+        {
+          address: "0001ABCD:3",
+          number: 3,
+          type: "CLIMATECONTROL_WEEK_PROFILE",
+          name: "Program",
+          data_points_count: 0,
+        },
+      ]),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: "device.subtab.schedule" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(channelRows()[1]);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: "device.subtab.schedule" }).getAttribute("aria-selected"),
+      ).toBe("true");
+    });
+  });
+
+  it("counts a channel's links into the table once the channels sub-tab opens", async () => {
+    mockListLinks.mockResolvedValue([
+      { sender_address: "0001ABCD:1", receiver_address: "000BEEF:1", peer_address: "000BEEF:1", direction: "out" },
+      { sender_address: "000CAFE:2", receiver_address: "0001ABCD:1", peer_address: "000CAFE:2", direction: "in" },
+    ]);
+    await openChannels(
+      deviceWithChannels([
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "One", data_points_count: 1 },
+        { address: "0001ABCD:2", number: 2, type: "SWITCH", name: "Two", data_points_count: 1 },
+      ]),
+    );
+
+    await waitFor(() => {
+      expect(mockListLinks).toHaveBeenCalledWith("0001ABCD", "en");
+    });
+    await waitFor(() => {
+      expect(within(channelRows()[0]).getByText("2")).toBeInTheDocument();
+    });
+    // A channel with no link keeps the em dash: the map has no entry for it,
+    // and "not loaded" must not read as "no links".
+    expect(within(channelRows()[1]).getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("leaves the link column empty when the link listing fails", async () => {
+    mockListLinks.mockRejectedValue(new Error("boom"));
+    await openChannels(
+      deviceWithChannels([
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "One", data_points_count: 1 },
+      ]),
+    );
+
+    await waitFor(() => {
+      expect(mockListLinks).toHaveBeenCalled();
+    });
+    // No toast: the links sub-tab owns reporting link failures, and a column
+    // nobody asked for must not raise one.
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(within(channelRows()[0]).getAllByText("—").length).toBeGreaterThan(0);
+  });
+});

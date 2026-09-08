@@ -6,6 +6,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The device page's channel strip is a sortable table.** The chip strip it
+  replaced could show a channel's name and data-point count and nothing else,
+  in whatever order the CCU sent them. The table carries number, name with the
+  address beneath it, description, type, direct-link role, data points, link
+  count and status chips (hidden / locked / virtual / week profile / group),
+  sorts and filters, and the selected channel's editor follows below it under
+  a heading of the shape `Türschlossantrieb (HmIP-DLP, Kanal 12)`. The deep
+  link `#/devices/<addr>/channels/<n>` still drives the selection, and a
+  week-profile row still routes to the schedule sub-tab.
+- **A channel's direct-link roles are on the channel listing now.** REST
+  `ChannelSummary` and the MCP `list_channels` result carry the raw CCU
+  `LINK_SOURCE_ROLES` / `LINK_TARGET_ROLES` tokens as `link_source_roles`
+  and `link_target_roles`. Answering "is this channel a sender, a receiver
+  or both" previously meant fetching the whole link surface of the device
+  to ask a per-channel question. Both keys are omitted when the channel
+  cannot take part in a direct link on that side, so an absent key means
+  "not linkable here" rather than "empty list".
+
+### Changed
+
+- **REST `APIVersion` 11.1.0 → 11.2.0** (additive): the two link-role
+  fields above.
+
 ### Fixed
 
 - **The HmIP door lock's operation modes are named now.** The curated

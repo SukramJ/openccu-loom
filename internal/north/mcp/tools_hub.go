@@ -507,6 +507,11 @@ type channelSummary struct {
 	Room        string `json:"room,omitempty"`
 	ParamsetKey string `json:"paramset_key,omitempty"`
 	DataPoints  int    `json:"data_points"`
+	// LinkSourceRoles / LinkTargetRoles are the raw CCU LINK_SOURCE_ROLES /
+	// LINK_TARGET_ROLES tokens — they answer whether a channel can act as a
+	// direct-link sender, a receiver, or both, without a second call.
+	LinkSourceRoles []string `json:"link_source_roles,omitempty"`
+	LinkTargetRoles []string `json:"link_target_roles,omitempty"`
 }
 
 type listChannelsIn struct {
@@ -522,7 +527,7 @@ type listChannelsOut struct {
 func registerListChannels(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_channels",
-		Description: "List the channels of a device by its address, so an agent can discover channel addresses (<device>:<n>) before calling read_paramset. Returns each channel's address, number, type, name, room, and data-point count.",
+		Description: "List the channels of a device by its address, so an agent can discover channel addresses (<device>:<n>) before calling read_paramset. Returns each channel's address, number, type, name, room, data-point count, and its direct-link source/target roles.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listChannelsIn) (*mcpsdk.CallToolResult, listChannelsOut, error) {
 		out := listChannelsOut{Channels: []channelSummary{}}
 		if d.Devices == nil {
@@ -544,6 +549,9 @@ func registerListChannels(s *mcpsdk.Server, d Deps) {
 				Room:        ch.Room(),
 				ParamsetKey: string(ch.ParamsetIn),
 				DataPoints:  len(ch.DataPoints()),
+
+				LinkSourceRoles: ch.LinkSourceRoles(),
+				LinkTargetRoles: ch.LinkTargetRoles(),
 			})
 		}
 		return nil, out, nil
