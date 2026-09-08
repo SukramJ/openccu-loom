@@ -27,8 +27,8 @@ lives only on the machine this was written on.
 | 1 — inbox accept renames channels | **merged**, [#721](https://github.com/SukramJ/openccu-loom/pull/721) |
 | 2 — door-lock operation-mode labels | **merged**, code half [#722](https://github.com/SukramJ/openccu-loom/pull/722) + [#723](https://github.com/SukramJ/openccu-loom/pull/723), data half [openccu-data#33](https://github.com/SukramJ/openccu-data/pull/33) → go-openccu-data v0.1.4, module bump [#726](https://github.com/SukramJ/openccu-loom/pull/726) *(open)* |
 | 3 — link editor null link | **merged**, [#725](https://github.com/SukramJ/openccu-loom/pull/725) |
-| 4 — channel table | **in review**, branch `feat/channel-table` |
-| 5 — parameter table | not started |
+| 4 — channel table | **merged**, [#728](https://github.com/SukramJ/openccu-loom/pull/728) |
+| 5 — parameter table | **in review**, branch `feat/parameter-table` |
 | 6 — device table | not started |
 
 The plan itself is [#724](https://github.com/SukramJ/openccu-loom/pull/724).
@@ -528,9 +528,9 @@ then the full gate.
 
 ## Cut 4 — channel table and channel header
 
-> **In review** on `feat/channel-table`. Both halves are implemented and the
-> full gate is green; what the plan got wrong or left ambiguous is recorded
-> under [What cut 4 measured](#what-cut-4-measured) below.
+> **Merged** as [#728](https://github.com/SukramJ/openccu-loom/pull/728).
+> What the plan got wrong or left ambiguous is recorded under
+> [What cut 4 measured](#what-cut-4-measured) below.
 
 **Branch:** `feat/channel-table`
 **Goal:** the chip strip becomes a sortable table; the selected channel's
@@ -732,6 +732,60 @@ cd assets/ui && npm run check && npx vitest run src/lib/channel src/lib/control 
 ```
 
 then the full gate.
+
+### What cut 5 measured
+
+1. **The Files table names the wrong spec for the FLOAT save.**
+   `channel-editor.spec.ts:147` is the undo/redo test; the FLOAT MASTER save
+   that has to click through the preview is `device-detail.spec.ts:147`. Four
+   e2e tests needed the click-through in the end — those two plus the
+   edit-lock case and `links.spec.ts`'s LINK write.
+2. **The widget table's `*.LEVEL → slider` rule is wrong as stated.** The
+   inventory's own disambiguation section records that `WIN_SC.LEVEL` is an
+   enumerated handle position, not a 0–100 position, so a slot-name rule
+   would render a slider over an enum. What shipped derives the exception
+   from the parameter's own `value_list` rather than naming the family: a
+   parameter the CCU describes with choices is a selector whatever its slot
+   is called, and that is a property the DTO carries rather than one this
+   table would have to keep in sync with firmware. Same for `STATE`, which is
+   a toggle only where it is writable and BOOL — on `DOOR_SENSOR`, `DANGER`
+   or `SMOKE_DETECTOR` it is a read-only status.
+3. **The preview cannot re-implement the display projection.** `buildPreview`
+   reports "from X to Y" about values the operator only ever saw projected
+   (LEVEL raw 0.42 shown as 42 %), so a second copy of that logic would let
+   the preview claim a change the field never showed. The projection moved
+   out of `ParameterField.svelte` into `lib/parameter/display-value.ts` and
+   both read it.
+4. **Two defects the plan did not anticipate, both introduced by this cut and
+   fixed in it.** The preview's request line named `/link-paramsets/` where
+   `api.putLinkParamset` calls `/link-ps/` — a wrong answer to the one
+   question the dialog exists to answer, and nothing else in the app would
+   have contradicted it; it is pinned by a test now. And `requestSave` opened
+   the preview before the edit-lock check, so a lost lock asked the operator
+   to approve a write the daemon would refuse and the refusal then read as a
+   failure of their approval. The guard moved ahead of the preview, with the
+   existing one in `performSave` kept as the backstop for a lock that lapses
+   while the dialog is open.
+5. **Only the Settings visual baselines moved**, from the two new preference
+   controls — the parameter editor has no visual baseline of its own. Two
+   unrelated vitest files (`Inbox`, `SimpleScheduleEditor`) failed in the
+   full parallel run and passed in isolation: parallel-run flakes, not this
+   cut.
+
+Guards added, each proved to bite by removing the named production line:
+
+| Guard | Line removed | Message when red |
+|---|---|---|
+| `write preview > writes nothing until confirmed` | the preview branch of `requestSave` | `expected +0 to be 1` |
+| `read-back > warns when the device kept a different value` | `readBack = readBackDiff(...)` | `readback.title` never toasted |
+| `widgetFor > WIN_SC.LEVEL is a selector` | the `value_list` check in `widgetFor` | `expected 'level' to be 'auto'` |
+| `readBackDiff > numeric echo` | the numeric branch of `sameValue` | a `1` vs `1.0` echo reported as a divergence |
+| `buildPreview > projected values` | `formatDisplayValue` on the `from` side | `expected '0.42' to be '42 %'` |
+
+Cut 3's own guard (`LinkConfigPanel.null-link`) needed the preview
+click-through added, so it was re-proved to bite afterwards: restoring the
+pre-fix prop shape still produces `Cannot read properties of null (reading
+'sender_address')`.
 
 ---
 

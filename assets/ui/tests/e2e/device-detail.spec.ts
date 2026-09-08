@@ -176,6 +176,21 @@ test.describe('Device detail — MASTER parameter write', () => {
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
 
+    // A MASTER save goes through the write preview (the preference is on by
+    // default), which names the request and shows the from/to before the
+    // write leaves. Nothing may reach the CCU until it is confirmed.
+    const dialog = page.getByRole('dialog', { name: 'Review this write' });
+    await expect(dialog).toBeVisible();
+    // The parameter appears twice in the dialog — once in the from/to table,
+    // once in the JSON body — so assert on the dialog's text rather than
+    // locating an element.
+    await expect(dialog).toContainText('TEMPERATURE_OFFSET');
+    await expect(dialog).toContainText(
+      `PUT /api/v1/devices/${DEVICE_ADDRESS}:1/paramsets/MASTER`,
+    );
+    expect(putBody).toBeNull();
+    await dialog.getByRole('button', { name: 'Write', exact: true }).click();
+
     // The write reaches the MASTER paramset PUT endpoint with the edited value...
     await expect.poll(() => putBody).not.toBeNull();
     expect(putBody).toMatchObject({ TEMPERATURE_OFFSET: 1.5 });
@@ -186,5 +201,38 @@ test.describe('Device detail — MASTER parameter write', () => {
 
     // ...and a success toast confirms the write to the operator.
     await expect(page.getByText('Saved.')).toBeVisible();
+  });
+
+  test('with the write preview turned off, saving writes straight through', async ({
+    page,
+  }) => {
+    let putBody: unknown = null;
+    await page.route('**/api/v1/devices/*/paramsets/MASTER', async (route) => {
+      putBody = route.request().postDataJSON();
+      await route.fulfill({ json: { status: 'ok' } });
+    });
+
+    // The preference is read from localStorage at module load, so it has to
+    // be seeded before the SPA boots rather than toggled afterwards.
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openccu-loom.prefs.v1',
+        JSON.stringify({ locale: 'en', theme: 'light', writePreview: false }),
+      );
+    });
+
+    await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
+    await page.waitForSelector('#main');
+    await page.getByRole('tab', { name: 'Configure' }).click();
+    await page.waitForSelector('text=Temperature offset');
+
+    const input = page.locator('input[type="number"]').first();
+    await input.fill('2.5');
+    await input.blur();
+    await page.getByRole('button', { name: /Save \(\d+\)/ }).first().click();
+
+    await expect.poll(() => putBody).not.toBeNull();
+    expect(putBody).toMatchObject({ TEMPERATURE_OFFSET: 2.5 });
+    await expect(page.getByRole('dialog', { name: 'Review this write' })).toHaveCount(0);
   });
 });

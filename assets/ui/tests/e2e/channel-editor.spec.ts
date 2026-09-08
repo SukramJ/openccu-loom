@@ -177,6 +177,12 @@ test.describe('Channel editor — undo/redo', () => {
     const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ }).first();
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
+    // A MASTER save is previewed before it leaves (write-preview preference,
+    // on by default); confirm it so the write reaches the API.
+    await page
+      .getByRole('dialog', { name: 'Review this write' })
+      .getByRole('button', { name: 'Write', exact: true })
+      .click();
 
     await expect.poll(() => putBody).not.toBeNull();
     expect(putBody).toMatchObject({ ON_TIME: 2.5 });

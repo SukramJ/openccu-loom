@@ -1266,6 +1266,12 @@ const EN: Catalog = {
   "settings.title": "Settings",
   "settings.subtitle": "Daemon configuration and UI preferences",
   "settings.expert_mode": "Expert mode",
+  "settings.prefs.write_preview": "Preview configuration writes",
+  "settings.prefs.write_preview_help":
+    "Show what a MASTER or LINK save will write, and to which request, before it goes out. Never applies to control writes.",
+  "settings.prefs.param_density": "Parameter row height",
+  "settings.prefs.density.compact": "Compact",
+  "settings.prefs.density.comfortable": "Comfortable",
   "settings.expert_mode_hint":
     "Reveal deep-tuning fields (reliability, callback ports, Matter internals). Off by default.",
   "settings.live_edit_disabled":
@@ -2669,6 +2675,20 @@ const EN: Catalog = {
   "channel.save_n": "Save ({count})",
   "channel.unsaved": "Unsaved changes",
   "channel.saved_short": "Saved.",
+  // Write preview (MASTER / LINK only) and the read-back comparison that
+  // follows the write — see lib/channel/write-preview.ts.
+  "channel.preview.title": "Review this write",
+  "channel.preview.request": "Request",
+  "channel.preview.body": "Body",
+  "channel.preview.col.parameter": "Parameter",
+  "channel.preview.col.from": "Currently",
+  "channel.preview.col.to": "New",
+  "channel.preview.write": "Write",
+  "channel.preview.nothing_to_write": "Nothing has changed.",
+  "channel.readback.title": "The device kept different values",
+  "channel.readback.body": "{count} values differ from what was sent",
+  "channel.readback.chip": "Device reports {value}",
+  "parameter.default": "Default",
   // --- Secured transmission (channel/SecureTransmission.svelte) ---
   "channel.flags.hidden.title": "Hide channel",
   "channel.flags.hidden.help":
@@ -5204,6 +5224,12 @@ const DE: Catalog = {
   "settings.title": "Einstellungen",
   "settings.subtitle": "Daemon-Konfiguration und UI-Voreinstellungen",
   "settings.expert_mode": "Expert-Modus",
+  "settings.prefs.write_preview": "Konfigurationsschreibvorgänge vorher zeigen",
+  "settings.prefs.write_preview_help":
+    "Zeigt vor dem Absenden, was ein MASTER- oder LINK-Speichern schreibt und an welche Anfrage. Gilt nie für Steuerbefehle.",
+  "settings.prefs.param_density": "Zeilenhöhe der Parameter",
+  "settings.prefs.density.compact": "Kompakt",
+  "settings.prefs.density.comfortable": "Komfortabel",
   "settings.expert_mode_hint":
     "Tiefe Tuning-Felder einblenden (Reliability, Callback-Ports, Matter-Internals). Standard: aus.",
   "settings.live_edit_disabled":
@@ -6621,6 +6647,19 @@ const DE: Catalog = {
   "channel.save_n": "Speichern ({count})",
   "channel.unsaved": "Ungespeicherte Änderungen",
   "channel.saved_short": "Gespeichert.",
+  // Schreibvorschau (nur MASTER / LINK) und der Read-back danach.
+  "channel.preview.title": "Diesen Schreibvorgang prüfen",
+  "channel.preview.request": "Anfrage",
+  "channel.preview.body": "Rumpf",
+  "channel.preview.col.parameter": "Parameter",
+  "channel.preview.col.from": "Aktuell",
+  "channel.preview.col.to": "Neu",
+  "channel.preview.write": "Schreiben",
+  "channel.preview.nothing_to_write": "Es hat sich nichts geändert.",
+  "channel.readback.title": "Das Gerät hat abweichende Werte behalten",
+  "channel.readback.body": "{count} Werte weichen vom Gesendeten ab",
+  "channel.readback.chip": "Gerät meldet {value}",
+  "parameter.default": "Standard",
   // --- Secured transmission (channel/SecureTransmission.svelte) ---
   "channel.flags.hidden.title": "Kanal ausblenden",
   "channel.flags.hidden.help":

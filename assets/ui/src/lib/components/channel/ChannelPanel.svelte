@@ -19,6 +19,14 @@
   import ProfileSelector from "./ProfileSelector.svelte";
   import SubsetGroupSelector from "./SubsetGroupSelector.svelte";
   import SecureTransmission from "./SecureTransmission.svelte";
+  import WritePreviewDialog from "./WritePreviewDialog.svelte";
+  import { prefs } from "$lib/stores/preferences.svelte";
+  import {
+    buildPreview,
+    readBackDiff,
+    type PreviewEntry,
+    type ReadBackEntry,
+  } from "$lib/channel/write-preview";
   import {
     validateCrossRules,
     visibleParameters,
@@ -410,6 +418,12 @@
     stack = pushEntry(stack, entry);
     values = { ...values, [name]: next };
     banner = null;
+    // The chip reports what the device did with the last write; editing the
+    // row supersedes that, so it goes rather than sitting next to a value it
+    // no longer describes.
+    if (readBack.length > 0) {
+      readBack = readBack.filter((entry) => entry.name !== name);
+    }
   }
 
   // Root element of this panel — the identity the shortcut owner is
@@ -568,9 +582,65 @@
   );
 
   const dirtySet = $derived(new Set(dirtyNames));
+  // Parameters the device reported differently from what was written, kept
+  // until the row is edited again. See lib/channel/write-preview.ts.
+  let readBack = $state<ReadBackEntry[]>([]);
+  const readBackMap = $derived(
+    new Map(readBack.map((entry) => [entry.name, entry.got])),
+  );
   const hasErrors = $derived(Object.keys(crossErrors).length > 0);
 
-  async function save() {
+  // Write preview + read-back state. `previewOpen` gates the dialog;
+  // `readBack` holds the parameters the device reported differently from what
+  // was sent, so their rows can carry a chip until the next edit.
+  let previewOpen = $state(false);
+  let previewEntries = $state<PreviewEntry[]>([]);
+
+  // The request line the preview shows. It names the endpoint the write
+  // actually goes to, which is the part an operator cannot infer from the
+  // form: a LINK paramset is addressed per peer, not by the key alone.
+  // The path segments mirror api.putLinkParamset / api.putParamset exactly.
+  // A preview that names an endpoint the client never calls is worse than no
+  // preview: it is a wrong answer to the one question the dialog exists to
+  // answer, and nothing else in the app would contradict it.
+  const previewRequest = $derived(
+    paramset === "LINK" && peer
+      ? `PUT /api/v1/devices/${channelAddress}/link-ps/${peer}`
+      : `PUT /api/v1/devices/${channelAddress}/paramsets/${paramset}`,
+  );
+
+  /**
+   * The Save button's entry point. A MASTER or LINK write is device
+   * configuration the operator cannot inspect from the device itself, so it
+   * goes through the preview when the preference is on. VALUES writes never
+   * do: those are immediate control actions whose effect is the point, and a
+   * dialog in front of a light switch is friction with nothing behind it.
+   */
+  function requestSave() {
+    if (!schema || dirtyNames.length === 0 || hasErrors) return;
+    // Refuse a lost lock here rather than after the preview: previewing a
+    // write that cannot happen asks the operator to review and approve a
+    // change the daemon will refuse, and the refusal then reads as a failure
+    // of their approval. performSave keeps the same guard as the backstop —
+    // the lock can lapse while the dialog is open.
+    if (lockedByOther || lockLost) {
+      toastStore.error(t("channel.lock_lost"), t("channel.lock_lost_detail"));
+      return;
+    }
+    if (prefs.writePreview && paramset !== "VALUES") {
+      previewEntries = buildPreview(schema, values, serverValues, dirtyNames);
+      previewOpen = true;
+      return;
+    }
+    void performSave();
+  }
+
+  function confirmPreview() {
+    previewOpen = false;
+    void performSave();
+  }
+
+  async function performSave() {
     if (!schema || dirtyNames.length === 0 || hasErrors) return;
     // Refuse to write once our edit lock was taken over or dropped
     // mid-life: PUTting now would silently clobber whoever holds the
@@ -582,6 +652,12 @@
     }
     saving = true;
     banner = null;
+    // Snapshot what goes out before the write, so the read-back compares
+    // against the sent values rather than against the working copy, which the
+    // reload is about to overwrite.
+    const sent: Record<string, unknown> = {};
+    for (const name of dirtyNames) sent[name] = values[name];
+    readBack = [];
     try {
       if (paramset === "MASTER") {
         // MASTER writes must go through putParamset: the CCU applies
@@ -605,6 +681,20 @@
       // working copy (the callback server will also stream the event
       // through, but a refresh is simpler for the initial scope).
       await load(address, channel, paramset, locale, peer, expertMode);
+      // What the device kept is not always what was sent: rfd clamps an
+      // out-of-range value to MAX and answers ok, while hmipserver stores the
+      // rejected value (both measured by the homematic-manager project
+      // against CCU firmware 3.89.8, its docs/config-pending.md — an external
+      // measurement). A success toast on top of either is a lie the operator
+      // has no way to catch, so the reloaded values are compared against what
+      // went out.
+      readBack = readBackDiff(schema, sent, serverValues);
+      if (readBack.length > 0) {
+        toastStore.warn(
+          t("channel.readback.title"),
+          t("channel.readback.body", { count: readBack.length }),
+        );
+      }
       // A LINK paramset write goes to a battery device only on its next
       // wakeup; surface that hint in place of the plain success toast.
       const wakeupShown =
@@ -948,7 +1038,7 @@
         <Button
           type="button"
           size="sm"
-          onclick={save}
+          onclick={requestSave}
           disabled={dirtyNames.length === 0 || saving || hasErrors}
         >
           {saving ? t("common.saving") : t("channel.save_n", { count: dirtyNames.length })}
@@ -1098,6 +1188,7 @@
               {values}
               dirty={dirtySet}
               errors={crossErrors}
+              readBack={readBackMap}
               {locale}
               locked={lockedParams}
               brightnessSource={brightnessSource}
@@ -1129,6 +1220,7 @@
             {values}
             dirty={dirtySet}
             errors={crossErrors}
+            readBack={readBackMap}
             {locale}
             locked={lockedParams}
             brightnessSource={brightnessSource}
@@ -1157,6 +1249,7 @@
               {values}
               dirty={dirtySet}
               errors={crossErrors}
+              readBack={readBackMap}
               {locale}
               locked={lockedParams}
               brightnessSource={brightnessSource}
@@ -1184,6 +1277,7 @@
             {values}
             dirty={dirtySet}
             errors={crossErrors}
+            readBack={readBackMap}
             {locale}
             locked={lockedParams}
             brightnessSource={brightnessSource}
@@ -1199,6 +1293,7 @@
         {values}
         dirty={dirtySet}
         errors={crossErrors}
+        readBack={readBackMap}
         {locale}
         locked={lockedParams}
         brightnessSource={brightnessSource}
@@ -1219,11 +1314,19 @@
         <Button type="button" variant="outline" size="sm" onclick={reset} disabled={saving}>
           {t("common.reset")}
         </Button>
-        <Button type="button" size="sm" onclick={save} disabled={saving || hasErrors}>
+        <Button type="button" size="sm" onclick={requestSave} disabled={saving || hasErrors}>
           {saving ? t("common.saving") : t("channel.save_n", { count: dirtyNames.length })}
         </Button>
       </div>
     {/if}
   </Card>
 {/if}
+
+<WritePreviewDialog
+  open={previewOpen}
+  entries={previewEntries}
+  request={previewRequest}
+  onCancel={() => (previewOpen = false)}
+  onConfirm={confirmPreview}
+/>
 </div>

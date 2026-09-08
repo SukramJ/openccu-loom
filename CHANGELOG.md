@@ -8,6 +8,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Configuration writes are previewed before they leave.** A MASTER or LINK
+  save now opens a dialog listing every parameter it will change — from and
+  to, in the same display units the form showed — alongside the exact request
+  and JSON body. On by default for those two paramsets and switchable under
+  Settings → Interface; VALUES writes are control actions and never take this
+  path.
+- **A write the device did not keep is reported.** After a configuration
+  write the reloaded values are compared against what was sent, and the rows
+  that differ carry a "Device reports …" chip until they are edited again.
+  The CCU's two backends disagree here — `rfd` clamps an out-of-range value
+  to MAX and answers `ok`, while `hmipserver` stores the rejected value
+  (measured by the homematic-manager project against firmware 3.89.8) — so a
+  plain success toast could follow a write that never landed as sent.
+- **The parameter editor renders rows instead of a two-column card grid.**
+  Each row lines up label (with the raw CCU name beneath), widget, and the
+  range and default the CCU will hold the write to, so constraints are
+  visible before a value is refused rather than after. Row height follows a
+  new density preference.
+- **Widgets follow the CCU's own `CONTROL` hint** before falling back to the
+  type/range heuristics, using the slot semantics recorded in the control
+  inventory. A parameter the CCU describes with choices stays a selector
+  whatever its slot is called — `WIN_SC.LEVEL` is an enumerated handle
+  position, not a percentage.
 - **The device page's channel strip is a sortable table.** The chip strip it
   replaced could show a channel's name and data-point count and nothing else,
   in whatever order the CCU sent them. The table carries number, name with the

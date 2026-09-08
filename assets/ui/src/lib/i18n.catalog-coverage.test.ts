@@ -76,6 +76,38 @@ describe("i18n catalogue coverage", () => {
     }
   });
 
+  // The write preview, the read-back report and the two new preference
+  // controls. The preview dialog is the surface an operator reads right
+  // before a configuration write lands, so a dotted literal in it is worse
+  // than in most places.
+  it("resolves the write-preview and preference keys in both locales", () => {
+    prefs.locale = "en";
+    const keys = [
+      "channel.preview.title",
+      "channel.preview.request",
+      "channel.preview.body",
+      "channel.preview.col.parameter",
+      "channel.preview.col.from",
+      "channel.preview.col.to",
+      "channel.preview.write",
+      "channel.preview.nothing_to_write",
+      "channel.readback.title",
+      "channel.readback.body",
+      "channel.readback.chip",
+      "parameter.default",
+      "settings.prefs.write_preview",
+      "settings.prefs.write_preview_help",
+      "settings.prefs.param_density",
+      "settings.prefs.density.compact",
+      "settings.prefs.density.comfortable",
+    ];
+    for (const key of keys) {
+      expect(t(key)).not.toBe(key);
+      expect(de.has(key), `${key} missing in de`).toBe(true);
+      expect(en.has(key), `${key} missing in en`).toBe(true);
+    }
+  });
+
   // Every user-visible string ships in both locales (CLAUDE.md, SPA
   // operating concept). A key added to one catalogue only degrades to the
   // other language on screen instead of failing anywhere, so nothing but
