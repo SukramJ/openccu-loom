@@ -1,17 +1,19 @@
 <script lang="ts">
   import type { TabItem } from "./tabs";
   import { cn } from "$lib/utils";
+  import Badge from "./Badge.svelte";
   import Icon from "./Icon.svelte";
 
   /**
    * Tabs — the shared tab strip, in the SPA's two established weights.
    *
-   * Five hand-rolled strips had drifted apart before this: the alarm, security
-   * and matter shells used `py-3` links spread with `flex-1`, the device page
-   * used `py-2` buttons aligned left, and the active marker was
-   * `brand-600/400` in three of them and `brand-500/700/300` in the fourth. The
-   * strip therefore changed height and alignment depending on which area the
-   * operator was in.
+   * Seven hand-rolled strips had drifted apart before this: the alarm, security
+   * and matter shells used `py-3` links spread with `flex-1`; the device page,
+   * the message list and the keypress sections used `py-2` buttons aligned
+   * left; and the active marker was `brand-600/400` in three of them,
+   * `brand-500/700/300` in the device page and `brand-500/700` — with no dark
+   * variant at all — in the keypress strip. The strip therefore changed height,
+   * alignment and colour depending on which area the operator was in.
    *
    *  - `underline` — primary, branded navigation. One per page.
    *  - `segmented` — a quiet recessed track for a second level nested under an
@@ -86,6 +88,7 @@
       >
         {#if item.icon}<Icon name={item.icon} size={16} />{/if}
         {item.label}
+        {#if item.badge !== undefined}<Badge variant="muted">{item.badge}</Badge>{/if}
       </a>
     {:else}
       <button
@@ -97,6 +100,7 @@
       >
         {#if item.icon}<Icon name={item.icon} size={16} />{/if}
         {item.label}
+        {#if item.badge !== undefined}<Badge variant="muted">{item.badge}</Badge>{/if}
       </button>
     {/if}
   {/each}

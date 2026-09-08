@@ -13,4 +13,7 @@ export type TabItem = {
   // and reports through the strip's `onSelect`.
   href?: string;
   icon?: IconName;
+  // Trailing count, as the message and keypress strips carry: the number of
+  // rows behind the tab, so an empty section is visible before opening it.
+  badge?: string | number;
 };

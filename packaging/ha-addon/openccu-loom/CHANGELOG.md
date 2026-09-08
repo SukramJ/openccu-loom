@@ -1,5 +1,30 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.77.0
+
+Changed: the Config UI looks and behaves the same on every page. Views used to
+each bring their own page width, title styling and tab strip, so the content
+shifted as you moved between them — that is gone. The same applies to the
+filter dropdowns above lists: they are one control now, the same height as the
+buttons beside them, and they carry a proper name for screen readers instead of
+a hover tooltip.
+
+Changed: more lists are sortable, filterable tables. Links and schedules were
+card lists — on a real CCU they run into the hundreds, and nothing lined up
+down the page. The alarm journal, the walk-test checklist and the Matter
+session and exposure lists were tables that could not sort and, on a phone,
+scrolled sideways instead of folding into cards. All of them now behave like
+the device list: click a column to sort, filter a column whose values are a
+fixed set, and read them on a phone. The Matter exposure list keeps its
+grouping by device while gaining the sort.
+
+Changed: the tab strips above the message list and in a channel's keypress
+sections match the rest of the UI — they were a little shorter than every other
+strip, and the keypress one was hard to read in dark mode.
+
+Changed: a sort you pick is remembered. Nine tables forgot it as soon as you
+left the view.
+
 ## 0.76.0
 
 Changed: the device pages are tables now. The device list drops the card grid
