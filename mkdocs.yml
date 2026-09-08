@@ -89,7 +89,7 @@ nav:
       - Architecture: developer/architecture.md
       - Development Setup: developer/setup.md
       - Testing: developer/testing.md
-      - Matter Parity Workflow: matter-parity-contract.md
+      - Matter Parity — Host Side: matter-parity-contract.md
       - Matter Ecosystem Observations: developer/matter-ecosystem-observations.md
       - Writing a Source: contributor/source-interface.md
       - Architecture Decisions:

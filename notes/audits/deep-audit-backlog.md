@@ -10,7 +10,7 @@
 - **Purpose**: track which subsystems have had a dedicated deep audit,
   and carry the findings that outlive the release that produced them.
 - **Related audit-scope docs**: the Matter-side equivalent of this backlog is
-  [`matter_behaviour_findings.md`](../parity/matter_behaviour_findings.md);
+  [`matter_behaviour_findings.md`](https://github.com/SukramJ/go-fabric/blob/main/notes/parity/matter_behaviour_findings.md);
   the assessment of what the SPA still owes against the classic CCU WebUI is
   [`ccu-webui-gap-analysis.md`](../reference/ccu-webui-gap-analysis.md).
   The forward-looking product roadmap is [`roadmap.md`](../plans/roadmap.md).
