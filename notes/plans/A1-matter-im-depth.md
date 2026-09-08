@@ -360,11 +360,15 @@ one are rejected (`CLAUDE.md`, `matter-parity-contract.md`).
   shape vs. `GroupKeyManagementServer.ts`; if documented, no code test —
   add the `by_design.md` entry instead.
 - **OTA Provider:** add `cluster/core/parity_matterjs_test.go` cases for
-  the three command/response TLV shapes (verify against
-  `notes/parity/matter/tlv-wire-fixtures.json`; regen the schema snapshot
-  `notes/parity/matter/matter-schema-snapshot.json` if the cluster was
-  not previously enumerated). A `QueryImage` → `NotAvailable` round-trip
-  test through the bridge.
+  the three command/response TLV shapes. Both halves of this now live in
+  go-fabric: the TLV wire fixtures under
+  [`notes/parity/matter/`](https://github.com/SukramJ/go-fabric/tree/main/notes/parity/matter)
+  (the `testdata/` copies beside the tests are the masters), and the cluster
+  work itself. The schema snapshot
+  `notes/parity/matter/matter-schema-snapshot.json` stays here — it is the
+  pin the matter.js NOTICE travels with — so a newly enumerated cluster still
+  regenerates it in this repository. A `QueryImage` → `NotAvailable`
+  round-trip test through the bridge.
 - **Integration (optional, hermetic):** `tests/integration/` with
   `-tags=integration` against `godevccu`. Live chip-tool sweeps follow
   `notes/contributor/chip-tool-test-brief.md` and need explicit user approval
